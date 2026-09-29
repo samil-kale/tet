@@ -1,4 +1,4 @@
-import { runProcess, type RunProcessOptions } from "../run-process";
+import { runProcess, type RunProcessOptions } from "../util/run-process";
 
 /** How much of a failed agent's output goes into a notice. */
 const MAX_ERROR = 600;

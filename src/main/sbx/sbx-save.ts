@@ -1,8 +1,8 @@
-import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, sbxPortKey, sbxProblemNotices } from "../shared/sbx-rules";
-import type { AgentId, ProjectRef, SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig } from "../shared/types";
-import { getAgent, SANDBOXED_AGENTS } from "./agents";
-import type { SandboxedAgent } from "./agents/agent";
-import { readSbxConfig, writeSbxConfig } from "./tet-json";
+import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, sbxPortKey, sbxProblemNotices } from "../../shared/sbx-rules";
+import type { AgentId, ProjectRef, SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig } from "../../shared/types";
+import { getAgent, SANDBOXED_AGENTS } from "../agents";
+import type { SandboxedAgent } from "../agents/agent";
+import { readSbxConfig, writeSbxConfig } from "../tet-json";
 import { runSbx, sbxJson } from "./sbx-cli";
 import { contractHome, normalizeHostPath, type SandboxList } from "./sbx-status";
 import { ensureRunning, grantsOf, revokeMounts } from "./sbx-mounts";

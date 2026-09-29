@@ -33,19 +33,19 @@ import type {
 } from "../../shared/types";
 import type { AgentDefinition } from "../agents/agent";
 import type { ToastTarget } from "../notifications";
-import type { SbxReading } from "../sbx-status";
+import type { SbxReading } from "../sbx/sbx-status";
 import { CALLER_SIDES, HOST_CALLER, type CallerSide } from "./caller-side";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
 import { machineName } from "../env-names";
 import type { EnvRequests, EnvStore } from "../environment";
-import { repositoryRelative } from "../path-inside";
+import { repositoryRelative } from "../util/path-inside";
 import type { ProjectLookup } from "../projects";
 import type { SettingsAccess } from "../settings";
 import { tabControlToken } from "./control-token";
 import { sbxVerbs } from "./control-sbx-verbs";
 import { ControlError, count, list, oneOf, optionalText, text, type Caller, type Handler, type RefFrom } from "./control-verb";
-import { canBind } from "../can-bind";
-import { isRecord } from "../json-file";
+import { canBind } from "../util/can-bind";
+import { isRecord } from "../util/json-file";
 
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs

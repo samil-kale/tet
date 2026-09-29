@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
 import type { ProviderAccount, ProviderId } from "../../shared/types";
-import { readRows, writeJson } from "../json-file";
-import { seal, unseal } from "../sealed";
+import { readRows, writeJson } from "../util/json-file";
+import { seal, unseal } from "../util/sealed";
 import { PROVIDERS } from "./index";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */

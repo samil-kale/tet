@@ -3,7 +3,7 @@ import { DEFAULT_THEME_IDS, type ThemeKind } from "../shared/themes";
 import { DEFAULT_PROMPTS } from "../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../shared/types";
 import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../shared/types";
-import { isRecord, readJson, writeJson } from "./json-file";
+import { isRecord, readJson, writeJson } from "./util/json-file";
 
 const DEFAULTS: AppSettings = {
   notifications: {

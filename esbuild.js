@@ -45,7 +45,7 @@ const gitHostConfig = {
 /** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
  *  them, and each run under tet's own electron as node: `tet-ctl`, which an agent runs from a
  *  terminal (see src/main/control/control-launcher.ts), and `tet-update`, which a new version's
- *  binary runs once tet has quit (src/main/auto-update.ts). */
+ *  binary runs once tet has quit (src/main/update/auto-update.ts). */
 /** @returns {import('esbuild').BuildOptions} */
 function cliConfig(name) {
   return {

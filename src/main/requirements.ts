@@ -3,7 +3,7 @@ import { AGENTS, agentInstalled } from "./agents";
 import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
-import { readSbxVersion } from "./sbx-cli";
+import { readSbxVersion } from "./sbx/sbx-cli";
 import { isSimulatedMissing } from "./simulate";
 import { augmentAgentPath } from "./terminals/agent-path";
 

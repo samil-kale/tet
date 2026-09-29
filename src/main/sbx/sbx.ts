@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
-import { CONTROL_ENV } from "../shared/control";
+import { CONTROL_ENV } from "../../shared/control";
 import {
   SBX_KNOWLEDGE_KINDS,
   SBX_PROBLEM,
@@ -9,8 +9,8 @@ import {
   isPort,
   sbxPortKey,
   withoutProblems
-} from "../shared/sbx-rules";
-import { projectRefKey } from "../shared/types";
+} from "../../shared/sbx-rules";
+import { projectRefKey } from "../../shared/types";
 import type {
   ProjectRef,
   SbxAccess,
@@ -21,11 +21,11 @@ import type {
   SbxProblems,
   SbxProjectConfig,
   SbxSecret
-} from "../shared/types";
-import { SANDBOXED_AGENTS } from "./agents";
-import { canBind } from "./can-bind";
-import { inTurn } from "./in-turn";
-import type { SandboxedAgent } from "./agents/agent";
+} from "../../shared/types";
+import { SANDBOXED_AGENTS } from "../agents";
+import { canBind } from "../util/can-bind";
+import { inTurn } from "../util/in-turn";
+import type { SandboxedAgent } from "../agents/agent";
 import type { FilesystemRule } from "./sbx-policy";
 import { runSbx, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
 import { listSandboxes, mountableBy, normalizeHostPath, readFilesystemRules, readHostAllowed, sandboxControl, type SandboxList } from "./sbx-status";

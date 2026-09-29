@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import * as path from "node:path";
-import { errorMessage } from "../shared/errors";
-import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../shared/types";
-import { readRows, writeJson } from "./json-file";
+import { errorMessage } from "../../shared/errors";
+import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../../shared/types";
+import { readRows, writeJson } from "../util/json-file";
 import { readSbxUser, runSbxTokenLogin } from "./sbx-cli";
-import { seal, unseal } from "./sealed";
+import { seal, unseal } from "../util/sealed";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */
 interface StoredSbxAccount extends SbxAccount {

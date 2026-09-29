@@ -1,13 +1,13 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ProjectRef, SbxAccess, SbxBlocker, SbxStatus } from "../shared/types";
-import { SANDBOXED_AGENTS } from "./agents";
-import { readLinkedGitDir } from "./git/linked-git-dir";
-import { expandHome, relativeInside } from "./path-inside";
+import type { ProjectRef, SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types";
+import { SANDBOXED_AGENTS } from "../agents";
+import { readLinkedGitDir } from "../git/linked-git-dir";
+import { expandHome, relativeInside } from "../util/path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxBlocked, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
-import { projectsDir, sandboxDir } from "./project-dirs";
-import { augmentAgentPath } from "./terminals/agent-path";
-import { PLATFORM } from "./host-platform";
+import { projectsDir, sandboxDir } from "../project-dirs";
+import { augmentAgentPath } from "../terminals/agent-path";
+import { PLATFORM } from "../host-platform";
 import { jsonOf, readSbxVersion, runSbx, sbxError, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set

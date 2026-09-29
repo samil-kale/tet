@@ -15,7 +15,7 @@ import {
   truncateTitle,
   type ScannedTail
 } from "../transcript";
-import { watchTranscriptDir } from "../../watch-dir";
+import { watchTranscriptDir } from "../../util/watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /**

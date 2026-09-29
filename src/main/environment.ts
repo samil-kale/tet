@@ -4,7 +4,7 @@ import { errorMessage } from "../shared/errors";
 import type { ProjectRef, EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "../shared/types";
 import { envEditRefusal } from "../shared/env-rules";
 import { machineName, machineSets } from "./env-names";
-import { hasStrings, writeJson } from "./json-file";
+import { hasStrings, writeJson } from "./util/json-file";
 import { PLATFORM } from "./host-platform";
 
 /** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */

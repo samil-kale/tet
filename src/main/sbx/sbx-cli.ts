@@ -3,10 +3,10 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import { SBX_PROBLEM } from "../shared/sbx-rules";
-import { isSimulatedMissing } from "./simulate";
-import { runProcess, stoppable } from "./run-process";
-import { PLATFORM } from "./host-platform";
+import { SBX_PROBLEM } from "../../shared/sbx-rules";
+import { isSimulatedMissing } from "../simulate";
+import { runProcess, stoppable } from "../util/run-process";
+import { PLATFORM } from "../host-platform";
 
 /**
  * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy

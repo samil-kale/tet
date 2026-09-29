@@ -12,10 +12,10 @@ import type {
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId, NoticeSeverity, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../project-dirs";
-import type { ResolvedRef } from "../resolved-ref";
-import { prepareSbxRun, sandboxName } from "../sbx";
-import { mountDropped, type SbxSessionMount } from "../sbx-mounts";
-import type { checkSbxReady } from "../sbx-status";
+import type { ResolvedRef } from "../util/resolved-ref";
+import { prepareSbxRun, sandboxName } from "../sbx/sbx";
+import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
+import type { checkSbxReady } from "../sbx/sbx-status";
 import { toContainerPath } from "./hook-target";
 import { HOST_CALLER, SANDBOX_CALLER, type CallerSide } from "../control/caller-side";
 

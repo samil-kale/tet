@@ -19,8 +19,8 @@ import type {
 } from "../shared/types";
 import { machineName } from "./env-names";
 import { readMainWorktree } from "./git/linked-git-dir";
-import { inTurn } from "./in-turn";
-import { isRecord } from "./json-file";
+import { inTurn } from "./util/in-turn";
+import { isRecord } from "./util/json-file";
 import { PLATFORM } from "./host-platform";
 
 /** A project's saved commands, Explorer view and sbx settings, in its own root so it travels with

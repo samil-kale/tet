@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { SessionWatch } from "./agents/agent";
+import type { SessionWatch } from "../agents/agent";
 
 /**
  * Whether an `fs.watch` event means the watched directory itself is gone, which raises no `error`:

@@ -6,8 +6,8 @@ import type { GitLoginStore } from "../git-logins";
 import type { RepositoryManager } from "../git/repository";
 import type { ProjectDeps, ProjectStore } from "../projects";
 import type { AccountStore } from "../providers/accounts";
-import type { SbxAccountStore } from "../sbx-accounts";
-import type { SbxLocalStore } from "../sbx-local";
+import type { SbxAccountStore } from "../sbx/sbx-accounts";
+import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsAccess } from "../settings";
 import type { SessionManagerRegistry } from "../terminals/session-manager";
 

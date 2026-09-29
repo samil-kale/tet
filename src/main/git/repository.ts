@@ -21,14 +21,14 @@ import type {
   StashCommand
 } from "../../shared/types";
 import { PROJECT_FILE } from "../tet-json";
-import type { ResolvedRef } from "../resolved-ref";
+import type { ResolvedRef } from "../util/resolved-ref";
 import { worktreeKeyOf } from "../project-dirs";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
 import { git } from "./git-client";
 import type { GitLoginStore } from "../git-logins";
 import { readLinkedGitDir } from "./linked-git-dir";
-import { watchedDirectoryGone } from "../watch-dir";
-import { relativeInside } from "../path-inside";
+import { watchedDirectoryGone } from "../util/watch-dir";
+import { relativeInside } from "../util/path-inside";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
 

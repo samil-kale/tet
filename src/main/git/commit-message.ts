@@ -1,5 +1,5 @@
 import { askAgent } from "../agents/ask";
-import { stoppable } from "../run-process";
+import { stoppable } from "../util/run-process";
 
 /** Takes the first subject out of an otherwise well-formed answer, tolerating a fenced reply. */
 export function commitMessageFrom(reply: string): string {

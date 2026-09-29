@@ -16,7 +16,7 @@ import type {
 } from "../../shared/types";
 import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
-import { logFailure } from "../json-file";
+import { logFailure } from "../util/json-file";
 import { addProject, addWorktree, deleteWorktree, removeProject } from "../projects";
 import { PROVIDERS } from "../providers";
 import type { IpcDeps } from "./deps";

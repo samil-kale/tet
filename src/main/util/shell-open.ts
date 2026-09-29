@@ -1,6 +1,6 @@
 import * as path from "node:path";
-import { PLATFORM } from "./host-platform";
-import type { Platform } from "../shared/platform";
+import { PLATFORM } from "../host-platform";
+import type { Platform } from "../../shared/platform";
 
 /**
  * What a ctrl-click or "Open in external editor" may hand the OS (`shell:open-url`, `shell:open-file`,

@@ -29,8 +29,10 @@ project's terminals.
   the only folder imported across them (`no-restricted-imports` in `eslint.config.mjs`).
 - `src/main/`: `git/` (the git process and everything talking to it),
   `terminals/` (pty, sessions, hooks), `control/` (`tet-ctl`), `ipc/` (the `TETApi` handlers,
-  registrars by area, each taking only the singletons it touches), `agents/`, `providers/`; flat
-  is the app itself — `main.ts` (window, startup), settings, projects, requirements, sbx.
+  registrars by area, each taking only the singletons it touches), `agents/`, `providers/`, `sbx/`
+  (the `sbx` CLI), `update/` (the auto-update), `util/` (helpers shared across the areas). An area
+  of several files that belong together is a folder; flat are only the window, the startup and
+  the app's stores — `main.ts`, settings, projects, requirements.
 - Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
   wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `main.ts`'s `send` in main,
   `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or
@@ -169,7 +171,7 @@ others.
   Chromium's stack applies the machine's proxy and certificate store. Code the tests run under
   node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`).
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
-  (`src/main/script-text.ts`).
+  (`src/main/util/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
   `tet-ctl hook <event>`.
 - A file another process reads (hook settings, launchers) is written beside the
@@ -368,8 +370,7 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
 
 ## sbx: agent tabs in a Docker sandbox
 
-Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx.ts` and the
-`sbx-*.ts` beside it drive the `sbx` CLI.
+Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx/` drives the `sbx` CLI.
 
 - **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each start
   (`resolvePlace`), until then by where its session lives; each agent's runtime holds a `host` one,

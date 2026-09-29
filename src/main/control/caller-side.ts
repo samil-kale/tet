@@ -4,7 +4,7 @@ import type { ControlVerb } from "../../shared/control";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../shared/control-side";
 import type { Project } from "../../shared/types";
 import { hasSandbox, type AgentDefinition } from "../agents/agent";
-import { relativeInside } from "../path-inside";
+import { relativeInside } from "../util/path-inside";
 import type { InspectedTab } from "./control-server";
 import { ControlError } from "./control-verb";
 

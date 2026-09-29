@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { shellSingleQuote, writePosixScript } from "../script-text";
-import { writeIfChanged } from "../write-if-changed";
+import { shellSingleQuote, writePosixScript } from "../util/script-text";
+import { writeIfChanged } from "../util/write-if-changed";
 import { PLATFORM } from "../host-platform";
 
 /**

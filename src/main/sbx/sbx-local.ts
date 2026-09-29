@@ -1,8 +1,8 @@
 import * as path from "node:path";
-import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../shared/types";
-import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../shared/types";
-import { isRecord, logFailure, readJson, writeJson } from "./json-file";
-import { seal, unseal } from "./sealed";
+import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../../shared/types";
+import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types";
+import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
+import { seal, unseal } from "../util/sealed";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
  *  base64-wrapped, and the knowledge unless it is all off (EMPTY_SBX_KNOWLEDGE). */

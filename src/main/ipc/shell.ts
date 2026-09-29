@@ -4,8 +4,8 @@ import { net, shell } from "electron";
 import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types";
-import { expandHome, repositoryRelative } from "../path-inside";
-import { isExecutableFile, isOpenableUrl } from "../shell-open";
+import { expandHome, repositoryRelative } from "../util/path-inside";
+import { isExecutableFile, isOpenableUrl } from "../util/shell-open";
 import type { IpcDeps } from "./deps";
 
 /** A Markdown preview's web image: the editor's cap for a repository file (`Repository.readFile`),

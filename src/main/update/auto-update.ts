@@ -5,13 +5,13 @@ import { app, net } from "electron";
 import * as originalFs from "original-fs";
 import * as semver from "semver";
 import writeFileAtomic from "write-file-atomic";
-import { assetName, installRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../shared/release";
-import { PLATFORM } from "./host-platform";
-import type { UpdateResult } from "../shared/release";
-import type { NoticeProgress, NoticeSeverity } from "../shared/types";
-import { readJson } from "./json-file";
+import { assetName, installRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../../shared/release";
+import { PLATFORM } from "../host-platform";
+import type { UpdateResult } from "../../shared/release";
+import type { NoticeProgress, NoticeSeverity } from "../../shared/types";
+import { readJson } from "../util/json-file";
 import { resumableDownload } from "./resumable-download";
-import { runProcess } from "./run-process";
+import { runProcess } from "../util/run-process";
 
 /** Not urgent: an update installs only once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;

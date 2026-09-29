@@ -18,13 +18,13 @@ import type {
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
-import type { ResolvedRef } from "../resolved-ref";
+import type { ResolvedRef } from "../util/resolved-ref";
 import { HostSetups } from "./host-setup";
 import { dropsDir } from "../project-dirs";
 import { readSbxConfig } from "../tet-json";
-import { ensureRunning } from "../sbx-mounts";
-import { checkSbxReady } from "../sbx-status";
-import type { SbxLocalStore } from "../sbx-local";
+import { ensureRunning } from "../sbx/sbx-mounts";
+import { checkSbxReady } from "../sbx/sbx-status";
+import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../settings";
 import { TerminalSession } from "./terminal-session";
 import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";

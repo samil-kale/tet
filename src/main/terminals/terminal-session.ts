@@ -3,7 +3,7 @@ import { errorMessage } from "../../shared/errors";
 import type { TerminalStatus } from "../../shared/types";
 import { spawnAgentProcess, type SpawnOptions } from "./pty";
 import { isSimulatedMissing } from "../simulate";
-import { runProcess } from "../run-process";
+import { runProcess } from "../util/run-process";
 
 interface SessionCallbacks {
   onOutput: (data: string) => void;

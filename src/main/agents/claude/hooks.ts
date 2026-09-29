@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { hookCommand } from "../../terminals/hook-command";
 import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
-import { writeIfChanged } from "../../write-if-changed";
+import { writeIfChanged } from "../../util/write-if-changed";
 import type { AgentPaths } from "../agent";
 import type { HookEvent } from "../../../shared/control";
 

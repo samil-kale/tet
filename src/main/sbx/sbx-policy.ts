@@ -10,9 +10,9 @@
  * and `dir/**` covers `dir`.
  */
 
-import type { Platform } from "../shared/platform";
-import type { SbxAccess, SbxBlocker, SbxStatus } from "../shared/types";
-import { isRecord } from "./json-file";
+import type { Platform } from "../../shared/platform";
+import type { SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types";
+import { isRecord } from "../util/json-file";
 
 type FilesystemAction = "read" | "write";
 

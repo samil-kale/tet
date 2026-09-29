@@ -3,8 +3,8 @@ import { urlOrigin, urlUsername } from "../shared/git-url";
 import type { GitActionResult, GitLogin } from "../shared/types";
 import { git } from "./git/git-client";
 import type { NetworkLogin } from "./git/git";
-import { logFailure, readRows, writeJson } from "./json-file";
-import { seal, unseal } from "./sealed";
+import { logFailure, readRows, writeJson } from "./util/json-file";
+import { seal, unseal } from "./util/sealed";
 
 /** What the file holds: one login per origin and username, its password encrypted by the OS and
  *  base64-wrapped. */

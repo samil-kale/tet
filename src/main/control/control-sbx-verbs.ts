@@ -17,9 +17,9 @@ import {
   sbxVariableRefusal,
   withoutProblems
 } from "../../shared/sbx-rules";
-import { sbxBlocked, sbxNotReady } from "../sbx-policy";
+import { sbxBlocked, sbxNotReady } from "../sbx/sbx-policy";
 import type { ControlDeps } from "./control-server";
-import type { SbxReading } from "../sbx-status";
+import type { SbxReading } from "../sbx/sbx-status";
 import { ControlError, list, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./control-verb";
 import { PLATFORM } from "../host-platform";
 

@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
-import { resolveProjectRef } from "../src/main/resolved-ref";
+import { resolveProjectRef } from "../src/main/util/resolved-ref";
 import type { ControlRecords } from "../src/main/control/control-records";
 import { GitLoginStore } from "../src/main/git-logins";
 import { RepositoryManager } from "../src/main/git/repository";
@@ -21,7 +21,7 @@ import {
   syncWorktrees,
   type ProjectDeps
 } from "../src/main/projects";
-import { SbxLocalStore } from "../src/main/sbx-local";
+import { SbxLocalStore } from "../src/main/sbx/sbx-local";
 import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
 import { readCommands, readSbxConfig, writeCommands } from "../src/main/tet-json";
 import type { ProjectRef, ProjectsChange } from "../src/shared/types";

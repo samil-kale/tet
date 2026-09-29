@@ -14,7 +14,7 @@ import {
   truncateTitle,
   type ScannedTail
 } from "../transcript";
-import { watchTranscriptDir } from "../../watch-dir";
+import { watchTranscriptDir } from "../../util/watch-dir";
 import { SANDBOX_HOME } from "../../terminals/hook-target";
 
 /** Claude Code has no session CLI: sessions are the `<uuid>.jsonl` transcripts in

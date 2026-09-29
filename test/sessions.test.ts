@@ -7,7 +7,7 @@ import { PLATFORM } from "../src/main/host-platform";
 import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
 import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
-import { watchTranscriptDir } from "../src/main/watch-dir";
+import { watchTranscriptDir } from "../src/main/util/watch-dir";
 import { eventually, tempDir } from "./helpers";
 
 /**

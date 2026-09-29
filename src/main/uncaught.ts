@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import type { NoticeSeverity } from "../shared/types";
-import { rotateLog } from "./rotate-log";
+import { rotateLog } from "./util/rotate-log";
 
 /**
  * Uncaught main-process exceptions. Electron's default modal dialog would freeze every terminal,

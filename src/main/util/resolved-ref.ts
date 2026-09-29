@@ -1,7 +1,7 @@
-import { projectRefName } from "../shared/types";
-import type { ProjectRef } from "../shared/types";
-import { projectRefPath } from "./project-dirs";
-import type { ProjectLookup } from "./projects";
+import { projectRefName } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types";
+import { projectRefPath } from "../project-dirs";
+import type { ProjectLookup } from "../projects";
 
 /**
  * A project's repository or one of its worktrees as the runtime holds it (Repository, the session

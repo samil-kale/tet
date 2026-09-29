@@ -15,11 +15,11 @@ import type {
   SbxStoredLocal,
   SbxValueKind
 } from "../../shared/types";
-import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxLogin, runSbxLogout } from "../sbx-cli";
-import { readKnowledgeSources } from "../sbx-mounts";
-import { readSbxStatus } from "../sbx-status";
-import { signInToSbx } from "../sbx-accounts";
-import { readProjectSbxProblems, saveProjectSbx } from "../sbx-settings";
+import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxLogin, runSbxLogout } from "../sbx/sbx-cli";
+import { readKnowledgeSources } from "../sbx/sbx-mounts";
+import { readSbxStatus } from "../sbx/sbx-status";
+import { signInToSbx } from "../sbx/sbx-accounts";
+import { readProjectSbxProblems, saveProjectSbx } from "../sbx/sbx-settings";
 import { readSbxConfig } from "../tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 

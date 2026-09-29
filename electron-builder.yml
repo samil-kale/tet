@@ -1,7 +1,7 @@
 # What turns the compiled dist/ into the app the install scripts unpack, per platform. No
 # installer: an archive per platform and architecture, attached to the GitHub Release, which
 # scripts/install.sh and scripts/install.ps1 fetch and unpack, and which the app's own update
-# (src/main/auto-update.ts) fetches the same way. The names are src/shared/release.ts's
+# (src/main/update/auto-update.ts) fetches the same way. The names are src/shared/release.ts's
 # `assetName`, and the scripts' own copy of it.
 # Neither an installer nor an npm package: an antivirus blocks the NSIS setup, and macOS rejects an
 # unsigned dmg as damaged. The executable is the app's own (TET.exe, TET.app, tet), never a bare

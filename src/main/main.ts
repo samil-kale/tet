@@ -12,7 +12,7 @@ import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { projectRefKey, overridesMachineNote } from "../shared/types";
 import type { ProjectRef, Notice, NoticeProgress, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
-import { installPendingUpdate, startAutoUpdate } from "./auto-update";
+import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readChanged, readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
 import { ControlRecords } from "./control/control-records";
@@ -21,7 +21,7 @@ import { EnvRequests, EnvStore } from "./environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc, sweepDropFiles } from "./ipc";
 import { on, once } from "./ipc/channels";
-import { resolveProjectRef } from "./resolved-ref";
+import { resolveProjectRef } from "./util/resolved-ref";
 import { projectRefPath } from "./project-dirs";
 import {
   addProject,
@@ -34,18 +34,18 @@ import {
   syncWorktrees,
   type ProjectDeps
 } from "./projects";
-import { readSbxUser } from "./sbx-cli";
-import { configureSandboxes, readSbxReading, readSbxSignedIn } from "./sbx-status";
-import { SbxAccountStore, signInToSbx } from "./sbx-accounts";
-import { SbxLocalStore } from "./sbx-local";
-import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
+import { readSbxUser } from "./sbx/sbx-cli";
+import { configureSandboxes, readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
+import { SbxAccountStore, signInToSbx } from "./sbx/sbx-accounts";
+import { SbxLocalStore } from "./sbx/sbx-local";
+import { readProjectSbxProblems, saveProjectSbx } from "./sbx/sbx-settings";
 import { anyAgentInstalled } from "./requirements";
 import { resolveDataRoot } from "./data-root";
 import { augmentAgentPath } from "./terminals/agent-path";
 import { setControlEnv, setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler, logError } from "./uncaught";
 import { awaitedToastTab, showDesktopNotification, startNotifications } from "./notifications";
-import { isOpenableUrl } from "./shell-open";
+import { isOpenableUrl } from "./util/shell-open";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-manager";
 import { SettingsStore } from "./settings";

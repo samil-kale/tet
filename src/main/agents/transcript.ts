@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
-import { isRecord } from "../json-file";
+import { isRecord } from "../util/json-file";
 import type { AgentSessionInfo } from "./agent";
 import { PLATFORM } from "../host-platform";
 
