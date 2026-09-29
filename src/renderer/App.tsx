@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
-import { projectRefKey, projectRefsOf, EMPTY_REPOSITORY_STATE, refName, worktreeBase } from "../shared/types";
-import type { AgentInfo, ProjectRef, EnvRequest, Project, RepositoryState, TerminalDescriptor } from "../shared/types";
+import { projectRefKey, projectRefsOf, EMPTY_REPOSITORY_STATE } from "../shared/types";
+import type { AgentInfo, ProjectRef, EnvRequest, Project, TerminalDescriptor } from "../shared/types";
 import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
@@ -13,7 +13,6 @@ import { FilesPane } from "./files/FilesPane";
 import { GitPane } from "./git/GitPane";
 import { Notices, notify, showProgress } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
-import type { RefHead } from "./sidebar/ProjectList";
 import { useSandboxedProjects } from "./sidebar/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
@@ -21,30 +20,22 @@ import { usePaneSize } from "./ui/layout-storage";
 import { useSidePane } from "./ui/use-side-pane";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./tabs/TerminalsPane";
-import { clearTerminal, disposeRefTerminals } from "./tabs/terminal-views";
-import { setRevealHandler } from "./editor/editor-tab";
+import { disposeRefTerminals } from "./tabs/terminal-views";
 import { NO_IDS, useSessionMarks } from "./tabs/use-session-marks";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { agentName, useAgents } from "./ui/use-agents";
-import { forget, sameList, stableRecord } from "./identity";
-import { matchesShortcut } from "./shortcuts";
+import { forget, sameList } from "./identity";
 import { defaultLayout, paneOf, tabsInFront } from "./tabs/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./tabs/use-project-layouts";
-import { nextEditorTabId, type EditorTab, type OpenEditor, type PaneTab } from "./editor/editor-tab";
-import {
-  canDiscardRefEdits,
-  canDiscardEdits,
-  disposeRefEditors,
-  disposeEditor,
-  keepEditor,
-  openEditorFile,
-  previewEditorTab,
-  revealEditorMatch,
-  showDiff,
-  showMarkdownPreview
-} from "./editor/editor-views";
+import type { EditorTab, PaneTab } from "./editor/editor-tab";
+import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
+import { useEditorOpening } from "./tabs/use-editor-opening";
 import { useEditorSync } from "./tabs/use-editor-sync";
+import { useRefHeads } from "./sidebar/use-ref-heads";
+import { useWindowFocused } from "./ui/use-window-focused";
+import { useWindowShortcuts } from "./ui/use-window-shortcuts";
+import { useRefFeeds } from "./use-ref-feeds";
 
 /** Who asks for environment variables, as the window names that tab: "Claude (fix login) in
  *  autocontract". */
@@ -74,19 +65,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const resolvedRefs = useMemo(() => resolvedByKey(refsHeld, projects), [projects]);
   /** The repository or worktree in front, by key. */
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  /** For callbacks the project list gets, read on a click: see `tabsRef`. */
+  /** For callbacks the project list gets, read on a click: depending on `activeKey` would remake
+   *  them, and every row's props, on every switch. */
   const activeKeyRef = useLatest(activeKey);
   useEffect(() => rememberActive(activeKey), [activeKey]);
-  /** Each repository's or worktree's repository state; everything below is by `projectRefKey` too,
-   *  but `sandboxed`. */
-  const [states, setStates] = useState<Record<string, RepositoryState>>({});
-  /** Every repository's and worktree's tabs: the project list needs all of them at once. */
-  const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
-  /**
-   * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
-   * pane's props, on every push.
-   */
-  const tabsRef = useLatest(tabs);
+  const loadedProjects = useCallback((stored: Project[]) => {
+    setProjects(stored);
+    setActiveKey((current) => current ?? activeAtStart(stored));
+  }, []);
+  /** Each repository's or worktree's git state, tabs and starting flag (use-ref-feeds.ts);
+   *  everything below is by `projectRefKey` too, but `sandboxed`. */
+  const { states, tabs, starting, forgetRef: forgetFeeds } = useRefFeeds(projectsRef, loadedProjects);
   /**
    * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
    * tabs keep their instance across updates: `stripTabs` compares items.
@@ -108,11 +97,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     stripTabsRef.current = next;
     return next;
   }, [tabs, editorTabs]);
-  /**
-   * Repositories and worktrees with something starting (bootstrap listing, a CLI booting). Read by
-   * the progress bar and the layout persistence.
-   */
-  const [starting, setStarting] = useState<Record<string, boolean>>({});
   /**
    * Split state lives here, not in `TerminalsPane`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
@@ -147,67 +131,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
   /** Each project's sbx switch (use-sandboxed-projects.ts). */
   const { sandboxed, forgetSandboxed } = useSandboxedProjects(projects);
-
-  useEffect(() => {
-    const unsubscribers = [
-      window.tet.repository.onState(({ ref, state }) =>
-        setStates((current) => ({ ...current, [projectRefKey(ref)]: state }))
-      ),
-      window.tet.terminals.onTabs(({ ref, tabs: list }) =>
-        setTabs((current) => ({ ...current, [projectRefKey(ref)]: list }))
-      ),
-      window.tet.terminals.onStatus(({ ref, tabId, status }) => {
-        const key = projectRefKey(ref);
-      // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
-      // it off screen (main flushes the old output before the status, the new one's has not come).
-        if (status === "running" && tabsRef.current[key]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
-          clearTerminal(ref, tabId);
-        }
-        setTabs((current) => {
-          const list = current[key];
-          return list
-            ? { ...current, [key]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) }
-            : current;
-        });
-      }),
-      window.tet.terminals.onStartupProgress(({ ref, show }) => {
-        const key = projectRefKey(ref);
-        setStarting((current) => (current[key] === show ? current : { ...current, [key]: show }));
-      })
-    ];
-
-    void (async () => {
-      const stored = await window.tet.projects.list();
-      setProjects(stored);
-      setActiveKey((current) => current ?? activeAtStart(stored));
-      const fetched = await Promise.all(
-        stored.flatMap(projectRefsOf).map(async (ref) => {
-          const [state, list, isStarting] = await Promise.all([
-            window.tet.repository.state(ref),
-            window.tet.terminals.list(ref),
-            window.tet.terminals.starting(ref)
-          ]);
-          return [projectRefKey(ref), state, list, isStarting] as const;
-        })
-      );
-      // A repository or worktree closed meanwhile was forgotten already: merging its entries would
-      // revive it.
-      const open = new Set(projectsRef.current.flatMap(projectRefsOf).map(projectRefKey));
-      const loaded = fetched.filter(([key]) => open.has(key));
-      // Pushes that landed meanwhile are newer than what was fetched.
-      setStates((current) => ({
-        ...Object.fromEntries(loaded.map(([id, state]) => [id, state])),
-        ...current
-      }));
-      setTabs((current) => ({ ...Object.fromEntries(loaded.map(([id, , list]) => [id, list])), ...current }));
-      setStarting((current) => ({
-        ...Object.fromEntries(loaded.map(([id, , , isStarting]) => [id, isStarting])),
-        ...current
-      }));
-    })();
-
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [projectsRef, tabsRef]);
 
   // Before onNotice, whose subscription tells main the window listens.
   useEffect(() => window.tet.onNoticeProgress(showProgress), []);
@@ -256,17 +179,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [showTab]
   );
 
-  const [focused, setFocused] = useState(() => document.hasFocus());
-  useEffect(() => {
-    const onFocus = (): void => setFocused(true);
-    const onBlur = (): void => setFocused(false);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("blur", onBlur);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("blur", onBlur);
-    };
-  }, []);
+  const focused = useWindowFocused();
   const covered = useWindowCovered();
 
   const activeResolved = (activeKey ? resolvedRefs[activeKey] : undefined) ?? null;
@@ -296,9 +209,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** Drops everything held for a repository or worktree; the project list is the caller's. */
   const forgetProjectRef = useCallback((ref: ProjectRef) => {
     const key = projectRefKey(ref);
-    setStates((current) => forget(current, key));
-    setTabs((current) => forget(current, key));
-    setStarting((current) => forget(current, key));
+    forgetFeeds(key);
     setEditorTabs((current) => forget(current, key));
     forgetEditorSync(key);
     disposeRefEditors(ref);
@@ -306,7 +217,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     forgetMarks(key);
     // The xterms live outside React; this is where a repository or worktree ends for good.
     disposeRefTerminals(ref);
-  }, [forgetLayout, forgetEditorSync, forgetMarks]);
+  }, [forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks]);
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git pane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
@@ -336,31 +247,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [forgetProjectRef, forgetSandboxed]
   );
 
-  /**
-   * A row's HEAD, first remote and dirty flag, by repository or worktree, identity-stable where
-   * unchanged (`states` is fresh on every push, so every field is a value — the remote by what the
-   * row shows of it). No git call of its own: `changes` comes with every refresh.
-   */
-  const headsRef = useRef<Record<string, RefHead>>({});
-  const heads = useMemo(() => {
-    const next: Record<string, RefHead> = {};
-    for (const [key, state] of Object.entries(states)) {
-      const base = state.worktrees.find((worktree) => worktree.current)?.base;
-      const target = worktreeBase(state);
-      next[key] = {
-        head: state.head,
-        detached: state.detached,
-        upstream: state.upstream,
-        base,
-        baseAt: base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path,
-        defaultBranch: target && refName(target),
-        remoteName: state.remotes[0]?.name,
-        remoteUrl: state.remotes[0]?.url,
-        dirty: state.changes.length > 0
-      };
-    }
-    return stableRecord(headsRef, next);
-  }, [states]);
+  /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
+  const heads = useRefHeads(states);
 
   /** A shell tab — a row's "terminal". */
   const openTerminal = useCallback(
@@ -410,42 +298,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     return () => window.removeEventListener("focus", onFocus);
   }, [activeRef]);
 
-  /**
-   * The window's shortcuts, on `document` in the capture phase to beat xterm's textarea listener.
-   * xterm never encodes any of them — see `shortcuts.ts`.
-   */
-  // A ref: the actions are remade on every tab push, the listener is registered once.
-  const shortcutActions = useLatest({ toggleSideView, showNeedsAttention, cycleTab, newShellTab });
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      const actions = shortcutActions.current;
-      let run: (() => void) | undefined;
-      if (matchesShortcut(event, "settings")) {
-        // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has
-        // to be the one on top — an agent's environment dialog, drawn last, can already be up.
-        run = () => !isWindowCovered() && setSettingsOpen(true);
-      } else if (matchesShortcut(event, "toggleGit")) {
-        run = () => actions.toggleSideView("git");
-      } else if (matchesShortcut(event, "toggleFiles")) {
-        run = () => actions.toggleSideView("files");
-      } else if (matchesShortcut(event, "needsAttention")) {
-        run = actions.showNeedsAttention;
-      } else if (matchesShortcut(event, "nextTab")) {
-        run = () => actions.cycleTab(1);
-      } else if (matchesShortcut(event, "previousTab")) {
-        run = () => actions.cycleTab(-1);
-      } else if (matchesShortcut(event, "newShellTab")) {
-        run = actions.newShellTab;
-      }
-      if (run) {
-        event.preventDefault();
-        event.stopPropagation();
-        run();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [shortcutActions]);
+  useWindowShortcuts({
+    // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has to be
+    // the one on top — an agent's environment dialog, drawn last, can already be up.
+    settings: () => !isWindowCovered() && setSettingsOpen(true),
+    toggleGit: () => toggleSideView("git"),
+    toggleFiles: () => toggleSideView("files"),
+    needsAttention: showNeedsAttention,
+    nextTab: () => cycleTab(1),
+    previousTab: () => cycleTab(-1),
+    newShellTab
+  });
 
   const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
 
@@ -459,68 +322,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [projects]
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
-  /**
-   * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
-   * (`OpenEditor`). A path already open is brought to front, kept if asked; else the preview tab
-   * takes it, unless `keep`; else a new tab.
-   * The editor is told before the tab draws, since the tab attaches what it made; the tab is
-   * activated before it appears in `stripTabs`, as a new terminal tab is — both in one handler, so
-   * the layout and the list agree on the first render.
-   *
-   * A tab already open only ever has its diff switched on, never off, so opening a file again
-   * leaves what the user chose there (`showDiff`).
-   *
-   * Handed as is to every way in but the changes list (`openActiveDiff`) — the Explorer, its
-   * search, a path ctrl-clicked in a terminal, a Markdown preview's link: the file itself, in the
-   * repository or worktree the view names.
-   */
-  const openEditor = useCallback(
-    (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
-      const key = projectRefKey(ref);
-      const open = editorTabsRef.current[key]?.find((tab) => tab.path === path);
-      const preview = how.keep ? undefined : previewEditorTab(ref);
-      let tabId: string;
-      if (open) {
-        tabId = open.tabId;
-        if (how.keep) {
-          keepEditor(tabId);
-        }
-        if (how.markdownPreview) {
-          showMarkdownPreview(tabId, true);
-        }
-        if (how.diff) {
-          showDiff(tabId, true);
-        }
-        if (how.reveal) {
-          revealEditorMatch(tabId, how.reveal);
-        }
-      } else if (preview !== undefined) {
-        tabId = preview;
-        openEditorFile(ref, tabId, path, true, how);
-        setEditorTabs((current) => ({
-          ...current,
-          [key]: (current[key] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
-        }));
-      } else {
-        tabId = nextEditorTabId();
-        openEditorFile(ref, tabId, path, how.keep !== true, how);
-        setEditorTabs((current) => ({ ...current, [key]: [...(current[key] ?? []), { tabId, ref, path }] }));
-      }
-      activateTab(key, tabId);
-    },
-    [activateTab, editorTabsRef]
+  /** Opening and closing editor tabs (use-editor-opening.ts). */
+  const { openEditor, openActiveDiff, closeEditors } = useEditorOpening(
+    editorTabsRef,
+    setEditorTabs,
+    activateTab,
+    select,
+    activeRef
   );
-  // A file the control channel asked for, brought to front.
-  useEffect(
-    () =>
-      window.tet.repository.onOpenEditor(({ ref, path, keep }) => {
-        setActiveKey(projectRefKey(ref));
-        openEditor(ref, path, { keep });
-      }),
-    [openEditor]
-  );
-  // A path ctrl-clicked in a terminal, or linked from a Markdown preview.
-  useEffect(() => setRevealHandler(openEditor), [openEditor]);
   useEffect(() => {
     const offRequest = window.tet.environment.onRequest(setEnvRequest);
     const offWithdrawn = window.tet.environment.onWithdrawn((id) =>
@@ -533,31 +342,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
   const closeEnvRequest = useCallback(() => setEnvRequest(null), []);
   const agents = useAgents();
-  /** The changes list's, the one view that opens a file against HEAD. */
-  const openActiveDiff = useCallback(
-    (path: string, how?: OpenEditor) => {
-      if (activeRef) {
-        openEditor(activeRef, path, { ...how, diff: true });
-      }
-    },
-    [activeRef, openEditor]
-  );
-  /** Disposes the editors; the layout collapses a pane left empty. By `projectRefKey`. */
-  const closeEditors = useCallback((key: string, tabIds: string[]) => {
-    void canDiscardEdits(tabIds).then((discard) => {
-      if (!discard) {
-        return;
-      }
-      setEditorTabs((current) => {
-        const rest = (current[key] ?? []).filter((tab) => !tabIds.includes(tab.tabId));
-        return rest.length > 0 ? { ...current, [key]: rest } : forget(current, key);
-      });
-      for (const tabId of tabIds) {
-        disposeEditor(tabId);
-      }
-    });
-  }, []);
-
   return (
     <div className="app">
       {/* The drag region and the window controls' space. */}

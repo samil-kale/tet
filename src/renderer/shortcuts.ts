@@ -9,7 +9,7 @@ import { isModifierHeld, PLATFORM } from "./platform";
  * the latter Claude Code's mode toggle. `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` send nothing.
  * None of these close a tab.
  */
-type ShortcutId =
+export type ShortcutId =
   | "settings"
   | "toggleGit"
   | "toggleFiles"

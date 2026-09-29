@@ -56,7 +56,7 @@ const RENDERER_LAYERS = [
   { tabs: [] },
   { git: [] },
   { files: [], sidebar: [], dialogs: [] },
-  { App: ["*"], Startup: ["*"], main: ["*"] }
+  { App: ["*"], Startup: ["*"], main: ["*"], "use-ref-feeds": ["*"] }
 ];
 
 /** One config per area of the process: its border, `extra`, and every area it may not reach. */
