@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { AgentId, AskModelsResult, ProjectRef, Suggester } from "../../shared/types";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError } from "../ui/Field";
@@ -9,7 +9,7 @@ import { agentName, useAgents } from "../ui/use-agents";
 const SUGGESTER_KEY = "tet.dialog.suggester";
 
 /** No model argument: the agent's own configuration picks. */
-const DEFAULT_MODEL = { value: "", label: "Default" };
+const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };
 
 /** The last pick; an agent of "" until the installed ones are known (`SuggesterPicker`). */
 export function rememberedSuggester(): Suggester {
@@ -31,8 +31,6 @@ interface SuggesterPickerProps {
   ref: ProjectRef;
   value: Suggester;
   onChange: (suggester: Suggester) => void;
-  /** Placed last in the row (`SuggestField`). */
-  wand: ReactNode;
   disabled?: boolean;
 }
 
@@ -41,7 +39,7 @@ interface SuggesterPickerProps {
  * one no longer offered — the first agent with its default model; only what the user picks is
  * remembered.
  */
-export function SuggesterPicker({ ref, value, onChange, wand, disabled }: SuggesterPickerProps) {
+export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPickerProps) {
   const agents = useAgents();
   const [agentIds, setAgentIds] = useState<AgentId[]>();
   const [listed, setListed] = useState<{ agentId: AgentId; result: AskModelsResult }>();
@@ -118,7 +116,6 @@ export function SuggesterPicker({ ref, value, onChange, wand, disabled }: Sugges
           disabled={disabled}
           onChange={(model) => pick({ ...value, model })}
         />
-        {wand}
       </div>
       <DialogError message={models?.error} />
     </>

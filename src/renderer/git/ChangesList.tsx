@@ -116,12 +116,11 @@ export async function askCommit(
           ref={field}
           error={error}
           onSuggesting={hold}
-          picker={(wand, pickerDisabled) => (
+          picker={(pickerDisabled) => (
             <SuggesterPicker
               ref={ref}
               value={value.suggester}
               onChange={(suggester) => onChange((current) => ({ ...current, suggester }))}
-              wand={wand}
               disabled={pickerDisabled}
             />
           )}

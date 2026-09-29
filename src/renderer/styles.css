@@ -1086,9 +1086,18 @@ textarea:focus,
   min-width: 120px;
 }
 
-/* Its height is capped by `Dropdown` to the room below the trigger. */
+/* Its height is capped by `Dropdown` to the room below the trigger; its width is the trigger's,
+   so a longer option is cut short rather than scrolled to. */
 .dropdown-menu {
+  overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* Plain text, no icon or arrow: a block, which can end in an ellipsis. */
+.dropdown-menu .context-menu-item {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .new-session-menu .context-menu-item,
@@ -2417,10 +2426,15 @@ textarea:focus,
   min-width: 0;
 }
 
-/* Who suggests, beside the wand: the model takes what the agent leaves. */
+/* Who suggests: the model takes what the agent leaves. */
 .dialog-field-row .select-field:not(.fit) {
   flex: 1;
   min-width: 0;
+}
+
+/* The agent: 20px of room past its longest name, before the arrow's 26. */
+.dialog-field-row .select-field.fit .dropdown-trigger {
+  padding-right: 46px;
 }
 
 /* Just its wand: squared off, as tall as the field beside it. */

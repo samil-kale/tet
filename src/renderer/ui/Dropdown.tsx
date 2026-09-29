@@ -1,4 +1,4 @@
-import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
+import { SEPARATOR, useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
 import { ChevronIcon } from "./icons";
 
 /** Taller lists scroll. */
@@ -10,6 +10,8 @@ const WINDOW_MARGIN = 8;
 interface DropdownOption<T extends string> {
   value: T;
   label: string;
+  /** A line under it, setting it apart from the options that follow. */
+  separatorAfter?: boolean;
 }
 
 interface DropdownProps<T extends string> {
@@ -35,10 +37,10 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
   }));
   const selected = options.find((option) => option.value === value);
 
-  const entries: ContextMenuEntry[] = options.map((option) => ({
-    label: option.label,
-    run: () => onChange(option.value)
-  }));
+  const entries: ContextMenuEntry[] = options.flatMap((option, index) => {
+    const entry: ContextMenuEntry = { label: option.label, run: () => onChange(option.value) };
+    return option.separatorAfter && index < options.length - 1 ? [entry, SEPARATOR] : [entry];
+  });
 
   return (
     <div className={fit ? "select-field fit" : "select-field"}>

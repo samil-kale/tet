@@ -160,12 +160,12 @@ interface SuggestFieldProps {
   /** Told while a suggestion is fetched, for the dialog to hold its answer back (`PromptFields`).
    *  Stable, as a state setter is. */
   onSuggesting?: (suggesting: boolean) => void;
-  /** The row under the field that picks who suggests, handed the wand to place in it and whether
-   *  it is disabled, as it is while a suggestion runs. */
-  picker: (wand: ReactNode, disabled: boolean) => ReactNode;
+  /** The row under the field that picks who suggests, handed whether it is disabled, as it is
+   *  while a suggestion runs. */
+  picker: (disabled: boolean) => ReactNode;
 }
 
-/** A text field filled by a wand in the row under it, e.g. a model's commit message. */
+/** A text field with a wand beside it that fills it, e.g. a model's commit message. */
 export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting, picker }: SuggestFieldProps) {
   const { running: suggesting, run } = useRunning();
   const [refused, setRefused] = useState<string>();
@@ -194,35 +194,35 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
     });
   };
 
-  // While suggesting, the dialog's bar runs (`onSuggesting`).
-  const wand = (
-    <button
-      type="button"
-      className="button secondary dialog-suggest"
-      title={suggestion.title}
-      disabled={disabled || suggesting}
-      onMouseDown={(event) => event.preventDefault()}
-      onClick={() => void suggest()}
-    >
-      <SparkleIcon />
-    </button>
-  );
-
   return (
     <>
       <Field label={label} error={refused ?? error}>
-        <input
-          type="text"
-          value={value}
-          disabled={disabled || suggesting}
-          onChange={(event) => {
-            setRefused(undefined);
-            onChange(event.target.value);
-          }}
-          ref={ref}
-        />
+        {/* Paired like a path field and its Browse button; while suggesting, the dialog's bar runs
+            (`onSuggesting`). */}
+        <div className="dialog-field-row">
+          <input
+            type="text"
+            value={value}
+            disabled={disabled || suggesting}
+            onChange={(event) => {
+              setRefused(undefined);
+              onChange(event.target.value);
+            }}
+            ref={ref}
+          />
+          <button
+            type="button"
+            className="button secondary dialog-suggest"
+            title={suggestion.title}
+            disabled={disabled || suggesting}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void suggest()}
+          >
+            <SparkleIcon />
+          </button>
+        </div>
       </Field>
-      {picker(wand, Boolean(disabled) || suggesting)}
+      {picker(Boolean(disabled) || suggesting)}
     </>
   );
 }
