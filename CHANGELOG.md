@@ -11,6 +11,7 @@ changed for the user, not the commit list.
 - **The Explorer follows the disk.** It re-lists as soon as files change, not only on refresh.
 - **Dialogs finish what they started.** While a Save or a git command runs, the dialog's fields
   and Cancel are locked, and a follow-up question is asked only once the run has ended.
+- **Update progress.** While a newer version downloads, a notice shows how far it has come.
 - **Fixes.** Updates are downloaded through the machine's proxy and certificate store; the sbx
   check at start gives up on a stuck Docker daemon instead of hanging; focus outlines in the file
   tree and the changes list are no longer cut off; sbx path rules ignore case only on Windows.
