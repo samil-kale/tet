@@ -401,6 +401,8 @@ export interface AddRepositoryResult {
   error?: string;
   /** The clone wants a login for this url; the dialog asks for one (GitActionResult). */
   loginUrl?: string;
+  /** The folder holds no git repository; the dialog offers to initialize one (`initialize`). */
+  notRepository?: boolean;
 }
 
 /** A username and password (or token) typed into tet for a git host. */

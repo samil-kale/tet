@@ -71,9 +71,14 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
     return { error: `${directory} is not a folder` };
   }
   // Picking a subdirectory opens the repository itself: git reports paths relative to the root.
-  const root = await git.resolveRoot(directory).catch(() => undefined);
+  let root: string | undefined;
+  try {
+    root = await git.resolveRoot(directory);
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
   if (root === undefined) {
-    return { error: `${directory} is not a git repository` };
+    return { error: `${directory} is not a git repository`, notRepository: true };
   }
   const mainPath = readMainWorktree(root) ?? onDisk(root);
   let project = store.list().find((entry) => entry.path === mainPath);

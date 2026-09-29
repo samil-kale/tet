@@ -70,7 +70,8 @@ export function registerProjectsIpc({
     addProject(projectDeps, directory)
   );
 
-  /** Clone and create both end with the new folder added as a project, as `projects:open` does. */
+  /** Clone, create and initialize all end with the new folder added as a project, as `projects:open`
+   *  does. */
   const addRepository = async (
     action: Promise<GitActionResult>,
     directory: string,
@@ -113,6 +114,10 @@ export function registerProjectsIpc({
     const target = path.join(directory, name);
     return addRepository(git.init(target), target, "Create");
   });
+
+  handle("projects:initialize", (_event, directory: string) =>
+    addRepository(git.init(directory), directory, "Initialize")
+  );
 
   handle("providers:accounts", (): ProviderAccount[] => accounts.list());
 

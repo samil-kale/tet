@@ -494,6 +494,12 @@ export function clearTerminal(ref: ProjectRef, tabId: string): void {
   views.get(viewKey(ref, tabId))?.term.write("\x1bc");
 }
 
+/** Wipes scrollback and screen but the cursor line, for the user's Clear: the shell's prompt stays,
+ *  as it would not redraw a wiped one. */
+export function clearTerminalOutput(ref: ProjectRef, tabId: string): void {
+  views.get(viewKey(ref, tabId))?.term.clear();
+}
+
 export function disposeTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
   earlyOutput.delete(key);

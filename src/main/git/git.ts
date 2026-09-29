@@ -120,15 +120,22 @@ export async function isRepository(cwd: string): Promise<boolean> {
   }
 }
 
-/** The repository root of `cwd`, or undefined outside one; git reports paths relative to it. */
+/**
+ * The repository root of `cwd`, or undefined outside one; git reports paths relative to it. Any
+ * other failure — a repository git will not open, as one of another owner — rejects with git's
+ * words, so it is not taken for a folder without one.
+ */
 export async function resolveRoot(cwd: string): Promise<string | undefined> {
-  try {
-    const result = await git(cwd, ["rev-parse", "--show-toplevel"]);
+  // Untranslated: its message is matched as text.
+  const result = await git(cwd, ["rev-parse", "--show-toplevel"], { env: { LC_ALL: "C" } });
+  if (result.code === 0) {
     const root = result.stdout.trim();
-    return result.code === 0 && root ? path.normalize(root) : undefined;
-  } catch {
+    return root ? path.normalize(root) : undefined;
+  }
+  if (result.stderr.includes("not a git repository")) {
     return undefined;
   }
+  throw new Error(result.stderr.trim() || `git rev-parse failed in ${cwd}`);
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

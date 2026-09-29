@@ -10,6 +10,7 @@ import { askName, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
+import { clearTerminalOutput } from "./terminal-views";
 import { isEditorTab, isEditorTabId, type PaneTab } from "./editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../diff/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../diff/editor-views";
@@ -256,7 +257,7 @@ export const Pane = memo(function Pane({
   const siblingPanes = PRESET_PANES[preset].filter((id) => id !== paneId);
 
   /**
-   * Restart, the close actions, rename, and the moves to sibling panes. A close with nothing to
+   * Restart, Clear for the shell, the close actions, rename, and the moves to sibling panes. A close with nothing to
    * close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
    * moves.
    */
@@ -324,6 +325,8 @@ export const Pane = memo(function Pane({
         label: "Restart",
         run: restartable ? () => restartTab(tabId) : undefined
       },
+      // The shell and saved commands only: an agent's TUI would not redraw what was wiped.
+      ...(terminal.agentId === "shell" ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
       SEPARATOR,
       ...closeEntries,
       SEPARATOR,

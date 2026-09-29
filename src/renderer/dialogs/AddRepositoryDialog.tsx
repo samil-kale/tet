@@ -359,6 +359,8 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   /** null until a clone wanted a login (`loginUrl`), then the url it wants one for. */
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [login, setLogin] = useState<GitLogin>({ username: "", password: "" });
+  /** null until an add found no repository (`notRepository`), then the folder it found none in. */
+  const [uninitialized, setUninitialized] = useState<string | null>(null);
   /** The remote tab's listing underway, on the header's bar. */
   const [listing, setListing] = useState(false);
   /** The account form while it is up: the frame's primary button and Enter are its
@@ -372,6 +374,9 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   }, [loginUrl]);
 
   const folderName = name ?? cloneFolder(url.trim());
+  /** The add tab offers `git init` for the folder it found no repository in, as long as it is the
+   *  one typed. */
+  const initializing = mode === "add" && uninitialized !== null && uninitialized === directory.trim();
   const ready =
     mode === "clone"
       ? url.trim() !== "" &&
@@ -398,7 +403,9 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const { busy: adding, refused, submit, changing } = useSubmit(async () => {
     const result =
       mode === "add"
-        ? await window.tet.projects.open(directory.trim())
+        ? initializing
+          ? await window.tet.projects.initialize(directory.trim())
+          : await window.tet.projects.open(directory.trim())
         : mode === "clone"
           ? await cloneRepository()
           : await window.tet.projects.create(directory.trim(), folderName.trim());
@@ -411,6 +418,9 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       setLogin(emptyLogin(result.loginUrl));
       // An account's token the host refused: the login typed next goes in its stead.
       setAccountId(null);
+    }
+    if (result.notRepository) {
+      setUninitialized(directory.trim());
     }
     return result.error ?? "The repository could not be added";
   }, onClose);
@@ -427,7 +437,11 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const primary: DialogPrimary | undefined = accountForm
     ? { ...accountForm, disabled: accountForm.disabled || busy }
     : mode !== "remote"
-      ? { label: MODES.find((entry) => entry.id === mode)?.label ?? "", disabled: !ready || busy, run: () => void submit() }
+      ? {
+          label: initializing ? "Initialize" : (MODES.find((entry) => entry.id === mode)?.label ?? ""),
+          disabled: !ready || busy,
+          run: () => void submit()
+        }
       : undefined;
 
   /** A remote row's Clone: the clone tab filled in, with the row's account. */
@@ -474,12 +488,15 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
         </>
       )}
       {mode === "add" && (
-        <PathField
-          label="Repository path"
-          value={directory}
-          pickTitle="Add repository"
-          onChange={changing(setDirectory)}
-        />
+        <>
+          <PathField
+            label="Repository path"
+            value={directory}
+            pickTitle="Add repository"
+            onChange={changing(setDirectory)}
+          />
+          {initializing && <p className="dialog-detail">Initialize creates a git repository in this folder.</p>}
+        </>
       )}
       {mode === "create" && (
         <>

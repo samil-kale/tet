@@ -144,6 +144,9 @@ export interface TETApi {
     ): Promise<AddRepositoryResult>;
     /** `git init` of `directory`/`name`, opened as a project. */
     create(directory: string, name: string): Promise<AddRepositoryResult>;
+    /** `git init` of `directory` itself, a folder `open` answered `notRepository` for, opened as a
+     *  project. */
+    initialize(directory: string): Promise<AddRepositoryResult>;
     /** Deletes the worktrees TET made with their branches, then TET's data of the project and its
      *  `tet.id`; the repository's folder stays. The caller confirms first when it has worktrees. */
     remove(projectId: string): Promise<GitActionResult>;
