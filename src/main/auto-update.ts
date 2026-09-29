@@ -8,7 +8,7 @@ import writeFileAtomic from "write-file-atomic";
 import { assetName, installRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../shared/release";
 import { PLATFORM } from "./host-platform";
 import type { UpdateResult } from "../shared/release";
-import type { NoticeSeverity } from "../shared/types";
+import type { NoticeProgress, NoticeSeverity } from "../shared/types";
 import { readJson } from "./json-file";
 import { resumableDownload } from "./resumable-download";
 import { runProcess } from "./run-process";
@@ -23,6 +23,7 @@ const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 const UPDATER_POLL_MS = 2000;
 
 type Notify = (severity: NoticeSeverity, message: string) => void;
+type ShowProgress = (progress: NoticeProgress) => void;
 
 /** Unpacked this session, for `installPendingUpdate`. */
 let pending: { version: string; root: string } | undefined;
@@ -152,7 +153,7 @@ function findRoot(dir: string): string | undefined {
  * macOS it quarantines the file, and Gatekeeper would refuse the ad-hoc signed bundle. A failed
  * download keeps its part for the next try; once unpacked, or refused by tar, the archive goes.
  */
-async function stage(releasesUrl: string, asset: string, version: string): Promise<string> {
+async function stage(releasesUrl: string, asset: string, version: string, onProgress: (fraction: number) => void): Promise<string> {
   const dir = path.join(updateDir(), version);
   await originalFs.promises.rm(dir, { recursive: true, force: true });
   await fs.promises.mkdir(dir, { recursive: true });
@@ -163,7 +164,7 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
       await fs.promises.rm(path.join(updateDir(), entry), { force: true });
     }
   }
-  await resumableDownload(`${releasesUrl}/download/v${version}/${asset}`, archive, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS));
+  await resumableDownload(`${releasesUrl}/download/v${version}/${asset}`, archive, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS), onProgress);
   try {
     await unpack(archive, dir);
   } finally {
@@ -178,13 +179,20 @@ async function stage(releasesUrl: string, asset: string, version: string): Promi
 
 /**
  * Installs only (`app.isPackaged`). Checks at startup and every four hours; a newer version is
- * fetched and unpacked at once, announced once, and installed on quit (`installPendingUpdate`) â€”
+ * fetched and unpacked at once — its progress in a notice that goes silently if it fails —
+ * announced once, and installed on quit (`installPendingUpdate`) â€”
  * never mid-session, a tab being a live agent session. If tet cannot replace its own folder, the
  * notice carries the install command instead.
  *
  * `releasesUrl` is `RELEASES_URL` except for test/install.test.ts.
  */
-export function startAutoUpdate(installed: boolean, releasesUrl: string, tetDataRoot: string, notify: Notify): void {
+export function startAutoUpdate(
+  installed: boolean,
+  releasesUrl: string,
+  tetDataRoot: string,
+  notify: Notify,
+  showProgress: ShowProgress
+): void {
   dataRoot = tetDataRoot;
   const asset = assetName(PLATFORM, process.arch);
   if (!installed || !asset) {
@@ -211,14 +219,28 @@ export function startAutoUpdate(installed: boolean, releasesUrl: string, tetData
         notify("info", `Update ${latest} available, update with: ${PLATFORM.installCommand}`);
         return;
       }
+      const message = `Downloading update ${latest}`;
+      let percent = 0;
+      showProgress({ key: "update", message, fraction: 0 });
+      let staged: string;
       try {
-        pending = { version: latest, root: await stage(releasesUrl, asset, latest) };
-        announced = latest;
-        notify("info", `Update ${latest} available, installs when you quit TET`);
+        staged = await stage(releasesUrl, asset, latest, (fraction) => {
+          // One message per percent, not per chunk.
+          if (Math.floor(fraction * 100) > percent) {
+            percent = Math.floor(fraction * 100);
+            showProgress({ key: "update", message, fraction });
+          }
+        });
       } catch (error) {
         // Tried again at the next check.
         console.error(`[tet] could not fetch the update to ${latest}:`, error);
+        return;
+      } finally {
+        showProgress({ key: "update", message, fraction: undefined });
       }
+      pending = { version: latest, root: staged };
+      announced = latest;
+      notify("info", `Update ${latest} available, installs when you quit TET`);
     } finally {
       checking = false;
     }

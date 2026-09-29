@@ -280,7 +280,8 @@ or a per-line decision is for an agent.
 - **One progress indicator per section** (`ProgressBar.tsx`, `Section`'s `busy`): a new slow
   reason feeds the existing bar. In a dialog that bar is `DialogFrame`'s `busy`, so a busy state
   held by a nested view is lifted to the view owning the frame (`hold`). No spinners for progress: the one
-  spinner is a session's working mark.
+  spinner is a session's working mark. The one determinate bar is the update download's, in its
+  notice (`showProgress`).
 - **The keyboard belongs to the terminal**: tet's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.

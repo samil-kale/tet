@@ -23,6 +23,7 @@ import type {
   HandoffResult,
   ListRepositoriesResult,
   Notice,
+  NoticeProgress,
   NoticeReport,
   Project,
   ProjectCommand,
@@ -358,6 +359,8 @@ export interface TETApi {
   };
   /** What the main process wants said â€” see Notice. */
   onNotice(listener: (payload: Notice) => void): Unsubscribe;
+  /** A download the main process runs — see NoticeProgress. */
+  onNoticeProgress(listener: (payload: NoticeProgress) => void): Unsubscribe;
   /** Read synchronously off `webPreferences.additionalArguments` before main.tsx runs: an async read
    *  would draw the first frame in the wrong colors. */
   initialTheme: string;

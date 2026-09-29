@@ -2430,6 +2430,8 @@ textarea:focus,
 }
 
 .notice {
+  /* Anchors a progress notice's `.notice-progress`. */
+  position: relative;
   display: flex;
   align-items: flex-start;
   /* With the 13px icon, the text starts where VS Code's does beside its 16px one. */
@@ -2483,4 +2485,22 @@ textarea:focus,
   white-space: pre-line;
   /* VS Code's notification line. */
   line-height: 22px;
+}
+
+/* VS Code's notification progress: 2px along the bottom edge, inside the border's radius. */
+.notice-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 0 0 3px 3px;
+}
+
+.notice-progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--vscode-progressBar-background);
+  transition: width 0.2s linear;
 }

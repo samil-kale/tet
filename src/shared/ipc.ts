@@ -135,6 +135,7 @@ export interface SendChannels {
 /** Main to renderer: `webContents.send` and the preload's subscriptions, by payload. */
 export interface EventChannels {
   "app:notice": Payload<TETApi["onNotice"]>;
+  "app:notice-progress": Payload<TETApi["onNoticeProgress"]>;
   "app:theme": Payload<TETApi["onTheme"]>;
   "projects:changed": Payload<TETApi["projects"]["onChanged"]>;
   "environment:request": Payload<TETApi["environment"]["onRequest"]>;

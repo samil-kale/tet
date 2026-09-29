@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { NoticeSeverity } from "../../shared/types";
+import type { NoticeProgress, NoticeSeverity } from "../../shared/types";
 import { SeverityIcon } from "./icons";
 import { createStore, useStore } from "./store";
 import { useTopDialog } from "./window-covered";
@@ -11,6 +11,8 @@ interface ShownNotice {
   id: number;
   severity: NoticeSeverity;
   message: string;
+  /** A progress notice's (`showProgress`). */
+  progress?: { key: string; fraction: number };
 }
 
 /**
@@ -23,6 +25,8 @@ const shown = createStore<ShownNotice[]>([]);
 let nextId = 0;
 /** The notice under the pointer, kept while hovered. */
 let hovered: number | undefined;
+/** Progresses whose notice the user dismissed: not shown again until they end. */
+const dismissedProgress = new Set<string>();
 
 export function notify(severity: NoticeSeverity, message: string): void {
   const id = ++nextId;
@@ -33,6 +37,30 @@ export function notify(severity: NoticeSeverity, message: string): void {
   shown.set([...shown.get(), { id, severity, message }]);
   scheduleDismiss(id, severity);
   window.tet.app.reportNotice({ severity, message, at: Date.now() });
+}
+
+/**
+ * A download's progress, one notice per `key` updated in place: it stands, with a bar along its
+ * bottom edge as VS Code's, until the progress ends or a click dismisses it.
+ */
+export function showProgress({ key, message, fraction }: NoticeProgress): void {
+  const standing = shown.get().find((notice) => notice.progress?.key === key);
+  if (fraction === undefined) {
+    if (standing) {
+      dismissNotice(standing.id);
+    }
+    dismissedProgress.delete(key);
+    return;
+  }
+  if (dismissedProgress.has(key)) {
+    return;
+  }
+  if (standing) {
+    shown.set(shown.get().map((notice) => (notice === standing ? { ...notice, message, progress: { key, fraction } } : notice)));
+    return;
+  }
+  shown.set([...shown.get(), { id: ++nextId, severity: "info", message, progress: { key, fraction } }]);
+  window.tet.app.reportNotice({ severity: "info", message, at: Date.now() });
 }
 
 /**
@@ -58,6 +86,10 @@ function dismissNotice(id: number): void {
   // A removed element never reports the pointer leaving it.
   if (hovered === id) {
     hovered = undefined;
+  }
+  const progress = shown.get().find((notice) => notice.id === id)?.progress;
+  if (progress) {
+    dismissedProgress.add(progress.key);
   }
   shown.set(shown.get().filter((notice) => notice.id !== id));
 }
@@ -85,6 +117,11 @@ export function Notices() {
         >
           <SeverityIcon className="notice-icon" severity={notice.severity} />
           <span className="notice-message">{notice.message}</span>
+          {notice.progress && (
+            <span className="notice-progress">
+              <span className="notice-progress-fill" style={{ width: `${notice.progress.fraction * 100}%` }} />
+            </span>
+          )}
         </button>
       ))}
     </div>

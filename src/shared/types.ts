@@ -643,6 +643,14 @@ export interface Notice {
   message: string;
 }
 
+/** A download's notice, updated in place by its `key` (Notices.tsx's `showProgress`). */
+export interface NoticeProgress {
+  key: string;
+  message: string;
+  /** Share done, 0 to 1; `undefined` ends it, its notice goes. */
+  fraction: number | undefined;
+}
+
 /** The file at HEAD — the diff editor's original side. */
 export interface HeadBlob {
   content: string;

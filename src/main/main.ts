@@ -11,7 +11,7 @@ import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { projectRefKey, overridesMachineNote } from "../shared/types";
-import type { ProjectRef, Notice, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
+import type { ProjectRef, Notice, NoticeProgress, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./auto-update";
 import { readChanged, readCommands, readSbxConfig } from "./tet-json";
 import { writeLaunchers } from "./control/control-launcher";
@@ -66,6 +66,7 @@ let rendererRebuiltAt = 0;
  * Notices sent before the window listens are held: `App` subscribes only after the requirements
  * check, and a fast sender (the update's "Updated to") would otherwise be lost. The renderer
  * reports listening via `app:notice-listening` (preload's `onNotice`); every page load resets it.
+ * A progress is dropped instead: its next step shows it anew.
  */
 let noticesHeard = false;
 const heldNotices: Notice[] = [];
@@ -73,6 +74,9 @@ const heldNotices: Notice[] = [];
 function send<C extends keyof EventChannels>(channel: C, payload: EventChannels[C]): void {
   if (channel === "app:notice" && !noticesHeard) {
     heldNotices.push(payload as Notice);
+    return;
+  }
+  if (channel === "app:notice-progress" && !noticesHeard) {
     return;
   }
   if (window && !window.isDestroyed()) {
@@ -83,6 +87,10 @@ function send<C extends keyof EventChannels>(channel: C, payload: EventChannels[
 /** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
 function notice(severity: NoticeSeverity, message: string): void {
   send("app:notice", { severity, message });
+}
+
+function noticeProgress(progress: NoticeProgress): void {
+  send("app:notice-progress", progress);
 }
 
 on("app:notice-listening", () => {
@@ -679,7 +687,7 @@ if (!app.requestSingleInstanceLock()) {
     // while the renderer loads.
     await pathReady;
     startGitProcess();
-    startAutoUpdate(installed, releasesUrl, dataRoot, notice);
+    startAutoUpdate(installed, releasesUrl, dataRoot, notice, noticeProgress);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

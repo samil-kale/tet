@@ -11,7 +11,7 @@ import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesPane } from "./files/FilesPane";
 import { GitPane } from "./git/GitPane";
-import { Notices, notify } from "./ui/Notices";
+import { Notices, notify, showProgress } from "./ui/Notices";
 import { ProjectList } from "./sidebar/ProjectList";
 import type { RefHead } from "./sidebar/ProjectList";
 import { useSandboxedProjects } from "./sidebar/use-sandboxed-projects";
@@ -208,6 +208,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [projectsRef, tabsRef]);
 
+  // Before onNotice, whose subscription tells main the window listens.
+  useEffect(() => window.tet.onNoticeProgress(showProgress), []);
   useEffect(
     () => window.tet.onNotice(({ severity, message }) => notify(severity, message)),
     []

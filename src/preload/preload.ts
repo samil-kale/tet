@@ -197,6 +197,7 @@ const api: TETApi = {
     send("app:notice-listening");
     return unsubscribe;
   },
+  onNoticeProgress: (listener) => subscribe("app:notice-progress", listener),
   initialTheme,
   onTheme: (listener) => subscribe("app:theme", listener),
   waylandSession

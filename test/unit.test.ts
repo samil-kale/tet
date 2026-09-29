@@ -535,12 +535,13 @@ describe("an update's download, continued after it was cut short", () => {
 
   const archive = (): string => path.join(tempDir("tet-download-test-"), "TET.zip");
   const signal = (): AbortSignal => AbortSignal.timeout(10_000);
+  const ignore = (): void => undefined;
 
   it("fetches the whole file when there is no part", async () => {
     const server = await releaseServer({});
     try {
       const file = archive();
-      await resumableDownload(server.url, file, signal(), fetch);
+      await resumableDownload(server.url, file, signal(), ignore, fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, [undefined]);
     } finally {
@@ -552,12 +553,16 @@ describe("an update's download, continued after it was cut short", () => {
     const server = await releaseServer({ cutAt: 200 * 1024 });
     try {
       const file = archive();
-      await assert.rejects(resumableDownload(server.url, file, signal(), fetch));
+      await assert.rejects(resumableDownload(server.url, file, signal(), ignore, fetch));
       const part = fs.statSync(file).size;
       assert.ok(part > 0 && part <= 200 * 1024, `part of ${part} bytes`);
-      await resumableDownload(server.url, file, signal(), fetch);
+      const fractions: number[] = [];
+      await resumableDownload(server.url, file, signal(), (fraction) => fractions.push(fraction), fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, [undefined, `bytes=${part}-`]);
+      // Counted from the part on, not from zero.
+      assert.ok(fractions[0] > part / BODY.length, `first fraction ${fractions[0]}`);
+      assert.equal(fractions.at(-1), 1);
     } finally {
       server.close();
     }
@@ -568,7 +573,7 @@ describe("an update's download, continued after it was cut short", () => {
     try {
       const file = archive();
       fs.writeFileSync(file, BODY.subarray(0, 1000));
-      await resumableDownload(server.url, file, signal(), fetch);
+      await resumableDownload(server.url, file, signal(), ignore, fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, ["bytes=1000-"]);
     } finally {
@@ -581,7 +586,7 @@ describe("an update's download, continued after it was cut short", () => {
     try {
       const file = archive();
       fs.writeFileSync(file, BODY);
-      await resumableDownload(server.url, file, signal(), fetch);
+      await resumableDownload(server.url, file, signal(), ignore, fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
     } finally {
       server.close();
@@ -593,7 +598,7 @@ describe("an update's download, continued after it was cut short", () => {
     try {
       const file = archive();
       fs.writeFileSync(file, BODY.subarray(0, 1000));
-      await assert.rejects(resumableDownload(server.url, file, signal(), fetch), /bytes 0-/);
+      await assert.rejects(resumableDownload(server.url, file, signal(), ignore, fetch), /bytes 0-/);
       assert.equal(fs.existsSync(file), false);
     } finally {
       server.close();

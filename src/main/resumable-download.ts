@@ -11,9 +11,17 @@ type FetchLike = (url: string, init: { headers: Record<string, string>; signal: 
  * Fetches `url` into `file`, continuing what an earlier call left there: a quit or a dropped
  * connection keeps the part, and the next call asks only for the rest (`Range`). A server sending
  * the whole file anyway (200) overwrites the part. What is appended is not checked against the
- * part: a mismatch makes an archive the unpack refuses, and the caller deletes it.
+ * part: a mismatch makes an archive the unpack refuses, and the caller deletes it. `onProgress`
+ * gets the share of the whole file on disk after each chunk, the part included, and nothing when
+ * the server gives no length.
  */
-export async function resumableDownload(url: string, file: string, signal: AbortSignal, fetchFn: FetchLike = net.fetch): Promise<void> {
+export async function resumableDownload(
+  url: string,
+  file: string,
+  signal: AbortSignal,
+  onProgress: (fraction: number) => void,
+  fetchFn: FetchLike = net.fetch
+): Promise<void> {
   const have = await fs.promises.stat(file).then(
     (stat) => stat.size,
     () => 0
@@ -33,5 +41,20 @@ export async function resumableDownload(url: string, file: string, signal: Abort
     await fs.promises.rm(file, { force: true });
     throw new Error(`download answered ${response.headers.get("content-range")} for bytes ${have}-`);
   }
-  await pipeline(Readable.fromWeb(response.body as WebReadableStream), fs.createWriteStream(file, { flags: resumed ? "a" : "w" }));
+  let received = resumed ? have : 0;
+  const length = Number(response.headers.get("content-length"));
+  const total = length > 0 ? received + length : undefined;
+  await pipeline(
+    Readable.fromWeb(response.body as WebReadableStream),
+    async function* (chunks: AsyncIterable<Uint8Array>) {
+      for await (const chunk of chunks) {
+        received += chunk.byteLength;
+        if (total !== undefined) {
+          onProgress(Math.min(received / total, 1));
+        }
+        yield chunk;
+      }
+    },
+    fs.createWriteStream(file, { flags: resumed ? "a" : "w" })
+  );
 }
