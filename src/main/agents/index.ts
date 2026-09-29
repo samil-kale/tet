@@ -93,6 +93,7 @@ export function listAgents(): AgentInfo[] {
     hasSessions: agent.sessions !== undefined,
     takesPrompt: agent.terminal !== undefined,
     shiftEnter: agent.terminal?.shiftEnter,
+    clearable: agent.clearable === true,
     sandboxed: hasSandbox(agent)
   }));
 }

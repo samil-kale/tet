@@ -28,6 +28,8 @@ export interface AgentInfo {
   takesPrompt: boolean;
   /** What its tabs send for Shift+Enter (AgentTerminal.shiftEnter); unset: the terminal's own. */
   shiftEnter?: string;
+  /** Its tabs offer Clear (AgentBase.clearable). */
+  clearable: boolean;
   /** Can run in an sbx sandbox (the agent's `sandbox` group). */
   sandboxed: boolean;
 }

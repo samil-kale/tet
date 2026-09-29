@@ -8,7 +8,7 @@ import { PLATFORM } from "../../src/main/util/host-platform";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { readSbxConfig, writeSbxConfig } from "../../src/main/store/tet-json";
-import { parsePublishedPorts, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../../src/main/sbx/sbx";
+import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../../src/main/sbx/sbx";
 import { parseSignedInUser, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
 import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../../src/main/sbx/sbx-mounts";
 import { saveSbxConfig } from "../../src/main/sbx/sbx-save";
@@ -532,6 +532,35 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     });
   });
 
+  for (const created of [true, false]) {
+    it(`${created ? "removes the sandbox a start created" : "keeps a sandbox the start found"} when the start fails after it`, async () => {
+      const { dir, projectPath } = fakeSbx({ published: [], fail: ["policy ls --type filesystem"] });
+      // Listed at another folder, the sandbox is rebuilt: removed, then created at this one.
+      const at = created ? path.join(dir, "moved") : projectPath;
+      const { calls } = await withSbx(dir, () =>
+        assert.rejects(
+          prepareSbxRun({
+            agent: claudeAgent,
+            name,
+            ref: main,
+            projectRefPath: at,
+            config: { ...EMPTY_SBX_CONFIG, enabled: true, paths: [{ path: os.tmpdir(), access: "ro" }] },
+            knowledge: EMPTY_SBX_KNOWLEDGE,
+            sandboxes: new Map([[name, [projectPath]]]),
+            paths: { agentDir: sandboxDir(dir, main, "claude") },
+            agentArgs: [],
+            secretValues: new Map(),
+            variableValues: new Map()
+          }),
+          /SBX could not/
+        )
+      );
+      assert.deepEqual(
+        calls.filter((call) => /^(rm|create) /.test(call)),
+        created ? [`rm ${name} --force`, `create claude ${at} --name ${name} --skills=off`, `rm ${name} --force`] : []
+      );
+    });
+  }
 });
 
 describe("what of the SBX Settings could not be applied", () => {

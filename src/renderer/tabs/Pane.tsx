@@ -327,8 +327,10 @@ export const Pane = memo(function Pane({
         label: "Restart",
         run: restartable ? () => restartTab(tabId) : undefined
       },
-      // The shell and saved commands only: an agent's TUI would not redraw what was wiped.
-      ...(terminal.agentId === "shell" ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
+      // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
+      ...(agentInfo(agents, terminal.agentId)?.clearable === true
+        ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }]
+        : []),
       SEPARATOR,
       ...closeEntries,
       ...(hasSessions

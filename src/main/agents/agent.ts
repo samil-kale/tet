@@ -284,6 +284,9 @@ interface AgentBase {
   quotePath(path: string): string;
   /** Resolved at spawn time: the shell's executable depends on the platform. */
   executable(): string;
+  /** Its output is plain lines, so the tab offers Clear: a TUI draws its screen once and would not
+   *  redraw what was wiped. Omitted by every agent with one. */
+  clearable?: boolean;
   /** Omitted where the CLI always exists (the shell). */
   install?: AgentInstall;
   /** Omitted by the shell. */

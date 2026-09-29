@@ -399,16 +399,34 @@ export function sandboxEnv({
  * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent.
  * Applies tet.json as it stands and never writes it: what cannot be applied here
  * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
- * tell (sbxProblemNotices) — how a user learns that governance took over. Rejects only when
- * creating fails or a folder of tet's own cannot be mounted.
+ * tell (sbxProblemNotices) — how a user learns that governance took over. Rejects when creating
+ * fails, sbx cannot say what applies (readSbxProblems) or a folder of tet's own cannot be mounted.
  */
 export async function prepareSbxRun(
   request: SbxRunRequest
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
+  const { agent, name, onData } = request;
+  const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
+  try {
+    return await readySandboxRun(request, created);
+  } catch (error) {
+    // Only the start that created a sandbox seeds it: one left unseeded would be found by every
+    // later start and run without its hosts, ports and secrets, so it goes, to be created anew.
+    if (created && !(await removeSandbox(name, onData))) {
+      logError(`could not remove the ${name} sandbox a failed first start left`);
+    }
+    throw error;
+  }
+}
+
+/** prepareSbxRun past ensureSandboxExists, `created` telling whether this start made the sandbox. */
+async function readySandboxRun(
+  request: SbxRunRequest,
+  created: boolean
+): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
   const { agent, onData, secretValues, variableValues } = request;
   const { projectId } = request.ref;
   const { name } = request;
-  const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
   // Ports, hosts and secrets only reach a sandbox this call created: they survive a stop, and after
   // that a Save brings them in line (saveSbxConfig). A port another sandbox of the project forwards
   // is in place already (applyProjectPorts).
