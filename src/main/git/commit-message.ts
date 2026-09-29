@@ -21,8 +21,8 @@ export function commitMessageFrom(reply: string): string {
  *  time. */
 const suggestion = stoppable();
 
-/** The commit prompt's suggest button, asked of the first installed agent with `ask`
- *  (`findAskableAgent`). `prompt` (`effectivePrompt`) and `context` (`readCommitContext`) are handed
+/** The commit prompt's suggest button, asked of the agent and model picked beside it; `args`
+ *  include its model's. `prompt` (`effectivePrompt`) and `context` (`readCommitContext`) are handed
  *  in: only the main process reaches the git process and the settings. */
 export async function suggestCommitMessage(
   root: string,

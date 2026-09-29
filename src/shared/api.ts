@@ -47,6 +47,8 @@ import type {
   SettingsEdits,
   StashCommand,
   SuggestionResult,
+  Suggester,
+  AskModelsResult,
   TerminalDescriptor,
   TerminalOutput,
   TerminalStatus
@@ -226,8 +228,12 @@ export interface TETApi {
     commitAll(ref: ProjectRef, message: string): Promise<GitActionResult>;
     /** These files alone, untracked included; nothing else staged goes with them. */
     commitPaths(ref: ProjectRef, message: string, paths: string[]): Promise<GitActionResult>;
-    /** An installed agent suggests one subject for all changes, or only `paths`. */
-    suggestCommitMessage(ref: ProjectRef, paths?: string[]): Promise<SuggestionResult>;
+    /** The installed agents that can suggest a value here (`AgentAsk`), in registration order. */
+    suggestionAgents(ref: ProjectRef): Promise<AgentId[]>;
+    /** The models `agentId` can suggest with here. */
+    suggestionModels(ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult>;
+    /** `suggester` suggests one subject for all changes, or only `paths`. */
+    suggestCommitMessage(ref: ProjectRef, suggester: Suggester, paths?: string[]): Promise<SuggestionResult>;
     /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
     cancelCommitSuggestion(): void;
     /** Everything the changes list shows, untracked included. */

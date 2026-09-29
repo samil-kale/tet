@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import * as readline from "node:readline";
 import { killProcessTree, resolveCommand } from "../../terminals/pty";
+import type { AskModel } from "../../../shared/types";
 
 /**
  * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. tet starts one per
@@ -109,6 +110,28 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     });
     pending.set(initId, "initialize");
   });
+}
+
+/** `model/list`'s rows, as far as tet reads them: `model` is what `--model` takes. */
+interface ModelPage {
+  data?: { model?: unknown; displayName?: unknown }[];
+  nextCursor?: unknown;
+}
+
+/** The models Codex's own picker offers (`model/list` without hidden ones), page by page. */
+export async function listModels(executable: string, cwd: string): Promise<AskModel[]> {
+  const models: AskModel[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = (await callAppServer(executable, cwd, { method: "model/list", params: { cursor } })) as ModelPage;
+    for (const row of page.data ?? []) {
+      if (typeof row.model === "string") {
+        models.push({ id: row.model, label: typeof row.displayName === "string" ? row.displayName : row.model });
+      }
+    }
+    cursor = typeof page.nextCursor === "string" ? page.nextCursor : undefined;
+  } while (cursor !== undefined);
+  return models;
 }
 
 export async function renameThread(executable: string, cwd: string, threadId: string, name: string): Promise<void> {

@@ -393,6 +393,25 @@ export interface SuggestionResult {
   error?: string;
 }
 
+/** A model an agent can be asked with: `id` is what its CLI takes, `label` what the user reads. */
+export interface AskModel {
+  id: string;
+  label: string;
+}
+
+/** The models an agent lists (`AgentAsk.models`), or why it could not. */
+export interface AskModelsResult {
+  models: AskModel[];
+  error?: string;
+}
+
+/** Who answers a suggestion: an agent that can ask, and one of its models — "" for the one its
+ *  own configuration picks. */
+export interface Suggester {
+  agentId: AgentId;
+  model: string;
+}
+
 /** Open/clone/create/new worktree: the project, or git's message. `worktree` names the worktree it
  *  was about, to bring to the front. */
 export interface AddRepositoryResult {

@@ -159,6 +159,23 @@ textarea:focus,
   min-width: 0;
 }
 
+/* Dropdown's `fit`: sized by its content, never stretched by its row. */
+.select-field.fit {
+  flex: none;
+}
+
+.dropdown-fit {
+  display: inline-grid;
+}
+
+.dropdown-fit > span {
+  grid-area: 1 / 1;
+}
+
+.dropdown-fit-other {
+  visibility: hidden;
+}
+
 .select-arrow {
   position: absolute;
   right: 10px;
@@ -2396,6 +2413,12 @@ textarea:focus,
 }
 
 .dialog-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Who suggests, beside the wand: the model takes what the agent leaves. */
+.dialog-field-row .select-field:not(.fit) {
   flex: 1;
   min-width: 0;
 }

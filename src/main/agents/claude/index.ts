@@ -8,6 +8,7 @@ import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hoo
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
+import type { AskModel } from "../../../shared/types";
 import { logError } from "../../uncaught";
 
 /** Appended to Claude Code's own system prompt for this process (see system-prompt.ts). */
@@ -18,6 +19,13 @@ const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prom
  * booted (terminal-session.ts), and this variable overrides that.
  */
 const FULLSCREEN_ENV = { CLAUDE_CODE_NO_FLICKER: "1" };
+
+const MODEL_ALIASES: AskModel[] = [
+  { id: "fable", label: "Fable" },
+  { id: "opus", label: "Opus" },
+  { id: "sonnet", label: "Sonnet" },
+  { id: "haiku", label: "Haiku" }
+];
 
 export const claudeAgent: SandboxedAgent = {
   id: "claude",
@@ -36,7 +44,12 @@ export const claudeAgent: SandboxedAgent = {
     quitPresses: 2
   },
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
-  ask: { args: ["-p", "--no-session-persistence"] },
+  ask: {
+    args: ["-p", "--no-session-persistence"],
+    // Its aliases, each the latest model of its line: the CLI lists none without a session.
+    models: () => Promise.resolve(MODEL_ALIASES),
+    modelArgs: (model) => ["--model", model]
+  },
   sessions: claudeSessionProvider,
   turns: { sessionIdOf: hookSessionId, workOutlivesStop: claudeWorkOutlivesStop, hookReply: claudeHookReply },
   host: {

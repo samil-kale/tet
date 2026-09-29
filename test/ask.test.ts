@@ -3,6 +3,7 @@ import * as os from "node:os";
 import { describe, it } from "node:test";
 import { askAgent } from "../src/main/agents/ask";
 import { commitMessageFrom } from "../src/main/git/commit-message";
+import { piModelsFrom } from "../src/main/agents/pi/models";
 
 describe("a background agent question", () => {
   it("arrives on stdin and returns trimmed stdout", async () => {
@@ -13,6 +14,25 @@ describe("a background agent question", () => {
       "process.stdin.on('end', () => process.stdout.write('  ' + input.toUpperCase() + '  '));"
     ].join(" ");
     assert.equal(await askAgent(os.tmpdir(), process.execPath, ["-e", script], "first\nsecond"), "FIRST\nSECOND");
+  });
+});
+
+describe("pi's model listing", () => {
+  it("reads each row of its table as provider/model", () => {
+    const output = [
+      "provider    model                            context  max-out  thinking  images",
+      "openrouter  ~anthropic/claude-sonnet-latest  1M       128K     yes       yes   ",
+      "anthropic   claude-haiku                     200K     64K      yes       yes   ",
+      ""
+    ].join("\n");
+    assert.deepEqual(piModelsFrom(output), [
+      { id: "openrouter/~anthropic/claude-sonnet-latest", label: "openrouter/~anthropic/claude-sonnet-latest" },
+      { id: "anthropic/claude-haiku", label: "anthropic/claude-haiku" }
+    ]);
+  });
+
+  it("lists nothing without its table", () => {
+    assert.deepEqual(piModelsFrom("No models available. Set an API key.\n"), []);
   });
 });
 

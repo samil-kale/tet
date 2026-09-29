@@ -74,6 +74,8 @@ export interface InvokeChannels {
   "repository:checkout-tag": TETApi["repository"]["checkoutTag"];
   "repository:commit-all": TETApi["repository"]["commitAll"];
   "repository:commit-paths": TETApi["repository"]["commitPaths"];
+  "repository:suggestion-agents": TETApi["repository"]["suggestionAgents"];
+  "repository:suggestion-models": TETApi["repository"]["suggestionModels"];
   "repository:suggest-commit-message": TETApi["repository"]["suggestCommitMessage"];
   "repository:stash-push": TETApi["repository"]["stashPush"];
   "repository:stash": TETApi["repository"]["stash"];

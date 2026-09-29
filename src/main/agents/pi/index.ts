@@ -6,6 +6,7 @@ import { piIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { writePiExtension } from "./extension";
+import { listPiModels } from "./models";
 import { piAgentDir, piSandboxSessions, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
@@ -54,7 +55,7 @@ export const piAgent: SandboxedAgent = {
   },
   // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript
   // behind.
-  ask: { args: ["-p", "--no-session"] },
+  ask: { args: ["-p", "--no-session"], models: listPiModels, modelArgs: (model) => ["--model", model] },
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
   turns: { sessionIdOf: hookSessionId },

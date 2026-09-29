@@ -2,7 +2,7 @@ import * as os from "node:os";
 import { checkAgentInstalled, isAgentInstalled } from "../terminals/terminal-session";
 import type { AgentId, AgentInfo } from "../../shared/types";
 import { hasSandbox } from "./agent";
-import type { AgentAsk, AgentDefinition, SandboxedAgent } from "./agent";
+import type { AgentDefinition, SandboxedAgent } from "./agent";
 import { claudeAgent } from "./claude";
 import { codexAgent } from "./codex";
 import { piAgent } from "./pi";
@@ -27,19 +27,11 @@ export function agentInstalled(agent: AgentDefinition, cwd: string, fresh = fals
   return check(agent.executable(), agent.install.versionArgs, cwd);
 }
 
-/** The first installed agent that can `ask`, in registration order. */
-export async function findAskableAgent(
-  cwd: string
-): Promise<{ executable: string; agent: AgentDefinition; ask: AgentAsk } | undefined> {
-  for (const agent of AGENTS) {
-    if (!agent.ask || !agent.install) {
-      continue;
-    }
-    if (await agentInstalled(agent, cwd)) {
-      return { executable: agent.executable(), agent, ask: agent.ask };
-    }
-  }
-  return undefined;
+/** The installed agents that can `ask`, in registration order. */
+export async function listAskableAgents(cwd: string): Promise<AgentId[]> {
+  const askable = AGENTS.filter((agent) => agent.ask && agent.install);
+  const installed = await Promise.all(askable.map((agent) => agentInstalled(agent, cwd)));
+  return askable.filter((_, index) => installed[index]).map((agent) => agent.id);
 }
 
 export function getAgent(id: AgentId): AgentDefinition {

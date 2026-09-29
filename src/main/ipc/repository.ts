@@ -1,6 +1,6 @@
 import type { IpcMainInvokeEvent } from "electron";
 import { handle, on } from "./channels";
-import { AGENTS, findAskableAgent } from "../agents";
+import { getAgent, listAskableAgents } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { errorMessage, failure } from "../../shared/errors";
 import type {
@@ -16,6 +16,9 @@ import type {
   GitLogin,
   RepositoryState,
   StashCommand,
+  AgentId,
+  AskModelsResult,
+  Suggester,
   SuggestionResult
 } from "../../shared/types";
 import {
@@ -100,31 +103,45 @@ export function registerRepositoryIpc({
   handle("repository:commit-paths", inRepository((repository, message: string, paths: string[]) =>
     repository.commitPaths(message, paths))
   );
-  handle("repository:suggest-commit-message", async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
+  handle("repository:suggestion-agents", async (_event, ref: ProjectRef): Promise<AgentId[]> => {
     const repository = repositories.get(ref);
-    if (!repository) {
-      return {};
+    return repository ? listAskableAgents(repository.at.path) : [];
+  });
+  handle("repository:suggestion-models", async (_event, ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult> => {
+    const repository = repositories.get(ref);
+    const agent = getAgent(agentId);
+    if (!repository || !agent.ask) {
+      return { models: [] };
     }
-    const cwd = repository.at.path;
-    const askable = await findAskableAgent(cwd);
-    if (!askable) {
-      const candidates = AGENTS.filter((agent) => agent.ask)
-        .map((agent) => agent.displayName)
-        .join(" or ");
-      return { error: `${candidates} not found — install one to have it suggest a commit message.` };
-    }
-    const { executable, ask } = askable;
     try {
-      // The commit's own paths, a rename's old one included.
-      const pathspec = paths && repository.pathspec(paths);
-      const context = await git.readCommitContext(cwd, pathspec);
-      const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
-      const message = await suggestCommitMessage(cwd, executable, ask.args, prompt, context);
-      return message.length === 0 ? { error: "The agent did not suggest a commit message" } : { value: message };
+      return { models: await agent.ask.models(agent.executable(), repository.at.path) };
     } catch (error) {
-      return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
+      return { models: [], error: `Could not list ${agent.displayName}'s models: ${errorMessage(error)}` };
     }
   });
+  handle(
+    "repository:suggest-commit-message",
+    async (_event, ref: ProjectRef, suggester: Suggester, paths?: string[]): Promise<SuggestionResult> => {
+      const repository = repositories.get(ref);
+      const agent = getAgent(suggester.agentId);
+      if (!repository || !agent.ask) {
+        return {};
+      }
+      const cwd = repository.at.path;
+      // "" leaves the model to the agent's own configuration.
+      const args = [...agent.ask.args, ...(suggester.model === "" ? [] : agent.ask.modelArgs(suggester.model))];
+      try {
+        // The commit's own paths, a rename's old one included.
+        const pathspec = paths && repository.pathspec(paths);
+        const context = await git.readCommitContext(cwd, pathspec);
+        const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
+        const message = await suggestCommitMessage(cwd, agent.executable(), args, prompt, context);
+        return message.length === 0 ? { error: "The agent did not suggest a commit message" } : { value: message };
+      } catch (error) {
+        return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
+      }
+    }
+  );
   on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
   handle("repository:stash-push", inRepository((repository, message: string) => repository.stashPush(message)));
   handle("repository:stash", inRepository((repository, command: StashCommand, sha: string) => repository.stash(command, sha)));

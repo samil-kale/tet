@@ -1,7 +1,7 @@
 import type { ThemeDefinition } from "../../shared/themes";
 import type { HookEvent } from "../../shared/control";
 import type { ControlSide } from "../../shared/control-side";
-import type { AgentIcon, AgentId, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
+import type { AgentIcon, AgentId, AskModel, SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid). */
@@ -163,6 +163,10 @@ export interface AgentAsk {
   /** The question arrives on stdin, so these only name the mode — one that leaves no session
    *  behind: a background question must not come back as a tab. */
   args: string[];
+  /** The models it can be asked with, as its CLI offers them in `cwd`, in its own order. */
+  models(executable: string, cwd: string): Promise<AskModel[]>;
+  /** What picks `model` (an `AskModel.id`) for one question, beside `args`. */
+  modelArgs(model: string): string[];
 }
 
 /** One command line run in a terminal, for a saved command with `"shell": true`. */

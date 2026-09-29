@@ -8,6 +8,7 @@ import type { ThemeDefinition } from "../../../shared/themes";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
 import { codexHookReply, setupCodexHooks } from "./hooks";
+import { listModels } from "./app-server-client";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
 import { PLATFORM } from "../../host-platform";
 import { logError } from "../../uncaught";
@@ -57,7 +58,11 @@ export const codexAgent: SandboxedAgent = {
     quitPresses: 1
   },
   // `--ephemeral` writes no rollout, so no session is left behind.
-  ask: { args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"] },
+  ask: {
+    args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
+    models: listModels,
+    modelArgs: (model) => ["--model", model]
+  },
   sessions: codexSessionProvider,
   // See AgentTurns.questionOutlivesTurn.
   turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true, hookReply: codexHookReply },

@@ -16,13 +16,16 @@ interface DropdownProps<T extends string> {
   value: T;
   options: DropdownOption<T>[];
   onChange: (value: T) => void;
+  disabled?: boolean;
+  /** As wide as its longest option rather than its row, so picking another never resizes it. */
+  fit?: boolean;
 }
 
 /**
  * A `<select>` stand-in on `ContextMenu`: Chrome draws a native select's open list itself and
  * ignores CSS colors for the highlighted row.
  */
-export function Dropdown<T extends string>({ value, options, onChange }: DropdownProps<T>) {
+export function Dropdown<T extends string>({ value, options, onChange, disabled, fit }: DropdownProps<T>) {
   const menu = useAnchoredMenu((rect) => ({
     x: rect.left,
     y: rect.bottom,
@@ -38,13 +41,25 @@ export function Dropdown<T extends string>({ value, options, onChange }: Dropdow
   }));
 
   return (
-    <div className="select-field">
+    <div className={fit ? "select-field fit" : "select-field"}>
       <button
         type="button"
         className={menu.isOpen ? "dropdown-trigger open" : "dropdown-trigger"}
+        disabled={disabled}
         onMouseDown={menu.open}
       >
-        {selected?.label}
+        {fit ? (
+          // Every label in one cell, the others hidden: the widest sets the width.
+          <span className="dropdown-fit">
+            {options.map((option) => (
+              <span key={option.value} className={option === selected ? undefined : "dropdown-fit-other"}>
+                {option.label}
+              </span>
+            ))}
+          </span>
+        ) : (
+          selected?.label
+        )}
       </button>
       <ChevronIcon expanded className="select-arrow" />
       {menu.render(() => entries, "dropdown-menu")}

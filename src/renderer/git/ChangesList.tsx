@@ -11,6 +11,7 @@ import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextM
 import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
+import { rememberedSuggester, SuggesterPicker } from "./SuggesterPicker";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
 
@@ -95,7 +96,7 @@ export async function askCommit(
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
-    value: { message: "", push: false },
+    value: { message: "", push: false, suggester: rememberedSuggester() },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
     render: ({ value, onChange, error, busy, field, hold }) => (
@@ -106,12 +107,24 @@ export async function askCommit(
           onChange={(message) => onChange((current) => ({ ...current, message }))}
           suggestion={{
             title: "Suggest a commit message",
-            run: () => window.tet.repository.suggestCommitMessage(ref, paths)
+            run: () =>
+              value.suggester.agentId === ""
+                ? Promise.resolve({ error: "No agent that can suggest a commit message is installed." })
+                : window.tet.repository.suggestCommitMessage(ref, value.suggester, paths)
           }}
           disabled={busy}
           ref={field}
           error={error}
           onSuggesting={hold}
+          picker={(wand, pickerDisabled) => (
+            <SuggesterPicker
+              ref={ref}
+              value={value.suggester}
+              onChange={(suggester) => onChange((current) => ({ ...current, suggester }))}
+              wand={wand}
+              disabled={pickerDisabled}
+            />
+          )}
         />
         {pushLabel && (
           <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />
