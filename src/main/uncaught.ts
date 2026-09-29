@@ -33,7 +33,8 @@ export function logInfo(line: string): void {
 }
 
 function appendLog(entry: string): void {
-  console.error(entry);
+  // console.error ends the line itself.
+  console.error(entry.trimEnd());
   if (!errorLog) {
     return;
   }
@@ -59,7 +60,7 @@ export function installUncaughtHandler(logFile: string, notify: (severity: Notic
     const stack = error instanceof Error ? (error.stack ?? summary) : summary;
     const report = `${UNCAUGHT_MARKER} (${origin}, #${count}) ${new Date().toISOString()}\n${stack}\n`;
     // Console too: tests driving the app read stderr.
-    console.error(report);
+    console.error(report.trimEnd());
     try {
       fs.appendFileSync(logFile, report);
     } catch {
