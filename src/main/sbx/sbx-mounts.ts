@@ -7,8 +7,7 @@ import type { SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowle
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";
-import { inTurn } from "../util/in-turn";
-import { mapLimited } from "../util/map-limited";
+import { inTurn, mapLimited } from "../util/async";
 import { normalizeHostPath, relativeInside } from "../util/path-inside";
 import { toContainerPath } from "../agents/hook-target";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";

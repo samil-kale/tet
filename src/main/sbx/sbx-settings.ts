@@ -14,7 +14,7 @@ import type {
 } from "../../shared/types";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import { logFailure } from "../util/json-file";
-import { inTurn } from "../util/in-turn";
+import { inTurn } from "../util/async";
 import { readSbxProblems } from "./sbx";
 import { saveSbxConfig, type SbxSaveTarget } from "./sbx-save";
 import { listSandboxes, readGovernance, type SandboxList, type SbxReading } from "./sbx-status";

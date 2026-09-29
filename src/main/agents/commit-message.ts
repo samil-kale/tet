@@ -2,7 +2,7 @@ import { errorMessage } from "../../shared/errors";
 import type { Suggester, SuggestionResult } from "../../shared/types";
 import { askAgent } from "./ask";
 import { AGENTS } from "./index";
-import { stoppable } from "../util/run-process";
+import { stoppable } from "../util/process";
 
 /** Takes the first subject out of an otherwise well-formed answer, tolerating a fenced reply. */
 export function commitMessageFrom(reply: string): string {

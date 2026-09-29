@@ -19,7 +19,7 @@ import type {
 } from "../../shared/types";
 import { machineName } from "./env-names";
 import { readMainWorktree } from "../util/linked-git-dir";
-import { inTurn } from "../util/in-turn";
+import { inTurn } from "../util/async";
 import { isRecord } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 

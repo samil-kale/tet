@@ -1,17 +1,20 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { shell } from "electron";
 import { Minimatch } from "minimatch";
-import { errorMessage } from "../../shared/errors";
+import { errorMessage, failure } from "../../shared/errors";
 import type {
   ExplorerListing,
   FileSearchFile,
   FileSearchMatch,
   FileSearchQuery,
-  FileSearchResult
+  FileSearchResult,
+  GitActionResult
 } from "../../shared/types";
 import { PLATFORM } from "../util/host-platform";
 import { readExplorerView, type ExplorerView } from "../store/tet-json";
 import { git } from "./git-client";
+import { relativeInside } from "../util/path-inside";
 
 /**
  * The Explorer's listing and its search: filesystem walks off `Repository`'s git state machine
@@ -244,4 +247,93 @@ async function matchesIn(root: string, filePath: string, matcher: RegExp): Promi
     }
   });
   return matches;
+}
+
+/** What every path check answers for a path that escapes the repository root. */
+export const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" } as const;
+
+/**
+ * A filesystem action as a `GitActionResult`: whatever it threw becomes the failure's message, in
+ * the words the OS used. For the Explorer's own edits, which run off `runAction` — they take no
+ * index lock (Repository.listExplorer).
+ */
+function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
+  return action().then(() => ({ ok: true }), failure);
+}
+
+/** Whether two paths name one entry, e.g. differing in case on a case-insensitive filesystem. By
+ *  file id, as bigints: a win32 file id overflows a number. */
+function sameEntry(a: string, b: string): boolean {
+  try {
+    const [first, second] = [fs.statSync(a, { bigint: true }), fs.statSync(b, { bigint: true })];
+    return first.ino === second.ino && first.dev === second.dev;
+  } catch {
+    return false;
+  }
+}
+
+/** A repository-relative path for a new entry, resolved, or an error if outside or taken.
+ *  `renaming` is the source: on a case-insensitive filesystem `Readme.md` → `README.md` finds the
+ *  source at the target, which is no conflict. */
+async function resolveNew(root: string, filePath: string, renaming?: string): Promise<{ absolute: string } | { error: string }> {
+  const absolute = resolveInside(root, filePath);
+  if (!absolute) {
+    return { error: OUTSIDE_REPOSITORY.error };
+  }
+  if (fs.existsSync(absolute) && !(renaming && sameEntry(absolute, renaming))) {
+    return { error: `A file or folder "${filePath}" already exists at this location` };
+  }
+  return { absolute };
+}
+
+/** The Explorer's "New File...", creating parent directories. */
+export async function createFile(root: string, filePath: string): Promise<GitActionResult> {
+  const target = await resolveNew(root, filePath);
+  if ("error" in target) {
+    return { ok: false, error: target.error };
+  }
+  return attempt(async () => {
+    await fs.promises.mkdir(path.dirname(target.absolute), { recursive: true });
+    await fs.promises.writeFile(target.absolute, "", { flag: "wx" });
+  });
+}
+
+/** The Explorer's "New Folder...". */
+export async function createDirectory(root: string, dirPath: string): Promise<GitActionResult> {
+  const target = await resolveNew(root, dirPath);
+  if ("error" in target) {
+    return { ok: false, error: target.error };
+  }
+  return attempt(() => fs.promises.mkdir(target.absolute, { recursive: true }));
+}
+
+/** The Explorer's "Delete...": to the trash, like `discard`. */
+export async function deletePath(root: string, filePath: string): Promise<GitActionResult> {
+  const absolute = resolveInside(root, filePath);
+  if (!absolute) {
+    return OUTSIDE_REPOSITORY;
+  }
+  return attempt(() => shell.trashItem(absolute));
+}
+
+/** The Explorer's "Rename...", which may also move. */
+export async function renamePath(root: string, fromPath: string, toPath: string): Promise<GitActionResult> {
+  const from = resolveInside(root, fromPath);
+  if (!from) {
+    return OUTSIDE_REPOSITORY;
+  }
+  const to = await resolveNew(root, toPath, from);
+  if ("error" in to) {
+    return { ok: false, error: to.error };
+  }
+  return attempt(async () => {
+    await fs.promises.mkdir(path.dirname(to.absolute), { recursive: true });
+    await fs.promises.rename(from, to.absolute);
+  });
+}
+
+/** The absolute path, or undefined if it escapes the root. */
+export function resolveInside(root: string, filePath: string): string | undefined {
+  const absolute = path.resolve(root, filePath);
+  return relativeInside(root, absolute) === undefined ? undefined : absolute;
 }

@@ -29,8 +29,8 @@ project's terminals.
   the only folder imported across them (`no-restricted-imports` in `eslint.config.mjs`).
 - `src/main/` is layered: each area imports its own layer's areas it is allowed and every layer
   below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
-  0. `util/`: helpers of no area — the platform (`host-platform.ts`), spawning (`spawn.ts`,
-     `run-process.ts`), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
+  0. `util/`: helpers of no area — the platform (`host-platform.ts`), starting processes
+     (`process.ts`), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
   1. `store/`: what TET keeps and reads back — settings, environment variables, `tet.json`, the
      data folder's layout (`data-root.ts`, `project-dirs.ts`). A store of one area stays in it
      (`sbx-local.ts`, `providers/accounts.ts`).
@@ -42,13 +42,13 @@ project's terminals.
   4. `control/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
      (`CallerSide`) extends the tab's.
   5. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
-     singletons it touches) and, flat, the window and startup (`main.ts`, `uncaught.ts`),
-     `projects.ts` and `requirements.ts`.
+     singletons it touches) and, flat, the startup (`main.ts`, `uncaught.ts`), the window
+     (`window.ts`), `projects.ts` and `requirements.ts`.
 
   Files that belong together are a folder; one that stands alone stays flat in its layer. No
   folder for its own sake.
 - Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
-  wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `main.ts`'s `send` in main,
+  wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `window.ts`'s `send` in main,
   `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or
   `webContents.send` call with a string.
 - `src/renderer/`: `terminal/` (xterm, split view, link providers), `git/` (the side pane's git
@@ -181,14 +181,14 @@ others.
   the id is data alone (tet.json's `os`, the app's info) — `install.test.ts`, testing each OS's own
   installer, alone branches on it. A new difference extends the interface.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
-  (`src/main/util/spawn.ts`), never `shell: true`.
+  (`src/main/util/process.ts`), never `shell: true`.
 - Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`: only
   Chromium's stack applies the machine's proxy and certificate store. Code the tests run under
   node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`). A request that reads
   a redirect instead of following it uses `net.request`, the same stack: `net.fetch` throws on
   `redirect: "manual"` (the update check's `latestVersion`).
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
-  (`src/main/util/script-text.ts`).
+  (`src/main/util/generated-file.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
   `tet-ctl hook <event>`.
 - A file another process reads (hook settings, launchers) is written beside the

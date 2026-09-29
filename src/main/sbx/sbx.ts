@@ -25,7 +25,7 @@ import type {
 } from "../../shared/types";
 import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
-import { inTurn } from "../util/in-turn";
+import { inTurn } from "../util/async";
 import type { SandboxedAgent } from "../agents/agent";
 import type { FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";

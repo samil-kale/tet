@@ -1,5 +1,5 @@
 import { isSimulatedMissing } from "../util/simulate";
-import { runProcess } from "../util/run-process";
+import { runProcess } from "../util/process";
 
 /** The last answer per executable — a program installed while tet runs is not on its PATH anyway. */
 const installedChecks = new Map<string, Promise<boolean>>();

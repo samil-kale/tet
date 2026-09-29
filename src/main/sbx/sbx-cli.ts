@@ -5,7 +5,7 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { SBX_PROBLEM } from "../../shared/sbx-rules";
 import { isSimulatedMissing } from "../util/simulate";
-import { runProcess, stoppable } from "../util/run-process";
+import { runProcess, stoppable } from "../util/process";
 import { PLATFORM } from "../util/host-platform";
 import { logError } from "../util/error-log";
 

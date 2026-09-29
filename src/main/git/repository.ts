@@ -23,12 +23,21 @@ import type {
 import { PROJECT_FILE } from "../store/tet-json";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { worktreeKeyOf } from "../store/project-dirs";
-import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
+import {
+  createDirectory,
+  createFile,
+  deletePath,
+  listExplorer,
+  MAX_EDIT_BYTES,
+  OUTSIDE_REPOSITORY,
+  renamePath,
+  resolveInside,
+  searchFiles
+} from "./explorer";
 import { git } from "./git-client";
 import type { GitLoginStore } from "./git-logins";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { watchedDirectoryGone } from "../util/watch-dir";
-import { relativeInside } from "../util/path-inside";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
 import { logError } from "../util/error-log";
@@ -89,29 +98,6 @@ function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
 /** A `.gitignore` anywhere in the tree, or the repository's own exclude file. */
 function isIgnoreFile(relativePath: string): boolean {
   return /(?:^|[\\/])\.gitignore$|^\.git[\\/]info[\\/]exclude$/.test(relativePath);
-}
-
-/** What every path check answers for a path that escapes the repository root. */
-const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" } as const;
-
-/**
- * A filesystem action as a `GitActionResult`: whatever it threw becomes the failure's message, in
- * the words the OS used. For the Explorer's own edits, which run off `runAction` — they take no
- * index lock (Repository.listExplorer).
- */
-function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
-  return action().then(() => ({ ok: true }), failure);
-}
-
-/** Whether two paths name one entry, e.g. differing in case on a case-insensitive filesystem. By
- *  file id, as bigints: a win32 file id overflows a number. */
-function sameEntry(a: string, b: string): boolean {
-  try {
-    const [first, second] = [fs.statSync(a, { bigint: true }), fs.statSync(b, { bigint: true })];
-    return first.ino === second.ino && first.dev === second.dev;
-  } catch {
-    return false;
-  }
 }
 
 /** One repository's state, the single source of truth for the git views and the terminals.
@@ -740,70 +726,24 @@ export class Repository {
     return searchFiles(this.at.path, query, () => seq !== this.searchSeq);
   }
 
-  /** A repository-relative path for a new entry, resolved, or an error if outside or taken.
-   *  `renaming` is the source: on a case-insensitive filesystem `Readme.md` → `README.md` finds the
-   *  source at the target, which is no conflict. */
-  private async resolveNew(filePath: string, renaming?: string): Promise<{ absolute: string } | { error: string }> {
-    const absolute = this.resolveInside(filePath);
-    if (!absolute) {
-      return { error: OUTSIDE_REPOSITORY.error };
-    }
-    if (fs.existsSync(absolute) && !(renaming && sameEntry(absolute, renaming))) {
-      return { error: `A file or folder "${filePath}" already exists at this location` };
-    }
-    return { absolute };
+  /** The Explorer's "New File..." (explorer.ts). */
+  createFile(filePath: string): Promise<GitActionResult> {
+    return createFile(this.at.path, filePath);
   }
 
-  /** The Explorer's "New File...", creating parent directories. */
-  async createFile(filePath: string): Promise<GitActionResult> {
-    const target = await this.resolveNew(filePath);
-    if ("error" in target) {
-      return { ok: false, error: target.error };
-    }
-    return attempt(async () => {
-      await fs.promises.mkdir(path.dirname(target.absolute), { recursive: true });
-      await fs.promises.writeFile(target.absolute, "", { flag: "wx" });
-    });
+  /** The Explorer's "New Folder..." (explorer.ts). */
+  createDirectory(dirPath: string): Promise<GitActionResult> {
+    return createDirectory(this.at.path, dirPath);
   }
 
-  /** The Explorer's "New Folder...". */
-  async createDirectory(dirPath: string): Promise<GitActionResult> {
-    const target = await this.resolveNew(dirPath);
-    if ("error" in target) {
-      return { ok: false, error: target.error };
-    }
-    return attempt(() => fs.promises.mkdir(target.absolute, { recursive: true }));
+  /** The Explorer's "Delete..." (explorer.ts). */
+  deletePath(filePath: string): Promise<GitActionResult> {
+    return deletePath(this.at.path, filePath);
   }
 
-  /** The Explorer's "Delete...": to the trash, like `discard`. */
-  async deletePath(filePath: string): Promise<GitActionResult> {
-    const absolute = this.resolveInside(filePath);
-    if (!absolute) {
-      return OUTSIDE_REPOSITORY;
-    }
-    return attempt(() => shell.trashItem(absolute));
-  }
-
-  /** The Explorer's "Rename...", which may also move. */
-  async renamePath(fromPath: string, toPath: string): Promise<GitActionResult> {
-    const from = this.resolveInside(fromPath);
-    if (!from) {
-      return OUTSIDE_REPOSITORY;
-    }
-    const to = await this.resolveNew(toPath, from);
-    if ("error" in to) {
-      return { ok: false, error: to.error };
-    }
-    return attempt(async () => {
-      await fs.promises.mkdir(path.dirname(to.absolute), { recursive: true });
-      await fs.promises.rename(from, to.absolute);
-    });
-  }
-
-  /** The absolute path, or undefined if it escapes the root. */
-  private resolveInside(filePath: string): string | undefined {
-    const absolute = path.resolve(this.at.path, filePath);
-    return relativeInside(this.at.path, absolute) === undefined ? undefined : absolute;
+  /** The Explorer's "Rename..." (explorer.ts). */
+  renamePath(fromPath: string, toPath: string): Promise<GitActionResult> {
+    return renamePath(this.at.path, fromPath, toPath);
   }
 
   /** A file for the editor tab: the working tree's text, plus HEAD's (the diff's original side)
@@ -811,7 +751,7 @@ export class Repository {
    *  deleted, binary or too-large file is read-only (`isReadOnly` in editor-views.ts). */
   async readFile(filePath: string): Promise<FileContent> {
     const base = { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false };
-    const absolute = this.resolveInside(filePath);
+    const absolute = resolveInside(this.at.path, filePath);
     if (!absolute) {
       return { ...base, error: OUTSIDE_REPOSITORY.error };
     }
@@ -865,7 +805,7 @@ export class Repository {
    *  edit. Written in place: the user's source file, not one other processes read, and in place
    *  keeps mode and links. */
   async writeFile(filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> {
-    const absolute = this.resolveInside(filePath);
+    const absolute = resolveInside(this.at.path, filePath);
     if (!absolute) {
       return OUTSIDE_REPOSITORY;
     }

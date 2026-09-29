@@ -11,7 +11,7 @@ import type { UpdateResult } from "../../shared/release";
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types";
 import { readJson } from "../util/json-file";
 import { resumableDownload } from "./resumable-download";
-import { runProcess } from "../util/run-process";
+import { runProcess } from "../util/process";
 import { logError, logInfo } from "../util/error-log";
 
 /** Not urgent: an update installs only once tet quits. */

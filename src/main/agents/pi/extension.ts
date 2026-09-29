@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { writeIfChanged } from "../../util/write-if-changed";
+import { writeIfChanged } from "../../util/generated-file";
 import { renderHookReport } from "./hook-report";
 
 /**

@@ -1,16 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app, BrowserWindow, Menu, shell } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git/git-logins";
-import { WINDOW_ARGS } from "../shared/api";
-import type { EditorContentReply, EventChannels } from "../shared/ipc";
 import { CONTROL_ENV } from "../shared/control";
 import { RELEASES_URL } from "../shared/release";
-import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
-import { projectRefKey, overridesMachineNote } from "../shared/types";
-import type { ProjectRef, Notice, NoticeProgress, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
+import { resolveTheme, themeKey } from "../shared/themes";
+import { overridesMachineNote } from "../shared/types";
+import type { ProjectRef, TerminalDescriptor, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readChanged, readCommands, readSbxConfig } from "./store/tet-json";
 import { prepareControl } from "./control/control-channel";
@@ -21,7 +19,6 @@ import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
-import { on, once } from "./ipc/channels";
 import { resolveProjectRef } from "./store/resolved-ref";
 import { projectRefPath } from "./store/project-dirs";
 import {
@@ -45,115 +42,15 @@ import { resolveDataRoot } from "./store/data-root";
 import { augmentAgentPath } from "./agents/agent-path";
 import { setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler } from "./uncaught";
+import { AppWindow } from "./window";
 import { logError, logInfo } from "./util/error-log";
 import { awaitedToastTab, showDesktopNotification, startNotifications } from "./util/notifications";
-import { isOpenableUrl } from "./util/shell-open";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-registry";
 import { SettingsStore } from "./store/settings";
 import type { SettingsAccess } from "./store/settings";
 import { currentTheme } from "./store/theme";
 import { PLATFORM } from "./util/host-platform";
-
-/** Output arrives in small chunks; batch them rather than one IPC message each. */
-const OUTPUT_FLUSH_MS = 8;
-
-let window: BrowserWindow | undefined;
-
-/** Minimum gap between two renderer-crash rebuilds. */
-const RENDERER_REBUILD_GAP_MS = 60_000;
-let rendererRebuiltAt = 0;
-
-/**
- * Notices sent before the window listens are held: `App` subscribes only after the requirements
- * check, and a fast sender (the update's "Updated to") would otherwise be lost. The renderer
- * reports listening via `app:notice-listening` (preload's `onNotice`); every page load resets it.
- * A progress is dropped instead: its next step shows it anew.
- */
-let noticesHeard = false;
-const heldNotices: Notice[] = [];
-
-function send<C extends keyof EventChannels>(channel: C, payload: EventChannels[C]): void {
-  if (channel === "app:notice" && !noticesHeard) {
-    heldNotices.push(payload as Notice);
-    return;
-  }
-  if (channel === "app:notice-progress" && !noticesHeard) {
-    return;
-  }
-  if (window && !window.isDestroyed()) {
-    window.webContents.send(channel, payload);
-  }
-}
-
-/** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
-function notice(severity: NoticeSeverity, message: string): void {
-  send("app:notice", { severity, message });
-}
-
-function noticeProgress(progress: NoticeProgress): void {
-  send("app:notice-progress", progress);
-}
-
-on("app:notice-listening", () => {
-  noticesHeard = true;
-  for (const notice of heldNotices.splice(0)) {
-    send("app:notice", notice);
-  }
-});
-
-/** `editor-state`'s wait for the window: one in its requirements check or reloading never answers. */
-const EDITOR_CONTENT_TIMEOUT_MS = 2000;
-let editorContentRequests = 0;
-
-/** A repository's or worktree's active editor tab text (ControlDeps.editorContent), on a
- *  per-request reply channel. */
-function editorContent(ref: ProjectRef): Promise<string | undefined> {
-  if (!window || window.isDestroyed()) {
-    return Promise.resolve(undefined);
-  }
-  editorContentRequests += 1;
-  const reply: EditorContentReply = `editor:content:${editorContentRequests}`;
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      off();
-      resolve(undefined);
-    }, EDITOR_CONTENT_TIMEOUT_MS);
-    const off = once(reply, (_event, content) => {
-      clearTimeout(timer);
-      resolve(content);
-    });
-    send("editor:content-request", { ref, reply });
-  });
-}
-
-const pendingOutput = new Map<string, TerminalOutput>();
-let flushTimer: ReturnType<typeof setTimeout> | undefined;
-
-/**
- * One message for all tabs: see TerminalOutput. Output whose tab closed while it was batched is
- * dropped here: the renderer has disposed that view by now, and a late batch would look to it
- * like output for a tab not yet attached (terminal-views.ts's earlyOutput).
- */
-function flushOutput(): void {
-  flushTimer = undefined;
-  const live = [...pendingOutput.values()].filter((pending) => sessions.get(pending.ref)?.hasTab(pending.tabId));
-  pendingOutput.clear();
-  if (live.length > 0) {
-    send("terminals:output", live);
-  }
-}
-
-function queueOutput(ref: ProjectRef, tabId: string, data: string): void {
-  const key = `${projectRefKey(ref)}\u0000${tabId}`;
-  const pending = pendingOutput.get(key);
-  if (pending) {
-    pending.data += data;
-  } else {
-    pendingOutput.set(key, { ref, tabId, data });
-  }
-  flushTimer ??= setTimeout(flushOutput, OUTPUT_FLUSH_MS);
-}
 
 /**
  * A separate profile for tests driving the real app via tet-ctl (test/app.test.ts): own projects,
@@ -204,31 +101,18 @@ if (PLATFORM.windowsToasts) {
 app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
 
 /**
- * Whether Chromium draws through Wayland; the renderer then keeps terminals off WebGL
- * (terminal-views.ts). An explicit x11 wins; else any Wayland sign counts, as Electron picks it.
- */
-function isWaylandSession(): boolean {
-  if (!PLATFORM.checksGpu) {
-    return false;
-  }
-  const ozonePlatform = app.commandLine.getSwitchValue("ozone-platform").toLowerCase();
-  const ozoneHint = (process.env.ELECTRON_OZONE_PLATFORM_HINT ?? "").toLowerCase();
-  if (ozonePlatform === "x11" || (ozonePlatform === "" && ozoneHint === "x11")) {
-    return false;
-  }
-  return (
-    Boolean(process.env.WAYLAND_DISPLAY) ||
-    process.env.XDG_SESSION_TYPE === "wayland" ||
-    ozoneHint === "wayland" ||
-    ozonePlatform === "wayland"
-  );
-}
-
-/**
  * GitHub's releases, except for the install test (test/install.test.ts) serving its own — read from
  * the environment only with a profile of its own, like the control token.
  */
 const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_URL;
+
+const appWindow: AppWindow = new AppWindow({
+  hidden: HIDE_WINDOW,
+  hasTab: (ref, tabId): boolean => sessions.get(ref)?.hasTab(tabId) === true,
+  // The environment dialog went with the page.
+  onPageLoad: (): void => envRequests.drop()
+});
+const { send, notice } = appWindow;
 
 // Before anything that could throw asynchronously, so an uncaught exception becomes a notice rather
 // than Electron's modal dialog freezing every terminal (uncaught.ts).
@@ -248,17 +132,17 @@ const overriding = environment.list().filter((variable) => variable.overridesMac
 if (overriding.length > 0) {
   notice("info", overridesMachineNote(overriding));
 }
-// Asked only once App listens (noticesHeard), which is also when the dialog can show.
+// Asked only once App listens (AppWindow.listening), which is also when the dialog can show.
 const envRequests = new EnvRequests(
   environment,
   (request) => {
-    if (!noticesHeard || !window || window.isDestroyed()) {
+    if (!appWindow.listening()) {
       return false;
     }
     send("environment:request", request);
     // Out of sight, told as a question is (session-manager's toast): the agent's shell gives up
     // waiting at some point, and the dialog with it.
-    if ((!window.isFocused() || window.isMinimized()) && settings.get().notifications.needsYou) {
+    if (appWindow.inBackground() && settings.get().notifications.needsYou) {
       const tab = request.ref && request.tabId ? findTab(request.ref, request.tabId) : undefined;
       const agent = AGENTS.find((entry) => entry.id === tab?.agentId)?.displayName ?? "An agent";
       showDesktopNotification(
@@ -319,15 +203,12 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   },
   onOutput: (ref, tabId, data) => {
     records.addOutput(ref, tabId, data);
-    queueOutput(ref, tabId, data);
+    appWindow.queueOutput(ref, tabId, data);
   },
   onStatus: (ref, tabId, status: TerminalStatus) => {
     // Output batched before the change goes first, so a status never overtakes it (a restart's
     // clear in App.tsx would otherwise run before the dying process's last bytes arrive).
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushOutput();
-    }
+    appWindow.flushOutput();
     send("terminals:status", { ref, tabId, status });
   },
   onStartupProgress: (ref, show) => send("terminals:startup-progress", { ref, show }),
@@ -390,33 +271,10 @@ function showToastTarget(target: { ref: ProjectRef; tabId: string; sessionId?: s
   return tab !== undefined;
 }
 
-/**
- * A toast disappears; this lasts until the window is focused (createWindow's `focus` handler):
- * taskbar flash on Windows, dock bounce on macOS, urgency hint on Linux. No badge count: only
- * macOS has one everywhere.
- *
- * `isMinimized` too: a win32 window minimized by its button still reports `isFocused`.
- */
-function attractAttention(): void {
-  if (window && !window.isDestroyed() && (!window.isFocused() || window.isMinimized())) {
-    window.flashFrame(true);
-  }
-}
-
-function revealWindow(): void {
-  if (!window || window.isDestroyed()) {
-    return;
-  }
-  if (window.isMinimized()) {
-    window.restore();
-  }
-  window.focus();
-}
-
 startNotifications({
   installed,
-  revealWindow,
-  attractAttention,
+  revealWindow: appWindow.reveal,
+  attractAttention: appWindow.attractAttention,
   showTab: showToastTarget,
   sessionIdOf: (target) => findTab(target.ref, target.tabId)?.sessionId
 });
@@ -453,7 +311,7 @@ async function startControl(): Promise<void> {
           return project && projectRefPath(dataRoot, project, ref);
         },
         openEditor: (ref, filePath, keep) => send("editor:open", { ref, path: filePath, keep }),
-        editorContent,
+        editorContent: appWindow.editorContent,
         showTab: (ref, tabId) => send("terminals:show", { ref, tabId }),
         notify: showDesktopNotification,
         environment,
@@ -495,139 +353,29 @@ const settingsAccess: SettingsAccess = {
   }
 };
 
-/** The theme on screen: the window's initial one or the last `applyTheme` took. */
-let shownTheme: ThemeDefinition | undefined;
-
 /**
  * Applies the saved theme live and returns whether a restart is still needed. Live only within one
  * `kind`: an agent gets light or dark once at tab start (`AgentPaths.theme`).
  */
 function applyTheme(): boolean {
-  if (!window || window.isDestroyed() || !shownTheme) {
+  const shown = appWindow.shownTheme();
+  if (!shown) {
     return false;
   }
   // The kind on screen, not the saved one: a pending kind switch must not block a change within it.
-  const { kind } = shownTheme;
-  const theme = resolveTheme(settings.get()[themeKey(kind)], kind);
-  if (theme.id !== shownTheme.id) {
-    shownTheme = theme;
-    window.setBackgroundColor(theme.windowBackground);
-    if (PLATFORM.titleBarOverlay) {
-      window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
-    }
-    send("app:theme", theme.id);  }
+  const { kind } = shown;
+  appWindow.showTheme(resolveTheme(settings.get()[themeKey(kind)], kind));
   const saved = currentTheme(settings);
   // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
   // restart is not handed to them.
-  if (saved.id === shownTheme.id) {
+  if (saved.id === appWindow.shownTheme()?.id) {
     sessions.themeChanged();
   }
   return saved.kind !== kind;
 }
 
 function createWindow(): void {
-  // Per window: a theme the running window could not take (applyTheme) reaches later windows.
-  const theme = currentTheme(settings);
-  shownTheme = theme;
-  window = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    // The panes' floors summed (--pane-min-width twice, --content-min-width, the stacked sections,
-    // title and branch bars); below this something clips.
-    minWidth: 800,
-    minHeight: 340,
-    // Painted before the first frame in the title bar's color, since the window controls overlay
-    // shows at once. Equals --vscode-titleBar-activeBackground and --vscode-sideBar-background.
-    backgroundColor: theme.windowBackground,
-    show: false,
-    // Windows takes the .ico (generated from icon.png): per-size frames stay sharp in the taskbar,
-    // where a resampled image looks soft. Linux wants a plain image; macOS reads the app bundle.
-    icon: path.join(__dirname, PLATFORM.windowIcon),
-    // Our own title bar; the platform's window controls stay via the overlay.
-    titleBarStyle: PLATFORM.titleBarOverlay ? "hidden" : "hiddenInset",
-    titleBarOverlay:
-      // Height must match the renderer's .titlebar rule, or controls and drag region disagree.
-      PLATFORM.titleBarOverlay
-        ? { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 }
-        : undefined,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      spellcheck: false,
-      // The preload reads the theme off process.argv synchronously, so the first frame is right;
-      // an IPC round trip would paint it in the defaults.
-      additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])]
-    }
-  });
-
-  // Every load, reloads included, has no listener until App subscribes.
-  window.webContents.on("did-start-loading", () => {
-    noticesHeard = false;
-    // The dialog went with the page.
-    envRequests.drop();
-  });
-  // A reload reads the theme off the window's original arguments, possibly stale since applyTheme.
-  // The renderer ignores its own theme id.
-  window.webContents.on("did-finish-load", () => {
-    if (shownTheme) {
-      send("app:theme", shownTheme.id);
-    }
-  });
-  if (!HIDE_WINDOW) {
-    window.once("ready-to-show", () => window?.show());
-  }
-  // Ends attractAttention's flash.
-  window.on("focus", () => window?.flashFrame(false));
-  window.on("closed", () => {
-    window = undefined;
-  });
-
-  const crashed = window;
-  window.webContents.on("render-process-gone", (_event, details) => {
-    // `clean-exit` is a window on its way out, not a fault.
-    if (details.reason === "clean-exit" || crashed.isDestroyed()) {
-      return;
-    }
-    logError(`renderer gone (${details.reason}); rebuilding the window`);
-    // Every pty lives in this process and keeps running, so reloading brings the sessions back;
-    // only the renderer-held scrollback is lost. Rate-limited, or a renderer failing on load
-    // would reload forever.
-    const now = Date.now();
-    if (now - rendererRebuiltAt < RENDERER_REBUILD_GAP_MS) {
-      return;
-    }
-    rendererRebuiltAt = now;
-    // Only once the new renderer has loaded; earlier sends reach the dead process.
-    crashed.webContents.once("did-finish-load", () =>
-      notice("warning", "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.")
-    );
-    crashed.webContents.reload();
-  });
-
-  // No application menu (the title bar is our own), so wire the devtools shortcuts by hand.
-  window.webContents.on("before-input-event", (_event, input) => {
-    const toggle =
-      input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i");
-    if (input.type === "keyDown" && toggle) {
-      window?.webContents.toggleDevTools();
-    }
-  });
-
-  // Nothing in the page takes the window away from tet or opens another: a link or form in a
-  // Markdown preview, a stray drop. A new window is what monaco's ctrl-clicked link asks for, so
-  // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves. A
-  // navigation to `about:blank` reaches neither event, so only the page's own script could blank
-  // the window, and there is none but tet's.
-  window.webContents.on("will-navigate", (event) => event.preventDefault());
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isOpenableUrl(url)) {
-      shell.openExternal(url).catch((error: unknown) => logError(`could not open ${url}`, error));
-    }
-    return { action: "deny" };
-  });
-
-  void window.loadFile(path.join(__dirname, "index.html"));
+  appWindow.create(currentTheme(settings));
 }
 
 /**
@@ -639,7 +387,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   // A second start brings the running window to the front.
-  app.on("second-instance", revealWindow);
+  app.on("second-instance", appWindow.reveal);
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
@@ -671,7 +419,7 @@ if (!app.requestSingleInstanceLock()) {
     // while the renderer loads.
     await pathReady;
     startGitProcess();
-    startAutoUpdate(installed, releasesUrl, dataRoot, notice, noticeProgress);
+    startAutoUpdate(installed, releasesUrl, dataRoot, notice, appWindow.noticeProgress);
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

@@ -13,7 +13,7 @@ import { SBX_VERIFIED_VERSION } from "../src/main/sbx/sbx-cli";
 import { ensureRunning, pathMountSpecs } from "../src/main/sbx/sbx-mounts";
 import { parseFilesystemRules } from "../src/main/sbx/sbx-policy";
 import { toContainerPath } from "../src/main/agents/hook-target";
-import { resolveCommand } from "../src/main/util/spawn";
+import { resolveCommand } from "../src/main/util/process";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { ControlEvent } from "../src/shared/control";
 import type { AgentId, Project, TerminalDescriptor } from "../src/shared/types";

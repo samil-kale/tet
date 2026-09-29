@@ -4,7 +4,7 @@ import type { IPty } from "node-pty";
 import { CONTROL_ENV } from "../../shared/control";
 import { tabControlToken } from "./control-token";
 import { KEPT_ENV_NAME, machineName } from "../store/env-names";
-import { pathKey, resolveCommand } from "../util/spawn";
+import { pathKey, resolveCommand } from "../util/process";
 import { HOST_TAB, type TabSide } from "./tab-side";
 
 export interface SpawnOptions {

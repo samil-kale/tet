@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
 import { createByteThresholdCheck } from "../session-ready";
-import { writeIfChanged } from "../../util/write-if-changed";
+import { writeIfChanged } from "../../util/generated-file";
 import { codexIcon } from "./icon";
 import type { ThemeDefinition } from "../../../shared/themes";
 import type { SandboxedAgent } from "../agent";

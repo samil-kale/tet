@@ -18,7 +18,7 @@ const IPC_BY_NAME = {
 };
 const WEB_CONTENTS_SEND = {
   selector: "CallExpression[callee.property.name='send'][callee.object.property.name='webContents']",
-  message: "Only through main.ts's typed send."
+  message: "Only through window.ts's typed send."
 };
 const PROCESS_PLATFORM = { object: "process", property: "platform", message: "Ask PLATFORM (util/host-platform.ts)." };
 const NAVIGATOR_PLATFORM = { object: "navigator", property: "platform", message: "Ask PLATFORM (renderer/platform.ts)." };
@@ -145,7 +145,7 @@ export default tseslint.config(
     rules: { "no-restricted-syntax": ["error", IPC_BY_NAME, WEB_CONTENTS_SEND] }
   },
   { files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"], rules: { "no-restricted-syntax": ["error", WEB_CONTENTS_SEND] } },
-  { files: ["src/main/main.ts"], rules: { "no-restricted-syntax": ["error", IPC_BY_NAME] } },
+  { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": ["error", IPC_BY_NAME] } },
   // What differs between the OSes is a Platform member; only the two files naming the platform ask
   // which one it is (AGENTS.md, "Cross-platform").
   {

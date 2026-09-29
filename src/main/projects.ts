@@ -17,7 +17,7 @@ import type { ControlRecords } from "./control/control-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readMainWorktree } from "./util/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
-import { inTurn } from "./util/in-turn";
+import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
 import { onDisk } from "./util/path-inside";
 import { newWorktreeKey, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./store/project-dirs";

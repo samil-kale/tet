@@ -380,6 +380,6 @@ export interface TETApi {
   waylandSession: boolean;
 }
 
-/** main.ts's createWindow hands `initialTheme` and `waylandSession` to the preload through
+/** window.ts's AppWindow.create hands `initialTheme` and `waylandSession` to the preload through
  *  `webPreferences.additionalArguments`: the theme as `theme` + its id, the flag bare. */
 export const WINDOW_ARGS = { theme: "--tet-theme=", wayland: "--tet-wayland" } as const;
