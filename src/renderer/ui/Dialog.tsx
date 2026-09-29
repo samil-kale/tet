@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject, type SetStateAction } from "react";
 import type { GitActionResult } from "../../shared/types";
 import { DialogFrame, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
@@ -29,7 +29,9 @@ interface ConfirmAnswer {
 /** What a question's fields are drawn from (`PromptOptions.render`). */
 export interface PromptFields<T> {
   value: T;
-  onChange: (value: T) => void;
+  /** Takes an updater for a change that lands later than its render, e.g. a suggestion arriving
+   *  after the user ticked a checkbox beside it. */
+  onChange: (value: SetStateAction<T>) => void;
   /** What `submit` refused, for the field it was typed in (`Field`'s `error`); cleared by the next
    *  change (`useSubmit`). */
   error: string | undefined;
@@ -241,7 +243,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
     }
   }, [refused]);
 
-  const onChange = changing((next: unknown) => setValue(next));
+  const onChange = changing((next: SetStateAction<unknown>) => setValue(next));
 
   return (
     <DialogFrame

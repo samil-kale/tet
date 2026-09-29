@@ -103,7 +103,7 @@ export async function askCommit(
         <SuggestField
           label="Message"
           value={value.message}
-          onChange={(message) => onChange({ ...value, message })}
+          onChange={(message) => onChange((current) => ({ ...current, message }))}
           suggestion={{
             title: "Suggest a commit message",
             run: () => window.tet.repository.suggestCommitMessage(ref, paths)
