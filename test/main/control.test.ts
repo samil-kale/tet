@@ -3,30 +3,28 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
-import { PLATFORM } from "../src/main/util/host-platform";
-import { claudeAgent } from "../src/main/agents/claude";
-import { codexHookReply } from "../src/main/agents/codex/hooks";
-import { shellAgent } from "../src/main/agents/shell";
-import { systemPrompt } from "../src/main/agents/system-prompt";
-import { findControlPort } from "../src/main/control/control-port";
-import { startControlServer } from "../src/main/control/control-server";
-import type { ControlDeps, ControlTerminals } from "../src/main/control/control-verb";
-import type { ToastTarget } from "../src/main/util/notifications";
-import type { EnvAsk } from "../src/main/control/env-requests";
-import { tabControlToken } from "../src/main/terminals/control-token";
-import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
-import { EMPTY_REPOSITORY_STATE } from "../src/shared/types/git";
-import { projectRefKey } from "../src/shared/types/project";
-import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE } from "../src/shared/types/sbx";
-import { withSettings } from "../src/shared/types/settings";
-import type { FileChange, GitActionResult, WorktreeInfo } from "../src/shared/types/git";
-import type { Project, ProjectCommand, ProjectRef } from "../src/shared/types/project";
-import type { SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxStatus } from "../src/shared/types/sbx";
-import type { AppSettings } from "../src/shared/types/settings";
-import type { TerminalDescriptor } from "../src/shared/types/terminals";
-import { eventually, tempDir, tetCtl as runCli } from "./helpers";
-import type { Run } from "./helpers";
+import { HOST_SIDE, SANDBOX_SIDE } from "../../src/shared/control-side";
+import { PLATFORM } from "../../src/main/util/host-platform";
+import { claudeAgent } from "../../src/main/agents/claude";
+import { codexHookReply } from "../../src/main/agents/codex/hooks";
+import { shellAgent } from "../../src/main/agents/shell";
+import { systemPrompt } from "../../src/main/agents/system-prompt";
+import { findControlPort } from "../../src/main/control/control-port";
+import { startControlServer } from "../../src/main/control/control-server";
+import type { ControlDeps, ControlTerminals } from "../../src/main/control/control-verb";
+import type { ToastTarget } from "../../src/main/util/notifications";
+import type { EnvAsk } from "../../src/main/control/env-requests";
+import { tabControlToken } from "../../src/main/terminals/control-token";
+import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/control";
+import { EMPTY_REPOSITORY_STATE, type FileChange, type GitActionResult, type WorktreeInfo } from "../../src/shared/types/git";
+import { type Project, type ProjectCommand, type ProjectRef, projectRefKey } from "../../src/shared/types/project";
+import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, type SbxKnowledgeConfig, type SbxLocalSave, type SbxProblems, type SbxProjectConfig, type SbxStatus } from "../../src/shared/types/sbx";
+import { type AppSettings, withSettings } from "../../src/shared/types/settings";
+import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
+import { spawn } from "node:child_process";
+import { writeLaunchers } from "../../src/main/control/control-launcher";
+import { ControlRecords } from "../../src/main/control/control-records";
 
 /**
  * The control channel below the app: the real server on a loopback port, the real CLI as a child
@@ -45,16 +43,21 @@ const PROJECT: Project = {
     { path: "/elsewhere/five", branch: "five" }
   ]
 };
+
 const OTHER: Project = { id: "p2", path: "", name: "two", worktrees: [] };
+
 /** PROJECT's worktree TET made. */
 const WORKTREE: ProjectRef = { projectId: PROJECT.id, worktree: "k4" };
+
 /** The worktrees of PROJECT's repository, as its repository state lists them. */
 const WORKTREES: WorktreeInfo[] = [
   { path: "/repo/one", branch: "main", main: true, current: false },
   { path: "/wt/four", branch: "four", base: "main", key: "k4", main: false, current: false },
   { path: "/elsewhere/five", branch: "five", main: false, current: false }
 ];
+
 const OWN_TAB = "tab-own";
+
 /** A tab of PROJECT whose process runs in its sbx sandbox. */
 const SANDBOX_TAB = "tab-sbx";
 
@@ -103,10 +106,12 @@ interface Calls {
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
 const ACTIVE_EDITOR = { path: "a.txt", loading: false, dirty: true, readOnly: false, preview: true };
+
 const EDITOR_LISTING = [
   { path: "b.txt", loading: false, dirty: false, readOnly: false, preview: false, active: false },
   { ...ACTIVE_EDITOR, active: true }
 ];
+
 /** What `editor-list` answers for PROJECT; a.txt holds unsaved changes. */
 let editorListing = EDITOR_LISTING;
 
@@ -122,9 +127,12 @@ interface Merging {
   forwardError?: string;
   deleteRefused?: GitActionResult;
 }
+
 let merging: Merging;
+
 /** Whether "tab-2" is mid-turn. */
 let tab2Busy: boolean;
+
 /** What the window reported for the editor tabs of PROJECT's worktree. */
 let worktreeEditors: typeof EDITOR_LISTING;
 
@@ -132,31 +140,48 @@ let worktreeEditors: typeof EDITOR_LISTING;
 let tab2Session: string | undefined;
 
 let workDir: string;
+
 let port: number;
+
 let server: { close: () => Promise<void> };
+
 let settings: AppSettings;
+
 /** Whether the faked settings patch says a theme waits for a restart. */
 let themeWaits = false;
+
 /** What the faked renameTab answers: an agent's refusal, as a real one can give. */
 let refuseRename: string | undefined;
+
 let calls: Calls;
+
 /** The faked store: the names it keeps. */
 let envNames: string[];
+
 /** What the faked dialog answers: the names saved, undefined for Cancel, or DIALOG_STAYS_OPEN to stay
  *  up until the caller leaves. */
 let dialogAnswer: string[] | undefined;
+
 const DIALOG_STAYS_OPEN = ["(stays open)"];
+
 /** The faked SBX Settings: sbx's status, and what a save leaves behind. */
 let sbxStatus: SbxStatus;
+
 let sbxConfig: SbxProjectConfig;
+
 let sbxKnowledge: SbxKnowledgeConfig;
+
 /** What the faked check finds, and so what a save leaves out. */
 let sbxProblems: SbxProblems;
+
 /** The users whose access tokens the faked store keeps; what the faked `sbx login` says on refusing,
  *  and whom it names while signed in. */
 let sbxAccounts: string[];
+
 let sbxRefusal: string | undefined;
+
 let sbxUser: string | undefined;
+
 /** Why the faked store could not keep a token sbx took. */
 let sbxNotKept: string | undefined;
 
@@ -1515,5 +1540,69 @@ describe("tet-ctl against the control server", () => {
       stalled.closeAllConnections();
       await new Promise((resolve) => stalled.close(resolve));
     }
+  });
+});
+
+describe("the tet-ctl launcher", () => {
+  it("is found on PATH and runs the CLI", async () => {
+    const dir = tempDir("tet-launcher-");
+    // Here `process.execPath` is node, which ignores ELECTRON_RUN_AS_NODE; the app writes electron.
+    const bin = writeLaunchers(dir, CLI);
+    const run = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
+      // cmd.exe resolves a .cmd on PATH and takes the line whole; a POSIX script needs no shell.
+      const viaCmd = PLATFORM.cmdLauncher;
+      const child = spawn(viaCmd ? "tet-ctl help" : "tet-ctl", viaCmd ? [] : ["help"], {
+        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined },
+        shell: viaCmd
+      });
+      let stdout = "";
+      child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+      child.on("close", (status) => resolve({ status, stdout }));
+    });
+    assert.equal(run.status, 0);
+    assert.match(run.stdout, /tet-ctl — control the TET app/);
+  });
+
+  it("leaves nothing set in the cmd.exe that ran it", { skip: !PLATFORM.cmdLauncher }, async () => {
+    const dir = tempDir("tet-launcher-");
+    const bin = writeLaunchers(dir, CLI);
+    const after = await new Promise<string>((resolve) => {
+      // One cmd.exe session: the launcher, then a look at the variable.
+      const child = spawn(`call tet-ctl help >nul & set ELECTRON_RUN_AS_NODE`, [], {
+        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined, ELECTRON_RUN_AS_NODE: undefined },
+        shell: true
+      });
+      let stdout = "";
+      child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
+      child.on("close", () => resolve(stdout));
+    });
+    assert.doesNotMatch(after, /ELECTRON_RUN_AS_NODE=1/);
+  });
+});
+
+describe("a tab's recorded output", () => {
+  it("keeps the latest output of open tabs only", () => {
+    const records = new ControlRecords();
+    records.addOutput({ projectId: "p1" }, "tab-1", "one");
+    records.addOutput({ projectId: "p1" }, "tab-1", "two");
+    records.addOutput({ projectId: "p1" }, "tab-2", "gone");
+    records.addOutput({ projectId: "p2" }, "tab-3", "other project");
+    records.keepOutputs({ projectId: "p1" }, new Set(["tab-1"]));
+    assert.equal(records.output({ projectId: "p1" }, "tab-1"), "onetwo");
+    assert.equal(records.output({ projectId: "p1" }, "tab-2"), undefined, "a closed tab's output goes with it");
+    assert.equal(records.output({ projectId: "p2" }, "tab-3"), "other project", "another project's tabs untouched");
+    records.forget({ projectId: "p2" });
+    assert.equal(records.output({ projectId: "p2" }, "tab-3"), undefined, "a closed worktree's output goes with it");
+  });
+
+  it("holds the latest 256 KB of a tab", () => {
+    const records = new ControlRecords();
+    // A progress bar redrawn for hours, never a newline: bounded all the same.
+    for (let i = 0; i < 400; i++) {
+      records.addOutput({ projectId: "p" }, "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
+      records.addOutput({ projectId: "p" }, "agent", "\x1b[H".padEnd(16 * 1024, "x"));
+    }
+    assert.equal(records.output({ projectId: "p" }, "shell")?.length, 256 * 1024);
+    assert.equal(records.output({ projectId: "p" }, "agent")?.length, 256 * 1024);
   });
 });

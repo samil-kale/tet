@@ -18,7 +18,7 @@ const SBX: Omit<Requirement, "installed"> = {
   command: "sbx"
 };
 
-/** For test/app.test.ts: a CI runner with git and no agent still opens, shell only. */
+/** For test/e2e/app.test.ts: a CI runner with git and no agent still opens, shell only. */
 const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
 
 /**

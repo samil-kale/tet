@@ -65,7 +65,8 @@ export interface FilesystemRule {
  * "filesystem:read" | "filesystem:write" | "filesystem", `decision`, `resources`, `status`
  * "inactive" for a local rule an organization overrides). Unreadable is no rules — all denied.
  * Deliberately not "sbx cannot say" (a failed run is that, readFilesystemRules): sbx's format is
- * trusted, and held by the recorded answer in pieces.test.ts and the live one in agents.test.ts.
+ * trusted, and held by the recorded answer in test/main/sbx.test.ts and the live one in
+ * test/e2e/agents.test.ts.
  */
 export function parseFilesystemRules(json: string): FilesystemRule[] {
   let parsed: unknown;

@@ -1,7 +1,7 @@
 /*
  * The theme layer: every UI color is a --vscode-* custom property, under VS Code's own names.
  * One file per theme, each declaring the *complete* list — nothing falls through from another
- * theme (pieces.test.ts holds the lists equal). main.tsx picks the block from the id in
+ * theme (test/shared/themes.test.ts holds the lists equal). main.tsx picks the block from the id in
  * src/shared/themes.ts, at start and on `app:theme`. This one, VS Code's "Dark Modern", is also
  * the bare `:root`, so an unknown id still gets a whole theme. Values come from VS Code's theme
  * files (extensions/theme-defaults) and color registry, not from eyeballing. Fonts live in

@@ -54,17 +54,17 @@ import { currentTheme } from "./store/theme";
 import { PLATFORM } from "./util/host-platform";
 
 /**
- * A separate profile for tests driving the real app via tet-ctl (test/app.test.ts): own projects,
- * settings and socket, and — the lock being per profile — a second tet beside the working one.
- * Both Chromium's profile and tet's data folder (data-root.ts), set before either is asked for.
- * Only then is the control token taken from the environment.
+ * A separate profile for tests driving the real app via tet-ctl (test/e2e/app.test.ts): own
+ * projects, settings and socket, and — the lock being per profile — a second tet beside the working
+ * one. Both Chromium's profile and tet's data folder (data-root.ts), set before either is asked
+ * for. Only then is the control token taken from the environment.
  */
 const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
 if (userDataArg) {
   app.setPath("userData", path.resolve(userDataArg));
 }
-/** For tests run locally (test/helpers.ts): the window is drawn but never shown. */
+/** For tests run locally (test/helpers/): the window is drawn but never shown. */
 const HIDE_WINDOW = process.argv.includes("--hide-window");
 /** tet's own data; `userData` is left to Chromium's profile. */
 const dataRoot = resolveDataRoot(userDataArg);
@@ -102,8 +102,8 @@ if (PLATFORM.windowsToasts) {
 app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
 
 /**
- * GitHub's releases, except for the install test (test/install.test.ts) serving its own — read from
- * the environment only with a profile of its own, like the control token.
+ * GitHub's releases, except for the install test (test/e2e/install.test.ts) serving its own — read
+ * from the environment only with a profile of its own, like the control token.
  */
 const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_URL;
 

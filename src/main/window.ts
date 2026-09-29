@@ -20,7 +20,7 @@ const RENDERER_REBUILD_GAP_MS = 60_000;
 const EDITOR_CONTENT_TIMEOUT_MS = 2000;
 
 export interface AppWindowDeps {
-  /** For tests run locally (test/helpers.ts): the window is drawn but never shown. */
+  /** For tests run locally (test/helpers/): the window is drawn but never shown. */
   hidden: boolean;
   /** Whether the tab is still open: output batched for one closed meanwhile is dropped. */
   hasTab(ref: ProjectRef, tabId: string): boolean;

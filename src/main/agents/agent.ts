@@ -135,8 +135,8 @@ export interface AgentInstall {
   /** Tells "not installed" from a spawn that failed otherwise. */
   versionArgs: string[];
   /**
-   * The CLI version this definition is tested against (test/agents.test.ts reports a difference).
-   * Not read by the app: a newer install is not refused.
+   * The CLI version this definition is tested against (test/e2e/agents.test.ts reports a
+   * difference). Not read by the app: a newer install is not refused.
    */
   verifiedVersion: string;
 }

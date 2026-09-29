@@ -36,9 +36,9 @@ import {
   stashPush,
   updateRemoteHead,
   version
-} from "../src/main/git/git";
-import { worktreesSupported } from "../src/shared/types/git";
-import { git, initBare, initRepository, isolateGitConfig, tempDir } from "./helpers";
+} from "../../src/main/git/git";
+import { worktreesSupported } from "../../src/shared/types/git";
+import { git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
 
 /**
  * git.ts against the real git, in a repository built up step by step. It imports nothing from

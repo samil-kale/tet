@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatEnv, isSameCommand, parseEnv, splitCommand } from "../src/shared/command";
+import { formatEnv, isSameCommand, parseEnv, splitCommand } from "../../src/shared/command";
 
 /** The one reading of a saved command line, shared by the dialog and the spawn. */
 

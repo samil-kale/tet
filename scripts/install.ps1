@@ -10,7 +10,7 @@
 # The Start menu entry is TET.lnk pointing at TET.exe, which is also what Electron writes on the
 # first toast (see main.ts's APP_USER_MODEL_ID): it rewrites this very entry with the
 # AppUserModelID and toast activator on it, rather than adding one of its own. TET_RELEASES_URL
-# stands in for GitHub's releases in test/install.test.ts.
+# stands in for GitHub's releases in test/e2e/install.test.ts.
 #
 # Run through iex, in the user's own session: a block, so nothing it defines stays behind, and
 # `throw` rather than `exit`, which would close their window.

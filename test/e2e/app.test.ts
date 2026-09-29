@@ -3,14 +3,14 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { PLATFORM } from "../src/main/util/host-platform";
-import { resolveRoot } from "../src/main/git/git";
-import { UNCAUGHT_MARKER } from "../src/main/uncaught";
-import type { RepositoryState } from "../src/shared/types/git";
-import type { Project } from "../src/shared/types/project";
-import type { AppSettings } from "../src/shared/types/settings";
-import type { TerminalDescriptor } from "../src/shared/types/terminals";
-import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./helpers";
+import { PLATFORM } from "../../src/main/util/host-platform";
+import { resolveRoot } from "../../src/main/git/git";
+import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
+import type { RepositoryState } from "../../src/shared/types/git";
+import type { Project } from "../../src/shared/types/project";
+import type { AppSettings } from "../../src/shared/types/settings";
+import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
  * The real app, driven through tet-ctl alone, on a profile of its own (`--user-data-dir`) with a

@@ -7,9 +7,9 @@ import { admitsVerb, type ControlSide } from "../../shared/control-side";
  * `SessionStart` hook's answer (codex/hooks.ts). It only says when to look; `tet-ctl help` holds
  * the verbs.
  *
- * One line with no `"`, `\`, backtick or cmd.exe/shell metacharacter (pieces.test.ts): it travels
- * as a plain argument through cmd.exe (pi's npm shim) and through `sbx run`. What a side does not
- * admit (ControlSide.admits) it is not sent looking for: tabs-run-command, the env verbs.
+ * One line with no `"`, `\`, backtick or cmd.exe/shell metacharacter (test/main/agents.test.ts): it
+ * travels as a plain argument through cmd.exe (pi's npm shim) and through `sbx run`. What a side
+ * does not admit (ControlSide.admits) it is not sent looking for: tabs-run-command, the env verbs.
  */
 function tetSentences(side: ControlSide): string {
   return (

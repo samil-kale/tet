@@ -7,13 +7,13 @@ import type { AddressInfo } from "node:net";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import * as semver from "semver";
-import { findControlPort } from "../src/main/control/control-port";
-import { PLATFORM } from "../src/main/util/host-platform";
-import { CONTROL_ENV } from "../src/shared/control";
-import { assetName, rootExecutable } from "../src/shared/release";
-import type { UpdateResult } from "../src/shared/release";
-import type { NoticeReport } from "../src/shared/types/app";
-import { eventually, killApp, processAlive, tempDir, tetCtl } from "./helpers";
+import { findControlPort } from "../../src/main/control/control-port";
+import { PLATFORM } from "../../src/main/util/host-platform";
+import { CONTROL_ENV } from "../../src/shared/control";
+import { assetName, rootExecutable } from "../../src/shared/release";
+import type { UpdateResult } from "../../src/shared/release";
+import type { NoticeReport } from "../../src/shared/types/app";
+import { eventually, killApp, processAlive, ROOT, tempDir, tetCtl } from "../helpers";
 
 /**
  * Install with the script, start, find a newer version, quit, start the update. Releases are
@@ -26,7 +26,6 @@ import { eventually, killApp, processAlive, tempDir, tetCtl } from "./helpers";
  */
 
 const ENABLED = process.env.TET_INSTALL_TEST === "1";
-const ROOT = path.join(__dirname, "..");
 const STARTUP_MS = 120_000;
 const TOKEN = "install-test-token";
 const ASSET = assetName(PLATFORM, process.arch) as string;

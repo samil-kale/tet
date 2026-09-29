@@ -1,7 +1,8 @@
 import type { ColorScheme } from "./types/settings";
 
 /** A color theme: one stylesheet in src/renderer/themes/<id>.css (`:root[data-theme="<id>"]`) plus
- *  what both processes need before it loads. pieces.test.ts checks the two halves agree. */
+ *  what both processes need before it loads. test/shared/themes.test.ts checks the two halves
+ *  agree. */
 export interface ThemeDefinition {
   id: string;
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */

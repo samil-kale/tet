@@ -17,10 +17,10 @@ import {
   snapZoneAt,
   tabsInFront,
   visibleTabIds
-} from "../src/renderer/tabs/pane-layout";
-import type { ProjectLayout } from "../src/renderer/tabs/pane-layout";
-import type { TerminalDescriptor } from "../src/shared/types/terminals";
-import { nextEditorTabId, type EditorTab } from "../src/renderer/editor/editor-tab";
+} from "../../src/renderer/tabs/pane-layout";
+import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
+import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import { nextEditorTabId, type EditorTab } from "../../src/renderer/editor/editor-tab";
 
 /** The split view's rules — pure functions, needing no window. */
 

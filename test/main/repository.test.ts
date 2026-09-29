@@ -5,28 +5,32 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { shell } from "electron";
-import { GitLoginStore } from "../src/main/git/git-logins";
-import * as git_ from "../src/main/git/git";
-import { Repository } from "../src/main/git/repository";
-import { readMainWorktree } from "../src/main/util/linked-git-dir";
-import { worktreeBase } from "../src/shared/types/git";
-import type { FileSearchQuery, FileSearchResult } from "../src/shared/types/files";
-import { fakeSafeStorage, forkGitInProcess, git, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir, type HttpRemote } from "./helpers";
+import { GitLoginStore } from "../../src/main/git/git-logins";
+import * as git_ from "../../src/main/git/git";
+import { Repository } from "../../src/main/git/repository";
+import { readMainWorktree } from "../../src/main/util/linked-git-dir";
+import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
+import type { FileSearchQuery, FileSearchResult } from "../../src/shared/types/files";
+import { fakeSafeStorage, forkGitInProcess, git, type HttpRemote, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir } from "../helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
  * switches to, the question it hands back. electron's three pieces are faked: `utilityProcess` runs
  * git.ts in this process as git-host.ts would, `shell.trashItem` moves a file into a folder or fails,
- * and `safeStorage` (helpers.ts's fakeSafeStorage).
+ * and `safeStorage` (helpers/index.ts's fakeSafeStorage).
  */
 
 isolateGitConfig("tet-repository-noglobal");
+
 forkGitInProcess();
 
 const trash = tempDir("tet-trash-");
+
 /** Which paths the trash refuses. */
 let trashRefuses: (absolute: string) => boolean = () => false;
+
 let trashed = 0;
+
 Object.assign(shell, {
   trashItem: async (absolute: string) => {
     if (trashRefuses(absolute)) {
@@ -69,7 +73,6 @@ async function open(
 }
 
 after(() => opened.forEach((repository) => repository.dispose()));
-
 
 describe("a discard, through the trash as in GitHub Desktop", () => {
   let dir: string;
@@ -416,7 +419,6 @@ describe("the Explorer's search, VS Code's search in files", () => {
   });
 });
 
-
 describe("a remote over http that wants a login", () => {
   const login = { username: "saka", password: "right" };
   before(() => fakeSafeStorage());
@@ -545,5 +547,69 @@ describe("a remote over http that wants a login", () => {
     } finally {
       remote.close();
     }
+  });
+});
+
+describe("the git logins kept in TET", () => {
+  const tempRoot = (): string => tempDir("tet-git-logins-");
+
+  it("keep one login per origin, never in the clear", () => {
+    fakeSafeStorage(true);
+    const root = tempRoot();
+    const store = new GitLoginStore(root);
+    store.set("https://git.example.com/team/app.git", { username: "old", password: "one" });
+    store.set("https://git.example.com:443/other.git", { username: "saka", password: "two" });
+    assert.deepEqual(store.get("https://git.example.com/elsewhere.git"), { username: "saka", password: "two" });
+    assert.equal(store.get("https://git.example.com:8443/team/app.git"), undefined, "another port is another origin");
+    assert.doesNotMatch(fs.readFileSync(path.join(root, "git-logins.json"), "utf8"), /"two"/);
+    assert.deepEqual(new GitLoginStore(root).get("https://git.example.com/"), { username: "saka", password: "two" });
+    assert.deepEqual(store.get("https://old@git.example.com/team/app.git"), { username: "old", password: "one" }, "the url's user");
+    assert.equal(store.get("https://nobody@git.example.com/"), undefined, "no login of another user for it");
+    store.delete("https://git.example.com/team/app.git", "saka");
+    assert.deepEqual(store.get("https://git.example.com/team/app.git"), { username: "old", password: "one" });
+    store.delete("https://git.example.com/team/app.git", "old");
+    assert.equal(store.get("https://git.example.com/team/app.git"), undefined);
+  });
+
+  it("keep nothing for an ssh remote, or where the OS offers no encryption", () => {
+    fakeSafeStorage(true);
+    const store = new GitLoginStore(tempRoot());
+    store.set("git@git.example.com:team/app.git", { username: "saka", password: "x" });
+    assert.equal(store.get("git@git.example.com:team/app.git"), undefined);
+    fakeSafeStorage(false);
+    store.set("https://git.example.com/app.git", { username: "saka", password: "x" });
+    assert.equal(store.get("https://git.example.com/app.git"), undefined);
+  });
+
+  it("offer a kept login, and forget it once the host refuses it", async () => {
+    fakeSafeStorage(true);
+    const store = new GitLoginStore(tempRoot());
+    store.set("https://git.example.com/app.git", { username: "saka", password: "revoked" });
+    let offered: string | undefined;
+    const refusing = async (login?: GitLogin) => {
+      offered = login && `${login.username}:${login.password}`;
+      return { ok: false, error: "Authentication failed", authRequired: true };
+    };
+    const result = await store.run("/nowhere", "https://saka@git.example.com/app.git", undefined, refusing);
+    assert.equal(offered, "saka:revoked");
+    assert.equal(result.loginUrl, "https://saka@git.example.com/app.git");
+    assert.equal(store.get("https://git.example.com/app.git"), undefined);
+
+    // A url with a password of its own: git uses that one, so nothing is offered or asked.
+    store.set("https://git.example.com/app.git", { username: "saka", password: "kept" });
+    offered = "untouched";
+    const withPassword = await store.run("/nowhere", "https://saka:wrong@git.example.com/app.git", undefined, refusing);
+    assert.equal(offered, undefined);
+    assert.equal(withPassword.loginUrl, undefined);
+    assert.equal(store.get("https://git.example.com/app.git")?.password, "kept");
+  });
+
+  it("pass an ssh remote's command through untouched", async () => {
+    const store = new GitLoginStore(tempRoot());
+    const result = await store.run("/nowhere", "git@git.example.com:app.git", undefined, async (login) => ({
+      ok: login === undefined,
+      authRequired: true
+    }));
+    assert.deepEqual(result, { ok: true, authRequired: true }, "no login offered, and none asked for");
   });
 });

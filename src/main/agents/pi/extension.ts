@@ -23,8 +23,8 @@ export function writePiExtension(storageDir: string): string {
  * The extension source; pure, so tests can compile it.
  *
  * pi loads `-e <path>` (jiti; spaces work) before the project-trust dialog and EXITS on a load
- * failure, so every branch must compile (pieces.test.ts). Nothing imported from pi's packages:
- * they don't resolve under tet's data folder, and its events are plain objects.
+ * failure, so every branch must compile (test/main/agents.test.ts). Nothing imported from pi's
+ * packages: they don't resolve under tet's data folder, and its events are plain objects.
  *
  * Event order: session_start → (per prompt) before_agent_start → agent_start → turn_start/turn_end…
  * → agent_end → agent_settled; ui_prompt_start/end around an extension's own dialogs.

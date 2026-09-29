@@ -33,9 +33,9 @@ project's terminals.
   below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
   0. `util/`: helpers of no area — the platform (`host-platform.ts`), starting processes
      (`process.ts`), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
-  1. `store/`: what TET keeps and reads back — settings, environment variables, `tet.json`, the
-     data folder's layout (`data-root.ts`, `project-dirs.ts`). A store of one area stays in it
-     (`sbx-local.ts`, `providers/accounts.ts`).
+  1. `store/`: what TET keeps and reads back — the open projects (`project-store.ts`), settings,
+     environment variables, `tet.json`, the data folder's layout (`data-root.ts`,
+     `project-dirs.ts`). A store of one area stays in it (`sbx-local.ts`, `providers/accounts.ts`).
   2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
      everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
      the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
@@ -64,8 +64,8 @@ project's terminals.
   4. `git/`: the side pane's git view, and running a git action from any view (`run-action.ts`).
   5. `files/` (the side pane's other view: the Explorer tree, the SEARCH pane, Seti's file icons),
      `sidebar/` and `dialogs/`, apart from each other.
-  6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`. `assets/` holds the app icon,
-     for the window and the packages.
+  6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
+     (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
   documents every field), grouped by what it can do — `install`, `terminal`, `run`, `ask`,
   `sessions`, `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent
@@ -88,13 +88,13 @@ project's terminals.
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
   laid out in the data model below.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer view and `sbx`. Read defensively (`src/main/store/tet-json.ts`): missing means nothing
-  configured, broken never does — a project whose file is broken is neither added nor opened at
-  start (kept, with all TET has of it, until added again), and one broken while open counts as its
-  last readable version, said in a notice. Nothing writes over a broken file. A worktree has none
-  of its own: it takes its project's (`configRoot`) and its sbx values, forwards none of the ports,
-  and changes nothing of it — its row, Explorer and COMMANDS offer no settings, `tet-ctl` refuses
-  them.
+  the Explorer view and `sbx`. Read defensively (`src/main/store/tet-json.ts`): missing means
+  nothing configured, broken never does — a project whose file is broken is neither added nor
+  opened at start (kept, with all TET has of it, until added again), and one broken while open
+  counts as its last readable version, said in a notice. Nothing writes over a broken file. A
+  worktree has none of its own: it takes its project's (`configRoot`) and its sbx values, forwards
+  none of the ports, and changes nothing of it — its row, Explorer and COMMANDS offer no settings,
+  `tet-ctl` refuses them.
 
 ## Data model: `~/.tet`
 
@@ -292,8 +292,8 @@ or a per-line decision is for an agent.
   - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it changes
     happens whole or not at all — and that waits on something outside TET (a browser, an agent, a
     provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
-    (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today: the
-    SBX dialog's setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
+    (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today:
+    the SBX dialog's setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
     message, and the Add Repository dialog's listing.
 
   A new run is held unless it meets both conditions; a dialog's Save is always held.
@@ -310,9 +310,9 @@ or a per-line decision is for an agent.
   Only rows a picker adds (the SBX paths) get a line saying there are none.
 - **One progress indicator per section** (`ProgressBar.tsx`, `Section`'s `busy`): a new slow
   reason feeds the existing bar. In a dialog that bar is `DialogFrame`'s `busy`, so a busy state
-  held by a nested view is lifted to the view owning the frame (`hold`). No spinners for progress: the one
-  spinner is a session's working mark. The one determinate bar is the update download's, in its
-  notice (`showProgress`).
+  held by a nested view is lifted to the view owning the frame (`hold`). No spinners for progress:
+  the one spinner is a session's working mark. The one determinate bar is the update download's,
+  in its notice (`showProgress`).
 - **The keyboard belongs to the terminal**: tet's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.
@@ -357,8 +357,8 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
   shown (`useSessionMarks`) and clears what was seen (`terminals.seen`).
-- A session is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a CLI's exit
-  handlers.
+- A session is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a
+  CLI's exit handlers.
 
 ## The control channel: `tet-ctl`
 
@@ -372,19 +372,20 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; ha
 - Agents learn of `tet-ctl` once per session: `systemPrompt`
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
   `SessionStart` hook's added context), never replacing the user's instructions.
-- **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent needs, typed
-  only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab gets them
-  anyway), global, and set in every tab at its start (`pty.ts`'s `buildEnv`), over what the machine
-  sets itself — said in a notice. A running tab takes them up only when restarted: the dialog's
-  Save restarts the asking one. None in a sandbox, and the verbs refused *and* unmentioned there —
-  not in `help`, not in its system prompt.
+- **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent
+  needs, typed only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab
+  gets them anyway), global, and set in every tab at its start (`pty.ts`'s `buildEnv`), over what
+  the machine sets itself — said in a notice. A running tab takes them up only when restarted: the
+  dialog's Save restarts the asking one. None in a sandbox, and the verbs refused *and* unmentioned
+  there — not in `help`, not in its system prompt.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
 - **Where a caller runs is its side** (`ControlSide`, `src/shared/control-side.ts`; in the main
   process the tab's `TabSide`, `terminals/tab-side.ts`, and the caller's `CallerSide` extending it,
-  `control/caller-side.ts`), set by its tab's place and read back off its token: which verbs answer and how far, what `tet-ctl help` and the system prompt mention, the
-  variables its tab gets, the tabs, projects and files it reaches. Nothing else asks whether a
-  caller is sandboxed; a new difference extends the side.
+  `control/caller-side.ts`), set by its tab's place and read back off its token: which verbs
+  answer and how far, what `tet-ctl help` and the system prompt mention, the variables its tab
+  gets, the tabs, projects and files it reaches. Nothing else asks whether a caller is sandboxed; a
+  new difference extends the side.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
 - `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository or
@@ -399,7 +400,8 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; ha
 
 ## sbx: agent tabs in a Docker sandbox
 
-Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx/` drives the `sbx` CLI.
+Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx/` drives
+the `sbx` CLI.
 
 - **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): decided at each start
   (`resolvePlace`), until then by where its session lives; each agent's runtime holds a `host` one,
@@ -444,10 +446,15 @@ is a wall and **installs nothing**. `process.env.PATH` is rewritten before that 
 ## npm scripts
 
 - `npm run compile`, `npm run typecheck`, `npm run lint`
-- `npm test` — compile, then node's test runner over `dist-test/`, one file per seam; nothing looks
-  into the window. `app.test.ts` starts the real app on a throwaway profile (needs a display,
-  `xvfb-run` on Linux); `install.test.ts` runs only with `TET_INSTALL_TEST=1` after `npm run dist`
-  (on Windows it writes shortcuts and the PATH entry for the account).
+- `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: one
+  file per area in `main/`, `renderer/` and `shared/` (`main/sbx.test.ts` tests `src/main/sbx/`),
+  a new test going to its area's file; `e2e/` runs the real thing, `helpers/` serves them all,
+  and `lint.test.ts` holds `eslint.config.mjs`'s rules to what they must let through and refuse.
+  Nothing looks into the window. `e2e/app.test.ts` starts the real app on a throwaway profile
+  (needs a display, `xvfb-run` on Linux); `e2e/agents.test.ts` drives the installed CLIs only with
+  `TET_AGENT_TEST=1` or `TET_SBX_TEST=1`; `e2e/install.test.ts` runs only with
+  `TET_INSTALL_TEST=1` after `npm run dist` (on Windows it writes shortcuts and the PATH entry for
+  the account).
 - `npm start` — typecheck, compile, launch (see "Do not restart the app yourself").
   `npm start -- --simulate=git,claude` shows the requirements dialog, `--simulate=sbx-mode` a
   machine with only git and sbx; `--user-data-dir=<dir>` gives a run its own profile;

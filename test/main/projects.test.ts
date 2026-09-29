@@ -5,11 +5,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
-import { resolveProjectRef } from "../src/main/store/resolved-ref";
-import type { ControlRecords } from "../src/main/control/control-records";
-import { GitLoginStore } from "../src/main/git/git-logins";
-import { RepositoryManager } from "../src/main/git/repository";
-import { projectDir, worktreeDir, worktreeFolders } from "../src/main/store/project-dirs";
+import { resolveProjectRef } from "../../src/main/store/resolved-ref";
+import type { ControlRecords } from "../../src/main/control/control-records";
+import { GitLoginStore } from "../../src/main/git/git-logins";
+import { RepositoryManager } from "../../src/main/git/repository";
+import { projectDir, worktreeDir, worktreeFolders } from "../../src/main/store/project-dirs";
 import {
   addProject,
   addWorktree,
@@ -19,13 +19,13 @@ import {
   resolveStoredIds,
   syncWorktrees,
   type ProjectDeps
-} from "../src/main/projects";
-import { ProjectStore } from "../src/main/store/project-store";
-import { SbxLocalStore } from "../src/main/sbx/sbx-local";
-import type { SessionManagerRegistry } from "../src/main/terminals/session-registry";
-import { readCommands, readSbxConfig, writeCommands } from "../src/main/store/tet-json";
-import type { ProjectRef, ProjectsChange } from "../src/shared/types/project";
-import { eventually, forkGitInProcess, git, initBare, isolateGitConfig, tempDir } from "./helpers";
+} from "../../src/main/projects";
+import { ProjectStore } from "../../src/main/store/project-store";
+import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
+import type { SessionManagerRegistry } from "../../src/main/terminals/session-registry";
+import { readCommands, readSbxConfig, writeCommands } from "../../src/main/store/tet-json";
+import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project";
+import { eventually, forkGitInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
 
 /**
  * projects.ts against the real git and real Repositories, the sessions faked: a project's id in its

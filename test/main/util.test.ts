@@ -1,0 +1,219 @@
+import * as assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { describe, it } from "node:test";
+import { LINUX, MAC, WINDOWS } from "../../src/shared/platform";
+import { PLATFORM } from "../../src/main/util/host-platform";
+import { stripAnsi } from "../../src/main/util/ansi";
+import { shellSingleQuote } from "../../src/main/util/generated-file";
+import { onDisk, relativeInside } from "../../src/main/util/path-inside";
+import { sameSet } from "../../src/main/util/same-set";
+import { killProcessTree, resolveCommand } from "../../src/main/util/process";
+import { eventually, processAlive, tempDir } from "../helpers";
+import { isExecutableFile, isOpenableUrl } from "../../src/main/util/shell-open";
+
+/** util/: spawning, escape sequences, quoting, paths, what the shell may open. */
+
+describe("resolveCommand", () => {
+  /** Runs `program` as tet spawns it: resolved, no shell. */
+  const runResolved = (program: string, args: string[], cwd: string) => {
+    const resolved = resolveCommand(program, args);
+    return spawnSync(resolved.command, resolved.args, {
+      encoding: "utf8",
+      windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+      cwd
+    });
+  };
+
+  it("spawns a native executable directly and routes a shim through cmd.exe", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
+    assert.deepEqual(resolveCommand("C:\\tools\\run.exe", ["-v"]), { command: "C:\\tools\\run.exe", args: ["-v"] });
+    assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
+      command: "cmd.exe",
+      args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^"-v^""'],
+      windowsVerbatimArguments: true
+    });
+  });
+
+  it("hands every character to a shim literally, through cmd.exe", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
+    // A global npm shim's shape (cmd-shim), in a folder whose name cmd.exe would otherwise split and
+    // group; node by its path, where cmd-shim looks beside the shim or on PATH.
+    const dir = tempDir("tet shim (x)-");
+    const script = path.join(dir, "argv.js");
+    fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
+    const shim = path.join(dir, "echo-args.cmd");
+    fs.writeFileSync(
+      shim,
+      "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n" +
+        `SET "_prog=${process.execPath}"\r\n` +
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\argv.js" %*\r\n'
+    );
+    const args = [
+      // A quote cmd.exe sees as closing, then an operator: the shim's `%*` parses the line again.
+      // First, since an argument with an odd count of quotes (`a\"b`) would hide what follows.
+      'a"&echo INJECTED&"b', 'a">out.txt"', '{"k": 1}', "%VAR%",
+      "plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€",
+      // Runs of backslashes before a quote and at the end, each one halved by the C runtime.
+      "C:\\out\\\\", "a\\\\\"b", "x\\\\\\", "a\\\\\\\"b"
+    ];
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
+    try {
+      // The shim by its path, and by a bare name found on PATH, with its extension or without.
+      for (const program of [shim, "echo-args", "echo-args.cmd"]) {
+        const run = runResolved(program, args, dir);
+        assert.deepEqual(JSON.parse(run.stdout), args, `${program}: ${run.stdout} ${run.stderr}`);
+      }
+    } finally {
+      process.env.PATH = originalPath;
+    }
+    assert.deepEqual(fs.readdirSync(dir).sort(), ["argv.js", "echo-args.cmd"], "nothing redirected into a file");
+  });
+
+  it("hands a batch file reading its own arguments each one once escaped", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
+    // Maven's `mvn.cmd` shape: `%~1` compared in an `if`, where a second escape's carets are a
+    // syntax error ("[tet] mvn exited with code 255").
+    const dir = tempDir("tet batch (x)-");
+    const script = path.join(dir, "argv.js");
+    fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");
+    const batch = path.join(dir, "mvn.cmd");
+    fs.writeFileSync(
+      batch,
+      '@ECHO off\r\nIF "%~1" == "-f" (SET "kind=file") ELSE (SET "kind=other")\r\n' +
+        `"${process.execPath}" "${script}" %kind% %*\r\n`
+    );
+    for (const [args, kind] of [[["process-classes", "exec:java", "a b"], "other"], [["-f", "pom.xml"], "file"]] as const) {
+      const run = runResolved(batch, [...args], dir);
+      assert.equal(run.status, 0, `${run.stdout} ${run.stderr}`);
+      assert.deepEqual(JSON.parse(run.stdout), [kind, ...args]);
+    }
+  });
+
+  it("finds a native executable named by its path without an extension", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
+    const dir = tempDir("tet-native-");
+    fs.writeFileSync(path.join(dir, "build.exe"), "");
+    assert.deepEqual(resolveCommand(path.join(dir, "build"), ["-v"]), { command: path.join(dir, "build.exe"), args: ["-v"] });
+  });
+
+  it("kills the program behind a shim along with its cmd.exe", { skip: !PLATFORM.killsWithTaskkill && "win32 only" }, async () => {
+    const dir = tempDir("tet-kill-");
+    const pidFile = path.join(dir, "pid");
+    const script = path.join(dir, "wait.js");
+    fs.writeFileSync(script, `require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`);
+    const shim = path.join(dir, "wait.cmd");
+    fs.writeFileSync(shim, `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
+    const resolved = resolveCommand(shim, []);
+    const child = spawn(resolved.command, resolved.args, { windowsHide: true, windowsVerbatimArguments: resolved.windowsVerbatimArguments, stdio: "ignore" });
+    await eventually("the program started", () => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8") !== "", 10_000);
+    const pid = Number(fs.readFileSync(pidFile, "utf8"));
+    killProcessTree(child);
+    await eventually("the program behind the shim exited", () => !processAlive(pid), 10_000);
+  });
+
+  it("takes a name's first folder on PATH, its extension second", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
+    // A shim put in front of an installed program: cmd.exe resolves per folder, every PATHEXT
+    // extension before the next folder, so the earlier .cmd runs and not the later .exe.
+    const dir = tempDir("tet-path-");
+    const [first, second] = [path.join(dir, "first"), path.join(dir, "second")];
+    fs.mkdirSync(first);
+    fs.mkdirSync(second);
+    fs.writeFileSync(path.join(first, "tool.cmd"), "@ECHO off\r\n");
+    fs.writeFileSync(path.join(second, "tool.exe"), "");
+    const originalPath = process.env.PATH;
+    process.env.PATH = [first, second].join(path.delimiter);
+    try {
+      assert.equal(resolveCommand("tool", []).command, "cmd.exe", "the .cmd in the first folder");
+      process.env.PATH = [second, first].join(path.delimiter);
+      assert.equal(resolveCommand("tool", []).command, path.join(second, "tool.exe"), "the .exe where its folder comes first");
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  it("changes nothing elsewhere", { skip: PLATFORM.spawnsThroughCmd && "not win32" }, () => {
+    assert.deepEqual(resolveCommand("npm", ["-v"]), { command: "npm", args: ["-v"] });
+  });
+});
+
+describe("stripping escape sequences", () => {
+  it("removes CSI with any parameter bytes, OSC ended either way and two-byte escapes", () => {
+    const text = "\x1b[1;31mred\x1b[0m \x1b[>4;1mkeys\x1b[<u \x1b]0;title\x07a\x1b]8;;url\x1b\\b \x1bMc\x1b[?25h";
+    assert.equal(stripAnsi(text), "red keys ab c");
+  });
+});
+
+describe("the quoting helpers", () => {
+  it("make any value one literal word in their shell", () => {
+    assert.equal(shellSingleQuote("it's $HOME"), `'it'\\''s $HOME'`);
+  });
+});
+
+describe("a path inside a root", () => {
+  const root = path.join(os.tmpdir(), "tet-root");
+
+  it("is answered relative to the root", () => {
+    assert.equal(relativeInside(root, path.join(root, "src", "a.ts")), path.join("src", "a.ts"));
+  });
+
+  it("counts a name that only starts with two dots as inside", () => {
+    assert.equal(relativeInside(root, path.join(root, "..env")), "..env");
+  });
+
+  it("leaves out the root itself, its parent and its siblings", () => {
+    assert.equal(relativeInside(root, root), undefined);
+    assert.equal(relativeInside(root, path.dirname(root)), undefined);
+    assert.equal(relativeInside(root, path.join(path.dirname(root), "other", "a.ts")), undefined);
+  });
+});
+
+describe("what a ctrl-click hands the OS", () => {
+  it("opens web and mail links only", () => {
+    for (const url of ["https://example.com/a?b=c", "http://localhost:3000", "mailto:someone@example.com"]) {
+      assert.equal(isOpenableUrl(url), true, url);
+    }
+    for (const url of ["file:///C:/Windows/System32/calc.exe", "ms-msdt://x", "vscode://file/a", "javascript://%0aalert(1)", "not a url"]) {
+      assert.equal(isOpenableUrl(url), false, url);
+    }
+  });
+
+  it("counts a program by its extension on Windows, and by its executable bit elsewhere", () => {
+    for (const name of ["setup.EXE", "run.bat", "run.cmd", "a.ps1", "a.vbs", "a.js", "a.msi", "a.lnk"]) {
+      assert.equal(isExecutableFile(path.join("dir", name), 0o644, WINDOWS), true, name);
+    }
+    assert.equal(isExecutableFile("notes.txt", 0o755, WINDOWS), false, "Windows has no executable bit");
+    assert.equal(isExecutableFile("build", 0o755, LINUX), true);
+    assert.equal(isExecutableFile("build.sh", 0o644, LINUX), true);
+    assert.equal(isExecutableFile("app.desktop", 0o644, LINUX), true);
+    assert.equal(isExecutableFile("run.command", 0o644, MAC), true);
+    assert.equal(isExecutableFile("notes.txt", 0o644, MAC), false);
+  });
+});
+
+describe("a path in on-disk spelling", () => {
+  it("is the folder's real path where it exists", () => {
+    const dir = tempDir("tet-on-disk-");
+    assert.equal(onDisk(dir), fs.realpathSync.native(dir));
+  });
+
+  it("keeps the part that does not exist yet as given, under its existing folder's real path", () => {
+    const dir = tempDir("tet-on-disk-");
+    assert.equal(onDisk(path.join(dir, "not", "yet")), path.join(fs.realpathSync.native(dir), "not", "yet"));
+  });
+
+  it("takes a relative path from the working folder", () => {
+    assert.equal(onDisk("."), fs.realpathSync.native(process.cwd()));
+  });
+});
+
+describe("two lists as sets", () => {
+  it("are the same in any order", () => {
+    assert.equal(sameSet(["a", "b"], ["b", "a"]), true);
+  });
+
+  it("differ by a member or by how many there are", () => {
+    assert.equal(sameSet(["a", "b"], ["a", "c"]), false);
+    assert.equal(sameSet(["a"], ["a", "a"]), false);
+  });
+});

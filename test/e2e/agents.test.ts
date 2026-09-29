@@ -6,20 +6,20 @@ import type { AddressInfo } from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { SANDBOXED_AGENTS } from "../src/main/agents";
-import type { AgentDefinition, AgentSessionInfo } from "../src/main/agents/agent";
-import { askAgent } from "../src/main/agents/ask";
-import { SBX_VERIFIED_VERSION } from "../src/main/sbx/sbx-cli";
-import { ensureRunning, pathMountSpecs } from "../src/main/sbx/sbx-mounts";
-import { parseFilesystemRules } from "../src/main/sbx/sbx-policy";
-import { toContainerPath } from "../src/main/agents/hook-target";
-import { resolveCommand } from "../src/main/util/process";
-import { UNCAUGHT_MARKER } from "../src/main/uncaught";
-import type { ControlEvent } from "../src/shared/control";
-import type { AgentId } from "../src/shared/types/agents";
-import type { Project } from "../src/shared/types/project";
-import type { TerminalDescriptor } from "../src/shared/types/terminals";
-import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "./helpers";
+import { SANDBOXED_AGENTS } from "../../src/main/agents";
+import type { AgentDefinition, AgentSessionInfo } from "../../src/main/agents/agent";
+import { askAgent } from "../../src/main/agents/ask";
+import { SBX_VERIFIED_VERSION } from "../../src/main/sbx/sbx-cli";
+import { ensureRunning, pathMountSpecs } from "../../src/main/sbx/sbx-mounts";
+import { parseFilesystemRules } from "../../src/main/sbx/sbx-policy";
+import { toContainerPath } from "../../src/main/agents/hook-target";
+import { resolveCommand } from "../../src/main/util/process";
+import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
+import type { ControlEvent } from "../../src/shared/control";
+import type { AgentId } from "../../src/shared/types/agents";
+import type { Project } from "../../src/shared/types/project";
+import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
  * The agents' CLIs and sbx as installed on this machine, driven the way tet drives them — what the

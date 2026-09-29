@@ -100,9 +100,10 @@ export function list(args: Record<string, unknown>, name: string): string[] {
 }
 
 /**
- * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
- * the server under plain node with these faked. The same singletons ipc/ holds: a second
- * transport onto that logic, never a second implementation (projects.ts's addProject/removeProject).
+ * Handed over by main.ts, not imported: no electron or node-pty here, so test/main/control.test.ts
+ * runs the server under plain node with these faked. The same singletons ipc/ holds: a second
+ * transport onto that logic, never a second implementation (projects.ts's
+ * addProject/removeProject).
  */
 export interface ControlDeps {
   version: string;

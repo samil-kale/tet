@@ -7,7 +7,7 @@ import { appendLog, openErrorLog } from "./util/error-log";
  * EAGAIN` on a socket the other side dropped. The user gets a notice; the stack goes to `errors.log`.
  */
 
-/** Starts every report; test/app.test.ts fails a run on it. */
+/** Starts every report; test/e2e/app.test.ts fails a run on it. */
 export const UNCAUGHT_MARKER = "[tet] uncaught exception";
 
 /** One notice per distinct error per run; every occurrence is still logged, numbered. */

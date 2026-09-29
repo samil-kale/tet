@@ -2,7 +2,7 @@
  * `electron` for the tests (esbuild.js's testConfig aliases it): the real package only exports the
  * binary's path. CommonJS, so esbuild checks no named import against it: only what main code
  * reachable from a test reads is here, anything else fails where it is used. `shell`,
- * `utilityProcess` and `safeStorage` are empty for a test to fill with its fakes (helpers.ts's
+ * `utilityProcess` and `safeStorage` are empty for a test to fill with its fakes (helpers/index.ts's
  * forkGitInProcess and fakeSafeStorage, repository.test.ts's trash).
  */
 module.exports = { nativeTheme: { shouldUseDarkColors: true }, shell: {}, utilityProcess: {}, safeStorage: {} };

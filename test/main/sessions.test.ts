@@ -3,12 +3,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { PLATFORM } from "../src/main/util/host-platform";
-import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
-import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
-import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
-import { watchTranscriptDir } from "../src/main/agents/transcript";
-import { eventually, tempDir } from "./helpers";
+import { PLATFORM } from "../../src/main/util/host-platform";
+import { claudeSandboxSessions, claudeSessionProvider } from "../../src/main/agents/claude/sessions";
+import { codexSandboxSessions, codexSessionProvider } from "../../src/main/agents/codex/sessions";
+import { encodeCwd, piSandboxSessions, piSessionProvider } from "../../src/main/agents/pi/sessions";
+import { watchTranscriptDir } from "../../src/main/agents/transcript";
+import { eventually, tempDir } from "../helpers";
 
 /**
  * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a

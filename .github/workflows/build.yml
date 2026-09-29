@@ -40,7 +40,7 @@ jobs:
       # tests are what exercises the control channel's loopback TCP port on each platform.
       - run: npm run typecheck
       - run: npm run lint
-      # test/app.test.ts starts the real app, which wants a display; the other two runners
+      # test/e2e/app.test.ts starts the real app, which wants a display; the other two runners
       # have one.
       - run: xvfb-run -a npm test
         if: runner.os == 'Linux'
@@ -49,7 +49,7 @@ jobs:
 
   # The archives, one runner per platform, and what a user does with the one for this runner's
   # architecture: install it with the script, start it, let it update itself on quit, start the
-  # new version (test/install.test.ts).
+  # new version (test/e2e/install.test.ts).
   package:
     strategy:
       fail-fast: false
@@ -72,9 +72,9 @@ jobs:
 
       - run: npm run dist
 
-      - run: xvfb-run -a node --test dist-test/install.test.js
+      - run: xvfb-run -a node --test dist-test/e2e/install.test.js
         if: runner.os == 'Linux'
-      - run: node --test dist-test/install.test.js
+      - run: node --test dist-test/e2e/install.test.js
         if: runner.os != 'Linux'
 
       # Only a handoff to the release job of this same run; the Release itself keeps the

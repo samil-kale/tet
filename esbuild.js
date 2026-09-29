@@ -90,12 +90,14 @@ const editorWorkerConfig = {
 /** @type {import('esbuild').BuildOptions} */
 const testConfig = {
   ...node,
-  entryPoints: [path.join(__dirname, "test", "*.test.ts")],
+  // test/ mirrors src/ (main/, renderer/, shared/) plus e2e/, and dist-test/ mirrors test/.
+  entryPoints: [path.join(__dirname, "test", "**", "*.test.ts")],
+  outbase: path.join(__dirname, "test"),
   outdir: distTest,
   // node-pty (native) cannot be bundled; esbuild finds its own binary relative to its package, and
-  // pieces.test.ts compiles pi's generated extension with it. electron is a stub: node's runner has
-  // none (helpers.ts finds the binary through its own require).
-  alias: { electron: "./test/electron-stub.js" },
+  // main/agents.test.ts compiles pi's generated extension with it. electron is a stub: node's runner
+  // has none (helpers/ finds the binary through its own require).
+  alias: { electron: "./test/helpers/electron-stub.js" },
   external: ["node-pty", "esbuild"]
 };
 

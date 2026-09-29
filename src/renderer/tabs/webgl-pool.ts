@@ -1,6 +1,6 @@
 /**
  * Which terminals may hold a WebGL context, apart from xterm and the DOM so the rules run in node
- * (test/webgl-pool.test.ts). Contexts live in terminal-views.ts; keys are its view keys.
+ * (test/renderer/webgl-pool.test.ts). Contexts live in terminal-views.ts; keys are its view keys.
  *
  * A terminal in front of the user always gets one; a hidden one only while among the most recently
  * hidden — each costs GPU memory, and switching back to a warm one shows no DOM frame.

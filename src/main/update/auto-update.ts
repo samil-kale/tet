@@ -185,7 +185,7 @@ async function stage(releasesUrl: string, asset: string, version: string, onProg
  * never mid-session, a tab being a live agent session. If tet cannot replace its own folder, the
  * notice carries the install command instead.
  *
- * `releasesUrl` is `RELEASES_URL` except for test/install.test.ts.
+ * `releasesUrl` is `RELEASES_URL` except for test/e2e/install.test.ts.
  */
 export function startAutoUpdate(
   installed: boolean,

@@ -8,14 +8,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after } from "node:test";
 import { safeStorage, utilityProcess } from "electron";
-import { PLATFORM } from "../src/main/util/host-platform";
-import { findControlPort } from "../src/main/control/control-port";
-import { tabControlToken } from "../src/main/terminals/control-token";
-import * as gitModule from "../src/main/git/git";
-import type { GitRequest, GitResponse } from "../src/main/git/git-host";
-import { CONTROL_ENV } from "../src/shared/control";
-import { HOST_SIDE } from "../src/shared/control-side";
-import type { GitLogin } from "../src/shared/types/git";
+import { PLATFORM } from "../../src/main/util/host-platform";
+import { findControlPort } from "../../src/main/control/control-port";
+import { tabControlToken } from "../../src/main/terminals/control-token";
+import * as gitModule from "../../src/main/git/git";
+import type { GitRequest, GitResponse } from "../../src/main/git/git-host";
+import { CONTROL_ENV } from "../../src/shared/control";
+import { HOST_SIDE } from "../../src/shared/control-side";
+import type { GitLogin } from "../../src/shared/types/git";
 
 /**
  * Stands in for the OS's encryption (electron-stub.js's `safeStorage`): "sealed:" is the cipher,
@@ -69,8 +69,21 @@ after(() => {
   }
 });
 
+/** The repository: a test runs bundled from dist-test/, as deep as its file lies in test/. */
+export const ROOT = (() => {
+  let dir = __dirname;
+  while (!fs.existsSync(path.join(dir, "package.json"))) {
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      throw new Error(`no package.json above ${__dirname}`);
+    }
+    dir = parent;
+  }
+  return dir;
+})();
+
 /** The built CLI — the tests run what ships, not the source. */
-export const CLI = path.join(__dirname, "..", "dist", "tet-ctl.js");
+export const CLI = path.join(ROOT, "dist", "tet-ctl.js");
 
 export interface Run {
   status: number;
@@ -155,7 +168,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     [CONTROL_ENV.worktree]: undefined,
     [CONTROL_ENV.tabId]: undefined
   };
-  const args = [path.join(__dirname, ".."), `--user-data-dir=${userData}`, "--allow-shell-only"];
+  const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
   if (PLATFORM.startsWithoutChromeSandbox) {
     args.push("--no-sandbox");
   }

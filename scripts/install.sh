@@ -11,7 +11,7 @@
 #
 # Fetched with curl, which marks nothing it saves as quarantined: that is what lets macOS start
 # the ad-hoc signed bundle without Gatekeeper asking. TET_RELEASES_URL stands in for GitHub's
-# releases in test/install.test.ts.
+# releases in test/e2e/install.test.ts.
 
 set -eu
 
