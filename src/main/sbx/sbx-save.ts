@@ -2,11 +2,13 @@ import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, sbxPortKey, sbxProblemNo
 import type { AgentId, ProjectRef, SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig } from "../../shared/types";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import type { SandboxedAgent } from "../agents/agent";
-import { readSbxConfig, writeSbxConfig } from "../tet-json";
+import { readSbxConfig, writeSbxConfig } from "../store/tet-json";
 import { runSbx, sbxJson } from "./sbx-cli";
-import { contractHome, normalizeHostPath, type SandboxList } from "./sbx-status";
+import type { SandboxList } from "./sbx-status";
+import { contractHome, normalizeHostPath } from "../util/path-inside";
+import { sameSet } from "../util/same-set";
 import { ensureRunning, grantsOf, revokeMounts } from "./sbx-mounts";
-import { allowHosts, applyPortChanges, applySecrets, readSandboxPorts, removeSandbox, sameSet, sandboxName, type LiveSecret } from "./sbx";
+import { allowHosts, applyPortChanges, applySecrets, readSandboxPorts, removeSandbox, sandboxName, type LiveSecret } from "./sbx";
 
 /**
  * The agent of a sandbox tet made (sandboxName) for this workspace under another id, as for a

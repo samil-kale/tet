@@ -80,7 +80,7 @@ export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder 
         type="text"
         value={value}
         placeholder={placeholder}
-        disabled={pickedOnly}
+        readOnly={pickedOnly}
         title={pickedOnly ? value : undefined}
         onChange={(event) => onChange(event.target.value)}
       />

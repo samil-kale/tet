@@ -8,14 +8,14 @@ import {
   nonEmptyString,
   parseLine,
   requireTitle,
+  type ScannedTail,
   scanTranscriptHead,
   scanTranscriptTail,
   timestampOf,
   truncateTitle,
-  type ScannedTail
+  watchTranscriptDir
 } from "../transcript";
-import { watchTranscriptDir } from "../../util/watch-dir";
-import { SANDBOX_HOME } from "../../terminals/hook-target";
+import { SANDBOX_HOME } from "../hook-target";
 
 /** Claude Code has no session CLI: sessions are the `<uuid>.jsonl` transcripts in
  *  ~/.claude/projects/<cwd with non-alphanumerics as "-">; deleting one deletes its transcript.

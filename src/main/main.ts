@@ -1,10 +1,9 @@
-import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { app, BrowserWindow, Menu, shell } from "electron";
-import { AGENTS, listInstalledAgents } from "./agents";
+import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
-import { GitLoginStore } from "./git-logins";
+import { GitLoginStore } from "./git/git-logins";
 import { WINDOW_ARGS } from "../shared/api";
 import type { EditorContentReply, EventChannels } from "../shared/ipc";
 import { CONTROL_ENV } from "../shared/control";
@@ -13,45 +12,48 @@ import { resolveTheme, themeKey, type ThemeDefinition } from "../shared/themes";
 import { projectRefKey, overridesMachineNote } from "../shared/types";
 import type { ProjectRef, Notice, NoticeProgress, NoticeSeverity, TerminalDescriptor, TerminalOutput, TerminalStatus } from "../shared/types";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
-import { readChanged, readCommands, readSbxConfig } from "./tet-json";
-import { writeLaunchers } from "./control/control-launcher";
+import { readChanged, readCommands, readSbxConfig } from "./store/tet-json";
+import { prepareControl } from "./control/control-channel";
 import { ControlRecords } from "./control/control-records";
-import { findControlPort, startControlServer } from "./control/control-server";
-import { EnvRequests, EnvStore } from "./environment";
+import { startControlServer } from "./control/control-server";
+import { EnvRequests } from "./control/env-requests";
+import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
-import { registerIpc, sweepDropFiles } from "./ipc";
+import { registerIpc } from "./ipc";
+import { sweepDropFiles } from "./store/drops";
 import { on, once } from "./ipc/channels";
-import { resolveProjectRef } from "./util/resolved-ref";
-import { projectRefPath } from "./project-dirs";
+import { resolveProjectRef } from "./store/resolved-ref";
+import { projectRefPath } from "./store/project-dirs";
 import {
   addProject,
   addWorktree,
   deleteWorktree,
   openStoredProjects,
-  ProjectStore,
   removeProject,
   resolveStoredIds,
   syncWorktrees,
   type ProjectDeps
 } from "./projects";
+import { ProjectStore } from "./store/project-store";
 import { readSbxUser } from "./sbx/sbx-cli";
-import { configureSandboxes, readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
+import { readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
 import { SbxAccountStore, signInToSbx } from "./sbx/sbx-accounts";
 import { SbxLocalStore } from "./sbx/sbx-local";
 import { readProjectSbxProblems, saveProjectSbx } from "./sbx/sbx-settings";
 import { anyAgentInstalled } from "./requirements";
-import { resolveDataRoot } from "./data-root";
-import { augmentAgentPath } from "./terminals/agent-path";
-import { setControlEnv, setStoredEnv } from "./terminals/pty";
-import { installUncaughtHandler, logError, logInfo } from "./uncaught";
-import { awaitedToastTab, showDesktopNotification, startNotifications } from "./notifications";
+import { resolveDataRoot } from "./store/data-root";
+import { augmentAgentPath } from "./agents/agent-path";
+import { setStoredEnv } from "./terminals/pty";
+import { installUncaughtHandler } from "./uncaught";
+import { logError, logInfo } from "./util/error-log";
+import { awaitedToastTab, showDesktopNotification, startNotifications } from "./util/notifications";
 import { isOpenableUrl } from "./util/shell-open";
 import { RepositoryManager } from "./git/repository";
-import { SessionManagerRegistry } from "./terminals/session-manager";
-import { SettingsStore } from "./settings";
-import type { SettingsAccess } from "./settings";
-import { currentTheme } from "./theme";
-import { PLATFORM } from "./host-platform";
+import { SessionManagerRegistry } from "./terminals/session-registry";
+import { SettingsStore } from "./store/settings";
+import type { SettingsAccess } from "./store/settings";
+import { currentTheme } from "./store/theme";
+import { PLATFORM } from "./util/host-platform";
 
 /** Output arrives in small chunks; batch them rather than one IPC message each. */
 const OUTPUT_FLUSH_MS = 8;
@@ -438,6 +440,7 @@ async function startControl(): Promise<void> {
         repositories,
         listAgents: listInstalledAgents,
         agents: AGENTS,
+        askModels: listAskModels,
         addProject: (directory) => addProject(projectDeps, directory),
         removeProject: (projectId) => removeProject(projectDeps, projectId),
         addWorktree: (projectId, branch) => addWorktree(projectDeps, projectId, branch),
@@ -619,7 +622,7 @@ function createWindow(): void {
   window.webContents.on("will-navigate", (event) => event.preventDefault());
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isOpenableUrl(url)) {
-      shell.openExternal(url).catch((error: unknown) => logError(`could not open ${url}: ${String(error)}`));
+      shell.openExternal(url).catch((error: unknown) => logError(`could not open ${url}`, error));
     }
     return { action: "deny" };
   });
@@ -645,26 +648,7 @@ if (!app.requestSingleInstanceLock()) {
     // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepDropFiles(dataRoot);
-    // Before the first spawn; each terminal gets only a token made from it for its own tab
-    // (control-token.ts). The token lives in this process only — never on disk or a command line.
-    const controlToken =
-      (userDataArg && process.env[CONTROL_ENV.token]) || crypto.randomBytes(24).toString("base64url");
-    const port = await findControlPort(dataRoot);
-    // Installed, dist/ is in app.asar, unreadable outside electron; electron-builder.yml unpacks
-    // the CLI.
-    const cliPath = path.join(installed ? __dirname.replace("app.asar", "app.asar.unpacked") : __dirname, "tet-ctl.js");
-    let binDir: string | undefined;
-    try {
-      binDir = writeLaunchers(dataRoot, cliPath);
-    } catch (error) {
-      // Not fatal: terminals then just lack `tet-ctl` on PATH.
-      logError("could not write the tet-ctl launcher", error);
-    }
-    setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: controlToken }, binDir);
-    // A sandbox cannot reach the data folder's launcher, so sbx.ts writes the bundle into it
-    // (ensureSandboxLauncher).
-    configureSandboxes(cliPath, port, dataRoot);
-    controlChannel = { token: controlToken, port };
+    controlChannel = await prepareControl(dataRoot, __dirname, installed, (userDataArg && process.env[CONTROL_ENV.token]) || undefined);
     registerIpc({
       store,
       settings: settingsAccess,

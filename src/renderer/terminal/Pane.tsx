@@ -4,7 +4,7 @@ import type { AgentId, AgentInfo, ProjectRef, TerminalDescriptor } from "../../s
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
-import { agentName } from "../ui/use-agents";
+import { agentInfo, agentName } from "../ui/use-agents";
 import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
@@ -232,7 +232,7 @@ export const Pane = memo(function Pane({
     if (tab.title) {
       return tab.title;
     }
-    return agents.find((agent) => agent.id === tab.agentId)?.hasSessions === false
+    return agentInfo(agents, tab.agentId)?.hasSessions === false
       ? agentName(agents, tab.agentId)
       : "New session";
   };
@@ -305,7 +305,7 @@ export const Pane = memo(function Pane({
       ];
     }
     // Rename and hand-over act on a session: an agent that keeps none never offers them.
-    const hasSessions = agents.find((agent) => agent.id === terminal.agentId)?.hasSessions === true;
+    const hasSessions = agentInfo(agents, terminal.agentId)?.hasSessions === true;
     // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
     // before the session is persisted.
     const handOffAgents = agents.filter((agent) => agent.takesPrompt && agent.id !== terminal.agentId);

@@ -1,8 +1,8 @@
 import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
-import { projectRefKey, projectRef } from "../shared/types";
-import type { ProjectRef } from "../shared/types";
-import { logError } from "./uncaught";
+import { projectRefKey, projectRef } from "../../shared/types";
+import type { ProjectRef } from "../../shared/types";
+import { logError } from "./error-log";
 import { PLATFORM } from "./host-platform";
 
 /** The tab a toast is about, which a click shows. */

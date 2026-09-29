@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import writeFileAtomic from "write-file-atomic";
-import { logError } from "../uncaught";
+import { logError } from "./error-log";
 
 /** A parsed JSON object; an array or null is not one. */
 export function isRecord(value: unknown): value is Record<string, unknown> {

@@ -18,10 +18,10 @@ import {
   withoutProblems
 } from "../../shared/sbx-rules";
 import { sbxBlocked, sbxNotReady } from "../sbx/sbx-policy";
-import type { ControlDeps } from "./control-server";
+import type { ControlDeps } from "./control-verb";
 import type { SbxReading } from "../sbx/sbx-status";
-import { ControlError, list, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./control-verb";
-import { PLATFORM } from "../host-platform";
+import { ControlError, list, onOff, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./control-verb";
+import { PLATFORM } from "../util/host-platform";
 
 /**
  * The SBX Settings verbs: `sbx-get` and one `sbx-set-*` per field, each a Save as the dialog's
@@ -158,12 +158,12 @@ export function sbxVerbs(
     },
 
     "sbx-set-enabled": async (args, caller) => {
-      const value = oneOf(args, "value", "value", ["on", "off"]);
+      const enabled = onOff(args, "value");
       // As the dialog's switch, locked where no agent runs on this machine.
-      if (value === "off" && !(await deps.sbx.anyAgentInstalled())) {
+      if (!enabled && !(await deps.sbx.anyAgentInstalled())) {
         throw new ControlError("bad_args", "no agent is installed on this machine, so sandboxing cannot be switched off");
       }
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, enabled: value === "on" } }), true);
+      return editSbx(args, caller, ({ config }) => ({ config: { ...config, enabled } }), true);
     },
 
     "sbx-set-ports": (args, caller) => {

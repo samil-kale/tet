@@ -3,9 +3,9 @@ import * as path from "node:path";
 // The ESM build: esbuild can't follow the UMD build's `require("./impl/format")`.
 import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
-import { isEnvName, isReservedName } from "../shared/env-rules";
-import { errorMessage } from "../shared/errors";
-import { COMMAND_COLORS, EXPLORER_SORT_ORDERS, SBX_ACCESS } from "../shared/types";
+import { isEnvName, isReservedName } from "../../shared/env-rules";
+import { errorMessage } from "../../shared/errors";
+import { COMMAND_COLORS, EXPLORER_SORT_ORDERS, SBX_ACCESS } from "../../shared/types";
 import type {
   CommandColor,
   ExplorerRoot,
@@ -16,12 +16,12 @@ import type {
   SbxProjectConfig,
   SbxSecret,
   SbxVariable
-} from "../shared/types";
+} from "../../shared/types";
 import { machineName } from "./env-names";
-import { readMainWorktree } from "./git/linked-git-dir";
-import { inTurn } from "./util/in-turn";
-import { isRecord } from "./util/json-file";
-import { PLATFORM } from "./host-platform";
+import { readMainWorktree } from "../util/linked-git-dir";
+import { inTurn } from "../util/in-turn";
+import { isRecord } from "../util/json-file";
+import { PLATFORM } from "../util/host-platform";
 
 /** A project's saved commands, Explorer view and sbx settings, in its own root so it travels with
  *  the repository; a linked worktree has none of its own (configRoot). Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by

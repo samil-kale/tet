@@ -63,7 +63,7 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
         renderRow={(row) => (
           // The Settings' Environment rows, the name fixed: it is the agent's.
           <EditRow key={row.id}>
-            <RowInput value={row.name} disabled />
+            <RowInput value={row.name} readOnly />
             {row.overridesMachine && <OverridesMachine name={row.name} />}
             <SecretInput
               stored={row.stored}

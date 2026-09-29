@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import * as readline from "node:readline";
-import { killProcessTree, resolveCommand } from "../../terminals/pty";
+import { killProcessTree, resolveCommand } from "../../util/spawn";
 import type { AskModel } from "../../../shared/types";
 
 /**

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { createByteThresholdCheck } from "../../terminals/session-ready";
+import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
+import { createByteThresholdCheck } from "../session-ready";
 import { piIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -10,7 +10,7 @@ import { listPiModels } from "./models";
 import { piAgentDir, piSandboxSessions, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
-import { logError } from "../../uncaught";
+import { logError } from "../../util/error-log";
 
 /** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32 (see
  *  system-prompt.ts). */

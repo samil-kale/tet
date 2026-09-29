@@ -1,5 +1,5 @@
 import { nativeTheme } from "electron";
-import { resolveTheme, schemeKind, themeKey, type ThemeDefinition } from "../shared/themes";
+import { resolveTheme, schemeKind, themeKey, type ThemeDefinition } from "../../shared/themes";
 import type { SettingsStore } from "./settings";
 
 /** The saved theme for the kind in use, "system" answered by `nativeTheme`. Asked per window and

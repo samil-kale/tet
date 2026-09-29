@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, it } from "node:test";
 import { EMPTY_SBX_CONFIG } from "../src/shared/types";
-import { PLATFORM } from "../src/main/host-platform";
+import { PLATFORM } from "../src/main/util/host-platform";
 import {
   addExclude,
   addFolder,
@@ -16,7 +16,7 @@ import {
   tetJsonProblem,
   writeCommands,
   writeSbxConfig
-} from "../src/main/tet-json";
+} from "../src/main/store/tet-json";
 import { tempDir } from "./helpers";
 
 /** tet.json: the user's file, read defensively and written back with nothing of theirs lost. */

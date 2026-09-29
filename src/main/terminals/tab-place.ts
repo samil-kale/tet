@@ -11,13 +11,13 @@ import type {
 } from "../agents/agent";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId, NoticeSeverity, SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types";
-import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../project-dirs";
-import type { ResolvedRef } from "../util/resolved-ref";
+import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../store/project-dirs";
+import type { ResolvedRef } from "../store/resolved-ref";
 import { prepareSbxRun, sandboxName } from "../sbx/sbx";
 import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
 import type { checkSbxReady } from "../sbx/sbx-status";
-import { toContainerPath } from "./hook-target";
-import { HOST_CALLER, SANDBOX_CALLER, type CallerSide } from "../control/caller-side";
+import { toContainerPath } from "../agents/hook-target";
+import { HOST_TAB, SANDBOX_TAB, type TabSide } from "./tab-side";
 
 /** A tab's session operations, bound to where its session lives. */
 export interface SessionActions {
@@ -64,7 +64,7 @@ export interface Launch {
  */
 export interface TabPlace {
   /** What the tab's process may do through the control channel and gets at its start (pty.ts). */
-  readonly side: CallerSide;
+  readonly side: TabSide;
   /** Where the tab's pasted or dropped content without a path is written. */
   dropsDir(): string;
   /** Pasted or dropped paths of this machine as the tab types them; a refused one is left out. */
@@ -97,7 +97,7 @@ export interface PlaceContext<A extends AgentDefinition = AgentDefinition> {
 
 /** This machine: paths as they are, the host setup's spawn (HostSetups). */
 export class HostPlace implements StartingPlace {
-  readonly side = HOST_CALLER;
+  readonly side = HOST_TAB;
   private watch?: SessionWatch;
 
   constructor(
@@ -208,7 +208,7 @@ export interface SbxStart {
  * its sight mounted (mountDropped).
  */
 export class SandboxPlace implements TabPlace {
-  readonly side = SANDBOX_CALLER;
+  readonly side = SANDBOX_TAB;
   readonly name: string;
   protected readonly agentDir: string;
   /** Undefined where the agent keeps no sessions in a sandbox. */

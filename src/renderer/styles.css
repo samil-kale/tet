@@ -70,17 +70,30 @@ input::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
 
-/* Dimmed, not recolored, like a disabled button. A checkbox is dimmed with its label, a dropdown
-   with its arrow. */
+/* Every control that cannot be used now: dimmed, never recolored. A checkbox is dimmed with its
+   label, a dropdown with its arrow. */
 input:not([type="checkbox"]):disabled,
 textarea:disabled,
-.select-field:has(.dropdown-trigger:disabled) {
+.select-field:has(.dropdown-trigger:disabled),
+.dialog-checkbox:has(input:disabled),
+.button:disabled,
+.button.disabled,
+/* Its own pane's bar says it is busy. */
+.icon-button:disabled,
+.context-menu-item.disabled,
+.dialog-tab.disabled,
+/* A worktree TET did not make: listed, never opened. */
+.project-item.foreign,
+/* An agent a knowledge row brings nothing to. */
+.sbx-knowledge-agent.dimmed {
   opacity: 0.4;
+  cursor: default;
 }
 
+/* The control itself too, where its own rule sets a pointer. */
 input:disabled,
-textarea:disabled,
-.dropdown-trigger:disabled {
+.dropdown-trigger:disabled,
+.dialog-checkbox input:disabled {
   cursor: default;
 }
 
@@ -327,12 +340,6 @@ textarea:focus,
   opacity: 1;
 }
 
-/* A disabled action is dimmed, not recolored; its own pane's bar says it is busy. */
-.icon-button:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
 /* Measure a spinning element by its layout size, not `getBoundingClientRect`: the rotation grows
    its bounding box. */
 .spinning {
@@ -461,12 +468,6 @@ textarea:focus,
 /* A worktree under its project's row, indented as `.tree-item.nested`. */
 .project-item.worktree {
   padding-left: 30px;
-}
-
-/* A worktree TET did not make: listed, never opened. Dimmed as a disabled menu entry. */
-.project-item.foreign {
-  opacity: 0.4;
-  cursor: default;
 }
 
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
@@ -1083,11 +1084,6 @@ textarea:focus,
   margin: 0 -16px 0 auto;
   padding-left: 12px;
   box-sizing: content-box;
-}
-
-.context-menu-item.disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 /* Compact lists of choices: the context menu without its padding. */
@@ -1717,10 +1713,6 @@ textarea:focus,
 }
 
 /* `.dialog-tab.active` is `.tab.active`'s. */
-.dialog-tab.disabled {
-  opacity: 0.4;
-  cursor: default;
-}
 
 /* The rows' mark (.row-mark) repeated on their tab, so it shows from any pane. */
 .dialog-tab-mark {
@@ -1808,11 +1800,6 @@ textarea:focus,
 
 .sbx-knowledge-agent {
   display: flex;
-}
-
-/* An agent this row brings nothing to, as .icon-button:disabled. */
-.sbx-knowledge-agent.dimmed {
-  opacity: 0.3;
 }
 
 /* The chosen skills folder, one row under the source and the agents. */
@@ -2077,16 +2064,6 @@ textarea:focus,
     center / contain no-repeat;
 }
 
-/* Dimmed, not recolored, like a disabled button. */
-.dialog-checkbox:has(input:disabled) {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.dialog-checkbox input:disabled {
-  cursor: default;
-}
-
 /* Wider than a question, for the rows of switches and the Prompts tab's text box. Fixed height:
    switching tabs must not resize the dialog under the pointer. */
 .settings-dialog {
@@ -2239,12 +2216,6 @@ textarea:focus,
 .dialog-color.selected {
   outline: 1px solid var(--vscode-focusBorder);
   outline-offset: 1px;
-}
-
-.button:disabled,
-.button.disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 /* The one being suggested sits last, where the platform's own dialogs put it. */

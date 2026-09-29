@@ -245,9 +245,9 @@ const VERBS = [
     sandbox: "ownProject"
   },
   {
-    verb: "worktree-merge",
+    verb: "worktree-agent-merge",
     group: "TET itself",
-    usage: "worktree-merge <branch|key> [--project <id>]",
+    usage: "worktree-agent-merge <branch|key> [--project <id>]",
     summary:
       "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, and run it again. Only from the repository, since deleting a worktree closes its tabs.",
     positionals: ["branch"],

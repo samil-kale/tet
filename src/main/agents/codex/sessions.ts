@@ -17,9 +17,9 @@ import {
 } from "../transcript";
 import { renameThread } from "./app-server-client";
 import { runCodex } from "./cli";
-import { SANDBOX_HOME } from "../../terminals/hook-target";
+import { SANDBOX_HOME } from "../hook-target";
 import { mapLimited } from "../../util/map-limited";
-import { PLATFORM } from "../../host-platform";
+import { PLATFORM } from "../../util/host-platform";
 
 /** Codex's config root; tet never overrides it. */
 export function codexHome(): string {

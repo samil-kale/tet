@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentId } from "../shared/types";
+import type { AgentId } from "../../shared/types";
 
 /**
  * `~/.tet` on every platform, like the agents' `~/.claude`, `~/.codex`, `~/.pi`: settings,

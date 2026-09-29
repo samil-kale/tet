@@ -4,7 +4,7 @@
  * `sbx-set-*` verbs and a sandboxed session's start (sbx.ts's readSbxProblems).
  */
 
-import { isEnvName, isReservedName } from "./env-rules";
+import { envNameKey, isEnvName, isReservedName } from "./env-rules";
 import type {
   SbxKnowledgeConfig,
   SbxKnowledgeKind,
@@ -58,7 +58,7 @@ export function sbxVariableRefusal(
   secrets: SbxSecret[],
   ignoreCase: boolean
 ): string | undefined {
-  const same = (name: string): string => (ignoreCase ? name.toUpperCase() : name);
+  const same = (name: string): string => envNameKey(name, ignoreCase);
   return !isEnvName(env) ||
     isReservedName(env) ||
     others.some((other) => same(other.env) === same(env)) ||

@@ -1,6 +1,5 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { PLATFORM } from "../host-platform";
+import { PLATFORM } from "../util/host-platform";
+import { onDisk } from "../util/path-inside";
 
 /** Where a generated hook command will actually run — on this host, or inside an sbx sandbox. The
  *  command is the same on both; a sandboxed `tet-ctl` reaches the host through TET_CONTROL_HOST. */
@@ -22,21 +21,11 @@ export function toContainerPath(hostPath: string): string {
   if (!PLATFORM.driveLetters) {
     return hostPath;
   }
-  const match = /^([A-Za-z]):[\\/](.*)$/.exec(onDiskCase(hostPath));
+  const match = /^([A-Za-z]):[\\/](.*)$/.exec(onDisk(hostPath));
   if (!match) {
     return hostPath;
   }
   return `/${match[1].toLowerCase()}/${match[2].replace(/\\/g, "/")}`;
-}
-
-/** The longest existing prefix in on-disk spelling, the rest as given — the file may not exist yet. */
-function onDiskCase(hostPath: string): string {
-  try {
-    return fs.realpathSync.native(hostPath);
-  } catch {
-    const parent = path.dirname(hostPath);
-    return parent === hostPath ? hostPath : path.join(onDiskCase(parent), path.basename(hostPath));
-  }
 }
 
 /** The sandbox user's home in every template. A mount target must be absolute: `~` never

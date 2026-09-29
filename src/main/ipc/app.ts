@@ -3,9 +3,9 @@ import { handle, on } from "./channels";
 import { listAgents } from "../agents";
 import type { AppInfo, AppSettings, Requirements, SettingsEdits } from "../../shared/types";
 import { anyAgentInstalled, checkRequirements } from "../requirements";
-import { augmentAgentPath } from "../terminals/agent-path";
+import { augmentAgentPath } from "../agents/agent-path";
 import type { IpcDeps } from "./deps";
-import { PLATFORM } from "../host-platform";
+import { PLATFORM } from "../util/host-platform";
 
 /** The startup gate, the app's own facts, the settings, and what the agents are. */
 export function registerAppIpc({

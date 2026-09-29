@@ -20,18 +20,18 @@ import type {
   RepositoryState,
   StashCommand
 } from "../../shared/types";
-import { PROJECT_FILE } from "../tet-json";
-import type { ResolvedRef } from "../util/resolved-ref";
-import { worktreeKeyOf } from "../project-dirs";
+import { PROJECT_FILE } from "../store/tet-json";
+import type { ResolvedRef } from "../store/resolved-ref";
+import { worktreeKeyOf } from "../store/project-dirs";
 import { listExplorer, MAX_EDIT_BYTES, searchFiles } from "./explorer";
 import { git } from "./git-client";
-import type { GitLoginStore } from "../git-logins";
-import { readLinkedGitDir } from "./linked-git-dir";
+import type { GitLoginStore } from "./git-logins";
+import { readLinkedGitDir } from "../util/linked-git-dir";
 import { watchedDirectoryGone } from "../util/watch-dir";
 import { relativeInside } from "../util/path-inside";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
-import { logError } from "../uncaught";
+import { logError } from "../util/error-log";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
 const REFRESH_DEBOUNCE_MS = 250;

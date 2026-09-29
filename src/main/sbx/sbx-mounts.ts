@@ -1,4 +1,4 @@
-import { statSync, type Stats } from "node:fs";
+import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -6,14 +6,14 @@ import { SBX_KNOWLEDGE_KINDS, addProblems, forbiddenBy } from "../../shared/sbx-
 import type { SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../../shared/types";
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
-import { readLinkedGitDir } from "../git/linked-git-dir";
+import { readLinkedGitDir } from "../util/linked-git-dir";
 import { inTurn } from "../util/in-turn";
 import { mapLimited } from "../util/map-limited";
-import { relativeInside } from "../util/path-inside";
-import { toContainerPath } from "../terminals/hook-target";
+import { normalizeHostPath, relativeInside } from "../util/path-inside";
+import { toContainerPath } from "../agents/hook-target";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
-import { mountableBy, normalizeHostPath, readFilesystemRules, readGovernance } from "./sbx-status";
-import { logError } from "../uncaught";
+import { mountableBy, readFilesystemRules, readGovernance } from "./sbx-status";
+import { logError } from "../util/error-log";
 
 /**
  * A live bind mount's `sbx mount` and `sbx umount` specs: `HOST:CTR_TARGET[:ro]` and
@@ -37,15 +37,6 @@ function mountSpec(host: string, target: string, readOnly: boolean): MountSpec {
 export function pathMountSpecs(entry: SbxPath): MountSpec {
   const host = normalizeHostPath(entry.path);
   return mountSpec(host, toContainerPath(host), entry.access === "ro");
-}
-
-/** Undefined for nothing — only what exists is mounted. */
-export function statOf(candidate: string): Stats | undefined {
-  try {
-    return statSync(candidate);
-  } catch {
-    return undefined;
-  }
 }
 
 export type SandboxPaths = Pick<AgentPaths, "agentDir">;
@@ -93,16 +84,16 @@ function skillsTargets(agent: SandboxedAgent): string[] {
  */
 export async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: string): Promise<KnowledgeEntries> {
   const own = (await agentInstalled(agent, os.tmpdir())) ? agent.sandbox.knowledge() : undefined;
-  const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => statOf(entry.host));
+  const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => existsSync(entry.host));
   const rest = { plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
   if (skillsFolder !== undefined) {
-    const skills = statOf(skillsFolder) ? skillsTargets(agent).map((target) => ({ host: skillsFolder, target })) : [];
+    const skills = existsSync(skillsFolder) ? skillsTargets(agent).map((target) => ({ host: skillsFolder, target })) : [];
     return { skills, ...rest };
   }
   const skills = existing(own?.skills);
   const target = agent.sandbox.sharedSkillsTarget;
   const shared = path.join(os.homedir(), ".agents", "skills");
-  if (target !== undefined && !skills.some((entry) => entry.target === target) && statOf(shared)) {
+  if (target !== undefined && !skills.some((entry) => entry.target === target) && existsSync(shared)) {
     skills.push({ host: shared, target });
   }
   return { skills, ...rest };
@@ -152,7 +143,7 @@ export async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeCon
         : [];
     }),
     ...paths
-      .filter((entry) => statOf(normalizeHostPath(entry.path)))
+      .filter((entry) => existsSync(normalizeHostPath(entry.path)))
       .map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
   ];
 }
@@ -211,7 +202,7 @@ const droppedMounts = new Map<string, string[]>();
 /** A sandbox's dropped paths as mounts, those still here: mountAll must not be handed one whose
  *  host path is gone. */
 export function droppedMountSpecs(name: string): MountSpec[] {
-  return (droppedMounts.get(name) ?? []).filter((host) => statOf(host)).map((host) => pathMountSpecs({ path: host, access: "rw" }));
+  return (droppedMounts.get(name) ?? []).filter((host) => existsSync(host)).map((host) => pathMountSpecs({ path: host, access: "rw" }));
 }
 
 /**

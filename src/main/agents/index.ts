@@ -1,13 +1,14 @@
 import * as os from "node:os";
-import { checkAgentInstalled, isAgentInstalled } from "../terminals/terminal-session";
-import type { AgentId, AgentInfo } from "../../shared/types";
+import { checkAgentInstalled, isAgentInstalled } from "./install-check";
+import { errorMessage } from "../../shared/errors";
+import type { AgentId, AgentInfo, AskModelsResult } from "../../shared/types";
 import { hasSandbox } from "./agent";
 import type { AgentDefinition, SandboxedAgent } from "./agent";
 import { claudeAgent } from "./claude";
 import { codexAgent } from "./codex";
 import { piAgent } from "./pi";
 import { shellAgent } from "./shell";
-import { logError } from "../uncaught";
+import { logError } from "../util/error-log";
 
 /** Also the order of the "new terminal" menu. */
 export const AGENTS: AgentDefinition[] = [claudeAgent, codexAgent, piAgent, shellAgent];
@@ -32,6 +33,22 @@ export async function listAskableAgents(cwd: string): Promise<AgentId[]> {
   const askable = AGENTS.filter((agent) => agent.ask && agent.install);
   const installed = await Promise.all(askable.map((agent) => agentInstalled(agent, cwd)));
   return askable.filter((_, index) => installed[index]).map((agent) => agent.id);
+}
+
+/** The models `agent` answers with at `cwd`, for the commit prompt and `tet-ctl`; an agent not
+ *  installed there, or one whose listing fails, answers why. */
+export async function listAskModels(agent: AgentDefinition, cwd: string): Promise<AskModelsResult> {
+  if (!agent.ask) {
+    return { models: [] };
+  }
+  if (!(await agentInstalled(agent, cwd))) {
+    return { models: [], error: `${agent.displayName} is not installed` };
+  }
+  try {
+    return { models: await agent.ask.models(agent.executable(), cwd) };
+  } catch (error) {
+    return { models: [], error: `Could not list ${agent.displayName}'s models: ${errorMessage(error)}` };
+  }
 }
 
 export function getAgent(id: AgentId): AgentDefinition {

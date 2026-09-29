@@ -1,8 +1,8 @@
 import type { IpcMainInvokeEvent } from "electron";
 import { handle, on } from "./channels";
-import { getAgent, listAskableAgents } from "../agents";
+import { getAgent, listAskableAgents, listAskModels } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
-import { errorMessage, failure } from "../../shared/errors";
+import { failure } from "../../shared/errors";
 import type {
   ProjectRef,
   CheckoutTarget,
@@ -28,8 +28,8 @@ import {
   readExplorerView,
   removeFolder,
   setExplorerSetting
-} from "../tet-json";
-import { cancelCommitSuggestion, suggestCommitMessage } from "../git/commit-message";
+} from "../store/tet-json";
+import { cancelCommitSuggestion, suggestCommitMessage } from "../agents/commit-message";
 import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
@@ -109,37 +109,19 @@ export function registerRepositoryIpc({
   });
   handle("repository:suggestion-models", async (_event, ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult> => {
     const repository = repositories.get(ref);
-    const agent = getAgent(agentId);
-    if (!repository || !agent.ask) {
-      return { models: [] };
-    }
-    try {
-      return { models: await agent.ask.models(agent.executable(), repository.at.path) };
-    } catch (error) {
-      return { models: [], error: `Could not list ${agent.displayName}'s models: ${errorMessage(error)}` };
-    }
+    return repository ? listAskModels(getAgent(agentId), repository.at.path) : { models: [] };
   });
   handle(
     "repository:suggest-commit-message",
     async (_event, ref: ProjectRef, suggester: Suggester, paths?: string[]): Promise<SuggestionResult> => {
       const repository = repositories.get(ref);
-      const agent = getAgent(suggester.agentId);
-      if (!repository || !agent.ask) {
+      if (!repository) {
         return {};
       }
       const cwd = repository.at.path;
-      // "" leaves the model to the agent's own configuration.
-      const args = [...agent.ask.args, ...(suggester.model === "" ? [] : agent.ask.modelArgs(suggester.model))];
-      try {
-        // The commit's own paths, a rename's old one included.
-        const pathspec = paths && repository.pathspec(paths);
-        const context = await git.readCommitContext(cwd, pathspec);
-        const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
-        const message = await suggestCommitMessage(cwd, agent.executable(), args, prompt, context);
-        return message.length === 0 ? { error: "The agent did not suggest a commit message" } : { value: message };
-      } catch (error) {
-        return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
-      }
+      const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
+      // The commit's own paths, a rename's old one included.
+      return suggestCommitMessage(suggester, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
     }
   );
   on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());

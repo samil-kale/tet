@@ -1,8 +1,42 @@
-import type { ControlErrorCode, ControlRequest } from "../../shared/control";
-import type { Project, ProjectRef } from "../../shared/types";
-import type { CallerSide } from "./caller-side";
+import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/control";
+import { projectRefKey, projectRef } from "../../shared/types";
+import type {
+  AddRepositoryResult,
+  AgentId,
+  AskModelsResult,
+  ProjectRef,
+  EditorListing,
+  EditorReport,
+  ExplorerListing,
+  GitActionResult,
+  NoticeReport,
+  Project,
+  ProjectCommand,
+  RepositoryState,
+  SbxAccount,
+  SbxKnowledgeConfig,
+  SbxLocalSave,
+  SbxProblems,
+  SbxProjectConfig,
+  SbxSaveResult,
+  SbxSignInResult,
+  SbxStoredLocal,
+  SbxValueKind,
+  TerminalDescriptor
+} from "../../shared/types";
+import type { AgentDefinition } from "../agents/agent";
+import type { ToastTarget } from "../util/notifications";
+import type { SbxReading } from "../sbx/sbx-status";
+import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
+import { type CallerSide } from "./caller-side";
+import type { EnvStore } from "../store/environment";
+import type { EnvRequests } from "./env-requests";
+import type { ProjectLookup } from "../store/project-store";
+import type { SettingsAccess } from "../store/settings";
 
-/** What a verb's handler is made of, shared by control-server.ts and the verb files beside it. */
+
+/** What a verb is made of, shared by control-server.ts and the verb files beside it: the handler,
+ *  its dependencies (ControlDeps) and the lookups every verb file uses. */
 
 export class ControlError extends Error {
   constructor(
@@ -50,6 +84,11 @@ export function oneOf<T extends string>(args: Record<string, unknown>, name: str
   return known;
 }
 
+/** A switch's `on` or `off`, as true or false. */
+export function onOff(args: Record<string, unknown>, name: string): boolean {
+  return oneOf(args, name, "value", ["on", "off"]) === "on";
+}
+
 /** A text flag or positional, undefined when absent or empty. */
 export function optionalText(args: Record<string, unknown>, name: string): string | undefined {
   const value = args[name];
@@ -75,4 +114,186 @@ export function count(args: Record<string, unknown>, name: string, fallback: num
 export function list(args: Record<string, unknown>, name: string): string[] {
   const value = args[name];
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+/**
+ * Handed over by main.ts, not imported: no electron or node-pty here, so test/control.test.ts runs
+ * the server under plain node with these faked. The same singletons ipc/ holds: a second
+ * transport onto that logic, never a second implementation (projects.ts's addProject/removeProject).
+ */
+export interface ControlDeps {
+  version: string;
+  /** Lets a test tell that restart-app replaced the process. */
+  pid: number;
+  store: ProjectLookup;
+  settings: SettingsAccess;
+  sessions: {
+    get(ref: ProjectRef): ControlTerminals | undefined;
+  };
+  repositories: {
+    get(ref: ProjectRef):
+      | {
+          at: { path: string };
+          getState(): RepositoryState;
+          listExplorer(): Promise<ExplorerListing>;
+          merge(ref: string, fastForwardOnto?: string): Promise<GitActionResult>;
+          conflictMarkers(base: string): Promise<string[]>;
+        }
+      | undefined;
+  };
+  /** See ControlRecords. */
+  records: {
+    editor(ref: ProjectRef): EditorReport | undefined;
+    editors(ref: ProjectRef): EditorListing[];
+    notices(): NoticeReport[];
+    output(ref: ProjectRef, tabId: string): string | undefined;
+  };
+  /** A repository's or worktree's folder (project-dirs.ts's projectRefPath); undefined for an
+   *  unknown project. */
+  projectRefPath(ref: ProjectRef): string | undefined;
+  /** Opens a file in the repository's or worktree's preview tab, or a kept tab, and brings it to
+   *  the front. */
+  openEditor(ref: ProjectRef, path: string, keep: boolean): void;
+  /** The active editor tab's text, asked of the window live — the one thing not kept as a report
+   *  (see EditorReport). */
+  editorContent(ref: ProjectRef): Promise<string | undefined>;
+  /** agents/index.ts's listInstalledAgents: the requirements dialog's answer, by id. */
+  listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
+  /** `AGENTS`, so a new agent needs nothing here. */
+  agents: readonly AgentDefinition[];
+  /** agents/index.ts's listAskModels, the commit prompt's list. */
+  askModels(agent: AgentDefinition, cwd: string): Promise<AskModelsResult>;
+  /** projects.ts's, which tell the window their outcome themselves (projectsChanged). */
+  addProject(directory: string): Promise<AddRepositoryResult>;
+  removeProject(projectId: string): Promise<GitActionResult>;
+  addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
+  deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
+  readCommands(root: string): Promise<ProjectCommand[]>;
+  /** main.ts's teardown: ends every session and quits, optionally relaunching. */
+  shutdown(relaunch: boolean): void;
+  /** Its process starts with the first resize that draws it. */
+  showTab(ref: ProjectRef, tabId: string): void;
+  /** A desktop toast from this process, which holds the desktop session (a sandboxed hook has
+   *  none). Must never throw: `hook` toasts on the way to answering a turn. A click brings
+   *  `target` to the front. */
+  notify(title: string, body: string, target?: ToastTarget): void;
+  /** main.ts's, shared with ipc/environment.ts. */
+  environment: Pick<EnvStore, "list" | "remove">;
+  envRequests: Pick<EnvRequests, "ask">;
+  /** The SBX Settings dialog's reads and Save (ipc/sbx.ts, sbx-settings.ts). */
+  sbx: {
+    /** sbx-status.ts's readSbxReading: the status, and what the verb's problems check reuses of it. */
+    status(project: Project): Promise<SbxReading>;
+    /** Whether an agent runs on this machine at all: without one, sandboxing cannot be switched off. */
+    anyAgentInstalled(): Promise<boolean>;
+    config(project: Project): Promise<SbxProjectConfig>;
+    stored(projectId: string): SbxStoredLocal;
+    /** sbx-settings.ts's readProjectSbxProblems. */
+    problems(
+      project: Project,
+      config: SbxProjectConfig,
+      knowledge: SbxKnowledgeConfig,
+      values: Record<SbxValueKind, string[]>,
+      reading?: SbxReading
+    ): Promise<SbxProblems>;
+    /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */
+    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, known?: Pick<SbxReading, "status">): Promise<SbxSaveResult>;
+    /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
+    accounts(): SbxAccount[];
+    /** sbx-status.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the
+     *  machine's. */
+    signedIn(): Promise<boolean>;
+    /** sbx-cli.ts's readSbxUser: only once signedIn said so. */
+    signedInUser(): Promise<string | undefined>;
+    /** sbx-accounts.ts's signInToSbx with the token kept for that account. */
+    signIn(account: SbxAccount): Promise<SbxSignInResult>;
+  };
+}
+
+/** The slice of TabSessionManager the verbs use. */
+export interface ControlTerminals {
+  snapshot(): TerminalDescriptor[];
+  inspect(): InspectedTab[];
+  /** At the last fitted size or a default; false unless the tab awaits its first start. */
+  start(tabId: string): boolean;
+  /** False for a tab that neither stopped nor failed to start. */
+  restart(tabId: string): boolean;
+  write(tabId: string, data: string): void;
+  /** Oldest first. */
+  events(): ControlEvent[];
+  /** `sandboxOnly`: opened from a sandbox, so it never runs on this machine. `prompt`: its first,
+   *  for an agent that takes one. */
+  createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TerminalDescriptor;
+  /** The new tab taking over the tab's session, or why there is none. */
+  handOff(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TerminalDescriptor | string>;
+  createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
+  closeTabs(tabIds: string[]): Promise<void>;
+  /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
+  seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
+  /** The agent's refusal, or nothing when it went through. */
+  renameTab(tabId: string, title: string): Promise<string | undefined>;
+  /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
+   *  may have closed while its CLI ended the turn. */
+  hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined, side: CallerSide): HookOutcome;
+}
+
+/** The repository or worktree the caller's tab runs in; undefined for the run itself. */
+export function callerRef(caller: ControlRequest["caller"]): ProjectRef | undefined {
+  return caller.projectId === undefined ? undefined : projectRef(caller.projectId, caller.worktree);
+}
+
+/** A worktree of the project TET made, named as `tet-ctl` names one: by its branch, or else by
+ *  its key. One made elsewhere cannot be addressed: TET never opens it. */
+export function tetWorktree(project: Project, name: string): { worktree: Project["worktrees"][number]; ref: ProjectRef } {
+  const worktree = project.worktrees.find((entry) => entry.branch === name) ?? project.worktrees.find((entry) => entry.key === name);
+  if (!worktree) {
+    throw new ControlError("not_found", `${project.name} has no worktree ${name} (see projects-list)`);
+  }
+  if (worktree.key === undefined) {
+    throw new ControlError("bad_args", `the worktree of ${name} was not made by TET, which cannot reach it: use git`);
+  }
+  return { worktree, ref: projectRef(project.id, worktree.key) };
+}
+
+/**
+ * The repository or worktree a verb acts on: without flags the caller's own; `--project` alone that
+ * project's repository; `--worktree` one of its worktrees TET made (tetWorktree). Also the gate's
+ * answer to "is this the caller's own".
+ */
+export function resolveCallerRef(
+  store: ProjectLookup,
+  args: Record<string, unknown>,
+  caller: ControlRequest["caller"]
+): { project: Project; ref: ProjectRef } {
+  const askedProject = optionalText(args, "project");
+  const projectId = askedProject ?? caller.projectId;
+  if (!projectId) {
+    throw new ControlError("bad_args", "no project: pass --project <id> (see projects-list)");
+  }
+  const project = store.get(projectId);
+  if (!project) {
+    throw new ControlError("not_found", `unknown project: ${projectId}`);
+  }
+  const asked = optionalText(args, "worktree");
+  if (asked === undefined) {
+    return { project, ref: projectRef(projectId, askedProject === undefined ? caller.worktree : undefined) };
+  }
+  return { project, ref: tetWorktree(project, asked).ref };
+}
+
+/** The repository's or worktree's git state; one closed meanwhile is an internal error. */
+export function repositoryOf(deps: Pick<ControlDeps, "repositories">, ref: ProjectRef): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> {
+  const repo = deps.repositories.get(ref);
+  if (!repo) {
+    throw new ControlError("internal", `${projectRefKey(ref)} has no repository`);
+  }
+  return repo;
+}
+
+/** Only the window asks about unsaved edits; from here they would be lost, whatever --force says. */
+export function refuseUnsaved(deps: Pick<ControlDeps, "records">, refs: ProjectRef[], outcome: string): void {
+  const unsaved = refs.flatMap((ref) => deps.records.editors(ref)).filter((editor) => editor.dirty);
+  if (unsaved.length > 0) {
+    throw new ControlError("bad_args", `unsaved changes in ${unsaved.map((editor) => editor.path).join(", ")}, ${outcome}: ask the user to save or close them in TET`);
+  }
 }

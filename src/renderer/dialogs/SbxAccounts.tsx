@@ -117,7 +117,7 @@ export function SbxAccounts({
               <RowInput
                 placeholder="Docker username"
                 // A kept token belongs to its user: another user is another row.
-                disabled={row.account !== undefined}
+                readOnly={row.account !== undefined}
                 title={row.account !== undefined ? "The Docker account this token belongs to" : undefined}
                 value={row.user}
                 onChange={(user) => setRow(row, { user })}

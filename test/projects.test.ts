@@ -5,25 +5,25 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
-import { resolveProjectRef } from "../src/main/util/resolved-ref";
+import { resolveProjectRef } from "../src/main/store/resolved-ref";
 import type { ControlRecords } from "../src/main/control/control-records";
-import { GitLoginStore } from "../src/main/git-logins";
+import { GitLoginStore } from "../src/main/git/git-logins";
 import { RepositoryManager } from "../src/main/git/repository";
-import { projectDir, worktreeDir, worktreeFolders } from "../src/main/project-dirs";
+import { projectDir, worktreeDir, worktreeFolders } from "../src/main/store/project-dirs";
 import {
   addProject,
   addWorktree,
   deleteWorktree,
   openStoredProjects,
-  ProjectStore,
   removeProject,
   resolveStoredIds,
   syncWorktrees,
   type ProjectDeps
 } from "../src/main/projects";
+import { ProjectStore } from "../src/main/store/project-store";
 import { SbxLocalStore } from "../src/main/sbx/sbx-local";
-import type { SessionManagerRegistry } from "../src/main/terminals/session-manager";
-import { readCommands, readSbxConfig, writeCommands } from "../src/main/tet-json";
+import type { SessionManagerRegistry } from "../src/main/terminals/session-registry";
+import { readCommands, readSbxConfig, writeCommands } from "../src/main/store/tet-json";
 import type { ProjectRef, ProjectsChange } from "../src/shared/types";
 import { eventually, forkGitInProcess, git, initBare, isolateGitConfig, tempDir } from "./helpers";
 
@@ -122,13 +122,23 @@ describe("a project added", () => {
     assert.equal((await addProject(deps, repo.main)).project?.id, id);
   });
 
-  it("is the same project when added again, and its repository when a subfolder is picked", async () => {
+  it("is the same project when added again", async () => {
     const repo = repository();
     const { deps, store, add } = open();
     const id = await add(repo.main);
-    fs.mkdirSync(path.join(repo.main, "sub"));
-    assert.equal((await addProject(deps, path.join(repo.main, "sub"))).project?.id, id);
+    assert.equal((await addProject(deps, repo.main)).project?.id, id);
     assert.equal(store.list().length, 1);
+  });
+
+  it("is refused where the folder lies inside a repository, with no offer to initialize it", async () => {
+    const repo = repository();
+    const { deps, store } = open();
+    fs.mkdirSync(path.join(repo.main, "sub"));
+    const added = await addProject(deps, path.join(repo.main, "sub"));
+    assert.equal(added.project, undefined);
+    assert.equal(added.notRepository, undefined);
+    assert.match(added.error ?? "", /inside the repository/);
+    assert.equal(store.list().length, 0);
   });
 
   it("gets a new id where it is a copy of a project open elsewhere", async () => {

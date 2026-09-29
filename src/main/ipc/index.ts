@@ -10,7 +10,6 @@ import { registerShellIpc } from "./shell";
 import { registerTerminalsIpc } from "./terminals";
 
 export type { IpcDeps } from "./deps";
-export { sweepDropFiles } from "./files";
 
 /** The renderer-facing surface, one registrar per group of `TETApi` (`src/shared/api.ts`). Each
  *  takes only the singletons it touches, so what a group reaches is visible at its signature. */

@@ -79,16 +79,17 @@ export function RowInput({
   width = "fill",
   placeholder,
   title,
-  disabled,
+  readOnly,
   value,
   onChange
 }: {
   width?: "fill" | "fixed" | "port";
   placeholder?: string;
   title?: string;
-  disabled?: boolean;
+  /** A field that only shows: not dimmed, as an unavailable one is. */
+  readOnly?: boolean;
   value: string;
-  /** Left out for a field that only shows (`disabled`). */
+  /** Left out for a field that only shows (`readOnly`). */
   onChange?: (value: string) => void;
 }) {
   return (
@@ -98,7 +99,7 @@ export function RowInput({
       inputMode={width === "port" ? "numeric" : undefined}
       placeholder={placeholder}
       title={title}
-      disabled={disabled}
+      readOnly={readOnly}
       value={value}
       onChange={onChange && ((event) => onChange(event.target.value))}
     />

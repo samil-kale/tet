@@ -27,12 +27,26 @@ project's terminals.
 
 - `src/` is one folder per process — `main/`, `renderer/`, `preload/`, `cli/` — plus `shared/`,
   the only folder imported across them (`no-restricted-imports` in `eslint.config.mjs`).
-- `src/main/`: `git/` (the git process and everything talking to it),
-  `terminals/` (pty, sessions, hooks), `control/` (`tet-ctl`), `ipc/` (the `TETApi` handlers,
-  registrars by area, each taking only the singletons it touches), `agents/`, `providers/`, `sbx/`
-  (the `sbx` CLI), `update/` (the auto-update), `util/` (helpers shared across the areas). An area
-  of several files that belong together is a folder; flat are only the window, the startup and
-  the app's stores — `main.ts`, settings, projects, requirements.
+- `src/main/` is layered: each area imports its own layer's areas it is allowed and every layer
+  below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
+  0. `util/`: helpers of no area — the platform (`host-platform.ts`), spawning (`spawn.ts`,
+     `run-process.ts`), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
+  1. `store/`: what TET keeps and reads back — settings, environment variables, `tet.json`, the
+     data folder's layout (`data-root.ts`, `project-dirs.ts`). A store of one area stays in it
+     (`sbx-local.ts`, `providers/accounts.ts`).
+  2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
+     everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
+     the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
+  3. `terminals/`: pty, sessions, where a tab runs and the side it runs on (`TabSide`), its
+     control token.
+  4. `control/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
+     (`CallerSide`) extends the tab's.
+  5. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
+     singletons it touches) and, flat, the window and startup (`main.ts`, `uncaught.ts`),
+     `projects.ts` and `requirements.ts`.
+
+  Files that belong together are a folder; one that stands alone stays flat in its layer. No
+  folder for its own sake.
 - Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
   wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `main.ts`'s `send` in main,
   `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or
@@ -46,8 +60,9 @@ project's terminals.
   documents every field), grouped by what it can do — `install`, `terminal`, `run`, `ask`,
   `sessions`, `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent
   can do something is whether it has the group (`hasSandbox`), never a list of ids. Shared code
-  imports only the registry (`agents/index.ts`), `agent.ts`'s types and `hasSandbox`, and the
-  agent-neutral `ask.ts` and `system-prompt.ts`. A new agent must fit the data model (below) and is
+  never imports an agent's own folder: only the registry (`agents/index.ts`), `agent.ts`'s types
+  and `hasSandbox`, and the agent-neutral files beside them (`ask.ts`, `system-prompt.ts`,
+  `agent-path.ts`, …). A new agent must fit the data model (below) and is
   a new folder and one registry entry, nothing else: its icon is data in its definition (`icon`),
   which the window draws, and no code outside `agents/` names an agent (user-facing text may) but
   the shell, which TET itself runs saved commands and plain terminals in. What a new agent needs
@@ -63,7 +78,7 @@ project's terminals.
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
   laid out in the data model below.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer view and `sbx`. Read defensively (`src/main/tet-json.ts`): missing means nothing
+  the Explorer view and `sbx`. Read defensively (`src/main/store/tet-json.ts`): missing means nothing
   configured, broken never does — a project whose file is broken is neither added nor opened at
   start (kept, with all TET has of it, until added again), and one broken while open counts as its
   last readable version, said in a notice. Nothing writes over a broken file. A worktree has none
@@ -110,9 +125,9 @@ change, and every agent added, fits it.
 - **What exists is handed over, never copied.** A host tab gets the original path. A path dropped
   into a sandboxed tab outside its sight is mounted rw at its container path, never written into
   `tet.json`, and held until TET quits (every start's `mountAll` is handed it); a notice says it
-  was mounted, or that governance refuses it. `worktree-merge` hands a conflicted worktree to the
-  repository tab that merges it the same way, and deleting a worktree releases every such mount of
-  its folder (`releaseDropped`). Only what has no path of its own (a browser's drop, a pasted
+  was mounted, or that governance refuses it. `worktree-agent-merge` hands a conflicted worktree to
+  the repository tab that merges it the same way, and deleting a worktree releases every such mount
+  of its folder (`releaseDropped`). Only what has no path of its own (a browser's drop, a pasted
   image) is written, into `drops/` on either side; a handoff copies what sits in another agent's
   store, which no sandbox may see.
 - **A store written by a Save someone waits on writes before it changes** (`writeJson`,
@@ -166,10 +181,12 @@ others.
   the id is data alone (tet.json's `os`, the app's info) — `install.test.ts`, testing each OS's own
   installer, alone branches on it. A new difference extends the interface.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
-  (`src/main/terminals/pty.ts`), never `shell: true`.
+  (`src/main/util/spawn.ts`), never `shell: true`.
 - Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`: only
   Chromium's stack applies the machine's proxy and certificate store. Code the tests run under
-  node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`).
+  node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`). A request that reads
+  a redirect instead of following it uses `net.request`, the same stack: `net.fetch` throws on
+  `redirect: "manual"` (the update check's `latestVersion`).
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
   (`src/main/util/script-text.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
@@ -234,7 +251,7 @@ or a per-line decision is for an agent.
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
   unasked. Card dialogs are drawn in `DialogFrame`. The one exception: an agent's
-  `env-request`, answered in `EnvDialog`, one at a time (`environment.ts`).
+  `env-request`, answered in `EnvDialog`, one at a time (`env-requests.ts`).
 - **`DialogFrame` draws every dialog's button row**: Cancel with × and Escape (`onCancel`; a wall
   has none), the `actions`, and the `primary` button, which Enter runs from anywhere in the dialog
   unless it cannot go. One that cannot says why as its tooltip (`blocked`), unless an empty field
@@ -337,15 +354,15 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
 
 Lets an agent ask the app for what the filesystem and git can't give (theme, projects, tabs). A
 second transport onto the logic behind `ipc/`, never a second implementation. Contract and
-verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CLI:
-`src/cli/tet-ctl.ts`.
+verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; handlers:
+`control-verbs.ts` and the `control-*-verbs.ts` beside it; CLI: `src/cli/tet-ctl.ts`.
 
 - `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
 - Agents learn of `tet-ctl` once per session: `systemPrompt`
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
   `SessionStart` hook's added context), never replacing the user's instructions.
-- **Environment variables** (`src/main/environment.ts`): tokens and passwords an agent needs, typed
+- **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent needs, typed
   only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab gets them
   anyway), global, and set in every tab at its start (`pty.ts`'s `buildEnv`), over what the machine
   sets itself — said in a notice. A running tab takes them up only when restarted: the dialog's
@@ -353,17 +370,17 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   not in `help`, not in its system prompt.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
-- **Where a caller runs is its side** (`ControlSide`, `src/shared/control-side.ts`, and the main
-  process's `CallerSide`, `control/caller-side.ts`), set by its tab's place and read back off its
-  token: which verbs answer and how far, what `tet-ctl help` and the system prompt mention, the
+- **Where a caller runs is its side** (`ControlSide`, `src/shared/control-side.ts`; in the main
+  process the tab's `TabSide`, `terminals/tab-side.ts`, and the caller's `CallerSide` extending it,
+  `control/caller-side.ts`), set by its tab's place and read back off its token: which verbs answer and how far, what `tet-ctl help` and the system prompt mention, the
   variables its tab gets, the tabs, projects and files it reaches. Nothing else asks whether a
   caller is sandboxed; a new difference extends the side.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
 - `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository or
   any worktree (`ownProjectOnly`); from a sandbox, every verb naming one only for the caller's own
-  repository or worktree, except `worktree-add`, `worktree-delete` and `worktree-merge`, which reach
-  every worktree of its project (`ownProject`). `tabs-keys` never from inside a sandbox.
+  repository or worktree, except `worktree-add`, `worktree-delete` and `worktree-agent-merge`, which
+  reach every worktree of its project (`ownProject`). `tabs-keys` never from inside a sandbox.
   `tabs-output`, `tabs-close`, `tabs-rename` and `tabs-handoff` from a sandbox reach only tabs
   running there: a host tab is the machine's, and its output may print the host's control token.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
@@ -391,7 +408,7 @@ Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/ma
   worktrees. TET's own live mounts are folders of that `sandboxes/…/<agent>` folder alone; the one
   exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails there.
   The user's grants (Allowed paths, knowledge) and a path the user drops (data model) are theirs,
-  not TET's; so is a worktree `worktree-merge` hands over, taken as a drop.
+  not TET's; so is a worktree `worktree-agent-merge` hands over, taken as a drop.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`

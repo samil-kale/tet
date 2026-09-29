@@ -1,11 +1,11 @@
 import * as path from "node:path";
-import { urlOrigin, urlUsername } from "../shared/git-url";
-import type { GitActionResult, GitLogin } from "../shared/types";
-import { git } from "./git/git-client";
-import type { NetworkLogin } from "./git/git";
-import { logFailure, readRows, writeJson } from "./util/json-file";
-import { seal, unseal } from "./util/sealed";
-import { logError } from "./uncaught";
+import { urlOrigin, urlUsername } from "../../shared/git-url";
+import type { GitActionResult, GitLogin } from "../../shared/types";
+import { git } from "./git-client";
+import type { NetworkLogin } from "./git";
+import { logFailure, readRows, writeJson } from "../util/json-file";
+import { seal, unseal } from "../util/sealed";
+import { logError } from "../util/error-log";
 
 /** What the file holds: one login per origin and username, its password encrypted by the OS and
  *  base64-wrapped. */

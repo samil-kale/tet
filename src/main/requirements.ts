@@ -4,8 +4,8 @@ import { worktreesSupported } from "../shared/types";
 import type { Requirement, Requirements } from "../shared/types";
 import { git } from "./git/git-client";
 import { readSbxVersion } from "./sbx/sbx-cli";
-import { isSimulatedMissing } from "./simulate";
-import { augmentAgentPath } from "./terminals/agent-path";
+import { isSimulatedMissing } from "./util/simulate";
+import { augmentAgentPath } from "./agents/agent-path";
 
 const GIT: Omit<Requirement, "installed"> = {
   name: "Git",

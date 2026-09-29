@@ -3,11 +3,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { PLATFORM } from "../src/main/host-platform";
+import { PLATFORM } from "../src/main/util/host-platform";
 import { claudeSandboxSessions, claudeSessionProvider } from "../src/main/agents/claude/sessions";
 import { codexSandboxSessions, codexSessionProvider } from "../src/main/agents/codex/sessions";
 import { encodeCwd, piSandboxSessions, piSessionProvider } from "../src/main/agents/pi/sessions";
-import { watchTranscriptDir } from "../src/main/util/watch-dir";
+import { watchTranscriptDir } from "../src/main/agents/transcript";
 import { eventually, tempDir } from "./helpers";
 
 /**

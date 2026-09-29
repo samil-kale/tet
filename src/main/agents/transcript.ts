@@ -2,9 +2,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import { isRecord } from "../util/json-file";
-import type { AgentSessionInfo } from "./agent";
-import { PLATFORM } from "../host-platform";
-import { logError } from "../uncaught";
+import type { AgentSessionInfo, SessionWatch } from "./agent";
+import { PLATFORM } from "../util/host-platform";
+import { logError } from "../util/error-log";
+import { watchedDirectoryGone } from "../util/watch-dir";
 
 /**
  * Shared reading of append-only JSONL transcripts from either end: the chunked read, title rules,
@@ -298,4 +299,81 @@ export async function scanTranscriptTail<T>(
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * Watches the directory an agent keeps a repository's transcripts in, or the root above it while
+ * that is missing — fs.watch throws ENOENT on one, and the agent creates it with the first
+ * transcript. Non-recursive on purpose: writes in a session's subdirectory (Claude's `subagents/`)
+ * don't fire, the rest are filtered by `wanted`. `find` may reject when the root itself is absent
+ * (a fresh install), read as "not yet".
+ */
+export function watchTranscriptDir(
+  root: () => string,
+  find: () => Promise<string | undefined>,
+  wanted: (filename: string) => boolean,
+  onChange: () => void
+): SessionWatch {
+  let dirWatcher: fs.FSWatcher | undefined;
+  let rootWatcher: fs.FSWatcher | undefined;
+  let stopped = false;
+
+  const armDirWatcher = async (): Promise<void> => {
+    if (stopped || dirWatcher) {
+      return;
+    }
+    const dir = await find().catch(() => undefined);
+    if (!dir || stopped || dirWatcher) {
+      return;
+    }
+    const onEvent = (_eventType: string, filename: string | null): void => {
+      // Directory deleted: back to watching the root until the agent recreates it.
+      if (watchedDirectoryGone(dir, filename)) {
+        dirWatcher?.close();
+        dirWatcher = undefined;
+        armRootWatcher();
+        return;
+      }
+      // A null filename means "something changed" — reconcile to be safe.
+      if (filename === null || wanted(filename)) {
+        onChange();
+      }
+    };
+    try {
+      dirWatcher = fs.watch(dir, onEvent);
+    } catch {
+      // Gone again since the lookup, or no descriptor left: output schedules the listing instead.
+      return;
+    }
+    // Made while only the root was watched: its first transcript may be written already, which no
+    // event of the new watcher reports.
+    const appeared = rootWatcher !== undefined;
+    rootWatcher?.close();
+    rootWatcher = undefined;
+    if (appeared) {
+      onChange();
+    }
+  };
+
+  const armRootWatcher = (): void => {
+    if (stopped || dirWatcher || rootWatcher) {
+      return;
+    }
+    try {
+      rootWatcher = fs.watch(root(), () => void armDirWatcher());
+    } catch {
+      // The agent never ran on this machine: output schedules the listing instead.
+    }
+  };
+
+  void armDirWatcher().then(armRootWatcher);
+
+  return {
+    stop: () => {
+      stopped = true;
+      dirWatcher?.close();
+      rootWatcher?.close();
+    },
+    watching: () => !stopped && (dirWatcher !== undefined || rootWatcher !== undefined)
+  };
 }

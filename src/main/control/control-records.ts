@@ -1,3 +1,4 @@
+import { stripAnsi } from "../../shared/ansi";
 import { projectRefKey } from "../../shared/types";
 import type { ProjectRef, EditorListing, EditorReport, NoticeReport } from "../../shared/types";
 
@@ -94,4 +95,22 @@ export class ControlRecords {
   output(ref: ProjectRef, tabId: string): string | undefined {
     return this.outputs.get(projectRefKey(ref))?.get(tabId)?.slice(-MAX_OUTPUT_CHARS);
   }
+}
+
+/** Strips escape sequences; CRLF to LF. */
+export function plainText(data: string): string {
+  return stripAnsi(data).replace(/\r\n/g, "\n");
+}
+
+/**
+ * A tab's output with its lines as finally shown: each keeps what follows its last bare `\r`, so a
+ * progress bar's redraws leave one line. Over the whole output at once, a redraw split across
+ * chunks included; the `\r` of a `\r\n` not yet complete is no redraw.
+ */
+export function shownText(data: string): string {
+  return plainText(data)
+    .replace(/\r$/, "")
+    .split("\n")
+    .map((line) => line.slice(line.lastIndexOf("\r") + 1))
+    .join("\n");
 }

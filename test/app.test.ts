@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
-import { PLATFORM } from "../src/main/host-platform";
+import { PLATFORM } from "../src/main/util/host-platform";
 import { resolveRoot } from "../src/main/git/git";
 import { UNCAUGHT_MARKER } from "../src/main/uncaught";
 import type { AppSettings, Project, RepositoryState, TerminalDescriptor } from "../src/shared/types";

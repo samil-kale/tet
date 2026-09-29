@@ -107,10 +107,7 @@ export async function askCommit(
           onChange={(message) => onChange((current) => ({ ...current, message }))}
           suggestion={{
             title: "Suggest a commit message",
-            run: () =>
-              value.suggester.agentId === ""
-                ? Promise.resolve({ error: "No agent that can suggest a commit message is installed." })
-                : window.tet.repository.suggestCommitMessage(ref, value.suggester, paths)
+            run: () => window.tet.repository.suggestCommitMessage(ref, value.suggester, paths)
           }}
           disabled={busy}
           ref={field}

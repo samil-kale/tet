@@ -9,8 +9,8 @@ import type {
   FileSearchQuery,
   FileSearchResult
 } from "../../shared/types";
-import { PLATFORM } from "../host-platform";
-import { readExplorerView, type ExplorerView } from "../tet-json";
+import { PLATFORM } from "../util/host-platform";
+import { readExplorerView, type ExplorerView } from "../store/tet-json";
 import { git } from "./git-client";
 
 /**

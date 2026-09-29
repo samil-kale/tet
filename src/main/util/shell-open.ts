@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { PLATFORM } from "../host-platform";
+import { PLATFORM } from "./host-platform";
 import type { Platform } from "../../shared/platform";
 
 /**

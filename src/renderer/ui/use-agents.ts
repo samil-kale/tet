@@ -25,7 +25,12 @@ export function useAgents(): AgentInfo[] {
   return agents;
 }
 
+/** An agent's entry; undefined while the list has not landed. */
+export function agentInfo(agents: readonly AgentInfo[], id: AgentId): AgentInfo | undefined {
+  return agents.find((agent) => agent.id === id);
+}
+
 /** An agent's name as the user reads it; its id while the list has not landed. */
 export function agentName(agents: readonly AgentInfo[], id: AgentId): string {
-  return agents.find((agent) => agent.id === id)?.displayName ?? id;
+  return agentInfo(agents, id)?.displayName ?? id;
 }

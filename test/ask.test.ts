@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as os from "node:os";
 import { describe, it } from "node:test";
 import { askAgent } from "../src/main/agents/ask";
-import { commitMessageFrom } from "../src/main/git/commit-message";
+import { commitMessageFrom } from "../src/main/agents/commit-message";
 import { piModelsFrom } from "../src/main/agents/pi/models";
 
 describe("a background agent question", () => {

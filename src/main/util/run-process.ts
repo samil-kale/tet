@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { killProcessTree, resolveCommand } from "../terminals/pty";
-import { logError } from "../uncaught";
+import { killProcessTree, resolveCommand } from "./spawn";
+import { logError } from "./error-log";
 
 export interface RunProcessOptions {
   cwd?: string;

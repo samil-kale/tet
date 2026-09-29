@@ -17,6 +17,7 @@ import type {
 import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
 import { logFailure } from "../util/json-file";
+import { onDisk } from "../util/path-inside";
 import { addProject, addWorktree, deleteWorktree, removeProject } from "../projects";
 import { PROVIDERS } from "../providers";
 import type { IpcDeps } from "./deps";
@@ -56,7 +57,7 @@ export function registerProjectsIpc({
     async (_event, directory: string): Promise<string> => {
       // A picked repository root remembers its parent, or the next picker opens inside it.
       const root = await git.resolveRoot(directory).catch(() => undefined);
-      if (root !== undefined && path.relative(root, directory) === "") {
+      if (root !== undefined && onDisk(root) === onDisk(directory)) {
         const parent = path.dirname(directory);
         if (parent !== directory) {
           return parent;

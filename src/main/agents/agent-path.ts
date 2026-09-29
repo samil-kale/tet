@@ -2,9 +2,9 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { pathKey } from "./pty";
-import { PLATFORM } from "../host-platform";
-import { logError } from "../uncaught";
+import { pathKey } from "../util/spawn";
+import { PLATFORM } from "../util/host-platform";
+import { logError } from "../util/error-log";
 
 /**
  * Puts the directories agents are installed in on `process.env.PATH`, at startup and on every

@@ -133,7 +133,8 @@ export interface TETApi {
     pickFile(title: string): Promise<string | null>;
     /** Where the folder picker opens next: `directory`, or its parent when it is a repository root. */
     directoryToRemember(directory: string): Promise<string>;
-    /** Opens the folder, or its enclosing repository; a missing one is an error. */
+    /** Opens the folder when it is a repository's root; a missing one, or one inside a repository,
+     *  is an error. */
     open(directory: string): Promise<AddRepositoryResult>;
     /** `git clone` into `directory`/`name`; an account's token authenticates it, else `login`
      *  where the first try answered `loginUrl`. */
@@ -368,7 +369,7 @@ export interface TETApi {
   };
   /** What the main process wants said â€” see Notice. */
   onNotice(listener: (payload: Notice) => void): Unsubscribe;
-  /** A download the main process runs — see NoticeProgress. */
+  /** A download the main process runs ï¿½ see NoticeProgress. */
   onNoticeProgress(listener: (payload: NoticeProgress) => void): Unsubscribe;
   /** Read synchronously off `webPreferences.additionalArguments` before main.tsx runs: an async read
    *  would draw the first frame in the wrong colors. */

@@ -7,7 +7,7 @@
 # as src/shared/release.ts's `assetName`) and unpacks it for this user alone, no root asked:
 #   macOS  ~/Applications/TET.app, and `tet` in ~/.local/bin
 #   Linux  ~/.local/share/tet, `tet` in ~/.local/bin and a desktop entry
-# The app updates itself from then on (src/main/auto-update.ts), in the same places.
+# The app updates itself from then on (src/main/update/auto-update.ts), in the same places.
 #
 # Fetched with curl, which marks nothing it saves as quarantined: that is what lets macOS start
 # the ad-hoc signed bundle without Gatekeeper asking. TET_RELEASES_URL stands in for GitHub's

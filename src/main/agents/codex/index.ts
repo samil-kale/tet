@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
-import { createByteThresholdCheck } from "../../terminals/session-ready";
+import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
+import { createByteThresholdCheck } from "../session-ready";
 import { writeIfChanged } from "../../util/write-if-changed";
 import { codexIcon } from "./icon";
 import type { ThemeDefinition } from "../../../shared/themes";
@@ -10,8 +10,8 @@ import { hookSessionId } from "../hook-payload";
 import { codexHookReply, setupCodexHooks } from "./hooks";
 import { listModels } from "./app-server-client";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
-import { PLATFORM } from "../../host-platform";
-import { logError } from "../../uncaught";
+import { PLATFORM } from "../../util/host-platform";
+import { logError } from "../../util/error-log";
 
 /**
  * On win32 Codex reads its colors from the *console* (conhost's palette, whatever xterm draws) and

@@ -1,8 +1,8 @@
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { AgentId, ProjectRef, Project } from "../shared/types";
-import { onDisk, relativeInside } from "./util/path-inside";
+import type { AgentId, ProjectRef, Project } from "../../shared/types";
+import { onDisk, relativeInside } from "../util/path-inside";
 
 /**
  * Everything TET keeps of a project, in one folder of its data folder (data-root.ts), ordered by

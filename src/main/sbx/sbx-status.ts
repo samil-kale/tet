@@ -2,12 +2,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ProjectRef, SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types";
 import { SANDBOXED_AGENTS } from "../agents";
-import { readLinkedGitDir } from "../git/linked-git-dir";
-import { expandHome, relativeInside } from "../util/path-inside";
+import { readLinkedGitDir } from "../util/linked-git-dir";
+import { normalizeHostPath, relativeInside } from "../util/path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxBlocked, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
-import { projectsDir, sandboxDir } from "../project-dirs";
-import { augmentAgentPath } from "../terminals/agent-path";
-import { PLATFORM } from "../host-platform";
+import { projectsDir, sandboxDir } from "../store/project-dirs";
+import { augmentAgentPath } from "../agents/agent-path";
+import { PLATFORM } from "../util/host-platform";
 import { jsonOf, readSbxVersion, runSbx, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
@@ -289,31 +289,4 @@ function parseSandboxes(result: RunResult): SandboxList | undefined {
     }
   }
   return sandboxes;
-}
-
-/**
- * `normalizeHostPath`'s inverse, for tet.json: under home as `~/…` with forward slashes, so a row serves another user
- * on the same OS; else as typed. Case-insensitive on win32 through `path.relative`.
- */
-export function contractHome(hostPath: string): string {
-  const typed = hostPath.trim();
-  const resolved = normalizeHostPath(typed);
-  if (!path.isAbsolute(resolved)) {
-    return typed;
-  }
-  if (path.relative(os.homedir(), resolved) === "") {
-    return "~";
-  }
-  const relative = relativeInside(os.homedir(), resolved);
-  if (relative === undefined) {
-    return typed;
-  }
-  return `~/${relative.split(path.sep).join("/")}`;
-}
-
-/** A typed host path as sbx lists it back: `~` expanded, native separators, no trailing one.
- *  Relative paths are left alone. */
-export function normalizeHostPath(hostPath: string): string {
-  const expanded = expandHome(hostPath.trim());
-  return path.isAbsolute(expanded) ? path.resolve(expanded) : expanded;
 }

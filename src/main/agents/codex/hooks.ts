@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
-import { hookCommand } from "../../terminals/hook-command";
-import { HOST_TARGET, type HookTarget } from "../../terminals/hook-target";
+import { hookCommand } from "../hook-command";
+import { HOST_TARGET, type HookTarget } from "../hook-target";
 import type { HookEvent } from "../../../shared/control";
 import type { ControlSide } from "../../../shared/control-side";
 import { systemPrompt } from "../system-prompt";

@@ -23,7 +23,7 @@ export interface Platform {
   readonly executableByExtension: boolean;
 
   // Processes
-  /** A shim or an unresolved name starts through cmd.exe (pty.ts's resolveCommand). */
+  /** A shim or an unresolved name starts through cmd.exe (util/spawn.ts's resolveCommand). */
   readonly spawnsThroughCmd: boolean;
   /** A started program is ended with its children through `taskkill /T` (killProcessTree). */
   readonly killsWithTaskkill: boolean;

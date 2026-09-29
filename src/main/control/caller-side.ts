@@ -1,23 +1,21 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ControlVerb } from "../../shared/control";
-import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../shared/control-side";
 import type { Project } from "../../shared/types";
 import { hasSandbox, type AgentDefinition } from "../agents/agent";
+import { HOST_TAB, SANDBOX_TAB, type TabSide } from "../terminals/tab-side";
 import { relativeInside } from "../util/path-inside";
-import type { InspectedTab } from "./control-server";
+import type { InspectedTab } from "../terminals/session-manager";
 import { ControlError } from "./control-verb";
 
 /**
  * ControlSide with what only the main process does differently for a caller on this machine and
- * one in a sandbox: the variables its tab is started with (pty.ts), the tabs and projects it sees,
+ * one in a sandbox: the variables its tab is started with (TabSide), the tabs and projects it sees,
  * the agents it may open, and what an answer may hand it. Chosen once — by the tab's place for its
  * spawn (TabPlace), by the tab's token for a request (control-server's `handle`) — and nothing
  * else asks which side a caller is on.
  */
-export interface CallerSide extends ControlSide {
-  /** Whether TET's stored variables (environment.ts) reach the tab's process. */
-  readonly storedEnv: boolean;
+export interface CallerSide extends TabSide {
   /** Whether the caller may open a tab of this agent. */
   opens(agent: AgentDefinition): boolean;
   /** Whether a tab the caller opens runs in the sandbox or not at all (TabState.sandboxOnly). */
@@ -32,8 +30,7 @@ export interface CallerSide extends ControlSide {
 
 /** A tab on this machine: its variables, every agent, every tab and project. */
 export const HOST_CALLER: CallerSide = {
-  ...HOST_SIDE,
-  storedEnv: true,
+  ...HOST_TAB,
   opens: () => true,
   holdsTabs: false,
   reachesTab: () => true,
@@ -42,15 +39,13 @@ export const HOST_CALLER: CallerSide = {
 };
 
 /**
- * A tab in an sbx sandbox. None of TET's stored variables: the sandbox gets only what its policy
- * lets in. It opens only an agent that runs in a sandbox, held there — a shell would run on this
+ * A tab in an sbx sandbox, with none of TET's stored variables (SANDBOX_TAB). It opens only an agent that runs in a sandbox, held there — a shell would run on this
  * machine. It reaches only its own tab or one running there: a host tab is this machine's, and
  * its output may print the host's control token. It sees its own project only, and of its
  * worktrees only the one it runs in.
  */
 export const SANDBOX_CALLER: CallerSide = {
-  ...SANDBOX_SIDE,
-  storedEnv: false,
+  ...SANDBOX_TAB,
   opens: hasSandbox,
   holdsTabs: true,
   reachesTab: (tab, own) => own || tab?.sandbox !== undefined || tab?.sandboxOnly === true,

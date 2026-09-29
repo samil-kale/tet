@@ -7,7 +7,7 @@ import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types";
 import { isImage, toDataUrl } from "./image-type";
-import { headBranch, readLinkedGitDir } from "./linked-git-dir";
+import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
 import type {
   BranchUpstream,
   CheckoutTarget,
@@ -595,7 +595,7 @@ export async function readBranchConfig(
 /** Whether `git worktree remove` would refuse the worktree without `--force`: a change or an
  *  untracked file. Asked before its terminals close, never on the refresh path. */
 export async function hasChanges(cwd: string): Promise<boolean> {
-  const result = await git(cwd, ["--no-optional-locks", "status", "--porcelain"]);
+  const result = await git(cwd, ["--no-optional-locks", "status", "--porcelain=v2"]);
   return result.code !== 0 || result.stdout.trim() !== "";
 }
 

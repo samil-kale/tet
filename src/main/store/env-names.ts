@@ -1,4 +1,5 @@
-import { PLATFORM } from "./host-platform";
+import { envNameKey } from "../../shared/env-rules";
+import { PLATFORM } from "../util/host-platform";
 
 /**
  * How the environment variables kept in tet (environment.ts) meet this machine's — apart from the
@@ -12,7 +13,7 @@ export const KEPT_ENV_NAME = "TET_KEPT_ENV";
 
 /** A variable's name as this machine compares it: win32 ignores case. */
 export function machineName(name: string): string {
-  return PLATFORM.envNamesIgnoreCase ? name.toUpperCase() : name;
+  return envNameKey(name, PLATFORM.envNamesIgnoreCase);
 }
 
 /** Whether the environment tet was started with — what every tab would inherit — has the name. One

@@ -4,16 +4,17 @@ import * as http from "node:http";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../src/shared/control-side";
-import { PLATFORM } from "../src/main/host-platform";
+import { PLATFORM } from "../src/main/util/host-platform";
 import { claudeAgent } from "../src/main/agents/claude";
 import { codexHookReply } from "../src/main/agents/codex/hooks";
 import { shellAgent } from "../src/main/agents/shell";
 import { systemPrompt } from "../src/main/agents/system-prompt";
-import { findControlPort, startControlServer } from "../src/main/control/control-server";
-import type { ControlDeps, ControlTerminals } from "../src/main/control/control-server";
-import type { ToastTarget } from "../src/main/notifications";
-import type { EnvAsk } from "../src/main/environment";
-import { tabControlToken } from "../src/main/control/control-token";
+import { findControlPort } from "../src/main/control/control-port";
+import { startControlServer } from "../src/main/control/control-server";
+import type { ControlDeps, ControlTerminals } from "../src/main/control/control-verb";
+import type { ToastTarget } from "../src/main/util/notifications";
+import type { EnvAsk } from "../src/main/control/env-requests";
+import { tabControlToken } from "../src/main/terminals/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../src/shared/control";
 import { projectRefKey, EMPTY_REPOSITORY_STATE, EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, withSettings } from "../src/shared/types";
 import type {
@@ -116,7 +117,7 @@ const EDITOR_LISTING = [
 /** What `editor-list` answers for PROJECT; a.txt holds unsaved changes. */
 let editorListing = EDITOR_LISTING;
 
-/** What the faked git does for worktree-merge: the branch the repository has checked out, the
+/** What the faked git does for worktree-agent-merge: the branch the repository has checked out, the
  *  worktree's state, whether its merge conflicts or fails, the markers left, a fast-forward's and a
  *  delete's refusal. A conflicting merge leaves the worktree mid-merge, as git does. */
 interface Merging {
@@ -208,7 +209,7 @@ function terminalsOf(key: string): ControlTerminals {
       calls.closed.push(...tabIds);
     },
     // A sandboxed tab sees the path at its container path, a host tab as it is.
-    handPaths: async (tabId, hostPaths) => {
+    seenPaths: async (tabId, hostPaths) => {
       calls.handed.push([tabId, hostPaths]);
       return hostPaths.map((hostPath) => (tabId === SANDBOX_TAB ? `/sbx${hostPath}` : hostPath));
     },
@@ -277,6 +278,7 @@ function deps(): ControlDeps {
       get: (ref) =>
         open(ref)
           ? {
+              at: { path: projectRefKey(ref) },
               getState: () => ({
                 ...EMPTY_REPOSITORY_STATE,
                 head: `main-of-${projectRefKey(ref)}`,
@@ -303,6 +305,8 @@ function deps(): ControlDeps {
     },
     listAgents: async () => [{ id: "shell", name: "Shell", installed: true }],
     agents: [claudeAgent, shellAgent],
+    // Installed wherever asked: the list is the agent's own.
+    askModels: async (agent) => ({ models: await agent.ask!.models(agent.executable(), "") }),
     addProject: async (directory) => {
       calls.added.push(directory);
       return directory === "/nowhere"
@@ -1245,13 +1249,13 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.worktreesDeleted, []);
   });
 
-  describe("worktree-merge", () => {
+  describe("worktree-agent-merge", () => {
     beforeEach(() => {
       merging.deleteRefused = undefined;
     });
 
     it("merges the base into the worktree, fast-forwards the base in the repository, then deletes the worktree", async () => {
-      const run = await tetCtl(["worktree-merge", "four"]);
+      const run = await tetCtl(["worktree-agent-merge", "four"]);
       assert.equal(run.status, EXIT_CODES.ok, run.stderr);
       assert.deepEqual(run.result, { status: "merged", base: "main", branch: "four" });
       assert.deepEqual(calls.merges, [
@@ -1264,68 +1268,68 @@ describe("tet-ctl against the control server", () => {
 
     it("answers a conflict with its files and the worktree as the caller sees it, deleting nothing", async () => {
       merging.merge = "conflict";
-      const run = await tetCtl(["worktree-merge", "four"], { [CONTROL_ENV.tabId]: SANDBOX_TAB });
+      const run = await tetCtl(["worktree-agent-merge", "four"], { [CONTROL_ENV.tabId]: SANDBOX_TAB });
       assert.equal(run.status, EXIT_CODES.ok, run.stderr);
       const result = run.result as { status: string; path: string; files: string[]; next: string };
       assert.equal(result.status, "conflicts");
       assert.equal(result.path, "/sbx/wt/four");
       assert.deepEqual(result.files, ["a.ts"]);
-      assert.match(result.next, /git commit[^"]*"tet-ctl worktree-merge four" again/);
+      assert.match(result.next, /git commit[^"]*"tet-ctl worktree-agent-merge four" again/);
       assert.deepEqual(calls.handed, [[SANDBOX_TAB, ["/wt/four"]]]);
       assert.equal(calls.merges.length, 1, "no fast-forward");
       assert.deepEqual(calls.worktreesDeleted, []);
       // Run again while it is still mid-merge.
-      const again = await tetCtl(["worktree-merge", "four"]);
+      const again = await tetCtl(["worktree-agent-merge", "four"]);
       assert.match(again.stderr, /merge is in progress in \/wt\/four: resolve and commit it/);
     });
 
     it("refuses a caller inside a worktree, saying where to run it from", async () => {
-      const run = await tetCtl(["worktree-merge", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
+      const run = await tetCtl(["worktree-agent-merge", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
       assert.equal(run.status, EXIT_CODES.usage);
-      assert.match(run.stderr, /only from the project's repository[^.]*close this tab\. Run "tet-ctl worktree-merge four" from a tab of the repository/);
+      assert.match(run.stderr, /only from the project's repository[^.]*close this tab\. Run "tet-ctl worktree-agent-merge four" from a tab of the repository/);
       assert.deepEqual(calls.merges, []);
     });
 
     it("refuses what it cannot merge, each time saying what to do, and changes nothing", async () => {
-      assert.match((await tetCtl(["worktree-merge", "five"])).stderr, /not made by TET/);
-      assert.match((await tetCtl(["worktree-merge", "nine"])).stderr, /has no worktree nine/);
+      assert.match((await tetCtl(["worktree-agent-merge", "five"])).stderr, /not made by TET/);
+      assert.match((await tetCtl(["worktree-agent-merge", "nine"])).stderr, /has no worktree nine/);
       merging.checkedOut = "develop";
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /has develop checked out, not four's base main: run "git switch main" there/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /has develop checked out, not four's base main: run "git switch main" there/);
       merging.checkedOut = "main";
       merging.changes = [{ path: "b.ts", status: "modified" }];
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /uncommitted changes, nothing was merged: have them committed or stashed/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /uncommitted changes, nothing was merged: have them committed or stashed/);
       merging.changes = [];
       tab2Busy = true;
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /mid-turn \(tab tab-2\), nothing was merged: wait until it is done/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /mid-turn \(tab tab-2\), nothing was merged: wait until it is done/);
       tab2Busy = false;
       worktreeEditors = EDITOR_LISTING;
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /unsaved changes in a\.txt, nothing was merged: ask the user to save/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /unsaved changes in a\.txt, nothing was merged: ask the user to save/);
       worktreeEditors = [];
       merging.merge = "error";
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /unrelated histories — four is unchanged/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /unrelated histories — four is unchanged/);
       assert.deepEqual(calls.merges, [[projectRefKey(WORKTREE), "main", undefined]], "only the failed merge ran");
       assert.deepEqual(calls.worktreesDeleted, []);
     });
 
     it("keeps the base as it is while conflict markers are left, or the fast-forward fails", async () => {
       merging.markers = ["a.ts"];
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /conflict markers are left in a\.ts of four, main is unchanged: remove them, commit/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /conflict markers are left in a\.ts of four, main is unchanged: remove them, commit/);
       merging.markers = [];
       merging.forwardError = "fatal: Not possible to fast-forward, aborting.";
-      assert.match((await tetCtl(["worktree-merge", "four"])).stderr, /fast-forward, aborting\. — the merge is committed in four, main is unchanged[^]*run this again/);
+      assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /fast-forward, aborting\. — the merge is committed in four, main is unchanged[^]*run this again/);
       assert.deepEqual(calls.worktreesDeleted, []);
     });
 
     it("says how to finish when the merged worktree could not be deleted", async () => {
       merging.deleteRefused = { ok: false, needsConfirmation: "uncommitted" };
-      const run = await tetCtl(["worktree-merge", "four"]);
+      const run = await tetCtl(["worktree-agent-merge", "four"]);
       assert.match(run.stderr, /four is merged into main, but its worktree could not be deleted — it has uncommitted changes since[^]*"tet-ctl worktree-delete four" \(--force/);
     });
 
     it("reaches only the worktrees of a sandboxed caller's own project", async () => {
       const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-      assertRefused(await tetCtl(["worktree-merge", "four", "--project", OTHER.id], fromSandbox), /own project/, "worktree-merge");
-      assert.equal((await tetCtl(["worktree-merge", "four"], fromSandbox)).status, EXIT_CODES.ok);
+      assertRefused(await tetCtl(["worktree-agent-merge", "four", "--project", OTHER.id], fromSandbox), /own project/, "worktree-agent-merge");
+      assert.equal((await tetCtl(["worktree-agent-merge", "four"], fromSandbox)).status, EXIT_CODES.ok);
     });
   });
 

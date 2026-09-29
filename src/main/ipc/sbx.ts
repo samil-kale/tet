@@ -20,7 +20,7 @@ import { readKnowledgeSources } from "../sbx/sbx-mounts";
 import { readSbxStatus } from "../sbx/sbx-status";
 import { signInToSbx } from "../sbx/sbx-accounts";
 import { readProjectSbxProblems, saveProjectSbx } from "../sbx/sbx-settings";
-import { readSbxConfig } from "../tet-json";
+import { readSbxConfig } from "../store/tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
 /** The sandbox settings dialog: what sbx says, and what the project stores. */

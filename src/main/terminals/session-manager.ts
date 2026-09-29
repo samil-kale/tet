@@ -7,9 +7,8 @@ import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
-import type { HookOutcome, HookToast, InspectedTab } from "../control/control-server";
+import type { ControlSide } from "../../shared/control-side";
 import { hasSandbox } from "../agents/agent";
-import { projectRefKey } from "../../shared/types";
 import type {
   AgentId,
   ProjectRef,
@@ -18,24 +17,23 @@ import type {
   TerminalDescriptor,
   TerminalStatus
 } from "../../shared/types";
-import type { ResolvedRef } from "../util/resolved-ref";
+import type { ResolvedRef } from "../store/resolved-ref";
 import { HostSetups } from "./host-setup";
-import { dropsDir } from "../project-dirs";
-import { readSbxConfig } from "../tet-json";
+import { dropsDir } from "../store/project-dirs";
+import { readSbxConfig } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";
 import { checkSbxReady } from "../sbx/sbx-status";
 import type { SbxLocalStore } from "../sbx/sbx-local";
-import type { SettingsStore } from "../settings";
+import type { SettingsStore } from "../store/settings";
 import { TerminalSession } from "./terminal-session";
 import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
-import type { CallerSide } from "../control/caller-side";
 import type { HandoffFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
 import { reportApplies } from "./turn-order";
 import { ReconcileScheduler } from "./reconcile-scheduler";
 import { StartIndicators } from "./start-indicators";
-import { currentTheme } from "../theme";
+import { currentTheme } from "../store/theme";
 import { effectivePrompt } from "../../shared/prompts";
-import { logError } from "../uncaught";
+import { logError } from "../util/error-log";
 
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
 const SESSION_REMOVE_DELAY_MS = 500;
@@ -241,6 +239,28 @@ function singleLine(text: string): string {
     .map((line) => line.trim())
     .filter((line) => line !== "")
     .join(" ");
+}
+
+/** What a hook shows the user (control-verb.ts's ControlTerminals.hookEvent). */
+export interface HookToast {
+  title: string;
+  body: string;
+}
+
+export interface HookOutcome {
+  /** What the hook prints back into its agent (AgentTurns.hookReply). */
+  stdout: string;
+  /** None where the notification settings say so. */
+  toast?: HookToast;
+}
+
+/** A `tabs-list` entry: the window's descriptor plus what only the session manager knows. */
+export interface InspectedTab extends TerminalDescriptor {
+  /** The session this tab's hooks named, claimed or not. */
+  reportedSessionId?: string;
+  sandbox?: string;
+  /** Opened from a sandbox, so it runs there or not at all. */
+  sandboxOnly?: true;
 }
 
 /**
@@ -608,16 +628,22 @@ export class TabSessionManager {
     return tab ? this.placeOf(tab).dropsDir() : dropsDir(this.storageRoot, this.at.ref.projectId);
   }
 
-  /** Dropped or pasted paths of this machine as the words the tab types: where it sees them
-   *  (TabPlace.handPaths), quoted for its input (AgentDefinition.quotePath). A closed tab types
+  /** Paths of this machine where the tab sees them (TabPlace.handPaths). A closed tab sees
    *  nothing. */
+  async seenPaths(tabId: string, hostPaths: string[]): Promise<string[]> {
+    const tab = this.tabOf(tabId);
+    return tab ? this.placeOf(tab).handPaths(hostPaths) : [];
+  }
+
+  /** Dropped or pasted paths of this machine as the words the tab types: where it sees them
+   *  (seenPaths), quoted for its input (AgentDefinition.quotePath). A closed tab types nothing. */
   async handPaths(tabId: string, hostPaths: string[]): Promise<string[]> {
     const tab = this.tabOf(tabId);
     if (!tab) {
       return [];
     }
     const { agent } = this.runtimeFor(tab.agentId);
-    return (await this.placeOf(tab).handPaths(hostPaths)).map((handed) => agent.quotePath(handed));
+    return (await this.seenPaths(tabId, hostPaths)).map((handed) => agent.quotePath(handed));
   }
 
   /** The first prompt's arguments, a handoff's naming `files` as this start sees them. */
@@ -1196,7 +1222,7 @@ export class TabSessionManager {
    * baked in at setup. Showing a mark is the renderer's call; no toast for a tab in front
    * (`setInFront`).
    */
-  hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined, side: CallerSide): HookOutcome {
+  hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined, side: ControlSide): HookOutcome {
     const listed = this.tabOf(tabId);
     // Closed: the hook still gets its reply, but changes nothing.
     const tab = this.disposed ? undefined : listed;
@@ -1450,80 +1476,5 @@ export class TabSessionManager {
     // All at once: each may take a grace period (TerminalSession.stop), and quit waits on this.
     await Promise.all([...this.sessions.values()].map((session) => session.stop()));
     this.sessions.clear();
-  }
-}
-
-/** A session manager per open repository and worktree, by `projectRefKey`. */
-export class SessionManagerRegistry {
-  private readonly managers = new Map<string, TabSessionManager>();
-
-  /** The renderer's last report, sent only on change — for a repository or worktree opened after
-   *  it. */
-  private inFront: { key: string | null; tabIds: readonly string[] } = { key: null, tabIds: [] };
-  private readonly hostSetups: HostSetups;
-
-  constructor(
-    private readonly storageRoot: string,
-    private readonly settings: SettingsStore,
-    private readonly sbxLocal: SbxLocalStore,
-    private readonly callbacks: SessionManagerCallbacks
-  ) {
-    this.hostSetups = new HostSetups(storageRoot, settings, callbacks.onNotice);
-  }
-
-  open(resolved: ResolvedRef): TabSessionManager {
-    const key = projectRefKey(resolved.ref);
-    const existing = this.managers.get(key);
-    if (existing) {
-      return existing;
-    }
-    const manager = new TabSessionManager(resolved, this.storageRoot, this.settings, this.sbxLocal, this.hostSetups, this.callbacks);
-    manager.setInFront(key === this.inFront.key ? this.inFront.tabIds : []);
-    this.managers.set(key, manager);
-    manager.bootstrap().catch((error: unknown) => {
-      this.callbacks.onNotice("error", `${resolved.name()} could not be opened: ${errorMessage(error)}`);
-    });
-    return manager;
-  }
-
-  get(ref: ProjectRef): TabSessionManager | undefined {
-    return this.managers.get(projectRefKey(ref));
-  }
-
-  /** Those of the project's repository and worktrees that are open. */
-  forProject(projectId: string): TabSessionManager[] {
-    return [...this.managers.values()].filter((manager) => manager.at.ref.projectId === projectId);
-  }
-
-  /** The tabs in front belong to one repository or worktree at most. */
-  setInFront(ref: ProjectRef | null, tabIds: readonly string[]): void {
-    const key = ref && projectRefKey(ref);
-    this.inFront = { key, tabIds };
-    for (const [id, manager] of this.managers) {
-      manager.setInFront(id === key ? tabIds : []);
-    }
-  }
-
-  /** See HostSetups.themeChanged. */
-  themeChanged(): void {
-    this.hostSetups.themeChanged();
-  }
-
-  /** See HostSetups.idleReminderChanged. */
-  idleReminderChanged(): void {
-    this.hostSetups.idleReminderChanged();
-  }
-
-  async close(ref: ProjectRef): Promise<void> {
-    const manager = this.managers.get(projectRefKey(ref));
-    // Dropped before the wait, so a repository or worktree closed and reopened at once never has
-    // two.
-    this.managers.delete(projectRefKey(ref));
-    await manager?.dispose();
-  }
-
-  async disposeAll(): Promise<void> {
-    await Promise.all([...this.managers.values()].map((manager) => manager.dispose()));
-    this.managers.clear();
   }
 }

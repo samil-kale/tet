@@ -2,10 +2,10 @@ import * as fs from "node:fs";
 import { errorMessage } from "../../shared/errors";
 import type { AgentId, NoticeSeverity } from "../../shared/types";
 import type { AgentDefinition, SpawnPreparation } from "../agents/agent";
-import { agentConfigDir } from "../data-root";
-import type { SettingsStore } from "../settings";
-import { currentTheme } from "../theme";
-import { logError } from "../uncaught";
+import { agentConfigDir } from "../store/data-root";
+import type { SettingsStore } from "../store/settings";
+import { currentTheme } from "../store/theme";
+import { logError } from "../util/error-log";
 
 interface HostSetup {
   agent: AgentDefinition;

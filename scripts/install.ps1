@@ -5,7 +5,7 @@
 # Fetches the newest release's archive for this machine (electron-builder.yml builds them, named
 # as src/shared/release.ts's `assetName`) and unpacks it for this user alone, no administrator
 # asked: %LOCALAPPDATA%\Programs\TET, a Start menu entry and a desktop icon, and `tet` on the
-# user's PATH. The app updates itself from then on (src/main/auto-update.ts), in the same folder.
+# user's PATH. The app updates itself from then on (src/main/update/auto-update.ts), in the same folder.
 #
 # The Start menu entry is TET.lnk pointing at TET.exe, which is also what Electron writes on the
 # first toast (see main.ts's APP_USER_MODEL_ID): it rewrites this very entry with the

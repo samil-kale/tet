@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import { CONTROL_ENV } from "../../shared/control";
 import {
@@ -27,8 +28,11 @@ import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/in-turn";
 import type { SandboxedAgent } from "../agents/agent";
 import type { FilesystemRule } from "./sbx-policy";
-import { runSbx, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
-import { listSandboxes, mountableBy, normalizeHostPath, readFilesystemRules, readHostAllowed, sandboxControl, type SandboxList } from "./sbx-status";
+import { logError } from "../util/error-log";
+import { runSbx, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
+import { listSandboxes, mountableBy, readFilesystemRules, readHostAllowed, sandboxControl, type SandboxList } from "./sbx-status";
+import { normalizeHostPath } from "../util/path-inside";
+import { sameSet } from "../util/same-set";
 import {
   droppedMountSpecs,
   fixedMountSpecs,
@@ -36,7 +40,6 @@ import {
   mountAll,
   sandboxKnowledgeFor,
   sessionMountSpecs,
-  statOf,
   worktreeMountSpecs,
   type SandboxPaths,
   type SbxSessionMount
@@ -62,12 +65,6 @@ const launcherWritten = new Set<string>();
 
 /** The `sbx create` (or rebuild) underway per sandbox name — see ensureSandboxExists. */
 const sandboxSetups = new Map<string, Promise<unknown>>();
-
-export function sameSet(a: string[], b: string[]): boolean {
-  const sorted = (list: string[]) => [...list].sort();
-  const [left, right] = [sorted(a), sorted(b)];
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
 
 export async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
   launcherWritten.delete(name);
@@ -131,7 +128,7 @@ function ensureSandboxExists(
     }
     const created = await runSbx(["create", agent.sandbox.kit ?? agent.id, projectPath, "--name", name, "--skills=off"], { onData });
     if (!created.ok) {
-      throw new Error(`sbx could not create the ${agent.id} sandbox`);
+      throw new Error(`sbx could not create the ${agent.id} sandbox: ${sbxFailure(created, "sbx create")}`);
     }
     // A new sandbox holds nothing of the one that had this name — and one removed outside tet
     // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
@@ -153,7 +150,10 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
   if (!control || launcherWritten.has(name)) {
     return;
   }
-  const bundle = await fs.readFile(control.cliPath, "utf8").catch(() => undefined);
+  const bundle = await fs.readFile(control.cliPath, "utf8").catch((error: unknown) => {
+    logError(`could not read tet-ctl for the ${name} sandbox`, error);
+    return undefined;
+  });
   if (bundle === undefined) {
     return;
   }
@@ -166,6 +166,8 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
   );
   if (written.ok) {
     launcherWritten.add(name);
+  } else {
+    sbxFailure(written, `writing tet-ctl into the ${name} sandbox`);
   }
 }
 
@@ -572,7 +574,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
 
   for (const kind of kinds) {
     const access = knowledge[kind] as SbxAccess;
-    if (kind === "skills" && knowledge.skillsFolder !== undefined && !statOf(knowledge.skillsFolder)) {
+    if (kind === "skills" && knowledge.skillsFolder !== undefined && !existsSync(knowledge.skillsFolder)) {
       add("knowledge", kind, SBX_PROBLEM.missing);
     } else if (own.some((entries) => entries[kind].some((entry) => !mountable(entry.host, access)))) {
       add("knowledge", kind, forbidden);
@@ -585,7 +587,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     config.ports.forEach((port, index) => free[index] || add("ports", sbxPortKey(port), SBX_PROBLEM.portInUse));
   }
   for (const entry of config.paths) {
-    if (!statOf(normalizeHostPath(entry.path))) {
+    if (!existsSync(normalizeHostPath(entry.path))) {
       add("paths", entry.path, SBX_PROBLEM.missing);
     } else if (!mountable(entry.path, entry.access)) {
       add("paths", entry.path, forbidden);

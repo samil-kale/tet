@@ -1,15 +1,15 @@
 import * as path from "node:path";
-import { createByteThresholdCheck } from "../../terminals/session-ready";
+import { createByteThresholdCheck } from "../session-ready";
 import { claudeIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
-import { SANDBOX_HOME, SANDBOX_TARGET } from "../../terminals/hook-target";
+import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
 import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
 import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
 import type { AskModel } from "../../../shared/types";
-import { logError } from "../../uncaught";
+import { logError } from "../../util/error-log";
 
 /** Appended to Claude Code's own system prompt for this process (see system-prompt.ts). */
 const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prompt", systemPrompt(side)];

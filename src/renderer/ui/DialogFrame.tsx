@@ -82,7 +82,7 @@ interface DialogAction {
 }
 
 /** The open tab's first field: what is typed into, a checkbox, a picker's input. */
-const FIELD = "input:not([type=hidden]):not(:disabled), textarea:not(:disabled), select:not(:disabled)";
+const FIELD = "input:not([type=hidden]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled)";
 
 interface DialogTab<T extends string> {
   id: T;

@@ -2,15 +2,14 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { net, shell } from "electron";
 import { handle } from "./channels";
+import { MAX_EDIT_BYTES } from "../git/explorer";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types";
 import { expandHome, repositoryRelative } from "../util/path-inside";
 import { isExecutableFile, isOpenableUrl } from "../util/shell-open";
 import type { IpcDeps } from "./deps";
 
-/** A Markdown preview's web image: the editor's cap for a repository file (`Repository.readFile`),
- *  and a badge service that hangs is given up on. */
-const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+/** A Markdown preview's web image: a badge service that hangs is given up on. */
 const FETCH_IMAGE_TIMEOUT_MS = 15_000;
 /** As many hops as a badge service needs; past that it is a loop, not a move. */
 const MAX_IMAGE_REDIRECTS = 5;
@@ -109,7 +108,8 @@ export function registerShellIpc({
       let size = 0;
       for await (const chunk of response.body) {
         size += chunk.length;
-        if (size > MAX_IMAGE_BYTES) {
+        // The editor's cap for a repository file.
+        if (size > MAX_EDIT_BYTES) {
           return null;
         }
         chunks.push(chunk);

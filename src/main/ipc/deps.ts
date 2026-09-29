@@ -1,15 +1,17 @@
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types";
 import type { NoticeSeverity, RepositoryState } from "../../shared/types";
 import type { ControlRecords } from "../control/control-records";
-import type { EnvRequests, EnvStore } from "../environment";
-import type { GitLoginStore } from "../git-logins";
+import type { EnvRequests } from "../control/env-requests";
+import type { EnvStore } from "../store/environment";
+import type { GitLoginStore } from "../git/git-logins";
 import type { RepositoryManager } from "../git/repository";
-import type { ProjectDeps, ProjectStore } from "../projects";
+import type { ProjectDeps } from "../projects";
+import type { ProjectStore } from "../store/project-store";
 import type { AccountStore } from "../providers/accounts";
 import type { SbxAccountStore } from "../sbx/sbx-accounts";
 import type { SbxLocalStore } from "../sbx/sbx-local";
-import type { SettingsAccess } from "../settings";
-import type { SessionManagerRegistry } from "../terminals/session-manager";
+import type { SettingsAccess } from "../store/settings";
+import type { SessionManagerRegistry } from "../terminals/session-registry";
 
 /** The singletons main.ts builds, for the renderer-facing IPC surface. */
 export interface IpcDeps {

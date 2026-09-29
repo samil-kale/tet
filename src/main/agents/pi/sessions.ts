@@ -9,14 +9,14 @@ import {
   nonEmptyString,
   parseLine,
   requireTitle,
+  type ScannedTail,
   scanTranscriptHead,
   scanTranscriptTail,
   timestampOf,
   truncateTitle,
-  type ScannedTail
+  watchTranscriptDir
 } from "../transcript";
-import { watchTranscriptDir } from "../../util/watch-dir";
-import { SANDBOX_HOME } from "../../terminals/hook-target";
+import { SANDBOX_HOME } from "../hook-target";
 
 /**
  * pi keeps one JSONL transcript per session, `<ISO timestamp, ":" and "." as "-">_<uuid>.jsonl`,

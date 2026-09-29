@@ -1,7 +1,7 @@
 import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef, GitActionResult, ProjectCommand, TerminalDescriptor } from "../../shared/types";
-import { readCommands, writeCommands } from "../tet-json";
+import { readCommands, writeCommands } from "../store/tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
 /** The project's saved commands (tet.json), and running one in a tab of its own. */
