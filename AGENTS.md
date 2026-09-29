@@ -108,9 +108,11 @@ change, and every agent added, fits it.
 - **What exists is handed over, never copied.** A host tab gets the original path. A path dropped
   into a sandboxed tab outside its sight is mounted rw at its container path, never written into
   `tet.json`, and held until TET quits (every start's `mountAll` is handed it); a notice says it
-  was mounted, or that governance refuses it. Only what has no path of its own (a browser's drop, a
-  pasted image) is written, into `drops/` on either side; a handoff copies what sits in another
-  agent's store, which no sandbox may see.
+  was mounted, or that governance refuses it. `worktree-merge` hands a conflicted worktree to the
+  repository tab that merges it the same way, and deleting a worktree releases every such mount of
+  its folder (`releaseDropped`). Only what has no path of its own (a browser's drop, a pasted
+  image) is written, into `drops/` on either side; a handoff copies what sits in another agent's
+  store, which no sandbox may see.
 - **A store written by a Save someone waits on writes before it changes** (`writeJson`,
   `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
   and the store keeps what the disk has. Only a write nobody waits on, or a cleanup that must not
@@ -356,10 +358,10 @@ verbs: `src/shared/control.ts`; server: `src/main/control/control-server.ts`; CL
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
 - `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository or
   any worktree (`ownProjectOnly`); from a sandbox, every verb naming one only for the caller's own
-  repository or worktree, except `worktree-add` and `worktree-delete`, which reach every worktree of
-  its project (`ownProject`). `tabs-keys` never from inside a sandbox. `tabs-output`, `tabs-close`,
-  `tabs-rename` and `tabs-handoff` from a sandbox reach only tabs running there: a host tab is the
-  machine's, and its output may print the host's control token.
+  repository or worktree, except `worktree-add`, `worktree-delete` and `worktree-merge`, which reach
+  every worktree of its project (`ownProject`). `tabs-keys` never from inside a sandbox.
+  `tabs-output`, `tabs-close`, `tabs-rename` and `tabs-handoff` from a sandbox reach only tabs
+  running there: a host tab is the machine's, and its output may print the host's control token.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.
@@ -386,7 +388,7 @@ Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/ma
   worktrees. TET's own live mounts are folders of that `sandboxes/…/<agent>` folder alone; the one
   exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails there.
   The user's grants (Allowed paths, knowledge) and a path the user drops (data model) are theirs,
-  not TET's.
+  not TET's; so is a worktree `worktree-merge` hands over, taken as a drop.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`

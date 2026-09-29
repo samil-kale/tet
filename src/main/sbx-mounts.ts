@@ -213,6 +213,29 @@ export function droppedMountSpecs(name: string): MountSpec[] {
   return (droppedMounts.get(name) ?? []).filter((host) => statOf(host)).map((host) => pathMountSpecs({ path: host, access: "rw" }));
 }
 
+/**
+ * Takes every dropped path in or under `folder` out of every sandbox holding it, before `folder`
+ * goes: a mount whose host path is gone keeps a stopped sandbox from starting. Each `umount` in turn
+ * with that sandbox's mountAll; one sbx refuses is gone with the sandbox, or taken out at its next
+ * start, which is handed the path no more.
+ */
+export async function releaseDropped(folder: string): Promise<void> {
+  const root = normalizeHostPath(folder);
+  const inside = (host: string): boolean => host === root || relativeInside(root, host) !== undefined;
+  for (const [name, hosts] of droppedMounts) {
+    const released = hosts.filter(inside);
+    if (released.length === 0) {
+      continue;
+    }
+    droppedMounts.set(name, hosts.filter((host) => !inside(host)));
+    await inTurn(mountSetups, name, async () => {
+      for (const host of released) {
+        await runSbx(["umount", name, pathMountSpecs({ path: host, access: "rw" }).unmount]);
+      }
+    });
+  }
+}
+
 /** What mountDropped did: the sandbox saw the path already, mounted it, or could not. */
 export type DropMount = { seen: true } | { mounted: true } | { refused: string };
 

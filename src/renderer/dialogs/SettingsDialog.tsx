@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { envRowRefusal } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
+import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types";
@@ -20,7 +21,6 @@ import { confirm, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, DialogError, Field, FieldGroup } from "../ui/Field";
-import { KEYBINDING_PRESETS } from "../diff/keybinding-presets";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { useRunning } from "../ui/use-running";

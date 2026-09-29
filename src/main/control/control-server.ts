@@ -5,8 +5,9 @@ import { stripAnsi } from "../../shared/ansi";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlErrorCode, ControlEvent, ControlRequest, ControlResponse, ControlVerbName, HookEvent } from "../../shared/control";
+import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isWorking, sameProjectRef, worktreeOf } from "../../shared/types";
+import { COLOR_SCHEMES, NOTIFICATION_IDS, PROMPT_IDS, TERMINAL_STATUSES, projectRefKey, projectRef, projectRefsOf, isWorking, sameProjectRef, worktreeOf } from "../../shared/types";
 import type {
   AddRepositoryResult,
   AgentId,
@@ -61,7 +62,14 @@ export interface ControlDeps {
     get(ref: ProjectRef): ControlTerminals | undefined;
   };
   repositories: {
-    get(ref: ProjectRef): { getState(): RepositoryState; listExplorer(): Promise<ExplorerListing> } | undefined;
+    get(ref: ProjectRef):
+      | {
+          getState(): RepositoryState;
+          listExplorer(): Promise<ExplorerListing>;
+          merge(ref: string, fastForwardOnto?: string): Promise<GitActionResult>;
+          conflictMarkers(base: string): Promise<string[]>;
+        }
+      | undefined;
   };
   /** See ControlRecords. */
   records: {
@@ -170,6 +178,8 @@ export interface ControlTerminals {
   handOff(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TerminalDescriptor | string>;
   createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
+  /** Host paths as the tab types them, mounted into its sandbox where it would not see them. */
+  handPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */
   renameTab(tabId: string, title: string): Promise<string | undefined>;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
@@ -357,6 +367,8 @@ function verbs(deps: ControlDeps): Handlers {
 
     "list-themes": () => ({ result: THEMES.map(({ id, label, kind }) => ({ id, label, kind })) }),
 
+    "list-keybinding-presets": () => ({ result: KEYBINDING_PRESETS.map(({ id, label }) => ({ id, label })) }),
+
     "list-agents": async () => ({ result: await deps.listAgents() }),
 
     "settings-get": () => ({ result: settings.get() }),
@@ -384,6 +396,24 @@ function verbs(deps: ControlDeps): Handlers {
       // No text resets: "" means tet's own prompt, read by ipc/repository.ts when asking.
       const value = args.text;
       settings.patch({ prompts: { [id]: typeof value === "string" ? value : "" } });
+      return { result: { saved: true } };
+    },
+
+    "settings-set-keybindings": (args) => {
+      const id = text(args, "preset", "keybinding preset id");
+      // The store keeps any string and the editor falls back (settings.ts); refuse it here instead.
+      if (!KEYBINDING_PRESETS.some((preset) => preset.id === id)) {
+        throw new ControlError("bad_args", `unknown keybinding preset: ${id} (see list-keybinding-presets)`);
+      }
+      // An editor reads its keybindings once, when it is made (editor-views.ts's editorSetup).
+      settings.patch({ editorKeybindingPreset: id });
+      return { result: { saved: true } };
+    },
+
+    "settings-set-notification": (args) => {
+      const id = oneOf(args, "id", "notification", NOTIFICATION_IDS);
+      const value = oneOf(args, "value", "value", ["on", "off"]);
+      settings.patch({ notifications: { [id]: value === "on" } });
       return { result: { saved: true } };
     },
 
@@ -456,6 +486,106 @@ function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", deleted.error ?? "could not delete the worktree");
       }
       return { result: { deleted: branch } };
+    },
+
+    // From the repository alone: the worktree goes at the end, which would end a caller inside it.
+    // Every step before the fast-forward leaves nothing to undo, so each refusal says what to do
+    // and that running it again picks up where it stopped.
+    "worktree-merge": async (args, caller) => {
+      const found = project(args, caller);
+      const name = text(args, "branch", "branch");
+      if (caller.worktree !== undefined) {
+        const own = worktreeOf(found, projectRef(found.id, caller.worktree));
+        throw new ControlError(
+          "bad_args",
+          `worktree-merge runs only from the project's repository: it deletes the worktree when done, which would close this tab. Run "tet-ctl worktree-merge ${own?.branch ?? name}" from a tab of the repository, or ask the user to.`
+        );
+      }
+      const { worktree, ref } = tetWorktree(found, name);
+      const branch = worktree.branch;
+      if (branch === undefined) {
+        throw new ControlError("bad_args", `the worktree ${name} has no branch checked out, so there is nothing to merge: check one out there or delete the worktree`);
+      }
+      const main = repository(projectRef(found.id));
+      const listed = main.getState().worktrees;
+      const base = listed.find((entry) => entry.key === worktree.key)?.base;
+      if (base === undefined) {
+        throw new ControlError("bad_args", `${branch} has no recorded base, so TET cannot tell where it goes: merge it with git yourself`);
+      }
+      const checkedOut = listed.find((entry) => entry.main)?.branch;
+      if (checkedOut !== base) {
+        throw new ControlError(
+          "bad_args",
+          `the repository has ${checkedOut ?? "a detached HEAD"} checked out, not ${branch}'s base ${base}: run "git switch ${base}" there, or ask the user, then run this again`
+        );
+      }
+      const own = repository(ref);
+      const state = own.getState();
+      if (state.operation !== undefined) {
+        throw new ControlError(
+          "bad_args",
+          `a ${state.operation} is in progress in ${worktree.path}: resolve and commit it (or abort it with git), then run this again`
+        );
+      }
+      if (state.changes.length > 0) {
+        throw new ControlError(
+          "bad_args",
+          `${branch} has uncommitted changes, nothing was merged: have them committed or stashed there (by its agent or the user), then run this again`
+        );
+      }
+      const working = sessions.get(ref)?.inspect().find(isWorking);
+      if (working) {
+        throw new ControlError("bad_args", `an agent in ${branch} is mid-turn (tab ${working.tabId}), nothing was merged: wait until it is done, then run this again`);
+      }
+      const unsaved = deps.records.editors(ref).filter((editor) => editor.dirty);
+      if (unsaved.length > 0) {
+        throw new ControlError(
+          "bad_args",
+          `unsaved changes in ${unsaved.map((editor) => editor.path).join(", ")}, nothing was merged: ask the user to save or close them in TET`
+        );
+      }
+
+      const merged = await own.merge(base);
+      if (!merged.ok) {
+        const conflicts = own.getState();
+        if (conflicts.operation !== "merge") {
+          throw new ControlError("bad_args", `${merged.error ?? "the merge failed"} — ${branch} is unchanged`);
+        }
+        // Where the caller sees the worktree: mounted into its sandbox if it would not.
+        const [handed] = caller.tabId === undefined ? [] : ((await sessions.get(projectRef(found.id))?.handPaths(caller.tabId, [worktree.path])) ?? []);
+        const at = handed ?? worktree.path;
+        return {
+          result: {
+            status: "conflicts",
+            path: at,
+            files: conflicts.changes.filter((change) => change.status === "conflicted").map((change) => change.path),
+            next: `resolve the conflicts in ${at}, git add and git commit them there (or git merge --abort), then run "tet-ctl worktree-merge ${branch}" again`
+          }
+        };
+      }
+      const markers = await own.conflictMarkers(base);
+      if (markers.length > 0) {
+        throw new ControlError(
+          "bad_args",
+          `conflict markers are left in ${markers.join(", ")} of ${branch}, ${base} is unchanged: remove them, commit, then run this again`
+        );
+      }
+      const forwarded = await main.merge(branch, base);
+      if (!forwarded.ok) {
+        throw new ControlError(
+          "bad_args",
+          `${forwarded.error ?? "the fast-forward failed"} — the merge is committed in ${branch}, ${base} is unchanged: commit or stash what is in the way in the repository if anything is, then run this again`
+        );
+      }
+      const deleted = await deps.deleteWorktree(ref, false);
+      if (!deleted.ok) {
+        const why =
+          deleted.needsConfirmation === "uncommitted"
+            ? `it has uncommitted changes since: look at them, then run "tet-ctl worktree-delete ${branch}" (--force if they can go)`
+            : `${deleted.error ?? "unknown error"}: run "tet-ctl worktree-delete ${branch}"`;
+        throw new ControlError("bad_args", `${branch} is merged into ${base}, but its worktree could not be deleted — ${why}`);
+      }
+      return { result: { status: "merged", base, branch } };
     },
 
     "env-request": async (args, caller, _at, gone) => {

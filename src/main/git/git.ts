@@ -957,8 +957,28 @@ export async function deleteRemoteBranch(
   return run(cwd, ["update-ref", "-d", `refs/remotes/${remote}/${name}`]);
 }
 
-export function merge(cwd: string, ref: string): Promise<GitActionResult> {
-  return run(cwd, ["merge", ref]);
+/** `fastForwardOnto`: only a fast-forward, and only while that branch is checked out here — read
+ *  now, not off the last refresh, so a switch since cannot take the merge onto another branch. */
+export async function merge(cwd: string, ref: string, fastForwardOnto?: string): Promise<GitActionResult> {
+  if (fastForwardOnto === undefined) {
+    return run(cwd, ["merge", ref]);
+  }
+  const head = (await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"])).stdout.trim();
+  if (head !== fastForwardOnto) {
+    return { ok: false, error: `${head || "a detached HEAD"} is checked out, not ${fastForwardOnto}` };
+  }
+  return run(cwd, ["merge", "--ff-only", ref]);
+}
+
+/** The files differing between `base` and HEAD that still hold a conflict marker line, text files
+ *  only. `=======` alone is left out: Markdown underlines a heading with it. */
+export async function conflictMarkers(cwd: string, base: string): Promise<string[]> {
+  const changed = (await git(cwd, ["diff", "--name-only", "-z", `${base}...HEAD`])).stdout.split("\0").filter(Boolean);
+  if (changed.length === 0) {
+    return [];
+  }
+  const found = await git(cwd, ["grep", "-I", "-l", "-z", "-E", "^(<<<<<<<|>>>>>>>) ", "--", ...changed]);
+  return found.stdout.split("\0").filter(Boolean);
 }
 
 export function rebase(cwd: string, ref: string): Promise<GitActionResult> {

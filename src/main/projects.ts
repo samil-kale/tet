@@ -23,6 +23,7 @@ import { logFailure, readRows, writeJson } from "./json-file";
 import { onDisk } from "./path-inside";
 import { newWorktreeKey, ownedWorktreeKeys, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./project-dirs";
 import { removeRefSandboxes } from "./sbx";
+import { releaseDropped } from "./sbx-mounts";
 import type { SbxLocalStore } from "./sbx-local";
 import type { SessionManagerRegistry } from "./terminals/session-manager";
 import { tetJsonProblem } from "./tet-json";
@@ -325,6 +326,9 @@ export async function deleteWorktree(
       // An open terminal holds the folder on Windows, and git would delete it half.
       await closeProjectRef(deps, ref);
       await removeRefSandboxes([ref]);
+      // Held by other sandboxes: a worktree handed to a merging tab (worktree-merge), or a path in
+      // it dropped into one.
+      await releaseDropped(worktree.path);
       // Asked again with its terminals gone: one may have written meanwhile, and git would refuse
       // without the question being put.
       result = (await uncommitted())

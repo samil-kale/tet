@@ -10,6 +10,7 @@ import {
   checkout,
   commitAll,
   commitPaths,
+  conflictMarkers,
   createBranch,
   createTag,
   deleteRemoteBranch,
@@ -421,6 +422,48 @@ describe("more paths than a command line holds", () => {
   it("discards them", async () => {
     assert.deepEqual(await discard(cwd, { restore: names, drop: [] }), { ok: true });
     assert.deepEqual(await changed(), []);
+  });
+});
+
+describe("a worktree's merge into its base", () => {
+  before(() => {
+    cwd = initRepository("tet-git-forward-", { "a.txt": "a\n" });
+    run("switch", "-q", "-c", "ahead");
+    write("ahead.txt", "ahead\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "ahead");
+    run("switch", "-q", "-c", "diverged", "main");
+    write("diverged.txt", "diverged\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "diverged");
+    run("switch", "-q", "main");
+    write("main.txt", "main\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "main");
+  });
+
+  it("fast-forwards only onto the branch named, and only while it is checked out", async () => {
+    assert.deepEqual(await merge(cwd, "ahead", "develop"), { ok: false, error: "main is checked out, not develop" });
+    const refused = await merge(cwd, "diverged", "main");
+    assert.equal(refused.ok, false, "a diverged branch is no fast-forward");
+    assert.equal((await readState(cwd)).operation, undefined, "and nothing is left mid-merge");
+    run("merge", "-q", "--no-edit", "diverged");
+    run("switch", "-q", "ahead");
+    run("merge", "-q", "--no-edit", "main");
+    run("switch", "-q", "main");
+    assert.deepEqual(await merge(cwd, "ahead", "main"), { ok: true });
+    assert.equal(run("rev-parse", "main"), run("rev-parse", "ahead"));
+  });
+
+  it("finds conflict markers left in what differs from the base, and a Markdown underline is none", async () => {
+    run("switch", "-q", "-c", "markers");
+    write("left.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n");
+    write("doc.md", "Title\n=======\n");
+    run("add", "--all");
+    run("commit", "-q", "--message", "markers");
+    assert.deepEqual(await conflictMarkers(cwd, "main"), ["left.txt"]);
+    run("switch", "-q", "main");
+    assert.deepEqual(await conflictMarkers(cwd, "main"), [], "nothing differs");
   });
 });
 

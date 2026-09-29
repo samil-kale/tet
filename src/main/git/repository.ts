@@ -556,8 +556,14 @@ export class Repository {
     );
   }
 
-  merge(ref: string): Promise<GitActionResult> {
-    return this.runAction(() => git.merge(this.at.path, ref));
+  /** `fastForwardOnto`: see git.ts's merge. */
+  merge(ref: string, fastForwardOnto?: string): Promise<GitActionResult> {
+    return this.runAction(() => git.merge(this.at.path, ref, fastForwardOnto));
+  }
+
+  /** A read beside the actions, never on the refresh path. */
+  conflictMarkers(base: string): Promise<string[]> {
+    return git.conflictMarkers(this.at.path, base);
   }
 
   /** Unless `confirmed`, refused with `rewrites-pushed` where it would rewrite commits the upstream

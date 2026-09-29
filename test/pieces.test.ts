@@ -29,7 +29,7 @@ import { ProjectStore } from "../src/main/projects";
 import { readSbxConfig, writeSbxConfig } from "../src/main/tet-json";
 import { parsePublishedPorts, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../src/main/sbx";
 import { parseSignedInUser, sbxVersionSupported } from "../src/main/sbx-cli";
-import { fixedMountSpecs, pathMountSpecs } from "../src/main/sbx-mounts";
+import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../src/main/sbx-mounts";
 import { saveSbxConfig } from "../src/main/sbx-save";
 import { contractHome, listSandboxes, readHostAllowed } from "../src/main/sbx-status";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../src/main/sbx-policy";
@@ -344,6 +344,8 @@ describe("saving an sbx config", () => {
     others?: { name: string; workspaces?: string[] }[];
     /** `inspect --json`'s `runtime_mounts`. */
     mounts?: object[];
+    /** `policy ls --type filesystem`'s rules; none by default, which lets nothing be mounted. */
+    filesystemRules?: object[];
     /** Calls that fail with nothing on stdout, by how their arguments start: sbx that cannot say. */
     fail?: string[];
   }): { dir: string; projectPath: string } {
@@ -374,7 +376,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   process.stdout.write(JSON.stringify({ allowed }));
   process.exit(allowed ? 0 : 1);
 } else if (args[0] === "policy") {
-  process.stdout.write(JSON.stringify({ rules: [] }));
+  process.stdout.write(JSON.stringify({ rules: args.includes("filesystem") ? (answers.filesystemRules ?? []) : [] }));
 } else if (args[0] === "inspect") {
   process.stdout.write(JSON.stringify({ name: args[1], runtime_mounts: answers.mounts ?? [] }));
 } else if (args[0] === "ports" && args[2] === "--json") {
@@ -525,6 +527,26 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     );
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
     assert.deepEqual([result.refused, result.config.paths], [{}, []]);
+  });
+
+  it("releases the dropped paths in or under a folder that goes, from every sandbox holding one", async () => {
+    const going = tempDir("tet-going-");
+    const inside = path.join(going, "sub");
+    fs.mkdirSync(inside);
+    const kept = tempDir("tet-kept-");
+    const { dir } = fakeSbx({ published: [], filesystemRules: [{ resource_type: "filesystem", decision: "allow", resources: ["**"] }] });
+    const rw = (host: string) => pathMountSpecs({ path: host, access: "rw" });
+    const { calls } = await withSbx(dir, async () => {
+      await mountDropped("tet-release-a", [], [inside, kept]);
+      await mountDropped("tet-release-b", [], [going]);
+      await releaseDropped(going);
+    });
+    assert.deepEqual(
+      calls.filter((call) => call.startsWith("umount")),
+      [`umount tet-release-a ${rw(inside).unmount}`, `umount tet-release-b ${rw(going).unmount}`]
+    );
+    assert.deepEqual(droppedMountSpecs("tet-release-a"), [rw(kept)], "the other path stays, for the next start's mountAll");
+    assert.deepEqual(droppedMountSpecs("tet-release-b"), []);
   });
 
   it("brings the sandbox's secrets in line, values through stdin, leaving one set by hand alone", async () => {

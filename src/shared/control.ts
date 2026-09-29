@@ -1,5 +1,5 @@
 import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
-import { COLOR_SCHEMES, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
+import { COLOR_SCHEMES, NOTIFICATION_IDS, PROMPT_IDS, TERMINAL_STATUSES } from "./types";
 
 /**
  * The control channel's wire contract, shared by `src/main/control/control-server.ts` and
@@ -156,6 +156,14 @@ const VERBS = [
   { verb: "settings-get", group: "TET itself", usage: "settings-get", summary: "All of TET's settings.", positionals: [], sandbox: "any" },
   { verb: "list-themes", group: "TET itself", usage: "list-themes", summary: "The color themes (id, label and kind).", positionals: [], sandbox: "any" },
   {
+    verb: "list-keybinding-presets",
+    group: "TET itself",
+    usage: "list-keybinding-presets",
+    summary: "The file editor's keybinding presets (id and label).",
+    positionals: [],
+    sandbox: "any"
+  },
+  {
     verb: "list-agents",
     group: "TET itself",
     usage: "list-agents",
@@ -185,6 +193,21 @@ const VERBS = [
       "Set the text of what TET asks of an agent: a background question, or a handoff's first prompt. No text puts TET's own back. Applies from the next use.",
     positionals: ["id", "text"]
   },
+  {
+    verb: "settings-set-keybindings",
+    group: "TET itself",
+    usage: "settings-set-keybindings <preset-id>",
+    summary: "Set the file editor's keybindings to a preset (see list-keybinding-presets). Applies to editor tabs opened afterwards.",
+    positionals: ["preset"]
+  },
+  {
+    verb: "settings-set-notification",
+    group: "TET itself",
+    usage: `settings-set-notification <${NOTIFICATION_IDS.join("|")}> <on|off>`,
+    summary:
+      "Switch an OS notification on or off: a finished turn, an agent waiting on the user, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
+    positionals: ["id", "value"]
+  },
   { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was not made by TET and cannot be opened.", positionals: [], sandbox: "ownRef" },
   { verb: "projects-add", group: "TET itself", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
   {
@@ -210,6 +233,15 @@ const VERBS = [
     usage: "worktree-delete <branch|key> [--project <id>] [--force]",
     summary:
       "Close the project's worktree of branch <branch> (or key) and delete it with the branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
+    positionals: ["branch"],
+    sandbox: "ownProject"
+  },
+  {
+    verb: "worktree-merge",
+    group: "TET itself",
+    usage: "worktree-merge <branch|key> [--project <id>]",
+    summary:
+      "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, and run it again. Only from the repository, since deleting a worktree closes its tabs.",
     positionals: ["branch"],
     sandbox: "ownProject"
   },

@@ -143,6 +143,8 @@ export interface NotificationSettings {
   idleReminder: boolean;
 }
 
+export const NOTIFICATION_IDS = ["finished", "needsYou", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
+
 export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 

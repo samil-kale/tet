@@ -1,6 +1,6 @@
 import { KeyCodeUtils } from "monaco-editor/base/common/keyCodes.js";
 import type { Monaco } from "./editor";
-import { KEYBINDING_PRESETS } from "./keybinding-presets";
+import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 
 /**
  * tet's own commands, layered under the chosen preset (`keybinding-presets.ts`). No chords, no
