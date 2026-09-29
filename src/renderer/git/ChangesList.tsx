@@ -12,7 +12,6 @@ import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextM
 import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
-import { SuggesterPicker } from "./SuggesterPicker";
 import { FilterField } from "../ui/FilterField";
 import { notify } from "../ui/Notices";
 
@@ -97,7 +96,7 @@ export async function askCommit(
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
-    value: { message: "", push: false, suggester: (await window.tet.settings.get()).commitSuggester },
+    value: { message: "", push: false },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
     render: ({ value, onChange, error, busy, field, hold }) => (
@@ -108,20 +107,12 @@ export async function askCommit(
           onChange={(message) => onChange((current) => ({ ...current, message }))}
           suggestion={{
             title: "Suggest a commit message",
-            run: () => window.tet.repository.suggestCommitMessage(ref, value.suggester, paths)
+            run: () => window.tet.repository.suggestCommitMessage(ref, paths)
           }}
           disabled={busy}
           ref={field}
           error={error}
           onSuggesting={hold}
-          picker={(pickerDisabled) => (
-            <SuggesterPicker
-              ref={ref}
-              value={value.suggester}
-              onChange={(suggester) => onChange((current) => ({ ...current, suggester }))}
-              disabled={pickerDisabled}
-            />
-          )}
         />
         {pushLabel && (
           <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />

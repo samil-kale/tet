@@ -109,8 +109,8 @@ function themeId(value: unknown, kind: ThemeKind): string {
   return typeof value === "string" && value ? value : DEFAULT_THEME_IDS[kind];
 }
 
-/** Anything but two strings is no pick; an agent or model no longer offered is the picker's to
- *  replace (`SuggesterPicker`). */
+/** Anything but two strings is no pick; an agent or model no longer offered is replaced where it
+ *  is used (`SuggesterPicker`, `repository:suggest-commit-message`). */
 function suggester(value: unknown): Suggester {
   if (isRecord(value) && typeof value.agentId === "string" && typeof value.model === "string") {
     return { agentId: value.agentId, model: value.model };

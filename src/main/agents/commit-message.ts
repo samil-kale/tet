@@ -24,7 +24,7 @@ export function commitMessageFrom(reply: string): string {
  *  time. */
 const suggestion = stoppable();
 
-/** The commit prompt's suggest button, asked of the agent and model picked beside it. `prompt`
+/** The commit prompt's suggest button, asked of the agent and model picked in the settings. `prompt`
  *  (`effectivePrompt`) and `context` (`readCommitContext`, read only once an agent can answer) are
  *  handed in: the git process and the settings are not this layer's. */
 export async function suggestCommitMessage(

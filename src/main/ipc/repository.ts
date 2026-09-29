@@ -3,7 +3,7 @@ import { handle, on } from "./channels";
 import { getAgent, listAskableAgents, listAskModels } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { failure } from "../../shared/errors";
-import type { AgentId, AskModelsResult, Suggester, SuggestionResult } from "../../shared/types/agents";
+import type { AgentId, AskModelsResult, SuggestionResult } from "../../shared/types/agents";
 import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "../../shared/types/files";
 import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
@@ -99,12 +99,17 @@ export function registerRepositoryIpc({
   });
   handle(
     "repository:suggest-commit-message",
-    async (_event, ref: ProjectRef, suggester: Suggester, paths?: string[]): Promise<SuggestionResult> => {
+    async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
       const repository = repositories.get(ref);
       if (!repository) {
         return {};
       }
       const cwd = repository.at.path;
+      // A pick not installed here gives way to the first agent that is, with its default model, as
+      // the settings' picker shows it.
+      const picked = settings.get().commitSuggester;
+      const askable = await listAskableAgents(cwd);
+      const suggester = askable.includes(picked.agentId) ? picked : { agentId: askable[0] ?? "", model: "" };
       const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
       // The commit's own paths, a rename's old one included.
       return suggestCommitMessage(suggester, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));

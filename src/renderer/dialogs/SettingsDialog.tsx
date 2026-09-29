@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { envRowRefusal } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
+import type { Suggester } from "../../shared/types/agents";
 import type { AppInfo } from "../../shared/types/app";
 import type { EnvEdit } from "../../shared/types/environment";
 import type { ExplorerSettings, ExplorerSortOrder } from "../../shared/types/files";
-import type { Project } from "../../shared/types/project";
+import type { Project, ProjectRef } from "../../shared/types/project";
 import type { AppSettings, ColorScheme, NotificationSettings, PromptId, SettingsEdits } from "../../shared/types/settings";
 import { confirm, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
@@ -20,9 +21,11 @@ import { useRunning } from "../ui/use-running";
 import { PLATFORM } from "../platform";
 import { atLeastOne, EditRow, firstMark, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
+import { SuggesterPicker } from "./SuggesterPicker";
 
 interface SettingsDialogProps {
-  /** Whose tet.json the Files tab's Explorer settings edit; null hides them. */
+  /** Whose tet.json the Files tab's Explorer settings edit, and where the Prompts tab lists who
+   *  suggests a commit message; null hides both. */
   activeProject: Project | null;
   onClose: () => void;
 }
@@ -258,6 +261,17 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } });
 
+  const suggesterRef = useMemo<ProjectRef | undefined>(
+    () => (activeProjectId ? { projectId: activeProjectId } : undefined),
+    [activeProjectId]
+  );
+  /** A pick not offered in the active project is shown replaced, not saved: another project may
+   *  offer it. */
+  const replaceSuggester = useCallback(
+    (suggester: Suggester): void => setSettings((current) => (current ? { ...current, commitSuggester: suggester } : current)),
+    []
+  );
+
   const editExplorerSetting = changing(<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void => {
     setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
   });
@@ -385,6 +399,21 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               </button>
             </div>
           </FieldGroup>
+          {/* Only for a prompt tet asks in the background; a handoff's goes to the tab taking over. */}
+          {promptId === "commitMessage" && (
+            <FieldGroup label="Suggested by">
+              {suggesterRef ? (
+                <SuggesterPicker
+                  ref={suggesterRef}
+                  value={settings.commitSuggester}
+                  onChange={(suggester) => edit({ commitSuggester: suggester })}
+                  onReplace={replaceSuggester}
+                />
+              ) : (
+                <p className="dialog-detail">Open a project to pick the agent</p>
+              )}
+            </FieldGroup>
+          )}
           {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
               asked for, so it applies on Save. */}
           <textarea

@@ -29,7 +29,7 @@ export interface AppSettings {
   lightTheme: string;
   /** An empty string means tet's own (`DEFAULT_PROMPTS`). */
   prompts: PromptSettings;
-  /** Who suggests a commit message, as last picked beside it; an agent of "" until picked. */
+  /** Who suggests a commit message, picked in the Prompts tab; an agent of "" until picked. */
   commitSuggester: Suggester;
 }
 

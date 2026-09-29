@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { errorMessage } from "../../shared/errors";
 import type { AgentId, AskModelsResult, Suggester } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import { Dropdown } from "../ui/Dropdown";
@@ -10,22 +9,24 @@ import { agentName, useAgents } from "../ui/use-agents";
 const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };
 
 interface SuggesterPickerProps {
+  /** Where the agents and models are listed (`suggestionAgents`). */
   ref: ProjectRef;
   value: Suggester;
+  /** What the user picks. */
   onChange: (suggester: Suggester) => void;
-  disabled?: boolean;
+  /** What stands in for a pick not offered at `ref`: shown, never saved. */
+  onReplace: (suggester: Suggester) => void;
 }
 
 /**
  * The installed agents that can suggest, and the models of the one picked. Without a pick — or with
- * one no longer offered — the first agent with its default model. What the user picks is saved at
- * once (`AppSettings.commitSuggester`), a replacement is not.
+ * one no longer offered — the first agent with its default model, as the commit prompt's suggestion
+ * takes it (`repository:suggest-commit-message`).
  */
-export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPickerProps) {
+export function SuggesterPicker({ ref, value, onChange, onReplace }: SuggesterPickerProps) {
   const agents = useAgents();
   const [agentIds, setAgentIds] = useState<AgentId[]>();
   const [listed, setListed] = useState<{ agentId: AgentId; result: AskModelsResult }>();
-  const [unsaved, setUnsaved] = useState<string>();
   const models = listed?.agentId === value.agentId ? listed.result : undefined;
 
   useEffect(() => {
@@ -42,9 +43,9 @@ export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPic
 
   useEffect(() => {
     if (agentIds?.[0] !== undefined && !agentIds.includes(value.agentId)) {
-      onChange({ agentId: agentIds[0], model: "" });
+      onReplace({ agentId: agentIds[0], model: "" });
     }
-  }, [agentIds, value.agentId, onChange]);
+  }, [agentIds, value.agentId, onReplace]);
 
   useEffect(() => {
     if (!agentIds?.includes(value.agentId)) {
@@ -63,18 +64,9 @@ export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPic
 
   useEffect(() => {
     if (models && value.model !== "" && !models.models.some((model) => model.id === value.model)) {
-      onChange({ ...value, model: "" });
+      onReplace({ ...value, model: "" });
     }
-  }, [models, value, onChange]);
-
-  const pick = (suggester: Suggester): void => {
-    setUnsaved(undefined);
-    onChange(suggester);
-    // The pick holds for this commit either way; only the next prompt misses it.
-    window.tet.settings
-      .patch({ commitSuggester: suggester })
-      .catch((error: unknown) => setUnsaved(`Could not save the pick: ${errorMessage(error)}`));
-  };
+  }, [models, value, onReplace]);
 
   const agentOptions = (agentIds ?? []).map((id) => ({ value: id, label: agentName(agents, id) }));
   // Until its list lands, a remembered model stands by its id.
@@ -94,17 +86,15 @@ export function SuggesterPicker({ ref, value, onChange, disabled }: SuggesterPic
           fit
           value={value.agentId}
           options={agentOptions}
-          disabled={disabled}
-          onChange={(agentId) => pick({ agentId, model: "" })}
+          onChange={(agentId) => onChange({ agentId, model: "" })}
         />
         <Dropdown
           value={value.model}
           options={modelOptions}
-          disabled={disabled}
-          onChange={(model) => pick({ ...value, model })}
+          onChange={(model) => onChange({ ...value, model })}
         />
       </div>
-      <DialogError message={models?.error ?? unsaved} />
+      <DialogError message={models?.error} />
     </>
   );
 }

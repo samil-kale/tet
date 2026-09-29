@@ -1,4 +1,4 @@
-import type { AgentId, AgentInfo, AskModelsResult, Requirements, Suggester, SuggestionResult } from "./types/agents";
+import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
@@ -188,8 +188,8 @@ export interface TETApi {
     suggestionAgents(ref: ProjectRef): Promise<AgentId[]>;
     /** The models `agentId` can suggest with here. */
     suggestionModels(ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult>;
-    /** `suggester` suggests one subject for all changes, or only `paths`. */
-    suggestCommitMessage(ref: ProjectRef, suggester: Suggester, paths?: string[]): Promise<SuggestionResult>;
+    /** The settings' `commitSuggester` suggests one subject for all changes, or only `paths`. */
+    suggestCommitMessage(ref: ProjectRef, paths?: string[]): Promise<SuggestionResult>;
     /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
     cancelCommitSuggestion(): void;
     /** Everything the changes list shows, untracked included. */
