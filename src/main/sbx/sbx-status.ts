@@ -47,13 +47,13 @@ export async function checkSbxReady(
   ref: ProjectRef
 ): Promise<{ notReady: string } | { sandboxes: SandboxList; organization?: string; rules?: FilesystemRule[] }> {
   // No PATH re-read on the spawn path: on macOS/Linux that is a login shell per call.
-  const { status, sandboxes } = await probeSbx(false);
+  const { status, sandboxes, policy } = await probeSbx(false);
   const notReady = sbxNotReady(status);
   // A listing exists whenever signed in (probeSbx); `!sandboxes` only narrows it.
   if (notReady !== undefined || !sandboxes) {
     return { notReady: notReady ?? "SBX is not signed in to Docker" };
   }
-  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref);
+  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref, policy?.rules);
   if (failure !== undefined) {
     return { notReady: `SBX failed: ${failure}` };
   }
@@ -83,11 +83,11 @@ export async function readSbxStatus(projectRefPath: string, ref: ProjectRef): Pr
 /** readSbxStatus, with what it read on the way. `refreshPath` only where an install may have
  *  happened since (the dialog's "Check again"): on macOS/Linux that is a login shell per call. */
 export async function readSbxReading(projectRefPath: string, ref: ProjectRef, refreshPath: boolean): Promise<SbxReading> {
-  const { status, sandboxes } = await probeSbx(refreshPath);
+  const { status, sandboxes, policy } = await probeSbx(refreshPath);
   if (!status.policyInitialized) {
     return { status, sandboxes };
   }
-  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref);
+  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref, policy?.rules);
   status.blockers = blockers;
   status.failure = failure;
   return { status, sandboxes, rules };
@@ -104,17 +104,18 @@ function folderRule(folder: string): string {
  * What sbx's policy must still allow for a sandboxed tab: the control channel
  * (isControlChannelAllowed), the repository or worktree as workspace, and tet's mounted folders —
  * each agent's sandbox folder rw (fixedMountSpecs). Checked as mounted, asked for as one rule over
- * projectsDir, which covers a worktree TET made as well, read and write. Rules come from one
- * `sbx policy ls`, evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
- * for — a tab starts without them. Both questions are asked at once; the rules are returned too,
- * for a spawn's readSbxProblems. Either unanswered is a `failure`, never a blocker: could-not-say
- * is no refusal, and the rules it would ask for may well be there.
+ * projectsDir, which covers a worktree TET made as well, read and write. `rules` are the probe's
+ * (probeSbx), evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
+ * for — a tab starts without them. The rules are returned too, for a spawn's readSbxProblems.
+ * Either unanswered is a `failure`, never a blocker: could-not-say is no refusal, and the rules it
+ * would ask for may well be there.
  */
 async function readSbxBlockers(
   projectRefPath: string,
-  ref: ProjectRef
+  ref: ProjectRef,
+  rules: FilesystemRule[] | undefined
 ): Promise<{ blockers: SbxBlocker[]; rules?: FilesystemRule[]; failure?: string }> {
-  const [channelAllowed, rules] = await Promise.all([isControlChannelAllowed(), readFilesystemRules()]);
+  const channelAllowed = await isControlChannelAllowed();
   if (channelAllowed === undefined || rules === undefined) {
     return { blockers: [], failure: "its policy could not be read" };
   }
@@ -150,11 +151,20 @@ function hostFlavor(): PathFlavor {
   return { platform: PLATFORM, home: os.homedir() };
 }
 
-/** sbx's filesystem rules, evaluated in tet (sbx-policy.ts): sbx has no `policy check` for them.
- *  Undefined when sbx cannot say. */
-export async function readFilesystemRules(): Promise<FilesystemRule[] | undefined> {
-  const listed = await runSbx(["policy", "ls", "--type", "filesystem", "--json"]);
-  return listed.ok ? parseFilesystemRules(listed.stdout) : undefined;
+/** What one `sbx policy ls --type filesystem --json` says: the filesystem rules, evaluated in tet
+ *  (sbx-policy.ts: sbx has no `policy check` for them), and the organization managing the policy. */
+export interface SbxPolicy {
+  rules: FilesystemRule[];
+  organization?: string;
+}
+
+function policyOf(listed: RunResult): SbxPolicy | undefined {
+  return listed.ok ? { rules: parseFilesystemRules(listed.stdout), organization: parseGovernance(listed.stdout) } : undefined;
+}
+
+/** Undefined when sbx cannot say. */
+export async function readPolicy(): Promise<SbxPolicy | undefined> {
+  return policyOf(await runSbx(["policy", "ls", "--type", "filesystem", "--json"]));
 }
 
 /** Whether the rules let a path of this machine be mounted with that access. */
@@ -190,20 +200,21 @@ export async function readHostAllowed(host: string): Promise<boolean> {
  * in without a policy. Only that text reads as signed out; any other error is reported as sbx's
  * own.
  *
- * A governed account's `sbx policy ls` opens with "Governance: Managed by <org>" (parseGovernance).
+ * A governed account's `sbx policy ls --json` names its organization (parseGovernance).
  * Governance words a blocker and hides the dialog's Allowed hosts; what is allowed is asked of the
  * policy (readSbxBlockers).
  */
-async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList }> {
+async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList; policy?: SbxPolicy }> {
   const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, blockers: [] };
   if (refreshPath) {
     await augmentAgentPath();
   }
-  const [version, list, policy] = await Promise.all([
+  const [version, list, listedPolicy] = await Promise.all([
     readSbxVersion(),
     runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),
-    runSbx(["policy", "ls"], { timeoutMs: SBX_PROBE_TIMEOUT_MS })
+    runSbx(["policy", "ls", "--type", "filesystem", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS })
   ]);
+  const policy = policyOf(listedPolicy);
   status.installed = version !== undefined;
   if (version === undefined) {
     return { status };
@@ -214,21 +225,17 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   }
   const sandboxes = parseSandboxes(list);
   if (!sandboxes) {
+    // Text, since `sbx ls` fails signed out with the same exit code as any other failure and no
+    // other cheap command says it. Worth checking on a newer sbx for a structured answer.
     if (!/not authenticated/i.test(list.stderr)) {
       status.failure = sbxFailure(list, "sbx ls");
     }
     return { status };
   }
   status.loggedIn = true;
-  status.policyInitialized = policy.ok;
-  status.organization = policy.ok ? parseGovernance(policy.stdout) : undefined;
-  return { status, sandboxes };
-}
-
-/** The organization managing sbx's policy, if one does (parseGovernance), from one `policy ls`. */
-export async function readGovernance(): Promise<string | undefined> {
-  const policy = await runSbx(["policy", "ls"]);
-  return policy.ok ? parseGovernance(policy.stdout) : undefined;
+  status.policyInitialized = policy !== undefined;
+  status.organization = policy?.organization;
+  return { status, sandboxes, policy };
 }
 
 /** A yes is kept for the run; a no, or no answer, is asked again next spawn, as the policy may

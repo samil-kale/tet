@@ -116,16 +116,20 @@ export const SBX_VERIFIED_VERSION = "0.45.1";
 export const SBX_PROBE_TIMEOUT_MS = 10_000;
 
 /**
- * `sbx version`'s answer as its bare version (`version` is a subcommand; `sbx --version` fails
- * with "unknown flag"); undefined when sbx is not installed or does not answer in time — the
- * startup's and probeSbx's sign of it — "" when it printed no version.
+ * `sbx version --json`'s client version, without its "v" (`version` is a subcommand; `sbx
+ * --version` fails with "unknown flag"); undefined when sbx is not installed or does not answer in
+ * time — the startup's and probeSbx's sign of it — "" when it named no version.
  */
 export async function readSbxVersion(): Promise<string | undefined> {
   if (isSimulatedMissing("sbx")) {
     return undefined;
   }
-  const result = await runSbx(["version"], { timeoutMs: SBX_PROBE_TIMEOUT_MS });
-  return result.ok ? (/\d+\.\d+\.\d+/.exec(result.stdout)?.[0] ?? "") : undefined;
+  const result = await runSbx(["version", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS });
+  if (!result.ok) {
+    return undefined;
+  }
+  const version = jsonOf<{ client?: { version?: unknown } }>(result)?.client?.version;
+  return typeof version === "string" ? version.replace(/^v/, "") : "";
 }
 
 /** Whether that version keeps a sandbox's live mounts across a stop and lists them in
@@ -166,7 +170,8 @@ export async function runSbxLogin(): Promise<boolean> {
 }
 
 /** The user `sbx login` names while signed in ("You are signed in [username: <name>]" on stdout,
- *  exit 0, no browser). */
+ *  exit 0, no browser). Text, since no sbx command names the user otherwise. Worth checking on a
+ *  newer sbx for a structured answer. */
 export function parseSignedInUser(stdout: string): string | undefined {
   return /\[username: ([^\]]+)\]/.exec(stdout)?.[1].trim() || undefined;
 }

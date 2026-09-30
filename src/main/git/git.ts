@@ -613,6 +613,8 @@ export async function readState(cwd: string, remoteNames: string[] = []): Promis
   }
 }
 
+const MAX_ERROR_CHARS = 600;
+
 /** One git command for the UI: a non-zero exit carries git's message, a failed start the error's. */
 async function run(cwd: string, args: string[], options?: GitOptions): Promise<GitActionResult> {
   try {
@@ -626,7 +628,8 @@ async function run(cwd: string, args: string[], options?: GitOptions): Promise<G
       .filter((line) => !line.startsWith("hint:"))
       .join("\n")
       .trim();
-    return { ok: false, error: message };
+    // git lists every file in the way; a long list must not fill the screen.
+    return { ok: false, error: message.length <= MAX_ERROR_CHARS ? message : `${message.slice(0, MAX_ERROR_CHARS).trimEnd()}...` };
   } catch (error) {
     return failure(error);
   }

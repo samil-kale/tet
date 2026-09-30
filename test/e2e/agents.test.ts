@@ -9,7 +9,7 @@ import { after, before, describe, it } from "node:test";
 import { SANDBOXED_AGENTS } from "../../src/main/agents";
 import type { AgentDefinition, AgentSessionInfo } from "../../src/main/agents/agent";
 import { askAgent } from "../../src/main/agents/ask";
-import { SBX_VERIFIED_VERSION } from "../../src/main/sbx/sbx-cli";
+import { readSbxVersion, SBX_VERIFIED_VERSION } from "../../src/main/sbx/sbx-cli";
 import { ensureRunning, pathMountSpecs } from "../../src/main/sbx/sbx-mounts";
 import { parseFilesystemRules } from "../../src/main/sbx/sbx-policy";
 import { toContainerPath } from "../../src/main/agents/hook-target";
@@ -356,10 +356,9 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     }
   });
 
-  it("is the version last verified, or says which it is", (t) => {
-    const result = sbx("version");
-    const installed = versionIn(result.stdout);
-    assert.ok(installed, `sbx installed and printing its version: ${result.stdout}${result.stderr}`);
+  it("is the version last verified, or says which it is", async (t) => {
+    const installed = await readSbxVersion();
+    assert.ok(installed, "sbx installed and naming its version in `sbx version --json`");
     if (installed !== SBX_VERIFIED_VERSION) {
       t.diagnostic(`sbx ${installed} is installed, ${SBX_VERIFIED_VERSION} was verified: record it once this run passes`);
     }

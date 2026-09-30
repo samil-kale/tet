@@ -9,7 +9,7 @@ import { logFailure } from "../util/json-file";
 import { inTurn } from "../util/async";
 import { readSbxProblems } from "./sbx";
 import { saveSbxConfig, type SbxSaveTarget } from "./sbx-save";
-import { listSandboxes, readGovernance, type SandboxList, type SbxReading } from "./sbx-status";
+import { listSandboxes, readPolicy, type SandboxList, type SbxReading } from "./sbx-status";
 import type { SbxLocalStore } from "./sbx-local";
 
 /** What the caller read of sbx already: its status's organization, and with tet-ctl's reading the
@@ -51,7 +51,7 @@ function checkProject(
 
 /** The organization managing sbx's policy: as the caller's status read it, else read now. */
 async function organizationOf(known: KnownOrganization | undefined): Promise<string | undefined> {
-  return known ? known.status.organization : readGovernance();
+  return known ? known.status.organization : (await readPolicy())?.organization;
 }
 
 /**

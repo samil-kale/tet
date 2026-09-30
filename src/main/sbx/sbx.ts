@@ -22,7 +22,7 @@ import type { SandboxedAgent } from "../agents/agent";
 import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
 import { runSbx, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
-import { listSandboxes, mountableBy, readFilesystemRules, readHostAllowed, sandboxControl, type SandboxList } from "./sbx-status";
+import { listSandboxes, mountableBy, readHostAllowed, readPolicy, sandboxControl, type SandboxList } from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
 import {
@@ -527,9 +527,9 @@ interface SbxCheck {
   values: { secrets: ReadonlySet<string>; variables: ReadonlySet<string> };
   /** Whose knowledge is mounted: every agent at Save, the starting one at its spawn. */
   agents: readonly SandboxedAgent[];
-  /** readGovernance's. */
+  /** readPolicy's. */
   organization: string | undefined;
-  /** readFilesystemRules', when the caller has them already. */
+  /** readPolicy's rules, when the caller has them already. */
   rules?: FilesystemRule[];
   /** Whether the ports are applied now: at Save, and at the spawn creating a sandbox. */
   ports: boolean;
@@ -571,7 +571,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   const reachable = async (host: string): Promise<boolean> =>
     (!organization && config.hosts.includes(host)) || (await allowed(host));
   const [rules, hostsAllowed, secretHostsAllowed, published, own] = await Promise.all([
-    config.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readFilesystemRules()) : Promise.resolve([]),
+    config.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readPolicy().then((policy) => policy?.rules)) : Promise.resolve([]),
     organization ? Promise.all(config.hosts.map(allowed)) : Promise.resolve(config.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
     check.published ?? (check.ports && config.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),

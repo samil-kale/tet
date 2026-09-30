@@ -788,18 +788,14 @@ describe("sbx's filesystem policy", () => {
   });
 });
 
-describe("sbx's governance line", () => {
+describe("sbx's governance", () => {
   it("names the organization of a governed account, nothing for an ungoverned one", () => {
-    // `sbx policy ls` on an organization-governed account.
-    const governed = [
-      "Governance: Managed by prehcmservice | Sync: OK, last synced 08:18:18 | Hidden: 34 inactive rules. Show with: sbx policy ls --include-inactive",
-      "",
-      "POLICY      SOURCE   APPLIES TO   SUMMARY",
-      "ALLOW ALL   org      all          filesystem write: 2 allow"
-    ].join("\r\n");
+    // `sbx policy ls --json` on an organization-governed account.
+    const governed = JSON.stringify({ rules: [], organization: "prehcmservice", last_synced_status: "ok", last_synced_message: "[OK] last synced 08:18:18" });
     assert.equal(parseGovernance(governed), "prehcmservice");
-    assert.equal(parseGovernance("Governance: managed by unknown organization (lookup failed)"), "unknown organization (lookup failed)");
-    assert.equal(parseGovernance("POLICY    SOURCE   APPLIES TO   SUMMARY\nbalanced  local    all          network: 40 allow"), undefined);
+    assert.equal(parseGovernance(JSON.stringify({ rules: [], organization_unavailable: true })), "unknown organization (lookup failed)");
+    assert.equal(parseGovernance(JSON.stringify({ rules: [] })), undefined);
+    assert.equal(parseGovernance("not json"), undefined);
   });
 });
 
