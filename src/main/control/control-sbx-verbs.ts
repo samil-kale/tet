@@ -228,10 +228,9 @@ export function sbxVerbs(
 
     "sbx-set-variables": (args, caller) => {
       // `NAME=value` types a value as the dialog's field does (an empty one keeps the stored one);
-      // the first `=` splits, so a value may hold more. Typing one here is no hole: an agent in the
-      // sandbox can already set any variable for its own processes, and the verb is refused from
-      // there (no `ControlVerb.sandbox`), so a host agent is all it serves. A secret's value stays
-      // the user's.
+      // the first `=` splits, so a value may hold more. Typing one here is no hole, from a sandbox
+      // either: an agent there can already set any variable for its own processes, and these reach
+      // only its project's sandboxes. A secret's value stays the user's.
       const entries = list(args, "variables").map((entry) => {
         const at = entry.indexOf("=");
         return at < 0 ? { env: entry.trim(), value: "" } : { env: entry.slice(0, at).trim(), value: entry.slice(at + 1) };

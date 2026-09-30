@@ -269,7 +269,8 @@ const VERBS = [
     usage: "sbx-get [--project <id>]",
     summary:
       "A project's SBX Settings: sbx's status, the configuration, which secrets and variables hold a value here (never the values), and the problems: what cannot be applied here, per option.",
-    positionals: []
+    positionals: [],
+    sandbox: "ownRef"
   },
   {
     verb: "sbx-accounts",
@@ -333,9 +334,10 @@ const VERBS = [
     group: "TET itself",
     usage: "sbx-set-variables [<NAME>[=<value>]...] [--project <id>]",
     summary:
-      "Replace the variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the one stored. For a token or password use sbx-set-secrets: the user types that value in TET's SBX Settings, never you.",
+      "Replace the variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the one stored. A token or password is a secret instead, whose value the user types in TET's SBX Settings, never you.",
     positionals: ["variables"],
-    variadic: true
+    variadic: true,
+    sandbox: "ownRef"
   },
   {
     verb: "sbx-set-knowledge",

@@ -409,8 +409,10 @@ and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all
   the worktree verbs and every tab verb reach its repository and every worktree (`ownProject`), a
   tab verb only a tab running in a sandbox (`CallerSide.reachesTab`) — a host tab is the machine's,
   and its output may print the host's control token — and a tab it opens runs in one too; what acts
-  on this machine (its settings, projects, environment, sbx values, a saved command, restarting
-  TET) is refused; the other verbs answer for the caller's own repository or worktree only.
+  on this machine (its settings, projects, environment, the sbx settings but `sbx-get` and the
+  variables, a saved command, restarting TET) is refused; the other verbs answer for the caller's
+  own repository or worktree only. **Refuse a sandbox only what it cannot do itself**: where it
+  already can and `tet-ctl` doing it changes nothing beyond that, the verb answers there.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
   `control.test.ts` case) — the user decides what an agent may change.

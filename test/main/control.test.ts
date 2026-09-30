@@ -967,12 +967,10 @@ describe("tet-ctl against the control server", () => {
       ["env-request", "GITLAB_TOKEN"],
       ["env-list"],
       ["env-remove", "GITLAB_TOKEN"],
-      ["sbx-get"],
       ["sbx-accounts"],
       ["sbx-sign-in", "work"],
       ["sbx-set-enabled", "off"],
-      ["sbx-set-hosts", "example.com"],
-      ["sbx-set-variables", "MODE=1"]
+      ["sbx-set-hosts", "example.com"]
     ];
     for (const args of refused) {
       assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
@@ -1105,7 +1103,7 @@ describe("tet-ctl against the control server", () => {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own project/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
-    for (const args of [["repo-state"], ["explorer-list"]]) {
+    for (const args of [["repo-state"], ["explorer-list"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own repository or worktree/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
