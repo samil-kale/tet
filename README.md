@@ -34,10 +34,14 @@ and control. TET gives you the real agent CLIs, with a few quality-of-life featu
 
 **TET never changes your agents' configuration**
 
+### No monetization
+
+TET is and will stay free and opensource. There will be no functionality behind paywalls, and no
+backtracking later on.
+
 ### Familiar, yet different
 
-Anyone who has worked with VS Code will feel at home right away. Rather than reinventing the
-wheel, I built on mature, proven concepts.
+Rather than reinventing the wheel, I built on mature, proven concepts.
 
 TET draws heavily from VS Code and GitHub Desktop, bringing ideas from these already excellent
 applications together in a tool designed around working with agents.
@@ -69,14 +73,24 @@ straight into an agent session.
 
 ---
 
+## Who is it for?
+
+For everyone who works on many projects at once and easily loses track.
+For everyone who still looks at the code before committing.
+For anyone who wants a polished tool that isn't just slopped together, but built piece by piece
+with a lot of love, and continuously bug-fixed and improved.
+Not for Hans. Hans can go to hell.
+
 ## What it does
 
 - **Claude Code**, **Codex CLI** and **Pi** run in terminal tabs. TET
   shows when a turn is working, waiting or finished out of sight.
 - A project's terminals can be split into up to four panes. Files and images can be dropped into
   an agent session. So you can burn through tokens even faster.
-- The git pane handles branches, fetch, pull, push, commit, discard and `.gitignore`. A changed
-  file opens in an editor tab as an inline diff you can edit.
+- The git pane handles branches, tags, stashes, merge, rebase, fetch, pull, push, commit, discard
+  and `.gitignore`. A changed file opens in an editor tab as an inline diff you can edit.
+- An Explorer and a search pane sit next to git. Saved commands in `tet.json` travel with the
+  repository, and there are several themes.
 - Desktop notifications and project marks point to sessions that need attention. Because let's be
   real: you're watching YouTube.
 - With the `tet-ctl` interface, your agent can control TET autonomously. So you can watch even more
@@ -90,12 +104,13 @@ straight into an agent session.
 
 Yes, yes... of course it supports worktrees. Why wouldn't it?
 Create a Git worktree from TET when you want an agent to work on a separate branch without
-disturbing your current files. The worktree opens as its own project, with its own agent and shell
-tabs, while remaining grouped under the main repository in the sidebar.
+disturbing your current files. The worktree gets its own row, git pane, and agent and shell tabs,
+while staying grouped under its repository in the sidebar.
 
 TET treats the worktree and its branch as one: create, rename and delete them together, then merge
-the branch back into the branch it started from. Worktrees live under `~/.tet/worktrees`, outside
-your repository, so parallel tasks stay separate without extra clones.
+the branch back into the branch it started from. Worktrees live under
+`~/.tet/projects/<id>/worktrees`, outside your repository, so parallel tasks stay separate without
+extra clones.
 
 ---
 
