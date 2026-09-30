@@ -11,7 +11,7 @@ import { inTurn, mapLimited } from "../util/async";
 import { assertInside, normalizeHostPath, openInside, relativeInside } from "../util/path-inside";
 import { toContainerPath } from "../agents/hook-target";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
-import { mountableBy, readFilesystemRules, readGovernance } from "./sbx-status";
+import { mountableBy, readPolicy } from "./sbx-status";
 import { logError } from "../util/error-log";
 
 /**
@@ -245,20 +245,17 @@ export async function mountDropped(name: string, seen: string[], hostPaths: stri
     return hosts.map(() => ({ seen: true }));
   }
   return inTurn(mountSetups, name, async (): Promise<DropMount[]> => {
-    const [binds, rules] = await Promise.all([readRuntimeBinds(name), readFilesystemRules()]);
-    // Only a refusal's words need to know whose policy it is.
-    let governance: Promise<string | undefined> | undefined;
+    const [binds, policy] = await Promise.all([readRuntimeBinds(name), readPolicy()]);
     const answers: DropMount[] = [];
     // One by one: sbx's own lock refuses mounts side by side.
     for (const host of hosts) {
       const mountedAt = (root: string): boolean => within(host, root);
       if (seen.some(mountedAt) || binds?.some((bind) => bind.target === toContainerPath(bind.host) && mountedAt(bind.host))) {
         answers.push({ seen: true });
-      } else if (binds === undefined || rules === undefined) {
+      } else if (binds === undefined || policy === undefined) {
         answers.push({ refused: "SBX could not say whether it may be mounted" });
-      } else if (!mountableBy(rules)(host, "rw")) {
-        governance ??= readGovernance();
-        answers.push({ refused: forbiddenBy(await governance) });
+      } else if (!mountableBy(policy.rules)(host, "rw")) {
+        answers.push({ refused: forbiddenBy(policy.organization) });
       } else {
         const result = await runSbx(["mount", name, pathMountSpecs({ path: host, access: "rw" }).mount]);
         if (result.ok) {

@@ -209,6 +209,13 @@ others.
 - A file another process reads (hook settings, launchers) is written beside the
   target and renamed into place.
 
+## Read structure, never messages
+
+What a CLI tells tet is read from its exit code or its `--json` (`sbx policy ls --json`'s
+`organization`), never from the words of an error or of human-facing output: those change with
+the version and the locale. Text is matched only where the tool offers nothing else (git has no
+error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
+
 ## Git
 
 - Git is never reimplemented and never run from the renderer. `src/main/git/git.ts` wraps the CLI

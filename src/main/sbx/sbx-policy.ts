@@ -17,12 +17,23 @@ import { isRecord } from "../util/json-file";
 type FilesystemAction = "read" | "write";
 
 /**
- * The organization in `sbx policy ls`'s first line on a governed account ("Governance: Managed by
- * <org> | …"). An ungoverned account has no such line. sbx words a failed lookup "managed by
- * unknown organization (lookup failed)", which is shown as it stands.
+ * The organization of `sbx policy ls --json` on a governed account (`organization`;
+ * `organization_unavailable` when sbx could not look it up). An ungoverned account has neither.
  */
-export function parseGovernance(policyList: string): string | undefined {
-  return /^Governance:\s*Managed by\s+([^|\r\n]+?)\s*(?:\||$)/im.exec(policyList)?.[1];
+export function parseGovernance(json: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = parseSbxJson(json);
+  } catch {
+    return undefined;
+  }
+  if (!isRecord(parsed)) {
+    return undefined;
+  }
+  if (typeof parsed.organization === "string" && parsed.organization) {
+    return parsed.organization;
+  }
+  return parsed.organization_unavailable === true ? "unknown organization (lookup failed)" : undefined;
 }
 
 /** The first of sbx's setup steps still missing, as the user is told it (a tab's notice, tet-ctl's
@@ -30,7 +41,7 @@ export function parseGovernance(policyList: string): string | undefined {
  *  once sbx is installed, signed in and has a network policy. */
 export function sbxNotReady(status: SbxStatus): string | undefined {
   if (!status.installed) {
-    return "SBX is not installed (or no longer on PATH)";
+    return "SBX is not installed, too old or no longer on PATH";
   }
   if (status.failure) {
     return `SBX failed: ${status.failure}`;
@@ -82,7 +93,7 @@ export function parseSbxJson(stdout: string): unknown {
  * The active rules of `sbx policy ls --type filesystem --json` (`rules[]`: `resource_type`
  * "filesystem:read" | "filesystem:write" | "filesystem", `decision`, `resources`, `status`
  * "inactive" for a local rule an organization overrides). Unreadable is no rules — all denied.
- * Deliberately not "sbx cannot say" (a failed run is that, readFilesystemRules): sbx's format is
+ * Deliberately not "sbx cannot say" (a failed run is that, readPolicy): sbx's format is
  * trusted, and held by the recorded answer in test/main/sbx.test.ts and the live one in
  * test/e2e/agents.test.ts.
  */

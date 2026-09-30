@@ -316,7 +316,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     >
       {phase.kind === "checking" && <p className="dialog-detail">Checking SBX…</p>}
       {phase.kind === "not-installed" && (
-        <p className="dialog-detail">Docker Sandboxes (SBX) is not installed. Install it, then check again.</p>
+        <p className="dialog-detail">Docker Sandboxes (SBX) is not installed or too old. Install or update it, then check again.</p>
       )}
       {phase.kind === "initializing-policy" && <p className="dialog-detail">Setting up SBX's network policy…</p>}
       {/* In place of the settings that could not be loaded (DialogError). */}
