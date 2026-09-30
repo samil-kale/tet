@@ -4,7 +4,7 @@ import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { TerminalDescriptor } from "../shared/types/terminals";
 import { forget } from "./identity";
-import { clearTerminal } from "./tabs/terminal-views";
+import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
 import { useLatest } from "./ui/use-latest";
 
 /**
@@ -42,6 +42,8 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
       // it off screen (main flushes the old output before the status, the new one's has not come).
         if (status === "running" && tabsRef.current[key]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
           clearTerminal(ref, tabId);
+        } else if (status === "running") {
+          resetMouseModes(ref, tabId);
         }
         setTabs((current) => {
           const list = current[key];

@@ -508,6 +508,12 @@ export function clearTerminal(ref: ProjectRef, tabId: string): void {
   views.get(viewKey(ref, tabId))?.term.write("\x1bc");
 }
 
+/** Turns off the mouse reporting modes (and focus reporting) a killed process left on, so its
+ *  successor does not get mouse moves typed at it before it asks for them itself. */
+export function resetMouseModes(ref: ProjectRef, tabId: string): void {
+  views.get(viewKey(ref, tabId))?.term.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l");
+}
+
 /** Wipes scrollback and screen but the cursor line, for the user's Clear: the shell's prompt stays,
  *  as it would not redraw a wiped one. */
 export function clearTerminalOutput(ref: ProjectRef, tabId: string): void {
