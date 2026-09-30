@@ -36,9 +36,9 @@ const HOST_PLATFORM = [
   "CallExpression[callee.property.name='platform']",
   "MemberExpression[property.name='platform'][object.property.name='process']"
 ].map((selector) => ({ selector, message: PROCESS_PLATFORM.message }));
-/** Every spawn goes through resolveCommand; a shell joins the arguments unescaped. */
+/** Every spawn goes through resolveCommand; a shell joins the arguments unescaped. An object is a namespace, never the option. */
 const SHELL_OPTION = {
-  selector: "Property:matches([key.name='shell'], [key.value='shell']):not([value.value=false])",
+  selector: "Property:matches([key.name='shell'], [key.value='shell']):not([value.value=false]):not([value.type='ObjectExpression'])",
   message: "Never a `shell` option: spawn through resolveCommand (util/process.ts)."
 };
 /** net.fetch throws on a redirect it is told not to follow; net.request reads one. */

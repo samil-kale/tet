@@ -91,6 +91,7 @@ const CALLS: Probe[] = [
   ["src/main/window.ts", 'import type { BrowserWindow } from "electron";\ndeclare const w: BrowserWindow;\nw.webContents.send("x");', null],
   // Every spawn through resolveCommand.
   ["src/main/x/x.ts", 'import { spawn } from "node:child_process";\nspawn("a", [], { shell: true });', "no-restricted-syntax"],
+  ["src/preload/x.ts", 'export const api = { shell: { open: () => 1 } };', null],
   // The platform asked in two places only.
   ["src/main/util/x.ts", "export const p = process.platform;", "no-restricted-properties"],
   ["src/main/util/host-platform.ts", "export const p = process.platform;", null],
