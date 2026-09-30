@@ -25,7 +25,18 @@ interface TerminalView {
   sent?: { cols: number; rows: number };
   /** Set while it holds a WebGL context; otherwise xterm draws through the DOM. */
   webgl?: WebglAddon;
+  /** A focus-out report held back while the focus stayed in the window (`FOCUS_OUT`). */
+  focusOutHeld?: boolean;
 }
+
+/**
+ * The focus reports (DECSET 1004) xterm sends. Claude Code drops a click that comes while it thinks
+ * it is unfocused, so a click into a terminal that lost the focus to the sidebar or another pane
+ * would only focus it. So a terminal is told of losing the focus only once the window loses it;
+ * focus moving within the window is not reported.
+ */
+const FOCUS_IN = "\x1b[I";
+const FOCUS_OUT = "\x1b[O";
 
 /**
  * xterm instances live outside React, written to directly. Tab ids are unique only within their
@@ -57,6 +68,16 @@ window.tet.terminals.onOutput((batch) => {
       continue;
     }
     view.term.write(data);
+  }
+});
+
+// Leaving the window is the focus loss a terminal is told of (`FOCUS_OUT`).
+window.addEventListener("blur", () => {
+  for (const view of views.values()) {
+    if (view.focusOutHeld) {
+      view.focusOutHeld = false;
+      window.tet.terminals.input(view.ref, view.tabId, FOCUS_OUT);
+    }
   }
 });
 
@@ -283,7 +304,17 @@ function createView(ref: ProjectRef, tabId: string): TerminalView {
   term.registerLinkProvider(createUrlLinkProvider(term, openUrl));
   term.registerLinkProvider(createFileLinkProvider(term, (filePath) => openFile(ref, filePath)));
 
-  term.onData((data) => window.tet.terminals.input(ref, tabId, data));
+  term.onData((data) => {
+    if (data === FOCUS_OUT && document.hasFocus()) {
+      view.focusOutHeld = true;
+      return;
+    }
+    if (data === FOCUS_IN && view.focusOutHeld) {
+      view.focusOutHeld = false;
+      return;
+    }
+    window.tet.terminals.input(ref, tabId, data);
+  });
 
   // Runs before xterm encodes the key. Takes nothing an agent could receive (see `shortcuts.ts`):
   // the three below are handled *for* the terminal, not taken from it.
