@@ -366,13 +366,13 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
                   </div>
                 )}
                 <div className="sbx-knowledge-cell sbx-knowledge-agents">
-                  {sources.map((source) => {
+                  {access !== false && sources.map((source) => {
                     const entries = knowledgeEntries(source, kind, state.knowledge);
                     const what = entries.map((entry) => `${entry.host} → ${entry.target}`).join(", ");
                     return (
                       <span
                         key={source.agentId}
-                        className={access !== false && entries.length > 0 ? "sbx-knowledge-agent" : "sbx-knowledge-agent dimmed"}
+                        className={entries.length > 0 ? "sbx-knowledge-agent" : "sbx-knowledge-agent dimmed"}
                         title={`${source.displayName}: ${what || "nothing on this machine"}`}
                       >
                         <AgentIcon agentId={source.agentId} />
