@@ -28,7 +28,7 @@ import { openInside, removeInside } from "../../util/path-inside";
  * - later lines are entries with an 8-hex `id`, a `parentId` (a tree: pi branches in place) and an
  *   ISO `timestamp`; `message` entries carry `message.role` and, for the assistant, `stopReason`
  *   (`"aborted"` for an Escape-abort)
- * - the file appears with the first assistant message; harmless, since turns are reported per tab
+ * - the file appears with the first user message; harmless, since turns are reported per tab
  * - the display name is the LAST `session_info` in file order, whatever its tree position, a blank
  *   one clearing it; without one pi shows the first user message
  */
