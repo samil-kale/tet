@@ -5,6 +5,7 @@ import * as http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { before, describe, it } from "node:test";
+import { strToU8, zipSync } from "fflate";
 import {
   abortOperation,
   checkout,
@@ -140,6 +141,15 @@ describe("a repository, from init on", () => {
       binary: true,
       missing: false
     });
+  });
+
+  it("reads an ODF document as the text of its paragraphs", async () => {
+    const xml =
+      '<office:document-content><office:body><office:text><text:h>Title</text:h>' +
+      '<text:p>a &amp; b<text:tab/>c</text:p></office:text></office:body></office:document-content>';
+    fs.writeFileSync(path.join(cwd, "doc.odt"), zipSync({ "content.xml": strToU8(xml) }));
+    assert.deepEqual(await commitAll(cwd, "a document"), { ok: true });
+    assert.deepEqual(await head("doc.odt"), { content: "Title\na & b\tc\n", binary: false, missing: false });
   });
 
   it("calls a blob with a NUL byte binary, and reads an image as a data url", async () => {

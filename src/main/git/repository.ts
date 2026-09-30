@@ -29,6 +29,7 @@ import { readLinkedGitDir } from "../util/linked-git-dir";
 import { watchedDirectoryGone } from "../util/watch-dir";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
+import { odfText } from "./odf-text";
 import { logError } from "../util/error-log";
 
 /** Filesystem events arrive in bursts (a build, a checkout, an agent editing files). */
@@ -760,14 +761,16 @@ export class Repository {
         return { ...base, mtimeMs: stat.mtimeMs, tooLarge: true };
       }
       const buffer = await fs.promises.readFile(absolute);
-      const binary = buffer.includes(0);
+      const extracted = odfText(filePath, buffer, MAX_EDIT_BYTES);
+      const binary = extracted === undefined && buffer.includes(0);
       const image = isImage(filePath) ? toDataUrl(filePath, buffer) : undefined;
       return {
         ...base,
         mtimeMs: stat.mtimeMs,
         binary,
         image,
-        content: binary ? "" : buffer.toString("utf8"),
+        extracted: extracted !== undefined || undefined,
+        content: extracted ?? (binary ? "" : buffer.toString("utf8")),
         // A non-image binary has nothing to compare; don't spend a git process on it.
         head: binary && !image ? undefined : await this.headBlob(filePath, change)
       };

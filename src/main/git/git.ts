@@ -7,6 +7,7 @@ import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
 import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types/git";
 import { isImage, toDataUrl } from "./image-type";
+import { odfText } from "./odf-text";
 import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
 import type { HeadBlob } from "../../shared/types/files";
 import type { BranchUpstream, ChangeStatus, CheckoutTarget, FileChange, GitActionResult, GitLogin, GitOperation, RemoteInfo, RepositoryState, StashCommand, StashEntry, WorktreeInfo } from "../../shared/types/git";
@@ -1349,6 +1350,10 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
   const blob = read.stdout;
   if (isImage(at)) {
     return { content: "", binary: true, missing: false, image: toDataUrl(at, blob) };
+  }
+  const odf = odfText(at, blob, options.maxBytes);
+  if (odf !== undefined) {
+    return { content: odf, binary: false, missing: false };
   }
   if (blob.includes(0)) {
     return { content: "", binary: true, missing: false };

@@ -165,7 +165,7 @@ export function editorKind(file: FileContent | null): EditorKind {
 
 /** Nothing to save: a file that is gone, or one there is no editor for. */
 export function isReadOnly(file: FileContent | null): boolean {
-  return Boolean(file?.deleted || file?.binary || file?.tooLarge || file?.error);
+  return Boolean(file?.deleted || file?.binary || file?.extracted || file?.tooLarge || file?.error);
 }
 
 function subscribe(map: Map<string, Set<() => void>>, key: string, listener: () => void): () => void {

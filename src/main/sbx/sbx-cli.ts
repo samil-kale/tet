@@ -8,6 +8,7 @@ import { isSimulatedMissing } from "../util/simulate";
 import { runProcess, stoppable } from "../util/process";
 import { PLATFORM } from "../util/host-platform";
 import { logError } from "../util/error-log";
+import { parseSbxJson } from "./sbx-policy";
 
 /**
  * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
@@ -90,7 +91,7 @@ export function jsonOf<T>(result: RunResult): T | undefined {
     return undefined;
   }
   try {
-    return JSON.parse(result.stdout) as T;
+    return parseSbxJson(result.stdout) as T;
   } catch {
     return undefined;
   }

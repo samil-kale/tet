@@ -61,6 +61,24 @@ export interface FilesystemRule {
 }
 
 /**
+ * A `--json` stdout parsed, throwing when it holds none: sbx appends notices (an update banner) to
+ * stdout after the JSON, so what is read is the value from the first `{` or `[` to the last
+ * closing one.
+ */
+export function parseSbxJson(stdout: string): unknown {
+  try {
+    return JSON.parse(stdout);
+  } catch (error) {
+    const start = stdout.search(/[{[]/);
+    const end = Math.max(stdout.lastIndexOf("}"), stdout.lastIndexOf("]"));
+    if (start === -1 || end < start) {
+      throw error;
+    }
+    return JSON.parse(stdout.slice(start, end + 1));
+  }
+}
+
+/**
  * The active rules of `sbx policy ls --type filesystem --json` (`rules[]`: `resource_type`
  * "filesystem:read" | "filesystem:write" | "filesystem", `decision`, `resources`, `status`
  * "inactive" for a local rule an organization overrides). Unreadable is no rules — all denied.
@@ -71,7 +89,7 @@ export interface FilesystemRule {
 export function parseFilesystemRules(json: string): FilesystemRule[] {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(json);
+    parsed = parseSbxJson(json);
   } catch {
     return [];
   }

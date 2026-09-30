@@ -21,6 +21,8 @@ export interface FileContent {
   tooLarge: boolean;
   /** An image as a data URL, instead of `content`. */
   image?: string;
+  /** `content` is the text taken out of a document (ODF), not the file itself; the editor is read-only. */
+  extracted?: boolean;
   /** Absent for an unchanged file: the diff editor mirrors its own content, nothing marked. */
   head?: HeadBlob;
   /** Missing from the working tree; the editor is read-only. */
