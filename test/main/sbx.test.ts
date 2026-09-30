@@ -740,6 +740,12 @@ describe("sbx's filesystem policy", () => {
     assert.deepEqual(parseFilesystemRules("Not authenticated"), []);
   });
 
+  it("reads the JSON before a notice sbx appends to stdout", () => {
+    const banner = "\n╭──╮\n│ Docker Sandboxes Update Available │\n│ v0.45.1  →  v0.46.0 │\n╰──╯\n";
+    assert.equal(parseFilesystemRules(governed + banner).length, 2);
+    assert.deepEqual(parsePublishedPorts(`[{"host_port":1,"sandbox_port":2}]${banner}`), [{ host: "1", container: "2" }]);
+  });
+
   it("lets an organization granting write alone mount read-write and read-only", () => {
     const measured = parseFilesystemRules(governed);
     assert.ok(isMountAllowed(measured, "C:\\Users\\saka\\.tet\\projects\\p\\repository\\sandbox\\claude", "rw", win32));

@@ -5,7 +5,7 @@ import type { SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { normalizeHostPath, relativeInside } from "../util/path-inside";
-import { isMountAllowed, parseFilesystemRules, parseGovernance, sbxBlocked, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
+import { isMountAllowed, parseFilesystemRules, parseGovernance, parseSbxJson, sbxBlocked, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
 import { projectsDir, sandboxDir } from "../store/project-dirs";
 import { augmentAgentPath } from "../agents/agent-path";
 import { PLATFORM } from "../util/host-platform";
@@ -243,7 +243,7 @@ let controlAllowed: Promise<boolean | undefined> | undefined;
 async function isNetworkAllowed(target: string): Promise<boolean | undefined> {
   const checked = await runSbx(["policy", "check", "network", "--json", target]);
   try {
-    const { allowed } = JSON.parse(checked.stdout) as { allowed?: unknown };
+    const { allowed } = parseSbxJson(checked.stdout) as { allowed?: unknown };
     return typeof allowed === "boolean" ? allowed : undefined;
   } catch {
     return undefined;

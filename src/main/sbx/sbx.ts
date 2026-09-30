@@ -19,7 +19,7 @@ import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/async";
 import type { SandboxedAgent } from "../agents/agent";
-import type { FilesystemRule } from "./sbx-policy";
+import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
 import { runSbx, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
 import { listSandboxes, mountableBy, readFilesystemRules, readHostAllowed, sandboxControl, type SandboxList } from "./sbx-status";
@@ -213,7 +213,7 @@ export async function readSandboxPorts(name: string): Promise<SbxPort[] | undefi
  *  the sandbox has only answers "already published". */
 export function parsePublishedPorts(stdout: string): SbxPort[] {
   try {
-    const listed = JSON.parse(stdout) as { host_port?: number; sandbox_port?: number }[];
+    const listed = parseSbxJson(stdout) as { host_port?: number; sandbox_port?: number }[];
     return listed
       .filter((entry) => typeof entry?.host_port === "number" && typeof entry.sandbox_port === "number")
       .map((entry) => ({ host: String(entry.host_port), container: String(entry.sandbox_port) }));
