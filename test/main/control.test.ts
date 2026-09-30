@@ -971,7 +971,8 @@ describe("tet-ctl against the control server", () => {
       ["sbx-accounts"],
       ["sbx-sign-in", "work"],
       ["sbx-set-enabled", "off"],
-      ["sbx-set-hosts", "example.com"]
+      ["sbx-set-hosts", "example.com"],
+      ["sbx-set-variables", "MODE=1"]
     ];
     for (const args of refused) {
       assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
@@ -1022,6 +1023,14 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(sbxConfig.ports, [{ host: "8080", container: "80" }]);
     assert.equal((await tetCtl(["sbx-set-variables", "DB_URL"])).status, EXIT_CODES.ok);
     assert.deepEqual(sbxConfig.variables, [{ env: "DB_URL" }]);
+    assert.deepEqual(calls.sbxSaved.at(-1)?.[2].variables, { values: {}, from: { DB_URL: "DB_URL" } }, "a bare name types no value");
+    assert.equal((await tetCtl(["sbx-set-variables", "DB_URL=a=b", "MODE="])).status, EXIT_CODES.ok);
+    assert.deepEqual(sbxConfig.variables, [{ env: "DB_URL" }, { env: "MODE" }]);
+    assert.deepEqual(
+      calls.sbxSaved.at(-1)?.[2].variables,
+      { values: { DB_URL: "a=b" }, from: { DB_URL: "DB_URL", MODE: "MODE" } },
+      "NAME=value types a value, split at the first =, an empty one none"
+    );
     assert.equal((await tetCtl(["sbx-set-knowledge", "skills", "ro"])).status, EXIT_CODES.ok);
     assert.equal((await tetCtl(["sbx-set-skills-folder", folder])).status, EXIT_CODES.ok);
     assert.deepEqual(sbxKnowledge, { ...EMPTY_SBX_KNOWLEDGE, skills: "ro", skillsFolder: folder });

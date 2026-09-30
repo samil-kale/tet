@@ -331,8 +331,9 @@ const VERBS = [
   {
     verb: "sbx-set-variables",
     group: "TET itself",
-    usage: "sbx-set-variables [<NAME>...] [--project <id>]",
-    summary: "Replace the variables set in the sandboxes with their real value. The user types the values in TET's SBX Settings, never you.",
+    usage: "sbx-set-variables [<NAME>[=<value>]...] [--project <id>]",
+    summary:
+      "Replace the variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the one stored. For a token or password use sbx-set-secrets: the user types that value in TET's SBX Settings, never you.",
     positionals: ["variables"],
     variadic: true
   },

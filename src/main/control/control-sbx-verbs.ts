@@ -58,6 +58,7 @@ export function sbxVerbs(
     edit: (loaded: { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig }) => {
       config?: SbxProjectConfig;
       knowledge?: SbxKnowledgeConfig;
+      variableValues?: Record<string, string>;
     },
     switching = false
   ): Promise<Answer> => {
@@ -80,7 +81,11 @@ export function sbxVerbs(
     const saved = await deps.sbx.save(
       found,
       request,
-      { secrets: keptValues(request.secrets), variables: keptValues(request.variables), knowledge: nextKnowledge },
+      {
+        secrets: keptValues(request.secrets),
+        variables: { ...keptValues(request.variables), values: next.variableValues ?? {} },
+        knowledge: nextKnowledge
+      },
       reading
     );
     if (!saved.ok) {
@@ -222,10 +227,20 @@ export function sbxVerbs(
     },
 
     "sbx-set-variables": (args, caller) => {
-      const variables = list(args, "variables").map((name) => ({ env: name.trim() }));
+      // `NAME=value` types a value as the dialog's field does (an empty one keeps the stored one);
+      // the first `=` splits, so a value may hold more. Typing one here is no hole: an agent in the
+      // sandbox can already set any variable for its own processes, and the verb is refused from
+      // there (no `ControlVerb.sandbox`), so a host agent is all it serves. A secret's value stays
+      // the user's.
+      const entries = list(args, "variables").map((entry) => {
+        const at = entry.indexOf("=");
+        return at < 0 ? { env: entry.trim(), value: "" } : { env: entry.slice(0, at).trim(), value: entry.slice(at + 1) };
+      });
+      const variables = entries.map(({ env }) => ({ env }));
+      const variableValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
       return editSbx(args, caller, ({ config }) => {
         refuseVariables(variables, config.secrets);
-        return { config: { ...config, variables } };
+        return { config: { ...config, variables }, variableValues };
       });
     },
 
