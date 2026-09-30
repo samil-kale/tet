@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.14.4 (2026-09-30)
+
+- **ODT diffs.** An `.odt` file shows its extracted text in the diff editor.
+- **Fixes.** sbx's status and version are read even when it appends a notice to its output; a pi
+  session appears with its first user message; terminals report focus loss only when the window
+  loses focus.
+
 ## 0.14.3 (2026-09-30)
 
 - **Pick who suggests commit messages.** The agent and model that suggest a commit message are
