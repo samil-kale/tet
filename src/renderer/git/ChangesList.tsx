@@ -8,7 +8,7 @@ import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";
 import { baseName, extensionOf, parentOf } from "../paths";
 import { openEntries, pathEntries } from "../editor/file-menu";
 import { FileMarkIcon } from "../ui/file-mark";
-import { buildTree, compactTree, compareGrouped, compareNames, filesUnder, sortTree, visibleRows, type TreeNode } from "../ui/tree";
+import { buildTree, compactTree, compareGrouped, compareNames, filesByNode, foldersIn, sortTree, visibleRows, type TreeNode } from "../ui/tree";
 import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, Twistie, type CheckState } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
@@ -223,39 +223,28 @@ export const ChangesList = memo(function ChangesList({
     () => visibleRows([root], (node) => filtering || (expanded[node.id] ?? true)),
     [root, expanded, filtering]
   );
-  /** The folders under the root, as their rows are keyed. */
-  const folders = useMemo(() => {
-    const ids: string[] = [];
-    const collect = (node: TreeNode): void => {
-      for (const child of node.children ?? []) {
-        if (child.children) {
-          ids.push(child.id);
-          collect(child);
-        }
-      }
-    };
-    collect(root);
-    return ids;
-  }, [root]);
+  /** What each row's checkbox stands for, read once per tree rather than per row and render. */
+  const filesOf = useMemo(() => filesByNode([root]), [root]);
+  const shownFiles = filesOf.get(ROOT_ID)!;
 
-  const shownChecked = useMemo(() => filesUnder(root).filter((path) => checked.has(path)), [root, checked]);
+  const shownChecked = useMemo(() => shownFiles.filter((path) => checked.has(path)), [shownFiles, checked]);
   useEffect(() => onChecked(shownChecked), [shownChecked, onChecked]);
 
   useImperativeHandle(ref, () => ({
     // Folders start open, so nothing folded is everything open.
     expandAll: () => setExpanded({}),
     // The root stays open: what is folded is every folder under it.
-    collapseAll: () => setExpanded(Object.fromEntries(folders.map((id) => [id, false])))
+    collapseAll: () => setExpanded(Object.fromEntries(foldersIn(root.children!).map((id) => [id, false])))
   }));
 
   const checkState = (node: TreeNode): CheckState => {
-    const files = filesUnder(node);
+    const files = filesOf.get(node.id)!;
     const count = files.filter((path) => checked.has(path)).length;
     return count === 0 ? false : count === files.length ? true : "mixed";
   };
   /** A file flips; a folder all checked is unchecked, any other is checked whole (IntelliJ). */
   const toggleChecked = (node: TreeNode): void => {
-    const files = filesUnder(node);
+    const files = filesOf.get(node.id)!;
     setChecked((current) => {
       const next = new Set(current);
       const all = files.every((path) => current.has(path));
@@ -333,7 +322,7 @@ export const ChangesList = memo(function ChangesList({
                 }
                 label={node.name}
               >
-                {node.id === ROOT_ID && <span className="tree-dir">{fileCount(filesUnder(node).length)}</span>}
+                {node.id === ROOT_ID && <span className="tree-dir">{fileCount(shownFiles.length)}</span>}
                 {change && !asTree && parentOf(change.path) && <span className="tree-dir">{parentOf(change.path)}</span>}
               </TreeRow>
             );

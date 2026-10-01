@@ -10,7 +10,7 @@ import { openEntries, pathEntries } from "../editor/file-menu";
 import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
 import { baseName, parentOf } from "../paths";
 import { FileMarkIcon } from "../ui/file-mark";
-import { compactTree, filterTree, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../ui/tree";
+import { compactTree, filterTree, foldersIn, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../ui/tree";
 import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
@@ -183,16 +183,7 @@ export const Explorer = memo(function Explorer({
     [shown, expanded, filtering]
   );
 
-  /** Every folder's id under `nodes`, from the uncompacted `tree`, whose ids compacted rows keep. */
-  const foldersIn = (nodes: TreeNode[], ids: string[] = []): string[] => {
-    for (const node of nodes) {
-      if (node.children) {
-        ids.push(node.id);
-        foldersIn(node.children, ids);
-      }
-    }
-    return ids;
-  };
+  // Folds by ids of the uncompacted `tree`, which compacted rows keep.
   const setAll = (ids: string[], open: boolean): void =>
     setExpanded((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, open])) }));
   /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything

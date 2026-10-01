@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { holdEscape } from "../../src/renderer/ui/use-escape";
-import { buildTree, compactTree, compareGrouped, filesUnder, filterTree, sortTree, type TreeNode } from "../../src/renderer/ui/tree";
+import { buildTree, compactTree, compareGrouped, filesByNode, filterTree, foldersIn, sortTree, type TreeNode } from "../../src/renderer/ui/tree";
 
 /** ui/: what the views share. */
 
@@ -64,9 +64,10 @@ describe("a tree of repository paths", () => {
     assert.deepEqual(outline(filterTree(buildTree(paths), "src/main/git")), ["src", "  main", "    git", "      git.ts", "      repository.ts"]);
   });
 
-  it("lists the files under a node", () => {
-    const [src] = buildTree(paths);
-    assert.deepEqual(filesUnder(src).sort(), ["src/main/git/git.ts", "src/main/git/repository.ts", "src/renderer/App.tsx"]);
-    assert.deepEqual(filesUnder({ id: "a.ts", name: "a.ts", path: "a.ts" }), ["a.ts"]);
+  it("lists the files under every node, and every folder", () => {
+    const files = filesByNode(buildTree(paths));
+    assert.deepEqual(files.get("src")!.sort(), ["src/main/git/git.ts", "src/main/git/repository.ts", "src/renderer/App.tsx"]);
+    assert.deepEqual(files.get("src/main/git/git.ts"), ["src/main/git/git.ts"]);
+    assert.deepEqual(foldersIn(buildTree(paths)).sort(), ["src", "src/main", "src/main/git", "src/renderer"]);
   });
 });

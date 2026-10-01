@@ -123,16 +123,27 @@ export function isOpen(node: TreeNode, expanded: Record<string, boolean>): boole
   return expanded[node.id] ?? node.root === true;
 }
 
-/** The paths of the files at and below `node`. */
-export function filesUnder(node: TreeNode, out: string[] = []): string[] {
-  if (node.children) {
-    for (const child of node.children) {
-      filesUnder(child, out);
+/** Every folder's id under `nodes`, at any depth. */
+export function foldersIn(nodes: TreeNode[], ids: string[] = []): string[] {
+  for (const node of nodes) {
+    if (node.children) {
+      ids.push(node.id);
+      foldersIn(node.children, ids);
     }
-  } else {
-    out.push(node.path);
   }
-  return out;
+  return ids;
+}
+
+/** Each node's id to the paths of the files at and below it, in one walk. */
+export function filesByNode(nodes: TreeNode[]): Map<string, string[]> {
+  const files = new Map<string, string[]>();
+  const walk = (node: TreeNode): string[] => {
+    const under = node.children ? node.children.flatMap(walk) : [node.path];
+    files.set(node.id, under);
+    return under;
+  };
+  nodes.forEach(walk);
+  return files;
 }
 
 /** A row on screen: the tree flattened to what open folders show, as VS Code's list renders it. */

@@ -20,7 +20,7 @@ export const CHECK_INDENT_STEP = 17;
 
 /**
  * A row of a tree or list (`.tree-item`), in the branch tree, the Explorer, SEARCH and LOCAL
- * CHANGES alike: what leads it (`icon`: an icon, a twistie, a status letter), its label, then what
+ * CHANGES alike: what leads it (`icon`: an icon, a twistie, a checkbox), its label, then what
  * trails it (`children`: counts, a folder, a branch's base). `indent` is its left padding.
  */
 export function TreeRow({
