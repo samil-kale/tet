@@ -32,6 +32,62 @@ export function usePaneToggle(key: string, initial: boolean): [boolean, (open: b
 }
 
 /**
+ * Which of `choices` a pane shows, in the same layout storage, kept as `usePaneToggle` keeps
+ * whether it is out. Anything stored outside `choices` is `initial`.
+ */
+export function usePaneChoice<T extends string>(
+  key: string,
+  choices: readonly T[],
+  initial: T
+): [T, (choice: T) => void] {
+  const [choice, setChoice] = useState<T>(() => {
+    const stored = localStorage.getItem(STORAGE_PREFIX + key);
+    return choices.find((candidate) => candidate === stored) ?? initial;
+  });
+  // Stable like a setState, as `usePaneToggle`'s.
+  const set = useCallback(
+    (next: T) => {
+      setChoice(next);
+      localStorage.setItem(STORAGE_PREFIX + key, next);
+    },
+    [key]
+  );
+  return [choice, set];
+}
+
+/**
+ * Which of `choices` a pane holds at once, in the same layout storage, kept as `usePaneToggle`
+ * keeps whether a pane is out. Anything stored outside `choices` is dropped; unreadable storage is
+ * `initial`.
+ */
+export function usePaneSet<T extends string>(
+  key: string,
+  choices: readonly T[],
+  initial: readonly T[]
+): [ReadonlySet<T>, (next: ReadonlySet<T>) => void] {
+  const [held, setHeld] = useState<ReadonlySet<T>>(() => {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_PREFIX + key) ?? "null");
+      if (Array.isArray(stored)) {
+        return new Set(choices.filter((choice) => stored.includes(choice)));
+      }
+    } catch {
+      // Unreadable storage is the initial state.
+    }
+    return new Set(initial);
+  });
+  // Stable like a setState, as `usePaneToggle`'s.
+  const set = useCallback(
+    (next: ReadonlySet<T>) => {
+      setHeld(next);
+      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify([...next]));
+    },
+    [key]
+  );
+  return [held, set];
+}
+
+/**
  * Which sections of a tree the user has folded, restored on the next start, in layout storage.
  * `initial` names what starts folded; a key never toggled stands open.
  */

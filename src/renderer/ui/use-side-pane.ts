@@ -1,62 +1,118 @@
-import { useCallback, useState, type RefObject } from "react";
+import { useCallback, useMemo, useState, type RefObject } from "react";
 import { useLatest } from "./use-latest";
-import { usePaneToggle } from "./layout-storage";
+import { usePaneChoice, usePaneSet, usePaneSize } from "./layout-storage";
+import { MIN_PANE_WIDTH } from "./Sash";
 
-/** The side pane's view: one of two, never both. */
-export type SideView = "git" | "files";
+/** A view of the side pane, each a column of its own. */
+export type SideView = "projects" | "git" | "files";
 
-/** The side pane's view, its slide, and the ways views open it. */
+/** The columns' order, pinned ones first: the strip's toggles'. */
+export const SIDE_VIEWS: readonly SideView[] = ["projects", "git", "files"];
+
+/** What the free column holds: a view, or none while it is in. */
+const FREE_CHOICES: readonly (SideView | "none")[] = [...SIDE_VIEWS, "none"];
+
+/** A column's width and how its sash sets it. */
+type ColumnWidth = [number, (size: number) => void];
+
+/** The side pane's columns, their widths and slide, and the ways views open them. */
 interface SidePane {
-  sideView: SideView | null;
-  sideSliding: boolean;
-  stopSliding: () => void;
+  /** Every column out: the pinned ones and the free one. */
+  openViews: ReadonlySet<SideView>;
+  pinnedViews: ReadonlySet<SideView>;
+  /** The one view out not pinned, which the strip's toggles show, replace and hide. */
+  freeView: SideView | null;
+  widthOf: (view: SideView) => ColumnWidth;
+  /** The columns whose width transitions now (`.side-pane.sliding`). */
+  slidingViews: ReadonlySet<SideView>;
+  stopSliding: (view: SideView) => void;
   toggleSideView: (view: SideView) => void;
+  togglePin: (view: SideView) => void;
   showChanges: (key: string) => void;
 }
 
 /**
- * Whether the side pane is out, and whether it shows files instead of git — remembered like a
- * pane size. One view at a time, as VS Code's Explorer and Source Control. `activeKeyRef` is the
- * repository or worktree in front, `setActiveKey` how a row's git mark brings its own there.
+ * Which views are pinned and which one is free, and their widths — remembered like a pane size.
+ * The strip's toggles drive the free column alone, one view at a time as VS Code's Explorer and
+ * Source Control: the next replaces it. A pinned view is out until unpinned from its headers' menu,
+ * when its column slides in; its toggle is gone from the strip meanwhile. The free column is one
+ * width whichever view it shows, a pinned one keeps its own, and a pin hands the column's width
+ * over so it stays put. `activeKeyRef` is the repository or worktree in front,
+ * `setActiveKey` how a row's git mark brings its own there.
  */
 export function useSidePane(
   activeKeyRef: RefObject<string | null>,
   setActiveKey: (key: string) => void
 ): SidePane {
-  const [sidePaneOpen, setSidePaneOpen] = usePaneToggle("git-pane", false);
-  const [filesShown, setFilesShown] = usePaneToggle("side-pane-files", false);
-  const sideView: SideView | null = sidePaneOpen ? (filesShown ? "files" : "git") : null;
-  /** Read on a click, so `toggleSideView` — and every view handed it — stays the same across a
-   *  toggle. */
-  const sideViewRef = useLatest(sideView);
+  const [pinnedViews, setPinnedViews] = usePaneSet("side-pane-pinned", SIDE_VIEWS, []);
+  const [freeChoice, setFreeChoice] = usePaneChoice("side-pane-free", FREE_CHOICES, "projects");
+  // A view pinned since it was stored is no longer free.
+  const freeView = freeChoice === "none" || pinnedViews.has(freeChoice) ? null : freeChoice;
+  const openViews = useMemo(
+    () => new Set<SideView>([...pinnedViews, ...(freeView ? [freeView] : [])]),
+    [pinnedViews, freeView]
+  );
+  const pinnedWidths: Record<SideView, ColumnWidth> = {
+    projects: usePaneSize("side-width-projects", 300, MIN_PANE_WIDTH),
+    git: usePaneSize("side-width-git", 300, MIN_PANE_WIDTH),
+    files: usePaneSize("side-width-files", 300, MIN_PANE_WIDTH)
+  };
+  const freeWidth = usePaneSize("side-width-free", 300, MIN_PANE_WIDTH);
+  const widthOf = (view: SideView): ColumnWidth => (pinnedViews.has(view) ? pinnedWidths[view] : freeWidth);
+  /** Read on a click, so the callbacks — and every view handed them — stay the same across one. */
+  const freeRef = useLatest(freeView);
+  const pinnedRef = useLatest(pinnedViews);
+  const widthsRef = useLatest({ pinnedWidths, freeWidth });
   /**
-   * Gates `.side-pane.sliding`'s width transition to the slide alone — the pane stays in the DOM
-   * at width 0 while in, so opening and closing both transition — and the sash sets the same
-   * width, where an animated one would lag the pointer. Set by what opens or closes the pane,
-   * cleared once the transition ends; switching views while out slides nothing. Not without a
-   * repository or worktree: no pane is drawn then, and nothing would end the transition.
+   * Gates a column's width transition to its slide alone — a column stays in the DOM at width 0
+   * while in, so opening and closing both transition — and its sash sets the same width, where an
+   * animated one would lag the pointer. Set by what opens or closes a column, cleared once its
+   * transition ends; a view replacing the free one slides nothing.
    */
-  const [sideSliding, setSideSliding] = useState(false);
-  const stopSliding = useCallback(() => setSideSliding(false), []);
-  const slidePane = useCallback((open: boolean) => {
-    setSidePaneOpen(open);
-    if (activeKeyRef.current !== null) {
-      setSideSliding(true);
-    }
-  }, [activeKeyRef, setSidePaneOpen]);
-  /** Shows that view, or slides the pane in when that view is already out. */
+  const [slidingViews, setSlidingViews] = useState<ReadonlySet<SideView>>(() => new Set());
+  const stopSliding = useCallback(
+    (view: SideView) =>
+      setSlidingViews((current) => (current.has(view) ? new Set([...current].filter((entry) => entry !== view)) : current)),
+    []
+  );
+  const slide = useCallback((view: SideView) => setSlidingViews((current) => new Set([...current, view])), []);
+
+  /** Shows that view in the free column, or slides it in when it is already there. A pinned one is
+   *  out and stays. */
   const toggleSideView = useCallback(
     (view: SideView) => {
-      if (sideViewRef.current === view) {
-        slidePane(false);
+      if (pinnedRef.current.has(view)) {
         return;
       }
-      setFilesShown(view === "files");
-      if (sideViewRef.current === null) {
-        slidePane(true);
+      const free = freeRef.current;
+      setFreeChoice(free === view ? "none" : view);
+      if (free === null || free === view) {
+        slide(view);
       }
     },
-    [setFilesShown, sideViewRef, slidePane]
+    [pinnedRef, freeRef, setFreeChoice, slide]
+  );
+  /** Pinning the free view keeps it where it is, with its width; unpinning a view slides its column
+   *  in, the free one staying. */
+  const togglePin = useCallback(
+    (view: SideView) => {
+      const pinned = pinnedRef.current;
+      const free = freeRef.current;
+      const widths = widthsRef.current;
+      if (!pinned.has(view)) {
+        widths.pinnedWidths[view][1](widths.freeWidth[0]);
+        setPinnedViews(new Set([...pinned, view]));
+        if (free === view) {
+          setFreeChoice("none");
+        } else {
+          slide(view);
+        }
+        return;
+      }
+      setPinnedViews(new Set([...pinned].filter((entry) => entry !== view)));
+      slide(view);
+    },
+    [pinnedRef, freeRef, widthsRef, setPinnedViews, setFreeChoice, slide]
   );
   /**
    * A row's git mark: switches to the repository or worktree and slides git out; on the one shown,
@@ -65,17 +121,12 @@ export function useSidePane(
   const showChanges = useCallback(
     (key: string) => {
       setActiveKey(key);
-      if (key === activeKeyRef.current) {
+      if (key === activeKeyRef.current || (!pinnedRef.current.has("git") && freeRef.current !== "git")) {
         toggleSideView("git");
-      } else {
-        setFilesShown(false);
-        if (sideViewRef.current === null) {
-          slidePane(true);
-        }
       }
     },
-    [activeKeyRef, setActiveKey, toggleSideView, setFilesShown, sideViewRef, slidePane]
+    [activeKeyRef, setActiveKey, pinnedRef, freeRef, toggleSideView]
   );
 
-  return { sideView, sideSliding, stopSliding, toggleSideView, showChanges };
+  return { openViews, pinnedViews, freeView, widthOf, slidingViews, stopSliding, toggleSideView, togglePin, showChanges };
 }

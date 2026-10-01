@@ -18,7 +18,7 @@ import { isEditorTab, isEditorTabId, type PaneTab } from "../editor/editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
-import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon } from "../ui/icons";
+import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, type IconProps } from "../ui/icons";
 import { SessionMark } from "../ui/SessionMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -42,11 +42,19 @@ function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
 
 /** The one row of icon buttons, on pane "a" alone whatever the preset. */
 export interface PaneChrome {
-  /** Null while the side pane is in. */
-  sideView: SideView | null;
+  /** The strip toggles the free view alone; a pinned one is out, its toggle gone. */
+  freeView: SideView | null;
+  pinnedViews: ReadonlySet<SideView>;
   onToggleSideView: (view: SideView) => void;
   onOpenSettings: () => void;
 }
+
+/** The side views' toggles, in the columns' order (`SIDE_VIEWS`). */
+const SIDE_TOGGLES: { view: SideView; noun: string; Icon: (props: IconProps) => React.ReactNode }[] = [
+  { view: "projects", noun: "projects", Icon: ProjectsIcon },
+  { view: "git", noun: "repository", Icon: GitIcon },
+  { view: "files", noun: "files", Icon: FilesIcon }
+];
 
 interface PaneProps {
   at: ProjectRef;
@@ -395,20 +403,16 @@ export const Pane = memo(function Pane({
         {/* Window chrome, on pane "a" alone. */}
         {chrome && (
           <div className="tab-strip-actions">
-            <IconButton
-              active={chrome.sideView === "git"}
-              onClick={() => chrome.onToggleSideView("git")}
-              title={chrome.sideView === "git" ? "Hide the repository" : "Show the repository"}
-            >
-              <GitIcon />
-            </IconButton>
-            <IconButton
-              active={chrome.sideView === "files"}
-              onClick={() => chrome.onToggleSideView("files")}
-              title={chrome.sideView === "files" ? "Hide the files" : "Show the files"}
-            >
-              <FilesIcon />
-            </IconButton>
+            {SIDE_TOGGLES.filter(({ view }) => !chrome.pinnedViews.has(view)).map(({ view, noun, Icon }) => (
+              <IconButton
+                key={view}
+                active={chrome.freeView === view}
+                onClick={() => chrome.onToggleSideView(view)}
+                title={`${chrome.freeView === view ? "Hide" : "Show"} the ${noun}`}
+              >
+                <Icon />
+              </IconButton>
+            ))}
             <IconButton title="Settings" onClick={chrome.onOpenSettings}>
               <GearIcon />
             </IconButton>

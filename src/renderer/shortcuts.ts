@@ -11,6 +11,7 @@ import { isModifierHeld, PLATFORM } from "./platform";
  */
 export type ShortcutId =
   | "settings"
+  | "toggleProjects"
   | "toggleGit"
   | "toggleFiles"
   | "needsAttention"
@@ -32,6 +33,7 @@ interface ShortcutDef {
 
 const DEFS: ShortcutDef[] = [
   { id: "settings", description: "Open settings", shift: false, key: ",", label: "," },
+  { id: "toggleProjects", description: "Show or hide the projects", shift: true, key: "p", label: "P" },
   { id: "toggleGit", description: "Show or hide the repository", shift: true, key: "g", label: "G" },
   { id: "toggleFiles", description: "Show or hide the files", shift: true, key: "e", label: "E" },
   {

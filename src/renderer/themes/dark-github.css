@@ -112,7 +112,7 @@
 
   --vscode-gitDecoration-modifiedResourceForeground: #d29922;
   --vscode-gitDecoration-deletedResourceForeground: #f85149;
-  --vscode-gitDecoration-untrackedResourceForeground: #bc8cff;
+  --vscode-gitDecoration-untrackedResourceForeground: #3fb950;
   --vscode-gitDecoration-addedResourceForeground: #3fb950;
   --vscode-gitDecoration-conflictingResourceForeground: #db6d28;
 

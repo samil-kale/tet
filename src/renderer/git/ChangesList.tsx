@@ -7,7 +7,6 @@ import type { OpenEditor } from "../editor/editor-tab";
 import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";
 import { baseName, extensionOf, parentOf } from "../paths";
 import { openEntries, pathEntries } from "../editor/file-menu";
-import { FileMarkIcon } from "../ui/file-mark";
 import { buildTree, compactTree, compareGrouped, compareNames, filesByNode, foldersIn, sortTree, visibleRows, type TreeNode } from "../ui/tree";
 import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, Twistie, type CheckState } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -39,15 +38,13 @@ export interface ChangesListHandle {
   collapseAll(): void;
 }
 
-/** A row's tooltip names its change: the name's color alone does not, where a theme gives two
- *  of them one color. */
-const STATUS_LABEL: Record<ChangeStatus, string> = {
-  modified: "Modified",
-  added: "Added",
-  deleted: "Deleted",
-  renamed: "Renamed",
-  untracked: "Untracked",
-  conflicted: "Conflicted"
+const STATUS_LETTER: Record<ChangeStatus, string> = {
+  modified: "M",
+  added: "A",
+  deleted: "D",
+  renamed: "R",
+  untracked: "?",
+  conflicted: "C"
 };
 
 /** The top row, standing for every change the filter shows. Its id is no path's. */
@@ -296,11 +293,10 @@ export const ChangesList = memo(function ChangesList({
             return (
               <TreeRow
                 key={node.id}
-                className={change?.status}
                 indent={INDENT_BASE + depth * CHECK_INDENT_STEP}
                 title={
                   change
-                    ? `${STATUS_LABEL[change.status]}\n${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`
+                    ? `${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`
                     : node.path || undefined
                 }
                 onClick={change ? undefined : () => setExpanded((current) => ({ ...current, [node.id]: !open }))}
@@ -311,7 +307,7 @@ export const ChangesList = memo(function ChangesList({
                     <>
                       <Twistie />
                       {box}
-                      <FileMarkIcon name={node.name} />
+                      <span className={`tree-icon change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
                     </>
                   ) : (
                     <>

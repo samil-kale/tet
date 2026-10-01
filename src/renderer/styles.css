@@ -388,16 +388,6 @@ textarea:focus,
 
 /* Project list --------------------------------------------------------------------------- */
 
-/* The left column; its width comes from the sash (default and limits in App). */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  flex: none;
-  min-width: var(--pane-min-width);
-  min-height: 0;
-  background: var(--vscode-sideBar-background);
-}
-
 /* A titled section of a column. One of a pair is sized by the sash and may still shrink to the
    floor; the other (`.grows`) takes the rest. */
 .section {
@@ -1198,9 +1188,10 @@ textarea:focus,
  * reach; `theme.ts` hides it by color, with the overview ruler.
  */
 
-/* Side pane: git or files ----------------------------------------------------------------- */
+/* Side pane: the side views' columns ------------------------------------------------------ */
 
-/* A column between navigation and terminals; width dragged like the sidebar's. */
+/* A side view's column, left of the terminals; its width comes from its sash (default and limits
+   in use-side-pane.ts). */
 .side-pane {
   display: flex;
   flex: none;
@@ -1237,25 +1228,37 @@ textarea:focus,
   display: none;
 }
 
-/* A changed file's name in the theme's SCM colour (git/ChangesList.tsx). `renamed` has none: git
-   treats it as a modification of a moved file. */
-.tree-item.modified .tree-label {
+/* git's letter for the change, in the theme's SCM colour, in a file mark's place and gap
+   (`.file-mark`), so file and folder labels stay level. `renamed` has none: git treats it as a
+   modification of a moved file. */
+.change-status {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--small-font-size);
+  opacity: 1;
+}
+
+.change-status.modified {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
 
-.tree-item.added .tree-label {
+.change-status.added {
   color: var(--vscode-gitDecoration-addedResourceForeground);
 }
 
-.tree-item.deleted .tree-label {
+.change-status.deleted {
   color: var(--vscode-gitDecoration-deletedResourceForeground);
 }
 
-.tree-item.untracked .tree-label {
+.change-status.untracked {
   color: var(--vscode-gitDecoration-untrackedResourceForeground);
 }
 
-.tree-item.conflicted .tree-label {
+.change-status.conflicted {
   color: var(--vscode-gitDecoration-conflictingResourceForeground);
 }
 
@@ -2059,7 +2062,7 @@ textarea:focus,
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E");
 }
 
-/* In a 22px row, before the file mark: a size smaller than the dialogs'. */
+/* In a 22px row, before the status letter: a size smaller than the dialogs'. */
 .tree-checkbox {
   display: grid;
   place-content: center;
@@ -2067,6 +2070,7 @@ textarea:focus,
   box-sizing: border-box;
   width: 16px;
   height: 16px;
+  margin-left: 1px;
   margin-right: 6px;
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
 import { projectRefKey, projectRefsOf } from "../shared/types/project";
@@ -12,6 +12,7 @@ import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./sidebar/CommandList";
 import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
+import { useContextMenu } from "./ui/ContextMenu";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesPane } from "./files/FilesPane";
 import { GitPane } from "./git/GitPane";
@@ -21,7 +22,7 @@ import { useSandboxedProjects } from "./sidebar/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize } from "./ui/layout-storage";
-import { useSidePane } from "./ui/use-side-pane";
+import { SIDE_VIEWS, useSidePane, type SideView } from "./ui/use-side-pane";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./tabs/TerminalsPane";
 import { disposeRefTerminals } from "./tabs/terminal-views";
@@ -115,9 +116,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
-  // Pane defaults and limits; both side-pane views share its width ("git-panels").
-  const [sidebarWidth, setSidebarWidth] = usePaneSize("sidebar", 240, MIN_PANE_WIDTH);
-  const [sidePaneWidth, setSidePaneWidth] = usePaneSize("git-panels", 300, MIN_PANE_WIDTH);
+  /** Pin and Unpin, on a right-click on any of a side view's section headers. */
+  const sideMenu = useContextMenu<SideView>();
+  // Pane defaults and limits.
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
   const [fileSearchHeight, setFileSearchHeight] = usePaneSize("file-search", 260, MIN_PANE_HEIGHT);
   // 40% of the window it first opens in.
@@ -126,8 +127,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     Math.round(window.innerHeight * 0.4),
     MIN_PANE_HEIGHT
   );
-  /** The side pane's view and slide (use-side-pane.ts). */
-  const { sideView, sideSliding, stopSliding, toggleSideView, showChanges } = useSidePane(activeKeyRef, setActiveKey);
+  /** The side views out and pinned, their widths and slide (use-side-pane.ts). */
+  const { openViews, pinnedViews, freeView, widthOf, slidingViews, stopSliding, toggleSideView, togglePin, showChanges } =
+    useSidePane(activeKeyRef, setActiveKey);
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -307,6 +309,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has to be
     // the one on top — an agent's environment dialog, drawn last, can already be up.
     settings: () => !isWindowCovered() && setSettingsOpen(true),
+    toggleProjects: () => toggleSideView("projects"),
     toggleGit: () => toggleSideView("git"),
     toggleFiles: () => toggleSideView("files"),
     needsAttention: showNeedsAttention,
@@ -316,6 +319,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   });
 
   const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
+  /** Git and files need a repository or worktree in front; without one the projects stand in. */
+  const shownViews: ReadonlySet<SideView> = activeResolved ? openViews : new Set(openViews.size > 0 ? ["projects"] : []);
+  /** The pinned columns in the toggles' order, then the free one, then those in, unseen at width
+   *  0. */
+  const sideOrder = [
+    ...SIDE_VIEWS.filter((view) => shownViews.has(view) && pinnedViews.has(view)),
+    ...SIDE_VIEWS.filter((view) => shownViews.has(view) && !pinnedViews.has(view)),
+    ...SIDE_VIEWS.filter((view) => !shownViews.has(view))
+  ];
+  /** What the columns out take together; a sash leaves the terminals their floor beside it. */
+  const sideWidth = SIDE_VIEWS.reduce((sum, view) => (shownViews.has(view) ? sum + widthOf(view)[0] : sum), 0);
 
   // Stable handles, so memoized views re-render only for what they show.
   const openAdd = useCallback(() => setAddOpen(true), []);
@@ -356,86 +370,97 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       </div>
 
       <div className="body">
-        <div className="sidebar" style={{ width: sidebarWidth }}>
-          <ProjectList
-            projects={projects}
-            resolvedRefs={resolvedRefs}
-            activeKey={activeKey}
-            onSelect={select}
-            onRemove={removeProject}
-            onReorder={reorderProjects}
-            onAdd={openAdd}
-            heads={heads}
-            marks={marks}
-            sandboxed={sandboxed}
-            onShowChanges={showChanges}
-            onOpenTerminal={openTerminal}
-            onShowBusy={showBusy}
-            onShowFinished={showFinished}
-            onShowWaiting={showWaiting}
-            onSbxSettings={openSbxSettings}
-            runIn={runIn}
-            gitBusy={projectListBusy}
-            worktreesSupported={worktreesSupported}
-          />
-          <Sash
-            orientation="horizontal"
-            size={commandsHeight}
-            min={MIN_PANE_HEIGHT}
-            minOther={MIN_PANE_HEIGHT}
-            reverse
-            onResize={setCommandsHeight}
-          />
-          <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
-        </div>
-        <Sash
-          orientation="vertical"
-          size={sidebarWidth}
-          min={MIN_PANE_WIDTH}
-          minOther={MIN_CONTENT_WIDTH}
-          onResize={setSidebarWidth}
-        />
-
-        {/* One side pane for the repositories and worktrees, in the DOM at width 0 while in (so a
-            slide has a box to transition). Both views stay mounted, hidden while not shown, so a switch keeps
-            selection, filter, open folders and a running action's bar. */}
-        {activeResolved && (
-          <>
-            <div
-              className={`side-pane${sideSliding ? " sliding" : ""}`}
-              style={{ width: sideView ? sidePaneWidth : 0 }}
-              onTransitionEnd={stopSliding}
-            >
-              <FilesPane
-                resolved={activeResolved}
-                shown={sideView === "files"}
-                openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
-                onOpenFile={openEditor}
-                searchHeight={fileSearchHeight}
-                onSearchHeight={setFileSearchHeight}
-              />
-              <GitPane
-                resolved={activeResolved}
-                state={activeState}
-                shown={sideView === "git"}
-                branch={activeBranch}
-                treeHeight={branchTreeHeight}
-                onTreeHeight={setBranchTreeHeight}
-                onOpenDiff={openActiveDiff}
-                onSelect={select}
-              />
-            </div>
-            {sideView && (
-              <Sash
-                orientation="vertical"
-                size={sidePaneWidth}
-                min={MIN_PANE_WIDTH}
-                minOther={MIN_CONTENT_WIDTH}
-                onResize={setSidePaneWidth}
-              />
-            )}
-          </>
-        )}
+        {/* A column per side view, each in the DOM at width 0 while in (so a slide has a box to
+            transition) and mounted throughout, so hiding one keeps selection, filter, open folders
+            and a running action's bar. Pinned ones stand first, in the toggles' order. Git and
+            files need a repository or worktree in front; without one the projects stand in. */}
+        {sideOrder.map((view) => {
+          const [width, setWidth] = widthOf(view);
+          const shown = shownViews.has(view);
+          return (
+            <Fragment key={view}>
+              <div
+                className={`side-pane${slidingViews.has(view) ? " sliding" : ""}`}
+                style={{ width: shown ? width : 0 }}
+                onTransitionEnd={() => stopSliding(view)}
+                onContextMenu={(event) => {
+                  if ((event.target as Element).closest(".section-header")) {
+                    sideMenu.open(event, view);
+                  }
+                }}
+              >
+                {view === "projects" && (
+                  <div className={`side-pane-content${shown ? "" : " hidden"}`}>
+                    <ProjectList
+                      projects={projects}
+                      resolvedRefs={resolvedRefs}
+                      activeKey={activeKey}
+                      onSelect={select}
+                      onRemove={removeProject}
+                      onReorder={reorderProjects}
+                      onAdd={openAdd}
+                      heads={heads}
+                      marks={marks}
+                      sandboxed={sandboxed}
+                      onShowChanges={showChanges}
+                      onOpenTerminal={openTerminal}
+                      onShowBusy={showBusy}
+                      onShowFinished={showFinished}
+                      onShowWaiting={showWaiting}
+                      onSbxSettings={openSbxSettings}
+                      runIn={runIn}
+                      gitBusy={projectListBusy}
+                      worktreesSupported={worktreesSupported}
+                    />
+                    <Sash
+                      orientation="horizontal"
+                      size={commandsHeight}
+                      min={MIN_PANE_HEIGHT}
+                      minOther={MIN_PANE_HEIGHT}
+                      reverse
+                      onResize={setCommandsHeight}
+                    />
+                    <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
+                  </div>
+                )}
+                {view === "files" && activeResolved && (
+                  <FilesPane
+                    resolved={activeResolved}
+                    shown={shown}
+                    openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
+                    onOpenFile={openEditor}
+                    searchHeight={fileSearchHeight}
+                    onSearchHeight={setFileSearchHeight}
+                  />
+                )}
+                {view === "git" && activeResolved && (
+                  <GitPane
+                    resolved={activeResolved}
+                    state={activeState}
+                    shown={shown}
+                    branch={activeBranch}
+                    treeHeight={branchTreeHeight}
+                    onTreeHeight={setBranchTreeHeight}
+                    onOpenDiff={openActiveDiff}
+                    onSelect={select}
+                  />
+                )}
+              </div>
+              {shown && (
+                <Sash
+                  orientation="vertical"
+                  size={width}
+                  min={MIN_PANE_WIDTH}
+                  minOther={MIN_CONTENT_WIDTH + sideWidth - width}
+                  onResize={setWidth}
+                />
+              )}
+            </Fragment>
+          );
+        })}
+        {sideMenu.render((view) => [
+          { label: pinnedViews.has(view) ? "Unpin" : "Pin", run: () => togglePin(view) }
+        ])}
 
         <main className="content">
           {/* Every repository's and worktree's terminals stay mounted, so switching keeps buffers
@@ -446,7 +471,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               resolved={resolved}
               tabs={stripTabs[resolved.key] ?? NO_TABS}
               visible={resolved.key === activeKey}
-              sideView={sideView}
+              freeView={freeView}
+              pinnedViews={pinnedViews}
               onToggleSideView={toggleSideView}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.

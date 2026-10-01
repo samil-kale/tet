@@ -15,6 +15,7 @@ import {
   FilePlus,
   FolderGit2,
   FolderPlus,
+  Folders,
   GitBranch,
   GitCommitHorizontal,
   GitCompare,
@@ -243,6 +244,11 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
 /** Lucide's `git-branch`. */
 export function BranchIcon(props: IconProps) {
   return <Lucide {...props} icon={GitBranch} extent={20} />;
+}
+
+/** Lucide's `folders` — the projects, the side pane's first view. */
+export function ProjectsIcon(props: IconProps) {
+  return <Lucide {...props} icon={Folders} extent={20.98} />;
 }
 
 /** Lucide's `folder-git-2` — a worktree. */
