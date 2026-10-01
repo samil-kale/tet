@@ -1,0 +1,166 @@
+/*
+ * "Dark Claude": the Dark variant of sathishsk-me.claude-theme-for-vscode (MIT, S K). Values,
+ * token colors included, come from dark-claude.json beside this file: the extension's theme file
+ * as it ships, renamed. See dark-modern.css for the layer. A color the theme leaves unset takes VS
+ * Code's registry fallback — what VS Code draws with this theme — or, for a border, the theme's
+ * own border color; each is marked below. Exceptions: the surfaces and their borders are
+ * claude.ai's, whose sidebar is darker than its content, not lighter as the theme's; the dimmed
+ * text, the selection and the toolbar hover; each marked where it stands.
+ */
+:root[data-theme="dark-claude"] {
+  color-scheme: dark;
+
+  --vscode-foreground: #c3c1ba;
+  /* Not the theme's #b7b5a6: claude.ai's dimmed text. */
+  --vscode-descriptionForeground: #898781;
+  --vscode-errorForeground: #f14444;
+  --vscode-textLink-foreground: #4492e7;
+  --vscode-textLink-activeForeground: #4492e7;
+  --vscode-textPreformat-foreground: #c3c1ba;
+  /* Not the theme's #303030: claude.ai's raised surface. */
+  --vscode-textPreformat-background: #20201f;
+  /* Not the theme's #2a2a2a: claude.ai's raised surface. */
+  --vscode-textBlockQuote-background: #20201f;
+  --vscode-textBlockQuote-border: #d87757;
+  /* Unset; the registry's. */
+  --vscode-textCodeBlock-background: #0a0a0a66;
+  --vscode-focusBorder: #d87757;
+  --vscode-sash-hoverBorder: #d87757;
+
+  /* Not the theme's #1f1f1e (editor) and #1e1f22 (terminal, panel, active tab): claude.ai's
+     content surface, one for all four. */
+  --vscode-editor-background: #151515;
+  --vscode-editor-foreground: #c3c1ba;
+  --vscode-terminal-background: #151515;
+  --vscode-terminal-foreground: #c3c1ba;
+
+  /* Not the theme's #2a2a2a, lighter than the content: claude.ai's sidebar, darker than it — as
+     the title bar and the inactive tabs. */
+  --vscode-sideBar-background: #111111;
+  --vscode-sideBarSectionHeader-foreground: #c3c1ba;
+  --vscode-titleBar-activeBackground: #111111;
+  --vscode-titleBar-activeForeground: #c3c1ba;
+
+  --vscode-panel-background: #151515;
+  /* Not the theme's #3e3e38: claude.ai's border, white at 0.1 alpha — as every border below. */
+  --vscode-panel-border: #ffffff1a;
+
+  --vscode-tab-activeBackground: #151515;
+  /* Unset; tet underlines the active tab in the accent, as the theme's tab.activeBorderTop. */
+  --vscode-tab-activeBorder: #d87757;
+  --vscode-tab-activeForeground: #c3c1ba;
+  --vscode-tab-inactiveBackground: #111111;
+  /* Not the theme's #51504a, unreadable on the darker sidebar surface: claude.ai's dimmed text. */
+  --vscode-tab-inactiveForeground: #898781;
+  --vscode-tab-border: #111111;
+
+  /* tet's own, the same as Dark Modern's — see the note there; not the theme's #303030, the one
+     hover grey every tet theme shares. */
+  --vscode-toolbar-hoverBackground: #5a5d5e50;
+
+  /* Not the theme's #3e3e38 and #c3c1ba: claude.ai's selected sidebar row — as the menu's. */
+  --vscode-list-activeSelectionBackground: #343434;
+  --vscode-list-activeSelectionForeground: #f0efec;
+  --vscode-list-hoverBackground: #303030;
+
+  /* Not the theme's #303030: claude.ai's raised surface, as its prompt field — as the dropdown,
+     the checkbox, the widgets, the menu and the notifications below. */
+  --vscode-input-background: #20201f;
+  --vscode-input-foreground: #c3c1ba;
+  --vscode-input-border: #ffffff1a;
+  /* Not the theme's #51504a: claude.ai's dimmed text. */
+  --vscode-input-placeholderForeground: #898781;
+
+  --vscode-settings-dropdownBackground: #20201f;
+  --vscode-settings-checkboxBackground: #20201f;
+  --vscode-settings-checkboxBorder: #51504a;
+  --vscode-settings-checkboxForeground: #c3c1ba;
+
+  /* radio.* unset: activeForeground is its inputOption.activeForeground; activeBackground is its
+     inputOption.activeBackground; activeBorder is its inputOption.activeBorder;
+     inactiveForeground none in the registry: the foreground; inactiveBackground none in the
+     registry: none; inactiveHoverBackground is its inputOption.hoverBackground. */
+  --vscode-radio-activeForeground: #f7f5ee;
+  --vscode-radio-activeBackground: #d8775740;
+  --vscode-radio-activeBorder: #d87757;
+  --vscode-radio-inactiveForeground: #c3c1ba;
+  --vscode-radio-inactiveHoverBackground: #303030;
+
+  --vscode-button-background: #d87757;
+  --vscode-button-foreground: #1e1f22;
+  /* Unset; the registry's is contrastBorder, set only in high contrast. */
+  --vscode-button-border: #00000000;
+  --vscode-button-hoverBackground: #e0906e;
+  --vscode-button-secondaryBackground: #303030;
+  --vscode-button-secondaryForeground: #c3c1ba;
+  --vscode-button-secondaryHoverBackground: #3e3e38;
+
+  --vscode-editorWidget-background: #20201f;
+  --vscode-editorWidget-border: #ffffff1a;
+  --vscode-widget-shadow: #00000050;
+
+  --vscode-menu-background: #20201f;
+  --vscode-menu-foreground: #c3c1ba;
+  --vscode-menu-border: #ffffff1a;
+  --vscode-menu-selectionBackground: #343434;
+  --vscode-menu-selectionForeground: #f0efec;
+  --vscode-menu-separatorBackground: #ffffff1a;
+
+  --vscode-progressBar-background: #d87757;
+
+  --vscode-notifications-background: #20201f;
+  --vscode-notifications-foreground: #c3c1ba;
+  --vscode-notifications-border: #ffffff1a;
+  --vscode-notificationsErrorIcon-foreground: #f14444;
+  --vscode-notificationsWarningIcon-foreground: #e1a035;
+  --vscode-notificationsInfoIcon-foreground: #4492e7;
+
+  --vscode-scrollbarSlider-background: #3e3e3850;
+  --vscode-scrollbarSlider-hoverBackground: #51504a60;
+  --vscode-scrollbarSlider-activeBackground: #51504a80;
+
+  --vscode-gitDecoration-modifiedResourceForeground: #4492e7;
+  --vscode-gitDecoration-deletedResourceForeground: #f14444;
+  --vscode-gitDecoration-untrackedResourceForeground: #3e8343;
+  --vscode-gitDecoration-addedResourceForeground: #3e8343;
+  --vscode-gitDecoration-conflictingResourceForeground: #f14444;
+
+  --vscode-diffEditor-insertedLineBackground: #1e332030;
+  --vscode-diffEditor-removedLineBackground: #3d202030;
+  --vscode-diffEditor-insertedTextBackground: #1e332040;
+  --vscode-diffEditor-removedTextBackground: #3d202040;
+  --vscode-diffEditorOverview-insertedForeground: #3e834380;
+  --vscode-diffEditorOverview-removedForeground: #ac303180;
+  --vscode-editorLineNumber-foreground: #4b5059;
+  --vscode-editorLineNumber-activeForeground: #a1a3ab;
+  --vscode-editorCursor-foreground: #d87757;
+  --vscode-editor-selectionBackground: #3e3e38;
+  --vscode-editor-inactiveSelectionBackground: #3e3e38;
+  --vscode-editor-lineHighlightBorder: #30303000;
+  --vscode-editor-findMatchBackground: #d8775750;
+  --vscode-editor-findMatchHighlightBackground: #3e3e3880;
+  --vscode-editorIndentGuide-background1: #3e3e38;
+  --vscode-editorIndentGuide-activeBackground1: #51504a;
+
+  --vscode-terminalCursor-foreground: #d87757;
+  --vscode-terminal-selectionBackground: #3e3e38;
+  /* Unset; the registry's: the terminal selection at half its alpha. */
+  --vscode-terminal-inactiveSelectionBackground: #3e3e3880;
+
+  --vscode-terminal-ansiBlack: #1a1813;
+  --vscode-terminal-ansiRed: #ac3031;
+  --vscode-terminal-ansiGreen: #3e8343;
+  --vscode-terminal-ansiYellow: #c08000;
+  --vscode-terminal-ansiBlue: #1b7ede;
+  --vscode-terminal-ansiMagenta: #9c87f6;
+  --vscode-terminal-ansiCyan: #008c92;
+  --vscode-terminal-ansiWhite: #b7b5a6;
+  --vscode-terminal-ansiBrightBlack: #51504a;
+  --vscode-terminal-ansiBrightRed: #f14444;
+  --vscode-terminal-ansiBrightGreen: #51a556;
+  --vscode-terminal-ansiBrightYellow: #e1a035;
+  --vscode-terminal-ansiBrightBlue: #4492e7;
+  --vscode-terminal-ansiBrightMagenta: #b7a8f8;
+  --vscode-terminal-ansiBrightCyan: #40b1b7;
+  --vscode-terminal-ansiBrightWhite: #f7f5ee;
+}

@@ -30,7 +30,9 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "dark-slate": () => import("../themes/dark-slate.json") as unknown as Promise<{ default: ThemeRegistration }>,
   "dark-intellij": () => import("../themes/dark-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,
   "light-intellij": () => import("../themes/light-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "light-gameboy": () => import("../themes/light-gameboy.json") as unknown as Promise<{ default: ThemeRegistration }>
+  "light-gameboy": () => import("../themes/light-gameboy.json") as unknown as Promise<{ default: ThemeRegistration }>,
+  "dark-claude": () => import("../themes/dark-claude.json") as unknown as Promise<{ default: ThemeRegistration }>,
+  "light-claude": () => import("../themes/light-claude.json") as unknown as Promise<{ default: ThemeRegistration }>
 };
 
 /** Shiki theme `name` with its editor surface patched from tet's --vscode-* values, for shiki and

@@ -1,9 +1,11 @@
 import { createRoot } from "react-dom/client";
+import "./themes/dark-claude.css";
 import "./themes/dark-dracula.css";
 import "./themes/dark-github.css";
 import "./themes/dark-intellij.css";
 import "./themes/dark-modern.css";
 import "./themes/dark-slate.css";
+import "./themes/light-claude.css";
 import "./themes/light-gameboy.css";
 import "./themes/light-github.css";
 import "./themes/light-intellij.css";

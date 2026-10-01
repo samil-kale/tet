@@ -8,8 +8,8 @@ export interface ThemeDefinition {
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
   /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is tet's own
-   *  (src/renderer/themes/dark-slate.json), the IntelliJ and GameBoy themes' their extensions',
-   *  beside it. */
+   *  (src/renderer/themes/dark-slate.json), the IntelliJ, GameBoy and Claude themes' their
+   *  extensions', beside it. */
   shikiTheme:
     | "dark-plus"
     | "light-plus"
@@ -18,8 +18,10 @@ export interface ThemeDefinition {
     | "dark-slate"
     | "dark-intellij"
     | "dracula"
+    | "dark-claude"
     | "light-intellij"
-    | "light-gameboy";
+    | "light-gameboy"
+    | "light-claude";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
   /** BrowserWindow paint and Windows title-bar overlay, set before the CSS exists — kept in step
@@ -84,6 +86,16 @@ export const THEMES: ThemeDefinition[] = [
     terminalForeground: "#f8f8f2"
   },
   {
+    id: "dark-claude",
+    label: "Claude",
+    shikiTheme: "dark-claude",
+    kind: "dark",
+    windowBackground: "#111111",
+    titleBarSymbolColor: "#c3c1ba",
+    terminalBackground: "#151515",
+    terminalForeground: "#c3c1ba"
+  },
+  {
     id: "light-modern",
     label: "Modern",
     shikiTheme: "light-plus",
@@ -122,6 +134,16 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#494786",
     terminalBackground: "#c0d297",
     terminalForeground: "#0f380f"
+  },
+  {
+    id: "light-claude",
+    label: "Claude",
+    shikiTheme: "light-claude",
+    kind: "light",
+    windowBackground: "#fbfbf9",
+    titleBarSymbolColor: "#2a2a28",
+    terminalBackground: "#fcfcfb",
+    terminalForeground: "#2a2a28"
   }
 ];
 
