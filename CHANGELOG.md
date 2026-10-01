@@ -3,6 +3,18 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.15.0 (2026-10-01)
+
+- **Changes as a tree with checkboxes.** The changes list shows its files in a folder tree; commit
+  and discard act on the checked files.
+- **Claude themes.** A dark and a light Claude theme join the theme list.
+- **Centered title on macOS.** The app name stands in the middle of the title bar, as in a native
+  macOS window.
+- **Sandboxes set their own variables.** `tet-ctl sbx-get` and `sbx-set-variables` answer from a
+  sandbox for its own project, and `sbx-set-variables` takes `NAME=value` to store a value.
+- **Fixes.** Codex starts without a startup warning; a restarted tab no longer keeps the mouse
+  reporting of its previous process; sbx knowledge rows hide agent icons while access is off.
+
 ## 0.14.4 (2026-09-30)
 
 - **ODT diffs.** An `.odt` file shows its extracted text in the diff editor.
