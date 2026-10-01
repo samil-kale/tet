@@ -40,6 +40,12 @@ function writeConsoleColorLauncher(agentDir: string, executable: string, theme: 
  */
 const FULLSCREEN_ARGS = ["-c", "tui.fullscreen_transcript=true"];
 
+/**
+ * `-c` overrides need Codex's embedded app server, not its shared background one: asked for
+ * outright, it starts embedded without a startup warning.
+ */
+const BASE_ARGS = ["--no-daemon", ...FULLSCREEN_ARGS];
+
 export const codexAgent: SandboxedAgent = {
   id: "codex",
   displayName: "Codex",
@@ -47,7 +53,7 @@ export const codexAgent: SandboxedAgent = {
   // Its input field is no shell: only a space needs quoting, in double quotes.
   quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
   executable: () => "codex",
-  install: { versionArgs: ["--version"], verifiedVersion: "0.157.1" },
+  install: { versionArgs: ["--version"], verifiedVersion: "0.159.2" },
   terminal: {
     // The positional prompt of an interactive session, after the `-c` options.
     initialPromptArgs: (prompt) => [prompt],
@@ -70,7 +76,7 @@ export const codexAgent: SandboxedAgent = {
   turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true, hookReply: codexHookReply },
   host: {
     prepare: (executable, paths) => {
-      let args: string[] = FULLSCREEN_ARGS;
+      let args: string[] = BASE_ARGS;
       let launcher: string | undefined;
       if (PLATFORM.conpty) {
         try {
@@ -81,7 +87,7 @@ export const codexAgent: SandboxedAgent = {
         }
       }
       try {
-        args = [...FULLSCREEN_ARGS, ...setupCodexHooks()];
+        args = [...BASE_ARGS, ...setupCodexHooks()];
       } catch (error) {
         // See AgentHost.prepare: swallow, never reject.
         logError("could not set up Codex hooks", error);
@@ -92,10 +98,10 @@ export const codexAgent: SandboxedAgent = {
   sandbox: {
     prepare: () => {
       try {
-        return { args: [...FULLSCREEN_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
+        return { args: [...BASE_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
       } catch (error) {
         logError("could not set up Codex sandbox hooks", error);
-        return { args: FULLSCREEN_ARGS };
+        return { args: BASE_ARGS };
       }
     },
     // Skills in `~/.codex/skills` and `~/.agents/skills`; all of `~/.codex/plugins`;
