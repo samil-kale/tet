@@ -30,6 +30,7 @@ import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { agentName, useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
+import { PLATFORM } from "./platform";
 import { defaultLayout, paneOf, tabsInFront } from "./tabs/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./tabs/use-project-layouts";
 import type { EditorTab, PaneTab } from "./editor/editor-tab";
@@ -349,7 +350,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   return (
     <div className="app">
       {/* The drag region and the window controls' space. */}
-      <div className="titlebar">
+      <div className={PLATFORM.centersTitle ? "titlebar titlebar-centered" : "titlebar"}>
         <img className="titlebar-icon" src="icon.png" alt="" />
         <span className="titlebar-name">TET</span>
       </div>
