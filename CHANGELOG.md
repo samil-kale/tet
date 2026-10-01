@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.15.2 (2026-10-02)
+
+- **Diff preview from the changes list.** A single click on a changed file opens its diff as a
+  preview tab; a double click keeps it open.
+
 ## 0.15.1 (2026-10-01)
 
 - **Side views as columns.** The projects, git and files are each a side view of their own,
