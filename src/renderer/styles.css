@@ -290,6 +290,12 @@ textarea:focus,
   -webkit-app-region: drag;
 }
 
+/* The name in the middle (Platform.centersTitle); no padding, so the middle is the window's. */
+.titlebar-centered {
+  justify-content: center;
+  padding-left: 0;
+}
+
 /* icon.png scaled down. */
 .titlebar-icon {
   width: 18px;

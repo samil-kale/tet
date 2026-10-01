@@ -59,6 +59,9 @@ export interface Platform {
   readonly windowIcon: "icon.ico" | "icon.png";
   /** Window controls drawn over TET's own title bar (titleBarOverlay); macOS keeps its inset lights. */
   readonly titleBarOverlay: boolean;
+  /** The app name stands in the middle of the title bar, as a native macOS window's title does:
+   *  the inset lights take its left edge. */
+  readonly centersTitle: boolean;
   /** The app quits with its last window; macOS keeps it running. */
   readonly quitsWithLastWindow: boolean;
   /** Toasts go through Windows' activator (an AppUserModelID, toast XML), clicked even after TET
@@ -123,6 +126,7 @@ export const WINDOWS: Platform = {
   installCommand: "irm https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.ps1 | iex",
   windowIcon: "icon.ico",
   titleBarOverlay: true,
+  centersTitle: false,
   quitsWithLastWindow: true,
   windowsToasts: true,
   sbxFirstRunMarker: (env) =>
@@ -160,6 +164,7 @@ export const MAC: Platform = {
   installCommand: POSIX_INSTALL,
   windowIcon: "icon.png",
   titleBarOverlay: false,
+  centersTitle: true,
   quitsWithLastWindow: false,
   windowsToasts: false,
   checksGpu: false,
@@ -193,6 +198,7 @@ export const LINUX: Platform = {
   installCommand: POSIX_INSTALL,
   windowIcon: "icon.png",
   titleBarOverlay: true,
+  centersTitle: false,
   quitsWithLastWindow: true,
   windowsToasts: false,
   checksGpu: true,

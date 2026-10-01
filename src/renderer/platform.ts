@@ -2,10 +2,15 @@ import { platformOf } from "../shared/platform";
 
 /** The platform the window runs on (src/shared/platform.ts), read off `navigator`: the renderer
  *  has no `process`. */
-export const PLATFORM = platformOf(detect(navigator.platform.toLowerCase()));
+export const PLATFORM = platformOf(detectPlatform());
 
-function detect(reported: string): string {
-  if (reported.includes("mac")) {
+export function detectPlatform(
+  nav: { userAgentData?: { platform?: string }; platform?: string; userAgent?: string } = typeof navigator !== "undefined"
+    ? navigator
+    : {}
+): string {
+  const reported = (nav.userAgentData?.platform || nav.userAgent || nav.platform || "").toLowerCase();
+  if (reported.includes("mac") || reported.includes("darwin")) {
     return "darwin";
   }
   return reported.includes("win") ? "win32" : "linux";
