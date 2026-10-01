@@ -58,7 +58,8 @@ const GRID = 16;
  * Fits an icon by how much of its grid it actually draws on, since icons cover their grids
  * unequally. Each declares its extent — the side of its drawing's bounding box, half a stroke
  * included — and the viewBox is cropped to put that extent at TARGET_EXTENT. `strokeWidth` scales
- * by the same factor, or the crop would thicken every enlarged stroke.
+ * by the same factor, or the crop would thicken every enlarged stroke. One meant to read smaller
+ * or larger than its neighbours declares a wider or narrower extent, saying why at its site.
  *
  * An extent is the **geometric mean** of the box's sides, not the longer side, capped at about 87%
  * of the box in the long axis so a long thin icon does not outgrow its place.
@@ -75,7 +76,7 @@ function geometry(extent: number, cx: number, cy: number, grid: number, stroke: 
 }
 
 /** `Svg`'s box for a fill-only icon on its own grid (git's mark, agent-icons.tsx): the same
- *  fitting, nothing stroked, a `scale` already divided into `extent`. */
+ *  fitting, nothing stroked. */
 export function FillSvg({
   className,
   extent,
@@ -108,21 +109,7 @@ export function FillSvg({
 }
 
 /**
- * Draws an icon two pixels under the shared `--icon-size`, as a ratio so it holds for any size.
- * The box stays; only the drawing shrinks.
- */
-const SMALLER = 11 / 13;
-
-/** Two pixels over, for an icon that should read larger. */
-export const LARGER = 15 / 13;
-
-/** A tree's folding chevron, in the git pane and the Explorer alike: 9px of the `--icon-size`
- *  box, which draws TARGET_EXTENT/GRID of it unscaled. */
-export const TREE_CHEVRON = 9 / 10.4;
-
-/**
- * `extent` and the centre `cx`/`cy` are the drawing's, on the 16 grid; `scale` is a *choice* — to
- * read smaller or larger than the neighbours — kept apart from the extent. Also the stroked agent
+ * `extent` and the centre `cx`/`cy` are the drawing's, on the 16 grid. Also the stroked agent
  * icons' box (agent-icons.tsx).
  */
 export function Svg({
@@ -131,19 +118,16 @@ export function Svg({
   extent = TARGET_EXTENT,
   cx = 8,
   cy = 8,
-  scale = 1,
   stroke = 1.5
 }: IconProps & {
   children: React.ReactNode;
   extent?: number;
   cx?: number;
   cy?: number;
-  scale?: number;
   /** The drawing's own stroke on the 16 grid, scaled by the crop like everything else. */
   stroke?: number;
 }) {
-  // Dividing widens the crop, shrinking the drawing in the same box.
-  const { viewBox, strokeWidth } = geometry(extent / scale, cx, cy, GRID, stroke);
+  const { viewBox, strokeWidth } = geometry(extent, cx, cy, GRID, stroke);
   return (
     <svg
       className={className}
@@ -166,8 +150,7 @@ export function Svg({
 /**
  * A lucide-react icon, cropped like `Svg`: its native 24-unit grid, centred where most of them are,
  * and its stroke of 2. Only `extent` differs from one to the next — an icon off that centre or
- * drawn heavier says so, and one drawn `SMALLER`/`LARGER` passes it as `scale`. The extents hold
- * for the paths lucide-react ships.
+ * drawn heavier says so. The extents hold for the paths lucide-react ships.
  */
 function Lucide({
   icon: Icon,
@@ -175,17 +158,15 @@ function Lucide({
   extent,
   cx = 12,
   cy = 12,
-  scale = 1,
   stroke = 2
 }: IconProps & {
   icon: LucideIcon;
   extent: number;
   cx?: number;
   cy?: number;
-  scale?: number;
   stroke?: number;
 }) {
-  const { viewBox, strokeWidth } = geometry(extent / scale, cx, cy, 24, stroke);
+  const { viewBox, strokeWidth } = geometry(extent, cx, cy, 24, stroke);
   // `size` is the fallback only, as `Svg`'s width and height; `viewBox` overrides lucide's own.
   return <Icon className={className} size={13} viewBox={viewBox} strokeWidth={strokeWidth} />;
 }
@@ -195,9 +176,9 @@ export function PlusIcon(props: IconProps) {
   return <Lucide {...props} icon={Plus} extent={16} stroke={2.3} />;
 }
 
-/** Lucide's `x`, drawn `SMALLER`. */
+/** Lucide's `x`, drawn two pixels under the shared size. */
 export function CloseIcon(props: IconProps) {
-  return <Lucide {...props} icon={X} extent={14} scale={SMALLER} />;
+  return <Lucide {...props} icon={X} extent={16.55} />;
 }
 
 /** Lucide's `log-in` — sign in with an SBX access token. */
@@ -257,14 +238,12 @@ export function WorktreeIcon(props: IconProps) {
 }
 
 /**
- * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. A step past
- * `LARGER`, since a diamond inks half its bounding box; larger still would clip the tips.
+ * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. Drawn three pixels
+ * over the shared size, since a diamond inks half its bounding box; larger still would clip the tips.
  */
-const GIT_SCALE = 16 / 13;
-
 export function GitIcon(props: IconProps) {
   return (
-    <FillSvg className={props.className} extent={28 / GIT_SCALE} cx={16} cy={16} grid={32}>
+    <FillSvg className={props.className} extent={22.75} cx={16} cy={16} grid={32}>
       <path
         fill="currentColor"
         d="M16 2c-.504 0-.996.184-1.375.563l-2.813 2.843c-.152.082-.28.2-.374.344l-8.876 8.875a1.947 1.947 0 0 0 0 2.75l12.063 12.063a1.955 1.955 0 0 0 2.75 0l12.063-12.063a1.947 1.947 0 0 0 0-2.75L17.374 2.562A1.92 1.92 0 0 0 16 2m0 2.031L27.969 16L16 27.969L4.031 16l8.282-8.281l1.75 1.75A2 2 0 0 0 14 10c0 .738.402 1.371 1 1.719v8.562c-.598.348-1 .98-1 1.719a1.999 1.999 0 1 0 4 0c0-.738-.402-1.371-1-1.719v-7.843l3.063 3.062A2 2 0 0 0 22 18a2 2 0 0 0 1.999-2a2 2 0 0 0-2.5-1.938L17.937 10.5A2 2 0 0 0 16 8a2 2 0 0 0-.53.063l-1.75-1.75z"
@@ -296,8 +275,13 @@ export function RegexIcon(props: IconProps) {
 }
 
 /** Lucide's `chevron-down` or `chevron-right`. */
-export function ChevronIcon({ expanded, scale, ...props }: IconProps & { expanded: boolean; scale?: number }) {
-  return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} extent={12.29} scale={scale} />;
+export function ChevronIcon({ expanded, ...props }: IconProps & { expanded: boolean }) {
+  return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} extent={12.29} />;
+}
+
+/** A tree's folding chevron, in the git pane and the Explorer alike: `ChevronIcon` drawn 9px. */
+export function TreeChevronIcon({ expanded, ...props }: IconProps & { expanded: boolean }) {
+  return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} extent={14.2} />;
 }
 
 /** Lucide's `loader-circle`, spun (`spinning`) about its centre as a session's working mark
@@ -311,9 +295,9 @@ export function SparkleIcon(props: IconProps) {
   return <Lucide {...props} icon={Wand} extent={21} cx={12.5} cy={11.5} />;
 }
 
-/** Lucide's `play`, `SMALLER` like `CloseIcon`. */
+/** Lucide's `play`, two pixels under like `CloseIcon`. */
 export function PlayIcon(props: IconProps) {
-  return <Lucide {...props} icon={Play} extent={18.98} scale={SMALLER} cx={13} />;
+  return <Lucide {...props} icon={Play} extent={22.43} cx={13} />;
 }
 
 /** Lucide's `tag`. */
@@ -382,10 +366,10 @@ export function RemoteIcon(props: IconProps) {
   return <Lucide {...props} icon={Globe} extent={22} />;
 }
 
-/** Lucide's `settings`, drawn `LARGER`: a gear is mostly gaps and reads small beside the git
- *  mark. */
+/** Lucide's `settings`, drawn two pixels over the shared size: a gear is mostly gaps and reads
+ *  small beside the git mark. */
 export function GearIcon(props: IconProps) {
-  return <Lucide {...props} icon={Settings} extent={20.91} scale={LARGER} />;
+  return <Lucide {...props} icon={Settings} extent={18.12} />;
 }
 
 /** Lucide's `file-braces` — the files view. The long-axis cap: the geometric mean would clip the
@@ -407,15 +391,16 @@ export function NewFolderIcon(props: IconProps) {
 }
 
 /** A tree header's "Collapse All", as IntelliJ's: Lucide's `chevrons-down-up`, tall, so the
- *  long-side cap, and drawn `SMALLER`: at full size its chevrons outweigh the header's other icons. */
+ *  long-side cap, and drawn two pixels under: at full size its chevrons outweigh the header's other
+ *  icons. */
 export function CollapseAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsDownUp} extent={16.55} scale={SMALLER} />;
+  return <Lucide {...props} icon={ChevronsDownUp} extent={19.56} />;
 }
 
 /** A tree header's "Expand All", as IntelliJ's: Lucide's `chevrons-up-down`, `chevrons-down-up`'s
  *  box and size. */
 export function ExpandAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsUpDown} extent={16.55} scale={SMALLER} />;
+  return <Lucide {...props} icon={ChevronsUpDown} extent={19.56} />;
 }
 
 /** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap. */

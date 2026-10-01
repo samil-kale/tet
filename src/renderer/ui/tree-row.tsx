@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode, Ref } from "react";
-import { ChevronIcon, TREE_CHEVRON } from "./icons";
+import { TreeChevronIcon } from "./icons";
 
 /* VS Code's indent: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8). The chevron
  * sits as in the branch tree's headers (`.tree-header` in styles.css: 9px in, 4px before the label),
@@ -101,7 +101,7 @@ export function Twistie({ open }: { open?: boolean }) {
         marginRight: TWISTIE_GAP
       }}
     >
-      {open !== undefined && <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />}
+      {open !== undefined && <TreeChevronIcon expanded={open} className="tree-icon" />}
     </span>
   );
 }

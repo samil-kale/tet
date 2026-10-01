@@ -11,11 +11,10 @@ export interface IconShape {
 /**
  * An agent's icon as data, drawn by the window (agent-icons.tsx) and fitted into the shared box as
  * icons.tsx's hand drawings are: `fill` on its own grid (FillSvg), `stroke` on the 16 grid (Svg).
- * `larger` draws it two pixels over, for a mark that reads small beside the others.
  */
 export type AgentIcon =
-  | { kind: "fill"; extent: number; cx: number; cy: number; grid: number; larger?: boolean; crisp?: boolean; shapes: IconShape[] }
-  | { kind: "stroke"; extent: number; cx?: number; cy?: number; larger?: boolean; stroke?: number; shapes: IconShape[] };
+  | { kind: "fill"; extent: number; cx: number; cy: number; grid: number; crisp?: boolean; shapes: IconShape[] }
+  | { kind: "stroke"; extent: number; cx?: number; cy?: number; stroke?: number; shapes: IconShape[] };
 
 export interface AgentInfo {
   id: AgentId;
