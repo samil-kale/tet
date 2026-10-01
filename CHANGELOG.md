@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.15.1 (2026-10-01)
+
+- **Side views as columns.** The projects, git and files are each a side view of their own,
+  shown one at a time from the strip's toggles; a view pinned from its header's menu stays open
+  beside the others.
+- **Git status letters.** The changes list marks each file with its git status letter (M, A, D,
+  R, ?, C) instead of coloring its name.
+
 ## 0.15.0 (2026-10-01)
 
 - **Changes as a tree with checkboxes.** The changes list shows its files in a folder tree; commit
