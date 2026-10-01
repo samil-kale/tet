@@ -15,7 +15,7 @@ import type { ResolvedRef } from "../resolved-ref";
 /** Our own type, so a row dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-command";
 
-const COMMAND_DETAIL = "Saved to tet.json in the project. The command is started without a shell.";
+const COMMAND_DETAIL = "Saved to tet.json in the project.";
 
 function capitalized(color: CommandColor): string {
   return color[0].toUpperCase() + color.slice(1);

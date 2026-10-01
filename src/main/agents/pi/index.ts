@@ -17,22 +17,16 @@ import { logError } from "../../util/error-log";
 const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prompt", systemPrompt(side)];
 
 /**
- * pi's fullscreen TUI (`--tui-mode`, this run only — settings.json untouched): it enters the
- * alternate screen and owns the viewport, so a resize redraws in place. It also turns on
- * mouse reporting (`?1000;1002;1006h`): pi scrolls, selects and pastes on a right click itself
- * (terminal-views.ts).
- */
-const FULLSCREEN_ARGS = ["--tui-mode", "fullscreen"];
-
-/**
  * pi (`@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts, reporting
- * turns through a generated extension.
+ * turns through a generated extension. Its TUI is fullscreen by default: it enters the alternate
+ * screen and owns the viewport, so a resize redraws in place, and turns on mouse reporting
+ * (`?1000;1002;1006h`): pi scrolls, selects and pastes on a right click itself (terminal-views.ts).
  *
  * Deliberately unset: `PI_CODING_AGENT_DIR` (would move the user's sessions and auth) and
  * `PI_OFFLINE`.
  *
- * Sandboxed through a community kit — see `sandbox.kit` (pi has no `/login`; its Anthropic credential
- * comes from sbx's store).
+ * Sandboxed through a community kit — see `sandbox.kit` (its Anthropic credential comes from sbx's
+ * store).
  */
 export const piAgent: SandboxedAgent = {
   id: "pi",
@@ -74,7 +68,7 @@ export const piAgent: SandboxedAgent = {
       }
       // Built-in themes are `dark` and `light`; `--use-theme` applies to this run only, leaving
       // settings.json untouched.
-      args.push(...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, ...systemPromptArgs(HOST_SIDE));
+      args.push("--use-theme", paths.theme.kind, ...systemPromptArgs(HOST_SIDE));
       return Promise.resolve({ args });
     }
   },
@@ -82,7 +76,7 @@ export const piAgent: SandboxedAgent = {
     prepare: (paths) => {
       // `-a`/`--approve` skips the project-trust dialog (pi's only gate): the sandbox is the
       // safety boundary, as for Claude Code, and the pi kit does not set it.
-      const args = [...FULLSCREEN_ARGS, "--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)];
+      const args = ["--use-theme", paths.theme.kind, "-a", ...systemPromptArgs(SANDBOX_SIDE)];
       try {
         const extension = writePiExtension(paths.agentDir);
         // Written at the host path, read at the sandbox's: the sandbox's agentDir is mounted whole
