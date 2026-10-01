@@ -708,12 +708,12 @@ textarea:focus,
   gap: 0;
 }
 
-/* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's
+/* A file mark is a glyph of Seti's font (ui/file-icons.ts), centred in the chevron's
    `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
    (TWISTIE_WIDTH + TWISTIE_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
-  src: url("./files/seti.woff") format("woff");
+  src: url("./ui/seti.woff") format("woff");
   font-weight: normal;
   font-style: normal;
 }
@@ -728,7 +728,7 @@ textarea:focus,
   line-height: 1;
 }
 
-/* Seti's palette (FileMarkColor in files/file-icons.ts) in the terminal's ANSI colors, which every
+/* Seti's palette (FileMarkColor in ui/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
   color: var(--vscode-terminal-ansiBlue);
@@ -775,8 +775,9 @@ textarea:focus,
   color: var(--vscode-errorForeground);
 }
 
-/* The folder a result's file sits in, after its name as VS Code's result rows show it. */
-.search-dir {
+/* The folder a file sits in, after its name as VS Code's result rows show it: SEARCH's results,
+   the flat LOCAL CHANGES. */
+.tree-dir {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1236,53 +1237,25 @@ textarea:focus,
   display: none;
 }
 
-.changes-list {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.changes-list-items {
-  flex: 1;
-  overflow: auto;
-  /* As `.tree`'s. */
-  margin-left: 1px;
-}
-
-/* A `.tree-item`, spaced as a flat list. */
-.tree-item.change-item {
-  gap: 6px;
-  padding: 0 8px;
-}
-
-/* git's letter for the change, in the theme's SCM colour. `renamed` has none: git treats it as a
-   modification of a moved file. */
-.change-status {
-  flex: none;
-  width: 14px;
-  text-align: center;
-  font-family: var(--vscode-editor-font-family);
-  font-size: var(--small-font-size);
-}
-
-.change-status.modified {
+/* A changed file's name in the theme's SCM colour (git/ChangesList.tsx). `renamed` has none: git
+   treats it as a modification of a moved file. */
+.tree-item.modified .tree-label {
   color: var(--vscode-gitDecoration-modifiedResourceForeground);
 }
 
-.change-status.added {
+.tree-item.added .tree-label {
   color: var(--vscode-gitDecoration-addedResourceForeground);
 }
 
-.change-status.deleted {
+.tree-item.deleted .tree-label {
   color: var(--vscode-gitDecoration-deletedResourceForeground);
 }
 
-.change-status.untracked {
+.tree-item.untracked .tree-label {
   color: var(--vscode-gitDecoration-untrackedResourceForeground);
 }
 
-.change-status.conflicted {
+.tree-item.conflicted .tree-label {
   color: var(--vscode-gitDecoration-conflictingResourceForeground);
 }
 
@@ -2049,8 +2022,9 @@ textarea:focus,
 }
 
 /* Drawn by tet, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
-   dark, never a theme's colors. */
-.dialog-checkbox input {
+   dark, never a theme's colors. A tree row's (ui/tree-row.tsx) is the same box. */
+.dialog-checkbox input,
+.tree-checkbox {
   appearance: none;
   padding: 0;
   background: var(--vscode-settings-checkboxBackground);
@@ -2069,13 +2043,31 @@ textarea:focus,
 }
 
 /* Lucide's `check`, as a mask so it takes the theme's color. */
-.dialog-checkbox input:checked::before {
+.dialog-checkbox input:checked::before,
+.tree-checkbox[aria-checked="true"]::before,
+.tree-checkbox[aria-checked="mixed"]::before {
   content: "";
   width: 14px;
   height: 14px;
   background: var(--vscode-settings-checkboxForeground);
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
     center / contain no-repeat;
+}
+
+/* A folder partly checked: Lucide's `minus`. */
+.tree-checkbox[aria-checked="mixed"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E");
+}
+
+/* In a 22px row, before the file mark: a size smaller than the dialogs'. */
+.tree-checkbox {
+  display: grid;
+  place-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
 }
 
 /* Wider than a question, for the rows of switches and the Prompts tab's text box. Fixed height:

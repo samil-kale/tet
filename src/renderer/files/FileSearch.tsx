@@ -1,7 +1,7 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
 import { baseName, parentOf } from "../paths";
-import { FileMarkIcon } from "./file-mark";
+import { FileMarkIcon } from "../ui/file-mark";
 import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../ui/tree-row";
 import { FilterField } from "../ui/FilterField";
 import { IconButton } from "../ui/IconButton";
@@ -35,7 +35,8 @@ export function searchSummary(result: FileSearchResult): string {
 /** For the SEARCH header's title-bar buttons. */
 export interface FileSearchHandle {
   clear(): void;
-  toggleAll(): void;
+  expandAll(): void;
+  collapseAll(): void;
 }
 
 interface FileSearchProps {
@@ -43,8 +44,6 @@ interface FileSearchProps {
   result: FileSearchResult | undefined;
   /** The field asks for a search here, or for none; the pane runs it and shows it running. */
   runSearch: (query: FileSearchQuery | null) => void;
-  /** What the header's fold button stands for, reported as it changes. */
-  onAllFolded: (allFolded: boolean) => void;
   onOpenMatch: (path: string, match: FileSearchMatch) => void;
   ref?: React.Ref<FileSearchHandle>;
 }
@@ -55,7 +54,7 @@ interface FileSearchProps {
  * and under it a row per match with the match marked; the summary is the pane's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
-export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFolded, onOpenMatch, ref }: FileSearchProps) {
+export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMatch, ref }: FileSearchProps) {
   const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
   // Nothing but whitespace asks for nothing.
   const asked = search.text.trim() ? search : null;
@@ -69,14 +68,12 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFol
     setOpened({});
   }
   const files = result?.files ?? [];
-  const allFolded = files.length > 0 && files.every((file) => !opened[file.path]);
-  useEffect(() => onAllFolded(allFolded), [allFolded, onAllFolded]);
 
   useImperativeHandle(ref, () => ({
     // The text alone: the toggles are the field's own, as VS Code keeps them.
     clear: () => setSearch((current) => ({ ...current, text: "" })),
-    // VS Code's one button for both: every file listed open, or all of them folded away again.
-    toggleAll: () => setOpened(allFolded ? Object.fromEntries(files.map((file) => [file.path, true])) : {})
+    expandAll: () => setOpened(Object.fromEntries(files.map((file) => [file.path, true]))),
+    collapseAll: () => setOpened({})
   }));
 
   return (
@@ -111,7 +108,7 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onAllFol
                 }
                 label={name}
               >
-                {dir && <span className="search-dir">{dir}</span>}
+                {dir && <span className="tree-dir">{dir}</span>}
                 <span className="count-badge search-count">{file.matches.length}</span>
               </TreeRow>
               {open &&

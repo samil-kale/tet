@@ -14,6 +14,9 @@ const TWISTIE_GAP = 4;
 /** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the twistie and its
  *  gap): the line it found gets the width the rest of the nesting would have eaten. */
 export const MATCH_INDENT = INDENT_BASE + TWISTIE_WIDTH + TWISTIE_GAP + 1;
+/** A level of a tree with checkboxes, as IntelliJ's: every row keeps the twistie's box, so a child's
+ *  checkbox stands just past its parent's (`.tree-checkbox`'s 16px and 1px more). */
+export const CHECK_INDENT_STEP = 17;
 
 /**
  * A row of a tree or list (`.tree-item`), in the branch tree, the Explorer, SEARCH and LOCAL
@@ -62,8 +65,30 @@ export function TreeRow({
   );
 }
 
-/** A folder's or a result file's chevron, in the box the labels are measured against. */
-export function Twistie({ open }: { open: boolean }) {
+/** Whether the files under a row are checked: all, some, or none of them. */
+export type CheckState = boolean | "mixed";
+
+/** A row's checkbox, drawn as the dialogs' (`.tree-checkbox` in styles.css); "mixed" for a folder
+ *  partly checked. Not an `<input>`: the row is a button. Its click stays its own, as an
+ *  `IconButton`'s `isolated`. */
+export function TreeCheckbox({ checked, onToggle }: { checked: CheckState; onToggle: () => void }) {
+  return (
+    <span
+      role="checkbox"
+      aria-checked={checked}
+      className="tree-checkbox"
+      onClick={(event) => {
+        event.stopPropagation();
+        onToggle();
+      }}
+      onDoubleClick={(event) => event.stopPropagation()}
+    />
+  );
+}
+
+/** A folder's or a result file's chevron, in the box the labels are measured against. Without
+ *  `open`, the box alone: a changed file's checkbox stands under its folder's. */
+export function Twistie({ open }: { open?: boolean }) {
   return (
     <span
       style={{
@@ -76,7 +101,7 @@ export function Twistie({ open }: { open: boolean }) {
         marginRight: TWISTIE_GAP
       }}
     >
-      <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />
+      {open !== undefined && <ChevronIcon expanded={open} className="tree-icon" scale={TREE_CHEVRON} />}
     </span>
   );
 }

@@ -62,7 +62,6 @@ export const FilesPane = memo(function FilesPane({
   const searchRef = useRef<FileSearchHandle>(null);
   /** What the sections' header buttons stand for, reported by the views that hold the state. */
   const [filtering, setFiltering] = useState(false);
-  const [allFolded, setAllFolded] = useState(false);
   // A file action shows at once, as the git pane's changes list does.
   const showProgress = useDelayed(listing, PROGRESS_DELAY_MS) || acting;
   const showSearchProgress = useDelayed(searching, PROGRESS_DELAY_MS);
@@ -104,7 +103,14 @@ export const FilesPane = memo(function FilesPane({
               <ClearIcon />
             </IconButton>
             <IconButton
-              title="Collapse Folders in Explorer"
+              title="Expand All"
+              disabled={!explorerListing}
+              onClick={() => explorerRef.current?.expandAll()}
+            >
+              <ExpandAllIcon />
+            </IconButton>
+            <IconButton
+              title="Collapse All"
               disabled={!explorerListing}
               onClick={() => explorerRef.current?.collapseAll()}
             >
@@ -154,11 +160,18 @@ export const FilesPane = memo(function FilesPane({
               <ClearIcon />
             </IconButton>
             <IconButton
-              title={allFolded ? "Expand All" : "Collapse All"}
+              title="Expand All"
               disabled={searchResult === undefined || searchResult.files.length === 0}
-              onClick={() => searchRef.current?.toggleAll()}
+              onClick={() => searchRef.current?.expandAll()}
             >
-              {allFolded ? <ExpandAllIcon /> : <CollapseAllIcon />}
+              <ExpandAllIcon />
+            </IconButton>
+            <IconButton
+              title="Collapse All"
+              disabled={searchResult === undefined || searchResult.files.length === 0}
+              onClick={() => searchRef.current?.collapseAll()}
+            >
+              <CollapseAllIcon />
             </IconButton>
           </>
         }
@@ -169,7 +182,6 @@ export const FilesPane = memo(function FilesPane({
           ref={searchRef}
           result={searchResult}
           runSearch={search}
-          onAllFolded={setAllFolded}
           onOpenMatch={onOpenMatch}
         />
       </Section>

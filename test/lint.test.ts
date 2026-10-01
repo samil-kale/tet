@@ -50,7 +50,7 @@ const IMPORTS: Probe[] = [
   ["src/renderer/ui/x.ts", 'import "../tabs/pane-layout";', "no-restricted-imports"],
   ["src/renderer/editor/x.ts", 'import "../tabs/terminal-views";', "no-restricted-imports"],
   ["src/renderer/tabs/links/x.ts", 'import "../../editor/editor-tab";', null],
-  ["src/renderer/git/x.ts", 'import "../files/file-mark";', "no-restricted-imports"],
+  ["src/renderer/git/x.ts", 'import "../files/explorer-tree";', "no-restricted-imports"],
   ["src/renderer/files/x.ts", 'import "../git/run-action";', null],
   ["src/renderer/files/x.ts", 'import "../sidebar/ProjectList";', "no-restricted-imports"],
   ["src/renderer/platform.ts", 'import "./App";', "no-restricted-imports"],

@@ -1,13 +1,15 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { syncRemote } from "../../shared/types/git";
-import type { ChangeStatus, FileChange, GitActionResult, RepositoryState } from "../../shared/types/git";
+import type { ChangeStatus, GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../editor/editor-tab";
 import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";
-import { baseName, extensionOf } from "../paths";
+import { baseName, extensionOf, parentOf } from "../paths";
 import { openEntries, pathEntries } from "../editor/file-menu";
-import { TreeRow } from "../ui/tree-row";
+import { FileMarkIcon } from "../ui/file-mark";
+import { buildTree, compactTree, compareGrouped, compareNames, filesUnder, sortTree, visibleRows, type TreeNode } from "../ui/tree";
+import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, Twistie, type CheckState } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
@@ -17,24 +19,50 @@ import { notify } from "../ui/Notices";
 
 interface ChangesListProps {
   resolved: ResolvedRef;
-  /** The changes are the list; the rest feeds a commit from the menu. */
+  /** The changes are the list. */
   state: RepositoryState;
   /** The owner shows it running on its own bar. */
   act: FileAct;
-  /** For the commit, whose question stays up to show what git refused. */
-  ask: FileAsk;
   /** On a double-click; a Markdown file with its preview from the menu. */
   onOpenDiff: (path: string, how?: OpenEditor) => void;
+  /** Grouped by folder, or every file under the root with its folder after its name. */
+  asTree: boolean;
+  /** What the header's Commit and Discard act on, reported as it changes: the checked files the
+   *  filter shows — one it hides is never committed or discarded unseen. */
+  onChecked: (paths: string[]) => void;
+  ref?: React.Ref<ChangesListHandle>;
 }
 
-const STATUS_LETTER: Record<ChangeStatus, string> = {
-  modified: "M",
-  added: "A",
-  deleted: "D",
-  renamed: "R",
-  untracked: "?",
-  conflicted: "C"
+/** For the LOCAL CHANGES header's fold buttons. */
+export interface ChangesListHandle {
+  expandAll(): void;
+  collapseAll(): void;
+}
+
+/** A row's tooltip names its change: the name's color alone does not, where a theme gives two
+ *  of them one color. */
+const STATUS_LABEL: Record<ChangeStatus, string> = {
+  modified: "Modified",
+  added: "Added",
+  deleted: "Deleted",
+  renamed: "Renamed",
+  untracked: "Untracked",
+  conflicted: "Conflicted"
 };
+
+/** The top row, standing for every change the filter shows. Its id is no path's. */
+const ROOT_ID = "";
+
+/** What the top row counts, grey after its name as IntelliJ's. */
+function fileCount(count: number): string {
+  return `${count} file${count === 1 ? "" : "s"}`;
+}
+
+/** Whether git commits these paths now: some of the changes can't be committed while a merge is
+ *  being concluded, all of them can (`askCommit` commits them as all). */
+export function canCommit(state: RepositoryState, paths: string[]): boolean {
+  return paths.length > 0 && (state.operation === undefined || paths.length === state.changes.length);
+}
 
 /** The files go to the trash; where the trash fails, a second question offers to delete them.
  *  Asked although the trash can give them back: a discard is GitHub Desktop's one confirmed
@@ -70,13 +98,14 @@ export async function confirmDiscard(ref: ProjectRef, paths: string[], act: File
 }
 
 /** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. No
- *  staging area: the selection is what one commit takes. */
+ *  staging area: the checked files are what one commit takes. Every change given is all of them. */
 export async function askCommit(
   ref: ProjectRef,
   state: RepositoryState,
-  paths: string[] | undefined,
+  given: string[] | undefined,
   ask: FileAsk
 ): Promise<void> {
+  const paths = given?.length === state.changes.length ? undefined : given;
   const { remote, canSync } = syncRemote(state);
   // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitPane).
   const pushLabel = canSync ? (state.upstream === undefined ? "Also publish branch" : `Also push ${remote}`) : undefined;
@@ -90,12 +119,12 @@ export async function askCommit(
     return { committed, pushed: committed.ok && push ? await window.tet.repository.push(ref) : undefined };
   };
   await prompt({
-    title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} selected changes`,
+    title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} changes`,
     detail: !paths
       ? `Stages and commits all ${state.changes.length} changed files, untracked ones included.`
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
-        : `Stages and commits the ${paths.length} selected files; the other changes stay as they are.`,
+        : `Stages and commits these ${paths.length} files; the other changes stay as they are.`,
     value: { message: "", push: false },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
@@ -137,86 +166,126 @@ export async function askCommit(
   }
 }
 
-/** LOCAL CHANGES: the changed files with a filter and a per-file menu, run on the owner's `act`. */
-export const ChangesList = memo(function ChangesList({ resolved, state, act, ask, onOpenDiff }: ChangesListProps) {
+/**
+ * LOCAL CHANGES: the changed files under one "Changes" row, grouped by folder or flat, each with a
+ * checkbox — IntelliJ's commit view. The checked files are what the header's Commit and Discard
+ * take, and nothing else does: a row's menu holds what they don't cover. Shaped as the Explorer,
+ * so its class carries the styles they share.
+ */
+export const ChangesList = memo(function ChangesList({
+  resolved,
+  state,
+  act,
+  onOpenDiff,
+  asTree,
+  onChecked,
+  ref
+}: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
-  /** Ctrl- and shift-click extend it, so one action can cover several files. */
-  const [selected, setSelected] = useState<string[]>([]);
-  /** A shift-click range starts here: the last row clicked without shift. */
-  const [anchor, setAnchor] = useState<string | null>(null);
-  const menu = useContextMenu<FileChange>();
+  /** Nothing is checked to begin with, nor is a change that comes later (IntelliJ). */
+  const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
+  /** Folders start open; only what was folded is kept. */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const menu = useContextMenu<TreeNode>();
 
-  const query = filter.trim().toLowerCase();
-  const visible = useMemo(
-    () => changes.filter((change) => change.path.toLowerCase().includes(query)),
-    [changes, query]
-  );
-
-  // Drop files no longer changed, or a later change reappears pre-selected. In render, so the stale
-  // selection never paints.
+  // Drop files no longer changed, or a later change reappears checked. In render, so the stale
+  // checks never paint.
   const [prunedFor, setPrunedFor] = useState(changes);
   if (prunedFor !== changes) {
     setPrunedFor(changes);
-    setSelected((current) => {
+    setChecked((current) => {
       const changed = new Set(changes.map((change) => change.path));
-      const kept = current.filter((path) => changed.has(path));
-      return kept.length === current.length ? current : kept;
+      const kept = [...current].filter((path) => changed.has(path));
+      return kept.length === current.size ? current : new Set(kept);
     });
   }
 
-  /** VS Code's list selection: plain replaces, ctrl toggles, shift takes the range. */
-  const select = (event: React.MouseEvent, path: string): void => {
-    if (event.shiftKey && anchor) {
-      const from = visible.findIndex((change) => change.path === anchor);
-      const to = visible.findIndex((change) => change.path === path);
-      if (from >= 0 && to >= 0) {
-        const range = visible.slice(Math.min(from, to), Math.max(from, to) + 1);
-        setSelected(range.map((change) => change.path));
-        return;
+  const query = filter.trim().toLowerCase();
+  const filtering = query.length > 0;
+  const byPath = useMemo(() => new Map(changes.map((change) => [change.path, change])), [changes]);
+  /** Filtered before it is grouped: a file's path holds its folders' names. */
+  const root = useMemo((): TreeNode => {
+    const paths = changes.map((change) => change.path).filter((path) => path.toLowerCase().includes(query));
+    let children: TreeNode[];
+    if (asTree) {
+      children = buildTree(paths);
+      sortTree(children, (a, b) => compareGrouped(a, b, true));
+    } else {
+      children = paths.map((path) => ({ id: path, name: baseName(path), path }));
+      children.sort((a, b) => compareNames(a, b) || a.path.localeCompare(b.path));
+    }
+    const top: TreeNode = { id: ROOT_ID, name: "Changes", path: "", children, root: true };
+    return asTree ? compactTree([top])[0] : top;
+  }, [changes, query, asTree]);
+
+  const rows = useMemo(
+    () => visibleRows([root], (node) => filtering || (expanded[node.id] ?? true)),
+    [root, expanded, filtering]
+  );
+  /** The folders under the root, as their rows are keyed. */
+  const folders = useMemo(() => {
+    const ids: string[] = [];
+    const collect = (node: TreeNode): void => {
+      for (const child of node.children ?? []) {
+        if (child.children) {
+          ids.push(child.id);
+          collect(child);
+        }
       }
-    }
-    setAnchor(path);
-    if (event.ctrlKey || event.metaKey) {
-      setSelected((current) =>
-        current.includes(path) ? current.filter((entry) => entry !== path) : [...current, path]
-      );
-      return;
-    }
-    setSelected([path]);
+    };
+    collect(root);
+    return ids;
+  }, [root]);
+
+  const shownChecked = useMemo(() => filesUnder(root).filter((path) => checked.has(path)), [root, checked]);
+  useEffect(() => onChecked(shownChecked), [shownChecked, onChecked]);
+
+  useImperativeHandle(ref, () => ({
+    // Folders start open, so nothing folded is everything open.
+    expandAll: () => setExpanded({}),
+    // The root stays open: what is folded is every folder under it.
+    collapseAll: () => setExpanded(Object.fromEntries(folders.map((id) => [id, false])))
+  }));
+
+  const checkState = (node: TreeNode): CheckState => {
+    const files = filesUnder(node);
+    const count = files.filter((path) => checked.has(path)).length;
+    return count === 0 ? false : count === files.length ? true : "mixed";
+  };
+  /** A file flips; a folder all checked is unchecked, any other is checked whole (IntelliJ). */
+  const toggleChecked = (node: TreeNode): void => {
+    const files = filesUnder(node);
+    setChecked((current) => {
+      const next = new Set(current);
+      const all = files.every((path) => current.has(path));
+      for (const path of files) {
+        if (all) {
+          next.delete(path);
+        } else {
+          next.add(path);
+        }
+      }
+      return next;
+    });
   };
 
-  /** Acts on the selection, except where only one file makes sense (a diff, the file manager). */
-  const menuEntries = (change: FileChange): ContextMenuEntry[] => {
-    // A right-click outside the selection has already replaced it. Only what the filter shows: a
-    // selected file it hides would be committed or discarded unseen.
-    const paths = selected.includes(change.path)
-      ? selected.filter((path) => visible.some((entry) => entry.path === path))
-      : [change.path];
-    const one = paths.length === 1;
+  /** What the checkboxes don't cover: commit and discard go by them alone, from the header. */
+  const menuEntries = (node: TreeNode): ContextMenuEntry[] => {
+    const change = node.children ? undefined : byPath.get(node.path);
+    if (!change) {
+      // Without its leading separator: nothing stands above it.
+      return pathEntries(resolved, [node.path], "path").slice(1);
+    }
     const extension = extensionOf(baseName(change.path));
-    const discard = (targets: string[]) => () => void confirmDiscard(resolved.ref, targets, act);
     const ignore = (scope: "file" | "extension") => () =>
       act(() => window.tet.repository.ignore(resolved.ref, change.path, scope));
-
     const entries: ContextMenuEntry[] = [
-      { label: "Open diff", run: one ? () => onOpenDiff(change.path) : undefined },
-      ...openEntries(resolved.ref, change.path, one, (how) => onOpenDiff(change.path, how)),
-      SEPARATOR,
-      {
-        label: one ? "Commit changes..." : `Commit ${paths.length} selected changes...`,
-        // git refuses a commit of some paths while a merge is being concluded.
-        run: state.operation === undefined ? () => void askCommit(resolved.ref, state, paths, ask) : undefined
-      },
-      { label: one ? "Discard changes..." : `Discard ${paths.length} selected changes...`, run: discard(paths) },
-      {
-        label: "Discard all changes...",
-        // When the selection is everything, the entry above already does this.
-        run: changes.length > paths.length ? discard(changes.map((entry) => entry.path)) : undefined
-      },
-      ...pathEntries(resolved, paths, "file path")
+      { label: "Open diff", run: () => onOpenDiff(change.path) },
+      ...openEntries(resolved.ref, change.path, true, (how) => onOpenDiff(change.path, how)),
+      ...pathEntries(resolved, [change.path], "file path")
     ];
-    if (one && change.status === "untracked") {
+    if (change.status === "untracked") {
       entries.push(SEPARATOR, { label: "Ignore file (add to .gitignore)", run: ignore("file") });
       if (extension) {
         entries.push({ label: `Ignore all ${extension} files (add to .gitignore)`, run: ignore("extension") });
@@ -225,34 +294,52 @@ export const ChangesList = memo(function ChangesList({ resolved, state, act, ask
     return entries;
   };
 
-  // Asked per row: `includes` would make a long list with a long selection quadratic.
-  const selectedSet = new Set(selected);
-
   return (
-    <div className="changes-list">
+    <div className="explorer-tree">
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
-      <div className="changes-list-items">
-        {visible.map((change) => (
-          <TreeRow
-            key={change.path}
-            className={selectedSet.has(change.path) ? "change-item selected" : "change-item"}
-            onClick={(event) => select(event, change.path)}
-            onDoubleClick={() => onOpenDiff(change.path)}
-            onContextMenu={(event) => {
-              if (!selected.includes(change.path)) {
-                setSelected([change.path]);
-                setAnchor(change.path);
-              }
-              menu.open(event, change);
-            }}
-            title={`${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`}
-            icon={<span className={`change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>}
-            label={change.path}
-          />
-        ))}
-        {changes.length === 0 && <div className="placeholder">No local changes.</div>}
+      <div className="tree">
+        {changes.length === 0 ? (
+          <div className="placeholder">No local changes.</div>
+        ) : (
+          rows.map(({ node, depth, open }) => {
+            const change = node.children ? undefined : byPath.get(node.path);
+            const box = <TreeCheckbox checked={checkState(node)} onToggle={() => toggleChecked(node)} />;
+            return (
+              <TreeRow
+                key={node.id}
+                className={change?.status}
+                indent={INDENT_BASE + depth * CHECK_INDENT_STEP}
+                title={
+                  change
+                    ? `${STATUS_LABEL[change.status]}\n${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`
+                    : node.path || undefined
+                }
+                onClick={change ? undefined : () => setExpanded((current) => ({ ...current, [node.id]: !open }))}
+                onDoubleClick={change ? () => onOpenDiff(change.path) : undefined}
+                onContextMenu={(event) => menu.open(event, node)}
+                icon={
+                  change ? (
+                    <>
+                      <Twistie />
+                      {box}
+                      <FileMarkIcon name={node.name} />
+                    </>
+                  ) : (
+                    <>
+                      <Twistie open={open} />
+                      {box}
+                    </>
+                  )
+                }
+                label={node.name}
+              >
+                {node.id === ROOT_ID && <span className="tree-dir">{fileCount(filesUnder(node).length)}</span>}
+                {change && !asTree && parentOf(change.path) && <span className="tree-dir">{parentOf(change.path)}</span>}
+              </TreeRow>
+            );
+          })
+        )}
       </div>
-
       {menu.render(menuEntries)}
     </div>
   );

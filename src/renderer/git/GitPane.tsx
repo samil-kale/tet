@@ -1,14 +1,26 @@
-import { memo, useRef } from "react";
+import { memo, useRef, useState } from "react";
 import { syncRemote } from "../../shared/types/git";
 import type { RepositoryState } from "../../shared/types/git";
 import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../editor/editor-tab";
 import { BranchTree, type BranchActions } from "./BranchTree";
-import { askCommit, ChangesList, confirmDiscard } from "./ChangesList";
+import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHandle } from "./ChangesList";
 import { useFileAct } from "./run-action";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { IconButton } from "../ui/IconButton";
-import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, StashIcon, SyncIcon } from "../ui/icons";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CollapseAllIcon,
+  CommitIcon,
+  DiscardIcon,
+  ExpandAllIcon,
+  ListIcon,
+  ListTreeIcon,
+  StashIcon,
+  SyncIcon
+} from "../ui/icons";
+import { usePaneToggle } from "../ui/layout-storage";
 import { Section } from "../ui/Section";
 
 interface GitPaneProps {
@@ -39,6 +51,11 @@ export const GitPane = memo(function GitPane({
   onSelect
 }: GitPaneProps) {
   const { acting, act, ask } = useFileAct(resolved.key);
+  const changesRef = useRef<ChangesListHandle>(null);
+  /** What the LOCAL CHANGES header's buttons stand for, reported by the list that holds the state. */
+  const [checked, setChecked] = useState<string[]>([]);
+  /** One view for every project, as the side pane's toggles. */
+  const [asTree, setAsTree] = usePaneToggle("changes-tree", true);
   // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
   // for nobody. A repository or worktree switch is never held — the keyed views would get another
   // repository's.
@@ -108,7 +125,8 @@ export const GitPane = memo(function GitPane({
         minOther={MIN_PANE_HEIGHT}
         onResize={onTreeHeight}
       />
-      {/* What clears the whole list, ordered by cost. Narrower actions are in the context menu.
+      {/* The checked changes, ordered by cost — stash takes all, git stashing no single paths
+          safely. A row's own actions are in the context menu, then the view.
           This section's bar — everything `act` covers. */}
       <Section
         title="LOCAL CHANGES"
@@ -117,9 +135,9 @@ export const GitPane = memo(function GitPane({
         actions={
           <>
             <IconButton
-              title="Commit all changes"
-              disabled={locked || state.changes.length === 0}
-              onClick={() => void askCommit(resolved.ref, state, undefined, ask)}
+              title="Commit checked changes"
+              disabled={locked || !canCommit(state, checked)}
+              onClick={() => void askCommit(resolved.ref, state, checked, ask)}
             >
               <CommitIcon />
             </IconButton>
@@ -132,16 +150,44 @@ export const GitPane = memo(function GitPane({
               <StashIcon />
             </IconButton>
             <IconButton
-              title="Discard all changes"
-              disabled={locked || state.changes.length === 0}
-              onClick={() => void confirmDiscard(resolved.ref, state.changes.map((change) => change.path), act)}
+              title="Discard checked changes"
+              disabled={locked || checked.length === 0}
+              onClick={() => void confirmDiscard(resolved.ref, checked, act)}
             >
               <DiscardIcon />
+            </IconButton>
+            <IconButton title={asTree ? "View as List" : "View as Tree"} onClick={() => setAsTree(!asTree)}>
+              {asTree ? <ListIcon /> : <ListTreeIcon />}
+            </IconButton>
+            <IconButton
+              title="Expand All"
+              disabled={!asTree || state.changes.length === 0}
+              onClick={() => changesRef.current?.expandAll()}
+            >
+              <ExpandAllIcon />
+            </IconButton>
+            <IconButton
+              title="Collapse All"
+              disabled={!asTree || state.changes.length === 0}
+              onClick={() => changesRef.current?.collapseAll()}
+            >
+              <CollapseAllIcon />
             </IconButton>
           </>
         }
       >
-        <ChangesList key={resolved.key} resolved={resolved} state={state} act={act} ask={ask} onOpenDiff={onOpenDiff} />
+        {/* Keyed by repository or worktree: the checks and folds are keyed by paths that repeat
+            across them. */}
+        <ChangesList
+          key={resolved.key}
+          ref={changesRef}
+          resolved={resolved}
+          state={state}
+          act={act}
+          onOpenDiff={onOpenDiff}
+          asTree={asTree}
+          onChecked={setChecked}
+        />
       </Section>
     </div>
   );

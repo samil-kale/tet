@@ -7,46 +7,14 @@ import type { ResolvedRef } from "../resolved-ref";
 import type { OpenEditor } from "../editor/editor-tab";
 import type { FileAct, FileAsk } from "../git/run-action";
 import { openEntries, pathEntries } from "../editor/file-menu";
-import {
-  ancestorsOf,
-  buildForest,
-  compactTree,
-  filterTree,
-  hasExpandedRootChild,
-  isOpen,
-  rootIndexFor,
-  type TreeNode
-} from "./explorer-tree";
+import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
 import { baseName, parentOf } from "../paths";
-import { FileMarkIcon } from "./file-mark";
+import { FileMarkIcon } from "../ui/file-mark";
+import { compactTree, filterTree, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../ui/tree";
 import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
-
-/** A row on screen: the tree flattened to what open folders show, as VS Code's list renders it. */
-interface VisibleRow {
-  node: TreeNode;
-  depth: number;
-  open: boolean;
-}
-
-function visibleRows(
-  nodes: TreeNode[],
-  expanded: Record<string, boolean>,
-  forceExpanded: boolean,
-  depth = 0,
-  out: VisibleRow[] = []
-): VisibleRow[] {
-  for (const node of nodes) {
-    const open = forceExpanded || isOpen(node, expanded);
-    out.push({ node, depth, open });
-    if (node.children && open) {
-      visibleRows(node.children, expanded, forceExpanded, depth + 1, out);
-    }
-  }
-  return out;
-}
 
 interface ExplorerRowProps extends VisibleRow {
   selected: boolean;
@@ -115,6 +83,7 @@ interface ExplorerProps {
 export interface ExplorerHandle {
   newFile(): void;
   newFolder(): void;
+  expandAll(): void;
   collapseAll(): void;
   clearFilter(): void;
 }
@@ -209,33 +178,30 @@ export const Explorer = memo(function Explorer({
     (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isOpen(node, current) })),
     []
   );
-  const flat = useMemo(() => visibleRows(shown, expanded, filtering), [shown, expanded, filtering]);
+  const flat = useMemo(
+    () => visibleRows(shown, (node) => filtering || isOpen(node, expanded)),
+    [shown, expanded, filtering]
+  );
 
-  /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
-   *  (at once without roots). Walks the uncompacted `tree`, whose ids compacted rows keep. */
-  const collapseAll = (): void => {
-    const ids: string[] = [];
-    const collect = (nodes: TreeNode[]): void => {
-      for (const node of nodes) {
-        if (node.children) {
-          ids.push(node.id);
-          collect(node.children);
-        }
+  /** Every folder's id under `nodes`, from the uncompacted `tree`, whose ids compacted rows keep. */
+  const foldersIn = (nodes: TreeNode[], ids: string[] = []): string[] => {
+    for (const node of nodes) {
+      if (node.children) {
+        ids.push(node.id);
+        foldersIn(node.children, ids);
       }
-    };
-    if (roots && hasExpandedRootChild(tree, expanded)) {
-      tree.forEach((root) => collect(root.children!));
-    } else {
-      collect(tree);
     }
-    setExpanded((current) => {
-      const next = { ...current };
-      for (const id of ids) {
-        next[id] = false;
-      }
-      return next;
-    });
+    return ids;
   };
+  const setAll = (ids: string[], open: boolean): void =>
+    setExpanded((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, open])) }));
+  /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
+   *  (at once without roots). */
+  const collapseAll = (): void =>
+    setAll(
+      roots && hasExpandedRootChild(tree, expanded) ? tree.flatMap((root) => foldersIn(root.children!)) : foldersIn(tree),
+      false
+    );
 
   /** The action, then a listing re-read on success. */
   const reread = (action: () => Promise<GitActionResult>) => () =>
@@ -293,6 +259,7 @@ export const Explorer = memo(function Explorer({
   useImperativeHandle(ref, () => ({
     newFile: () => void askNew("file", ""),
     newFolder: () => void askNew("folder", ""),
+    expandAll: () => setAll(foldersIn(tree), true),
     collapseAll,
     clearFilter: () => setFilter("")
   }));

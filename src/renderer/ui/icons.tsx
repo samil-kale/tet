@@ -5,10 +5,10 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleAlert,
   CircleX,
-  CopyMinus,
-  CopyPlus,
   Eye,
   FileBraces,
   FileDiff,
@@ -22,6 +22,8 @@ import {
   Inbox,
   Info,
   Landmark,
+  List,
+  ListTree,
   ListX,
   LoaderCircle,
   LogIn,
@@ -35,7 +37,7 @@ import {
   Settings,
   Shield,
   Tag,
-  Trash,
+  Undo2,
   Wand,
   WholeWord,
   X,
@@ -323,10 +325,9 @@ export function StashIcon(props: IconProps) {
   return <Lucide {...props} icon={Inbox} extent={20.23} />;
 }
 
-/** Lucide's `trash` — discard, beside the stash's "put away". The long-axis cap: the geometric
- *  mean would clip the bottom. */
+/** Lucide's `undo-2` — discard, as IntelliJ's rollback. Square, so the geometric mean. */
 export function DiscardIcon(props: IconProps) {
-  return <Lucide {...props} icon={Trash} extent={20.98} />;
+  return <Lucide {...props} icon={Undo2} extent={18} />;
 }
 
 /** Lucide's `arrow-up`. */
@@ -399,20 +400,31 @@ export function NewFolderIcon(props: IconProps) {
   return <Lucide {...props} icon={FolderPlus} extent={20.45} cy={11.5} />;
 }
 
-/** "Collapse Folders in Explorer": Lucide's `copy-minus`. */
+/** A tree header's "Collapse All", as IntelliJ's: Lucide's `chevrons-down-up`, tall, so the
+ *  long-side cap, and drawn `SMALLER`: at full size its chevrons outweigh the header's other icons. */
 export function CollapseAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={CopyMinus} extent={22} />;
+  return <Lucide {...props} icon={ChevronsDownUp} extent={16.55} scale={SMALLER} />;
 }
 
-/** The results pane's "Expand All": Lucide's `copy-plus`, `copy-minus` with one line more, which
- *  sits inside its box — the same extent. */
+/** A tree header's "Expand All", as IntelliJ's: Lucide's `chevrons-up-down`, `chevrons-down-up`'s
+ *  box and size. */
 export function ExpandAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={CopyPlus} extent={22} />;
+  return <Lucide {...props} icon={ChevronsUpDown} extent={16.55} scale={SMALLER} />;
 }
 
 /** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap. */
 export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} extent={17.93} cx={11.75} />;
+}
+
+/** LOCAL CHANGES' "View as List": Lucide's `list`. Wide, so the long-side cap. */
+export function ListIcon(props: IconProps) {
+  return <Lucide {...props} icon={List} extent={18.39} />;
+}
+
+/** LOCAL CHANGES' "View as Tree": Lucide's `list-tree`, `list`'s box. */
+export function ListTreeIcon(props: IconProps) {
+  return <Lucide {...props} icon={ListTree} extent={18.39} />;
 }
 
 /** Lucide's `save`. */
