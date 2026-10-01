@@ -296,11 +296,18 @@ export const ChangesList = memo(function ChangesList({
                 indent={INDENT_BASE + depth * CHECK_INDENT_STEP}
                 title={
                   change
-                    ? `${change.origPath ? `${change.origPath} → ${change.path}` : change.path}\nDouble-click to see the diff`
+                    ? change.origPath
+                      ? `${change.origPath} → ${change.path}`
+                      : change.path
                     : node.path || undefined
                 }
-                onClick={change ? undefined : () => setExpanded((current) => ({ ...current, [node.id]: !open }))}
-                onDoubleClick={change ? () => onOpenDiff(change.path) : undefined}
+                onClick={
+                  change
+                    ? () => onOpenDiff(change.path)
+                    : () => setExpanded((current) => ({ ...current, [node.id]: !open }))
+                }
+                // As the Explorer: a single click previews, a double click keeps.
+                onDoubleClick={change ? () => onOpenDiff(change.path, { keep: true }) : undefined}
                 onContextMenu={(event) => menu.open(event, node)}
                 icon={
                   change ? (
