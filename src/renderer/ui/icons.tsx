@@ -116,9 +116,9 @@ const SMALLER = 11 / 13;
 /** Two pixels over, for an icon that should read larger. */
 export const LARGER = 15 / 13;
 
-/** A tree's folding chevron, in the git pane and the Explorer alike: 10px of the `--icon-size`
+/** A tree's folding chevron, in the git pane and the Explorer alike: 9px of the `--icon-size`
  *  box, which draws TARGET_EXTENT/GRID of it unscaled. */
-export const TREE_CHEVRON = 10 / 10.4;
+export const TREE_CHEVRON = 9 / 10.4;
 
 /**
  * `extent` and the centre `cx`/`cy` are the drawing's, on the 16 grid; `scale` is a *choice* — to
