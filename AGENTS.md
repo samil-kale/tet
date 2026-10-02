@@ -1,8 +1,5 @@
 # AGENTS.md
 
-asdf
-
-
 ## What this is
 
 TET is a git workspace for coding agents: Electron + React + xterm.js, several repositories open
