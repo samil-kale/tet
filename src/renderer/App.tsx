@@ -321,12 +321,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
   /** Git and files need a repository or worktree in front; without one the projects stand in. */
   const shownViews: ReadonlySet<SideView> = activeResolved ? openViews : new Set(openViews.size > 0 ? ["projects"] : []);
-  /** The pinned columns in the toggles' order, then the free one, then those in, unseen at width
-   *  0. */
+  /** The pinned columns in the toggles' order, then one sliding in, then the free one, then those
+   *  in, unseen at width 0. A column sliding in stays where it stood until its slide ends: moving
+   *  its node would cancel the transition and snap it shut. */
+  const slidingIn = (view: SideView) => !shownViews.has(view) && slidingViews.has(view);
   const sideOrder = [
     ...SIDE_VIEWS.filter((view) => shownViews.has(view) && pinnedViews.has(view)),
+    ...SIDE_VIEWS.filter(slidingIn),
     ...SIDE_VIEWS.filter((view) => shownViews.has(view) && !pinnedViews.has(view)),
-    ...SIDE_VIEWS.filter((view) => !shownViews.has(view))
+    ...SIDE_VIEWS.filter((view) => !shownViews.has(view) && !slidingIn(view))
   ];
   /** What the columns out take together; a sash leaves the terminals their floor beside it. */
   const sideWidth = SIDE_VIEWS.reduce((sum, view) => (shownViews.has(view) ? sum + widthOf(view)[0] : sum), 0);
