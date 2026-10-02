@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.16.0 (2026-10-02)
+
+- **Diff view options.** A diff shows side by side or inline, and can collapse its unchanged
+  regions; the Markdown preview steps aside while a diff is open.
+- **Agents read and type into tabs.** `tet-ctl tabs-output` returns what a tab's terminal shows,
+  a fullscreen TUI's screen included, and the new `tabs-text` types text into a tab as one paste.
+- **Fixes.** pi runs fullscreen by default; overlong sbx error lines are cut to their end;
+  side view icons are redrawn and centred.
+
 ## 0.15.2 (2026-10-02)
 
 - **Diff preview from the changes list.** A single click on a changed file opens its diff as a
