@@ -129,7 +129,6 @@
   --vscode-gitDecoration-untrackedResourceForeground: #007100;
   --vscode-gitDecoration-addedResourceForeground: #3e7718;
   --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
-  --vscode-gitDecoration-ignoredResourceForeground: #827717;
 
   /* Unset; the registry's, and the overview ruler the text colors at twice their alpha. */
   --vscode-diffEditor-insertedLineBackground: #9bb95533;

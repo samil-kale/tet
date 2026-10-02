@@ -568,9 +568,9 @@ textarea:focus,
   cursor: progress;
 }
 
-/* Merged into the default branch: VS Code has no colour for it, so the one for what git leaves be. */
+/* Merged into the default branch: dimmed, but less than a disabled control, which it is not. */
 .branch-tree .tree-icon.merged {
-  color: var(--vscode-gitDecoration-ignoredResourceForeground);
+  opacity: 0.6;
 }
 
 /* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH pane's box,

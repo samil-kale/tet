@@ -126,7 +126,6 @@
   /* Unset; the registry's. */
   --vscode-gitDecoration-addedResourceForeground: #81b88b;
   --vscode-gitDecoration-conflictingResourceForeground: #ffb86c;
-  --vscode-gitDecoration-ignoredResourceForeground: #6272a4;
 
   /* Unset; the registry's. */
   --vscode-diffEditor-insertedLineBackground: #9bb95533;
