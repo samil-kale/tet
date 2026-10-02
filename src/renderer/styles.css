@@ -569,10 +569,10 @@ textarea:focus,
 }
 
 /* Merged into the default branch: GitHub's purple, which every theme has as its ANSI magenta,
-   dimmed, but less than a disabled control, which it is not. */
+   dimmed a little below the other icons. */
 .branch-tree .tree-icon.merged {
   color: var(--vscode-terminal-ansiMagenta);
-  opacity: 0.6;
+  opacity: 0.7;
 }
 
 /* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH pane's box,
