@@ -568,8 +568,10 @@ textarea:focus,
   cursor: progress;
 }
 
-/* Merged into the default branch: dimmed, but less than a disabled control, which it is not. */
+/* Merged into the default branch: GitHub's purple, which every theme has as its ANSI magenta,
+   dimmed, but less than a disabled control, which it is not. */
 .branch-tree .tree-icon.merged {
+  color: var(--vscode-terminal-ansiMagenta);
   opacity: 0.6;
 }
 
