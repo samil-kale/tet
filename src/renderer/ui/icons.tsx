@@ -393,21 +393,22 @@ export function NewFolderIcon(props: IconProps) {
 }
 
 /** A tree header's "Collapse All", as IntelliJ's: Lucide's `chevrons-down-up`, tall, so the
- *  long-side cap, and drawn two pixels under: at full size its chevrons outweigh the header's other
+ *  long-side cap, and drawn a pixel under: at full size its chevrons outweigh the header's other
  *  icons. */
 export function CollapseAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsDownUp} extent={19.56} />;
+  return <Lucide {...props} icon={ChevronsDownUp} extent={17.71} />;
 }
 
 /** A tree header's "Expand All", as IntelliJ's: Lucide's `chevrons-up-down`, `chevrons-down-up`'s
  *  box and size. */
 export function ExpandAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsUpDown} extent={19.56} />;
+  return <Lucide {...props} icon={ChevronsUpDown} extent={17.71} />;
 }
 
-/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap. */
+/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap. Set most of
+ *  a pixel right, as far as its box allows. */
 export function ClearIcon(props: IconProps) {
-  return <Lucide {...props} icon={ListX} extent={17.93} cx={11.75} />;
+  return <Lucide {...props} icon={ListX} extent={17.93} cx={10.5} />;
 }
 
 /** LOCAL CHANGES' "View as List": Lucide's `list`. Wide, so the long-side cap. */
