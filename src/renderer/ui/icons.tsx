@@ -13,9 +13,9 @@ import {
   FileBraces,
   FileDiff,
   FilePlus,
+  FolderCode,
   FolderGit2,
   FolderPlus,
-  Folders,
   GitBranch,
   GitCommitHorizontal,
   GitCompare,
@@ -227,9 +227,10 @@ export function BranchIcon(props: IconProps) {
   return <Lucide {...props} icon={GitBranch} extent={20} />;
 }
 
-/** Lucide's `folders` — the projects, the side pane's first view. */
+/** Lucide's `folder-code` — the projects, the side pane's first view. Drawn a pixel over the
+ *  shared size, past the long-side cap, so the folder reads beside the strip's other toggles. */
 export function ProjectsIcon(props: IconProps) {
-  return <Lucide {...props} icon={Folders} extent={20.98} />;
+  return <Lucide {...props} icon={FolderCode} extent={18.66} cy={11.5} />;
 }
 
 /** Lucide's `folder-git-2` — a worktree. */
@@ -384,10 +385,10 @@ export function NewFileIcon(props: IconProps) {
   return <Lucide {...props} icon={FilePlus} extent={20.23} />;
 }
 
-/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, square enough for the uncapped
- *  geometric mean. */
+/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, drawn a pixel over the shared
+ *  size like the projects' folder, past the long-side cap. */
 export function NewFolderIcon(props: IconProps) {
-  return <Lucide {...props} icon={FolderPlus} extent={20.45} cy={11.5} />;
+  return <Lucide {...props} icon={FolderPlus} extent={18.66} cy={11.5} />;
 }
 
 /** A tree header's "Collapse All", as IntelliJ's: Lucide's `chevrons-down-up`, tall, so the

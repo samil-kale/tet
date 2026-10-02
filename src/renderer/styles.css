@@ -698,12 +698,12 @@ textarea:focus,
   gap: 0;
 }
 
-/* A file mark is a glyph of Seti's font (ui/file-icons.ts), centred in the chevron's
+/* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's
    `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
    (TWISTIE_WIDTH + TWISTIE_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
-  src: url("./ui/seti.woff") format("woff");
+  src: url("./files/seti.woff") format("woff");
   font-weight: normal;
   font-style: normal;
 }
@@ -718,7 +718,7 @@ textarea:focus,
   line-height: 1;
 }
 
-/* Seti's palette (FileMarkColor in ui/file-icons.ts) in the terminal's ANSI colors, which every
+/* Seti's palette (FileMarkColor in files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
   color: var(--vscode-terminal-ansiBlue);

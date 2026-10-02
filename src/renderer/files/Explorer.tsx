@@ -9,7 +9,7 @@ import type { FileAct, FileAsk } from "../git/run-action";
 import { openEntries, pathEntries } from "../editor/file-menu";
 import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
 import { baseName, parentOf } from "../paths";
-import { FileMarkIcon } from "../ui/file-mark";
+import { FileMarkIcon } from "./file-mark";
 import { compactTree, filterTree, foldersIn, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../ui/tree";
 import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";

@@ -60,13 +60,13 @@ project's terminals.
   0. Flat helpers of no view (`platform.ts`, `paths.ts`, `identity.ts`, `resolved-ref.ts`,
      `shortcuts.ts`) and `themes/` (the stylesheets and the colors built from them).
   1. `ui/`: views and hooks of no feature — dialogs' frame, fields, menus, the tree row and the
-     tree it lists, icons, Seti's file icons.
+     tree it lists, icons.
   2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
   3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
      editor tabs beside them.
   4. `git/`: the side pane's git view, and running a git action from the views above it
      (`run-action.ts`).
-  5. `files/` (the side pane's other view: the Explorer tree, the SEARCH pane),
+  5. `files/` (the side pane's other view: the Explorer tree, the SEARCH pane, Seti's file icons),
      `sidebar/` and `dialogs/`, apart from each other.
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages.
