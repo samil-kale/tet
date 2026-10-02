@@ -270,7 +270,7 @@ export const Explorer = memo(function Explorer({
     const fileEntries: ContextMenuEntry[] = isFile
       ? [
           { label: "Open", run: () => onOpen(node.path) },
-          ...openEntries(resolved.ref, node.path, true, (how) => onOpen(node.path, how)),
+          ...openEntries(resolved.ref, node.path, true, false, (how) => onOpen(node.path, how)),
           SEPARATOR
         ]
       : [];

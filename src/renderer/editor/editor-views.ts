@@ -75,6 +75,12 @@ export interface EditorSnapshot {
   unchangedCollapsed: boolean;
 }
 
+/** Whether a preview beside the editor is withheld: a diff shows the changes, not the result.
+ *  The preview's own setting stays, so it shows again once the diff is off. */
+export function previewWithheld({ diff }: Pick<EditorSnapshot, "diff">): boolean {
+  return diff;
+}
+
 /** A placeholder, the image view, or the editor. */
 type EditorKind = "loading" | "error" | "image" | "binary" | "tooLarge" | "text";
 
@@ -279,11 +285,12 @@ export function showDiff(tabId: string, shown: boolean): void {
 
 /**
  * Shows or hides the Markdown preview beside the tab's editor; a file of another kind has none.
- * The answer is the default every Markdown file opened afterwards takes.
+ * The answer is the default every Markdown file opened afterwards takes. A tab withholding its
+ * preview (`previewWithheld`) takes no answer.
  */
 export function showMarkdownPreview(tabId: string, shown: boolean): void {
   const view = views.get(tabId);
-  if (!view || !isMarkdown(view.snapshot.path)) {
+  if (!view || !isMarkdown(view.snapshot.path) || previewWithheld(view.snapshot)) {
     return;
   }
   previewByDefault.set(shown);
@@ -312,6 +319,13 @@ export function setDiffOption(tabId: string, option: DiffOption, on: boolean): v
 
 export function getEditorSnapshot(tabId: string): EditorSnapshot {
   return views.get(tabId)?.snapshot ?? CLOSED;
+}
+
+/** Whether opening `path` with its preview would land in a tab withholding it: one opened with
+ *  its diff if `diff`, else the tab already showing it with its own. */
+export function previewWithheldAt(ref: ProjectRef, path: string, diff: boolean): boolean {
+  const open = refViews(ref).find((view) => view.snapshot.path === path);
+  return previewWithheld({ diff: diff || (open?.snapshot.diff ?? false) });
 }
 
 function refViews(ref: ProjectRef): EditorView[] {
@@ -779,7 +793,7 @@ function makePreview(view: EditorView): PreviewView {
  */
 function renderPreview(view: EditorView, delay: number): void {
   const preview = view.preview;
-  if (!preview || !view.snapshot.markdownPreview) {
+  if (!preview || !view.snapshot.markdownPreview || previewWithheld(view.snapshot)) {
     return;
   }
   const typing = delay > 0;

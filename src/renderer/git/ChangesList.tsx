@@ -272,7 +272,7 @@ export const ChangesList = memo(function ChangesList({
       act(() => window.tet.repository.ignore(resolved.ref, change.path, scope));
     const entries: ContextMenuEntry[] = [
       { label: "Open diff", run: () => onOpenDiff(change.path) },
-      ...openEntries(resolved.ref, change.path, true, (how) => onOpenDiff(change.path, how)),
+      ...openEntries(resolved.ref, change.path, true, true, (how) => onOpenDiff(change.path, how)),
       ...pathEntries(resolved, [change.path], "file path")
     ];
     if (change.status === "untracked") {

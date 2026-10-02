@@ -270,6 +270,9 @@ or a per-line decision is for an agent.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.
+- **A diff withholds every preview beside the editor** — Markdown's, and any added later
+  (`previewWithheld`): it is hidden, its toggle, shortcut and menu entry disabled, and its own
+  setting kept, so it shows again once the diff is off.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
   message of its own but the SEARCH pane, whose failure stands in its header as VS Code's does:

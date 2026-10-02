@@ -4,19 +4,23 @@ import type { OpenEditor } from "./editor-tab";
 import { absolutePath, PLATFORM } from "../platform";
 import { SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { isMarkdown } from "./diff-highlight";
+import { previewWithheldAt } from "./editor-views";
 
 /** What a file's menu offers after its own "Open", in the Explorer and the changes list alike:
  *  the Markdown preview through `open`, then the external editor. `enabled` is false where the
- *  menu covers several files. */
+ *  menu covers several files; `diff` says whether `open` shows the file against HEAD, which
+ *  withholds the preview (`previewWithheldAt`). */
 export function openEntries(
   ref: ProjectRef,
   path: string,
   enabled: boolean,
+  diff: boolean,
   open: (how: OpenEditor) => void
 ): ContextMenuEntry[] {
+  const previewEnabled = enabled && !previewWithheldAt(ref, path, diff);
   return [
     ...(isMarkdown(path)
-      ? [{ label: "Open Preview", run: enabled ? () => open({ markdownPreview: true }) : undefined }]
+      ? [{ label: "Open Preview", run: previewEnabled ? () => open({ markdownPreview: true }) : undefined }]
       : []),
     {
       label: "Open in external editor",
