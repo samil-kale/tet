@@ -290,11 +290,21 @@ export default tseslint.config(
   },
   ...layerConfigs("renderer", RENDERER_LAYERS, () => [NODE_BUILTIN]),
   {
-    // The git utility process (git-host.ts) and the CLI run without electron; `shared/` runs in
-    // every process. None of them may import it, and the first two may import nothing from the
-    // rest of main either but linked-git-dir.ts, itself held to the same — git-client.ts is the
-    // main-process side of that boundary.
-    files: ["src/main/git/git.ts", "src/main/git/git-host.ts", "src/main/util/linked-git-dir.ts", "src/cli/**", "src/shared/**"],
+    // The utility processes (git-host.ts, explorer-host.ts) and the CLI run without electron;
+    // `shared/` runs in every process. None of them may import it, and the utility processes may
+    // import nothing from the rest of main either but the util/ files listed here, each held to the
+    // same — util/utility-client.ts is the main-process side of that boundary.
+    files: [
+      "src/main/git/git.ts",
+      "src/main/git/git-host.ts",
+      "src/main/git/explorer-read.ts",
+      "src/main/git/explorer-host.ts",
+      "src/main/util/linked-git-dir.ts",
+      "src/main/util/host-platform.ts",
+      "src/main/util/utility-host.ts",
+      "src/cli/**",
+      "src/shared/**"
+    ],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -302,10 +312,10 @@ export default tseslint.config(
           paths: [{ name: "electron", message: "Runs outside electron's main process." }],
           patterns: [
             // A regex, since glob negation does not take a `..` segment: anything one or two
-            // levels up that is not `shared`, or git.ts's linked-git-dir.
+            // levels up that is not `shared`, or one of the util/ files above.
             {
-              regex: "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/linked-git-dir$)",
-              message: "Only src/shared, this folder and util/linked-git-dir."
+              regex: "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/(linked-git-dir|host-platform|utility-host)$)",
+              message: "Only src/shared, this folder and util/'s linked-git-dir, host-platform and utility-host."
             }
           ]
         }

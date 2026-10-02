@@ -17,12 +17,12 @@ import {
   createFile,
   deletePath,
   listExplorer,
-  MAX_EDIT_BYTES,
   OUTSIDE_REPOSITORY,
   renamePath,
   resolveInside,
   searchFiles
 } from "./explorer";
+import { MAX_EDIT_BYTES } from "./explorer-read";
 import { git } from "./git-client";
 import type { GitLoginStore } from "./git-logins";
 import { readLinkedGitDir } from "../util/linked-git-dir";
@@ -135,8 +135,8 @@ export class Repository {
    *  written once, when the worktree is made, and read on every refresh. */
   private worktreeBases: Record<string, string> = {};
   private configStale = false;
-  /** Bumped by every `searchFiles`: the readers of one overtaken stop where they are. */
-  private searchSeq = 0;
+  /** The running `searchFiles`, aborted by the next one: the readers of one overtaken stop where they are. */
+  private search?: AbortController;
   /** Checked once on open; if false, nothing is read or watched. */
   private isGit = false;
   /** The project was closed; anything still in flight doesn't report. */
@@ -187,22 +187,15 @@ export class Repository {
   }
 
   private async startReading(): Promise<void> {
-    // All three at once: each is a git start; in sequence they visibly delay the pane.
-    const [isGit, , read] = await Promise.all([
-      git.isRepository(this.at.path).catch(() => false),
-      this.loadConfig(),
-      this.read()
-    ]);
+    // The check and the config at once, each a git start; the state after them, read once with the
+    // remote names and the default branch the config gives.
+    const [isGit] = await Promise.all([git.isRepository(this.at.path).catch(() => false), this.loadConfig()]);
     this.isGit = isGit;
     if (!this.isGit) {
       this.emit({ ...EMPTY_REPOSITORY_STATE, error: "Not a git repository" });
       return;
     }
-    // The first read ran without the remote names and with "main" for the default branch; only a
-    // name holding a "/", or another default branch name, changes it.
-    const reread =
-      Object.keys(this.remoteUrls).some((name) => name.includes("/")) || this.defaultBranchName !== "main";
-    this.emit(reread ? await this.read() : read);
+    this.emit(await this.read());
     // Closed during the first read: a watcher started now would never be closed.
     if (this.disposed) {
       return;
@@ -716,8 +709,9 @@ export class Repository {
 
   /** The SEARCH pane's matches (explorer.ts); a search is given up once the next one is asked for. */
   searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
-    const seq = ++this.searchSeq;
-    return searchFiles(this.at.path, query, () => seq !== this.searchSeq);
+    this.search?.abort();
+    this.search = new AbortController();
+    return searchFiles(this.at.path, query, this.search.signal);
   }
 
   /** The Explorer's "New File..." (explorer.ts). */
@@ -952,6 +946,7 @@ export class Repository {
   dispose(): Promise<void> {
     // Read by a refresh whose git call may outlive this.
     this.disposed = true;
+    this.search?.abort();
     clearTimeout(this.debounceTimer);
     clearTimeout(this.commandsTimer);
     clearTimeout(this.filesTimer);

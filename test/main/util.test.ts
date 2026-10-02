@@ -12,8 +12,9 @@ import { sameSet } from "../../src/main/util/same-set";
 import { killProcessTree, resolveCommand } from "../../src/main/util/process";
 import { eventually, processAlive, tempDir } from "../helpers";
 import { isExecutableFile, isOpenableUrl } from "../../src/main/util/shell-open";
+import { serving, type UtilityResponse } from "../../src/main/util/utility-host";
 
-/** util/: spawning, quoting, paths, what the shell may open. */
+/** util/: spawning, quoting, paths, what the shell may open, a module served to another process. */
 
 describe("resolveCommand", () => {
   /** Runs `program` as tet spawns it: resolved, no shell. */
@@ -257,5 +258,39 @@ describe("two lists as sets", () => {
   it("differ by a member or by how many there are", () => {
     assert.equal(sameSet(["a", "b"], ["a", "c"]), false);
     assert.equal(sameSet(["a"], ["a", "a"]), false);
+  });
+});
+
+describe("a module served to another process", () => {
+  /** `module` served as its host would, each answer awaited by its request's id. */
+  const serve = (module: object) => {
+    const waiting = new Map<number, (response: UtilityResponse) => void>();
+    const handle = serving(module, (response) => waiting.get(response.id)?.(response));
+    return {
+      handle,
+      answer: (id: number) => new Promise<UtilityResponse>((resolve) => waiting.set(id, resolve))
+    };
+  };
+
+  it("answers a call with what its function returns, and a throw with its message", async () => {
+    const { handle, answer } = serve({ add: (a: number, b: number) => a + b, fail: () => Promise.reject(new Error("no")) });
+    const answers = [answer(1), answer(2), answer(3)];
+    handle({ id: 1, method: "add", args: [1, 2] });
+    handle({ id: 2, method: "fail", args: [] });
+    handle({ id: 3, method: "missing", args: [] });
+    assert.deepEqual(await answers[0], { id: 1, value: 3 });
+    assert.deepEqual(await answers[1], { id: 2, error: "no" });
+    assert.equal(typeof (await answers[2]).error, "string");
+  });
+
+  it("hands the function a signal where the caller's stood, fired by an abort, and still answers", async () => {
+    const { handle, answer } = serve({
+      wait: (label: string, signal: AbortSignal) =>
+        new Promise((resolve) => signal.addEventListener("abort", () => resolve(`${label} aborted`)))
+    });
+    const answered = answer(7);
+    handle({ id: 7, method: "wait", args: ["search", undefined], signalAt: 1 });
+    handle({ id: 7, abort: true });
+    assert.deepEqual(await answered, { id: 7, value: "search aborted" });
   });
 });

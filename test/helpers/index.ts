@@ -12,7 +12,8 @@ import { PLATFORM } from "../../src/main/util/host-platform";
 import { findControlPort } from "../../src/main/control/control-port";
 import { tabControlToken } from "../../src/main/terminals/control-token";
 import * as gitModule from "../../src/main/git/git";
-import type { GitRequest, GitResponse } from "../../src/main/git/git-host";
+import * as explorerReadModule from "../../src/main/git/explorer-read";
+import { serving, type UtilityMessage, type UtilityResponse } from "../../src/main/util/utility-host";
 import { CONTROL_ENV } from "../../src/shared/control";
 import { HOST_SIDE } from "../../src/shared/control-side";
 import type { GitLogin } from "../../src/shared/types/git";
@@ -342,27 +343,22 @@ export async function serveOverHttp(bare: string, login: GitLogin): Promise<Http
   };
 }
 
-/** The electron stub's `utilityProcess` running git.ts in this process, as git-host.ts would. */
-export function forkGitInProcess(): void {
-  const api = gitModule as unknown as Record<string, (...args: unknown[]) => unknown>;
+/** What each utility process's bundle serves (git-host.ts, explorer-host.ts), by its file name. */
+const UTILITY_MODULES: Record<string, object> = { "git-host.js": gitModule, "explorer-host.js": explorerReadModule };
+
+/** The electron stub's `utilityProcess` serving each module in this process, as its host would. */
+export function forkUtilitiesInProcess(): void {
   Object.assign(utilityProcess, {
-    fork: () => {
-      let listener: (message: GitResponse) => void = () => undefined;
+    fork: (modulePath: string) => {
+      let listener: (message: UtilityResponse) => void = () => undefined;
+      const handle = serving(UTILITY_MODULES[path.basename(modulePath)], (response) => listener(response));
       return {
-        on: (event: string, handler: (message: GitResponse) => void) => {
+        on: (event: string, handler: (message: UtilityResponse) => void) => {
           if (event === "message") {
             listener = handler;
           }
         },
-        postMessage: ({ id, method, args }: GitRequest) => {
-          void (async () => {
-            try {
-              listener({ id, value: await api[method](...args) });
-            } catch (error) {
-              listener({ id, error: error instanceof Error ? error.message : String(error) });
-            }
-          })();
-        },
+        postMessage: (message: UtilityMessage) => handle(structuredClone(message)),
         kill: () => undefined
       };
     }

@@ -33,14 +33,17 @@ const mainConfig = {
   external: ["electron", "original-fs", "node-pty"]
 };
 
-/** The git CLI wrapper, which runs in a utilityProcess of its own — see AGENTS.md; nothing from
- *  electron in it (eslint.config.mjs). */
-/** @type {import('esbuild').BuildOptions} */
-const gitHostConfig = {
-  ...node,
-  entryPoints: [path.join(__dirname, "src", "main", "git", "git-host.ts")],
-  outfile: path.join(dist, "git-host.js")
-};
+/** `<name>-host`, a module the main process runs in a utilityProcess of its own
+ *  (util/utility-client.ts): `git`, the git CLI wrapper — see AGENTS.md — and `explorer`, the Explorer's
+ *  walk and search. Nothing from electron in either (eslint.config.mjs). */
+/** @returns {import('esbuild').BuildOptions} */
+function hostConfig(name) {
+  return {
+    ...node,
+    entryPoints: [path.join(__dirname, "src", "main", "git", `${name}-host.ts`)],
+    outfile: path.join(dist, `${name}-host.js`)
+  };
+}
 
 /** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
  *  them, and each run under tet's own electron as node: `tet-ctl`, which an agent runs from a
@@ -122,7 +125,8 @@ async function build() {
 
   const configs = [
     mainConfig,
-    gitHostConfig,
+    hostConfig("git"),
+    hostConfig("explorer"),
     cliConfig("tet-ctl"),
     cliConfig("tet-update"),
     preloadConfig,

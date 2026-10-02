@@ -12,7 +12,7 @@ import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { readJson } from "../util/json-file";
 import { resumableDownload } from "./resumable-download";
 import { runProcess } from "../util/process";
-import { logError, logInfo } from "../util/error-log";
+import { logError } from "../util/error-log";
 
 /** Not urgent: an update installs only once tet quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
@@ -264,7 +264,6 @@ export function installPendingUpdate(): void {
   if (!pending) {
     return;
   }
-  logInfo(`quit: starting the update to ${pending.version}`);
   try {
     const resources = resourcesDir(pending.root, PLATFORM);
     const script = path.join(resources, "app.asar.unpacked", "dist", "tet-update.js");

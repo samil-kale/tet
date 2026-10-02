@@ -11,18 +11,18 @@ import { Repository } from "../../src/main/git/repository";
 import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
 import type { FileSearchQuery, FileSearchResult } from "../../src/shared/types/files";
-import { fakeSafeStorage, forkGitInProcess, git, type HttpRemote, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir } from "../helpers";
+import { fakeSafeStorage, forkUtilitiesInProcess, git, type HttpRemote, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir } from "../helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
- * switches to, the question it hands back. electron's three pieces are faked: `utilityProcess` runs
- * git.ts in this process as git-host.ts would, `shell.trashItem` moves a file into a folder or fails,
+ * switches to, the question it hands back. electron's three pieces are faked: `utilityProcess` serves
+ * git.ts and the search in this process as their hosts would, `shell.trashItem` moves a file into a folder or fails,
  * and `safeStorage` (helpers/index.ts's fakeSafeStorage).
  */
 
 isolateGitConfig("tet-repository-noglobal");
 
-forkGitInProcess();
+forkUtilitiesInProcess();
 
 const trash = tempDir("tet-trash-");
 

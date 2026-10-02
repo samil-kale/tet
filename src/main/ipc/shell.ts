@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { net, shell } from "electron";
 import { handle } from "./channels";
-import { MAX_EDIT_BYTES } from "../git/explorer";
+import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types/project";
 import { expandHome, repositoryRelative } from "../util/path-inside";

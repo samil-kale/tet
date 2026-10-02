@@ -25,17 +25,17 @@ import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import type { SessionManagerRegistry } from "../../src/main/terminals/session-registry";
 import { readCommands, readSbxConfig, writeCommands } from "../../src/main/store/tet-json";
 import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project";
-import { eventually, forkGitInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
+import { eventually, forkUtilitiesInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
 
 /**
  * projects.ts against the real git and real Repositories, the sessions faked: a project's id in its
  * git config, the worktrees TET makes under the project's folder, what closing their terminals may
- * leave behind, what a delete and a project's removal take along. electron's `utilityProcess` runs
+ * leave behind, what a delete and a project's removal take along. electron's `utilityProcess` serves
  * git.ts in this process, as in repository.test.ts.
  */
 
 isolateGitConfig("tet-projects-noglobal");
-forkGitInProcess();
+forkUtilitiesInProcess();
 
 const real = (folder: string): string => fs.realpathSync.native(folder);
 

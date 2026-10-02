@@ -18,6 +18,7 @@ import { startControlServer } from "./control/control-server";
 import { EnvRequests } from "./control/env-requests";
 import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
+import { stopExplorerProcess } from "./git/explorer-client";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
 import { resolveProjectRef } from "./store/resolved-ref";
@@ -44,7 +45,7 @@ import { augmentAgentPath } from "./agents/agent-path";
 import { setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
-import { logError, logInfo } from "./util/error-log";
+import { logError } from "./util/error-log";
 import { awaitedToastTab, showDesktopNotification, startNotifications } from "./util/notifications";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-registry";
@@ -468,25 +469,21 @@ function shutdown(relaunch: boolean): void {
     return;
   }
   quitting = true;
-  // Each step logged, so a quit that hangs shows where.
-  logInfo(`quit: ending sessions${relaunch ? " for a restart" : ""}`);
   void Promise.race([
-    sessions.disposeAll().then(() => "sessions ended"),
-    new Promise((resolve) => setTimeout(() => resolve("sessions timed out"), QUIT_TEARDOWN_TIMEOUT_MS))
-  ]).then(
-    (outcome) => logInfo(`quit: ${String(outcome)}`),
+    sessions.disposeAll(),
+    new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))
+  ]).catch(
     (error: unknown) => logError("quit: ending sessions failed", error)
   ).finally(async () => {
     repositories.disposeAll();
     stopGitProcess();
-    logInfo("quit: git stopped, closing the control channel");
+    stopExplorerProcess();
     await controlServer?.close();
     if (relaunch) {
       app.relaunch();
     } else {
       installPendingUpdate();
     }
-    logInfo("quit: done, quitting");
     app.quit();
     setTimeout(() => {
       logError(`quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
@@ -496,15 +493,12 @@ function shutdown(relaunch: boolean): void {
 }
 
 app.on("before-quit", (event) => {
-  logInfo(`quit: before-quit${quitting ? ", letting it through" : ""}`);
   if (quitting) {
     return;
   }
   event.preventDefault();
   shutdown(false);
 });
-
-app.on("will-quit", () => logInfo("quit: will-quit"));
 
 /**
  * Keeps electron's own handling of these signals, a quit through before-quit. write-file-atomic

@@ -35,7 +35,8 @@ project's terminals.
 - `src/main/` is layered: each area imports its own layer's areas it is allowed and every layer
   below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
   0. `util/`: helpers of no area — the platform (`host-platform.ts`), starting processes
-     (`process.ts`), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
+     (`process.ts`), a module in a `utilityProcess` of its own (`utility-client.ts`, served by
+     `utility-host.ts`: git and the Explorer's walk and search), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
   1. `store/`: what TET keeps and reads back — the open projects (`project-store.ts`), settings,
      environment variables, `tet.json`, the data folder's layout (`data-root.ts`,
      `project-dirs.ts`) — and what resolves against it: a repository's or worktree's folder

@@ -64,6 +64,8 @@ const IMPORTS: Probe[] = [
   // Code running outside electron's main process.
   ["src/main/git/git.ts", 'import "../util/linked-git-dir";', null],
   ["src/main/git/git.ts", 'import "../util/process";', "no-restricted-imports"],
+  ["src/main/git/explorer-host.ts", 'import "../util/utility-host";', null],
+  ["src/main/git/explorer-read.ts", 'import "electron";', "no-restricted-imports"],
   ["src/shared/x.ts", 'import "electron";', "no-restricted-imports"],
   ["src/shared/types/x.ts", 'import "../errors";', null],
   ["src/shared/types/x.ts", 'import "../../main/main";', "no-restricted-imports"],

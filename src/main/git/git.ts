@@ -29,11 +29,41 @@ interface GitOptions {
   input?: string;
   /** The output past which git is killed, in bytes; MAX_BUFFER unless given. */
   maxBuffer?: number;
+  /** Starts at once instead of waiting for a free slot (`MAX_QUEUED`): a run that may wait on
+   *  something outside git — a hook, the network, a credential helper — and would hold one. */
+  unqueued?: true;
 }
 
 /** Output as bytes: utf8 replaces invalid bytes and would break an image (`readHeadBlob`). */
 interface GitBufferOptions extends GitOptions {
   encoding: "buffer";
+}
+
+/**
+ * Git runs at once, beyond which one more waits for a free slot (`unqueued` excepted): dozens
+ * started together — every project's first read at startup — slow each other down until all of
+ * them end later than they would in turns.
+ */
+const MAX_QUEUED = 6;
+let queuedRunning = 0;
+const queuedWaiting: (() => void)[] = [];
+
+/** Resolves once a run may start; it hands its slot on with `endQueued` when it ends. */
+function startQueued(): Promise<void> {
+  if (queuedRunning < MAX_QUEUED) {
+    queuedRunning++;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => queuedWaiting.push(resolve));
+}
+
+function endQueued(): void {
+  const next = queuedWaiting.shift();
+  if (next) {
+    next();
+  } else {
+    queuedRunning--;
+  }
 }
 
 /**
@@ -43,10 +73,17 @@ interface GitBufferOptions extends GitOptions {
  */
 function git(cwd: string, args: string[], options: GitBufferOptions): Promise<GitResult<Buffer>>;
 function git(cwd: string, args: string[], options?: GitOptions): Promise<GitResult>;
-function git(
+function git(cwd: string, args: string[], options: GitOptions & { encoding?: "buffer" } = {}): Promise<GitResult<string | Buffer>> {
+  if (options.unqueued) {
+    return spawnGit(cwd, args, options);
+  }
+  return startQueued().then(() => spawnGit(cwd, args, options).finally(endQueued));
+}
+
+function spawnGit(
   cwd: string,
   args: string[],
-  { env, timeoutMs, input, maxBuffer = MAX_BUFFER, encoding }: GitOptions & { encoding?: "buffer" } = {}
+  { env, timeoutMs, input, maxBuffer = MAX_BUFFER, encoding }: GitOptions & { encoding?: "buffer" }
 ): Promise<GitResult<string | Buffer>> {
   const empty = encoding === "buffer" ? Buffer.alloc(0) : "";
   return new Promise((resolve, reject) => {
@@ -684,10 +721,11 @@ export async function readState(
 
 const MAX_ERROR_CHARS = 600;
 
-/** One git command for the UI: a non-zero exit carries git's message, a failed start the error's. */
+/** One git command for the UI: a non-zero exit carries git's message, a failed start the error's.
+ *  Unqueued: a command changing the repository may run a hook, or reach a remote. */
 async function run(cwd: string, args: string[], options?: GitOptions): Promise<GitActionResult> {
   try {
-    const result = await git(cwd, args, options);
+    const result = await git(cwd, args, { ...options, unqueued: true });
     if (result.code === 0) {
       return { ok: true };
     }
@@ -861,7 +899,7 @@ export async function fastForwardBranches(cwd: string): Promise<void> {
     .filter(([refname, upstream, trackshort, worktree]) => refname && upstream && trackshort === "<" && !worktree)
     .map(([refname, upstream]) => `${upstream}:${refname}`);
   if (refs.code === 0 && refspecs.length > 0) {
-    await git(cwd, ["fetch", "--no-write-fetch-head", ".", ...refspecs], { env: { GIT_REFLOG_ACTION: "pull" } });
+    await git(cwd, ["fetch", "--no-write-fetch-head", ".", ...refspecs], { env: { GIT_REFLOG_ACTION: "pull" }, unqueued: true });
   }
 }
 
@@ -1018,7 +1056,7 @@ export async function deleteRemoteBranch(
   if (deleted.ok || deleted.authRequired) {
     return deleted;
   }
-  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], { env });
+  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], { env, unqueued: true });
   if (listed.code !== 2) {
     return deleted;
   }
@@ -1409,8 +1447,9 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
     // from one HEAD lacks.
     maxBuffer: options.maxBytes + 1,
     // `--filters` runs the repository's smudge filter, and an LFS one fetches: never ask for
-    // credentials without a terminal.
-    env: NETWORK_ENV
+    // credentials without a terminal, nor hold a queue slot while it does.
+    env: NETWORK_ENV,
+    unqueued: true
   }).catch(() => undefined);
   // Too large, an image, or a NUL byte: no text side, and the editor tab says so.
   if (read?.overflowed) {
