@@ -82,8 +82,9 @@ export interface TETApi {
   };
   projects: {
     list(): Promise<Project[]>;
-    /** Native folder picker opening at `defaultPath`; null when cancelled. */
-    pickDirectory(title: string, defaultPath?: string): Promise<string | null>;
+    /** Native folder picker opening at the first of `startPaths` on disk, or its nearest folder
+     *  there; null when cancelled. */
+    pickDirectory(title: string, startPaths?: string[]): Promise<string | null>;
     /** Separate because only macOS honours both modes in one dialog. */
     pickFile(title: string): Promise<string | null>;
     /** Where the folder picker opens next: `directory`, or its parent when it is a repository root. */

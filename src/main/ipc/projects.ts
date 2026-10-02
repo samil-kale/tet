@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { dialog } from "electron";
@@ -14,6 +15,21 @@ import { addProject, addWorktree, deleteWorktree, removeProject } from "../proje
 import { PROVIDERS } from "../providers";
 import type { IpcDeps } from "./deps";
 
+/** The nearest folder on disk at or above `candidate`; a relative path names none. */
+async function existingFolder(candidate: string): Promise<string | undefined> {
+  if (!path.isAbsolute(candidate)) {
+    return undefined;
+  }
+  for (let current = candidate; ; current = path.dirname(current)) {
+    if (await fs.promises.stat(current).then((stat) => stat.isDirectory(), () => false)) {
+      return current;
+    }
+    if (path.dirname(current) === current) {
+      return undefined;
+    }
+  }
+}
+
 /** Opening, cloning and creating repositories, their worktrees, and the provider accounts a
  *  clone authenticates with. */
 export function registerProjectsIpc({
@@ -26,11 +42,18 @@ export function registerProjectsIpc({
 
   handle(
     "projects:pick-directory",
-    async (_event, title: string, defaultPath?: string): Promise<string | null> => {
-      // An empty defaultPath is a path too, opening wherever it resolves to.
+    async (_event, title: string, startPaths: string[] = []): Promise<string | null> => {
+      // A path the picker cannot open would stand in its name field instead.
+      let defaultPath: string | undefined;
+      for (const start of startPaths) {
+        defaultPath = await existingFolder(start);
+        if (defaultPath !== undefined) {
+          break;
+        }
+      }
       const result = await dialog.showOpenDialog({
         title,
-        defaultPath: defaultPath === "" ? undefined : defaultPath,
+        defaultPath,
         // macOS offers a new folder only when asked; the add tab initializes one picked that way.
         properties: ["openDirectory", "createDirectory"]
       });

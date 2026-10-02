@@ -359,8 +359,9 @@ interface AddRepositoryDialogProps {
 export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");
-  /** The parent of the new folder (clone), or the folder itself (add). */
-  const [directory, setDirectory] = useState("");
+  /** The parent of the new folder. Apart from the add tab's path, which is the folder itself. */
+  const [cloneDirectory, setCloneDirectory] = useState("");
+  const [addDirectory, setAddDirectory] = useState("");
   /** null follows the url; a string is the user's and stays. */
   const [name, setName] = useState<string | null>(null);
   /** The account authenticating the clone: the remote tab's row. */
@@ -388,21 +389,21 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const folderName = name ?? cloneFolder(url.trim());
   /** The add tab offers `git init` for the folder it found no repository in, as long as it is the
    *  one typed. */
-  const initializing = mode === "add" && uninitialized !== null && uninitialized === directory.trim();
+  const initializing = mode === "add" && uninitialized !== null && uninitialized === addDirectory.trim();
   const ready =
     mode === "clone"
       ? url.trim() !== "" &&
-        directory.trim() !== "" &&
+        cloneDirectory.trim() !== "" &&
         folderName.trim() !== "" &&
         (loginUrl === null || loginReady(login))
       : mode === "add"
-        ? directory.trim() !== ""
+        ? addDirectory.trim() !== ""
         : false;
 
   const cloneRepository = (): Promise<AddRepositoryResult> =>
     window.tet.projects.clone(
       url.trim(),
-      directory.trim(),
+      cloneDirectory.trim(),
       folderName.trim(),
       accountId ?? undefined,
       loginUrl === null ? undefined : { username: login.username.trim(), password: login.password }
@@ -414,8 +415,8 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
     const result =
       mode === "add"
         ? initializing
-          ? await window.tet.projects.initialize(directory.trim())
-          : await window.tet.projects.open(directory.trim())
+          ? await window.tet.projects.initialize(addDirectory.trim())
+          : await window.tet.projects.open(addDirectory.trim())
         : await cloneRepository();
     if (result.project) {
       return undefined;
@@ -428,16 +429,13 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       setAccountId(null);
     }
     if (result.notRepository) {
-      setUninitialized(directory.trim());
+      setUninitialized(addDirectory.trim());
     }
     return result.error ?? "The repository could not be added";
   }, onClose);
 
-  // Fields survive a tab switch; only the name resets, since only clone derives it.
-  const switchMode = changing((next: Mode): void => {
-    setMode(next);
-    setName(null);
-  });
+  // Fields survive a tab switch.
+  const switchMode = changing(setMode);
 
   // The listing only reads, and its late answer is dropped (RemoteTab): it holds no Cancel.
   const locked = adding || removing || accountForm?.running === true;
@@ -487,7 +485,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
               setLoginUrl(null);
             })}
           />
-          <PathField label="Destination" value={directory} pickTitle="Clone into" onChange={changing(setDirectory)} />
+          <PathField label="Destination" value={cloneDirectory} pickTitle="Clone into" onChange={changing(setCloneDirectory)} />
           <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
           {loginUrl !== null && (
             // Its failure shows beside the buttons, as the tab's others do (`refused`).
@@ -499,9 +497,9 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
         <>
           <PathField
             label="Repository path"
-            value={directory}
+            value={addDirectory}
             pickTitle="Add repository"
-            onChange={changing(setDirectory)}
+            onChange={changing(setAddDirectory)}
           />
           {initializing && (
             <p className="dialog-detail">Initialize creates a git repository in this folder, and the folder where it is missing.</p>

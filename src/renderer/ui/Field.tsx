@@ -65,9 +65,9 @@ interface PathInputProps {
 /** A folder's path with a Browse button beside it; a cancelled pick keeps the path there was. */
 export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder }: PathInputProps) {
   const browse = async (): Promise<void> => {
-    // The field's own value is more specific, so it wins.
-    const start = value.trim() || localStorage.getItem(LAST_DIRECTORY_KEY) || undefined;
-    const picked = await window.tet.projects.pickDirectory(pickTitle, start);
+    // The field's own value is more specific, so it wins where it leads anywhere.
+    const last = localStorage.getItem(LAST_DIRECTORY_KEY) ?? "";
+    const picked = await window.tet.projects.pickDirectory(pickTitle, [value.trim(), last]);
     if (picked) {
       // A picked repository's parent is where the picker opens next.
       localStorage.setItem(LAST_DIRECTORY_KEY, await window.tet.projects.directoryToRemember(picked));
