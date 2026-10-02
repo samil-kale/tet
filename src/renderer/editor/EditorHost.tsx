@@ -5,9 +5,11 @@ import { isMarkdown } from "./diff-highlight";
 import {
   attachEditor,
   attachMarkdownPreview,
+  diffShown,
   editorKind,
   focusEditor,
   getEditorSnapshot,
+  hasChanges,
   isReadOnly,
   previewWithheld,
   saveEditorFile,
@@ -67,15 +69,14 @@ interface EditorHostProps {
  * move React removes a frame with it inside, and the next host's attach takes it out again.
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
-  const { path, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = useEditorStore(
-    tabId,
-    whole
-  );
+  const snapshot = useEditorStore(tabId, whole);
+  const { path, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const previewFrame = useRef<HTMLDivElement>(null);
   const kind = editorKind(file);
-  const withheld = previewWithheld({ diff });
+  const shown = diffShown(snapshot);
+  const withheld = previewWithheld(snapshot);
   const previewShown = markdownPreview && !withheld;
 
   useEffect(() => {
@@ -131,27 +132,28 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           >
             <SaveIcon />
           </IconButton>
-          {/* The file against HEAD, or on its own in a plain editor — a diff only a text file has. */}
+          {/* The file against HEAD, or on its own in a plain editor — a diff only a text file with
+              changes has; without any it shows off and comes back with them (`diffShown`). */}
           <IconButton
-            active={diff}
-            title={`${diff ? "Hide" : "Show"} Changes`}
-            disabled={kind !== "text"}
+            active={shown}
+            title={`${shown ? "Hide" : "Show"} Changes`}
+            disabled={kind !== "text" || !hasChanges(snapshot)}
             onClick={() => showDiff(tabId, !diff)}
           >
             <CompareIcon />
           </IconButton>
           {/* The diff's layout: disabled, not hidden, without one, so the path doesn't shift. */}
           <IconButton
-            active={sideBySide}
+            active={shown && sideBySide}
             title={sideBySide ? "Show Inline" : "Show Side by Side"}
-            disabled={!diff || kind !== "text"}
+            disabled={!shown || kind !== "text"}
             onClick={() => setDiffOption(tabId, "sideBySide", !sideBySide)}
           >
             <SideBySideIcon />
           </IconButton>
           <IconButton
             title={unchangedCollapsed ? "Expand Unchanged Regions" : "Collapse Unchanged Regions"}
-            disabled={!diff || kind !== "text"}
+            disabled={!shown || kind !== "text"}
             onClick={() => setDiffOption(tabId, "unchangedCollapsed", !unchangedCollapsed)}
           >
             {unchangedCollapsed ? <ExpandAllIcon /> : <CollapseAllIcon />}

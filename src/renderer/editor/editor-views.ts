@@ -64,7 +64,8 @@ export interface EditorSnapshot {
   dirty: boolean;
   /** The tab the next file replaces — until kept, which the first edit does (VS Code). */
   preview: boolean;
-  /** The file against HEAD in the diff editor; off shows it in the plain one (`showDiff`). */
+  /** The file against HEAD in the diff editor; off shows it in the plain one (`showDiff`). What
+   *  is on screen is `diffShown`. */
   diff: boolean;
   /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
    *  Side"). As the user last left it, the next Markdown file included (`previewByDefault`). */
@@ -75,10 +76,23 @@ export interface EditorSnapshot {
   unchangedCollapsed: boolean;
 }
 
+type DiffState = Pick<EditorSnapshot, "diff" | "file" | "dirty">;
+
+/** The file differs from HEAD: it has a HEAD side (`FileContent.head`), or unsaved edits. */
+export function hasChanges({ file, dirty }: Pick<EditorSnapshot, "file" | "dirty">): boolean {
+  return Boolean(file?.head) || dirty;
+}
+
+/** The diff on screen: switched on, and the file has changes. Without any the plain editor shows,
+ *  the switch kept, so the diff comes back once there are. */
+export function diffShown(snapshot: DiffState): boolean {
+  return snapshot.diff && hasChanges(snapshot);
+}
+
 /** Whether a preview beside the editor is withheld: a diff shows the changes, not the result.
  *  The preview's own setting stays, so it shows again once the diff is off. */
-export function previewWithheld({ diff }: Pick<EditorSnapshot, "diff">): boolean {
-  return diff;
+export function previewWithheld(snapshot: DiffState): boolean {
+  return diffShown(snapshot);
 }
 
 /** A placeholder, the image view, or the editor. */
@@ -205,13 +219,14 @@ export function subscribeRefEditors(ref: ProjectRef, listener: () => void): () =
 /** The code editor on screen: the diff editor's modified side, or the plain one. Null until the
  *  side in the snapshot has been built. */
 function activeEditor(view: EditorView): MonacoEditor.IStandaloneCodeEditor | null {
-  return (view.snapshot.diff ? view.diffEditor?.getModifiedEditor() : view.plainEditor) ?? null;
+  return (diffShown(view.snapshot) ? view.diffEditor?.getModifiedEditor() : view.plainEditor) ?? null;
 }
 
 /** Shows the editor the tab's snapshot asks for and hides the other, both keeping their box. */
 function applyMode(view: EditorView): void {
-  view.host.classList.toggle("hidden", !view.snapshot.diff);
-  view.plainHost.classList.toggle("hidden", view.snapshot.diff);
+  const shown = diffShown(view.snapshot);
+  view.host.classList.toggle("hidden", !shown);
+  view.plainHost.classList.toggle("hidden", shown);
 }
 
 /** Both editors carry the tab's models, so the one off screen is ready for the switch. */
@@ -253,23 +268,26 @@ function setReadOnly(view: EditorView, readOnly: boolean): void {
   view.plainEditor?.updateOptions({ readOnly });
 }
 
-/**
- * Switches the tab between the diff editor and the plain one, carrying the cursor and the scroll
- * over. The models stay as they are, HEAD's included, so switching back shows the diff against a
- * HEAD kept current meanwhile (`setEditorVersion`).
- */
+/** Switches the tab's diff on or off (`diffShown` says whether it is on screen). */
 export function showDiff(tabId: string, shown: boolean): void {
   const view = views.get(tabId);
-  if (!view || view.snapshot.diff === shown) {
-    return;
+  if (view && view.snapshot.diff !== shown) {
+    publish(view, { diff: shown });
   }
-  const leaving = activeEditor(view);
+}
+
+/**
+ * Moves the tab between the diff editor and the plain one once `diffShown` flipped, carrying the
+ * cursor and the scroll over from `leaving`. The models stay as they are, HEAD's included, so
+ * switching back shows the diff against a HEAD kept current meanwhile (`setEditorVersion`).
+ */
+function switchEditor(view: EditorView, leaving: MonacoEditor.IStandaloneCodeEditor | null): void {
+  const shown = diffShown(view.snapshot);
   const state = leaving?.saveViewState() ?? null;
   const focused = leaving?.hasTextFocus() ?? false;
   // Shown once the other editor is there, or the switch would uncover an empty frame while it builds.
-  publish(view, { diff: shown });
   void ensureEditor(view).then((built) => {
-    if (views.get(tabId) !== view || !built || view.snapshot.diff !== shown) {
+    if (views.get(view.tabId) !== view || !built || diffShown(view.snapshot) !== shown) {
       return;
     }
     applyMode(view);
@@ -325,7 +343,7 @@ export function getEditorSnapshot(tabId: string): EditorSnapshot {
  *  its diff if `diff`, else the tab already showing it with its own. */
 export function previewWithheldAt(ref: ProjectRef, path: string, diff: boolean): boolean {
   const open = refViews(ref).find((view) => view.snapshot.path === path);
-  return previewWithheld({ diff: diff || (open?.snapshot.diff ?? false) });
+  return diff || (open ? previewWithheld(open.snapshot) : false);
 }
 
 function refViews(ref: ProjectRef): EditorView[] {
@@ -343,14 +361,20 @@ function emit(view: EditorView): void {
   refListeners.get(projectRefKey(view.ref))?.forEach((listener) => listener());
 }
 
-/** Dropped for a view disposed meanwhile. */
+/** Dropped for a view disposed meanwhile. A tab without models yet takes its editor from
+ *  `showText`. */
 function publish(view: EditorView, patch: Partial<EditorSnapshot>): void {
   if (views.get(view.tabId) !== view) {
     return;
   }
+  const leaving = activeEditor(view);
+  const shown = diffShown(view.snapshot);
   view.snapshot = { ...view.snapshot, ...patch };
   emit(view);
   report(view);
+  if (view.models && diffShown(view.snapshot) !== shown) {
+    switchEditor(view, leaving);
+  }
 }
 
 /** The snapshot for `tet-ctl editor-state` and `editor-list` — see EditorReport. */
@@ -616,8 +640,13 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   view.saves++;
   view.onDisk = undefined;
   const held = view.snapshot.file;
+  // An unchanged file saved with edits differs from HEAD before the next report says so: its own
+  // original is HEAD's, so the diff stays on screen meanwhile.
+  const original = view.models?.original.getValue();
+  const head =
+    held?.head ?? (original !== undefined && original !== model.getValue() ? { content: original, binary: false, missing: false } : undefined);
   publish(view, {
-    file: held ? { ...held, content, mtimeMs: result.mtimeMs ?? held.mtimeMs } : held,
+    file: held ? { ...held, content, mtimeMs: result.mtimeMs ?? held.mtimeMs, head } : held,
     dirty: model.getAlternativeVersionId() !== versionId,
     saving: false
   });
@@ -758,6 +787,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   setReadOnly(view, isReadOnly(file));
   setModels(view, models);
   view.models = models;
+  applyMode(view);
   applyReveal(view);
   renderPreview(view, 0);
   publish(view, { building: false });
@@ -1000,5 +1030,5 @@ function ensurePlainEditor(view: EditorView): Promise<MonacoEditor.IStandaloneCo
 
 /** Builds the editor the tab's side needs; false for a tab closed while it built. */
 async function ensureEditor(view: EditorView): Promise<boolean> {
-  return Boolean(view.snapshot.diff ? await ensureDiffEditor(view) : await ensurePlainEditor(view));
+  return Boolean(diffShown(view.snapshot) ? await ensureDiffEditor(view) : await ensurePlainEditor(view));
 }
