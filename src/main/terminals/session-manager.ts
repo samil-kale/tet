@@ -780,7 +780,7 @@ export class TabSessionManager {
 
   /**
    * A closed tab's session keeps printing while it quits (closeTabs lists the tab as gone first);
-   * that output reaches nobody, or it would be recorded again after keepOutputs dropped it.
+   * that output reaches nobody.
    */
   private reportOutput(tab: TabState, data: string): void {
     if (this.tabs.includes(tab)) {

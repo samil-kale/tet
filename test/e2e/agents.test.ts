@@ -72,7 +72,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
 
   /**
    * The question a CLI asks in a folder it has not been trusted with, as `tabs-output` shows
-   * it (spaces may be gone), and the keys answering "trust" (`tabs-keys`). Claude Code preselects
+   * it, and the keys answering "trust" (`tabs-keys`). Claude Code preselects
    * "No, exit", Codex "1. Trust and continue"; pi asks nothing.
    */
   const TRUST_QUESTIONS: Partial<Record<AgentId, { asked: RegExp; keys: string[] }>> = {

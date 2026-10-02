@@ -173,6 +173,10 @@ const api: TETApi = {
     onStatus: (listener) => subscribe("terminals:status", listener),
     onStartupProgress: (listener) => subscribe("terminals:startup-progress", listener),
     onShow: (listener) => subscribe("terminals:show", listener),
+    onTextRequest: (listener) =>
+      subscribe("terminals:text-request", ({ ref, tabId, reply }) => {
+        void listener(ref, tabId).then((text) => send(reply, text));
+      }),
     starting: (ref) => invoke("terminals:starting", ref)
   },
   agents: {

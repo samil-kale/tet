@@ -396,7 +396,7 @@ const VERBS = [
     group: "The other tabs",
     usage: "tabs-output <tab-id> [--kb <n>]",
     summary:
-      "The last n KB a tab printed (16, at most 256), escape sequences out and a redrawn line kept as last shown; an agent's TUI redraws in place, so its text comes in pieces. From a sandbox, only a tab running there.",
+      "The last n KB (16) of what a tab's terminal shows, as text: its scrollback and screen, or a fullscreen TUI's screen. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     ownProjectOnly: true,
     sandbox: "ownProject"
@@ -426,6 +426,16 @@ const VERBS = [
       "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows on its screen. No text: an agent's TUI takes typed text as a paste and its Enter as a newline.",
     positionals: ["tabId", "keys"],
     variadic: true,
+    ownProjectOnly: true,
+    sandbox: "ownProject"
+  },
+  {
+    verb: "tabs-text",
+    group: "The other tabs",
+    usage: "tabs-text <tab-id> <text> [--project <id>]",
+    summary:
+      "Type text into a tab, as one paste and without Enter: an agent's TUI takes a newline in it as a new line. Submit it with tabs-keys <tab-id> enter.",
+    positionals: ["tabId", "text"],
     ownProjectOnly: true,
     sandbox: "ownProject"
   },

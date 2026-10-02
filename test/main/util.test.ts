@@ -6,7 +6,6 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { LINUX, MAC, WINDOWS } from "../../src/shared/platform";
 import { PLATFORM } from "../../src/main/util/host-platform";
-import { stripAnsi } from "../../src/main/util/ansi";
 import { shellSingleQuote } from "../../src/main/util/generated-file";
 import { onDisk, openInside, relativeInside, removeInside } from "../../src/main/util/path-inside";
 import { sameSet } from "../../src/main/util/same-set";
@@ -14,7 +13,7 @@ import { killProcessTree, resolveCommand } from "../../src/main/util/process";
 import { eventually, processAlive, tempDir } from "../helpers";
 import { isExecutableFile, isOpenableUrl } from "../../src/main/util/shell-open";
 
-/** util/: spawning, escape sequences, quoting, paths, what the shell may open. */
+/** util/: spawning, quoting, paths, what the shell may open. */
 
 describe("resolveCommand", () => {
   /** Runs `program` as tet spawns it: resolved, no shell. */
@@ -134,13 +133,6 @@ describe("resolveCommand", () => {
 
   it("changes nothing elsewhere", { skip: PLATFORM.spawnsThroughCmd && "not win32" }, () => {
     assert.deepEqual(resolveCommand("npm", ["-v"]), { command: "npm", args: ["-v"] });
-  });
-});
-
-describe("stripping escape sequences", () => {
-  it("removes CSI with any parameter bytes, OSC ended either way and two-byte escapes", () => {
-    const text = "\x1b[1;31mred\x1b[0m \x1b[>4;1mkeys\x1b[<u \x1b]0;title\x07a\x1b]8;;url\x1b\\b \x1bMc\x1b[?25h";
-    assert.equal(stripAnsi(text), "red keys ab c");
   });
 });
 

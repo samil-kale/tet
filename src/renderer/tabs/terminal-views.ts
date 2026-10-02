@@ -71,6 +71,37 @@ window.tet.terminals.onOutput((batch) => {
   }
 });
 
+window.tet.terminals.onTextRequest((ref, tabId) => shownText(ref, tabId));
+
+/**
+ * What the tab's terminal shows, as text — its scrollback and screen, or a fullscreen TUI's screen
+ * (the alternate buffer) — once xterm has parsed everything it was handed; a wrapped row joins the
+ * line it continues. `tabs-output`.
+ */
+async function shownText(ref: ProjectRef, tabId: string): Promise<string> {
+  const view = views.get(viewKey(ref, tabId));
+  if (!view) {
+    return "";
+  }
+  await new Promise<void>((resolve) => view.term.write("", resolve));
+  const buffer = view.term.buffer.active;
+  const lines: string[] = [];
+  for (let row = 0; row < buffer.length; row++) {
+    const line = buffer.getLine(row);
+    if (!line) {
+      continue;
+    }
+    // A row continued by the next keeps its trailing blanks: they are spaces of the line.
+    const text = line.translateToString(buffer.getLine(row + 1)?.isWrapped !== true);
+    if (line.isWrapped && lines.length > 0) {
+      lines[lines.length - 1] += text;
+    } else {
+      lines.push(text);
+    }
+  }
+  return lines.join("\n").trimEnd();
+}
+
 // Leaving the window is the focus loss a terminal is told of (`FOCUS_OUT`).
 window.addEventListener("blur", () => {
   for (const view of views.values()) {

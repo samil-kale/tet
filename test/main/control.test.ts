@@ -24,7 +24,6 @@ import type { TerminalDescriptor } from "../../src/shared/types/terminals";
 import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
 import { spawn } from "node:child_process";
 import { writeLaunchers } from "../../src/main/control/control-launcher";
-import { ControlRecords } from "../../src/main/control/control-records";
 
 /**
  * The control channel below the app: the real server on a loopback port, the real CLI as a child
@@ -261,21 +260,16 @@ function deps(): ControlDeps {
       editor: (ref) => (projectRefKey(ref) === PROJECT.id ? ACTIVE_EDITOR : undefined),
       editors: (ref) =>
         projectRefKey(ref) === PROJECT.id ? editorListing : projectRefKey(ref) === projectRefKey(WORKTREE) ? worktreeEditors : [],
-      notices: () => [{ severity: "error", message: "Could not delete", at: 1 }],
-      output: (ref, tabId) =>
-        projectRefKey(ref) !== PROJECT.id
-          ? undefined
-          : tabId === "tab-2"
-            ? "\x1b[1mbold\x1b[0m line\r\n\x1b]0;title\x07next"
-            : tabId === OWN_TAB
-              ? "\x1b[32mone\x1b[0m\r\nfetching 10%\rfetching 90%\rtwo\r\nthree\r"
-              : undefined
+      notices: () => [{ severity: "error", message: "Could not delete", at: 1 }]
     },
     projectRefPath: (ref) => {
       const project = projects.find((entry) => entry.id === ref.projectId);
       return ref.worktree === undefined ? project?.path : project?.worktrees.find((worktree) => worktree.key === ref.worktree)?.path;
     },
     editorContent: (ref) => Promise.resolve(projectRefKey(ref) === PROJECT.id ? "edited" : undefined),
+    // The worktree's window question goes unanswered.
+    terminalText: (ref, tabId) =>
+      Promise.resolve(projectRefKey(ref) !== PROJECT.id ? undefined : tabId === OWN_TAB ? `${"x".repeat(2048)}end` : "bold line\nnext"),
     openEditor: (ref, filePath, keep) => {
       calls.editorsOpened.push([projectRefKey(ref), filePath, keep]);
     },
@@ -939,12 +933,32 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.written, []);
   });
 
-  it("answers an agent or shell tab's output as text, its lines as finally shown", async () => {
+  it("types text into a tab as one write, without Enter", async () => {
+    assert.deepEqual((await tetCtl(["tabs-text", "tab-2", "fix the build\nthen test"])).result, { typed: "tab-2" });
+    assert.deepEqual(calls.written, [["tab-2", "fix the build\nthen test"]]);
+    assert.equal((await tetCtl(["tabs-text", "tab-2"])).status, EXIT_CODES.usage, "no text");
+  });
+
+  it("types text into no tab of another project, nor from outside a project", async () => {
+    assertRefused(await tetCtl(["tabs-text", OWN_TAB, "hello", "--project", OTHER.id]), /own project/, "another project");
+    const outside = await tetCtl(["tabs-text", "tab-2", "hello", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
+    assertRefused(outside, /own project/, "no project of its own");
+    assert.deepEqual(calls.written, []);
+  });
+
+  it("answers what a tab's terminal shows, its last n KB", async () => {
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2"])).result, { output: "bold line\nnext" });
-    assert.deepEqual((await tetCtl(["tabs-output", "tab-2", "--kb", "1"])).result, { output: "bold line\nnext" });
-    assert.deepEqual((await tetCtl(["tabs-output", OWN_TAB])).result, { output: "one\ntwo\nthree" }, "redraws collapsed");
+    const last = (await tetCtl(["tabs-output", OWN_TAB, "--kb", "1"])).result as { output: string };
+    assert.equal(last.output.length, 1024);
+    assert.ok(last.output.endsWith("end"));
     assert.equal((await tetCtl(["tabs-output", "tab-2", "--kb", "x"])).status, EXIT_CODES.usage);
     assert.equal((await tetCtl(["tabs-output", "tab-2", "--kb", "0"])).status, EXIT_CODES.usage);
+  });
+
+  it("fails a tab's output the window does not answer", async () => {
+    const run = await tetCtl(["tabs-output", "tab-2", "--worktree", "four"]);
+    assert.equal(run.status, EXIT_CODES.internal);
+    assert.match(run.stderr, /window did not answer/);
   });
 
   it("reads no tab of another project, nor from outside a project", async () => {
@@ -1139,9 +1153,9 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.handedOff, [["tab-2", "claude", true]], "held to the sandbox");
   });
 
-  it("starts, restarts, presses keys in and waits on a sandboxed tab of its project, never a host tab", async () => {
+  it("starts, restarts, presses keys and types in and waits on a sandboxed tab of its project, never a host tab", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    for (const args of [["tabs-start", OWN_TAB], ["tabs-restart", OWN_TAB], ["tabs-keys", OWN_TAB, "enter"], ["tabs-wait", OWN_TAB, "--idle"]]) {
+    for (const args of [["tabs-start", OWN_TAB], ["tabs-restart", OWN_TAB], ["tabs-keys", OWN_TAB, "enter"], ["tabs-text", OWN_TAB, "hello"], ["tabs-wait", OWN_TAB, "--idle"]]) {
       const run = await tetCtl(args, fromSandbox);
       assert.equal(run.status, EXIT_CODES.usage, args[0]);
       assert.match(run.stderr, /runs on this machine/, args[0]);
@@ -1152,7 +1166,8 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["tabs-start", "tab-2", ...inWorktree], fromSandbox)).result, { started: "tab-2" });
     assert.deepEqual((await tetCtl(["tabs-restart", "tab-2", ...inWorktree], fromSandbox)).result, { restarted: "tab-2" });
     assert.equal((await tetCtl(["tabs-keys", "tab-2", "enter", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
-    assert.equal(calls.written.length, 1);
+    assert.equal((await tetCtl(["tabs-text", "tab-2", "hello", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal(calls.written.length, 2);
     const listed = (await tetCtl(["tabs-list", ...inWorktree], fromSandbox)).result as TerminalDescriptor[];
     assert.deepEqual(listed.map((entry) => entry.tabId), ["tab-2"], "no host tab listed");
     assertRefused(await tetCtl(["tabs-start", "tab-2", "--project", OTHER.id], fromSandbox), /own project/, "another project");
@@ -1616,32 +1631,5 @@ describe("the tet-ctl launcher", () => {
       child.on("close", () => resolve(stdout));
     });
     assert.doesNotMatch(after, /ELECTRON_RUN_AS_NODE=1/);
-  });
-});
-
-describe("a tab's recorded output", () => {
-  it("keeps the latest output of open tabs only", () => {
-    const records = new ControlRecords();
-    records.addOutput({ projectId: "p1" }, "tab-1", "one");
-    records.addOutput({ projectId: "p1" }, "tab-1", "two");
-    records.addOutput({ projectId: "p1" }, "tab-2", "gone");
-    records.addOutput({ projectId: "p2" }, "tab-3", "other project");
-    records.keepOutputs({ projectId: "p1" }, new Set(["tab-1"]));
-    assert.equal(records.output({ projectId: "p1" }, "tab-1"), "onetwo");
-    assert.equal(records.output({ projectId: "p1" }, "tab-2"), undefined, "a closed tab's output goes with it");
-    assert.equal(records.output({ projectId: "p2" }, "tab-3"), "other project", "another project's tabs untouched");
-    records.forget({ projectId: "p2" });
-    assert.equal(records.output({ projectId: "p2" }, "tab-3"), undefined, "a closed worktree's output goes with it");
-  });
-
-  it("holds the latest 256 KB of a tab", () => {
-    const records = new ControlRecords();
-    // A progress bar redrawn for hours, never a newline: bounded all the same.
-    for (let i = 0; i < 400; i++) {
-      records.addOutput({ projectId: "p" }, "shell", "\rDownloading 42%".padEnd(16 * 1024, " "));
-      records.addOutput({ projectId: "p" }, "agent", "\x1b[H".padEnd(16 * 1024, "x"));
-    }
-    assert.equal(records.output({ projectId: "p" }, "shell")?.length, 256 * 1024);
-    assert.equal(records.output({ projectId: "p" }, "agent")?.length, 256 * 1024);
   });
 });

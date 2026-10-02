@@ -1,15 +1,12 @@
-import { stripAnsi } from "../util/ansi";
 import { projectRefKey } from "../../shared/types/project";
 import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
 import type { ProjectRef } from "../../shared/types/project";
 
 const MAX_NOTICES = 50;
-/** As far back as `tabs-output` reaches: a long build or test log. */
-const MAX_OUTPUT_CHARS = 256 * 1024;
 
 /**
  * Control-verb data no main-process store holds: what the window reports (editor tabs, shown
- * notices) and each open tab's latest output. Per repository or worktree.
+ * notices). Per repository or worktree.
  */
 export class ControlRecords {
   /** Per `projectRefKey`, per editor tab, in the order first reported. */
@@ -18,9 +15,6 @@ export class ControlRecords {
    *  report under it then, and the next activation replaces it. */
   private readonly activeEditors = new Map<string, string>();
   private readonly shownNotices: NoticeReport[] = [];
-  /** Per `projectRefKey`, per tab, what it printed, raw: cleaned only when read, so a redraw
-   *  spanning chunks still collapses. */
-  private readonly outputs = new Map<string, Map<string, string>>();
 
   /** null once the tab is closed. */
   setEditor(ref: ProjectRef, tabId: string, report: EditorReport | null): void {
@@ -61,57 +55,10 @@ export class ControlRecords {
     return [...this.shownNotices];
   }
 
-  addOutput(ref: ProjectRef, tabId: string, data: string): void {
-    const key = projectRefKey(ref);
-    const tabs = this.outputs.get(key) ?? new Map<string, string>();
-    const text = (tabs.get(tabId) ?? "") + data;
-    // Trimmed at twice the cap, to the cap when read: trimming every chunk would copy the whole
-    // cap per chunk.
-    tabs.set(tabId, text.length > 2 * MAX_OUTPUT_CHARS ? text.slice(-MAX_OUTPUT_CHARS) : text);
-    this.outputs.set(key, tabs);
-  }
-
-  /** Drops what closed tabs printed, given a repository's or worktree's open tabs. */
-  keepOutputs(ref: ProjectRef, tabIds: ReadonlySet<string>): void {
-    const tabs = this.outputs.get(projectRefKey(ref));
-    if (!tabs) {
-      return;
-    }
-    for (const tabId of tabs.keys()) {
-      if (!tabIds.has(tabId)) {
-        tabs.delete(tabId);
-      }
-    }
-  }
-
-  /** A closed repository's or worktree's editor reports and tab output. */
+  /** A closed repository's or worktree's editor reports. */
   forget(ref: ProjectRef): void {
     const key = projectRefKey(ref);
     this.editorTabs.delete(key);
     this.activeEditors.delete(key);
-    this.outputs.delete(key);
   }
-
-  /** Raw, escape sequences included; undefined before any output. */
-  output(ref: ProjectRef, tabId: string): string | undefined {
-    return this.outputs.get(projectRefKey(ref))?.get(tabId)?.slice(-MAX_OUTPUT_CHARS);
-  }
-}
-
-/** Strips escape sequences; CRLF to LF. */
-export function plainText(data: string): string {
-  return stripAnsi(data).replace(/\r\n/g, "\n");
-}
-
-/**
- * A tab's output with its lines as finally shown: each keeps what follows its last bare `\r`, so a
- * progress bar's redraws leave one line. Over the whole output at once, a redraw split across
- * chunks included; the `\r` of a `\r\n` not yet complete is no redraw.
- */
-export function shownText(data: string): string {
-  return plainText(data)
-    .replace(/\r$/, "")
-    .split("\n")
-    .map((line) => line.slice(line.lastIndexOf("\r") + 1))
-    .join("\n");
 }

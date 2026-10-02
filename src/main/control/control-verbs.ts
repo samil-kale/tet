@@ -14,7 +14,6 @@ import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
 import { sbxVerbs } from "./control-sbx-verbs";
 import { worktreeVerbs } from "./control-worktree-verbs";
-import { shownText } from "./control-records";
 import {
   callerRef,
   ControlError,
@@ -342,10 +341,21 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { pressed: tabId } };
     },
 
-    "tabs-output": (args, caller) => {
+    // One write: the Enter that submits it is tabs-keys' own, which a TUI does not read as the paste.
+    "tabs-text": (args, caller) => {
+      const { tabs, tabId } = ownedTab(args, caller);
+      tabs.write(tabId, text(args, "text", "text"));
+      return { result: { typed: tabId } };
+    },
+
+    "tabs-output": async (args, caller) => {
       const { tabId, ref } = ownedTab(args, caller);
-      const output = shownText(deps.records.output(ref, tabId) ?? "");
-      return { result: { output: output.slice(-count(args, "kb", OUTPUT_KB) * 1024) } };
+      const kb = count(args, "kb", OUTPUT_KB);
+      const output = await deps.terminalText(ref, tabId);
+      if (output === undefined) {
+        throw new ControlError("internal", "the window did not answer: TET shows no terminals right now");
+      }
+      return { result: { output: output.slice(-kb * 1024) } };
     },
 
     // From a sandbox, only the events of tabs it reaches, as tabs-list — none of a closed tab, whose

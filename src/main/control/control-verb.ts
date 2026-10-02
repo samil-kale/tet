@@ -130,7 +130,6 @@ export interface ControlDeps {
     editor(ref: ProjectRef): EditorReport | undefined;
     editors(ref: ProjectRef): EditorListing[];
     notices(): NoticeReport[];
-    output(ref: ProjectRef, tabId: string): string | undefined;
   };
   /** A repository's or worktree's folder (project-dirs.ts's projectRefPath); undefined for an
    *  unknown project. */
@@ -141,6 +140,9 @@ export interface ControlDeps {
   /** The active editor tab's text, asked of the window live — the one thing not kept as a report
    *  (see EditorReport). */
   editorContent(ref: ProjectRef): Promise<string | undefined>;
+  /** What a tab's terminal shows, asked of the window live: its xterm has parsed the output.
+   *  undefined when the window does not answer. */
+  terminalText(ref: ProjectRef, tabId: string): Promise<string | undefined>;
   /** agents/index.ts's listInstalledAgents: the requirements dialog's answer, by id. */
   listAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]>;
   /** `AGENTS`, so a new agent needs nothing here. */

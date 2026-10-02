@@ -200,10 +200,8 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (ref, tabs) => {
     send("terminals:tabs", { ref, tabs });
     awaitedToastTab(ref);
-    records.keepOutputs(ref, new Set(tabs.map((tab) => tab.tabId)));
   },
   onOutput: (ref, tabId, data) => {
-    records.addOutput(ref, tabId, data);
     appWindow.queueOutput(ref, tabId, data);
   },
   onStatus: (ref, tabId, status: TerminalStatus) => {
@@ -317,6 +315,7 @@ async function startControl(): Promise<void> {
         },
         openEditor: (ref, filePath, keep) => send("editor:open", { ref, path: filePath, keep }),
         editorContent: appWindow.editorContent,
+        terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("terminals:show", { ref, tabId }),
         notify: showDesktopNotification,
         environment,

@@ -290,6 +290,8 @@ export interface TETApi {
     onStartupProgress(listener: (payload: { ref: ProjectRef; show: boolean }) => void): Unsubscribe;
     /** A tab the control channel opened, to bring to front. */
     onShow(listener: (payload: { ref: ProjectRef; tabId: string }) => void): Unsubscribe;
+    /** `tet-ctl tabs-output` asks for what a tab's terminal shows; the listener answers. */
+    onTextRequest(listener: (ref: ProjectRef, tabId: string) => Promise<string>): Unsubscribe;
     /** onStartupProgress's current value: a project restored at start bootstraps before the window. */
     starting(ref: ProjectRef): Promise<boolean>;
   };

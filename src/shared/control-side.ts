@@ -45,7 +45,7 @@ export const HOST_SIDE: ControlSide = {
     ...OWN_LIMITS,
     "restartRequired in an answer means the change waits for a restart — tell the user, never",
     "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
-    "(tabs-output, tabs-keys)."
+    "(tabs-output, tabs-keys, tabs-text)."
   ]
 };
 

@@ -10,8 +10,9 @@ import type { ProjectRef } from "./types/project";
 /** The payload a `TETApi` subscription hands its listener. */
 type Payload<S> = S extends (listener: (payload: infer P) => unknown) => Unsubscribe ? P : never;
 
-/** The channel `editor-state`'s answer comes back on, one per request (main.ts's editorContent). */
-export type EditorContentReply = `editor:content:${number}`;
+/** The channel the window's answer to a question from main comes back on, one per question
+ *  (window.ts's askWindow). */
+export type WindowReply = `window:reply:${number}`;
 
 /** Renderer to main, answered: `invoke` and `handle`. */
 export interface InvokeChannels {
@@ -132,7 +133,7 @@ export interface SendChannels {
   "terminals:in-front": TETApi["terminals"]["inFront"];
   "terminals:input": TETApi["terminals"]["input"];
   "terminals:resize": TETApi["terminals"]["resize"];
-  [reply: EditorContentReply]: (content: string | undefined) => void;
+  [reply: WindowReply]: (answer: string | undefined) => void;
 }
 
 /** Main to renderer: `webContents.send` and the preload's subscriptions, by payload. */
@@ -147,7 +148,7 @@ export interface EventChannels {
   "repository:files-changed": Payload<TETApi["repository"]["onFilesChanged"]>;
   "repository:file-changed": Payload<TETApi["repository"]["onFileChanged"]>;
   /** `onEditorContentRequest`'s question; the answer goes back on `reply`. */
-  "editor:content-request": { ref: ProjectRef; reply: EditorContentReply };
+  "editor:content-request": { ref: ProjectRef; reply: WindowReply };
   "editor:open": Payload<TETApi["repository"]["onOpenEditor"]>;
   "commands:changed": Payload<TETApi["commands"]["onChanged"]>;
   "terminals:tabs": Payload<TETApi["terminals"]["onTabs"]>;
@@ -155,4 +156,6 @@ export interface EventChannels {
   "terminals:status": Payload<TETApi["terminals"]["onStatus"]>;
   "terminals:startup-progress": Payload<TETApi["terminals"]["onStartupProgress"]>;
   "terminals:show": Payload<TETApi["terminals"]["onShow"]>;
+  /** `onTextRequest`'s question; the answer goes back on `reply`. */
+  "terminals:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
 }

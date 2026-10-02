@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import { app, BrowserWindow, shell } from "electron";
 import { WINDOW_ARGS } from "../shared/api";
-import type { EditorContentReply, EventChannels } from "../shared/ipc";
+import type { EventChannels, WindowReply } from "../shared/ipc";
 import type { ThemeDefinition } from "../shared/themes";
 import { projectRefKey } from "../shared/types/project";
 import type { Notice, NoticeProgress, NoticeSeverity } from "../shared/types/app";
@@ -16,8 +16,8 @@ import { isOpenableUrl } from "./util/shell-open";
 const OUTPUT_FLUSH_MS = 8;
 /** Minimum gap between two renderer-crash rebuilds. */
 const RENDERER_REBUILD_GAP_MS = 60_000;
-/** `editor-state`'s wait for the window: one in its requirements check or reloading never answers. */
-const EDITOR_CONTENT_TIMEOUT_MS = 2000;
+/** A question's wait for the window: one in its requirements check or reloading never answers. */
+const WINDOW_ANSWER_TIMEOUT_MS = 2000;
 
 export interface AppWindowDeps {
   /** For tests run locally (test/helpers/): the window is drawn but never shown. */
@@ -44,7 +44,7 @@ export class AppWindow {
    */
   private noticesHeard = false;
   private readonly heldNotices: Notice[] = [];
-  private editorContentRequests = 0;
+  private windowQuestions = 0;
   private readonly pendingOutput = new Map<string, TerminalOutput>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   /** The theme on screen: the window's initial one or the last `showTheme` took. */
@@ -92,26 +92,35 @@ export class AppWindow {
     return this.window !== undefined && !this.window.isDestroyed() && (!this.window.isFocused() || this.window.isMinimized());
   }
 
-  /** A repository's or worktree's active editor tab text (ControlDeps.editorContent), on a
-   *  per-request reply channel. */
-  editorContent = (ref: ProjectRef): Promise<string | undefined> => {
+  /** A repository's or worktree's active editor tab text (ControlDeps.editorContent). */
+  editorContent = (ref: ProjectRef): Promise<string | undefined> =>
+    this.askWindow((reply) => this.send("editor:content-request", { ref, reply }));
+
+  /** What a tab's terminal shows (ControlDeps.terminalText), its batched output handed over first. */
+  terminalText = (ref: ProjectRef, tabId: string): Promise<string | undefined> => {
+    this.flushOutput();
+    return this.askWindow((reply) => this.send("terminals:text-request", { ref, tabId, reply }));
+  };
+
+  /** Asks the window on a per-question reply channel; undefined when it does not answer. */
+  private askWindow(ask: (reply: WindowReply) => void): Promise<string | undefined> {
     if (!this.window || this.window.isDestroyed()) {
       return Promise.resolve(undefined);
     }
-    this.editorContentRequests += 1;
-    const reply: EditorContentReply = `editor:content:${this.editorContentRequests}`;
+    this.windowQuestions += 1;
+    const reply: WindowReply = `window:reply:${this.windowQuestions}`;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         off();
         resolve(undefined);
-      }, EDITOR_CONTENT_TIMEOUT_MS);
-      const off = once(reply, (_event, content) => {
+      }, WINDOW_ANSWER_TIMEOUT_MS);
+      const off = once(reply, (_event, answer) => {
         clearTimeout(timer);
-        resolve(content);
+        resolve(answer);
       });
-      this.send("editor:content-request", { ref, reply });
+      ask(reply);
     });
-  };
+  }
 
   queueOutput(ref: ProjectRef, tabId: string, data: string): void {
     const key = `${projectRefKey(ref)}\u0000${tabId}`;
