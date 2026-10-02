@@ -9,7 +9,7 @@ import { claudeAgent } from "../../src/main/agents/claude";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { readSbxConfig, writeSbxConfig } from "../../src/main/store/tet-json";
 import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../../src/main/sbx/sbx";
-import { parseSignedInUser, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
+import { parseSignedInUser, sbxError, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
 import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../../src/main/sbx/sbx-mounts";
 import { saveSbxConfig } from "../../src/main/sbx/sbx-save";
 import { listSandboxes, readHostAllowed } from "../../src/main/sbx/sbx-status";
@@ -709,6 +709,23 @@ describe("who sbx says is signed in", () => {
     assert.equal(parseSignedInUser("You are signed in [username: yaskor]\n"), "yaskor");
     assert.equal(parseSignedInUser("Not authenticated to Docker\n"), undefined);
     assert.equal(parseSignedInUser(""), undefined);
+  });
+});
+
+describe("what sbx said on failing", () => {
+  const failed = (stderr: string) => ({ ok: false, code: 1, stdout: "", stderr });
+
+  it("is its last line, without the ERROR prefix", () => {
+    assert.equal(sbxError(failed("Starting sandboxd daemon...\nERROR: Not authenticated to Docker\n")), "Not authenticated to Docker");
+    assert.equal(sbxError(failed("")), "");
+  });
+
+  it("keeps only the end of a line too long for a message", () => {
+    const banner = "=== sbx v0.46.0 starting sandboxd at 2026-10-02T07:06:20Z === ".repeat(20);
+    const error = sbxError(failed(`${banner}error: another daemon is already running (state dir is locked)`));
+    assert.ok(error.startsWith("…"));
+    assert.ok(error.endsWith("error: another daemon is already running (state dir is locked)"));
+    assert.ok(error.length <= 301);
   });
 });
 

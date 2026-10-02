@@ -43,10 +43,16 @@ export interface RunResult {
   stderr: string;
 }
 
+/** How much of sbx's last line a message keeps, from its end: a daemon that would not start puts
+ *  its whole start log on that one line, the error last. */
+const MAX_ERROR_LENGTH = 300;
+
 /** What sbx said on failing: its last line, `ERROR: …` without the prefix — progress lines
- *  ("Starting sandboxd daemon...") precede it. Empty when it said nothing. */
+ *  ("Starting sandboxd daemon...") precede it — cut to its end past MAX_ERROR_LENGTH. Empty when
+ *  it said nothing. */
 export function sbxError(result: RunResult): string {
-  return result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
+  const line = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
+  return line.length > MAX_ERROR_LENGTH ? `…${line.slice(-MAX_ERROR_LENGTH).trimStart()}` : line;
 }
 
 /** How much of each stream a logged failure keeps, from its end. */
