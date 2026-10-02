@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.16.1 (2026-10-02)
+
+- **Merged branches marked.** The branch tree shows a branch already merged with a dimmed
+  purple icon.
+- **Fixes.** A file without changes opens in the plain editor instead of an empty diff; a side
+  column sliding in no longer jumps before the slide ends.
+
 ## 0.16.0 (2026-10-02)
 
 - **Diff view options.** A diff shows side by side or inline, and can collapse its unchanged
