@@ -62,7 +62,12 @@ export function addProject(deps: ProjectDeps, directory: string): Promise<AddRep
 
 async function addNow(deps: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
   const { store, dataRoot } = deps;
-  if (!(await fs.promises.stat(directory).then((stat) => stat.isDirectory(), () => false))) {
+  const stat = await fs.promises.stat(directory).catch((error: NodeJS.ErrnoException) => error.code);
+  // A missing folder is offered for initializing as well: `git init` creates it.
+  if (stat === "ENOENT") {
+    return { error: `${directory} does not exist`, notRepository: true };
+  }
+  if (typeof stat !== "object" || !stat.isDirectory()) {
     return { error: `${directory} is not a folder` };
   }
   // Only the folder itself counts: one inside a repository is no repository of its own.

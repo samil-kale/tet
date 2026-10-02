@@ -31,7 +31,8 @@ export function registerProjectsIpc({
       const result = await dialog.showOpenDialog({
         title,
         defaultPath: defaultPath === "" ? undefined : defaultPath,
-        properties: ["openDirectory"]
+        // macOS offers a new folder only when asked; the add tab initializes one picked that way.
+        properties: ["openDirectory", "createDirectory"]
       });
       return result.canceled ? null : (result.filePaths[0] ?? null);
     }
@@ -63,7 +64,7 @@ export function registerProjectsIpc({
     addProject(projectDeps, directory)
   );
 
-  /** Clone, create and initialize all end with the new folder added as a project, as `projects:open`
+  /** Clone and initialize both end with the new folder added as a project, as `projects:open`
    *  does. */
   const addRepository = async (
     action: Promise<GitActionResult>,
@@ -102,11 +103,6 @@ export function registerProjectsIpc({
       return addRepository(action, target, "Clone");
     }
   );
-
-  handle("projects:create", (_event, directory: string, name: string) => {
-    const target = path.join(directory, name);
-    return addRepository(git.init(target), target, "Create");
-  });
 
   handle("projects:initialize", (_event, directory: string) =>
     addRepository(git.init(directory), directory, "Initialize")

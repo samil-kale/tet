@@ -40,7 +40,6 @@ export interface InvokeChannels {
   "projects:directory-to-remember": TETApi["projects"]["directoryToRemember"];
   "projects:open": TETApi["projects"]["open"];
   "projects:clone": TETApi["projects"]["clone"];
-  "projects:create": TETApi["projects"]["create"];
   "projects:initialize": TETApi["projects"]["initialize"];
   "projects:remove": TETApi["projects"]["remove"];
   "projects:add-worktree": TETApi["projects"]["addWorktree"];

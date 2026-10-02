@@ -81,7 +81,7 @@ export function projectRefName(project: Project, ref: ProjectRef): string {
   return worktree ? `${worktreeName(worktree)} (${project.name})` : project.name;
 }
 
-/** Open/clone/create/new worktree: the project, or git's message. `worktree` names the worktree it
+/** Open/clone/initialize/new worktree: the project, or git's message. `worktree` names the worktree it
  *  was about, to bring to the front. */
 export interface AddRepositoryResult {
   project?: Project;
@@ -89,7 +89,8 @@ export interface AddRepositoryResult {
   error?: string;
   /** The clone wants a login for this url; the dialog asks for one (GitActionResult). */
   loginUrl?: string;
-  /** The folder holds no git repository; the dialog offers to initialize one (`initialize`). */
+  /** The folder holds no git repository or is missing; the dialog offers to initialize one
+   *  (`initialize`). */
   notRepository?: boolean;
 }
 

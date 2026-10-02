@@ -18,15 +18,14 @@ import { RadioGroup } from "../ui/RadioGroup";
 import { RowMark } from "../ui/RowSection";
 import { useRunning } from "../ui/use-running";
 
-/** Picked off an account's list, cloned from a url, added from disk, or created empty. Not in
- *  Dialog.tsx, which asks one question. */
-type Mode = "remote" | "clone" | "add" | "create";
+/** Picked off an account's list, cloned from a url, or added from disk — initialized there where it
+ *  holds no repository yet. Not in Dialog.tsx, which asks one question. */
+type Mode = "remote" | "clone" | "add";
 
 const MODES: { id: Mode; label: string }[] = [
   { id: "remote", label: "Remote" },
   { id: "clone", label: "Clone" },
-  { id: "add", label: "Add" },
-  { id: "create", label: "Create" }
+  { id: "add", label: "Add" }
 ];
 
 const PROVIDER_LABEL: Record<ProviderId, string> = { github: "GitHub", gitlab: "GitLab" };
@@ -360,7 +359,7 @@ interface AddRepositoryDialogProps {
 export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");
-  /** The parent of the new folder (clone, create), or the existing folder (add). */
+  /** The parent of the new folder (clone), or the folder itself (add). */
   const [directory, setDirectory] = useState("");
   /** null follows the url; a string is the user's and stays. */
   const [name, setName] = useState<string | null>(null);
@@ -369,7 +368,8 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   /** null until a clone wanted a login (`loginUrl`), then the url it wants one for. */
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [login, setLogin] = useState<GitLogin>({ username: "", password: "" });
-  /** null until an add found no repository (`notRepository`), then the folder it found none in. */
+  /** null until an add found no repository (`notRepository`), then the folder it found none in, or
+   *  found missing. */
   const [uninitialized, setUninitialized] = useState<string | null>(null);
   /** The remote tab's listing underway, on the header's bar. */
   const [listing, setListing] = useState(false);
@@ -397,9 +397,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
         (loginUrl === null || loginReady(login))
       : mode === "add"
         ? directory.trim() !== ""
-        : mode === "create"
-          ? directory.trim() !== "" && folderName.trim() !== ""
-          : false;
+        : false;
 
   const cloneRepository = (): Promise<AddRepositoryResult> =>
     window.tet.projects.clone(
@@ -418,9 +416,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
         ? initializing
           ? await window.tet.projects.initialize(directory.trim())
           : await window.tet.projects.open(directory.trim())
-        : mode === "clone"
-          ? await cloneRepository()
-          : await window.tet.projects.create(directory.trim(), folderName.trim());
+        : await cloneRepository();
     if (result.project) {
       return undefined;
     }
@@ -507,18 +503,9 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
             pickTitle="Add repository"
             onChange={changing(setDirectory)}
           />
-          {initializing && <p className="dialog-detail">Initialize creates a git repository in this folder.</p>}
-        </>
-      )}
-      {mode === "create" && (
-        <>
-          <PathField
-            label="Destination"
-            value={directory}
-            pickTitle="Create in"
-            onChange={changing(setDirectory)}
-          />
-          <TextField label="Folder name" value={folderName} onChange={changing(setName)} />
+          {initializing && (
+            <p className="dialog-detail">Initialize creates a git repository in this folder, and the folder where it is missing.</p>
+          )}
         </>
       )}
     </DialogFrame>

@@ -68,7 +68,6 @@ const api: TETApi = {
     open: (directory) => invoke("projects:open", directory),
     clone: (url, directory, name, accountId, login) =>
       invoke("projects:clone", url, directory, name, accountId, login),
-    create: (directory, name) => invoke("projects:create", directory, name),
     initialize: (directory) => invoke("projects:initialize", directory),
     remove: (projectId) => invoke("projects:remove", projectId),
     addWorktree: (projectId, branch) => invoke("projects:add-worktree", projectId, branch),

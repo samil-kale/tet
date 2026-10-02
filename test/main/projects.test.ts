@@ -141,6 +141,14 @@ describe("a project added", () => {
     assert.equal(store.list().length, 0);
   });
 
+  it("is refused where the folder is missing, with an offer to initialize it", async () => {
+    const { deps, store } = open();
+    const added = await addProject(deps, path.join(real(tempDir("tet-projects-missing-")), "missing"));
+    assert.equal(added.project, undefined);
+    assert.equal(added.notRepository, true);
+    assert.equal(store.list().length, 0);
+  });
+
   it("gets a new id where it is a copy of a project open elsewhere", async () => {
     const repo = repository();
     const { add } = open();
