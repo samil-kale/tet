@@ -53,6 +53,11 @@ type MenuTarget =
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
 const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or create a new worktree";
 
+/** A branch merged into the default branch is drawn in git's colour for what needs no more work. */
+function branchIconClass(merged: boolean): string {
+  return merged ? "tree-icon merged" : "tree-icon";
+}
+
 /**
  * One collapsible section of the tree. `rows` is called only while the section is open, so a
  * collapsed one with thousands of tags builds no elements.
@@ -464,7 +469,7 @@ export const BranchTree = memo(function BranchTree({
                   title="Double-click to check out"
                   onDoubleClick={() => checkout({ name: localBranch })}
                   onContextMenu={(event) => menu.open(event, { kind: "branch", name: localBranch })}
-                  icon={<BranchIcon className="tree-icon" />}
+                  icon={<BranchIcon className={branchIconClass(state.mergedBranches.includes(localBranch))} />}
                   label={localBranch}
                 >
                   {status && (status.ahead > 0 || status.behind > 0) && (
@@ -542,7 +547,7 @@ export const BranchTree = memo(function BranchTree({
                       onContextMenu={(event) =>
                         menu.open(event, { kind: "branch", name: remoteBranch, remote: entry.name })
                       }
-                      icon={<BranchIcon className="tree-icon" />}
+                      icon={<BranchIcon className={branchIconClass(entry.mergedBranches.includes(remoteBranch))} />}
                       label={remoteBranch}
                     />
                   ))}

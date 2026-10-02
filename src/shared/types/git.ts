@@ -8,6 +8,8 @@ export interface RemoteInfo {
   name: string;
   /** Branch names without the remote prefix, e.g. "development". */
   branches: string[];
+  /** Those merged into the default branch (`RepositoryState.mergedBranches`). */
+  mergedBranches: string[];
   /** e.g. "git@github.com:owner/repo.git"; read when the project opens, not on every refresh. */
   url?: string;
 }
@@ -63,6 +65,9 @@ export interface RepositoryState {
    *  finds it: the local branch tracking the remote's HEAD branch, else the local branch of that
    *  name, else the remote branch. */
   defaultBranch?: CheckoutTarget;
+  /** The local branches whose commit the default branch contains, but the default branch and the
+   *  remote branches standing for it; a remote's are its `RemoteInfo.mergedBranches`. */
+  mergedBranches: string[];
   /** In `for-each-ref` order. */
   tags: string[];
   stashes: StashEntry[];
@@ -98,6 +103,7 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   ahead: 0,
   behind: 0,
   localBranches: [],
+  mergedBranches: [],
   branchTrack: {},
   branchUpstreams: {},
   worktrees: [],

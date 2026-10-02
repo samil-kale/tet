@@ -246,7 +246,7 @@ describe("a repository, from init on", () => {
     assert.equal(state.upstream, "origin/main");
     assert.deepEqual(state.branchUpstreams, { main: { remote: "origin", branch: "main" } });
     assert.deepEqual([state.ahead, state.behind], [0, 0]);
-    assert.deepEqual(state.remotes, [{ name: "origin", branches: ["main"] }]);
+    assert.deepEqual(state.remotes, [{ name: "origin", branches: ["main"], mergedBranches: [] }]);
     assert.deepEqual(state.defaultBranch, { name: "main" });
     write("c.txt", "new\n");
     assert.deepEqual(await commitAll(cwd, "ahead"), { ok: true });
@@ -279,6 +279,26 @@ describe("a repository, from init on", () => {
     assert.deepEqual([state.upstream, state.ahead, state.behind], [undefined, 0, 0]);
     run("switch", "-q", "main");
     run("branch", "-q", "-D", "behind");
+  });
+
+  it("tells the branches merged into the default branch, never the default branch itself", async () => {
+    run("branch", "-q", "done", "main~1");
+    run("switch", "-q", "-c", "open");
+    write("open.txt", "open\n");
+    assert.deepEqual(await commitAll(cwd, "open work"), { ok: true });
+    run("update-ref", "refs/remotes/origin/done", "main~1");
+    run("update-ref", "refs/remotes/origin/open", "open");
+    run("switch", "-q", "main");
+    const state = await readState(cwd);
+    assert.deepEqual(state.mergedBranches, ["done"]);
+    assert.deepEqual(state.remotes, [{ name: "origin", branches: ["done", "main", "open"], mergedBranches: ["done"] }]);
+    // Merged since: the refs moved, so the read is not the one cached.
+    assert.deepEqual(await merge(cwd, "open"), { ok: true });
+    assert.deepEqual((await readState(cwd)).mergedBranches, ["done", "open"]);
+    run("reset", "-q", "--hard", "HEAD@{1}");
+    run("branch", "-q", "-D", "done", "open");
+    run("update-ref", "-d", "refs/remotes/origin/done");
+    run("update-ref", "-d", "refs/remotes/origin/open");
   });
 
   it("hides what .gitignore hides, added the way the menu adds it", async () => {
@@ -590,7 +610,7 @@ describe("remotes the tree has to read carefully", () => {
     assert.deepEqual(await push(cwd, "team/fork", "main", undefined), { ok: true });
     run("remote", "set-head", "team/fork", "main");
     const state = await readState(cwd, ["team/fork"]);
-    assert.deepEqual(state.remotes, [{ name: "team/fork", branches: ["main"] }]);
+    assert.deepEqual(state.remotes, [{ name: "team/fork", branches: ["main"], mergedBranches: [] }]);
     assert.deepEqual(state.defaultBranch, { name: "main" });
     assert.equal(state.upstream, "team/fork/main");
     assert.deepEqual(state.branchUpstreams, { main: { remote: "team/fork", branch: "main" } });

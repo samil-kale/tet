@@ -127,6 +127,7 @@
   --vscode-gitDecoration-untrackedResourceForeground: #306850;
   --vscode-gitDecoration-addedResourceForeground: #306850;
   --vscode-gitDecoration-conflictingResourceForeground: #9a2257;
+  --vscode-gitDecoration-ignoredResourceForeground: #49478680;
 
   --vscode-diffEditor-insertedLineBackground: #88c07040;
   --vscode-diffEditor-removedLineBackground: #9a225740;

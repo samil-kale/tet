@@ -111,6 +111,7 @@
   --vscode-gitDecoration-untrackedResourceForeground: #007100;
   --vscode-gitDecoration-addedResourceForeground: #587c0c;
   --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+  --vscode-gitDecoration-ignoredResourceForeground: #8e8e90;
 
   /* The registry's defaultInsertColor/defaultRemoveColor serve both grounds. */
   --vscode-diffEditor-insertedLineBackground: #2ea04326;

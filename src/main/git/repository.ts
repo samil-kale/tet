@@ -129,7 +129,7 @@ export class Repository {
    *  pays per git process for a url that almost never changes. */
   private remoteUrls: Record<string, string> = {};
   /** `init.defaultBranch`, or "main": the default branch where no remote names one (GitHub Desktop's
-   *  fallback). Read with the urls, on open and after `.git/config` changes. */
+   *  fallback), handed to each read. Read with the urls, on open and after `.git/config` changes. */
   private defaultBranchName = "main";
   /** Each worktree branch's `branch.<name>.base`, read with the urls and for the same reason: it is
    *  written once, when the worktree is made, and read on every refresh. */
@@ -198,8 +198,11 @@ export class Repository {
       this.emit({ ...EMPTY_REPOSITORY_STATE, error: "Not a git repository" });
       return;
     }
-    // The first read ran without the remote names; only a name holding a "/" changes it.
-    this.emit(Object.keys(this.remoteUrls).some((name) => name.includes("/")) ? await this.read() : read);
+    // The first read ran without the remote names and with "main" for the default branch; only a
+    // name holding a "/", or another default branch name, changes it.
+    const reread =
+      Object.keys(this.remoteUrls).some((name) => name.includes("/")) || this.defaultBranchName !== "main";
+    this.emit(reread ? await this.read() : read);
     // Closed during the first read: a watcher started now would never be closed.
     if (this.disposed) {
       return;
@@ -251,7 +254,7 @@ export class Repository {
 
   private read(): Promise<RepositoryState> {
     // readState reports errors in its result; a rejection is the git process gone.
-    return git.readState(this.at.path, Object.keys(this.remoteUrls)).catch((error: unknown) => ({
+    return git.readState(this.at.path, Object.keys(this.remoteUrls), this.defaultBranchName).catch((error: unknown) => ({
       ...EMPTY_REPOSITORY_STATE,
       error: errorMessage(error)
     }));
@@ -312,21 +315,22 @@ export class Repository {
     const names = new Set([...read.remotes.map((remote) => remote.name), ...Object.keys(this.remoteUrls)]);
     const remotes = [...names]
       .sort((a, b) => Number(b === "origin") - Number(a === "origin"))
-      .map((name) => ({
-        name,
-        branches: read.remotes.find((remote) => remote.name === name)?.branches ?? [],
-        url: this.remoteUrls[name]
-      }));
-    const defaultBranch =
-      read.defaultBranch ??
-      (read.localBranches.includes(this.defaultBranchName) ? { name: this.defaultBranchName } : undefined);
+      .map((name) => {
+        const known = read.remotes.find((remote) => remote.name === name);
+        return {
+          name,
+          branches: known?.branches ?? [],
+          mergedBranches: known?.mergedBranches ?? [],
+          url: this.remoteUrls[name]
+        };
+      });
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
       // Only a linked worktree carries a base and a key; the main one was made with the repository.
       base: worktree.main || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch],
       key: worktree.main ? undefined : this.worktreeKeyOf(worktree.path)
     }));
-    const next: RepositoryState = { ...read, remotes, defaultBranch, worktrees };
+    const next: RepositoryState = { ...read, remotes, worktrees };
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
     // emit re-renders the views.

@@ -111,6 +111,7 @@
   --vscode-gitDecoration-untrackedResourceForeground: #73c991;
   --vscode-gitDecoration-addedResourceForeground: #81b88b;
   --vscode-gitDecoration-conflictingResourceForeground: #e4676b;
+  --vscode-gitDecoration-ignoredResourceForeground: #8c8c8c;
 
   /* Three weights of two hues: a changed line's ground, the changed words on it, and the 15px
      overview ruler, which disappears against the editor background at anything lighter. */

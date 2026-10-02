@@ -212,18 +212,54 @@ async function readTrackCount(
 }
 
 /**
+ * The branches merged into the default branch, per working directory, with the refs they were read
+ * off: they change only when a ref moves, and readRefs would otherwise spend a process every refresh.
+ */
+const mergedBranches = new Map<string, { refs: string; merged: Set<string> }>();
+
+/** The full names of the branch refs whose commit `target` contains, but `excluded`; undefined
+ *  where git fails. */
+async function readMerged(
+  cwd: string,
+  refs: string,
+  target: string,
+  excluded: Set<string>
+): Promise<Set<string> | undefined> {
+  const cached = mergedBranches.get(cwd);
+  if (cached?.refs === refs) {
+    return cached.merged;
+  }
+  const result = await git(cwd, ["for-each-ref", `--merged=${target}`, "--format=%(refname)", "refs/heads", "refs/remotes"]);
+  if (result.code !== 0) {
+    return undefined;
+  }
+  const merged = new Set(
+    result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((refname) => refname && !refname.endsWith("/HEAD") && !excluded.has(refname))
+  );
+  mergedBranches.set(cwd, { refs, merged });
+  return merged;
+}
+
+/**
  * Every ref the tree shows, from one `for-each-ref`. A local branch `%(upstream:trackshort)` reports
  * as diverged gets its own `rev-list --left-right --count` — except the checked-out one (`readHead`
- * has its numbers) and one whose upstream is not among these refs.
+ * has its numbers) and one whose upstream is not among these refs. The branches merged into the
+ * default branch take one more `for-each-ref`, only when a branch ref moved (`readMerged`).
+ * `fallbackDefault` is the default branch where no remote names one (`readBranchConfig`).
  */
 async function readRefs(
   cwd: string,
-  remoteNames: string[]
+  remoteNames: string[],
+  fallbackDefault: string | undefined
 ): Promise<{
   localBranches: string[];
   remotes: RemoteInfo[];
   tags: string[];
   defaultBranch?: CheckoutTarget;
+  mergedBranches: string[];
   branchTrack: Record<string, { ahead: number; behind: number }>;
   branchUpstreams: Record<string, BranchUpstream>;
   headCommit?: string;
@@ -245,6 +281,8 @@ async function readRefs(
   const remotes = new Map<string, string[]>();
   // Each remote-tracking ref's commit, so a diverged branch is counted by hash, not name.
   const remoteHeads = new Map<string, string>();
+  // Each local branch's commit, for the default branch's.
+  const localHeads = new Map<string, string>();
   // Per remote: refs come sorted, and "backup/HEAD" would otherwise beat "origin/HEAD".
   const defaultBranches = new Map<string, string>();
   const diverged: { name: string; head: string; upstream: string }[] = [];
@@ -270,6 +308,7 @@ async function readRefs(
     if (refname.startsWith("refs/heads/")) {
       const name = refname.slice("refs/heads/".length);
       localBranches.push(name);
+      localHeads.set(name, objectname);
       // "." is a local upstream: nothing on a remote to push to or delete.
       if (upstreamRemote && upstreamRemote !== "." && upstreamRef.startsWith("refs/heads/")) {
         branchUpstreams[name] = { remote: upstreamRemote, branch: upstreamRef.slice("refs/heads/".length) };
@@ -327,15 +366,40 @@ async function readRefs(
       })
   );
 
+  const defaultBranch =
+    findDefaultBranch(defaultBranches, localBranches, trackers, remotes) ??
+    (fallbackDefault !== undefined && localBranches.includes(fallbackDefault) ? { name: fallbackDefault } : undefined);
+  const merged = defaultBranch ? await readDefaultMerged(cwd, result.stdout, defaultBranch) : undefined;
+  const isMerged = (refname: string): boolean => merged?.has(refname) ?? false;
+
   return {
     localBranches,
     tags,
-    defaultBranch: findDefaultBranch(defaultBranches, localBranches, trackers, remotes),
+    defaultBranch,
+    mergedBranches: localBranches.filter((name) => isMerged(`refs/heads/${name}`)),
     branchTrack,
     branchUpstreams,
     headCommit,
-    remotes: [...remotes].map(([name, branches]) => ({ name, branches }))
+    remotes: [...remotes].map(([name, branches]) => ({
+      name,
+      branches,
+      mergedBranches: branches.filter((branch) => isMerged(`refs/remotes/${name}/${branch}`))
+    }))
   };
+
+  /** The default branch is never merged into itself, nor are the remote branches standing for it:
+   *  its upstream and each remote's HEAD branch. */
+  function readDefaultMerged(cwd: string, refs: string, target: CheckoutTarget): Promise<Set<string> | undefined> {
+    const targetRef = target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
+    const upstream = target.remote ? undefined : branchUpstreams[target.name];
+    const excluded = new Set([
+      targetRef,
+      ...(upstream ? [`refs/remotes/${upstream.remote}/${upstream.branch}`] : []),
+      ...[...defaultBranches].map(([remote, branch]) => `refs/remotes/${remote}/${branch}`)
+    ]);
+    const commit = target.remote ? remoteHeads.get(targetRef) : localHeads.get(target.name);
+    return commit ? readMerged(cwd, `${targetRef}\0${refs}`, commit, excluded) : Promise.resolve(undefined);
+  }
 }
 
 /**
@@ -589,14 +653,18 @@ export async function hasChanges(cwd: string): Promise<boolean> {
 
 /** `remoteNames`: the remotes as last read, which `for-each-ref` can't tell apart from the branch
  *  part of a remote-tracking ref (`readRefs`). */
-export async function readState(cwd: string, remoteNames: string[] = []): Promise<RepositoryState> {
+export async function readState(
+  cwd: string,
+  remoteNames: string[] = [],
+  fallbackDefault?: string
+): Promise<RepositoryState> {
   try {
     // No `isRepository` check: Repository asks once on open, and the check costs a quarter of every
     // refresh where starting git is slow. The stash list is the third process, earned by being a
     // list the user acts on; anything added here has to earn its process too. All three run at
     // once, so no extra wall time. Operation and worktrees are file reads.
     const statusOf = readStatus(cwd);
-    const refsOf = readRefs(cwd, remoteNames);
+    const refsOf = readRefs(cwd, remoteNames, fallbackDefault);
     const stashesOf = readStashes(cwd);
     // One resolution of the git directory for both file readers, synchronous and so read only once
     // the three git processes have started: it never delays one.
@@ -666,8 +734,10 @@ const NETWORK_ENV: NodeJS.ProcessEnv = {
  */
 const AUTH_FAILURES = [/could not read (?:Username|Password)/i, /Authentication failed/i];
 
-/** Drops the track-count cache for a working directory whose project closed; this process outlives it. */
+/** Drops the track-count and merged caches for a working directory whose project closed; this
+ *  process outlives it. */
 export function forget(cwd: string): void {
+  mergedBranches.delete(cwd);
   for (const key of trackCounts.keys()) {
     if (key.startsWith(`${cwd}\0`)) {
       trackCounts.delete(key);

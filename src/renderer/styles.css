@@ -568,6 +568,11 @@ textarea:focus,
   cursor: progress;
 }
 
+/* Merged into the default branch: VS Code has no colour for it, so the one for what git leaves be. */
+.branch-tree .tree-icon.merged {
+  color: var(--vscode-gitDecoration-ignoredResourceForeground);
+}
+
 /* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH pane's box,
    which adds to it below. */
 .filter-field {
