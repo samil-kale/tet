@@ -23,6 +23,7 @@ export function layoutFlag(key: string): { get(): boolean; set(value: boolean): 
     }
   };
 }
+
 /** How long after the last resize a pane size is written to storage. */
 const PERSIST_MS = 300;
 

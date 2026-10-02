@@ -11,15 +11,14 @@ import { IconButton } from "../ui/IconButton";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  CollapseAllIcon,
   CommitIcon,
   DiscardIcon,
-  ExpandAllIcon,
   ListIcon,
   ListTreeIcon,
   StashIcon,
   SyncIcon
 } from "../ui/icons";
+import { FoldAllButton } from "../ui/FoldAllButton";
 import { usePaneToggle } from "../ui/layout-storage";
 import { Section } from "../ui/Section";
 
@@ -160,13 +159,7 @@ export const GitPane = memo(function GitPane({
             <IconButton title={asTree ? "View as List" : "View as Tree"} onClick={() => setAsTree(!asTree)}>
               {asTree ? <ListIcon /> : <ListTreeIcon />}
             </IconButton>
-            <IconButton
-              title={expanded ? "Collapse All" : "Expand All"}
-              disabled={!asTree || state.changes.length === 0}
-              onClick={() => (expanded ? changesRef.current?.collapseAll() : changesRef.current?.expandAll())}
-            >
-              {expanded ? <CollapseAllIcon /> : <ExpandAllIcon />}
-            </IconButton>
+            <FoldAllButton expanded={expanded} disabled={!asTree || state.changes.length === 0} tree={changesRef} />
           </>
         }
       >

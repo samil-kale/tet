@@ -124,8 +124,12 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   force: "switch"
 };
 
+/** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
+ *  drawn for until one does, and so the size `tabs-output` reads it at. */
+export const CONTROL_START_SIZE = { cols: 120, rows: 30 };
+
 /** What `tabs-keys` presses, as a terminal sends each key. Single keys only: a burst of text is a
- *  paste to an agent's TUI. */
+ *  paste to an agent's TUI, `tabs-text`'s. */
 export const TAB_KEYS: Readonly<Record<string, string>> = {
   enter: "\r",
   esc: "\x1b",
@@ -423,7 +427,7 @@ const VERBS = [
     group: "The other tabs",
     usage: `tabs-keys <tab-id> <${Object.keys(TAB_KEYS).join("|")}>... [--project <id>]`,
     summary:
-      "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows on its screen. No text: an agent's TUI takes typed text as a paste and its Enter as a newline.",
+      "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows on its screen, or Enter to submit what tabs-text typed.",
     positionals: ["tabId", "keys"],
     variadic: true,
     ownProjectOnly: true,

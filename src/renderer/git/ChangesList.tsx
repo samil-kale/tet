@@ -14,6 +14,7 @@ import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
 import { askLogin } from "./GitLogin";
 import { Checkbox, SuggestField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
+import type { FoldAll } from "../ui/FoldAllButton";
 import { notify } from "../ui/Notices";
 
 interface ChangesListProps {
@@ -35,11 +36,8 @@ interface ChangesListProps {
   ref?: React.Ref<ChangesListHandle>;
 }
 
-/** For the LOCAL CHANGES header's fold buttons. */
-export interface ChangesListHandle {
-  expandAll(): void;
-  collapseAll(): void;
-}
+/** For the LOCAL CHANGES header's fold button. */
+export type ChangesListHandle = FoldAll;
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
   modified: "M",

@@ -4,6 +4,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
 import { Terminal } from "@xterm/xterm";
+import { CONTROL_START_SIZE } from "../../shared/control";
 import { projectRefKey } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { createFileLinkProvider } from "./links/file-links";
@@ -76,10 +77,12 @@ window.tet.terminals.onTextRequest((ref, tabId) => shownText(ref, tabId));
 /**
  * What the tab's terminal shows, as text — its scrollback and screen, or a fullscreen TUI's screen
  * (the alternate buffer) — once xterm has parsed everything it was handed; a wrapped row joins the
- * line it continues. `tabs-output`.
+ * line it continues. `tabs-output`. A tab never attached that printed — one `tet-ctl` started —
+ * gets its xterm now, unopened and at the size it was started at, to parse what `earlyOutput` holds.
  */
 async function shownText(ref: ProjectRef, tabId: string): Promise<string> {
-  const view = views.get(viewKey(ref, tabId));
+  const key = viewKey(ref, tabId);
+  const view = views.get(key) ?? (earlyOutput.has(key) ? createView(ref, tabId, CONTROL_START_SIZE) : undefined);
   if (!view) {
     return "";
   }
@@ -297,8 +300,10 @@ function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void 
   }
 }
 
-function createView(ref: ProjectRef, tabId: string): TerminalView {
+/** At xterm's default size unless `size` is given; the first fit sets the window's. */
+function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows: number }): TerminalView {
   const term = new Terminal({
+    ...size,
     fontFamily: editorFontFamily(),
     fontSize: PLATFORM.terminalFontSize,
     theme: buildXtermTheme(),
@@ -393,9 +398,10 @@ function createView(ref: ProjectRef, tabId: string): TerminalView {
   return view;
 }
 
-/** Whether this tab has been attached before — its xterm exists, wherever it is mounted now. */
+/** Whether this tab has been attached before — its xterm is open, wherever it is mounted now. One
+ *  `shownText` made without attaching is not. */
 export function hasTerminal(ref: ProjectRef, tabId: string): boolean {
-  return views.has(viewKey(ref, tabId));
+  return views.get(viewKey(ref, tabId))?.term.element !== undefined;
 }
 
 export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLElement, shiftEnter: string | undefined): void {

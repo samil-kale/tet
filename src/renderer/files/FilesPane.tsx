@@ -9,7 +9,8 @@ import { useFileAct } from "../git/run-action";
 import { useFileSearch } from "./use-file-search";
 import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
 import { IconButton } from "../ui/IconButton";
-import { ClearIcon, CollapseAllIcon, ExpandAllIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
+import { ClearIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
+import { FoldAllButton } from "../ui/FoldAllButton";
 import { Section } from "../ui/Section";
 
 interface FilesPaneProps {
@@ -104,13 +105,7 @@ export const FilesPane = memo(function FilesPane({
             >
               <ClearIcon />
             </IconButton>
-            <IconButton
-              title={explorerExpanded ? "Collapse All" : "Expand All"}
-              disabled={!explorerListing}
-              onClick={() => (explorerExpanded ? explorerRef.current?.collapseAll() : explorerRef.current?.expandAll())}
-            >
-              {explorerExpanded ? <CollapseAllIcon /> : <ExpandAllIcon />}
-            </IconButton>
+            <FoldAllButton expanded={explorerExpanded} disabled={!explorerListing} tree={explorerRef} />
           </>
         }
       >
@@ -155,13 +150,11 @@ export const FilesPane = memo(function FilesPane({
             >
               <ClearIcon />
             </IconButton>
-            <IconButton
-              title={searchExpanded ? "Collapse All" : "Expand All"}
+            <FoldAllButton
+              expanded={searchExpanded}
               disabled={searchResult === undefined || searchResult.files.length === 0}
-              onClick={() => (searchExpanded ? searchRef.current?.collapseAll() : searchRef.current?.expandAll())}
-            >
-              {searchExpanded ? <CollapseAllIcon /> : <ExpandAllIcon />}
-            </IconButton>
+              tree={searchRef}
+            />
           </>
         }
       >

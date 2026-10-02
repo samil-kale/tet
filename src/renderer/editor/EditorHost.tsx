@@ -5,15 +5,14 @@ import { isMarkdown } from "./diff-highlight";
 import {
   attachEditor,
   attachMarkdownPreview,
-  collapseUnchanged,
   editorKind,
   focusEditor,
   getEditorSnapshot,
   isReadOnly,
   saveEditorFile,
+  setDiffOption,
   showDiff,
   showMarkdownPreview,
-  showSideBySide,
   subscribeEditor,
   subscribeRefEditors,
   type EditorSnapshot
@@ -143,14 +142,14 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
             active={sideBySide}
             title={sideBySide ? "Show Inline" : "Show Side by Side"}
             disabled={!diff || kind !== "text"}
-            onClick={() => showSideBySide(tabId, !sideBySide)}
+            onClick={() => setDiffOption(tabId, "sideBySide", !sideBySide)}
           >
             <SideBySideIcon />
           </IconButton>
           <IconButton
             title={unchangedCollapsed ? "Expand Unchanged Regions" : "Collapse Unchanged Regions"}
             disabled={!diff || kind !== "text"}
-            onClick={() => collapseUnchanged(tabId, !unchangedCollapsed)}
+            onClick={() => setDiffOption(tabId, "unchangedCollapsed", !unchangedCollapsed)}
           >
             {unchangedCollapsed ? <ExpandAllIcon /> : <CollapseAllIcon />}
           </IconButton>

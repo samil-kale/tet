@@ -15,6 +15,7 @@ import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
 import { FilterField } from "../ui/FilterField";
+import type { FoldAll } from "../ui/FoldAllButton";
 
 interface ExplorerRowProps extends VisibleRow {
   selected: boolean;
@@ -83,11 +84,9 @@ interface ExplorerProps {
 }
 
 /** For the EXPLORER header's title-bar buttons. */
-export interface ExplorerHandle {
+export interface ExplorerHandle extends FoldAll {
   newFile(): void;
   newFolder(): void;
-  expandAll(): void;
-  collapseAll(): void;
   clearFilter(): void;
 }
 

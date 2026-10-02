@@ -5,7 +5,7 @@ import { AGENTS, agentInstalled, getAgent } from "../agents";
 import type { AgentDefinition, AgentSessionInfo } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
-import { CONTROL_ENV } from "../../shared/control";
+import { CONTROL_ENV, CONTROL_START_SIZE } from "../../shared/control";
 import type { ControlEvent, HookEvent } from "../../shared/control";
 import type { ControlSide } from "../../shared/control-side";
 import { hasSandbox } from "../agents/agent";
@@ -49,8 +49,6 @@ const SESSION_REMOVE_DELAY_MS = 500;
 const REPORT_WAIT_MS = 3000;
 // How far back `tet-ctl events-tail` can look.
 const MAX_RECORDED_EVENTS = 200;
-// The size `tet-ctl tabs-start` gives a tab no window has fitted yet.
-const CONTROL_START_SIZE = { cols: 120, rows: 30 };
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
 // Across managers, so a repository or worktree reopened in this run never reuses a closed tab's

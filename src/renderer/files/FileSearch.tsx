@@ -4,6 +4,7 @@ import { baseName, parentOf } from "../paths";
 import { FileMarkIcon } from "./file-mark";
 import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../ui/tree-row";
 import { FilterField } from "../ui/FilterField";
+import type { FoldAll } from "../ui/FoldAllButton";
 import { IconButton } from "../ui/IconButton";
 import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../ui/icons";
 
@@ -33,10 +34,8 @@ export function searchSummary(result: FileSearchResult): string {
 }
 
 /** For the SEARCH header's title-bar buttons. */
-export interface FileSearchHandle {
+export interface FileSearchHandle extends FoldAll {
   clear(): void;
-  expandAll(): void;
-  collapseAll(): void;
 }
 
 interface FileSearchProps {

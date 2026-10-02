@@ -44,8 +44,13 @@ const PREVIEW_IMAGE_DELAY_MS = 1000;
 const previewByDefault = layoutFlag("markdown-preview.shown");
 /** Whether a diff opens side by side, and with its unchanged regions collapsed: as the preview's,
  *  the last answer, for every tab and the next start. */
-const sideBySideByDefault = layoutFlag("diff.side-by-side");
-const collapsedByDefault = layoutFlag("diff.unchanged-collapsed");
+const diffDefaults = {
+  sideBySide: layoutFlag("diff.side-by-side"),
+  unchangedCollapsed: layoutFlag("diff.unchanged-collapsed")
+};
+
+/** How a diff is laid out (`setDiffOption`). */
+export type DiffOption = keyof typeof diffDefaults;
 
 /** Replaced whole on every change — `useSyncExternalStore` compares identity. */
 export interface EditorSnapshot {
@@ -64,9 +69,9 @@ export interface EditorSnapshot {
   /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
    *  Side"). As the user last left it, the next Markdown file included (`previewByDefault`). */
   markdownPreview: boolean;
-  /** The diff in two columns instead of one (`showSideBySide`), as the user last left it. */
+  /** The diff in two columns instead of one (`setDiffOption`), as the user last left it. */
   sideBySide: boolean;
-  /** The diff's unchanged regions folded away (`collapseUnchanged`), as the user last left it. */
+  /** The diff's unchanged regions folded away (`setDiffOption`), as the user last left it. */
   unchangedCollapsed: boolean;
 }
 
@@ -293,29 +298,15 @@ function applyDiffOptions(view: EditorView): void {
   view.diffEditor?.updateOptions({ renderSideBySide: sideBySide, hideUnchangedRegions: { enabled: unchangedCollapsed } });
 }
 
-/** Shows the tab's diff side by side or inline; the answer is the default every diff opened
- *  afterwards takes. */
-export function showSideBySide(tabId: string, shown: boolean): void {
+/** Lays the tab's diff out side by side or inline, its unchanged regions folded or shown; the
+ *  answer is the default every diff opened afterwards takes. */
+export function setDiffOption(tabId: string, option: DiffOption, on: boolean): void {
   const view = views.get(tabId);
   if (!view) {
     return;
   }
-  sideBySideByDefault.set(shown);
-  publish(view, { sideBySide: shown });
-  applyDiffOptions(view);
-}
-
-/**
- * Folds the tab's unchanged regions away, or shows them all; the answer is the default every diff
- * opened afterwards takes.
- */
-export function collapseUnchanged(tabId: string, collapsed: boolean): void {
-  const view = views.get(tabId);
-  if (!view) {
-    return;
-  }
-  collapsedByDefault.set(collapsed);
-  publish(view, { unchangedCollapsed: collapsed });
+  diffDefaults[option].set(on);
+  publish(view, { [option]: on });
   applyDiffOptions(view);
 }
 
@@ -437,8 +428,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     preview,
     diff: how.diff === true,
     markdownPreview: previewByDefault.get() && isMarkdown(path),
-    sideBySide: sideBySideByDefault.get(),
-    unchangedCollapsed: collapsedByDefault.get()
+    sideBySide: diffDefaults.sideBySide.get(),
+    unchangedCollapsed: diffDefaults.unchangedCollapsed.get()
   });
   applyMode(view);
   // The diff editor is the tab's for every file it opens.
