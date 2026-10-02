@@ -203,9 +203,9 @@ export function LandmarkIcon(props: IconProps) {
 }
 
 /** Lucide's `file-diff` — the project row's mark for uncommitted changes. Tall, so the long-side
- *  cap. Set a pixel right, like the files view's. */
+ *  cap. */
 export function ChangesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileDiff} extent={20.23} cx={10} />;
+  return <Lucide {...props} icon={FileDiff} extent={20.23} />;
 }
 
 const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
@@ -375,15 +375,15 @@ export function GearIcon(props: IconProps) {
 }
 
 /** Lucide's `file-braces` — the files view. The long-axis cap: the geometric mean would clip the
- *  bottom. Set a pixel right, so it stands centred under the strip's other toggles. */
+ *  bottom. */
 export function FilesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileBraces} extent={20.23} cx={10} />;
+  return <Lucide {...props} icon={FileBraces} extent={20.23} />;
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus`. The long-axis cap: the geometric
- *  mean would clip the bottom. Set a pixel right, like the files view's. */
+ *  mean would clip the bottom. */
 export function NewFileIcon(props: IconProps) {
-  return <Lucide {...props} icon={FilePlus} extent={20.23} cx={10} />;
+  return <Lucide {...props} icon={FilePlus} extent={20.23} />;
 }
 
 /** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, drawn a pixel over the shared
@@ -400,15 +400,16 @@ export function CollapseAllIcon(props: IconProps) {
 }
 
 /** A tree header's "Expand All", as IntelliJ's: Lucide's `chevrons-up-down`, `chevrons-down-up`'s
- *  box and size. */
+ *  box, drawn a little past the long-side cap: its chevrons pointing apart read smaller than
+ *  Collapse All's. */
 export function ExpandAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsUpDown} extent={17.71} />;
+  return <Lucide {...props} icon={ChevronsUpDown} extent={16.91} />;
 }
 
-/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap. Set most of
- *  a pixel right, as far as its box allows. */
+/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap; its drawing
+ *  sits a quarter unit left of the grid's centre. */
 export function ClearIcon(props: IconProps) {
-  return <Lucide {...props} icon={ListX} extent={17.93} cx={10.5} />;
+  return <Lucide {...props} icon={ListX} extent={17.93} cx={11.75} />;
 }
 
 /** LOCAL CHANGES' "View as List": Lucide's `list`. Wide, so the long-side cap. */

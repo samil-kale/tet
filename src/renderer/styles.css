@@ -342,10 +342,14 @@ textarea:focus,
   opacity: 0.8;
 }
 
+/* The svg fills the box and its padding insets the drawing to --icon-size: centring a smaller
+   svg rounds its box apart from the button's on a fractional scale, off the middle by up to a
+   pixel. A percentage padding is of the box's width, so this holds for every square box. */
 .icon-button svg,
 .icon-mark svg {
-  width: var(--icon-size);
-  height: var(--icon-size);
+  width: 100%;
+  height: 100%;
+  padding: calc((100% - var(--icon-size)) / 2);
 }
 
 /* Never the list hover colour: invisible on a hovered row, a patch on a selected one. */
