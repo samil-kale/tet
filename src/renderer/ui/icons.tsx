@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   CircleAlert,
   CircleX,
+  Columns2,
   Eye,
   FileBraces,
   FileDiff,
@@ -435,4 +436,9 @@ export function EyeIcon(props: IconProps) {
 /** Lucide's `git-compare` — the editor tab's diff toggle. */
 export function CompareIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCompare} extent={20} />;
+}
+
+/** Lucide's `columns-2`, `save`'s box — the editor tab's side-by-side toggle. */
+export function SideBySideIcon(props: IconProps) {
+  return <Lucide {...props} icon={Columns2} extent={20} />;
 }

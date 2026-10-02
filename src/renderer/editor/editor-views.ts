@@ -4,7 +4,7 @@ import type { FileContent } from "../../shared/types/files";
 import type { ProjectRef } from "../../shared/types/project";
 import { PLATFORM } from "../platform";
 import { confirmed, confirmedFollowUp } from "../ui/Dialog";
-import { layoutKey } from "../ui/layout-storage";
+import { layoutFlag } from "../ui/layout-storage";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
@@ -41,13 +41,11 @@ const PREVIEW_IMAGE_DELAY_MS = 1000;
  * every tab and the next start. A layout key, like the preview's width (`markdown-preview`, a key
  * of its own): where the preview shows describes the window, not a repository.
  */
-const PREVIEW_DEFAULT_KEY = layoutKey("markdown-preview.shown");
-let previewByDefault = localStorage.getItem(PREVIEW_DEFAULT_KEY) === "true";
-
-function setPreviewDefault(shown: boolean): void {
-  previewByDefault = shown;
-  localStorage.setItem(PREVIEW_DEFAULT_KEY, String(shown));
-}
+const previewByDefault = layoutFlag("markdown-preview.shown");
+/** Whether a diff opens side by side, and with its unchanged regions collapsed: as the preview's,
+ *  the last answer, for every tab and the next start. */
+const sideBySideByDefault = layoutFlag("diff.side-by-side");
+const collapsedByDefault = layoutFlag("diff.unchanged-collapsed");
 
 /** Replaced whole on every change — `useSyncExternalStore` compares identity. */
 export interface EditorSnapshot {
@@ -66,6 +64,10 @@ export interface EditorSnapshot {
   /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
    *  Side"). As the user last left it, the next Markdown file included (`previewByDefault`). */
   markdownPreview: boolean;
+  /** The diff in two columns instead of one (`showSideBySide`), as the user last left it. */
+  sideBySide: boolean;
+  /** The diff's unchanged regions folded away (`collapseUnchanged`), as the user last left it. */
+  unchangedCollapsed: boolean;
 }
 
 /** A placeholder, the image view, or the editor. */
@@ -141,7 +143,9 @@ const CLOSED: EditorSnapshot = {
   dirty: false,
   preview: false,
   diff: true,
-  markdownPreview: false
+  markdownPreview: false,
+  sideBySide: false,
+  unchangedCollapsed: false
 };
 
 // Shiki's colors are fixed at render.
@@ -277,10 +281,42 @@ export function showMarkdownPreview(tabId: string, shown: boolean): void {
   if (!view || !isMarkdown(view.snapshot.path)) {
     return;
   }
-  setPreviewDefault(shown);
+  previewByDefault.set(shown);
   if (view.snapshot.markdownPreview !== shown) {
     publish(view, { markdownPreview: shown });
   }
+}
+
+/** The diff editor laid out as the tab's snapshot says. */
+function applyDiffOptions(view: EditorView): void {
+  const { sideBySide, unchangedCollapsed } = view.snapshot;
+  view.diffEditor?.updateOptions({ renderSideBySide: sideBySide, hideUnchangedRegions: { enabled: unchangedCollapsed } });
+}
+
+/** Shows the tab's diff side by side or inline; the answer is the default every diff opened
+ *  afterwards takes. */
+export function showSideBySide(tabId: string, shown: boolean): void {
+  const view = views.get(tabId);
+  if (!view) {
+    return;
+  }
+  sideBySideByDefault.set(shown);
+  publish(view, { sideBySide: shown });
+  applyDiffOptions(view);
+}
+
+/**
+ * Folds the tab's unchanged regions away, or shows them all; the answer is the default every diff
+ * opened afterwards takes.
+ */
+export function collapseUnchanged(tabId: string, collapsed: boolean): void {
+  const view = views.get(tabId);
+  if (!view) {
+    return;
+  }
+  collapsedByDefault.set(collapsed);
+  publish(view, { unchangedCollapsed: collapsed });
+  applyDiffOptions(view);
 }
 
 export function getEditorSnapshot(tabId: string): EditorSnapshot {
@@ -381,7 +417,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   }
   // "Open Preview" is the same answer as the toggle, whether or not the file was already open.
   if (how.markdownPreview === true && isMarkdown(path)) {
-    setPreviewDefault(true);
+    previewByDefault.set(true);
   }
   const seq = ++view.readSeq;
   // Now, or the editor shows the previous file under the new path until the read lands.
@@ -400,9 +436,13 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     dirty: false,
     preview,
     diff: how.diff === true,
-    markdownPreview: previewByDefault && isMarkdown(path)
+    markdownPreview: previewByDefault.get() && isMarkdown(path),
+    sideBySide: sideBySideByDefault.get(),
+    unchangedCollapsed: collapsedByDefault.get()
   });
   applyMode(view);
+  // The diff editor is the tab's for every file it opens.
+  applyDiffOptions(view);
   const current = view;
   void window.tet.repository.readFile(ref, path).then((file) => {
     if (views.get(tabId) !== current || current.readSeq !== seq) {
@@ -931,6 +971,7 @@ function ensureDiffEditor(view: EditorView): Promise<MonacoEditor.IStandaloneDif
     }
     const editor = setup.monaco.editor.createDiffEditor(view.host, { ...setup.options, ...diffEditorOptions() });
     view.diffEditor = editor;
+    applyDiffOptions(view);
     adoptEditor(view, setup, editor.getModifiedEditor());
     return editor;
   })();

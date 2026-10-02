@@ -5,6 +5,7 @@ import { isMarkdown } from "./diff-highlight";
 import {
   attachEditor,
   attachMarkdownPreview,
+  collapseUnchanged,
   editorKind,
   focusEditor,
   getEditorSnapshot,
@@ -12,13 +13,14 @@ import {
   saveEditorFile,
   showDiff,
   showMarkdownPreview,
+  showSideBySide,
   subscribeEditor,
   subscribeRefEditors,
   type EditorSnapshot
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "./editor-tab";
 import { IconButton } from "../ui/IconButton";
-import { CompareIcon, EyeIcon, SaveIcon } from "../ui/icons";
+import { CollapseAllIcon, CompareIcon, ExpandAllIcon, EyeIcon, SaveIcon, SideBySideIcon } from "../ui/icons";
 import { usePaneShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_PANE_WIDTH, Sash } from "../ui/Sash";
@@ -65,7 +67,10 @@ interface EditorHostProps {
  * move React removes a frame with it inside, and the next host's attach takes it out again.
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
-  const { path, file, building, saving, dirty, diff, markdownPreview } = useEditorStore(tabId, whole);
+  const { path, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = useEditorStore(
+    tabId,
+    whole
+  );
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const previewFrame = useRef<HTMLDivElement>(null);
@@ -132,6 +137,22 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
             onClick={() => showDiff(tabId, !diff)}
           >
             <CompareIcon />
+          </IconButton>
+          {/* The diff's layout: disabled, not hidden, without one, so the path doesn't shift. */}
+          <IconButton
+            active={sideBySide}
+            title={sideBySide ? "Show Inline" : "Show Side by Side"}
+            disabled={!diff || kind !== "text"}
+            onClick={() => showSideBySide(tabId, !sideBySide)}
+          >
+            <SideBySideIcon />
+          </IconButton>
+          <IconButton
+            title={unchangedCollapsed ? "Expand Unchanged Regions" : "Collapse Unchanged Regions"}
+            disabled={!diff || kind !== "text"}
+            onClick={() => collapseUnchanged(tabId, !unchangedCollapsed)}
+          >
+            {unchangedCollapsed ? <ExpandAllIcon /> : <CollapseAllIcon />}
           </IconButton>
           {isMarkdown(path) && (
             <IconButton

@@ -8,6 +8,21 @@ const STORAGE_PREFIX = "tet.layout.";
 export function layoutKey(key: string): string {
   return STORAGE_PREFIX + key;
 }
+
+/**
+ * A yes or no kept outside React in the same storage — the last answer the user gave, which what
+ * opens next takes as its default. Read once; `set` writes through.
+ */
+export function layoutFlag(key: string): { get(): boolean; set(value: boolean): void } {
+  let value = localStorage.getItem(STORAGE_PREFIX + key) === "true";
+  return {
+    get: () => value,
+    set: (next) => {
+      value = next;
+      localStorage.setItem(STORAGE_PREFIX + key, String(next));
+    }
+  };
+}
 /** How long after the last resize a pane size is written to storage. */
 const PERSIST_MS = 300;
 

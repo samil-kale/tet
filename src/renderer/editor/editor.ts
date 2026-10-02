@@ -153,22 +153,22 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
 }
 
 /**
- * The diff half. Inline — a side-by-side text diff is deliberately not offered — and the whole file,
- * not hunks, so the overview ruler beside the scrollbar is how changes are found (a click scrolls).
+ * The diff half. Inline or side by side, the whole file or its unchanged regions collapsed, as the
+ * user last chose (`applyDiffOptions`, editor-views.ts); side by side stays two columns in a narrow
+ * pane too. The overview ruler beside the scrollbar is how changes are found (a click scrolls).
  * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's. tet
  * never diffs: it hands monaco two texts. The modified (right-hand) side is the editable one.
  *
- * Left at default on purpose: `renderGutterMenu` (its "Revert Block" edits the buffer, a save away
- * from disk, never a git discard); `maxFileSize` (50 MB, beyond our 4 MB ceiling);
- * `renderMarginRevertIcon` (ignored inline). Defaults below are spelled out: each is a decision the
- * tab rests on, and a default is no promise across upgrades.
+ * Left at default on purpose: `renderGutterMenu` and `renderMarginRevertIcon` (their reverts edit
+ * the buffer, a save away from disk, never a git discard); `maxFileSize` (50 MB, beyond our 4 MB
+ * ceiling). Defaults below are spelled out: each is a decision the tab rests on, and a default is
+ * no promise across upgrades.
  */
 export function diffEditorOptions(): Record<string, unknown> {
   return {
-    renderSideBySide: false,
+    useInlineViewWhenSpaceIsLimited: false,
     ignoreTrimWhitespace: true,
     diffAlgorithm: "advanced",
-    hideUnchangedRegions: { enabled: false },
     renderOverviewRuler: true,
     originalEditable: false
   };

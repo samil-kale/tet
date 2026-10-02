@@ -1398,8 +1398,8 @@ textarea:focus,
 }
 
 /* A toggle whose pane is out (the side pane's view buttons). focusBorder, as everything that
-   points: `--vscode-button-background` is near white in Dark Slate. */
-.icon-button.active {
+   points: `--vscode-button-background` is near white in Dark Slate. A disabled one marks nothing. */
+.icon-button.active:not(:disabled) {
   opacity: 1;
   color: var(--vscode-focusBorder);
 }

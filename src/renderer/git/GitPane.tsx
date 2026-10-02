@@ -54,6 +54,7 @@ export const GitPane = memo(function GitPane({
   const changesRef = useRef<ChangesListHandle>(null);
   /** What the LOCAL CHANGES header's buttons stand for, reported by the list that holds the state. */
   const [checked, setChecked] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
   /** One view for every project, as the side pane's toggles. */
   const [asTree, setAsTree] = usePaneToggle("changes-tree", true);
   // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
@@ -160,18 +161,11 @@ export const GitPane = memo(function GitPane({
               {asTree ? <ListIcon /> : <ListTreeIcon />}
             </IconButton>
             <IconButton
-              title="Expand All"
+              title={expanded ? "Collapse All" : "Expand All"}
               disabled={!asTree || state.changes.length === 0}
-              onClick={() => changesRef.current?.expandAll()}
+              onClick={() => (expanded ? changesRef.current?.collapseAll() : changesRef.current?.expandAll())}
             >
-              <ExpandAllIcon />
-            </IconButton>
-            <IconButton
-              title="Collapse All"
-              disabled={!asTree || state.changes.length === 0}
-              onClick={() => changesRef.current?.collapseAll()}
-            >
-              <CollapseAllIcon />
+              {expanded ? <CollapseAllIcon /> : <ExpandAllIcon />}
             </IconButton>
           </>
         }
@@ -187,6 +181,7 @@ export const GitPane = memo(function GitPane({
           onOpenDiff={onOpenDiff}
           asTree={asTree}
           onChecked={setChecked}
+          onExpanded={setExpanded}
         />
       </Section>
     </div>

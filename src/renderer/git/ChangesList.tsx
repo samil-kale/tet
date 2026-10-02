@@ -29,6 +29,9 @@ interface ChangesListProps {
   /** What the header's Commit and Discard act on, reported as it changes: the checked files the
    *  filter shows — one it hides is never committed or discarded unseen. */
   onChecked: (paths: string[]) => void;
+  /** What the header's fold button does next, reported as it changes: collapse while a folder
+   *  under the root is open, else expand. */
+  onExpanded: (expanded: boolean) => void;
   ref?: React.Ref<ChangesListHandle>;
 }
 
@@ -176,6 +179,7 @@ export const ChangesList = memo(function ChangesList({
   onOpenDiff,
   asTree,
   onChecked,
+  onExpanded,
   ref
 }: ChangesListProps) {
   const { changes } = state;
@@ -226,6 +230,8 @@ export const ChangesList = memo(function ChangesList({
 
   const shownChecked = useMemo(() => shownFiles.filter((path) => checked.has(path)), [shownFiles, checked]);
   useEffect(() => onChecked(shownChecked), [shownChecked, onChecked]);
+  const anyExpanded = root.children!.some((node) => node.children !== undefined && (expanded[node.id] ?? true));
+  useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   useImperativeHandle(ref, () => ({
     // Folders start open, so nothing folded is everything open.

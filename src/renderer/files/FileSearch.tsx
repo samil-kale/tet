@@ -45,6 +45,9 @@ interface FileSearchProps {
   /** The field asks for a search here, or for none; the pane runs it and shows it running. */
   runSearch: (query: FileSearchQuery | null) => void;
   onOpenMatch: (path: string, match: FileSearchMatch) => void;
+  /** What the header's fold button does next, reported as it changes: collapse while a file is
+   *  open, else expand. */
+  onExpanded: (expanded: boolean) => void;
   ref?: React.Ref<FileSearchHandle>;
 }
 
@@ -54,7 +57,7 @@ interface FileSearchProps {
  * and under it a row per match with the match marked; the summary is the pane's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
-export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMatch, ref }: FileSearchProps) {
+export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMatch, onExpanded, ref }: FileSearchProps) {
   const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
   // Nothing but whitespace asks for nothing.
   const asked = search.text.trim() ? search : null;
@@ -68,6 +71,8 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
     setOpened({});
   }
   const files = result?.files ?? [];
+  const anyExpanded = files.some((file) => opened[file.path]);
+  useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   useImperativeHandle(ref, () => ({
     // The text alone: the toggles are the field's own, as VS Code keeps them.

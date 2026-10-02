@@ -62,6 +62,8 @@ export const FilesPane = memo(function FilesPane({
   const searchRef = useRef<FileSearchHandle>(null);
   /** What the sections' header buttons stand for, reported by the views that hold the state. */
   const [filtering, setFiltering] = useState(false);
+  const [explorerExpanded, setExplorerExpanded] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   // A file action shows at once, as the git pane's changes list does.
   const showProgress = useDelayed(listing, PROGRESS_DELAY_MS) || acting;
   const showSearchProgress = useDelayed(searching, PROGRESS_DELAY_MS);
@@ -103,18 +105,11 @@ export const FilesPane = memo(function FilesPane({
               <ClearIcon />
             </IconButton>
             <IconButton
-              title="Expand All"
+              title={explorerExpanded ? "Collapse All" : "Expand All"}
               disabled={!explorerListing}
-              onClick={() => explorerRef.current?.expandAll()}
+              onClick={() => (explorerExpanded ? explorerRef.current?.collapseAll() : explorerRef.current?.expandAll())}
             >
-              <ExpandAllIcon />
-            </IconButton>
-            <IconButton
-              title="Collapse All"
-              disabled={!explorerListing}
-              onClick={() => explorerRef.current?.collapseAll()}
-            >
-              <CollapseAllIcon />
+              {explorerExpanded ? <CollapseAllIcon /> : <ExpandAllIcon />}
             </IconButton>
           </>
         }
@@ -133,6 +128,7 @@ export const FilesPane = memo(function FilesPane({
           act={act}
           onExplorerChanged={refreshExplorer}
           onFiltering={setFiltering}
+          onExpanded={setExplorerExpanded}
         />
       </Section>
       <Sash
@@ -160,18 +156,11 @@ export const FilesPane = memo(function FilesPane({
               <ClearIcon />
             </IconButton>
             <IconButton
-              title="Expand All"
+              title={searchExpanded ? "Collapse All" : "Expand All"}
               disabled={searchResult === undefined || searchResult.files.length === 0}
-              onClick={() => searchRef.current?.expandAll()}
+              onClick={() => (searchExpanded ? searchRef.current?.collapseAll() : searchRef.current?.expandAll())}
             >
-              <ExpandAllIcon />
-            </IconButton>
-            <IconButton
-              title="Collapse All"
-              disabled={searchResult === undefined || searchResult.files.length === 0}
-              onClick={() => searchRef.current?.collapseAll()}
-            >
-              <CollapseAllIcon />
+              {searchExpanded ? <CollapseAllIcon /> : <ExpandAllIcon />}
             </IconButton>
           </>
         }
@@ -183,6 +172,7 @@ export const FilesPane = memo(function FilesPane({
           result={searchResult}
           runSearch={search}
           onOpenMatch={onOpenMatch}
+          onExpanded={setSearchExpanded}
         />
       </Section>
     </div>

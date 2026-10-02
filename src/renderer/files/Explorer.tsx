@@ -76,6 +76,9 @@ interface ExplorerProps {
   onExplorerChanged: () => void;
   /** What the header's clear button stands for, reported as it changes: the tree holds the filter. */
   onFiltering: (filtering: boolean) => void;
+  /** What the header's fold button does next, reported as it changes: collapse while a folder at
+   *  the top is open — any open folder shows under one — else expand. */
+  onExpanded: (expanded: boolean) => void;
   ref?: React.Ref<ExplorerHandle>;
 }
 
@@ -104,6 +107,7 @@ export const Explorer = memo(function Explorer({
   act,
   onExplorerChanged,
   onFiltering,
+  onExpanded,
   ref
 }: ExplorerProps) {
   const [filter, setFilter] = useState("");
@@ -182,6 +186,8 @@ export const Explorer = memo(function Explorer({
     () => visibleRows(shown, (node) => filtering || isOpen(node, expanded)),
     [shown, expanded, filtering]
   );
+  const anyExpanded = tree.some((node) => node.children !== undefined && isOpen(node, expanded));
+  useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   // Folds by ids of the uncompacted `tree`, which compacted rows keep.
   const setAll = (ids: string[], open: boolean): void =>

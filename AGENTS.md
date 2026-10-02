@@ -231,7 +231,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
 - Remote commands run with `NETWORK_ENV`. **TET writes into no credential helper itself**: a login
   typed into tet reaches git through askpass (`GitLoginStore.run`), and git stores it in the
   user's helper; where there is none, tet keeps it sealed in `~/.tet/git-logins.json`.
-- tet never diffs: it hands monaco's inline diff editor two texts (`Repository.readFile`).
+- tet never diffs: it hands monaco's diff editor two texts (`Repository.readFile`).
 - **A linked worktree is a worktree and belongs to its project; it is not a project.** It only
   behaves like one in places (its own row, tabs and git pane) — never design from "a worktree is a
   project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>`; the key is
@@ -255,7 +255,7 @@ working tree — a worktree's own row excepted, which is that tree, and its merg
 where the base is checked out.
 
 Don't add without being asked: staging or per-line staging, history or graph, cherry-pick, revert,
-squash, reorder, bisect, submodules, conflict resolution beyond aborting, side-by-side text diff,
+squash, reorder, bisect, submodules, conflict resolution beyond aborting,
 discarding single lines, pull with rebase, force push. A command needing a list, a message field
 or a per-line decision is for an agent.
 
