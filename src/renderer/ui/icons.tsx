@@ -311,9 +311,10 @@ export function CommitIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCommitHorizontal} extent={18.39} />;
 }
 
-/** Lucide's `inbox` — a stash. Wide, so the long-side cap. */
+/** Lucide's `inbox` — a stash. Drawn a pixel over the shared size, past the long-side cap, as
+ *  its flat box reads small at it. */
 export function StashIcon(props: IconProps) {
-  return <Lucide {...props} icon={Inbox} extent={20.23} />;
+  return <Lucide {...props} icon={Inbox} extent={18.46} />;
 }
 
 /** Lucide's `undo-2` — discard, as IntelliJ's rollback. Square, so the geometric mean. */
