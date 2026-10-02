@@ -203,9 +203,9 @@ export function LandmarkIcon(props: IconProps) {
 }
 
 /** Lucide's `file-diff` — the project row's mark for uncommitted changes. Tall, so the long-side
- *  cap. */
+ *  cap. Set a pixel right, like the files view's. */
 export function ChangesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileDiff} extent={20.23} />;
+  return <Lucide {...props} icon={FileDiff} extent={20.23} cx={10} />;
 }
 
 const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
@@ -375,15 +375,15 @@ export function GearIcon(props: IconProps) {
 }
 
 /** Lucide's `file-braces` — the files view. The long-axis cap: the geometric mean would clip the
- *  bottom. */
+ *  bottom. Set a pixel right, so it stands centred under the strip's other toggles. */
 export function FilesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileBraces} extent={20.23} />;
+  return <Lucide {...props} icon={FileBraces} extent={20.23} cx={10} />;
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus`. The long-axis cap: the geometric
- *  mean would clip the bottom. */
+ *  mean would clip the bottom. Set a pixel right, like the files view's. */
 export function NewFileIcon(props: IconProps) {
-  return <Lucide {...props} icon={FilePlus} extent={20.23} />;
+  return <Lucide {...props} icon={FilePlus} extent={20.23} cx={10} />;
 }
 
 /** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, drawn a pixel over the shared
