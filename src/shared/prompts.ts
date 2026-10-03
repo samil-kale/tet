@@ -1,4 +1,4 @@
-import type { PromptId, PromptSettings } from "./types/settings";
+import type { PromptId, PromptTexts } from "./types/settings";
 
 /**
  * What tet asks of an agent: questions in the background, and a handoff's first prompt. Here, not
@@ -34,6 +34,6 @@ export const DEFAULT_PROMPTS: Readonly<Record<PromptId, string>> = {
 };
 
 /** The user's text, else tet's. Read at the moment of asking, so a change needs no restart. */
-export function effectivePrompt(prompts: PromptSettings, id: PromptId): string {
-  return prompts[id] || DEFAULT_PROMPTS[id];
+export function effectivePrompt(texts: PromptTexts, id: PromptId): string {
+  return texts[id] || DEFAULT_PROMPTS[id];
 }

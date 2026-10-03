@@ -373,8 +373,8 @@ ${stderr.slice(uncaught)}`);
     // The window starts in "system", so dark may not be on screen; either way no restart is needed.
     const set = await ctl("settings-set-theme", "dark-slate");
     assert.deepEqual(set.result, { saved: true, restartRequired: false });
-    assert.equal(((await ctl("settings-get")).result as AppSettings).darkTheme, "dark-slate");
-    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).darkTheme, "dark-slate");
+    assert.equal(((await ctl("settings-get")).result as AppSettings).appearance.darkTheme, "dark-slate");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).appearance.darkTheme, "dark-slate");
   });
 
   it("restarts on --confirm and comes back with the same profile", async () => {
@@ -391,7 +391,7 @@ ${stderr.slice(uncaught)}`);
       STARTUP_MS
     );
     assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
-    assert.equal(((await ctl("settings-get")).result as AppSettings).darkTheme, "dark-slate");
+    assert.equal(((await ctl("settings-get")).result as AppSettings).appearance.darkTheme, "dark-slate");
   });
 
   it("closes a project with a running tab, and forgets it", async () => {

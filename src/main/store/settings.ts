@@ -3,21 +3,34 @@ import { DEFAULT_THEME_IDS, type ThemeKind } from "../../shared/themes";
 import { DEFAULT_PROMPTS } from "../../shared/prompts";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
 import type { Suggester } from "../../shared/types/agents";
-import type { AppSettings, ColorScheme, PromptSettings, SettingsEdits } from "../../shared/types/settings";
+import type { AppearanceSettings, AppSettings, PromptSettings, PromptTexts, SettingsEdits } from "../../shared/types/settings";
 import { isRecord, readJson, writeJson } from "../util/json-file";
 
 const DEFAULTS: AppSettings = {
+  appearance: {
+    colorScheme: "system",
+    darkTheme: DEFAULT_THEME_IDS.dark,
+    lightTheme: DEFAULT_THEME_IDS.light
+  },
   notifications: {
     finished: true,
     needsYou: true,
     idleReminder: false
   },
-  editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
-  colorScheme: "system",
-  darkTheme: DEFAULT_THEME_IDS.dark,
-  lightTheme: DEFAULT_THEME_IDS.light,
-  prompts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptSettings,
-  commitSuggester: { agentId: "", model: "" }
+  files: {
+    editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID
+  },
+  git: {
+    checkNewChanges: false,
+    pushOnCommit: false,
+    deleteBranchOnRemote: false,
+    deleteTagOnRemote: false,
+    deleteWorktreeOnRemote: false
+  },
+  prompts: {
+    texts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptTexts,
+    commitSuggester: { agentId: "", model: "" }
+  }
 };
 
 /** Reading and editing the settings, all either transport does with them: both take this rather
@@ -65,48 +78,56 @@ export class SettingsStore {
   private load(): void {
     const parsed = readJson(this.file);
     if (isRecord(parsed)) {
-      this.settings = normalize(parsed as Partial<AppSettings>);
+      this.settings = normalize(parsed);
     }
   }
 }
 
-/** Every key as the store holds it, from the dialog or the file. */
-function normalize(value: Partial<AppSettings>): AppSettings {
+/** Every key as the store holds it, from the dialog or the file; a tab's object that isn't one
+ *  takes its defaults whole. */
+function normalize(stored: unknown): AppSettings {
+  const value = record(stored);
   return {
-    notifications: booleans(value.notifications),
-    editorKeybindingPreset: presetId(value.editorKeybindingPreset),
-    colorScheme: colorScheme(value.colorScheme),
-    darkTheme: themeId(value.darkTheme, "dark"),
-    lightTheme: themeId(value.lightTheme, "light"),
-    prompts: promptTexts(value.prompts),
-    commitSuggester: suggester(value.commitSuggester)
+    appearance: appearance(record(value.appearance)),
+    notifications: switches(record(value.notifications), DEFAULTS.notifications),
+    files: { editorKeybindingPreset: presetId(record(value.files).editorKeybindingPreset) },
+    git: switches(record(value.git), DEFAULTS.git),
+    prompts: prompts(record(value.prompts))
   };
 }
 
-function colorScheme(value: unknown): ColorScheme {
-  return COLOR_SCHEMES.find((scheme) => scheme === value) ?? DEFAULTS.colorScheme;
+function record(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function appearance(value: Record<string, unknown>): AppearanceSettings {
+  return {
+    colorScheme: COLOR_SCHEMES.find((scheme) => scheme === value.colorScheme) ?? DEFAULTS.appearance.colorScheme,
+    darkTheme: themeId(value.darkTheme, "dark"),
+    lightTheme: themeId(value.lightTheme, "light")
+  };
 }
 
 /** A switch that isn't a boolean in the file takes its default. */
-function booleans(notifications: Partial<AppSettings["notifications"]> | undefined): AppSettings["notifications"] {
-  const defaults = DEFAULTS.notifications;
-  return {
-    finished: typeof notifications?.finished === "boolean" ? notifications.finished : defaults.finished,
-    needsYou: typeof notifications?.needsYou === "boolean" ? notifications.needsYou : defaults.needsYou,
-    idleReminder:
-      typeof notifications?.idleReminder === "boolean" ? notifications.idleReminder : defaults.idleReminder
-  };
+function switches<T extends object>(value: Record<string, unknown>, defaults: T): T {
+  return Object.fromEntries(
+    Object.entries(defaults).map(([id, fallback]) => [id, typeof value[id] === "boolean" ? value[id] : fallback])
+  ) as T;
 }
 
 /** A non-string is the default; an unknown id is kept — the renderer falls back to VS Code's
  *  bindings for it. */
 function presetId(value: unknown): string {
-  return typeof value === "string" && value ? value : DEFAULTS.editorKeybindingPreset;
+  return typeof value === "string" && value ? value : DEFAULTS.files.editorKeybindingPreset;
 }
 
 /** Likewise for a kind's theme: an unknown id is kept, and `currentTheme` falls back. */
 function themeId(value: unknown, kind: ThemeKind): string {
   return typeof value === "string" && value ? value : DEFAULT_THEME_IDS[kind];
+}
+
+function prompts(value: Record<string, unknown>): PromptSettings {
+  return { texts: promptTexts(record(value.texts)), commitSuggester: suggester(value.commitSuggester) };
 }
 
 /** Anything but two strings is no pick; an agent or model no longer offered is replaced where it
@@ -115,19 +136,18 @@ function suggester(value: unknown): Suggester {
   if (isRecord(value) && typeof value.agentId === "string" && typeof value.model === "string") {
     return { agentId: value.agentId, model: value.model };
   }
-  return DEFAULTS.commitSuggester;
+  return DEFAULTS.prompts.commitSuggester;
 }
 
 /**
  * A non-string, or tet's own default text verbatim, is stored as "", so a later improved default
  * still reaches the user (`effectivePrompt` fills it in).
  */
-function promptTexts(value: unknown): PromptSettings {
-  const texts: Partial<Record<string, unknown>> = isRecord(value) ? value : {};
+function promptTexts(texts: Record<string, unknown>): PromptTexts {
   return Object.fromEntries(
     PROMPT_IDS.map((id) => {
       const text = texts[id];
       return [id, typeof text === "string" && text !== DEFAULT_PROMPTS[id] ? text : ""];
     })
-  ) as PromptSettings;
+  ) as PromptTexts;
 }

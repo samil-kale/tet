@@ -10,7 +10,7 @@ import type { AppInfo } from "../../shared/types/app";
 import type { EnvEdit } from "../../shared/types/environment";
 import type { ExplorerSettings, ExplorerSortOrder } from "../../shared/types/files";
 import type { Project, ProjectRef } from "../../shared/types/project";
-import type { AppSettings, ColorScheme, NotificationSettings, PromptId, SettingsEdits } from "../../shared/types/settings";
+import type { AppSettings, ColorScheme, GitSettings, NotificationSettings, PromptId, SettingsEdits } from "../../shared/types/settings";
 import { confirm, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
@@ -30,13 +30,14 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-type SettingsTab = "appearance" | "notifications" | "files" | "prompts" | "environment" | "info";
+type SettingsTab = "appearance" | "notifications" | "files" | "git" | "prompts" | "environment" | "info";
 
 /** The dialog opens on the first. */
 const TABS: { id: SettingsTab; label: string }[] = [
   { id: "appearance", label: "Appearance" },
   { id: "notifications", label: "Notifications" },
   { id: "files", label: "Files" },
+  { id: "git", label: "Git" },
   { id: "prompts", label: "Prompts" },
   { id: "environment", label: "Environment" },
   { id: "info", label: "Info" }
@@ -100,6 +101,14 @@ const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
   // so it reaches tabs started afterwards (AgentPaths.idleReminder).
   { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
+];
+
+const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
+  { key: "checkNewChanges", label: "Check new changes in LOCAL CHANGES for the next commit" },
+  { key: "pushOnCommit", label: "Also push when committing" },
+  { key: "deleteBranchOnRemote", label: "Also delete a deleted branch's upstream on the remote" },
+  { key: "deleteTagOnRemote", label: "Also delete a deleted tag on the remote" },
+  { key: "deleteWorktreeOnRemote", label: "Also delete a deleted worktree's upstream on the remote" }
 ];
 
 /**
@@ -247,21 +256,21 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
 
   const flip = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
 
-  const applyPreset = (id: string): void => edit({ editorKeybindingPreset: id });
+  const applyPreset = (id: string): void => edit({ files: { editorKeybindingPreset: id } });
 
-  const applyColorScheme = (scheme: ColorScheme): void => edit({ colorScheme: scheme });
+  const applyColorScheme = (scheme: ColorScheme): void => edit({ appearance: { colorScheme: scheme } });
 
-  const applyTheme = (kind: ThemeKind, id: string): void => edit({ [themeKey(kind)]: id });
+  const applyTheme = (kind: ThemeKind, id: string): void => edit({ appearance: { [themeKey(kind)]: id } });
 
   // The kind shown now, and the one Save asks for — "system" resolved by the OS now (Electron's
   // prefers-color-scheme follows nativeTheme, which theme.ts's currentTheme reads).
   const shownKind = resolveTheme(document.documentElement.dataset.theme).kind;
-  const scheme = settings?.colorScheme ?? "system";
+  const scheme = settings?.appearance.colorScheme ?? "system";
   const chosenKind = schemeKind(scheme, window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   /** Tet's own text is stored as "", as in settings.ts; the reset button reads that. */
   const applyPrompt = (id: PromptId, text: string): void =>
-    edit({ prompts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } });
+    edit({ prompts: { texts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } } });
 
   const suggesterRef = useMemo<ProjectRef | undefined>(
     () => (activeProjectId ? { projectId: activeProjectId } : undefined),
@@ -270,7 +279,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   /** A pick not offered in the active project is shown replaced, not saved: another project may
    *  offer it. */
   const replaceSuggester = useCallback(
-    (suggester: Suggester): void => setSettings((current) => (current ? { ...current, commitSuggester: suggester } : current)),
+    (suggester: Suggester): void => setSettings((current) => (current ? { ...current, prompts: { ...current.prompts, commitSuggester: suggester } } : current)),
     []
   );
 
@@ -327,7 +336,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           </FieldGroup>
           <Field label={chosenKind === "dark" ? "Dark theme" : "Light theme"}>
             <Dropdown
-              value={resolveTheme(settings?.[themeKey(chosenKind)], chosenKind).id}
+              value={resolveTheme(settings?.appearance[themeKey(chosenKind)], chosenKind).id}
               onChange={(id) => applyTheme(chosenKind, id)}
               options={THEMES.filter((theme) => theme.kind === chosenKind).map((theme) => ({
                 value: theme.id,
@@ -382,13 +391,20 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           </FieldGroup>
           <Field label="Editor keybindings">
             <Dropdown
-              value={settings?.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
+              value={settings?.files.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
               onChange={applyPreset}
               options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
             />
           </Field>
           <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
         </>
+      )}
+      {shown === "git" && settings && (
+        <FieldGroup label="Checked to begin with">
+          {GIT_SWITCHES.map(({ key, label }) => (
+            <Checkbox key={key} label={label} checked={settings.git[key]} onChange={(next) => edit({ git: { [key]: next } })} />
+          ))}
+        </FieldGroup>
       )}
       {shown === "prompts" && settings && (
         <>
@@ -402,7 +418,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               <button
                 type="button"
                 className="button secondary"
-                disabled={settings.prompts[promptId] === ""}
+                disabled={settings.prompts.texts[promptId] === ""}
                 onClick={() => applyPrompt(promptId, "")}
               >
                 Reset to default
@@ -415,8 +431,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               {suggesterRef ? (
                 <SuggesterPicker
                   ref={suggesterRef}
-                  value={settings.commitSuggester}
-                  onChange={(suggester) => edit({ commitSuggester: suggester })}
+                  value={settings.prompts.commitSuggester}
+                  onChange={(suggester) => edit({ prompts: { commitSuggester: suggester } })}
                   onReplace={replaceSuggester}
                   hold={setListingModels}
                 />
@@ -430,7 +446,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <textarea
             className="settings-prompt"
             spellCheck={false}
-            value={effectivePrompt(settings.prompts, promptId)}
+            value={effectivePrompt(settings.prompts.texts, promptId)}
             onChange={(event) => applyPrompt(promptId, event.target.value)}
           />
         </>

@@ -107,10 +107,10 @@ export function registerRepositoryIpc({
       const cwd = repository.at.path;
       // A pick not installed here gives way to the first agent that is, with its default model, as
       // the settings' picker shows it.
-      const picked = settings.get().commitSuggester;
+      const picked = settings.get().prompts.commitSuggester;
       const askable = await listAskableAgents(cwd);
       const suggester = askable.includes(picked.agentId) ? picked : { agentId: askable[0] ?? "", model: "" };
-      const prompt = effectivePrompt(settings.get().prompts, "commitMessage");
+      const prompt = effectivePrompt(settings.get().prompts.texts, "commitMessage");
       // The commit's own paths, a rename's old one included.
       return suggestCommitMessage(suggester, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
     }

@@ -200,7 +200,8 @@ export const BranchTree = memo(function BranchTree({
       message: `Are you sure you want to delete ${name}?`,
       detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${COMMITS_LOST}` : COMMITS_LOST,
       confirmLabel: "Delete branch",
-      checkboxLabel: upstream ? `Also delete ${upstreamName(upstream)} on the remote` : undefined
+      checkboxLabel: upstream ? `Also delete ${upstreamName(upstream)} on the remote` : undefined,
+      checkboxChecked: (await window.tet.settings.get()).git.deleteBranchOnRemote
     });
     if (answer.confirmed) {
       // With a login, the local branch is gone already: only its upstream is tried again.
@@ -285,7 +286,8 @@ export const BranchTree = memo(function BranchTree({
       title: "Delete tag",
       message: `Are you sure you want to delete the tag ${name}?`,
       confirmLabel: "Delete tag",
-      checkboxLabel: remote ? `Also delete it on ${remote}` : undefined
+      checkboxLabel: remote ? `Also delete it on ${remote}` : undefined,
+      checkboxChecked: (await window.tet.settings.get()).git.deleteTagOnRemote
     });
     if (answer.confirmed) {
       // With a login, the local tag is gone already: only the remote one is tried again.

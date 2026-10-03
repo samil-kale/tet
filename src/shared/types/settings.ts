@@ -1,6 +1,20 @@
 import type { Suggester } from "./agents";
 
-/** What every agent notifies the OS about. */
+export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
+
+export type ColorScheme = (typeof COLOR_SCHEMES)[number];
+
+/** The Appearance tab. */
+export interface AppearanceSettings {
+  /** "system" follows the OS. A window's kind is fixed when it is built (`applyTheme` in
+   *  src/main/main.ts). */
+  colorScheme: ColorScheme;
+  /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
+  darkTheme: string;
+  lightTheme: string;
+}
+
+/** The Notifications tab: what every agent notifies the OS about. */
 export interface NotificationSettings {
   /** The agent finished responding, with nothing it started still running. */
   finished: boolean;
@@ -12,51 +26,85 @@ export interface NotificationSettings {
 
 export const NOTIFICATION_IDS = ["finished", "needsYou", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
 
-export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
-
-export type ColorScheme = (typeof COLOR_SCHEMES)[number];
-
-/** What tet keeps about itself, not about a repository; written whole. */
-export interface AppSettings {
-  notifications: NotificationSettings;
+/** The Files tab's part kept by tet; its Explorer settings are the project's, in tet.json. */
+export interface FilesSettings {
   /** An id out of `KEYBINDING_PRESETS`. */
   editorKeybindingPreset: string;
-  /** "system" follows the OS. A window's kind is fixed when it is built (`applyTheme` in
-   *  src/main/main.ts). */
-  colorScheme: ColorScheme;
-  /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
-  darkTheme: string;
-  lightTheme: string;
-  /** An empty string means tet's own (`DEFAULT_PROMPTS`). */
-  prompts: PromptSettings;
-  /** Who suggests a commit message, picked in the Prompts tab; an agent of "" until picked. */
-  commitSuggester: Suggester;
 }
+
+/** The Git tab: how git's checkboxes start out, each until the user ticks it otherwise. */
+export interface GitSettings {
+  /** A file LOCAL CHANGES has not listed before shows up checked, to be committed. */
+  checkNewChanges: boolean;
+  /** The commit question's "Also push". */
+  pushOnCommit: boolean;
+  /** "Also delete on the remote", when deleting a branch, a tag or a worktree. */
+  deleteBranchOnRemote: boolean;
+  deleteTagOnRemote: boolean;
+  deleteWorktreeOnRemote: boolean;
+}
+
+export const GIT_SETTING_IDS = [
+  "checkNewChanges",
+  "pushOnCommit",
+  "deleteBranchOnRemote",
+  "deleteTagOnRemote",
+  "deleteWorktreeOnRemote"
+] as const satisfies readonly (keyof GitSettings)[];
 
 /** What tet asks of an agent (prompts.ts), in the Prompts tab's picker. */
 export const PROMPT_IDS = ["commitMessage", "handoff"] as const;
 
 export type PromptId = (typeof PROMPT_IDS)[number];
 
-export type PromptSettings = Record<PromptId, string>;
+/** An empty string means tet's own (`DEFAULT_PROMPTS`). */
+export type PromptTexts = Record<PromptId, string>;
+
+/** The Prompts tab. */
+export interface PromptSettings {
+  texts: PromptTexts;
+  /** Who suggests a commit message; an agent of "" until picked. */
+  commitSuggester: Suggester;
+}
+
+/** What tet keeps about itself, not about a repository; written whole, one object per tab of the
+ *  settings dialog that has values here (Environment keeps its own store, Info none). */
+export interface AppSettings {
+  appearance: AppearanceSettings;
+  notifications: NotificationSettings;
+  files: FilesSettings;
+  git: GitSettings;
+  prompts: PromptSettings;
+}
 
 /**
  * A settings write: the keys it names and no others. The dialog and `tet-ctl` both write single
- * settings, and neither may take back what the other set meanwhile, so the two nested objects
- * merge by their own keys too — setting one prompt leaves the rest alone.
+ * settings, and neither may take back what the other set meanwhile, so each tab's object merges by
+ * its own keys too, the prompt texts within it as well — setting one prompt leaves the rest alone.
  */
-export type SettingsEdits = Partial<Omit<AppSettings, "notifications" | "prompts">> & {
+export interface SettingsEdits {
+  appearance?: Partial<AppearanceSettings>;
   notifications?: Partial<NotificationSettings>;
-  prompts?: Partial<PromptSettings>;
-};
+  files?: Partial<FilesSettings>;
+  git?: Partial<GitSettings>;
+  prompts?: Partial<Omit<PromptSettings, "texts">> & { texts?: Partial<PromptTexts> };
+}
 
 /** `edits` laid over `base`, by that rule. */
 export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEdits): T {
   return {
     ...base,
-    ...edits,
+    ...(edits.appearance && { appearance: { ...base.appearance, ...edits.appearance } }),
     ...(edits.notifications && { notifications: { ...base.notifications, ...edits.notifications } }),
-    ...(edits.prompts && { prompts: { ...base.prompts, ...edits.prompts } })
+    ...(edits.files && { files: { ...base.files, ...edits.files } }),
+    ...(edits.git && { git: { ...base.git, ...edits.git } }),
+    ...(edits.prompts && {
+      prompts: {
+        ...base.prompts,
+        ...edits.prompts,
+        ...(edits.prompts.texts && { texts: { ...base.prompts?.texts, ...edits.prompts.texts } })
+      }
+    })
   };
 }
 

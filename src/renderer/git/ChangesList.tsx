@@ -1,4 +1,4 @@
-import { memo, useEffect, useImperativeHandle, useMemo, useState } from "react";
+import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { syncRemote } from "../../shared/types/git";
 import type { ChangeStatus, GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
@@ -123,7 +123,7 @@ export async function askCommit(
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits these ${paths.length} files; the other changes stay as they are.`,
-    value: { message: "", push: false },
+    value: { message: "", push: (await window.tet.settings.get()).git.pushOnCommit },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
     render: ({ value, onChange, error, busy, field, hold }) => (
@@ -182,8 +182,10 @@ export const ChangesList = memo(function ChangesList({
 }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
-  /** Nothing is checked to begin with, nor is a change that comes later (IntelliJ). */
+  /** A file not listed before comes in checked or not by the setting (`GitDefaults.checkNewChanges`). */
   const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
+  /** The files listed last, so a later one is told from those already there. */
+  const listed = useRef<ReadonlySet<string>>(new Set());
   /** Folders start open; only what was folded is kept. */
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const menu = useContextMenu<TreeNode>();
@@ -199,6 +201,22 @@ export const ChangesList = memo(function ChangesList({
       return kept.length === current.size ? current : new Set(kept);
     });
   }
+
+  // Read per new file rather than once: a Save in the settings reaches a list already open.
+  useEffect(() => {
+    const fresh = changes.map((change) => change.path).filter((path) => !listed.current.has(path));
+    listed.current = new Set(changes.map((change) => change.path));
+    if (fresh.length === 0) {
+      return;
+    }
+    void window.tet.settings.get().then(({ git }) => {
+      // Only what is still listed: a refresh may have dropped a file meanwhile.
+      const stillListed = fresh.filter((path) => listed.current.has(path));
+      if (git.checkNewChanges && stillListed.length > 0) {
+        setChecked((current) => new Set([...current, ...stillListed]));
+      }
+    });
+  }, [changes]);
 
   const query = filter.trim().toLowerCase();
   const filtering = query.length > 0;

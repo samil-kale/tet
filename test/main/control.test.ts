@@ -468,13 +468,17 @@ describe("tet-ctl against the control server", () => {
 
   beforeEach(() => {
     settings = {
+      appearance: { colorScheme: "system", darkTheme: "dark-modern", lightTheme: "light-modern" },
       notifications: { finished: true, needsYou: true, idleReminder: false },
-      editorKeybindingPreset: "tet",
-      colorScheme: "system",
-      darkTheme: "dark-modern",
-      lightTheme: "light-modern",
-      prompts: { commitMessage: "", handoff: "" },
-      commitSuggester: { agentId: "", model: "" }
+      files: { editorKeybindingPreset: "tet" },
+      git: {
+        checkNewChanges: false,
+        pushOnCommit: false,
+        deleteBranchOnRemote: false,
+        deleteTagOnRemote: false,
+        deleteWorktreeOnRemote: false
+      },
+      prompts: { texts: { commitMessage: "", handoff: "" }, commitSuggester: { agentId: "", model: "" } }
     };
     for (const list of Object.values(calls)) {
       list.length = 0;
@@ -622,13 +626,13 @@ describe("tet-ctl against the control server", () => {
   it("sets a known theme for its own kind and relays whether a restart is needed, without restarting", async () => {
     const dark = await tetCtl(["settings-set-theme", "dark-slate"]);
     assert.deepEqual(dark.result, { saved: true, restartRequired: false });
-    assert.equal(settings.darkTheme, "dark-slate");
-    assert.equal(settings.lightTheme, "light-modern");
+    assert.equal(settings.appearance.darkTheme, "dark-slate");
+    assert.equal(settings.appearance.lightTheme, "light-modern");
     themeWaits = true;
     const light = await tetCtl(["settings-set-theme", "light-modern"]);
     assert.deepEqual(light.result, { saved: true, restartRequired: true });
-    assert.equal(settings.lightTheme, "light-modern");
-    assert.equal(settings.colorScheme, "system", "the kind is not the theme's to change");
+    assert.equal(settings.appearance.lightTheme, "light-modern");
+    assert.equal(settings.appearance.colorScheme, "system", "the kind is not the theme's to change");
     assert.deepEqual(calls.shutdown, []);
   });
 
@@ -636,28 +640,28 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["settings-set-theme", "solarized"]);
     assert.equal(run.status, EXIT_CODES.usage);
     assert.match(run.stderr, /unknown theme: solarized/);
-    assert.equal(settings.darkTheme, "dark-modern");
+    assert.equal(settings.appearance.darkTheme, "dark-modern");
   });
 
   it("sets the color scheme, relays whether a restart is needed, and refuses an unknown one", async () => {
     themeWaits = true;
     const set = await tetCtl(["settings-set-color-scheme", "light"]);
     assert.deepEqual(set.result, { saved: true, restartRequired: true });
-    assert.equal(settings.colorScheme, "light");
+    assert.equal(settings.appearance.colorScheme, "light");
     const unknown = await tetCtl(["settings-set-color-scheme", "sepia"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
     assert.match(unknown.stderr, /unknown color scheme: sepia/);
-    assert.equal(settings.colorScheme, "light");
+    assert.equal(settings.appearance.colorScheme, "light");
     assert.deepEqual(calls.shutdown, []);
   });
 
   it("sets a prompt's text, puts tet's own back without one, and refuses an unknown id", async () => {
     const set = await tetCtl(["settings-set-prompt", "commitMessage", "write a subject"]);
     assert.deepEqual(set.result, { saved: true });
-    assert.equal(settings.prompts.commitMessage, "write a subject");
+    assert.equal(settings.prompts.texts.commitMessage, "write a subject");
     const reset = await tetCtl(["settings-set-prompt", "commitMessage"]);
     assert.equal(reset.status, EXIT_CODES.ok);
-    assert.equal(settings.prompts.commitMessage, "");
+    assert.equal(settings.prompts.texts.commitMessage, "");
     const unknown = await tetCtl(["settings-set-prompt", "commands", "x"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
     assert.match(unknown.stderr, /unknown prompt: commands/);
@@ -672,11 +676,11 @@ describe("tet-ctl against the control server", () => {
   it("sets a known keybinding preset and refuses an unknown one rather than storing it", async () => {
     const set = await tetCtl(["settings-set-keybindings", "jetbrains"]);
     assert.deepEqual(set.result, { saved: true });
-    assert.equal(settings.editorKeybindingPreset, "jetbrains");
+    assert.equal(settings.files.editorKeybindingPreset, "jetbrains");
     const unknown = await tetCtl(["settings-set-keybindings", "emacs"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
     assert.match(unknown.stderr, /unknown keybinding preset: emacs/);
-    assert.equal(settings.editorKeybindingPreset, "jetbrains");
+    assert.equal(settings.files.editorKeybindingPreset, "jetbrains");
   });
 
   it("switches one notification, leaves the others alone, and refuses an unknown one", async () => {
@@ -696,10 +700,10 @@ describe("tet-ctl against the control server", () => {
   it("sets who suggests a commit message and refuses an agent or model that cannot", async () => {
     const set = await tetCtl(["settings-set-commit-suggester", "claude", "sonnet"]);
     assert.deepEqual(set.result, { saved: true });
-    assert.deepEqual(settings.commitSuggester, { agentId: "claude", model: "sonnet" });
+    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "sonnet" });
     const byDefault = await tetCtl(["settings-set-commit-suggester", "claude"]);
     assert.equal(byDefault.status, EXIT_CODES.ok);
-    assert.deepEqual(settings.commitSuggester, { agentId: "claude", model: "" });
+    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
     const model = await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]);
     assert.equal(model.status, EXIT_CODES.usage);
     assert.match(model.stderr, /unknown Claude model: gpt \(known: fable, opus, sonnet, haiku\)/);
@@ -709,7 +713,7 @@ describe("tet-ctl against the control server", () => {
     const unknown = await tetCtl(["settings-set-commit-suggester", "gemini"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
     assert.match(unknown.stderr, /unknown agent: gemini/);
-    assert.deepEqual(settings.commitSuggester, { agentId: "claude", model: "" });
+    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
   });
 
   it("acts on the caller's own repository or worktree when none is given", async () => {
@@ -997,8 +1001,8 @@ describe("tet-ctl against the control server", () => {
       [calls.commands, calls.added, calls.removed, calls.started, calls.restarted, calls.written, calls.shutdown, calls.created],
       [[], [], [], [], [], [], [], []]
     );
-    assert.equal(settings.darkTheme, "dark-modern");
-    assert.equal(settings.prompts.commitMessage, "");
+    assert.equal(settings.appearance.darkTheme, "dark-modern");
+    assert.equal(settings.prompts.texts.commitMessage, "");
     assert.deepEqual(calls.sbxSaved, []);
     assert.deepEqual(calls.sbxSignedIn, []);
   });

@@ -519,7 +519,7 @@ export class TabSessionManager {
   /** The first prompt's arguments, a handoff's naming `files` as this start sees them. */
   private promptArgs(tab: TabState, agent: AgentDefinition, files = tab.handoff?.files ?? []): string[] {
     const prompt = tab.handoff
-      ? handoffPrompt(effectivePrompt(this.settings.get().prompts, "handoff"), tab.handoff, files)
+      ? handoffPrompt(effectivePrompt(this.settings.get().prompts.texts, "handoff"), tab.handoff, files)
       : tab.initialPrompt;
     return prompt !== undefined && agent.terminal ? agent.terminal.initialPromptArgs(singleLine(prompt)) : [];
   }

@@ -214,29 +214,37 @@ describe("the stores", () => {
     const dir = tempDir("tet-settings-");
     const file = path.join(dir, "settings.json");
     fs.writeFileSync(file, "{ nope");
-    assert.equal(new SettingsStore(dir).get().colorScheme, "system");
+    assert.equal(new SettingsStore(dir).get().appearance.colorScheme, "system");
     fs.writeFileSync(
       file,
       JSON.stringify({
+        appearance: { colorScheme: "sepia", darkTheme: "solarized" },
         notifications: { finished: false, needsYou: "yes" },
-        colorScheme: "sepia",
-        darkTheme: "solarized",
-        editorKeybindingPreset: "",
-        prompts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }
+        files: { editorKeybindingPreset: "" },
+        git: { pushOnCommit: true, checkNewChanges: "yes" },
+        prompts: { texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }, commitSuggester: "claude" }
       })
     );
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
-    assert.equal(settings.colorScheme, "system");
-    assert.equal(settings.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
-    assert.equal(settings.lightTheme, "light-modern");
-    assert.equal(settings.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
-    assert.deepEqual(settings.prompts, { commitMessage: "", handoff: "" }, "tet's own text spelled out is stored as none");
-    assert.equal(effectivePrompt(settings.prompts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
+    assert.deepEqual(settings.git, {
+      checkNewChanges: false,
+      pushOnCommit: true,
+      deleteBranchOnRemote: false,
+      deleteTagOnRemote: false,
+      deleteWorktreeOnRemote: false
+    });
+    assert.equal(settings.appearance.colorScheme, "system");
+    assert.equal(settings.appearance.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
+    assert.equal(settings.appearance.lightTheme, "light-modern");
+    assert.equal(settings.files.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
+    assert.deepEqual(settings.prompts.texts, { commitMessage: "", handoff: "" }, "tet's own text spelled out is stored as none");
+    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "", model: "" });
+    assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
     assert.equal(effectivePrompt({ commitMessage: "write a subject", handoff: "" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
-    store.patch({ colorScheme: "light" });
-    assert.equal(new SettingsStore(dir).get().colorScheme, "light", "written and read back");
+    store.patch({ appearance: { colorScheme: "light" } });
+    assert.equal(new SettingsStore(dir).get().appearance.colorScheme, "light", "written and read back");
   });
 
   it("say when a Save could not be written, and keep what they had", () => {
@@ -244,8 +252,8 @@ describe("the stores", () => {
     // A folder where the file goes: no platform renames a file over it.
     fs.mkdirSync(path.join(dir, "settings.json"));
     const store = new SettingsStore(dir);
-    assert.throws(() => store.patch({ colorScheme: "light" }));
-    assert.equal(store.get().colorScheme, "system", "unchanged, as the disk is");
+    assert.throws(() => store.patch({ appearance: { colorScheme: "light" } }));
+    assert.equal(store.get().appearance.colorScheme, "system", "unchanged, as the disk is");
   });
 
   it("keep only well-formed projects and reorder what they know", () => {
@@ -280,10 +288,14 @@ describe("the stores", () => {
 
 describe("a settings write", () => {
   it("changes the keys it names and no others, down to one prompt", () => {
-    const stored = { colorScheme: "light", prompts: { a: "", b: "theirs" }, notifications: { finished: false, needsYou: true } };
-    assert.deepEqual(withSettings(stored as never, { prompts: { a: "mine" } as never }), {
-      colorScheme: "light",
-      prompts: { a: "mine", b: "theirs" },
+    const stored = {
+      appearance: { colorScheme: "light", darkTheme: "dark-modern" },
+      prompts: { texts: { a: "", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
+      notifications: { finished: false, needsYou: true }
+    };
+    assert.deepEqual(withSettings(stored as never, { appearance: { darkTheme: "dark-slate" }, prompts: { texts: { a: "mine" } as never } }), {
+      appearance: { colorScheme: "light", darkTheme: "dark-slate" },
+      prompts: { texts: { a: "mine", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
       notifications: { finished: false, needsYou: true }
     });
   });

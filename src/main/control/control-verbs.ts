@@ -139,20 +139,20 @@ export function verbs(deps: ControlDeps): Handlers {
       }
       // Shown at once if the window is in that kind. The flag is for the agent to relay; restarting
       // is the user's call.
-      return { result: { saved: true, restartRequired: settings.patch({ [themeKey(theme.kind)]: id }) } };
+      return { result: { saved: true, restartRequired: settings.patch({ appearance: { [themeKey(theme.kind)]: id } }) } };
     },
 
     "settings-set-color-scheme": (args) => {
       const colorScheme = oneOf(args, "scheme", "color scheme", COLOR_SCHEMES);
       // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
-      return { result: { saved: true, restartRequired: settings.patch({ colorScheme }) } };
+      return { result: { saved: true, restartRequired: settings.patch({ appearance: { colorScheme } }) } };
     },
 
     "settings-set-prompt": (args) => {
       const id = oneOf(args, "id", "prompt", PROMPT_IDS);
       // No text resets: "" means tet's own prompt, read by ipc/repository.ts when asking.
       const value = args.text;
-      settings.patch({ prompts: { [id]: typeof value === "string" ? value : "" } });
+      settings.patch({ prompts: { texts: { [id]: typeof value === "string" ? value : "" } } });
       return { result: { saved: true } };
     },
 
@@ -163,7 +163,7 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", `unknown keybinding preset: ${id} (see list-keybinding-presets)`);
       }
       // An editor reads its keybindings once, when it is made (editor-views.ts's editorSetup).
-      settings.patch({ editorKeybindingPreset: id });
+      settings.patch({ files: { editorKeybindingPreset: id } });
       return { result: { saved: true } };
     },
 
@@ -192,7 +192,7 @@ export function verbs(deps: ControlDeps): Handlers {
           throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
         }
       }
-      settings.patch({ commitSuggester: { agentId: id, model } });
+      settings.patch({ prompts: { commitSuggester: { agentId: id, model } } });
       return { result: { saved: true } };
     },
 

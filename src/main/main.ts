@@ -369,7 +369,7 @@ function applyTheme(): boolean {
   }
   // The kind on screen, not the saved one: a pending kind switch must not block a change within it.
   const { kind } = shown;
-  appWindow.showTheme(resolveTheme(settings.get()[themeKey(kind)], kind));
+  appWindow.showTheme(resolveTheme(settings.get().appearance[themeKey(kind)], kind));
   const saved = currentTheme(settings);
   // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
   // restart is not handed to them.

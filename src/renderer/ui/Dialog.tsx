@@ -15,6 +15,8 @@ interface ConfirmOptions {
   confirmLabel: string;
   /** An option carried along, e.g. "delete it on the remote too". */
   checkboxLabel?: string;
+  /** Whether that checkbox starts ticked. */
+  checkboxChecked?: boolean;
   /** Runs the answer while the question still stands, with the header's bar, as `PromptOptions.submit`
    *  does; it closes once this settles. For an answer that takes the window with it (a restart). */
   submit?: (checked: boolean) => Promise<void>;
@@ -131,7 +133,7 @@ export function confirm(options: ConfirmOptions): Promise<ConfirmAnswer> {
 }
 
 /** Whether the user went through, for a question without a checkbox. */
-export async function confirmed(options: Omit<ConfirmOptions, "checkboxLabel">): Promise<boolean> {
+export async function confirmed(options: Omit<ConfirmOptions, "checkboxLabel" | "checkboxChecked">): Promise<boolean> {
   return (await confirm(options)).confirmed;
 }
 
@@ -203,7 +205,7 @@ export async function askName({ title, detail, confirmLabel, current, maxLength,
 }
 
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
-  const [checked, setChecked] = useState(false);
+  const [checked, setChecked] = useState(dialog.checkboxLabel !== undefined && (dialog.checkboxChecked ?? false));
   const { busy: running, refused, submit } = useSubmit(
     async () => {
       await dialog.submit?.(checked);

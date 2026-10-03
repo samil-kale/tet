@@ -932,7 +932,7 @@ async function editorSetup(view: EditorView): Promise<EditorSetup | null> {
   const monaco = await loadMonaco();
   // Defines the theme before the editor exists, or it paints once in monaco's colors.
   await ensureLanguage(monaco, null);
-  const { editorKeybindingPreset } = await window.tet.settings.get();
+  const { editorKeybindingPreset } = (await window.tet.settings.get()).files;
   if (views.get(view.tabId) !== view) {
     return null;
   }
