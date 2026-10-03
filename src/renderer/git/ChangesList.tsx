@@ -307,9 +307,7 @@ export const ChangesList = memo(function ChangesList({
     <div className="explorer-tree">
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
       <div className="tree">
-        {changes.length === 0 ? (
-          <div className="placeholder">No local changes.</div>
-        ) : (
+        {changes.length > 0 &&
           rows.map(({ node, depth, open }) => {
             const change = node.children ? undefined : byPath.get(node.path);
             const box = <TreeCheckbox checked={checkState(node)} onToggle={() => toggleChecked(node)} />;
@@ -352,8 +350,7 @@ export const ChangesList = memo(function ChangesList({
                 {change && !asTree && parentOf(change.path) && <span className="tree-dir">{parentOf(change.path)}</span>}
               </TreeRow>
             );
-          })
-        )}
+          })}
       </div>
       {menu.render(menuEntries)}
     </div>

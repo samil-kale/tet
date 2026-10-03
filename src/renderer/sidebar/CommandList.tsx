@@ -357,7 +357,6 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
             </IconButton>
           </div>
         ))}
-        {projectId && held?.projectId === projectId && commands.length === 0 &&<div className="placeholder">No commands yet.</div>}
       </div>
 
       {menu.render(menuEntries)}

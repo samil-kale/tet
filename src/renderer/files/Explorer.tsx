@@ -327,9 +327,6 @@ export const Explorer = memo(function Explorer({
           }
         }}
       >
-        {files !== undefined && !files.roots && files.files.length === 0 && files.emptyDirs.length === 0 && (
-          <div className="placeholder">No files.</div>
-        )}
         {flat.map((row) => (
           <ExplorerRow
             key={row.node.id}
