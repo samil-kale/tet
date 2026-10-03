@@ -95,7 +95,7 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   handoff: "Session handoff"
 };
 
-const SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
+const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
   { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
   // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
@@ -254,7 +254,9 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     setSettings((current) => (current ? withSettings(current, change) : current));
   });
 
-  const flip = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
+  const flipNotification = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
+
+  const flipGit = (key: keyof GitSettings, value: boolean): void => edit({ git: { [key]: value } });
 
   const applyPreset = (id: string): void => edit({ files: { editorKeybindingPreset: id } });
 
@@ -350,12 +352,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
         <>
           <FieldGroup label="Desktop notifications for agent activity">
             {settings &&
-              SWITCHES.map(({ key, label }) => (
+              NOTIFICATION_SWITCHES.map(({ key, label }) => (
                 <Checkbox
                   key={key}
                   label={label}
                   checked={settings.notifications[key]}
-                  onChange={(next) => flip(key, next)}
+                  onChange={(next) => flipNotification(key, next)}
                 />
               ))}
           </FieldGroup>
@@ -399,11 +401,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
         </>
       )}
-      {shown === "git" && settings && (
+      {shown === "git" && (
         <FieldGroup label="Checked to begin with">
-          {GIT_SWITCHES.map(({ key, label }) => (
-            <Checkbox key={key} label={label} checked={settings.git[key]} onChange={(next) => edit({ git: { [key]: next } })} />
-          ))}
+          {settings &&
+            GIT_SWITCHES.map(({ key, label }) => (
+              <Checkbox key={key} label={label} checked={settings.git[key]} onChange={(next) => flipGit(key, next)} />
+            ))}
         </FieldGroup>
       )}
       {shown === "prompts" && settings && (

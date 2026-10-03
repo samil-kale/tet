@@ -151,6 +151,11 @@ marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of 
   `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
   and the store keeps what the disk has. Only a write nobody waits on, or a cleanup that must not
   stop what it cleans up after, logs instead (`logFailure`).
+- **`settings.json` is one object per tab of the settings dialog**, named by the tab
+  (`AppSettings`, `src/shared/types/settings.ts`): a new setting joins its tab's object, never the
+  top level; a tab that stores nothing has none (Environment keeps `environment.json`, the Files
+  tab's Explorer view is the project's `tet.json`). `withSettings` merges each object by its keys,
+  and `normalize` (`store/settings.ts`) reads every key back defensively, with its default.
 - **A host setup knows no project.** `host.prepare` is handed no project path and writes only into
   `config/<agent>`: one set of files serves every repository and worktree, rewritten once when a
   setting in it changes.

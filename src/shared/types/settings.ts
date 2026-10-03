@@ -44,14 +44,6 @@ export interface GitSettings {
   deleteWorktreeOnRemote: boolean;
 }
 
-export const GIT_SETTING_IDS = [
-  "checkNewChanges",
-  "pushOnCommit",
-  "deleteBranchOnRemote",
-  "deleteTagOnRemote",
-  "deleteWorktreeOnRemote"
-] as const satisfies readonly (keyof GitSettings)[];
-
 /** What tet asks of an agent (prompts.ts), in the Prompts tab's picker. */
 export const PROMPT_IDS = ["commitMessage", "handoff"] as const;
 

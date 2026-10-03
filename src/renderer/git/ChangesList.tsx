@@ -123,7 +123,7 @@ export async function askCommit(
       : paths.length === 1
         ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits these ${paths.length} files; the other changes stay as they are.`,
-    value: { message: "", push: (await window.tet.settings.get()).git.pushOnCommit },
+    value: { message: "", push: pushLabel !== undefined && (await window.tet.settings.get()).git.pushOnCommit },
     confirmLabel: "Commit",
     ready: ({ message }) => filled(message),
     render: ({ value, onChange, error, busy, field, hold }) => (
@@ -182,7 +182,7 @@ export const ChangesList = memo(function ChangesList({
 }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
-  /** A file not listed before comes in checked or not by the setting (`GitDefaults.checkNewChanges`). */
+  /** A file not listed before comes in checked or not by the setting (`GitSettings.checkNewChanges`). */
   const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
   /** The files listed last, so a later one is told from those already there. */
   const listed = useRef<ReadonlySet<string>>(new Set());
@@ -204,8 +204,9 @@ export const ChangesList = memo(function ChangesList({
 
   // Read per new file rather than once: a Save in the settings reaches a list already open.
   useEffect(() => {
-    const fresh = changes.map((change) => change.path).filter((path) => !listed.current.has(path));
-    listed.current = new Set(changes.map((change) => change.path));
+    const paths = changes.map((change) => change.path);
+    const fresh = paths.filter((path) => !listed.current.has(path));
+    listed.current = new Set(paths);
     if (fresh.length === 0) {
       return;
     }

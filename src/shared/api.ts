@@ -187,7 +187,7 @@ export interface TETApi {
     suggestionAgents(ref: ProjectRef): Promise<AgentId[]>;
     /** The models `agentId` can suggest with here. */
     suggestionModels(ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult>;
-    /** The settings' `commitSuggester` suggests one subject for all changes, or only `paths`. */
+    /** The settings' `prompts.commitSuggester` suggests one subject for all changes, or only `paths`. */
     suggestCommitMessage(ref: ProjectRef, paths?: string[]): Promise<SuggestionResult>;
     /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
     cancelCommitSuggestion(): void;
