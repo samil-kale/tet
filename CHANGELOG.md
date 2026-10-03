@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.16.4 (2026-10-03)
+
+- **Tidier views.** Icons are drawn at one consistent size, and the Explorer, the changes list
+  and the COMMANDS no longer show a placeholder when empty.
+
 ## 0.16.3 (2026-10-03)
 
 - **Git settings.** A new Git tab in the settings decides how git's checkboxes start: new changes
