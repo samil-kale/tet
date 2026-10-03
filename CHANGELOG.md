@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.16.5 (2026-10-04)
+
+- **Side views reorder by dragging.** The strip's toggles and the side columns can be dragged
+  into a new order; a pinned column moves by its header.
+
 ## 0.16.4 (2026-10-03)
 
 - **Tidier views.** Icons are drawn at one consistent size, and the Explorer, the changes list
