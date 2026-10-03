@@ -71,8 +71,7 @@ function SideToggles({ chrome }: { chrome: PaneChrome }) {
     count: toggleOrder.length,
     payloadOf: (index) => toggleOrder[index],
     indexOf: (view) => toggleOrder.indexOf(view as SideView),
-    onMove: onMoveToggle,
-    axis: "horizontal"
+    onMove: onMoveToggle
   });
   return toggleOrder.map((view, index) => {
     const { noun, Icon } = SIDE_TOGGLES[view];

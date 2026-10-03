@@ -154,8 +154,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     count: pinnedOrder.length,
     payloadOf: (index) => pinnedOrder[index],
     indexOf: (view) => pinnedOrder.indexOf(view as SideView),
-    onMove: movePinned,
-    axis: "horizontal"
+    onMove: movePinned
   });
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */

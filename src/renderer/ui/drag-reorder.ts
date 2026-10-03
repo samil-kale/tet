@@ -15,8 +15,6 @@ interface DragReorderOptions {
   indexOf: (payload: string) => number;
   /** The row at `from` goes to insertion index `to`. See `reorder`. */
   onMove: (from: number, to: number) => void;
-  /** Rows stacked top to bottom (the default) or side by side, left to right. */
-  axis?: "vertical" | "horizontal";
 }
 
 /** Any element: a row, a column, a button. */
@@ -43,26 +41,15 @@ export function reorder<T>(items: readonly T[], from: number, to: number): T[] {
   return moved;
 }
 
-export function useDragReorder({
-  dragType,
-  count,
-  payloadOf,
-  indexOf,
-  onMove,
-  axis = "vertical"
-}: DragReorderOptions): DragReorder {
+export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: DragReorderOptions): DragReorder {
   const [dragged, setDragged] = useState<number | null>(null);
   /** The insertion index the dragged row would take. */
   const [dropAt, setDropAt] = useState<number | null>(null);
 
-  /** After a row once the pointer is past its middle. The drawn line and the drop both use this,
-   *  so they cannot disagree. */
-  const insertionIndex = (event: DragEvent<RowElement>, index: number): number => {
-    const box = event.currentTarget.getBoundingClientRect();
-    const before =
-      axis === "vertical" ? event.clientY < box.top + box.height / 2 : event.clientX < box.left + box.width / 2;
-    return before ? index : index + 1;
-  };
+  /** The dragged row takes the place of the row it is over, wherever on it: after it moving down
+   *  or right, before it moving up or left. The drawn line and the drop both use this, so they
+   *  cannot disagree. */
+  const insertionIndex = (index: number): number => (dragged !== null && index > dragged ? index + 1 : index);
 
   const end = (): void => {
     setDragged(null);
@@ -97,7 +84,7 @@ export function useDragReorder({
       // Only a prevented dragover makes an element a drop target.
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-      setDropAt(insertionIndex(event, index));
+      setDropAt(insertionIndex(index));
     },
     onDrop: (event) => {
       // A file still lands here (main.tsx prevents every file's dragover); its getData is "", and
@@ -106,8 +93,8 @@ export function useDragReorder({
         return;
       }
       event.preventDefault();
-      // From the event: the dragover state only draws the line, and a drop must not wait on it.
-      move(event.dataTransfer.getData(dragType), insertionIndex(event, index));
+      // Not the dragover state: it only draws the line, and a drop must not wait on it.
+      move(event.dataTransfer.getData(dragType), insertionIndex(index));
     }
   });
 
