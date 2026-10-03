@@ -22,6 +22,11 @@ export function installRoot(executable: string, platform: Platform): string {
   return platform.appBundle ? path.resolve(executable, "..", "..", "..") : path.dirname(executable);
 }
 
+/** An update complete beside the install root, prepared while tet runs: the quit only swaps them. */
+export function preparedRoot(root: string): string {
+  return `${root}.new`;
+}
+
 /** The inverse of `installRoot`. */
 export function rootExecutable(root: string, platform: Platform): string {
   return path.join(root, ...platform.executableInRoot);

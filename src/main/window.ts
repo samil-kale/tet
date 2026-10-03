@@ -40,7 +40,8 @@ export class AppWindow {
    * Notices sent before the window listens are held: `App` subscribes only after the requirements
    * check, and a fast sender (the update's "Updated to") would otherwise be lost. The renderer
    * reports listening via `app:notice-listening` (preload's `onNotice`); every page load resets it.
-   * A progress is dropped instead: its next step shows it anew.
+   * A progress is dropped instead: its next step shows it anew. Its end on `done` is held as the
+   * notice it becomes.
    */
   private noticesHeard = false;
   private readonly heldNotices: Notice[] = [];
@@ -65,6 +66,10 @@ export class AppWindow {
       return;
     }
     if (channel === "app:notice-progress" && !this.noticesHeard) {
+      const progress = payload as NoticeProgress;
+      if (progress.fraction === undefined && progress.done) {
+        this.heldNotices.push({ severity: "info", message: progress.message });
+      }
       return;
     }
     if (this.window && !this.window.isDestroyed()) {

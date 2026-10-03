@@ -49,6 +49,8 @@ export interface Notice {
 export interface NoticeProgress {
   key: string;
   message: string;
-  /** Share done, 0 to 1; `undefined` ends it, its notice goes. */
-  fraction: number | undefined;
+  /** Share done, 0 to 1, `null` while unknown (a running bar); `undefined` ends it, its notice goes. */
+  fraction: number | null | undefined;
+  /** With `fraction: undefined`: the notice stays in its place as the info `message`, its bar gone. */
+  done?: boolean;
 }

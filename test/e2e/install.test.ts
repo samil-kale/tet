@@ -10,7 +10,7 @@ import * as semver from "semver";
 import { findControlPort } from "../../src/main/control/control-port";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { CONTROL_ENV } from "../../src/shared/control";
-import { assetName, rootExecutable } from "../../src/shared/release";
+import { assetName, preparedRoot, rootExecutable } from "../../src/shared/release";
 import type { UpdateResult } from "../../src/shared/release";
 import type { NoticeReport } from "../../src/shared/types/app";
 import { eventually, killApp, processAlive, ROOT, tempDir, tetCtl } from "../helpers";
@@ -129,7 +129,7 @@ async function version(): Promise<{ version: string; pid: number } | undefined> 
  */
 async function updateArmed(): Promise<boolean> {
   const notices = (await ask(["notices-list"])) as NoticeReport[] | undefined;
-  return notices?.some((notice) => notice.message === `Update ${next} available, installs when you quit TET`) ?? false;
+  return notices?.some((notice) => notice.message === `Update ${next} ready, installs when you quit TET`) ?? false;
 }
 
 /** A user's quit per platform: closing the window, SIGTERM, Cmd+Q's Apple Event. */
@@ -264,6 +264,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     const running = await version();
     assert.ok(running, "tet running");
     await eventually(withLog("the update armed"), updateArmed, 5 * 60_000);
+    assert.ok(fs.existsSync(rootExecutable(preparedRoot(installedRoot()), PLATFORM)), "the new version beside the install");
     quit(running.pid);
     await eventually(withLog("tet gone"), () => !processAlive(running.pid), 60_000);
     const resultFile = path.join(userData, "update", "result.json");
@@ -271,6 +272,7 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     const result = JSON.parse(fs.readFileSync(resultFile, "utf8")) as UpdateResult;
     assert.equal(result.ok, true, result.output);
     assert.equal(result.version, next);
+    assert.equal(fs.existsSync(preparedRoot(installedRoot())), false, "the new version swapped in");
   });
 
   it("starts the updated version, which reports the update", async () => {

@@ -2,14 +2,17 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage } from "../shared/errors";
-import { processAlive, runningUpdater, updateLockPath } from "../shared/release";
+import { preparedRoot, processAlive, runningUpdater, updateLockPath } from "../shared/release";
 import type { UpdateResult } from "../shared/release";
 
 /**
- * Run after tet quits: `tet-update.js <pid> <version> <staged root> <install root> <result file>`.
+ * Run after tet quits:
+ * `tet-update.js <pid> <version> <staged root> <install root> <result file> [<prepared root>]`.
  * Started detached by auto-update.ts under the *new* binary as node from its unpack folder — the
  * installed binary gets replaced, and win32 locks it (and node-pty's native files) until tet's
- * process is gone. Hence the wait first.
+ * process is gone. Hence the wait first. The prepared root is the version already copied whole
+ * beside the install while tet ran, leaving only the two renames; a tet that prepared none hands
+ * none, and the copy is made here (MIGRATION, below).
  */
 
 const EXIT_WAIT_MS = 60_000;
@@ -45,7 +48,7 @@ function writeResult(file: string, result: UpdateResult): void {
   writeFileAtomic.sync(file, JSON.stringify(result));
 }
 
-function install(pid: number, version: string, staged: string, root: string, resultFile: string): void {
+function install(pid: number, version: string, staged: string, root: string, resultFile: string, prepared: string | undefined): void {
   const deadline = Date.now() + EXIT_WAIT_MS;
   while (processAlive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
@@ -60,18 +63,27 @@ function install(pid: number, version: string, staged: string, root: string, res
   // Complete beside the install before the install is touched: moving it aside and this into
   // place are two renames, and nothing ever removes the install. A tet started meanwhile holds
   // its TET.exe and app.asar open, which removing the install under it would leave behind.
-  const fresh = `${root}.new`;
-  try {
-    fs.rmSync(fresh, { recursive: true, force: true });
+  const fresh = prepared ?? preparedRoot(root);
+  // MIGRATION: started by a tet that prepares no copy beside the install, which hands none. Once
+  // no installed tet is that old, remove this branch and make `prepared` required.
+  if (prepared === undefined) {
     try {
-      fs.renameSync(staged, fresh);
-    } catch {
-      // A rename cannot take the folder this process runs from on win32, nor cross a volume.
-      fs.cpSync(staged, fresh, { recursive: true, verbatimSymlinks: true });
+      fs.rmSync(fresh, { recursive: true, force: true });
+      try {
+        fs.renameSync(staged, fresh);
+      } catch {
+        // A rename cannot take the folder this process runs from on win32, nor cross a volume.
+        fs.cpSync(staged, fresh, { recursive: true, verbatimSymlinks: true });
+      }
+    } catch (error) {
+      fs.rmSync(fresh, { recursive: true, force: true });
+      writeResult(resultFile, { version, ok: false, output: `could not copy ${version} beside ${root}: ${errorMessage(error)}` });
+      return;
     }
-  } catch (error) {
-    fs.rmSync(fresh, { recursive: true, force: true });
-    writeResult(resultFile, { version, ok: false, output: `could not copy ${version} beside ${root}: ${errorMessage(error)}` });
+  }
+  // Checked before the install is moved aside, which a missing copy would only have to undo.
+  if (!fs.existsSync(fresh)) {
+    writeResult(resultFile, { version, ok: false, output: `${fresh} is missing` });
     return;
   }
 
@@ -110,10 +122,10 @@ function install(pid: number, version: string, staged: string, root: string, res
 }
 
 function main(): void {
-  const [pidArg, version, staged, root, resultFile] = process.argv.slice(2);
+  const [pidArg, version, staged, root, resultFile, prepared] = process.argv.slice(2);
   const lockFile = updateLockPath(path.dirname(resultFile));
   try {
-    install(Number(pidArg), version, staged, root, resultFile);
+    install(Number(pidArg), version, staged, root, resultFile, prepared);
   } finally {
     if (runningUpdater(lockFile) === process.pid) {
       fs.rmSync(lockFile, { force: true });

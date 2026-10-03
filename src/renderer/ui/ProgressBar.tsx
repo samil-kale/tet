@@ -11,7 +11,7 @@ const SPEED = 500;
  * under a header: a new slow reason feeds the bar it has. No spinner stands in for it, and a
  * button disabled for being underway only dims; the one spinner is a session's working mark
  * (`SessionMark`), a status rather than progress. The one determinate bar is a download's notice
- * (Notices.tsx's `showProgress`).
+ * (Notices.tsx's `showProgress`), which runs this one while its share is unknown.
  *
  * Length and speed are absolute, not a share of the width, so bars of different widths side by
  * side look alike; the duration follows from the measured width. `useLayoutEffect`, so the first

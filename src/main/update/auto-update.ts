@@ -5,7 +5,7 @@ import { app, net } from "electron";
 import * as originalFs from "original-fs";
 import * as semver from "semver";
 import writeFileAtomic from "write-file-atomic";
-import { assetName, installRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../../shared/release";
+import { assetName, installRoot, preparedRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../../shared/release";
 import { PLATFORM } from "../util/host-platform";
 import type { UpdateResult } from "../../shared/release";
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
@@ -26,8 +26,11 @@ const UPDATER_POLL_MS = 2000;
 type Notify = (severity: NoticeSeverity, message: string) => void;
 type ShowProgress = (progress: NoticeProgress) => void;
 
-/** Unpacked this session, for `installPendingUpdate`. */
-let pending: { version: string; root: string } | undefined;
+/**
+ * Unpacked (`root`) and copied beside the install (`prepared`) this session, for
+ * `installPendingUpdate`. Set only once the copy is whole, cleared before another one begins.
+ */
+let pending: { version: string; root: string; prepared: string } | undefined;
 
 /** Set by startAutoUpdate, always before `pending`. */
 let dataRoot = "";
@@ -72,12 +75,14 @@ function reportLastUpdate(notify: Notify): void {
 }
 
 /**
- * Removes earlier sessions' unpacked updates. Best effort: on win32 the updater may still hold its
- * executable briefly after writing its result. Awaited before the first check, whose `stage` may
- * unpack into the swept folder. Removed with original-fs: electron's fs opens `app.asar` as an
- * archive and fails its rm with EBUSY. A download cut short stays for `stage` to continue.
+ * Removes earlier sessions' unpacked updates and a copy beside the install a quit left unfinished
+ * or uninstalled. Best effort: on win32 the updater may still hold its executable briefly after
+ * writing its result. Awaited before the first check, whose `stage` may write into the swept
+ * folders. Removed with original-fs: electron's fs opens `app.asar` as an archive and fails its rm
+ * with EBUSY. A download cut short stays for `stage` to continue.
  */
-async function sweepUpdateDir(asset: string): Promise<void> {
+async function sweepUpdateDir(asset: string, root: string): Promise<void> {
+  await originalFs.promises.rm(preparedRoot(root), { recursive: true, force: true }).catch(() => undefined);
   let entries: string[];
   try {
     entries = await fs.promises.readdir(updateDir());
@@ -150,11 +155,21 @@ function findRoot(dir: string): string | undefined {
 }
 
 /**
- * Fetches and unpacks a version for the quit. Plain fetch, never electron's download manager: on
- * macOS it quarantines the file, and Gatekeeper would refuse the ad-hoc signed bundle. A failed
- * download keeps its part for the next try; once unpacked, or refused by tar, the archive goes.
+ * Fetches and unpacks a version, then copies it beside the install root (`preparedRoot`), so the
+ * quit only swaps the two and a tet started right after it rarely finds the old one. The unpacked
+ * folder stays: the updater runs from it, and on win32 a folder a process runs from cannot be
+ * renamed into place. Plain fetch, never electron's download manager: on macOS it quarantines the
+ * file, and Gatekeeper would refuse the ad-hoc signed bundle. A failed download keeps its part for
+ * the next try; once unpacked, or refused by tar, the archive goes; a failed copy goes whole.
  */
-async function stage(releasesUrl: string, asset: string, version: string, onProgress: (fraction: number) => void): Promise<string> {
+async function stage(
+  releasesUrl: string,
+  asset: string,
+  version: string,
+  installed: string,
+  onProgress: (fraction: number) => void,
+  onPreparing: () => void
+): Promise<{ root: string; prepared: string }> {
   const dir = path.join(updateDir(), version);
   await originalFs.promises.rm(dir, { recursive: true, force: true });
   await fs.promises.mkdir(dir, { recursive: true });
@@ -166,6 +181,7 @@ async function stage(releasesUrl: string, asset: string, version: string, onProg
     }
   }
   await resumableDownload(`${releasesUrl}/download/v${version}/${asset}`, archive, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS), onProgress);
+  onPreparing();
   try {
     await unpack(archive, dir);
   } finally {
@@ -175,13 +191,23 @@ async function stage(releasesUrl: string, asset: string, version: string, onProg
   if (!root) {
     throw new Error(`no ${path.basename(rootExecutable(".", PLATFORM))} in ${asset}`);
   }
-  return root;
+  const prepared = preparedRoot(installed);
+  try {
+    await originalFs.promises.rm(prepared, { recursive: true, force: true });
+    // original-fs, as in the sweep: electron's fs reads app.asar as a folder.
+    await originalFs.promises.cp(root, prepared, { recursive: true, verbatimSymlinks: true });
+  } catch (error) {
+    await originalFs.promises.rm(prepared, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+  return { root, prepared };
 }
 
 /**
  * Installs only (`app.isPackaged`). Checks at startup and every four hours; a newer version is
- * fetched and unpacked at once — its progress in a notice that goes silently if it fails —
- * announced once, and installed on quit (`installPendingUpdate`) —
+ * fetched, unpacked and copied beside the install at once — one notice from the download's share
+ * to the announcement it ends on, which goes silently if any step fails — announced once, and
+ * installed on quit (`installPendingUpdate`) —
  * never mid-session, a tab being a live agent session. If tet cannot replace its own folder, the
  * notice carries the install command instead.
  *
@@ -220,28 +246,36 @@ export function startAutoUpdate(
         notify("info", `Update ${latest} available, update with: ${PLATFORM.installCommand}`);
         return;
       }
+      // The copy beside the install is about to change: no quit installs it until it is whole again.
+      pending = undefined;
       const message = `Downloading update ${latest}`;
       let percent = 0;
       showProgress({ key: "update", message, fraction: 0 });
-      let staged: string;
+      let staged: { root: string; prepared: string };
       try {
-        staged = await stage(releasesUrl, asset, latest, (fraction) => {
-          // One message per percent, not per chunk.
-          if (Math.floor(fraction * 100) > percent) {
-            percent = Math.floor(fraction * 100);
-            showProgress({ key: "update", message, fraction });
-          }
-        });
+        staged = await stage(
+          releasesUrl,
+          asset,
+          latest,
+          root,
+          (fraction) => {
+            // One message per percent, not per chunk.
+            if (Math.floor(fraction * 100) > percent) {
+              percent = Math.floor(fraction * 100);
+              showProgress({ key: "update", message, fraction });
+            }
+          },
+          () => showProgress({ key: "update", message: `Preparing update ${latest}`, fraction: null })
+        );
       } catch (error) {
         // Tried again at the next check.
         logError(`could not fetch the update to ${latest}`, error);
-        return;
-      } finally {
         showProgress({ key: "update", message, fraction: undefined });
+        return;
       }
-      pending = { version: latest, root: staged };
+      pending = { version: latest, ...staged };
       announced = latest;
-      notify("info", `Update ${latest} available, installs when you quit TET`);
+      showProgress({ key: "update", message: `Update ${latest} ready, installs when you quit TET`, fraction: undefined, done: true });
     } finally {
       checking = false;
     }
@@ -249,7 +283,7 @@ export function startAutoUpdate(
 
   void updaterDone().then(async () => {
     reportLastUpdate(notify);
-    await sweepUpdateDir(asset);
+    await sweepUpdateDir(asset, root);
     await check();
     setInterval(() => void check(), CHECK_INTERVAL_MS);
   });
@@ -258,7 +292,8 @@ export function startAutoUpdate(
 /**
  * Starts the pending update to run after this process exits: at the end of a quit, not a restart
  * (a relaunched tet would hold the folder being replaced). Run by the *new* binary as node from its
- * unpack folder — no node on the machine to count on, and the installed binary gets replaced.
+ * unpack folder — no node on the machine to count on, and the installed binary gets replaced — and
+ * handed the copy beside the install to swap in.
  */
 export function installPendingUpdate(): void {
   if (!pending) {
@@ -267,7 +302,15 @@ export function installPendingUpdate(): void {
   try {
     const resources = resourcesDir(pending.root, PLATFORM);
     const script = path.join(resources, "app.asar.unpacked", "dist", "tet-update.js");
-    const args = [script, String(process.pid), pending.version, pending.root, installRoot(process.execPath, PLATFORM), resultPath()];
+    const args = [
+      script,
+      String(process.pid),
+      pending.version,
+      pending.root,
+      installRoot(process.execPath, PLATFORM),
+      resultPath(),
+      pending.prepared
+    ];
     const child = spawn(rootExecutable(pending.root, PLATFORM), args, {
       cwd: updateDir(),
       detached: true,

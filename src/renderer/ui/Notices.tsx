@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { SeverityIcon } from "./icons";
+import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
 import { useTopDialog } from "./window-covered";
 
@@ -12,7 +13,7 @@ interface ShownNotice {
   severity: NoticeSeverity;
   message: string;
   /** A progress notice's (`showProgress`). */
-  progress?: { key: string; fraction: number };
+  progress?: { key: string; fraction: number | null };
 }
 
 /**
@@ -41,13 +42,20 @@ export function notify(severity: NoticeSeverity, message: string): void {
 
 /**
  * A download's progress, one notice per `key` updated in place: it stands, with a bar along its
- * bottom edge as VS Code's, until the progress ends or a click dismisses it.
+ * bottom edge as VS Code's, until the progress ends or a click dismisses it. Ended on `done`, it
+ * stays in its place as a plain info, dismissed as one; dismissed earlier, that info comes anew.
  */
-export function showProgress({ key, message, fraction }: NoticeProgress): void {
+export function showProgress({ key, message, fraction, done }: NoticeProgress): void {
   const standing = shown.get().find((notice) => notice.progress?.key === key);
   if (fraction === undefined) {
-    if (standing) {
+    if (standing && done) {
+      shown.set(shown.get().map((notice) => (notice === standing ? { id: notice.id, severity: "info", message } : notice)));
+      scheduleDismiss(standing.id, "info");
+      window.tet.app.reportNotice({ severity: "info", message, at: Date.now() });
+    } else if (standing) {
       dismissNotice(standing.id);
+    } else if (done) {
+      notify("info", message);
     }
     dismissedProgress.delete(key);
     return;
@@ -119,7 +127,11 @@ export function Notices() {
           <span className="notice-message">{notice.message}</span>
           {notice.progress && (
             <span className="notice-progress">
-              <span className="notice-progress-fill" style={{ width: `${notice.progress.fraction * 100}%` }} />
+              {notice.progress.fraction === null ? (
+                <ProgressBar />
+              ) : (
+                <span className="notice-progress-fill" style={{ width: `${notice.progress.fraction * 100}%` }} />
+              )}
             </span>
           )}
         </button>
