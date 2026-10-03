@@ -179,7 +179,7 @@ export function PlusIcon(props: IconProps) {
 
 /** Lucide's `x`, drawn two pixels under the shared size. */
 export function CloseIcon(props: IconProps) {
-  return <Lucide {...props} icon={X} extent={14.71} />;
+  return <Lucide {...props} icon={X} extent={15.31} />;
 }
 
 /** Lucide's `log-in` — sign in with an SBX access token. */
