@@ -33,7 +33,8 @@ project's terminals.
   below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
   0. `util/`: helpers of no area — the platform (`host-platform.ts`), starting processes
      (`process.ts`), a module in a `utilityProcess` of its own (`utility-client.ts`, served by
-     `utility-host.ts`: git and the Explorer's walk and search), logging (`error-log.ts`), reading `.git` without git (`linked-git-dir.ts`).
+     `utility-host.ts`: git and the Explorer's walk and search), logging (`error-log.ts`), reading 
+     `.git` without git (`linked-git-dir.ts`).
   1. `store/`: what TET keeps and reads back — the open projects (`project-store.ts`), settings,
      environment variables, `tet.json`, the data folder's layout (`data-root.ts`,
      `project-dirs.ts`) — and what resolves against it: a repository's or worktree's folder
@@ -256,9 +257,9 @@ and tag create/rename/delete, merge and rebase onto a branch, abort, per-file di
 `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
 staging), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), and a commit message suggested by an installed agent.
-Where Desktop differs from git's defaults, follow Desktop. The project row's entries are repository-wide and never touch the
-working tree — a worktree's own row excepted, which is that tree, and its merge into the base, run
-where the base is checked out.
+Where Desktop differs from git's defaults, follow Desktop. The project row's entries are 
+repository-wide and never touch the working tree — a worktree's own row excepted, which is that 
+tree, and its merge into the base, run where the base is checked out.
 
 Don't add without being asked: staging or per-line staging, history or graph, cherry-pick, revert,
 squash, reorder, bisect, submodules, conflict resolution beyond aborting,
