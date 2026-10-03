@@ -259,7 +259,7 @@ textarea:focus,
      .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
   --field-height: 29px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
-  --icon-size: 14px;
+  --icon-size: 13px;
   /* An action button's box (.icon-button), and what sits in its place or level with it. */
   --action-size: 24px;
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
@@ -460,7 +460,7 @@ textarea:focus,
 }
 
 /* One row shape for both sidebar lists. No gap: the icon buttons ending a row already carry
-   5px around a 14px drawing in a 24px box. */
+   5.5px around a 13px drawing in a 24px box. */
 .project-item,
 .command-item {
   display: flex;
@@ -2526,8 +2526,8 @@ textarea:focus,
   position: relative;
   display: flex;
   align-items: flex-start;
-  /* With the 14px icon, the text starts where VS Code's does beside its 16px one. */
-  gap: 6px;
+  /* With the 13px icon, the text starts where VS Code's does beside its 16px one. */
+  gap: 7px;
   /* VS Code's fixed width: a notice sized to its text is easily missed. Capped by the window
      minus margins. */
   width: min(450px, 100vw - 14px);

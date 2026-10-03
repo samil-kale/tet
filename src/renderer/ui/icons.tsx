@@ -98,8 +98,8 @@ export function FillSvg({
     <svg
       className={className}
       // Fallback only, as `Svg`'s.
-      width="14"
-      height="14"
+      width="13"
+      height="13"
       viewBox={geometry(extent, cx, cy, grid, 0).viewBox}
       shapeRendering={shapeRendering}
       aria-hidden="true"
@@ -133,8 +133,8 @@ export function Svg({
     <svg
       className={className}
       // Fallback only: CSS `--icon-size` renders over these in a flex container; keep them equal.
-      width="14"
-      height="14"
+      width="13"
+      height="13"
       viewBox={viewBox}
       fill="none"
       stroke="currentColor"
@@ -169,7 +169,7 @@ function Lucide({
 }) {
   const { viewBox, strokeWidth } = geometry(extent, cx, cy, 24, stroke);
   // `size` is the fallback only, as `Svg`'s width and height; `viewBox` overrides lucide's own.
-  return <Icon className={className} size={14} viewBox={viewBox} strokeWidth={strokeWidth} />;
+  return <Icon className={className} size={13} viewBox={viewBox} strokeWidth={strokeWidth} />;
 }
 
 /** Lucide's `plus`, stroked heavier to lead a row. */
