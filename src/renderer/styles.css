@@ -512,9 +512,15 @@ textarea:focus,
 .side-toggle.drop-after::after {
   content: "";
   position: absolute;
-  background: var(--vscode-focusBorder);
   pointer-events: none;
   z-index: 1;
+}
+
+.project-group.drop-before::before,
+.side-toggle.drop-before::before,
+.project-group.drop-after::after,
+.side-toggle.drop-after::after {
+  background: var(--vscode-focusBorder);
 }
 
 .project-group.drop-before::before,
@@ -538,13 +544,17 @@ textarea:focus,
 .side-toggle.drop-after::after {
   top: 0;
   bottom: 0;
+}
+
+.side-toggle.drop-before::before,
+.side-toggle.drop-after::after {
   width: 1px;
 }
 
-/* 2px: at the window's left edge a 1px line is lost. */
+/* A border as the split view's drop frames, 2px as theirs. */
 .side-pane.drop-before::before,
 .side-pane.drop-after::after {
-  width: 2px;
+  border-left: 2px solid var(--vscode-focusBorder);
 }
 
 .side-pane.drop-before::before,
@@ -947,7 +957,7 @@ textarea:focus,
   content: "";
   position: absolute;
   inset: 0;
-  border: 1px solid var(--vscode-focusBorder);
+  border: 2px solid var(--vscode-focusBorder);
   /* Above `.terminal-host`'s own layers. */
   z-index: 10;
   pointer-events: none;
@@ -957,7 +967,7 @@ textarea:focus,
    sizes until the drop, or every pty under them refits mid-drag. */
 .snap-preview {
   position: absolute;
-  border: 1px solid var(--vscode-focusBorder);
+  border: 2px solid var(--vscode-focusBorder);
   z-index: 10;
   pointer-events: none;
 }
@@ -1257,7 +1267,7 @@ textarea:focus,
   /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
      edges, where no line is drawn. */
   inset: -6px -5px -5px -6px;
-  border: 1px solid var(--vscode-focusBorder);
+  border: 2px solid var(--vscode-focusBorder);
   /* Above xterm's layers, which reach 7 for decorations. */
   z-index: 10;
   pointer-events: none;

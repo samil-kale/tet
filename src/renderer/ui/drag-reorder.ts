@@ -142,6 +142,10 @@ export function useDragReorder({
     if (index === dragged) {
       classes.push("dragging");
     }
+    // Either side of the dragged row is where it stands already: no line, as the drop moves nothing.
+    if (dropAt === null || (dragged !== null && (dropAt === dragged || dropAt === dragged + 1))) {
+      return classes;
+    }
     if (dropAt === index) {
       classes.push("drop-before");
     }
