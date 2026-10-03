@@ -19,7 +19,7 @@ import {
   RemoteIcon,
   StashIcon,
   TagIcon,
-  TreeChevronIcon,
+  ChevronIcon,
   WorktreeIcon
 } from "../ui/icons";
 import { askDeleteWorktree, askRenameWorktree, NOT_MADE_BY_TET, worktreeEntry } from "./worktree-questions";
@@ -78,7 +78,7 @@ function TreeSection({
   return (
     <div className="tree-section">
       <button className="tree-header" onClick={onToggle}>
-        <TreeChevronIcon expanded={!collapsed} className="tree-icon" />
+        <ChevronIcon expanded={!collapsed} className="tree-icon" />
         <span>{label}</span>
         <span className="count-badge">({count})</span>
       </button>
@@ -531,7 +531,7 @@ export const BranchTree = memo(function BranchTree({
                   onClick={() => toggle(`remote:${entry.name}`)}
                   icon={
                     <>
-                      <TreeChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="tree-icon" />
+                      <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="tree-icon" />
                       <RemoteIcon className="tree-icon" />
                     </>
                   }

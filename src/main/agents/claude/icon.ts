@@ -5,7 +5,7 @@ export const claudeIcon: AgentIcon = {
   kind: "fill",
   extent: 19.2,
   cx: 12,
-  cy: 12.14 - 1.85,
+  cy: 11.67,
   grid: 24,
   shapes: [
     {
