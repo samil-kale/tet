@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.16.2 (2026-10-03)
+
+- **Faster updates.** An update is prepared while tet runs; quitting only puts it in place.
+- **Simpler Add Repository.** The dialog has no separate create mode: adding a folder that does
+  not exist yet creates and initializes it.
+- **Fixes.** The folder picker opens at the field's path, or the last folder used; the Explorer's
+  file walk and search no longer slow down the window.
+
 ## 0.16.1 (2026-10-02)
 
 - **Merged branches marked.** The branch tree shows a branch already merged with a dimmed
