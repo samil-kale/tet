@@ -71,6 +71,16 @@ export function usePaneChoice<T extends string>(
   return [choice, set];
 }
 
+/** The list stored under that layout key, or null when there is none or it does not parse. */
+function storedList(key: string): unknown[] | null {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_PREFIX + key) ?? "null");
+    return Array.isArray(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Which of `choices` a pane holds at once, in the same layout storage, kept as `usePaneToggle`
  * keeps whether a pane is out. Anything stored outside `choices` is dropped; unreadable storage is
@@ -82,15 +92,8 @@ export function usePaneSet<T extends string>(
   initial: readonly T[]
 ): [ReadonlySet<T>, (next: ReadonlySet<T>) => void] {
   const [held, setHeld] = useState<ReadonlySet<T>>(() => {
-    try {
-      const stored: unknown = JSON.parse(localStorage.getItem(STORAGE_PREFIX + key) ?? "null");
-      if (Array.isArray(stored)) {
-        return new Set(choices.filter((choice) => stored.includes(choice)));
-      }
-    } catch {
-      // Unreadable storage is the initial state.
-    }
-    return new Set(initial);
+    const stored = storedList(key);
+    return new Set(stored ? choices.filter((choice) => stored.includes(choice)) : initial);
   });
   // Stable like a setState, as `usePaneToggle`'s.
   const set = useCallback(
@@ -101,6 +104,27 @@ export function usePaneSet<T extends string>(
     [key]
   );
   return [held, set];
+}
+
+/**
+ * Every one of `choices` in the order the user put them, in the same layout storage, kept as
+ * `usePaneSet` keeps its set. Anything stored outside `choices` is dropped, and a choice missing
+ * from storage joins at the end in `choices`' order.
+ */
+export function usePaneOrder<T extends string>(key: string, choices: readonly T[]): [readonly T[], (next: readonly T[]) => void] {
+  const [order, setOrder] = useState<readonly T[]>(() => {
+    const kept = [...new Set(storedList(key))].filter((entry): entry is T => choices.includes(entry as T));
+    return [...kept, ...choices.filter((choice) => !kept.includes(choice))];
+  });
+  // Stable like a setState, as `usePaneToggle`'s.
+  const set = useCallback(
+    (next: readonly T[]) => {
+      setOrder(next);
+      localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(next));
+    },
+    [key]
+  );
+  return [order, set];
 }
 
 /**

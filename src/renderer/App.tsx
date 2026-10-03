@@ -23,6 +23,8 @@ import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/acti
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize } from "./ui/layout-storage";
 import { SIDE_VIEWS, useSidePane, type SideView } from "./ui/use-side-pane";
+import { useDragReorder } from "./ui/drag-reorder";
+import { SectionHandle } from "./ui/Section";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
 import { TerminalsPane } from "./tabs/TerminalsPane";
 import { disposeRefTerminals } from "./tabs/terminal-views";
@@ -59,6 +61,9 @@ function requesterOf(
 }
 
 const DEFAULT_LAYOUT = defaultLayout();
+
+/** A side pane column's drag, its own so no list or terminal takes the drop. */
+const COLUMN_DRAG_TYPE = "application/x-tet-side-column";
 
 /** `worktreesSupported`: git creates them (Requirements.worktrees). */
 export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
@@ -128,8 +133,30 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     MIN_PANE_HEIGHT
   );
   /** The side views out and pinned, their widths and slide (use-side-pane.ts). */
-  const { openViews, pinnedViews, freeView, widthOf, slidingViews, stopSliding, toggleSideView, togglePin, showChanges } =
-    useSidePane(activeKeyRef, setActiveKey);
+  const {
+    openViews,
+    pinnedViews,
+    pinnedOrder,
+    toggleOrder,
+    freeView,
+    widthOf,
+    slidingViews,
+    stopSliding,
+    toggleSideView,
+    togglePin,
+    movePinned,
+    moveToggle,
+    showChanges
+  } = useSidePane(activeKeyRef, setActiveKey);
+  /** A pinned column moves by its headers, among the pinned ones. */
+  const columnDrag = useDragReorder({
+    dragType: COLUMN_DRAG_TYPE,
+    count: pinnedOrder.length,
+    payloadOf: (index) => pinnedOrder[index],
+    indexOf: (view) => pinnedOrder.indexOf(view as SideView),
+    onMove: movePinned,
+    axis: "horizontal"
+  });
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -321,12 +348,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
   /** Git and files need a repository or worktree in front; without one the projects stand in. */
   const shownViews: ReadonlySet<SideView> = activeResolved ? openViews : new Set(openViews.size > 0 ? ["projects"] : []);
-  /** The pinned columns in the toggles' order, then one sliding in, then the free one, then those
+  /** The pinned columns in the user's order, then one sliding in, then the free one, then those
    *  in, unseen at width 0. A column sliding in stays where it stood until its slide ends: moving
    *  its node would cancel the transition and snap it shut. */
   const slidingIn = (view: SideView) => !shownViews.has(view) && slidingViews.has(view);
   const sideOrder = [
-    ...SIDE_VIEWS.filter((view) => shownViews.has(view) && pinnedViews.has(view)),
+    ...pinnedOrder.filter((view) => shownViews.has(view)),
     ...SIDE_VIEWS.filter(slidingIn),
     ...SIDE_VIEWS.filter((view) => shownViews.has(view) && !pinnedViews.has(view)),
     ...SIDE_VIEWS.filter((view) => !shownViews.has(view) && !slidingIn(view))
@@ -375,15 +402,24 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       <div className="body">
         {/* A column per side view, each in the DOM at width 0 while in (so a slide has a box to
             transition) and mounted throughout, so hiding one keeps selection, filter, open folders
-            and a running action's bar. Pinned ones stand first, in the toggles' order. Git and
+            and a running action's bar. Pinned ones stand first, in the user's order. Git and
             files need a repository or worktree in front; without one the projects stand in. */}
         {sideOrder.map((view) => {
           const [width, setWidth] = widthOf(view);
           const shown = shownViews.has(view);
+          /** A pinned column out drags by its headers (`SectionHandle`): a row inside has a drag of its own. */
+          const pinIndex = shown ? pinnedOrder.indexOf(view) : -1;
           return (
             <Fragment key={view}>
               <div
-                className={`side-pane${slidingViews.has(view) ? " sliding" : ""}`}
+                {...(pinIndex >= 0 ? columnDrag.targetProps(pinIndex) : undefined)}
+                className={[
+                  "side-pane",
+                  slidingViews.has(view) && "sliding",
+                  ...(pinIndex >= 0 ? columnDrag.rowClasses(pinIndex) : [])
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 style={{ width: shown ? width : 0 }}
                 onTransitionEnd={() => stopSliding(view)}
                 onContextMenu={(event) => {
@@ -392,62 +428,64 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                   }
                 }}
               >
-                {view === "projects" && (
-                  <div className={`side-pane-content${shown ? "" : " hidden"}`}>
-                    <ProjectList
-                      projects={projects}
-                      resolvedRefs={resolvedRefs}
-                      activeKey={activeKey}
+                <SectionHandle.Provider value={pinIndex >= 0 ? columnDrag.handleProps(pinIndex) : undefined}>
+                  {view === "projects" && (
+                    <div className={`side-pane-content${shown ? "" : " hidden"}`}>
+                      <ProjectList
+                        projects={projects}
+                        resolvedRefs={resolvedRefs}
+                        activeKey={activeKey}
+                        onSelect={select}
+                        onRemove={removeProject}
+                        onReorder={reorderProjects}
+                        onAdd={openAdd}
+                        heads={heads}
+                        marks={marks}
+                        sandboxed={sandboxed}
+                        onShowChanges={showChanges}
+                        onOpenTerminal={openTerminal}
+                        onShowBusy={showBusy}
+                        onShowFinished={showFinished}
+                        onShowWaiting={showWaiting}
+                        onSbxSettings={openSbxSettings}
+                        runIn={runIn}
+                        gitBusy={projectListBusy}
+                        worktreesSupported={worktreesSupported}
+                      />
+                      <Sash
+                        orientation="horizontal"
+                        size={commandsHeight}
+                        min={MIN_PANE_HEIGHT}
+                        minOther={MIN_PANE_HEIGHT}
+                        reverse
+                        onResize={setCommandsHeight}
+                      />
+                      <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
+                    </div>
+                  )}
+                  {view === "files" && activeResolved && (
+                    <FilesPane
+                      resolved={activeResolved}
+                      shown={shown}
+                      openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
+                      onOpenFile={openEditor}
+                      searchHeight={fileSearchHeight}
+                      onSearchHeight={setFileSearchHeight}
+                    />
+                  )}
+                  {view === "git" && activeResolved && (
+                    <GitPane
+                      resolved={activeResolved}
+                      state={activeState}
+                      shown={shown}
+                      branch={activeBranch}
+                      treeHeight={branchTreeHeight}
+                      onTreeHeight={setBranchTreeHeight}
+                      onOpenDiff={openActiveDiff}
                       onSelect={select}
-                      onRemove={removeProject}
-                      onReorder={reorderProjects}
-                      onAdd={openAdd}
-                      heads={heads}
-                      marks={marks}
-                      sandboxed={sandboxed}
-                      onShowChanges={showChanges}
-                      onOpenTerminal={openTerminal}
-                      onShowBusy={showBusy}
-                      onShowFinished={showFinished}
-                      onShowWaiting={showWaiting}
-                      onSbxSettings={openSbxSettings}
-                      runIn={runIn}
-                      gitBusy={projectListBusy}
-                      worktreesSupported={worktreesSupported}
                     />
-                    <Sash
-                      orientation="horizontal"
-                      size={commandsHeight}
-                      min={MIN_PANE_HEIGHT}
-                      minOther={MIN_PANE_HEIGHT}
-                      reverse
-                      onResize={setCommandsHeight}
-                    />
-                    <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
-                  </div>
-                )}
-                {view === "files" && activeResolved && (
-                  <FilesPane
-                    resolved={activeResolved}
-                    shown={shown}
-                    openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
-                    onOpenFile={openEditor}
-                    searchHeight={fileSearchHeight}
-                    onSearchHeight={setFileSearchHeight}
-                  />
-                )}
-                {view === "git" && activeResolved && (
-                  <GitPane
-                    resolved={activeResolved}
-                    state={activeState}
-                    shown={shown}
-                    branch={activeBranch}
-                    treeHeight={branchTreeHeight}
-                    onTreeHeight={setBranchTreeHeight}
-                    onOpenDiff={openActiveDiff}
-                    onSelect={select}
-                  />
-                )}
+                  )}
+                  </SectionHandle.Provider>
               </div>
               {shown && (
                 <Sash
@@ -475,8 +513,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               tabs={stripTabs[resolved.key] ?? NO_TABS}
               visible={resolved.key === activeKey}
               freeView={freeView}
-              pinnedViews={pinnedViews}
+              toggleOrder={toggleOrder}
               onToggleSideView={toggleSideView}
+              onMoveToggle={moveToggle}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={starting[resolved.key] === true && (marks[resolved.key]?.starting ?? NO_IDS).length === 0}

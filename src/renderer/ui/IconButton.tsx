@@ -1,9 +1,9 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
 /**
  * An action as an icon (`.icon-button`), its `title` the words. `active` marks a toggle that is on;
  * `isolated` keeps the click from the row it sits in, which acts on a click of its own (selects,
- * activates).
+ * activates). Anything else, a drag's handlers say, goes onto the button as it is.
  */
 export function IconButton({
   title,
@@ -12,8 +12,9 @@ export function IconButton({
   active,
   isolated,
   className,
-  children
-}: {
+  children,
+  ...rest
+}: Omit<HTMLAttributes<HTMLButtonElement>, "onClick"> & {
   title: string;
   onClick: () => void;
   disabled?: boolean;
@@ -29,6 +30,7 @@ export function IconButton({
       className={["icon-button", active && "active", className].filter(Boolean).join(" ")}
       title={title}
       disabled={disabled}
+      {...rest}
       onClick={(event) => {
         if (isolated) {
           event.stopPropagation();

@@ -14,7 +14,7 @@ import {
 import { PLATFORM } from "../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { confirmed, filled, prompt, singleField } from "../ui/Dialog";
-import { reorder, useDragReorder } from "./drag-reorder";
+import { reorder, useDragReorder } from "../ui/drag-reorder";
 import { Section } from "../ui/Section";
 import { SessionMark } from "../ui/SessionMark";
 import { IconButton } from "../ui/IconButton";

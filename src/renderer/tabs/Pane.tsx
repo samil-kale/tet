@@ -18,6 +18,7 @@ import { isEditorTab, isEditorTabId, type PaneTab } from "../editor/editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
+import { useDragReorder } from "../ui/drag-reorder";
 import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { SessionMark } from "../ui/SessionMark";
 import { ProgressBar } from "../ui/ProgressBar";
@@ -44,17 +45,51 @@ function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
 export interface PaneChrome {
   /** The strip toggles the free view alone; a pinned one is out, its toggle gone. */
   freeView: SideView | null;
-  pinnedViews: ReadonlySet<SideView>;
+  /** The views not pinned, in the user's order. */
+  toggleOrder: readonly SideView[];
   onToggleSideView: (view: SideView) => void;
+  /** A toggle dragged from `from` to insertion index `to` of `toggleOrder`. */
+  onMoveToggle: (from: number, to: number) => void;
   onOpenSettings: () => void;
 }
 
-/** The side views' toggles, in the columns' order (`SIDE_VIEWS`). */
-const SIDE_TOGGLES: { view: SideView; noun: string; Icon: (props: IconProps) => React.ReactNode }[] = [
-  { view: "projects", noun: "projects", Icon: ProjectsIcon },
-  { view: "git", noun: "repository", Icon: GitIcon },
-  { view: "files", noun: "files", Icon: FilesIcon }
-];
+/** The side views' toggles, drawn in `toggleOrder`. */
+const SIDE_TOGGLES: Record<SideView, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
+  projects: { noun: "projects", Icon: ProjectsIcon },
+  git: { noun: "repository", Icon: GitIcon },
+  files: { noun: "files", Icon: FilesIcon }
+};
+
+/** A toggle's drag, its own so no tab strip or terminal takes the drop. */
+const TOGGLE_DRAG_TYPE = "application/x-tet-side-toggle";
+
+/** The strip's toggles, each dragged elsewhere among them. */
+function SideToggles({ chrome }: { chrome: PaneChrome }) {
+  const { toggleOrder, freeView, onToggleSideView, onMoveToggle } = chrome;
+  const { rowProps, rowClasses } = useDragReorder({
+    dragType: TOGGLE_DRAG_TYPE,
+    count: toggleOrder.length,
+    payloadOf: (index) => toggleOrder[index],
+    indexOf: (view) => toggleOrder.indexOf(view as SideView),
+    onMove: onMoveToggle,
+    axis: "horizontal"
+  });
+  return toggleOrder.map((view, index) => {
+    const { noun, Icon } = SIDE_TOGGLES[view];
+    return (
+      <IconButton
+        key={view}
+        {...rowProps(index)}
+        className={["side-toggle", ...rowClasses(index)].join(" ")}
+        active={freeView === view}
+        onClick={() => onToggleSideView(view)}
+        title={`${freeView === view ? "Hide" : "Show"} the ${noun}`}
+      >
+        <Icon />
+      </IconButton>
+    );
+  });
+}
 
 interface PaneProps {
   at: ProjectRef;
@@ -403,16 +438,7 @@ export const Pane = memo(function Pane({
         {/* Window chrome, on pane "a" alone. */}
         {chrome && (
           <div className="tab-strip-actions">
-            {SIDE_TOGGLES.filter(({ view }) => !chrome.pinnedViews.has(view)).map(({ view, noun, Icon }) => (
-              <IconButton
-                key={view}
-                active={chrome.freeView === view}
-                onClick={() => chrome.onToggleSideView(view)}
-                title={`${chrome.freeView === view ? "Hide" : "Show"} the ${noun}`}
-              >
-                <Icon />
-              </IconButton>
-            ))}
+            <SideToggles chrome={chrome} />
             <IconButton title="Settings" onClick={chrome.onOpenSettings}>
               <GearIcon />
             </IconButton>

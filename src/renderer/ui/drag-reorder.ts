@@ -1,8 +1,9 @@
 import { useState, type DragEvent, type HTMLAttributes } from "react";
 
-/** Drag-reordering, shared by both sidebar lists. Each list supplies its own drag type (a row
- *  dragged over a terminal must not be pasted into it, and no other list may take the drop), its
- *  payload (an id, or the position where an entry can appear twice), and the move itself. */
+/** Drag-reordering, shared by the sidebar lists, the side pane's columns and the strip's toggles.
+ *  Each supplies its own drag type (a row dragged over a terminal must not be pasted into it, and
+ *  no other list may take the drop), its payload (an id, or the position where an entry can appear
+ *  twice), and the move itself. */
 interface DragReorderOptions {
   /** This list's own MIME type, e.g. "application/x-tet-project". */
   dragType: string;
@@ -14,16 +15,23 @@ interface DragReorderOptions {
   indexOf: (payload: string) => number;
   /** The row at `from` goes to insertion index `to`. See `reorder`. */
   onMove: (from: number, to: number) => void;
+  /** Rows stacked top to bottom (the default) or side by side, left to right. */
+  axis?: "vertical" | "horizontal";
 }
 
-type RowElement = HTMLDivElement;
+/** Any element: a row, a column, a button. */
+type RowElement = HTMLElement;
 
 interface DragReorder {
-  /** Spread onto each row, with its index. */
+  /** Spread onto each row, with its index: `handleProps` and `targetProps` on one element. */
   rowProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
+  /** What starts the row's drag, where that is a part of it (a column's headers). */
+  handleProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
+  /** What takes the drop: the row's whole box. */
+  targetProps: (index: number) => HTMLAttributes<RowElement>;
   /** Spread onto the rows' container: the empty space below the last row is "the end". */
   listProps: HTMLAttributes<RowElement>;
-  /** The row's drag classes: "dragging", "drop-above", "drop-below". */
+  /** The row's drag classes: "dragging", "drop-before", "drop-after". */
   rowClasses: (index: number) => string[];
 }
 
@@ -35,16 +43,25 @@ export function reorder<T>(items: readonly T[], from: number, to: number): T[] {
   return moved;
 }
 
-export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: DragReorderOptions): DragReorder {
+export function useDragReorder({
+  dragType,
+  count,
+  payloadOf,
+  indexOf,
+  onMove,
+  axis = "vertical"
+}: DragReorderOptions): DragReorder {
   const [dragged, setDragged] = useState<number | null>(null);
   /** The insertion index the dragged row would take. */
   const [dropAt, setDropAt] = useState<number | null>(null);
 
-  /** Below a row once the pointer is past its middle. The drawn line and the drop both use this,
+  /** After a row once the pointer is past its middle. The drawn line and the drop both use this,
    *  so they cannot disagree. */
   const insertionIndex = (event: DragEvent<RowElement>, index: number): number => {
     const box = event.currentTarget.getBoundingClientRect();
-    return event.clientY < box.top + box.height / 2 ? index : index + 1;
+    const before =
+      axis === "vertical" ? event.clientY < box.top + box.height / 2 : event.clientX < box.left + box.width / 2;
+    return before ? index : index + 1;
   };
 
   const end = (): void => {
@@ -61,13 +78,17 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
     }
   };
 
-  const rowProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
+  const handleProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
     draggable: true,
     onDragStart: (event) => {
       event.dataTransfer.setData(dragType, payloadOf(index));
       event.dataTransfer.effectAllowed = "move";
       setDragged(index);
     },
+    onDragEnd: end
+  });
+
+  const targetProps = (index: number): HTMLAttributes<RowElement> => ({
     onDragOver: (event) => {
       // Read off the drag, not state: it also rejects a file dragged in from outside.
       if (!event.dataTransfer.types.includes(dragType)) {
@@ -87,8 +108,12 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       event.preventDefault();
       // From the event: the dragover state only draws the line, and a drop must not wait on it.
       move(event.dataTransfer.getData(dragType), insertionIndex(event, index));
-    },
-    onDragEnd: end
+    }
+  });
+
+  const rowProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
+    ...targetProps(index),
+    ...handleProps(index)
   });
 
   /** The empty space below the last row. Row drags bubble here too, and are left to the row. */
@@ -118,14 +143,14 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       classes.push("dragging");
     }
     if (dropAt === index) {
-      classes.push("drop-above");
+      classes.push("drop-before");
     }
     // The end of the list has no row, so the last row draws that line.
     if (dropAt === count && index === count - 1) {
-      classes.push("drop-below");
+      classes.push("drop-after");
     }
     return classes;
   };
 
-  return { rowProps, listProps, rowClasses };
+  return { rowProps, handleProps, targetProps, listProps, rowClasses };
 }

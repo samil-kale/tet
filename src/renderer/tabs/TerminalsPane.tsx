@@ -61,8 +61,9 @@ interface TerminalsPaneProps {
   visible: boolean;
   /** For the strip's toggles (`PaneChrome`). */
   freeView: SideView | null;
-  pinnedViews: ReadonlySet<SideView>;
+  toggleOrder: readonly SideView[];
   onToggleSideView: (view: SideView) => void;
+  onMoveToggle: (from: number, to: number) => void;
   agents: AgentInfo[];
   /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
@@ -87,8 +88,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   tabs,
   visible,
   freeView,
-  pinnedViews,
+  toggleOrder,
   onToggleSideView,
+  onMoveToggle,
   agents,
   externalBusy,
   onCloseEditors,
@@ -154,8 +156,8 @@ export const TerminalsPane = memo(function TerminalsPane({
   }, [layout.preset, resetDividerFractions]);
 
   const chrome = useMemo<PaneChrome>(
-    () => ({ freeView, pinnedViews, onToggleSideView, onOpenSettings }),
-    [freeView, pinnedViews, onToggleSideView, onOpenSettings]
+    () => ({ freeView, toggleOrder, onToggleSideView, onMoveToggle, onOpenSettings }),
+    [freeView, toggleOrder, onToggleSideView, onMoveToggle, onOpenSettings]
   );
   const onActivate = useCallback(
     (tabId: string, paneId: PaneId) => onActivateTab(resolved.key, tabId, paneId),

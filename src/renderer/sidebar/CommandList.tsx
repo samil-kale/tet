@@ -6,7 +6,7 @@ import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { notifying } from "../git/run-action";
 import { confirmed, filled, prompt, refusal, type PromptOptions } from "../ui/Dialog";
 import { ColorField, TextField } from "../ui/Field";
-import { reorder, useDragReorder } from "./drag-reorder";
+import { reorder, useDragReorder } from "../ui/drag-reorder";
 import { IconButton } from "../ui/IconButton";
 import { PlayIcon, PlusIcon } from "../ui/icons";
 import { Section } from "../ui/Section";

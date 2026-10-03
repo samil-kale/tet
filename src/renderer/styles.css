@@ -478,44 +478,83 @@ textarea:focus,
   padding-left: 30px;
 }
 
-/* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
+/* Being dragged; it stays in place until the drop. A project moves with its worktrees, a pinned
+   column by its headers. */
 .project-group.dragging,
-.command-item.dragging {
+.command-item.dragging,
+.side-pane.dragging,
+.side-toggle.dragging {
   opacity: 0.5;
 }
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
-.command-item.drop-above {
+.command-item.drop-before {
   box-shadow: inset 0 1px 0 var(--vscode-focusBorder);
 }
 
-.command-item.drop-below {
+.command-item.drop-after {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
-/* A group's line is drawn over its rows, whose hover and selection would paint over a shadow. */
-.project-group {
+/* A group's, a column's and a toggle's line is drawn over what it holds, whose hover and
+   selection would paint over a shadow: across a group, down a column or a toggle. */
+.project-group,
+.side-pane,
+.side-toggle {
   position: relative;
 }
 
-.project-group.drop-above::before,
-.project-group.drop-below::after {
+.project-group.drop-before::before,
+.side-pane.drop-before::before,
+.side-toggle.drop-before::before,
+.project-group.drop-after::after,
+.side-pane.drop-after::after,
+.side-toggle.drop-after::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
   background: var(--vscode-focusBorder);
   pointer-events: none;
   z-index: 1;
 }
 
-.project-group.drop-above::before {
+.project-group.drop-before::before,
+.project-group.drop-after::after {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.project-group.drop-before::before {
   top: 0;
 }
 
-.project-group.drop-below::after {
+.project-group.drop-after::after {
   bottom: 0;
+}
+
+.side-pane.drop-before::before,
+.side-toggle.drop-before::before,
+.side-pane.drop-after::after,
+.side-toggle.drop-after::after {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+/* 2px: at the window's left edge a 1px line is lost. */
+.side-pane.drop-before::before,
+.side-pane.drop-after::after {
+  width: 2px;
+}
+
+.side-pane.drop-before::before,
+.side-toggle.drop-before::before {
+  left: 0;
+}
+
+.side-pane.drop-after::after,
+.side-toggle.drop-after::after {
+  right: 0;
 }
 
 /* Takes the leftover width, so the row's buttons stay at its right edge. */
@@ -1261,6 +1300,7 @@ textarea:focus,
 .side-pane.sliding {
   transition: width 0.15s ease;
 }
+
 
 .side-pane-content {
   display: flex;
