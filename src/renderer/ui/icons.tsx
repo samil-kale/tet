@@ -192,8 +192,8 @@ export function CheckIcon(props: IconProps) {
   return <Lucide {...props} icon={Check} extent={15.3} cy={11.5} />;
 }
 
-/** Lucide's `shield` — a project sandboxed by sbx. Tall, so the long-side cap. Full size: it
- *  stands beside the session marks in the project row. */
+/** Lucide's `shield` — a project, or a tab, sandboxed by sbx. Tall, so the long-side cap. Full
+ *  size: it stands beside the session marks in the project row; a tab's badge sizes its own box. */
 export function ShieldIcon(props: IconProps) {
   return <Lucide {...props} icon={Shield} extent={20.23} />;
 }

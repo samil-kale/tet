@@ -1056,6 +1056,48 @@ textarea:focus,
   opacity: 0.8;
 }
 
+/* Holds the tab's icon or mark and, on a sandboxed tab, the badge over its lower right. */
+.tab-icon-box {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+/* A hollow outline in the tab's colour, dimmed to sit back from the icon, set off from it by a ring
+   in the tab's own background drawn beneath. ShieldIcon's box draws the shield 9px tall at 11.4px;
+   strokes are in its viewBox's units, 2.22 per px: the outline 1.1px, the ring 1.5px beyond it on
+   each side. */
+.tab-badge,
+.tab-badge-ring {
+  position: absolute;
+  right: -4.2px;
+  bottom: -4.2px;
+  width: 11.4px;
+  height: 11.4px;
+  overflow: visible;
+  fill: var(--vscode-tab-inactiveBackground);
+}
+
+.tab-badge-ring {
+  stroke: var(--vscode-tab-inactiveBackground);
+  stroke-width: 9.1;
+}
+
+.tab-badge {
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-opacity: 0.6;
+}
+
+.tab.active .tab-badge,
+.tab.active .tab-badge-ring {
+  fill: var(--vscode-tab-activeBackground);
+}
+
+.tab.active .tab-badge-ring {
+  stroke: var(--vscode-tab-activeBackground);
+}
+
 .new-tab {
   display: flex;
   align-items: center;

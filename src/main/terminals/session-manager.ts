@@ -180,13 +180,17 @@ export class TabSessionManager {
   ) {}
 
   snapshot(): TerminalDescriptor[] {
-    return this.tabs.map((tab) => toDescriptor(tab, this.indicators.has(tab.tabId)));
+    return this.tabs.map((tab) => this.descriptorOf(tab));
+  }
+
+  private descriptorOf(tab: TabState): TerminalDescriptor {
+    return toDescriptor(tab, this.indicators.has(tab.tabId), this.placeOf(tab).sandbox !== undefined);
   }
 
   /** `snapshot` plus what the window never gets, for `tet-ctl tabs-list`. */
   inspect(): InspectedTab[] {
     return this.tabs.map((tab) => ({
-      ...toDescriptor(tab, this.indicators.has(tab.tabId)),
+      ...this.descriptorOf(tab),
       reportedSessionId: tab.reportedSessionId,
       sandbox: tab.sandbox,
       sandboxOnly: tab.sandboxOnly
@@ -571,7 +575,7 @@ export class TabSessionManager {
 
     this.postTabs();
     // Starting begins with the first fit.
-    return toDescriptor(tab, false);
+    return this.descriptorOf(tab);
   }
 
   handleResize(tabId: string, cols: number, rows: number): void {
@@ -808,7 +812,13 @@ export class TabSessionManager {
     // Given once: a restart resumes the session the prompt began.
     tab.initialPrompt = undefined;
     tab.handoff = undefined;
+    const moved = this.placeOf(tab).sandbox !== place.sandbox;
     tab.place = place;
+    // The status alone posts no tabs, and the window's badge follows where the tab runs
+    // (TerminalDescriptor.sandboxed).
+    if (moved) {
+      this.postTabs();
+    }
     tab.handoffDir = launch.handoffDir ?? tab.handoffDir;
 
     const session = new TerminalSession(

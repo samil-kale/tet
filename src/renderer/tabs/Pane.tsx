@@ -18,7 +18,7 @@ import { isEditorTab, isEditorTabId, type PaneTab } from "../editor/editor-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
-import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, type IconProps } from "../ui/icons";
+import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { SessionMark } from "../ui/SessionMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -448,23 +448,32 @@ export const Pane = memo(function Pane({
               onContextMenu={(event) => tabMenu.open(event, tab.tabId)}
               title={tabTooltip(tab)}
             >
-              {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
-                  > finished ("Turns and session marks" in AGENTS.md). */}
-              {isEditorTab(tab) ? (
-                <FilesIcon className="tab-icon" />
-              ) : tab.status === "missing" || tab.status === "error" ? (
-                <SessionMark kind="error" className="tab-icon" />
-              ) : waitingTabIds.includes(tab.tabId) ? (
-                <SessionMark kind="waiting" className="tab-icon" />
-              ) : isWorking(tab) ? (
-                // A question hidden on the tab in front (left out of `waitingTabIds`) gets no
-                // spinner: a session stopped on a question is not working.
-                <SessionMark kind="working" className="tab-icon" />
-              ) : finishedTabIds.includes(tab.tabId) ? (
-                <SessionMark kind="finished" className="tab-icon" />
-              ) : (
-                <AgentIcon agentId={tab.agentId} className="tab-icon" />
-              )}
+              <span className="tab-icon-box">
+                {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
+                    > finished ("Turns and session marks" in AGENTS.md). */}
+                {isEditorTab(tab) ? (
+                  <FilesIcon className="tab-icon" />
+                ) : tab.status === "missing" || tab.status === "error" ? (
+                  <SessionMark kind="error" className="tab-icon" />
+                ) : waitingTabIds.includes(tab.tabId) ? (
+                  <SessionMark kind="waiting" className="tab-icon" />
+                ) : isWorking(tab) ? (
+                  // A question hidden on the tab in front (left out of `waitingTabIds`) gets no
+                  // spinner: a session stopped on a question is not working.
+                  <SessionMark kind="working" className="tab-icon" />
+                ) : finishedTabIds.includes(tab.tabId) ? (
+                  <SessionMark kind="finished" className="tab-icon" />
+                ) : (
+                  <AgentIcon agentId={tab.agentId} className="tab-icon" />
+                )}
+                {/* Over the mark too: where the tab runs outlasts its turn. */}
+                {!isEditorTab(tab) && tab.sandboxed && (
+                  <>
+                    <ShieldIcon className="tab-badge-ring" />
+                    <ShieldIcon className="tab-badge" />
+                  </>
+                )}
+              </span>
               {isEditorTab(tab) ? (
                 <EditorTabLabel tabId={tab.tabId} label={tabLabel(tab)} />
               ) : (

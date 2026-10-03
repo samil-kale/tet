@@ -111,8 +111,8 @@ export function answersQuestion(data: string): boolean {
   return /\S/.test(data);
 }
 
-/** `starting` comes from the caller's `indicators`. */
-export function toDescriptor(tab: TabState, starting: boolean): TerminalDescriptor {
+/** `starting` comes from the caller's `indicators`, `sandboxed` from its `placeOf`. */
+export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean): TerminalDescriptor {
   const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
   return {
     tabId,
@@ -125,6 +125,7 @@ export function toDescriptor(tab: TabState, starting: boolean): TerminalDescript
     busy,
     waitingAt,
     starting,
+    sandboxed,
     sessionId,
     savedCommand: isSavedCommandTab(tab),
     command

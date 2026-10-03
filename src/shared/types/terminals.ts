@@ -45,6 +45,8 @@ export interface TerminalDescriptor {
   /** Stopped mid-turn on an unanswered question, ms since epoch. Cleared like `finishedAt` and by
    *  either end of a turn. Not a shade of `busy`: such a session is *not* working. */
   waitingAt?: number;
+  /** Runs in its sbx sandbox: where its latest start ran it, until then where its session lives. */
+  sandboxed?: boolean;
   /** A saved command's tab; only these offer Restart. */
   savedCommand?: boolean;
   /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
