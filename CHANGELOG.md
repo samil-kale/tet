@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.16.3 (2026-10-03)
+
+- **Git settings.** A new Git tab in the settings decides how git's checkboxes start: new changes
+  checked for commit, "Also push", and deleting a branch, tag or worktree on the remote too. Push
+  starts unchecked when there is no remote.
+- **Sandboxed tabs marked.** A tab running in a sandbox shows a shield badge over its icon.
+
 ## 0.16.2 (2026-10-03)
 
 - **Faster updates.** An update is prepared while tet runs; quitting only puts it in place.
