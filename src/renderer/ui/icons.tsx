@@ -8,6 +8,7 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   CircleAlert,
+  CircleQuestionMark,
   CircleX,
   Columns2,
   FileBraces,
@@ -149,9 +150,10 @@ export function Svg({
 }
 
 /**
- * A lucide-react icon, cropped like `Svg`: its native 24-unit grid, centred where most of them are,
- * and its stroke of 2. Only `extent` differs from one to the next — an icon off that centre or
- * drawn heavier says so. The extents hold for the paths lucide-react ships.
+ * A lucide-react icon as Lucide draws it: its whole 24-unit grid and its stroke of 2, filling the
+ * box. One that must read otherwise — leading a row, or smaller beside its neighbours — is cropped
+ * like `Svg` instead: an `extent`, centred where most of them are unless `cx`/`cy` say otherwise,
+ * and a heavier `stroke` if it says so. The extents hold for the paths lucide-react ships.
  */
 function Lucide({
   icon: Icon,
@@ -162,13 +164,16 @@ function Lucide({
   stroke = 2
 }: IconProps & {
   icon: LucideIcon;
-  extent: number;
+  extent?: number;
   cx?: number;
   cy?: number;
   stroke?: number;
 }) {
+  // `size` is the fallback only, as `Svg`'s width and height; a `viewBox` overrides lucide's own.
+  if (extent === undefined) {
+    return <Icon className={className} size={14} />;
+  }
   const { viewBox, strokeWidth } = geometry(extent, cx, cy, 24, stroke);
-  // `size` is the fallback only, as `Svg`'s width and height; `viewBox` overrides lucide's own.
   return <Icon className={className} size={14} viewBox={viewBox} strokeWidth={strokeWidth} />;
 }
 
@@ -184,29 +189,27 @@ export function CloseIcon(props: IconProps) {
 
 /** Lucide's `log-in` — sign in with an SBX access token. */
 export function LogInIcon(props: IconProps) {
-  return <Lucide {...props} icon={LogIn} extent={20} />;
+  return <Lucide {...props} icon={LogIn} />;
 }
 
 /** Lucide's `check` — the SBX access token signed in with. */
 export function CheckIcon(props: IconProps) {
-  return <Lucide {...props} icon={Check} extent={15.3} cy={11.5} />;
+  return <Lucide {...props} icon={Check} />;
 }
 
-/** Lucide's `shield` — a project, or a tab, sandboxed by sbx. Tall, so the long-side cap. Full
- *  size: it stands beside the session marks in the project row; a tab's badge sizes its own box. */
+/** Lucide's `shield` — a project, or a tab, sandboxed by sbx. A tab's badge sizes its own box. */
 export function ShieldIcon(props: IconProps) {
-  return <Lucide {...props} icon={Shield} extent={20.23} />;
+  return <Lucide {...props} icon={Shield} />;
 }
 
-/** Lucide's `landmark` — sbx's policy governed by an organization. Tall, so the long-side cap. */
+/** Lucide's `landmark` — sbx's policy governed by an organization. */
 export function LandmarkIcon(props: IconProps) {
-  return <Lucide {...props} icon={Landmark} extent={20.23} />;
+  return <Lucide {...props} icon={Landmark} />;
 }
 
-/** Lucide's `file-diff` — the project row's mark for uncommitted changes. Tall, so the long-side
- *  cap. */
+/** Lucide's `file-diff` — the project row's mark for uncommitted changes. */
 export function ChangesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileDiff} extent={20.23} />;
+  return <Lucide {...props} icon={FileDiff} />;
 }
 
 const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
@@ -220,28 +223,27 @@ const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
  * shape carries the meaning as well as the color.
  */
 export function SeverityIcon({ severity, ...props }: IconProps & { severity: NoticeSeverity }) {
-  return <Lucide {...props} icon={SEVERITY_ICONS[severity]} extent={20.32} />;
+  return <Lucide {...props} icon={SEVERITY_ICONS[severity]} />;
 }
 
 /** Lucide's `git-branch`. */
 export function BranchIcon(props: IconProps) {
-  return <Lucide {...props} icon={GitBranch} extent={20} />;
+  return <Lucide {...props} icon={GitBranch} />;
 }
 
-/** Lucide's `folder-code` — the projects lane. Drawn a pixel over the
- *  shared size, past the long-side cap, so the folder reads beside the strip's other toggles. */
+/** Lucide's `folder-code` — the projects lane. */
 export function ProjectsIcon(props: IconProps) {
-  return <Lucide {...props} icon={FolderCode} extent={18.66} cy={11.5} />;
+  return <Lucide {...props} icon={FolderCode} />;
 }
 
 /** Lucide's `folder-git-2` — a worktree. */
 export function WorktreeIcon(props: IconProps) {
-  return <Lucide {...props} icon={FolderGit2} extent={21.49} cy={12.5} />;
+  return <Lucide {...props} icon={FolderGit2} />;
 }
 
 /**
- * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. Drawn three pixels
- * over the shared size, since a diamond inks half its bounding box; larger still would clip the tips.
+ * Git's mark as a hollow outline (`git-alt`): one filled path on a 32-unit grid. Nearly the whole
+ * box, as a diamond inks half its bounding box; larger would clip the tips.
  */
 export function GitIcon(props: IconProps) {
   return (
@@ -256,40 +258,38 @@ export function GitIcon(props: IconProps) {
 
 /** Lucide's `search`. */
 export function SearchIcon(props: IconProps) {
-  return <Lucide {...props} icon={Search} extent={20} />;
+  return <Lucide {...props} icon={Search} />;
 }
 
-/** Lucide's `case-sensitive` — the search field's "Match Case", VS Code's `Aa`. Wide and flat, so
- *  the long-side cap: the geometric mean would draw it past the box. */
+/** Lucide's `case-sensitive` — the search field's "Match Case", VS Code's `Aa`. */
 export function CaseSensitiveIcon(props: IconProps) {
-  return <Lucide {...props} icon={CaseSensitive} extent={20.23} cy={11} />;
+  return <Lucide {...props} icon={CaseSensitive} />;
 }
 
-/** Lucide's `whole-word` — "Match Whole Word", VS Code's underlined `ab`. The long-side cap again,
- *  so it reads level with the `Aa` beside it. */
+/** Lucide's `whole-word` — "Match Whole Word", VS Code's underlined `ab`. */
 export function WholeWordIcon(props: IconProps) {
-  return <Lucide {...props} icon={WholeWord} extent={20.23} cy={13} />;
+  return <Lucide {...props} icon={WholeWord} />;
 }
 
 /** Lucide's `regex` — "Use Regular Expression", VS Code's `.*`. */
 export function RegexIcon(props: IconProps) {
-  return <Lucide {...props} icon={Regex} extent={20.16} cx={12.17} />;
+  return <Lucide {...props} icon={Regex} />;
 }
 
 /** Lucide's `chevron-down` or `chevron-right`. */
 export function ChevronIcon({ expanded, ...props }: IconProps & { expanded: boolean }) {
-  return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} extent={14.13} />;
+  return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} />;
 }
 
 /** Lucide's `loader-circle`, spun (`spinning`) about its centre as a session's working mark
  *  (`SessionMark`). */
 export function SpinnerIcon(props: IconProps) {
-  return <Lucide {...props} icon={LoaderCircle} extent={19.54} />;
+  return <Lucide {...props} icon={LoaderCircle} />;
 }
 
 /** Lucide's `wand` — a model's suggestion. */
 export function SparkleIcon(props: IconProps) {
-  return <Lucide {...props} icon={Wand} extent={21} cx={12.5} cy={11.5} />;
+  return <Lucide {...props} icon={Wand} />;
 }
 
 /** Lucide's `play`, two pixels under like `CloseIcon`. */
@@ -299,51 +299,46 @@ export function PlayIcon(props: IconProps) {
 
 /** Lucide's `tag`. */
 export function TagIcon(props: IconProps) {
-  return <Lucide {...props} icon={Tag} extent={22} />;
+  return <Lucide {...props} icon={Tag} />;
 }
 
-/** Lucide's `git-commit-horizontal`. Wide and flat, so the long-side cap. */
+/** Lucide's `git-commit-horizontal`. */
 export function CommitIcon(props: IconProps) {
-  return <Lucide {...props} icon={GitCommitHorizontal} extent={18.39} />;
+  return <Lucide {...props} icon={GitCommitHorizontal} />;
 }
 
-/** Lucide's `inbox` — a stash. Drawn a pixel over the shared size, past the long-side cap, as
- *  its flat box reads small at it. */
+/** Lucide's `inbox` — a stash. */
 export function StashIcon(props: IconProps) {
-  return <Lucide {...props} icon={Inbox} extent={20.19} cy={11.51} />;
+  return <Lucide {...props} icon={Inbox} />;
 }
 
-/** Lucide's `undo-2` — discard, as IntelliJ's rollback. Square, so the geometric mean. */
+/** Lucide's `undo-2` — discard, as IntelliJ's rollback. */
 export function DiscardIcon(props: IconProps) {
-  return <Lucide {...props} icon={Undo2} extent={18} cy={12.43} />;
+  return <Lucide {...props} icon={Undo2} />;
 }
 
-/** Lucide's `arrow-up`. */
+/** Lucide's `arrow-up`, drawn larger than Lucide's own. */
 export function ArrowUpIcon(props: IconProps) {
-  return <Lucide {...props} icon={ArrowUp} extent={16} />;
+  return <Lucide {...props} icon={ArrowUp} extent={16.7} />;
 }
 
-/** Lucide's `arrow-down`. */
+/** Lucide's `arrow-down`, drawn larger as `arrow-up`. */
 export function ArrowDownIcon(props: IconProps) {
-  return <Lucide {...props} icon={ArrowDown} extent={16} />;
+  return <Lucide {...props} icon={ArrowDown} extent={16.7} />;
 }
 
 /** Lucide's `refresh-cw` — fetch. */
 export function SyncIcon(props: IconProps) {
-  return <Lucide {...props} icon={RefreshCw} extent={21.23} />;
+  return <Lucide {...props} icon={RefreshCw} />;
 }
 
 /**
- * A session stopped on an unanswered question, on its tab and project row. Shares the mark slot
- * with the bubble and the spinner, so it must differ from them at a glance.
+ * Lucide's `circle-question-mark` — a session stopped on an unanswered question, on its tab and
+ * project row. Shares the mark slot with the bubble and the spinner, so it must differ from them at
+ * a glance.
  */
 export function QuestionIcon(props: IconProps) {
-  return (
-    <Svg {...props} extent={9.8} cx={8.05} cy={7.45}>
-      <path d="M5.35 5.5a2.7 2.7 0 1 1 2.7 2.85v1.35" />
-      <circle cx="8.05" cy="12.15" r="0.35" fill="currentColor" stroke="none" />
-    </Svg>
-  );
+  return <Lucide {...props} icon={CircleQuestionMark} />;
 }
 
 /**
@@ -351,89 +346,81 @@ export function QuestionIcon(props: IconProps) {
  * dialog's row or tab (`RowMark`, `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
-  return <Lucide {...props} icon={CircleAlert} extent={20.32} />;
+  return <Lucide {...props} icon={CircleAlert} />;
 }
 
 /** Lucide's `message-square` — a finished turn nobody has seen yet. */
 export function CommentIcon(props: IconProps) {
-  return <Lucide {...props} icon={MessageSquare} extent={21.49} cy={12.5} />;
+  return <Lucide {...props} icon={MessageSquare} />;
 }
 
 /** Lucide's `globe` — a remote. */
 export function RemoteIcon(props: IconProps) {
-  return <Lucide {...props} icon={Globe} extent={20.31} />;
+  return <Lucide {...props} icon={Globe} />;
 }
 
-/** Lucide's `settings`, drawn two pixels over the shared size: a gear is mostly gaps and reads
- *  small beside the git mark. */
+/** Lucide's `settings`. */
 export function GearIcon(props: IconProps) {
-  return <Lucide {...props} icon={Settings} extent={18.12} />;
+  return <Lucide {...props} icon={Settings} />;
 }
 
-/** Lucide's `file-braces` — the files lane. The long-axis cap: the geometric mean would clip the
- *  bottom. */
+/** Lucide's `file-braces` — the files lane. */
 export function FilesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileBraces} extent={20.23} />;
+  return <Lucide {...props} icon={FileBraces} />;
 }
 
-/** The EXPLORER header's "New File...": Lucide's `file-plus`. The long-axis cap: the geometric
- *  mean would clip the bottom. */
+/** The EXPLORER header's "New File...": Lucide's `file-plus`. */
 export function NewFileIcon(props: IconProps) {
-  return <Lucide {...props} icon={FilePlus} extent={20.23} />;
+  return <Lucide {...props} icon={FilePlus} />;
 }
 
-/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`, drawn a pixel over the shared
- *  size like the projects' folder, past the long-side cap. */
+/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`. */
 export function NewFolderIcon(props: IconProps) {
-  return <Lucide {...props} icon={FolderPlus} extent={18.66} cy={11.5} />;
+  return <Lucide {...props} icon={FolderPlus} />;
 }
 
-/** A tree header's "Collapse All", as IntelliJ's: Lucide's `chevrons-down-up`, tall, so the
- *  long-side cap, and drawn a pixel under: at full size its chevrons outweigh the header's other
- *  icons. */
+/** A tree header's "Collapse All", as IntelliJ's: Lucide's `chevrons-down-up`. */
 export function CollapseAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsDownUp} extent={18.42} />;
+  return <Lucide {...props} icon={ChevronsDownUp} />;
 }
 
-/** A tree header's "Expand All", as IntelliJ's: Lucide's `chevrons-up-down`, `chevrons-down-up`'s
- *  box, drawn a little past the long-side cap: its chevrons pointing apart read smaller than
- *  Collapse All's. */
+/** A tree header's "Expand All", as IntelliJ's: Lucide's `chevrons-up-down`, drawn larger than Lucide's
+ *  own. */
 export function ExpandAllIcon(props: IconProps) {
-  return <Lucide {...props} icon={ChevronsUpDown} extent={17.59} />;
+  return <Lucide {...props} icon={ChevronsUpDown} extent={17.38} />;
 }
 
-/** Both files-pane headers' "Clear": Lucide's `list-x`. Wide, so the long-side cap; its drawing
- *  sits a quarter unit left of the grid's centre. */
+/** Both files-pane headers' "Clear": Lucide's `list-x`. */
 export function ClearIcon(props: IconProps) {
-  return <Lucide {...props} icon={ListX} extent={17.93} cx={11.75} />;
+  return <Lucide {...props} icon={ListX} />;
 }
 
-/** LOCAL CHANGES' "View as List": Lucide's `list`. Wide, so the long-side cap. */
+/** LOCAL CHANGES' "View as List": Lucide's `list`. */
 export function ListIcon(props: IconProps) {
-  return <Lucide {...props} icon={List} extent={18.76} />;
+  return <Lucide {...props} icon={List} />;
 }
 
-/** LOCAL CHANGES' "View as Tree": Lucide's `list-tree`, `list`'s box. */
+/** LOCAL CHANGES' "View as Tree": Lucide's `list-tree`. */
 export function ListTreeIcon(props: IconProps) {
-  return <Lucide {...props} icon={ListTree} extent={18.76} />;
+  return <Lucide {...props} icon={ListTree} />;
 }
 
 /** Lucide's `save`. */
 export function SaveIcon(props: IconProps) {
-  return <Lucide {...props} icon={Save} extent={19.02} />;
+  return <Lucide {...props} icon={Save} />;
 }
 
 /** Lucide's `scan-eye` — a Markdown preview. */
 export function ScanEyeIcon(props: IconProps) {
-  return <Lucide {...props} icon={ScanEye} extent={19.23} />;
+  return <Lucide {...props} icon={ScanEye} />;
 }
 
 /** Lucide's `git-compare` — the editor tab's diff toggle. */
 export function CompareIcon(props: IconProps) {
-  return <Lucide {...props} icon={GitCompare} extent={20} />;
+  return <Lucide {...props} icon={GitCompare} />;
 }
 
-/** Lucide's `columns-2`, `save`'s box — the editor tab's side-by-side toggle. */
+/** Lucide's `columns-2` — the editor tab's side-by-side toggle. */
 export function SideBySideIcon(props: IconProps) {
-  return <Lucide {...props} icon={Columns2} extent={20} />;
+  return <Lucide {...props} icon={Columns2} />;
 }
