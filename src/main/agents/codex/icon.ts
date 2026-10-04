@@ -7,7 +7,7 @@ import type { AgentIcon } from "../../../shared/types/agents";
  */
 export const codexIcon: AgentIcon = {
   kind: "stroke",
-  extent: 11.44,
+  extent: 11.33,
   stroke: 1.6,
   shapes: [
     { element: "circle", attributes: { cx: 8, cy: 8, r: 6 } },
