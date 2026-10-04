@@ -15,7 +15,9 @@ was measured, history, dates, version numbers or links. An agent's tested versio
 `install.verifiedVersion` alone.
 
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI —
-classic layout, Dark Modern's palette, tab semantics, theme names; **Monaco** for the editor tab.
+classic layout, Dark Modern's palette, tab semantics, theme names; **IntelliJ** where VS Code has
+no answer or the git lane's tree is concerned — the commit view's checkboxes, tree headers,
+toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor); **Monaco** for the editor tab.
 
 ## Do not restart the app yourself
 
@@ -31,15 +33,13 @@ project's tabs.
   file.
 - `src/main/` is layered: each area imports its own layer's areas it is allowed and every layer
   below, never one above — per area in `eslint.config.mjs` (`MAIN_LAYERS`), bottom first:
-  0. `util/`: helpers of no area — the platform (`host-platform.ts`), starting processes
-     (`process.ts`), a module in a `utilityProcess` of its own (`utility-client.ts`, served by
-     `utility-host.ts`: git and the Explorer's walk and search), logging (`error-log.ts`), reading 
-     `.git` without git (`linked-git-dir.ts`).
-  1. `store/`: what TET keeps and reads back — the open projects (`project-store.ts`), settings,
-     environment variables, `tet.json`, the data folder's layout (`data-root.ts`,
-     `project-dirs.ts`) — and what resolves against it: a repository's or worktree's folder
-     (`resolved-ref.ts`), the saved theme (`theme.ts`), pasted content (`drops.ts`). A store of one
-     area stays in it (`sbx-local.ts`, `providers/accounts.ts`).
+  0. `util/`: helpers of no area — the platform, starting processes, a module in a
+     `utilityProcess` of its own (git, the Explorer's walk and search), logging, reading `.git`
+     without git.
+  1. `store/`: what TET keeps and reads back — projects, settings, environment variables,
+     `tet.json`, the data folder's layout — and what resolves against it: a repository's or
+     worktree's folder, the saved theme, pasted content. A store of one area stays in it
+     (`sbx-local.ts`, `providers/accounts.ts`).
   2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
      everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
      the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
@@ -330,9 +330,7 @@ or a per-line decision is for an agent.
   - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it changes
     happens whole or not at all — and that waits on something outside TET (a browser, an agent, a
     provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
-    (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today:
-    the SBX Settings' setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
-    message, the Add Repository dialog's listing and the Settings dialog's model listing.
+    (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped.
 
   A new run is held unless it meets both conditions; a dialog's Save is always held.
 - **A follow-up question comes after its run** (`runWithFollowUp`): an action answering
@@ -492,14 +490,12 @@ is a wall and **installs nothing**. `process.env.PATH` is rewritten before that 
 ## npm scripts
 
 - `npm run compile`, `npm run typecheck`, `npm run lint`
-- `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: in
-  `main/`, `renderer/` and `shared/` one file per area (`main/sbx.test.ts` tests `src/main/sbx/`),
-  or per seam within one (`main/git.test.ts` and `main/repository.test.ts` for `git/`), a new test
-  going beside what it tests; `e2e/` runs the real thing, `helpers/` serves them all,
-  and `lint.test.ts` holds `eslint.config.mjs`'s rules to what they must let through and refuse.
-  Nothing looks into the window. `e2e/app.test.ts` starts the real app on a throwaway profile
-  (needs a display, `xvfb-run` on Linux); `e2e/agents.test.ts` drives the installed CLIs only with
-  `TET_AGENT_TEST=1` or `TET_SBX_TEST=1`; `e2e/install.test.ts` runs only with
+- `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: one
+  file per area or per seam within one, a new test going beside what it tests; `e2e/` runs the
+  real thing, `helpers/` serves them all, and `lint.test.ts` holds `eslint.config.mjs`'s rules to
+  what they must let through and refuse. Nothing looks into the window. `e2e/app.test.ts` starts
+  the real app on a throwaway profile (needs a display, `xvfb-run` on Linux); `e2e/agents.test.ts`
+  runs only with `TET_AGENT_TEST=1` or `TET_SBX_TEST=1`; `e2e/install.test.ts` only with
   `TET_INSTALL_TEST=1` after `npm run dist` (on Windows it writes shortcuts and the PATH entry for
   the account).
 - `npm start` — typecheck, compile, launch (see "Do not restart the app yourself").
