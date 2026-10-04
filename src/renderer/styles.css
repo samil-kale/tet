@@ -289,8 +289,10 @@ textarea:focus,
   --field-height: 28px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
   --icon-size: 15px;
-  /* An action button's box (.icon-button), and what sits in its place or level with it. */
+  /* An action button's box (.icon-button), and what sits in its place or level with it; the gap
+     between two side by side, as IntelliJ's toolbar buttons with their 2px on either side. */
   --action-size: 22px;
+  --action-gap: 4px;
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
   --small-font-size: 12px;
   --tiny-font-size: 11px;
@@ -441,7 +443,7 @@ textarea:focus,
 .section-header-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--action-gap);
 }
 
 .command-list {
@@ -488,12 +490,14 @@ textarea:focus,
   flex: none;
 }
 
-/* One row shape for both of the projects lane's lists. No gap: the icon buttons ending a row
-   already carry 3.5px around a 15px drawing in a 22px box. */
+/* One row shape for both of the projects lane's lists. The icon buttons ending a row stand apart
+   as everywhere else; the label before them needs no more, the buttons carrying 3.5px around a
+   15px drawing in a 22px box. */
 .project-item,
 .command-item {
   display: flex;
   align-items: center;
+  gap: var(--action-gap);
   padding: 0 6px 0 10px;
   font-size: var(--vscode-font-size);
 }
@@ -710,7 +714,7 @@ textarea:focus,
   position: absolute;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--action-gap);
   right: 4px;
   top: 50%;
   transform: translateY(-50%);
@@ -1086,7 +1090,7 @@ textarea:focus,
 .editor-bar-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--action-gap);
   flex: none;
   border-right: 1px solid var(--vscode-panel-border);
   padding: 0 8px;
@@ -1096,6 +1100,8 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* Optical: level with the tab's icon. */
+  margin-top: 1px;
 }
 
 .tab.inactive .tab-label {
