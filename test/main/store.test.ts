@@ -13,7 +13,7 @@ import { agentConfigDir } from "../../src/main/store/data-root";
 import { newWorktreeKey, ownedWorktreeKeys, sandboxDir, sandboxSessionDir, worktreeDir, worktreeKeyOf } from "../../src/main/store/project-dirs";
 import { SettingsStore } from "../../src/main/store/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../src/shared/prompts";
-import { DEFAULT_KEYBINDING_PRESET_ID, withLanePinned, withSettings } from "../../src/shared/types/settings";
+import { DEFAULT_KEYBINDING_PRESET_ID, laneSettings, withLanePinned, withSettings } from "../../src/shared/types/settings";
 import { tempDir } from "../helpers";
 
 /** store/: the data folder's layout, the stores, the environment variables kept in TET. */
@@ -215,11 +215,15 @@ describe("the stores", () => {
     const file = path.join(dir, "settings.json");
     fs.writeFileSync(file, "{ nope");
     assert.equal(new SettingsStore(dir).get().appearance.colorScheme, "system");
-    assert.deepEqual(new SettingsStore(dir).get().appearance.lanes, { pinned: ["projects"], order: ["projects", "git", "files"] });
+    assert.deepEqual(new SettingsStore(dir).get().appearance.lanes, [
+      { lane: "projects", pinned: true },
+      { lane: "git", pinned: false },
+      { lane: "files", pinned: false }
+    ]);
     fs.writeFileSync(
       file,
       JSON.stringify({
-        appearance: { colorScheme: "sepia", darkTheme: "solarized", lanes: { pinned: ["git", "nope", "git"], order: ["files", 3, "files"] } },
+        appearance: { colorScheme: "sepia", darkTheme: "solarized", lanes: [{ lane: "files" }, { lane: 3 }, { lane: "git", pinned: true }, { lane: "files", pinned: true }, "junk"] },
         notifications: { finished: false, waiting: "yes" },
         files: { editorKeybindingPreset: "", excludeGitIgnore: true, compactFolders: "no", sortOrder: "sideways" },
         git: { pushOnCommit: true, checkNewChanges: "yes" },
@@ -240,8 +244,12 @@ describe("the stores", () => {
     assert.equal(settings.appearance.lightTheme, "light-modern");
     assert.deepEqual(
       settings.appearance.lanes,
-      { pinned: ["git"], order: ["files", "projects", "git"] },
-      "no lane named twice or unknown, the order takes the ones it misses at its end"
+      [
+        { lane: "files", pinned: false },
+        { lane: "git", pinned: true },
+        { lane: "projects", pinned: false }
+      ],
+      "no lane named twice or unknown, the ones it misses join at its end"
     );
     assert.deepEqual(settings.files, {
       editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
@@ -298,12 +306,12 @@ describe("the stores", () => {
 });
 
 describe("pinning a lane", () => {
-  const lanes = { pinned: ["projects" as const], order: ["projects" as const, "git" as const, "files" as const] };
+  const lanes = laneSettings(["projects"], ["git", "files"]);
 
   it("takes it to the end of the pinned ones, and an unpinned one to the front of the toggles", () => {
     const pinned = withLanePinned(lanes, "files", true);
-    assert.deepEqual(pinned, { pinned: ["projects", "files"], order: ["projects", "files", "git"] });
-    assert.deepEqual(withLanePinned(pinned, "projects", false), { pinned: ["files"], order: ["files", "projects", "git"] });
+    assert.deepEqual(pinned, laneSettings(["projects", "files"], ["git"]));
+    assert.deepEqual(withLanePinned(pinned, "projects", false), laneSettings(["files"], ["projects", "git"]));
   });
 
   it("leaves a lane already so where it is", () => {

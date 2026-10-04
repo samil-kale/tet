@@ -10,31 +10,32 @@ export const LANES = ["projects", "git", "files"] as const;
 
 export type Lane = (typeof LANES)[number];
 
-/** Which lanes stand pinned, and one order for all of them: the pinned lanes in it, then the
- *  strip's toggles in it. */
-export interface LaneSettings {
-  pinned: Lane[];
-  /** Every lane once. */
-  order: Lane[];
+/** One lane and whether it stands pinned. */
+export interface LaneEntry {
+  lane: Lane;
+  pinned: boolean;
 }
+
+/** Every lane once, in its order: the pinned lanes in it, then the strip's toggles in it. */
+export type LaneSettings = LaneEntry[];
 
 /** The order split: the pinned lanes, then the strip's toggles; `laneSettings` joins them again. */
 export function laneOrders(lanes: LaneSettings): { pinned: Lane[]; toggles: Lane[] } {
   return {
-    pinned: lanes.order.filter((lane) => lanes.pinned.includes(lane)),
-    toggles: lanes.order.filter((lane) => !lanes.pinned.includes(lane))
+    pinned: lanes.filter((entry) => entry.pinned).map((entry) => entry.lane),
+    toggles: lanes.filter((entry) => !entry.pinned).map((entry) => entry.lane)
   };
 }
 
 /** `pinned` standing pinned in that order, then `toggles`. */
 export function laneSettings(pinned: readonly Lane[], toggles: readonly Lane[]): LaneSettings {
-  return { pinned: [...pinned], order: [...pinned, ...toggles] };
+  return [...pinned.map((lane) => ({ lane, pinned: true })), ...toggles.map((lane) => ({ lane, pinned: false }))];
 }
 
 /** `lanes` with `lane` pinned at the end of the pinned ones, beside the free lane where it stood,
  *  or unpinned to the front of the toggles; one already so stays where it is. */
 export function withLanePinned(lanes: LaneSettings, lane: Lane, pin: boolean): LaneSettings {
-  if (lanes.pinned.includes(lane) === pin) {
+  if (lanes.some((entry) => entry.lane === lane && entry.pinned === pin)) {
     return lanes;
   }
   const others = (list: readonly Lane[]) => list.filter((entry) => entry !== lane);

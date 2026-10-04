@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
 import { laneOrders, laneSettings, LANES, withLanePinned, type Lane, type LaneSettings } from "../../shared/types/settings";
-import { sameList } from "../identity";
 import { useLatest } from "../ui/use-latest";
 import { reorder } from "../ui/drag-reorder";
 import { useStoredChoice, useStoredSize } from "../ui/layout-storage";
@@ -10,8 +9,6 @@ import { MIN_AREA_WIDTH } from "../ui/Sash";
 
 /** The free lane: one of them, or none while it is in. */
 const FREE_CHOICES: readonly (Lane | "none")[] = [...LANES, "none"];
-
-const NO_LANES: Lane[] = [];
 
 /** A lane's width and how its sash sets it. */
 type LaneWidth = [number, (size: number) => void];
@@ -57,16 +54,16 @@ export function useLanes(
     () =>
       window.tet.onLanes((stored) =>
         setLanes((current) =>
-          sameList(current.pinned, stored.pinned, NO_LANES) === current.pinned &&
-          sameList(current.order, stored.order, NO_LANES) === current.order
+          current.length === stored.length &&
+          current.every((entry, i) => entry.lane === stored[i].lane && entry.pinned === stored[i].pinned)
             ? current
             : stored
         )
       ),
     []
   );
-  const pinnedLanes = useMemo(() => new Set(lanes.pinned), [lanes]);
   const { pinned: pinnedOrder, toggles: toggleOrder } = useMemo(() => laneOrders(lanes), [lanes]);
+  const pinnedLanes = useMemo(() => new Set(pinnedOrder), [pinnedOrder]);
   const [freeChoice, setFreeChoice] = useStoredChoice("lanes-free", FREE_CHOICES, "projects");
   // A lane pinned since it was stored is no longer free.
   const freeLane = freeChoice === "none" || pinnedLanes.has(freeChoice) ? null : freeChoice;

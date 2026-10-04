@@ -12,7 +12,7 @@ const DEFAULTS: AppSettings = {
     colorScheme: "system",
     darkTheme: DEFAULT_THEME_IDS.dark,
     lightTheme: DEFAULT_THEME_IDS.light,
-    lanes: { pinned: ["projects"], order: [...LANES] }
+    lanes: LANES.map((lane) => ({ lane, pinned: lane === "projects" }))
   },
   notifications: {
     finished: true,
@@ -110,20 +110,24 @@ function appearance(value: Record<string, unknown>): AppearanceSettings {
     colorScheme: COLOR_SCHEMES.find((scheme) => scheme === value.colorScheme) ?? DEFAULTS.appearance.colorScheme,
     darkTheme: themeId(value.darkTheme, "dark"),
     lightTheme: themeId(value.lightTheme, "light"),
-    lanes: lanes(record(value.lanes))
+    lanes: lanes(value.lanes)
   };
 }
 
-/** A list that isn't one is the default; in one, what names no lane and a lane named twice drop
- *  out, and the order takes a lane it misses at its end. */
-function lanes(value: Record<string, unknown>): LaneSettings {
-  const known = (list: unknown): Lane[] | undefined =>
-    Array.isArray(list) ? [...new Set(list)].filter((entry): entry is Lane => LANES.includes(entry as Lane)) : undefined;
-  const order = known(value.order) ?? DEFAULTS.appearance.lanes.order;
-  return {
-    pinned: known(value.pinned) ?? DEFAULTS.appearance.lanes.pinned,
-    order: [...order, ...LANES.filter((lane) => !order.includes(lane))]
-  };
+/** What isn't a list is the default; in one, what names no lane and a lane named twice drop out,
+ *  a lane it misses is added at its end, unpinned. */
+function lanes(value: unknown): LaneSettings {
+  if (!Array.isArray(value)) {
+    return DEFAULTS.appearance.lanes;
+  }
+  const entries: LaneSettings = [];
+  for (const item of value) {
+    const entry = record(item);
+    if (LANES.includes(entry.lane as Lane) && !entries.some((kept) => kept.lane === entry.lane)) {
+      entries.push({ lane: entry.lane as Lane, pinned: entry.pinned === true });
+    }
+  }
+  return [...entries, ...LANES.filter((lane) => !entries.some((kept) => kept.lane === lane)).map((lane) => ({ lane, pinned: false }))];
 }
 
 /** A switch that isn't a boolean in the file takes its default. */

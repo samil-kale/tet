@@ -5,7 +5,7 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef } from "../../shared/types/project";
-import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
+import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, laneOrders, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
@@ -168,7 +168,8 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", `lane named twice: ${twice}`);
       }
       // One left out joins at the end (settings.ts's normalize).
-      settings.patch({ appearance: { lanes: { pinned: settings.get().appearance.lanes.pinned, order } } });
+      const pinned = laneOrders(settings.get().appearance.lanes).pinned;
+      settings.patch({ appearance: { lanes: order.map((lane) => ({ lane, pinned: pinned.includes(lane) })) } });
       return { result: { saved: true } };
     },
 
