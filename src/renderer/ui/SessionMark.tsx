@@ -1,4 +1,4 @@
-import { CircleAlertIcon, CommentIcon, QuestionIcon, SpinnerIcon } from "./icons";
+import { CommentIcon, QuestionIcon, SessionErrorIcon, SpinnerIcon } from "./icons";
 
 /** What a session shows on its tab and project row ("Turns and session marks" in AGENTS.md). */
 type SessionMarkKind = "error" | "waiting" | "working" | "finished";
@@ -8,7 +8,7 @@ export function SessionMark({ kind, className }: { kind: SessionMarkKind; classN
   const classes = (extra: string) => [className, "session-mark", extra].filter(Boolean).join(" ");
   switch (kind) {
     case "error":
-      return <CircleAlertIcon className={classes("session-mark-error")} />;
+      return <SessionErrorIcon className={classes("session-mark-error")} />;
     case "waiting":
       return <QuestionIcon className={classes("")} />;
     case "working":

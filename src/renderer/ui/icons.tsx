@@ -8,11 +8,9 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   CircleAlert,
-  CircleQuestionMark,
   CircleX,
   Columns2,
   FileBraces,
-  FileDiff,
   FilePlus,
   FolderCode,
   FolderGit2,
@@ -29,7 +27,9 @@ import {
   ListX,
   LoaderCircle,
   LogIn,
-  MessageSquare,
+  MessageCircleCheck,
+  MessageCircleQuestionMark,
+  MessageCircleX,
   Play,
   Plus,
   RefreshCw,
@@ -207,9 +207,9 @@ export function LandmarkIcon(props: IconProps) {
   return <Lucide {...props} icon={Landmark} />;
 }
 
-/** Lucide's `file-diff` — the project row's mark for uncommitted changes. */
+/** Lucide's `git-compare` — the project row's mark for uncommitted changes. */
 export function ChangesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileDiff} />;
+  return <Lucide {...props} icon={GitCompare} />;
 }
 
 const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
@@ -333,25 +333,31 @@ export function SyncIcon(props: IconProps) {
 }
 
 /**
- * Lucide's `circle-question-mark` — a session stopped on an unanswered question, on its tab and
+ * Lucide's `message-circle-question-mark` — a session stopped on an unanswered question, on its tab and
  * project row. Shares the mark slot with the bubble and the spinner, so it must differ from them at
  * a glance.
  */
 export function QuestionIcon(props: IconProps) {
-  return <Lucide {...props} icon={CircleQuestionMark} />;
+  return <Lucide {...props} icon={MessageCircleQuestionMark} />;
 }
 
 /**
- * Lucide's `circle-alert` — what cannot work as it stands: a tab whose agent cannot start, a
- * dialog's row or tab (`RowMark`, `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
+ * Lucide's `circle-alert` — what cannot work as it stands in a dialog: its row or tab (`RowMark`,
+ * `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
   return <Lucide {...props} icon={CircleAlert} />;
 }
 
-/** Lucide's `message-square` — a finished turn nobody has seen yet. */
+/** Lucide's `message-circle-x` — a tab whose agent cannot start, among the other session marks'
+ *  bubbles. Its own color, as `CircleAlertIcon`. */
+export function SessionErrorIcon(props: IconProps) {
+  return <Lucide {...props} icon={MessageCircleX} />;
+}
+
+/** Lucide's `message-circle-check` — a finished turn nobody has seen yet. */
 export function CommentIcon(props: IconProps) {
-  return <Lucide {...props} icon={MessageSquare} />;
+  return <Lucide {...props} icon={MessageCircleCheck} />;
 }
 
 /** Lucide's `globe` — a remote. */
