@@ -691,10 +691,10 @@ textarea:focus,
   padding: 0;
 }
 
-/* Room for the three toggles ending the field (`.filter-toggles`: 20px each, 2px apart, 4px off
-   the edge). */
+/* Room for the three toggles ending the field (`.filter-toggles`: 20px each, --action-gap apart,
+   4px off the edge), and 4px before the text. */
 .filter-row .filter-field input {
-  padding-right: 72px;
+  padding-right: calc(3 * 20px + 2 * var(--action-gap) + 8px);
 }
 
 /* Here the field lacks the 6px the branch tree's icon is placed against. */
@@ -1859,17 +1859,11 @@ textarea:focus,
   font-weight: 600;
 }
 
-/* Bold field labels, this dialog only; `>` keeps it off .sbx-arrow's "→" nested deeper. */
-.sbx-settings-dialog .dialog-field > span {
-  font-weight: 600;
-}
-
 /* Its own scrollbox rather than growing the dialog, so labels and "+ Add" stay put. */
 .row-section-rows {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 5px;
   max-height: 245px;
   overflow-y: auto;
 }
@@ -1981,15 +1975,6 @@ textarea:focus,
   font-family: var(--vscode-editor-font-family);
 }
 
-/* Twice the body's gap around the words, so the rows and the buttons read as their own sections. */
-.env-dialog .dialog-message {
-  margin-bottom: 8px;
-}
-
-.env-dialog .dialog-detail {
-  margin: 8px 0;
-}
-
 /* The word for a variable this machine sets too, in the row's font
    (.sbx-path-value) and colour (.dialog-field span). */
 .env-overrides {
@@ -2042,20 +2027,13 @@ textarea:focus,
 /* The Docker account (SbxAccounts.tsx), below the project's switch or a blocked wall: set off by a
    divider with twice the body's gap on both sides. */
 .sbx-account {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
   margin-top: 8px;
   padding-top: 16px;
   border-top: 1px solid var(--vscode-panel-border);
 }
 
 .sbx-account-status {
-  display: flex;
   align-items: center;
-  gap: 8px;
 }
 
 .sbx-account-status > span {
@@ -2076,27 +2054,18 @@ textarea:focus,
   max-height: var(--dialog-max-height);
 }
 
-/* The body takes what the header and buttons leave, so the scrollbox below can shrink into it. */
-.sbx-settings-dialog .dialog-body {
+/* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
+   shrink into it. */
+.sbx-settings-dialog .dialog-body,
+.settings-dialog .dialog-body,
+.add-repository-dialog .dialog-body {
   flex: 1;
   min-height: 0;
 }
 
 /* Each tab scrolls on its own once its rows outgrow the dialog. */
 .sbx-settings-pane {
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* Two "+ Add" buttons: a folder and a file are two native pickers, which cannot be one dialog
-   off macOS (see the projects:pick-file handler). */
-.sbx-add-paths {
-  display: flex;
-  gap: 12px;
 }
 
 /* A fieldset, so a held run disables every field at once (`DialogFrame`'s `locked`): none of its
@@ -2214,23 +2183,13 @@ textarea:focus,
 }
 
 .settings-dialog .dialog-body {
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
 }
 
-/* The Environment tab fills the body, and only its rows scroll: the text above them stays put, and
-   the body never needs a bar of its own besides theirs. The rows' box is as tall as its rows, so
-   "+ Add" follows the last one as in the sbx dialog, and shrinks to scroll once they outgrow it. */
-.settings-environment {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-
-/* The same for the sbx dialog's rows: a tab's one section, and the Docker account's tokens. */
+/* The Environment tab fills the body (`FieldColumn`'s `fill`), and only its rows scroll: the text
+   above them stays put, and the body never needs a bar of its own besides theirs. The rows' box is
+   as tall as its rows, so "+ Add" follows the last one, and shrinks to scroll once they outgrow it.
+   The same for the sbx dialog's rows: a tab's one section, and the Docker account's tokens. */
 .settings-environment .dialog-field,
 .sbx-settings-pane > .dialog-field,
 .sbx-account .dialog-field {
@@ -2244,20 +2203,6 @@ textarea:focus,
   flex: 0 1 auto;
   min-height: 0;
   max-height: none;
-}
-
-.settings-prompt-header {
-  display: flex;
-  gap: 8px;
-}
-
-.settings-prompt-header .select-field {
-  flex: 1;
-  min-width: 0;
-}
-
-.settings-prompt-header .button {
-  flex: none;
 }
 
 .settings-prompt {
@@ -2275,18 +2220,6 @@ textarea:focus,
   gap: 60px;
 }
 
-.settings-info,
-.settings-shortcuts {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.settings-shortcuts {
-  flex: 1;
-  min-width: 0;
-}
-
 /* A column wide enough for "Ctrl+Shift+" plus a letter, shared by the Info tab's two lists. */
 .settings-info-row,
 .settings-shortcut-row {
@@ -2301,10 +2234,20 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
-.dialog-field {
+/* A field's label over its control, and every column of fields in a dialog (`FieldColumn`), spaced
+   alike. */
+.dialog-field,
+.dialog-column {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
+}
+
+/* Takes the room its parent leaves, across or down, so a scrollbox inside can shrink into it. */
+.dialog-column.fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 .dialog-field span {
@@ -2386,11 +2329,6 @@ textarea:focus,
 
 /* Startup requirements ------------------------------------------------------------------- */
 
-/* Room under the last line, so it does not sit against the buttons. */
-.requirements-dialog .dialog-body {
-  padding-bottom: 20px;
-}
-
 .requirement-list {
   display: flex;
   flex-direction: column;
@@ -2433,11 +2371,6 @@ textarea:focus,
   width: 700px;
   height: var(--dialog-tall-height);
   max-height: var(--dialog-max-height);
-}
-
-.add-repository-dialog .dialog-body {
-  flex: 1;
-  min-height: 0;
 }
 
 .remote-tab {
@@ -2497,15 +2430,6 @@ textarea:focus,
   opacity: 0.8;
 }
 
-.remote-main {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
 .repository-list {
   flex: 1;
   min-height: 0;
@@ -2541,15 +2465,15 @@ textarea:focus,
   visibility: visible;
 }
 
-.account-form {
+/* Every row of controls in a dialog (`FieldRow`), spaced alike. */
+.dialog-field-row {
   display: flex;
-  flex-direction: column;
   gap: 8px;
 }
 
-.dialog-field-row {
-  display: flex;
-  gap: 6px;
+/* A button keeps its label whole; the field or the dropdown beside it gives way. */
+.dialog-field-row .button {
+  flex: none;
 }
 
 .dialog-field-row input {

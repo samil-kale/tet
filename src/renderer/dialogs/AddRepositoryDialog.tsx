@@ -10,7 +10,7 @@ import { ActionLink } from "../ui/ActionLink";
 import { confirmed } from "../ui/Dialog";
 import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { DialogError, FieldGroup, PathField, TextField } from "../ui/Field";
+import { DialogError, FieldColumn, FieldGroup, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon } from "../ui/icons";
@@ -98,11 +98,11 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   }, [ready, busy, onForm, submitRef]);
 
   return (
-    <div className="account-form">
+    <FieldColumn>
       <ProviderPicker provider={provider} onPick={pick} />
       <TextField label="Host" value={host} onChange={changing(setHost)} />
       <TextField label="Personal access token" type="password" value={token} onChange={changing(setToken)} error={refused} />
-    </div>
+    </FieldColumn>
   );
 }
 
@@ -302,7 +302,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
           <ActionLink onClick={() => setAdding(true)}>+ Add account...</ActionLink>
         </div>
       </div>
-      <div className="remote-main">
+      <FieldColumn fill className="remote-main">
         {adding ? (
           <AccountForm onAdded={accountAdded} onForm={onForm} />
         ) : selectedId === null ? (
@@ -345,7 +345,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
             </div>
           </>
         )}
-      </div>
+      </FieldColumn>
     </div>
   );
 }

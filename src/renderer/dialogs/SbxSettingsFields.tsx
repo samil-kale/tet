@@ -5,7 +5,7 @@ import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import { atLeastOne, EditRow, firstMark, patched, RowInput, RowMark, RowSection, SecretInput, typedRows, withId, without, type Row } from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
-import { Checkbox, FieldGroup, PathInput } from "../ui/Field";
+import { Checkbox, FieldGroup, FieldRow, PathInput } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
@@ -452,14 +452,16 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
           </EditRow>
         )}
         add={
-          <div className="sbx-add-paths">
+          // Two "+ Add": a folder and a file are two native pickers, which cannot be one dialog off
+          // macOS (see the projects:pick-file handler).
+          <FieldRow>
             <ActionLink onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox"))}>
               + Add folder
             </ActionLink>
             <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>
               + Add file
             </ActionLink>
-          </div>
+          </FieldRow>
         }
       />
     );

@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { SbxAccount, SbxAccountEdit } from "../../shared/types/sbx";
 import { atLeastOne, EditRow, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
+import { FieldColumn, FieldRow } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import { CheckIcon, LogInIcon } from "../ui/icons";
 
@@ -83,8 +84,8 @@ export function SbxAccounts({
     setRows((current) => patched(current, row.id, { ...change, mark: undefined }));
   const tokens = typedRows("access token", BLANK_ACCOUNT, setRows);
   return (
-    <div className="sbx-account">
-      <div className="sbx-account-status">
+    <FieldColumn fill className="sbx-account">
+      <FieldRow className="sbx-account-status">
         <span>
           {!signedIn ? (
             "Not signed in to Docker"
@@ -105,7 +106,7 @@ export function SbxAccounts({
             Sign in with browser
           </button>
         )}
-      </div>
+      </FieldRow>
       <RowSection
         label="Access tokens"
         rows={rows}
@@ -147,6 +148,6 @@ export function SbxAccounts({
         }}
         add={tokens.add}
       />
-    </div>
+    </FieldColumn>
   );
 }

@@ -19,7 +19,7 @@ import { SbxAccounts, accountMarks, fromAccounts, toAccountEdits, type AccountRo
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { confirmed, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
-import { Checkbox, DialogError } from "../ui/Field";
+import { Checkbox, DialogError, FieldColumn } from "../ui/Field";
 import { useRunning } from "../ui/use-running";
 import { useAgents } from "../ui/use-agents";
 import { LandmarkIcon } from "../ui/icons";
@@ -367,7 +367,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         </>
       )}
       {phase.kind === "ready" && tab !== "general" && (
-        <div className="sbx-settings-pane">
+        <FieldColumn fill className="sbx-settings-pane">
           <SbxSettingsFields
             section={tab}
             state={state}
@@ -376,7 +376,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             sources={sources}
             problems={problems}
           />
-        </div>
+        </FieldColumn>
       )}
     </DialogFrame>
   );

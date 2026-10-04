@@ -48,6 +48,19 @@ export function FieldGroup({ label, children }: { label: string; children: React
   );
 }
 
+/** Controls side by side in a dialog — a field and its button, two dropdowns, a status and its
+ *  action — every such row spaced alike. `className` adds what only one row needs. */
+export function FieldRow({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={className ? `dialog-field-row ${className}` : "dialog-field-row"}>{children}</div>;
+}
+
+/** Fields stacked in a dialog, spaced as a `Field`'s label and control. `fill` takes the room its
+ *  parent leaves, so a scrollbox inside can shrink into it; `className` adds what only one needs. */
+export function FieldColumn({ className, fill, children }: { className?: string; fill?: boolean; children: ReactNode }) {
+  const classes = ["dialog-column", ...(fill ? ["fill"] : []), ...(className ? [className] : [])];
+  return <div className={classes.join(" ")}>{children}</div>;
+}
+
 /** Where the picker opens for an empty path field. Renderer storage, shared by every such field:
  *  it describes this window's use, not a project. */
 const LAST_DIRECTORY_KEY = "tet.dialog.lastDirectory";
@@ -75,7 +88,7 @@ export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder 
     }
   };
   return (
-    <div className="dialog-field-row">
+    <FieldRow>
       <input
         type="text"
         value={value}
@@ -87,7 +100,7 @@ export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder 
       <button type="button" className="button secondary" onClick={() => void browse()}>
         Browse...
       </button>
-    </div>
+    </FieldRow>
   );
 }
 
@@ -195,7 +208,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
     <Field label={label} error={refused ?? error}>
       {/* Paired like a path field and its Browse button; while suggesting, the dialog's bar runs
           (`onSuggesting`). */}
-      <div className="dialog-field-row">
+      <FieldRow>
         <input
           type="text"
           value={value}
@@ -216,7 +229,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
         >
           <SparkleIcon />
         </button>
-      </div>
+      </FieldRow>
     </Field>
   );
 }

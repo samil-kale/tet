@@ -14,7 +14,7 @@ import type { AppSettings, ColorScheme, GitSettings, NotificationSettings, Promp
 import { confirm, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { Checkbox, DialogError, Field, FieldGroup } from "../ui/Field";
+import { Checkbox, DialogError, Field, FieldColumn, FieldGroup, FieldRow } from "../ui/Field";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { useRunning } from "../ui/use-running";
@@ -412,7 +412,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       {shown === "prompts" && settings && (
         <>
           <FieldGroup label="Prompt">
-            <div className="settings-prompt-header">
+            <FieldRow>
               <Dropdown
                 value={promptId}
                 onChange={setPromptId}
@@ -426,7 +426,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               >
                 Reset to default
               </button>
-            </div>
+            </FieldRow>
           </FieldGroup>
           {/* Only for a prompt tet asks in the background; a handoff's goes to the tab taking over. */}
           {promptId === "commitMessage" && (
@@ -455,7 +455,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
         </>
       )}
       {shown === "environment" && (
-        <div className="settings-environment">
+        <FieldColumn fill className="settings-environment">
           <RowSection
             label="Environment variables"
             rows={variables}
@@ -477,11 +477,11 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             )}
             add={envRows.add}
           />
-        </div>
+        </FieldColumn>
       )}
       {shown === "info" && info && (
         <div className="settings-info-columns">
-          <div className="settings-info">
+          <FieldColumn>
             <p className="dialog-detail">Versions</p>
             {INFO_ROWS.map(({ key, label }) => (
               <div key={key} className="settings-info-row">
@@ -489,8 +489,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>{info[key]}</span>
               </div>
             ))}
-          </div>
-          <div className="settings-shortcuts">
+          </FieldColumn>
+          <FieldColumn fill>
             <p className="dialog-detail">Shortcuts</p>
             {SHORTCUTS.map(({ id, description }) => (
               <div key={id} className="settings-shortcut-row">
@@ -498,7 +498,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 <span>{description}</span>
               </div>
             ))}
-          </div>
+          </FieldColumn>
         </div>
       )}
     </DialogFrame>

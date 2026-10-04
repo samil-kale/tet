@@ -27,7 +27,6 @@ export function RequirementsDialog({ requirements, checking, onRecheck }: Requir
     <DialogFrame
       // No cancel: nothing stands behind this yet.
       header={{ title: "Missing requirements" }}
-      className="requirements-dialog"
       busy={checking}
       // The check only reads, so Quit stays open while it runs.
       locked={false}

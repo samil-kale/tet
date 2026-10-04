@@ -48,7 +48,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
 
   return (
     <DialogFrame
-      className="env-dialog"
       header={{ title: rows.length === 1 ? "Environment variable needed" : "Environment variables needed" }}
       busy={busy}
       error={refused}

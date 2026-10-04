@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { AgentId, AskModelsResult, Suggester } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import { Dropdown } from "../ui/Dropdown";
-import { DialogError } from "../ui/Field";
+import { DialogError, FieldRow } from "../ui/Field";
 import { agentName, useAgents } from "../ui/use-agents";
 
 /** No model argument: the agent's own configuration picks. */
@@ -98,7 +98,7 @@ export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: Sugge
 
   return (
     <>
-      <div className="dialog-field-row">
+      <FieldRow>
         <Dropdown
           fit
           value={value.agentId}
@@ -110,7 +110,7 @@ export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: Sugge
           options={modelOptions}
           onChange={(model) => onChange({ ...value, model })}
         />
-      </div>
+      </FieldRow>
       <DialogError message={models?.error} />
     </>
   );
