@@ -13,7 +13,7 @@ import { agentConfigDir } from "../../src/main/store/data-root";
 import { newWorktreeKey, ownedWorktreeKeys, sandboxDir, sandboxSessionDir, worktreeDir, worktreeKeyOf } from "../../src/main/store/project-dirs";
 import { SettingsStore } from "../../src/main/store/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../src/shared/prompts";
-import { DEFAULT_KEYBINDING_PRESET_ID, withSettings } from "../../src/shared/types/settings";
+import { DEFAULT_KEYBINDING_PRESET_ID, withLanePinned, withSettings } from "../../src/shared/types/settings";
 import { tempDir } from "../helpers";
 
 /** store/: the data folder's layout, the stores, the environment variables kept in TET. */
@@ -215,10 +215,11 @@ describe("the stores", () => {
     const file = path.join(dir, "settings.json");
     fs.writeFileSync(file, "{ nope");
     assert.equal(new SettingsStore(dir).get().appearance.colorScheme, "system");
+    assert.deepEqual(new SettingsStore(dir).get().appearance.lanes, { pinned: ["projects"], order: ["projects", "git", "files"] });
     fs.writeFileSync(
       file,
       JSON.stringify({
-        appearance: { colorScheme: "sepia", darkTheme: "solarized" },
+        appearance: { colorScheme: "sepia", darkTheme: "solarized", lanes: { pinned: ["git", "nope", "git"], order: ["files", 3, "files"] } },
         notifications: { finished: false, needsYou: "yes" },
         files: { editorKeybindingPreset: "" },
         git: { pushOnCommit: true, checkNewChanges: "yes" },
@@ -237,6 +238,11 @@ describe("the stores", () => {
     assert.equal(settings.appearance.colorScheme, "system");
     assert.equal(settings.appearance.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
     assert.equal(settings.appearance.lightTheme, "light-modern");
+    assert.deepEqual(
+      settings.appearance.lanes,
+      { pinned: ["git"], order: ["files", "projects", "git"] },
+      "no lane named twice or unknown, the order takes the ones it misses at its end"
+    );
     assert.equal(settings.files.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
     assert.deepEqual(settings.prompts.texts, { commitMessage: "", handoff: "" }, "tet's own text spelled out is stored as none");
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "", model: "" });
@@ -283,6 +289,21 @@ describe("the stores", () => {
     );
     assert.equal(new ProjectStore(dir).list().length, 3, "persisted");
     assert.deepEqual(fs.readdirSync(dir), ["projects.json"], "renamed into place, no temporary file left");
+  });
+});
+
+describe("pinning a lane", () => {
+  const lanes = { pinned: ["projects" as const], order: ["projects" as const, "git" as const, "files" as const] };
+
+  it("takes it to the end of the pinned ones, and an unpinned one to the front of the toggles", () => {
+    const pinned = withLanePinned(lanes, "files", true);
+    assert.deepEqual(pinned, { pinned: ["projects", "files"], order: ["projects", "files", "git"] });
+    assert.deepEqual(withLanePinned(pinned, "projects", false), { pinned: ["files"], order: ["files", "projects", "git"] });
+  });
+
+  it("leaves a lane already so where it is", () => {
+    assert.equal(withLanePinned(lanes, "projects", true), lanes);
+    assert.equal(withLanePinned(lanes, "git", false), lanes);
   });
 });
 

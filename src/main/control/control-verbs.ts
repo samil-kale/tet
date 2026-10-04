@@ -4,7 +4,8 @@ import type { ControlRequest, ControlVerbName } from "../../shared/control";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { projectRefKey, projectRefsOf, sameProjectRef } from "../../shared/types/project";
-import { COLOR_SCHEMES, NOTIFICATION_IDS, PROMPT_IDS } from "../../shared/types/settings";
+import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
+import type { Lane } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
@@ -146,6 +147,35 @@ export function verbs(deps: ControlDeps): Handlers {
       const colorScheme = oneOf(args, "scheme", "color scheme", COLOR_SCHEMES);
       // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
       return { result: { saved: true, restartRequired: settings.patch({ appearance: { colorScheme } }) } };
+    },
+
+    "settings-set-lane-pin": (args) => {
+      const lane = oneOf(args, "lane", "lane", LANES);
+      const lanes = withLanePinned(settings.get().appearance.lanes, lane, onOff(args, "value"));
+      // Shown at once (main.ts hands the window what the store then holds).
+      settings.patch({ appearance: { lanes } });
+      return { result: { saved: true } };
+    },
+
+    "settings-set-lane-order": (args) => {
+      const named = list(args, "lanes");
+      if (named.length === 0) {
+        throw new ControlError("bad_args", "missing lanes");
+      }
+      const order: Lane[] = [];
+      for (const name of named) {
+        const lane = LANES.find((candidate) => candidate === name);
+        if (lane === undefined) {
+          throw new ControlError("bad_args", `unknown lane: ${name} (one of ${LANES.join(", ")})`);
+        }
+        if (order.includes(lane)) {
+          throw new ControlError("bad_args", `lane named twice: ${name}`);
+        }
+        order.push(lane);
+      }
+      // One left out joins at the end (settings.ts's normalize).
+      settings.patch({ appearance: { lanes: { pinned: settings.get().appearance.lanes.pinned, order } } });
+      return { result: { saved: true } };
     },
 
     "settings-set-prompt": (args) => {

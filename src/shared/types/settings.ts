@@ -4,6 +4,36 @@ export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
+/** The lanes left of the terminals, in their order until the user moves one. */
+export const LANES = ["projects", "git", "files"] as const;
+
+export type Lane = (typeof LANES)[number];
+
+/** Which lanes stand pinned, and one order for all of them: the pinned lanes in it, then the
+ *  strip's toggles in it. */
+export interface LaneSettings {
+  pinned: Lane[];
+  /** Every lane once. */
+  order: Lane[];
+}
+
+/** `pinned` standing pinned in that order, then `toggles`: how the window and `tet-ctl` write them. */
+export function laneSettings(pinned: readonly Lane[], toggles: readonly Lane[]): LaneSettings {
+  return { pinned: [...pinned], order: [...pinned, ...toggles] };
+}
+
+/** `lanes` with `lane` pinned at the end of the pinned ones, beside the free lane where it stood,
+ *  or unpinned to the front of the toggles; one already so stays where it is. */
+export function withLanePinned(lanes: LaneSettings, lane: Lane, pin: boolean): LaneSettings {
+  if (lanes.pinned.includes(lane) === pin) {
+    return lanes;
+  }
+  const others = (list: readonly Lane[]) => list.filter((entry) => entry !== lane);
+  const pinned = lanes.order.filter((entry) => lanes.pinned.includes(entry));
+  const toggles = lanes.order.filter((entry) => !lanes.pinned.includes(entry));
+  return pin ? laneSettings([...others(pinned), lane], others(toggles)) : laneSettings(others(pinned), [lane, ...others(toggles)]);
+}
+
 /** The Appearance tab. */
 export interface AppearanceSettings {
   /** "system" follows the OS. A window's kind is fixed when it is built (`applyTheme` in
@@ -12,6 +42,8 @@ export interface AppearanceSettings {
   /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
   darkTheme: string;
   lightTheme: string;
+  /** Set in the window alone (a header's menu, a drag) or by `tet-ctl`; written whole. */
+  lanes: LaneSettings;
 }
 
 /** The Notifications tab: what every agent notifies the OS about. */

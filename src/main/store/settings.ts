@@ -1,16 +1,17 @@
 import * as path from "node:path";
 import { DEFAULT_THEME_IDS, type ThemeKind } from "../../shared/themes";
 import { DEFAULT_PROMPTS } from "../../shared/prompts";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, LANES, PROMPT_IDS, withSettings } from "../../shared/types/settings";
 import type { Suggester } from "../../shared/types/agents";
-import type { AppearanceSettings, AppSettings, PromptSettings, PromptTexts, SettingsEdits } from "../../shared/types/settings";
+import type { AppearanceSettings, AppSettings, Lane, LaneSettings, PromptSettings, PromptTexts, SettingsEdits } from "../../shared/types/settings";
 import { isRecord, readJson, writeJson } from "../util/json-file";
 
 const DEFAULTS: AppSettings = {
   appearance: {
     colorScheme: "system",
     darkTheme: DEFAULT_THEME_IDS.dark,
-    lightTheme: DEFAULT_THEME_IDS.light
+    lightTheme: DEFAULT_THEME_IDS.light,
+    lanes: { pinned: ["projects"], order: [...LANES] }
   },
   notifications: {
     finished: true,
@@ -104,7 +105,20 @@ function appearance(value: Record<string, unknown>): AppearanceSettings {
   return {
     colorScheme: COLOR_SCHEMES.find((scheme) => scheme === value.colorScheme) ?? DEFAULTS.appearance.colorScheme,
     darkTheme: themeId(value.darkTheme, "dark"),
-    lightTheme: themeId(value.lightTheme, "light")
+    lightTheme: themeId(value.lightTheme, "light"),
+    lanes: lanes(record(value.lanes))
+  };
+}
+
+/** A list that isn't one is the default; in one, what names no lane and a lane named twice drop
+ *  out, and the order takes a lane it misses at its end. */
+function lanes(value: Record<string, unknown>): LaneSettings {
+  const known = (list: unknown): Lane[] | undefined =>
+    Array.isArray(list) ? [...new Set(list)].filter((entry): entry is Lane => LANES.includes(entry as Lane)) : undefined;
+  const order = known(value.order) ?? DEFAULTS.appearance.lanes.order;
+  return {
+    pinned: known(value.pinned) ?? DEFAULTS.appearance.lanes.pinned,
+    order: [...order, ...LANES.filter((lane) => !order.includes(lane))]
   };
 }
 

@@ -354,6 +354,9 @@ const settingsAccess: SettingsAccess = {
     if (edits.notifications?.idleReminder !== undefined) {
       sessions.idleReminderChanged();
     }
+    if (edits.appearance?.lanes) {
+      appWindow.showLanes(settings.get().appearance.lanes);
+    }
     return restartRequired;
   }
 };

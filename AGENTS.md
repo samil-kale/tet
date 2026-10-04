@@ -272,7 +272,9 @@ or a per-line decision is for an agent.
 - **Layout**: the lanes on the left: the projects (each with its worktrees, and the COMMANDS), git
   and files — none of them a tab. The strip's toggles drive the one free lane, one at a time; a
   lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
-  by dragging its header (`use-lanes.ts`). The tab strip is the terminals and editor
+  by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
+  the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
+  layout storage. The tab strip is the terminals and editor
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap

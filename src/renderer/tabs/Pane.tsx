@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { isWorking } from "../../shared/types/terminals";
-import type { Lane } from "../ui/use-lanes";
+import type { Lane } from "../../shared/types/settings";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TerminalDescriptor } from "../../shared/types/terminals";

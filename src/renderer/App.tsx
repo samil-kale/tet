@@ -22,7 +22,8 @@ import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize } from "./ui/layout-storage";
-import { LANES, useLanes, type Lane } from "./ui/use-lanes";
+import { useLanes } from "./ui/use-lanes";
+import { LANES, type Lane, type LaneSettings } from "../shared/types/settings";
 import { useDragReorder } from "./ui/drag-reorder";
 import { SectionHandle } from "./ui/Section";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
@@ -65,8 +66,9 @@ const DEFAULT_LAYOUT = defaultLayout();
 /** A lane's drag, its own so no list or terminal takes the drop. */
 const LANE_DRAG_TYPE = "application/x-tet-lane";
 
-/** `worktreesSupported`: git creates them (Requirements.worktrees). */
-export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
+/** `worktreesSupported`: git creates them (Requirements.worktrees); `lanes` as the settings held
+ *  them at the start. */
+export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean; lanes: LaneSettings }) {
   const [projects, setProjects] = useState<Project[]>([]);
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useLatest(projects);
@@ -147,7 +149,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     movePinned,
     moveToggle,
     showChanges
-  } = useLanes(activeKeyRef, setActiveKey);
+  } = useLanes(lanes, activeKeyRef, setActiveKey);
   /** A pinned lane moves by its headers, among the pinned ones. */
   const laneDrag = useDragReorder({
     dragType: LANE_DRAG_TYPE,

@@ -206,6 +206,7 @@ const api: TETApi = {
   onNoticeProgress: (listener) => subscribe("app:notice-progress", listener),
   initialTheme,
   onTheme: (listener) => subscribe("app:theme", listener),
+  onLanes: (listener) => subscribe("app:lanes", listener),
   waylandSession
 };
 

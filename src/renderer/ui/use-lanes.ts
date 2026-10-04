@@ -1,14 +1,11 @@
-import { useCallback, useMemo, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useState, type RefObject } from "react";
+import { errorMessage } from "../../shared/errors";
+import { laneSettings, LANES, withLanePinned, type Lane, type LaneSettings } from "../../shared/types/settings";
 import { useLatest } from "./use-latest";
 import { reorder } from "./drag-reorder";
-import { usePaneChoice, usePaneOrder, usePaneSet, usePaneSize } from "./layout-storage";
+import { usePaneChoice, usePaneSize } from "./layout-storage";
+import { notify } from "./Notices";
 import { MIN_PANE_WIDTH } from "./Sash";
-
-/** A lane, left of the terminals: the projects, git or files. */
-export type Lane = "projects" | "git" | "files";
-
-/** The lanes' order until the user drags one elsewhere. */
-export const LANES: readonly Lane[] = ["projects", "git", "files"];
 
 /** The free lane: one of them, or none while it is in. */
 const FREE_CHOICES: readonly (Lane | "none")[] = [...LANES, "none"];
@@ -41,7 +38,8 @@ interface Lanes {
 }
 
 /**
- * Which lanes are pinned and which one is free, and their widths — remembered like a pane size.
+ * Which lanes are pinned and in what order, kept in the settings (`appearance.lanes`, `initial` as
+ * read at the start), and which one is free and their widths, remembered like a pane size.
  * The strip's toggles drive the free lane alone, one at a time as VS Code's Explorer and Source
  * Control: the next replaces it. A pinned lane is out until unpinned from its headers' menu, when
  * it slides in; its toggle is gone from the strip meanwhile. The free lane is one width whichever
@@ -52,14 +50,22 @@ interface Lanes {
  * worktree in front, `setActiveKey` how a row's git mark brings its own there.
  */
 export function useLanes(
+  initial: LaneSettings,
   activeKeyRef: RefObject<string | null>,
   setActiveKey: (key: string) => void
 ): Lanes {
-  // Nothing stored yet: the projects lane stands pinned.
-  const [pinnedLanes, setPinnedLanes] = usePaneSet("lanes-pinned", LANES, ["projects"]);
-  const [order, setOrder] = usePaneOrder("lanes-order", LANES);
-  const pinnedOrder = useMemo(() => order.filter((lane) => pinnedLanes.has(lane)), [order, pinnedLanes]);
-  const toggleOrder = useMemo(() => order.filter((lane) => !pinnedLanes.has(lane)), [order, pinnedLanes]);
+  const [lanes, setLanes] = useState(initial);
+  // Set by `tet-ctl`, or the window's own write coming back, which changes nothing.
+  useEffect(
+    () =>
+      window.tet.onLanes((stored) =>
+        setLanes((current) => (JSON.stringify(current) === JSON.stringify(stored) ? current : stored))
+      ),
+    []
+  );
+  const pinnedLanes = useMemo(() => new Set(lanes.pinned), [lanes]);
+  const pinnedOrder = useMemo(() => lanes.order.filter((lane) => pinnedLanes.has(lane)), [lanes, pinnedLanes]);
+  const toggleOrder = useMemo(() => lanes.order.filter((lane) => !pinnedLanes.has(lane)), [lanes, pinnedLanes]);
   const [freeChoice, setFreeChoice] = usePaneChoice("lanes-free", FREE_CHOICES, "projects");
   // A lane pinned since it was stored is no longer free.
   const freeLane = freeChoice === "none" || pinnedLanes.has(freeChoice) ? null : freeChoice;
@@ -78,12 +84,15 @@ export function useLanes(
   const freeRef = useLatest(freeLane);
   const pinnedRef = useLatest(pinnedLanes);
   const widthsRef = useLatest({ pinnedWidths, freeWidth });
-  const ordersRef = useLatest({ pinnedOrder, toggleOrder });
-  /** The one way the order is written: the pinned lanes, then the toggles. */
-  const writeOrder = useCallback(
-    (pinned: readonly Lane[], toggles: readonly Lane[]) => setOrder([...pinned, ...toggles]),
-    [setOrder]
-  );
+  const lanesRef = useLatest({ lanes, pinnedOrder, toggleOrder });
+  /** The one way the lanes are written. Shown at once; a failed write is told, and the settings
+   *  keep what the disk has. */
+  const writeLanes = useCallback((next: LaneSettings) => {
+    setLanes(next);
+    window.tet.settings
+      .patch({ appearance: { lanes: next } })
+      .catch((error: unknown) => notify("error", `Couldn't keep the lanes: ${errorMessage(error)}`));
+  }, []);
   /**
    * Gates a lane's width transition to its slide alone — a lane stays in the DOM at width 0
    * while in, so opening and closing both transition — and its sash sets the same width, where an
@@ -120,12 +129,10 @@ export function useLanes(
       const pinned = pinnedRef.current;
       const free = freeRef.current;
       const widths = widthsRef.current;
-      const orders = ordersRef.current;
-      const others = (lanes: readonly Lane[]) => lanes.filter((entry) => entry !== lane);
-      if (!pinned.has(lane)) {
+      const pin = !pinned.has(lane);
+      writeLanes(withLanePinned(lanesRef.current.lanes, lane, pin));
+      if (pin) {
         widths.pinnedWidths[lane][1](widths.freeWidth[0]);
-        setPinnedLanes(new Set([...pinned, lane]));
-        writeOrder([...orders.pinnedOrder, lane], others(orders.toggleOrder));
         if (free === lane) {
           setFreeChoice("none");
         } else {
@@ -133,25 +140,23 @@ export function useLanes(
         }
         return;
       }
-      setPinnedLanes(new Set(others([...pinned])));
-      writeOrder(others(orders.pinnedOrder), [lane, ...orders.toggleOrder]);
       slide(lane);
     },
-    [pinnedRef, freeRef, widthsRef, ordersRef, setPinnedLanes, writeOrder, setFreeChoice, slide]
+    [pinnedRef, freeRef, widthsRef, lanesRef, writeLanes, setFreeChoice, slide]
   );
   const movePinned = useCallback(
     (from: number, to: number) => {
-      const orders = ordersRef.current;
-      writeOrder(reorder(orders.pinnedOrder, from, to), orders.toggleOrder);
+      const orders = lanesRef.current;
+      writeLanes(laneSettings(reorder(orders.pinnedOrder, from, to), orders.toggleOrder));
     },
-    [ordersRef, writeOrder]
+    [lanesRef, writeLanes]
   );
   const moveToggle = useCallback(
     (from: number, to: number) => {
-      const orders = ordersRef.current;
-      writeOrder(orders.pinnedOrder, reorder(orders.toggleOrder, from, to));
+      const orders = lanesRef.current;
+      writeLanes(laneSettings(orders.pinnedOrder, reorder(orders.toggleOrder, from, to)));
     },
-    [ordersRef, writeOrder]
+    [lanesRef, writeLanes]
   );
   /**
    * A row's git mark: switches to the repository or worktree and slides git out; on the one shown,

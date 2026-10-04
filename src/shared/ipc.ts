@@ -140,6 +140,7 @@ export interface EventChannels {
   "app:notice": Payload<TETApi["onNotice"]>;
   "app:notice-progress": Payload<TETApi["onNoticeProgress"]>;
   "app:theme": Payload<TETApi["onTheme"]>;
+  "app:lanes": Payload<TETApi["onLanes"]>;
   "projects:changed": Payload<TETApi["projects"]["onChanged"]>;
   "environment:request": Payload<TETApi["environment"]["onRequest"]>;
   "environment:withdrawn": Payload<TETApi["environment"]["onWithdrawn"]>;

@@ -468,7 +468,12 @@ describe("tet-ctl against the control server", () => {
 
   beforeEach(() => {
     settings = {
-      appearance: { colorScheme: "system", darkTheme: "dark-modern", lightTheme: "light-modern" },
+      appearance: {
+        colorScheme: "system",
+        darkTheme: "dark-modern",
+        lightTheme: "light-modern",
+        lanes: { pinned: ["projects"], order: ["projects", "git", "files"] }
+      },
       notifications: { finished: true, needsYou: true, idleReminder: false },
       files: { editorKeybindingPreset: "tet" },
       git: {
@@ -653,6 +658,32 @@ describe("tet-ctl against the control server", () => {
     assert.match(unknown.stderr, /unknown color scheme: sepia/);
     assert.equal(settings.appearance.colorScheme, "light");
     assert.deepEqual(calls.shutdown, []);
+  });
+
+  it("pins and unpins a lane as the window does, and refuses an unknown one", async () => {
+    assert.deepEqual((await tetCtl(["settings-set-lane-pin", "files", "on"])).result, { saved: true });
+    assert.deepEqual(settings.appearance.lanes, { pinned: ["projects", "files"], order: ["projects", "files", "git"] });
+    await tetCtl(["settings-set-lane-pin", "projects", "off"]);
+    assert.deepEqual(settings.appearance.lanes, { pinned: ["files"], order: ["files", "projects", "git"] });
+    const unknown = await tetCtl(["settings-set-lane-pin", "terminals", "on"]);
+    assert.equal(unknown.status, EXIT_CODES.usage);
+    assert.match(unknown.stderr, /unknown lane: terminals/);
+    assert.deepEqual(settings.appearance.lanes.pinned, ["files"]);
+  });
+
+  it("sets the lanes' order, keeps the pins, and refuses an unknown, a doubled or no lane", async () => {
+    assert.deepEqual((await tetCtl(["settings-set-lane-order", "files", "git", "projects"])).result, { saved: true });
+    assert.deepEqual(settings.appearance.lanes, { pinned: ["projects"], order: ["files", "git", "projects"] });
+    for (const [args, refusal] of [
+      [["files", "terminals"], /unknown lane: terminals/],
+      [["git", "git"], /lane named twice: git/],
+      [[], /missing lanes/]
+    ] as const) {
+      const refused = await tetCtl(["settings-set-lane-order", ...args]);
+      assert.equal(refused.status, EXIT_CODES.usage);
+      assert.match(refused.stderr, refusal);
+    }
+    assert.deepEqual(settings.appearance.lanes.order, ["files", "git", "projects"]);
   });
 
   it("sets a prompt's text, puts tet's own back without one, and refuses an unknown id", async () => {
