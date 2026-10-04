@@ -347,21 +347,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             disabled={locked || !signedIn}
             onChange={editEnabled}
             label={
-              <>
-                <strong>Enable SBX sandboxing for this project</strong>
-                <p className="dialog-detail">
-                  {new Intl.ListFormat("en").format(agents.filter((agent) => agent.sandboxed).map((agent) => agent.displayName))}{" "}
-                  tabs run in their own isolated Docker sandbox.
-                  {locked && " No agent is installed on this machine, so this is the only way to run one here."}
-                </p>
-              </>
+                <>Enable SBX sandboxing for this project</>
             }
           />
           <div className={`sbx-governance${organization ? "" : " hidden"}`}>
             <span className="sbx-governance-icon">
               <LandmarkIcon />
             </span>
-            <strong>Organization governance is active (<span className="sbx-name">{organization}</span>)</strong>
+            <>Organization governance is active (<span className="sbx-name">{organization}</span>)</>
           </div>
           {accountSection}
         </>

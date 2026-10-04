@@ -1065,7 +1065,7 @@ textarea:focus,
 .tab {
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 12px;
   max-width: 270px;
   background: var(--vscode-tab-inactiveBackground);
   cursor: pointer;
@@ -1089,7 +1089,7 @@ textarea:focus,
   gap: var(--action-gap);
   flex: none;
   border-right: 1px solid var(--vscode-panel-border);
-  padding: 0 8px;
+  padding: 0 6px;
 }
 
 .tab.inactive .tab-label {
@@ -1745,7 +1745,7 @@ textarea:focus,
 .dialog {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   width: 500px;
   max-width: calc(100vw - 32px);
   padding: 16px;
@@ -1777,7 +1777,7 @@ textarea:focus,
 }
 
 .dialog-tab {
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 /* `.dialog-tab.active` is `.tab.active`'s. */
@@ -1785,8 +1785,7 @@ textarea:focus,
 /* The rows' mark (.row-mark) repeated on their tab, so it shows from any pane. */
 .dialog-tab-mark {
   display: flex;
-  margin-top: 3px;
-  margin-left: 4px;
+  margin-left: 6px;
   color: var(--vscode-errorForeground);
 }
 
@@ -2133,7 +2132,7 @@ textarea:focus,
 
 .dialog-checkbox > span,
 .sbx-governance > strong {
-  padding-top: calc((23px - 1lh) / 2);
+  padding-top: 5px;
 }
 
 /* Drawn by tet, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
@@ -2360,6 +2359,7 @@ textarea:focus,
   gap: 12px;
   flex: 1;
   min-height: 0;
+  margin-top: 4px;
 }
 
 .account-list {

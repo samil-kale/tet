@@ -96,19 +96,19 @@ const PROMPT_LABELS: Record<PromptId, string> = {
 };
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
-  { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
-  { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
+  { key: "finished", label: "Finished - the turn ended" },
+  { key: "needsYou", label: "Action needed - waiting for permission or an answer" },
   // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
   // so it reaches tabs started afterwards (AgentPaths.idleReminder).
-  { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
+  { key: "idleReminder", label: "Still waiting - no new prompt for a while (Claude Code only)" }
 ];
 
 const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
-  { key: "checkNewChanges", label: "Check new changes in LOCAL CHANGES for the next commit" },
+  { key: "checkNewChanges", label: "Check new changes for the next commit" },
   { key: "pushOnCommit", label: "Also push when committing" },
-  { key: "deleteBranchOnRemote", label: "Also delete a deleted branch's upstream on the remote" },
-  { key: "deleteTagOnRemote", label: "Also delete a deleted tag on the remote" },
-  { key: "deleteWorktreeOnRemote", label: "Also delete a deleted worktree's upstream on the remote" }
+  { key: "deleteBranchOnRemote", label: "Also delete branch on the remote" },
+  { key: "deleteTagOnRemote", label: "Also delete tag on the remote" },
+  { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" }
 ];
 
 /**
@@ -367,7 +367,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       )}
       {shown === "files" && (
         <>
-          <FieldGroup label={activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree"}>
+          <FieldGroup label={activeProject ? `Explorer settings, for ${activeProject.name}` : "Explorer settings"}>
             {!activeProject && <p className="dialog-detail">Open a project to edit it</p>}
             {activeProject && explorerSettings && (
               <>
@@ -377,7 +377,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   onChange={(next) => editExplorerSetting("excludeGitIgnore", next)}
                 />
                 <Checkbox
-                  label="Compact folders that only contain another folder into one row"
+                  label="Compact single-child folders"
                   checked={explorerSettings.compactFolders}
                   onChange={(next) => editExplorerSetting("compactFolders", next)}
                 />
@@ -398,7 +398,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
             />
           </Field>
-          <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
         </>
       )}
       {shown === "git" && (
