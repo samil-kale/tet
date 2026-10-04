@@ -9,7 +9,7 @@ import { ChevronIcon } from "./icons";
 export const INDENT_STEP = 8;
 export const INDENT_BASE = 9;
 /** Holds a folder's chevron: the chevron's own box, `--icon-size` in styles.css. */
-const TWISTIE_WIDTH = 15;
+const TWISTIE_WIDTH = 14;
 const TWISTIE_GAP = 4;
 /** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the twistie and its
  *  gap): the line it found gets the width the rest of the nesting would have eaten. */

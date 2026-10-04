@@ -477,7 +477,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
             )}
             add={envRows.add}
           />
-          <p className="dialog-detail">Stored on this machine and set in every tab but sandboxed ones, over the machine's own.</p>
         </div>
       )}
       {shown === "info" && info && (

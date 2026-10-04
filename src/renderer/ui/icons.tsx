@@ -98,8 +98,8 @@ export function FillSvg({
     <svg
       className={className}
       // Fallback only, as `Svg`'s.
-      width="15"
-      height="15"
+      width="14"
+      height="14"
       viewBox={geometry(extent, cx, cy, grid, 0).viewBox}
       shapeRendering={shapeRendering}
       aria-hidden="true"
@@ -133,8 +133,8 @@ export function Svg({
     <svg
       className={className}
       // Fallback only: CSS `--icon-size` renders over these in a flex container; keep them equal.
-      width="15"
-      height="15"
+      width="14"
+      height="14"
       viewBox={viewBox}
       fill="none"
       stroke="currentColor"
@@ -169,7 +169,7 @@ function Lucide({
 }) {
   const { viewBox, strokeWidth } = geometry(extent, cx, cy, 24, stroke);
   // `size` is the fallback only, as `Svg`'s width and height; `viewBox` overrides lucide's own.
-  return <Icon className={className} size={15} viewBox={viewBox} strokeWidth={strokeWidth} />;
+  return <Icon className={className} size={14} viewBox={viewBox} strokeWidth={strokeWidth} />;
 }
 
 /** Lucide's `plus`, stroked heavier to lead a row. */
@@ -179,7 +179,7 @@ export function PlusIcon(props: IconProps) {
 
 /** Lucide's `x`, drawn two pixels under the shared size. */
 export function CloseIcon(props: IconProps) {
-  return <Lucide {...props} icon={X} extent={15.31} />;
+  return <Lucide {...props} icon={X} extent={16.9} />;
 }
 
 /** Lucide's `log-in` — sign in with an SBX access token. */

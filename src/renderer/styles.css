@@ -288,7 +288,7 @@ textarea:focus,
      .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
   --field-height: 28px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
-  --icon-size: 15px;
+  --icon-size: 14px;
   /* An action button's box (.icon-button), and what sits in its place or level with it; the gap
      between two side by side, as IntelliJ's toolbar buttons with their 2px on either side. */
   --action-size: 22px;
@@ -491,8 +491,8 @@ textarea:focus,
 }
 
 /* One row shape for both of the projects lane's lists. The icon buttons ending a row stand apart
-   as everywhere else; the label before them needs no more, the buttons carrying 3.5px around a
-   15px drawing in a 22px box. */
+   as everywhere else; the label before them needs no more, the buttons carrying 4px around a
+   14px drawing in a 22px box. */
 .project-item,
 .command-item {
   display: flex;
@@ -921,24 +921,17 @@ textarea:focus,
 .tree-track-count {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   font-size: var(--tiny-font-size);
   border: 1px solid var(--vscode-foreground);
   border-radius: 999px;
-  padding: 1px 6px;
-}
-
-.tree-track-number {
-  /* Sits 1px too low next to the arrow otherwise. */
-  position: relative;
-  top: -1px;
+  padding: 2px 7px 2px 5px;
 }
 
 .tree-track-count svg {
   flex: none;
-  width: calc(var(--icon-size) - 3px);
-  height: calc(var(--icon-size) - 3px);
-  opacity: 0.8;
+  width: calc(var(--icon-size) - 4px);
+  height: calc(var(--icon-size) - 2px);
 }
 
 /* Terminals ------------------------------------------------------------------------------ */
@@ -1067,7 +1060,7 @@ textarea:focus,
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 4px 0 10px;
-  max-width: 250px;
+  max-width: 270px;
   font-size: var(--vscode-font-size);
   color: var(--vscode-tab-inactiveForeground);
   background: var(--vscode-tab-inactiveBackground);
@@ -1100,8 +1093,6 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* Optical: level with the tab's icon. */
-  margin-top: 1px;
 }
 
 .tab.inactive .tab-label {
@@ -1876,7 +1867,7 @@ textarea:focus,
 .row-section-rows {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 4px;
   margin-top: 5px;
   max-height: 245px;
   overflow-y: auto;
@@ -2610,8 +2601,8 @@ textarea:focus,
   position: relative;
   display: flex;
   align-items: flex-start;
-  /* With the 15px icon, the text starts where VS Code's does beside its 16px one. */
-  gap: 5px;
+  /* With the 14px icon, the text starts where VS Code's does beside its 16px one. */
+  gap: 6px;
   /* VS Code's fixed width: a notice sized to its text is easily missed. Capped by the window
      minus margins. */
   width: min(450px, 100vw - 14px);
