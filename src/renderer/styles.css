@@ -1242,6 +1242,10 @@ textarea:focus,
   padding: 5px 12px;
 }
 
+.new-tab-menu .context-menu-item {
+  padding-right: 16px;
+}
+
 .context-menu-separator {
   height: 0;
   margin: 4px 0;
