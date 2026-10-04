@@ -70,7 +70,8 @@ project's terminals.
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
      (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
-     Explorer tree, the SEARCH pane, Seti's file icons) — and imports no other lane.
+     Explorer tree, the SEARCH pane, Seti's file icons) — and imports no other lane; beside them,
+     their state (`use-lanes.ts`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`

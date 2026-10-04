@@ -5,7 +5,6 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { projectRefKey, projectRefsOf, sameProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
-import type { Lane } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
@@ -158,20 +157,13 @@ export function verbs(deps: ControlDeps): Handlers {
     },
 
     "settings-set-lane-order": (args) => {
-      const named = list(args, "lanes");
-      if (named.length === 0) {
+      const order = list(args, "lanes").map((name) => oneOf({ lane: name }, "lane", "lane", LANES));
+      if (order.length === 0) {
         throw new ControlError("bad_args", "missing lanes");
       }
-      const order: Lane[] = [];
-      for (const name of named) {
-        const lane = LANES.find((candidate) => candidate === name);
-        if (lane === undefined) {
-          throw new ControlError("bad_args", `unknown lane: ${name} (one of ${LANES.join(", ")})`);
-        }
-        if (order.includes(lane)) {
-          throw new ControlError("bad_args", `lane named twice: ${name}`);
-        }
-        order.push(lane);
+      const twice = order.find((lane, index) => order.indexOf(lane) !== index);
+      if (twice !== undefined) {
+        throw new ControlError("bad_args", `lane named twice: ${twice}`);
       }
       // One left out joins at the end (settings.ts's normalize).
       settings.patch({ appearance: { lanes: { pinned: settings.get().appearance.lanes.pinned, order } } });

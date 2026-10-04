@@ -1,4 +1,5 @@
-import { useState, type DragEvent, type HTMLAttributes } from "react";
+import { useCallback, useMemo, useState, type DragEvent, type HTMLAttributes } from "react";
+import { useLatest } from "./use-latest";
 
 /** Drag-reordering, shared by the projects lane's lists, the lanes and the strip's toggles.
  *  Each supplies its own drag type (a row dragged over a terminal must not be pasted into it, and
@@ -23,7 +24,8 @@ type RowElement = HTMLElement;
 interface DragReorder {
   /** Spread onto each row, with its index: `handleProps` and `targetProps` on one element. */
   rowProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
-  /** What starts the row's drag, where that is a part of it (a lane's headers). */
+  /** What starts the row's drag, where that is a part of it (a lane's headers): the same object
+   *  per index across renders, so a context handing it on changes only with the rows. */
   handleProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
   /** What takes the drop: the row's whole box. */
   targetProps: (index: number) => HTMLAttributes<RowElement>;
@@ -51,10 +53,10 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
    *  cannot disagree. */
   const insertionIndex = (index: number): number => (dragged !== null && index > dragged ? index + 1 : index);
 
-  const end = (): void => {
+  const end = useCallback((): void => {
     setDragged(null);
     setDropAt(null);
-  };
+  }, []);
 
   const move = (payload: string, to: number): void => {
     end();
@@ -65,15 +67,21 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
     }
   };
 
-  const handleProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
-    draggable: true,
-    onDragStart: (event) => {
-      event.dataTransfer.setData(dragType, payloadOf(index));
-      event.dataTransfer.effectAllowed = "move";
-      setDragged(index);
-    },
-    onDragEnd: end
-  });
+  const payloadRef = useLatest(payloadOf);
+  const handles = useMemo(
+    () =>
+      Array.from({ length: count }, (_, index): HTMLAttributes<RowElement> & { draggable: true } => ({
+        draggable: true,
+        onDragStart: (event) => {
+          event.dataTransfer.setData(dragType, payloadRef.current(index));
+          event.dataTransfer.effectAllowed = "move";
+          setDragged(index);
+        },
+        onDragEnd: end
+      })),
+    [count, dragType, payloadRef, end]
+  );
+  const handleProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => handles[index];
 
   const targetProps = (index: number): HTMLAttributes<RowElement> => ({
     onDragOver: (event) => {

@@ -17,7 +17,15 @@ export interface LaneSettings {
   order: Lane[];
 }
 
-/** `pinned` standing pinned in that order, then `toggles`: how the window and `tet-ctl` write them. */
+/** The order split: the pinned lanes, then the strip's toggles; `laneSettings` joins them again. */
+export function laneOrders(lanes: LaneSettings): { pinned: Lane[]; toggles: Lane[] } {
+  return {
+    pinned: lanes.order.filter((lane) => lanes.pinned.includes(lane)),
+    toggles: lanes.order.filter((lane) => !lanes.pinned.includes(lane))
+  };
+}
+
+/** `pinned` standing pinned in that order, then `toggles`. */
 export function laneSettings(pinned: readonly Lane[], toggles: readonly Lane[]): LaneSettings {
   return { pinned: [...pinned], order: [...pinned, ...toggles] };
 }
@@ -29,8 +37,7 @@ export function withLanePinned(lanes: LaneSettings, lane: Lane, pin: boolean): L
     return lanes;
   }
   const others = (list: readonly Lane[]) => list.filter((entry) => entry !== lane);
-  const pinned = lanes.order.filter((entry) => lanes.pinned.includes(entry));
-  const toggles = lanes.order.filter((entry) => !lanes.pinned.includes(entry));
+  const { pinned, toggles } = laneOrders(lanes);
   return pin ? laneSettings([...others(pinned), lane], others(toggles)) : laneSettings(others(pinned), [lane, ...others(toggles)]);
 }
 

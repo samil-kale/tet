@@ -22,7 +22,7 @@ import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize } from "./ui/layout-storage";
-import { useLanes } from "./ui/use-lanes";
+import { useLanes } from "./lanes/use-lanes";
 import { LANES, type Lane, type LaneSettings } from "../shared/types/settings";
 import { useDragReorder } from "./ui/drag-reorder";
 import { SectionHandle } from "./ui/Section";
@@ -403,22 +403,21 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
       <div className="body">
         {/* Every lane, each in the DOM at width 0 while in (so a slide has a box to
             transition) and mounted throughout, so hiding one keeps selection, filter, open folders
-            and a running action's bar. Pinned ones stand first, in the user's order. Git and
-            files need a repository or worktree in front; without one the projects stand in. */}
+            and a running action's bar. Pinned ones stand first, in the user's order. */}
         {laneOrder.map((lane) => {
           const [width, setWidth] = widthOf(lane);
           const shown = shownLanes.has(lane);
-          /** A pinned lane out drags by its headers (`SectionHandle`): a row inside has a drag of its own. */
           const pinIndex = shown ? pinnedOrder.indexOf(lane) : -1;
+          /** A pinned lane out drags by its headers (`SectionHandle`): a row inside has a drag of its own. */
+          const drag =
+            pinIndex < 0
+              ? undefined
+              : { target: laneDrag.targetProps(pinIndex), handle: laneDrag.handleProps(pinIndex), classes: laneDrag.rowClasses(pinIndex) };
           return (
             <Fragment key={lane}>
               <div
-                {...(pinIndex >= 0 ? laneDrag.targetProps(pinIndex) : undefined)}
-                className={[
-                  "lane",
-                  slidingLanes.has(lane) && "sliding",
-                  ...(pinIndex >= 0 ? laneDrag.rowClasses(pinIndex) : [])
-                ]
+                {...drag?.target}
+                className={["lane", slidingLanes.has(lane) && "sliding", ...(drag?.classes ?? [])]
                   .filter(Boolean)
                   .join(" ")}
                 style={{ width: shown ? width : 0 }}
@@ -429,7 +428,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                   }
                 }}
               >
-                <SectionHandle.Provider value={pinIndex >= 0 ? laneDrag.handleProps(pinIndex) : undefined}>
+                <SectionHandle.Provider value={drag?.handle}>
                   {lane === "projects" && (
                     <div className={`lane-content${shown ? "" : " hidden"}`}>
                       <ProjectList
@@ -486,7 +485,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                       onSelect={select}
                     />
                   )}
-                  </SectionHandle.Provider>
+                </SectionHandle.Provider>
               </div>
               {shown && (
                 <Sash
