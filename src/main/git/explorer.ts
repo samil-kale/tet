@@ -128,6 +128,10 @@ export async function renamePath(root: string, fromPath: string, toPath: string)
   if ("error" in to) {
     return { ok: false, error: to.error };
   }
+  // Before the `mkdir` below, which would leave its folders inside the source.
+  if (relativeInside(from, to.absolute) !== undefined) {
+    return { ok: false, error: `Cannot move "${fromPath}" into itself` };
+  }
   return attempt(async () => {
     await fs.promises.mkdir(path.dirname(to.absolute), { recursive: true });
     await fs.promises.rename(from, to.absolute);

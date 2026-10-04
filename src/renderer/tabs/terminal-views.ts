@@ -5,12 +5,14 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
 import { Terminal } from "@xterm/xterm";
 import { CONTROL_START_SIZE } from "../../shared/control";
+import { errorMessage } from "../../shared/errors";
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isModifierHeld, PLATFORM } from "../platform";
+import { notify } from "../ui/Notices";
 import { buildXtermTheme, editorFontFamily } from "../themes/theme-colors";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -446,7 +448,9 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
   container.addEventListener("drop", (event) => {
     event.preventDefault();
     frame(false);
-    void pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? []));
+    pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? [])).catch((error: unknown) =>
+      notify("error", `Could not paste the dropped files: ${errorMessage(error)}`)
+    );
   });
   container.addEventListener("contextmenu", (event) => {
     event.preventDefault();

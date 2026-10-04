@@ -9,7 +9,7 @@ import { assetName, installRoot, preparedRoot, resourcesDir, rootExecutable, roo
 import { PLATFORM } from "../util/host-platform";
 import type { UpdateResult } from "../../shared/release";
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
-import { readJson } from "../util/json-file";
+import { isRecord, readJson } from "../util/json-file";
 import { resumableDownload } from "./resumable-download";
 import { runProcess } from "../util/process";
 import { logError } from "../util/error-log";
@@ -66,6 +66,9 @@ function reportLastUpdate(notice: Notice): void {
     return;
   }
   fs.rmSync(file, { force: true });
+  if (!isRecord(result)) {
+    return;
+  }
   if (result.ok) {
     notice("info", `Updated to ${result.version}`);
   } else {
@@ -282,8 +285,13 @@ export function startAutoUpdate(
   };
 
   void updaterDone().then(async () => {
-    reportLastUpdate(notice);
-    await sweepUpdateDir(asset, root);
+    // A failed report or sweep must not end the checks for the session.
+    try {
+      reportLastUpdate(notice);
+      await sweepUpdateDir(asset, root);
+    } catch (error) {
+      logError("could not prepare the update folder", error);
+    }
     await check();
     setInterval(() => void check(), CHECK_INTERVAL_MS);
   });

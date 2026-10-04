@@ -108,8 +108,10 @@ export function utilityClient<Module>(name: string): UtilityClient<Module> {
     api: new Proxy({} as UtilityApi<Module>, {
       get:
         (_target, method: string) =>
-        (...args: unknown[]) =>
-          call(method, args)
+          // Not a method: `await api` would otherwise call "then" in the host.
+          method === "then"
+            ? undefined
+            : (...args: unknown[]) => call(method, args)
     }),
     start: () => void host(),
     stop: () => {

@@ -161,7 +161,10 @@ export async function startControlServer(
           gone.abort();
         }
       });
-      void handle(request, gone.signal).then(({ response, after }) => respond(res, response, after));
+      void handle(request, gone.signal).then(
+        ({ response, after }) => respond(res, response, after),
+        (error: unknown) => respond(res, reject("internal", errorMessage(error)))
+      );
     });
     req.on("error", () => undefined);
     // A response write failing after hand-over (CLI gone, reset, or this process exiting) is
