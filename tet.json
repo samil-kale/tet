@@ -1,5 +1,10 @@
 {
-  "exclude": [".github/workflows", ".claude", ".gitignore"],
+  "exclude": [
+    ".github/workflows",
+    ".claude",
+    ".gitignore",
+    "node_modules"
+  ],
   "commands": [
     {
       "command": "npm run compile",
