@@ -34,7 +34,7 @@
 
 :root {
   --vscode-font-family: "Inter", sans-serif;
-  --vscode-font-size: 13px;
+  --vscode-font-size: 12px;
   --vscode-editor-font-family: "JetBrains Mono", monospace;
 }
 
@@ -292,8 +292,8 @@ textarea:focus,
   /* An action button's box (.icon-button), and what sits in its place or level with it. */
   --action-size: 24px;
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
-  --small-font-size: 12px;
-  --tiny-font-size: 11px;
+  --small-font-size: 11px;
+  --tiny-font-size: 10px;
   /* The tabbed dialogs (settings, sbx): their tabs need more than `.dialog`'s width. */
   --dialog-wide-width: 580px;
   /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
