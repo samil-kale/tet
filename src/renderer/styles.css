@@ -34,7 +34,7 @@
 
 :root {
   --vscode-font-family: "Inter", sans-serif;
-  --vscode-font-size: 12px;
+  --vscode-font-size: 13px;
   --vscode-editor-font-family: "JetBrains Mono", monospace;
 }
 
@@ -283,17 +283,17 @@ textarea:focus,
   --pane-min-width: 230px;
   --pane-min-height: 120px;
   --content-min-width: 320px;
-  --list-row-height: 28px;
+  --list-row-height: 30px;
   /* One height for every single-line field, and for a button beside one: input,
      .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
   --field-height: 29px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
-  --icon-size: 13px;
+  --icon-size: 15px;
   /* An action button's box (.icon-button), and what sits in its place or level with it. */
   --action-size: 24px;
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
-  --small-font-size: 11px;
-  --tiny-font-size: 10px;
+  --small-font-size: 12px;
+  --tiny-font-size: 11px;
   /* The tabbed dialogs (settings, sbx): their tabs need more than `.dialog`'s width. */
   --dialog-wide-width: 580px;
   /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
@@ -489,7 +489,7 @@ textarea:focus,
 }
 
 /* One row shape for both of the projects lane's lists. No gap: the icon buttons ending a row
-   already carry 5.5px around a 13px drawing in a 24px box. */
+   already carry 4.5px around a 15px drawing in a 24px box. */
 .project-item,
 .command-item {
   display: flex;
@@ -781,9 +781,9 @@ textarea:focus,
   min-height: 0;
 }
 
-/* VS Code's explorer row. No flex gap: the twistie and the file mark carry their own. */
+/* The Explorer's row. No flex gap: the twistie and the file mark carry their own. */
 .explorer-tree .tree-item {
-  height: 22px;
+  height: 24px;
   gap: 0;
 }
 
@@ -1063,7 +1063,7 @@ textarea:focus,
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 4px 0 10px;
-  max-width: 220px;
+  max-width: 250px;
   font-size: var(--vscode-font-size);
   color: var(--vscode-tab-inactiveForeground);
   background: var(--vscode-tab-inactiveBackground);
@@ -1086,11 +1086,10 @@ textarea:focus,
 .editor-bar-actions {
   display: flex;
   align-items: center;
-  /* As `.section-header-actions`. */
-  gap: 2px;
+  gap: 6px;
   flex: none;
   border-right: 1px solid var(--vscode-panel-border);
-  padding: 0 4px;
+  padding: 0 8px;
 }
 
 .tab-label {
@@ -2603,8 +2602,8 @@ textarea:focus,
   position: relative;
   display: flex;
   align-items: flex-start;
-  /* With the 13px icon, the text starts where VS Code's does beside its 16px one. */
-  gap: 7px;
+  /* With the 15px icon, the text starts where VS Code's does beside its 16px one. */
+  gap: 5px;
   /* VS Code's fixed width: a notice sized to its text is easily missed. Capped by the window
      minus margins. */
   width: min(450px, 100vw - 14px);

@@ -305,7 +305,7 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
   const term = new Terminal({
     ...size,
     fontFamily: editorFontFamily(),
-    fontSize: PLATFORM.terminalFontSize,
+    fontSize: 14,
     theme: buildXtermTheme(),
     scrollback: 4000,
     // FitAddon reserves `options.overviewRuler?.width || 14` pixels for the hidden scrollbar; `0`

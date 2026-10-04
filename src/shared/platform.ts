@@ -82,8 +82,6 @@ export interface Platform {
   readonly modifierLabel: string;
   /** The context menu entry showing a file in the file manager. */
   readonly revealLabel: string;
-  /** VS Code's `terminal.integrated.fontSize` default. */
-  readonly terminalFontSize: number;
   /** Monaco's own Replace key, which tet unbinds (editor-views.ts). */
   readonly replaceKey: string;
 }
@@ -136,7 +134,6 @@ export const WINDOWS: Platform = {
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in Explorer",
-  terminalFontSize: 14,
   replaceKey: "ctrl+h"
 };
 
@@ -172,7 +169,6 @@ export const MAC: Platform = {
   modifierKey: "Meta",
   modifierLabel: "⌘",
   revealLabel: "Reveal in Finder",
-  terminalFontSize: 12,
   replaceKey: "alt+ctrl+f"
 };
 
@@ -206,7 +202,6 @@ export const LINUX: Platform = {
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in your file manager",
-  terminalFontSize: 14,
   replaceKey: "ctrl+h"
 };
 
