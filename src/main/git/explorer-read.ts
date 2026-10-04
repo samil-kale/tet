@@ -49,7 +49,7 @@ function searchPattern(query: FileSearchQuery, flags: string): RegExp {
   return new RegExp(source, query.matchCase ? flags : `${flags}i`);
 }
 
-/** A `files.exclude` glob, compiled once per walk rather than per entry: `path.matchesGlob`'s options,
+/** An `exclude` glob, compiled once per walk rather than per entry: `path.matchesGlob`'s options,
  *  case as the platform's paths compare. */
 function excludeMatcher(pattern: string): Minimatch {
   return new Minimatch(pattern, {
@@ -105,7 +105,7 @@ export async function walkExplorer(
     }
     const pending: Promise<void>[] = [];
     for (const entry of entries) {
-      // Hidden regardless of `files.exclude`.
+      // Hidden regardless of `exclude`.
       if (entry.name === ".git") {
         continue;
       }

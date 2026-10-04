@@ -166,18 +166,13 @@ describe("readExplorerView", () => {
     ]);
   });
 
-  it("reads the excludes the way VS Code spells them, and only what is well-formed", async () => {
-    put(
-      JSON.stringify({
-        settings: {
-          "files.exclude": { "**/node_modules": true, dist: false, " ": true, "*.log": "yes" },
-          "explorer.excludeGitIgnore": true,
-          "explorer.compactFolders": false,
-          "explorer.sortOrder": "modified"
-        }
-      })
-    );
-    assert.deepEqual(await readExplorerView(root), { folders: [], exclude: ["**/node_modules"] });
+  it("reads the exclude list, only what is well-formed, and nothing of the old settings keys", async () => {
+    put(JSON.stringify({ exclude: ["**/node_modules", " ", 3, "dist"] }));
+    assert.deepEqual(await readExplorerView(root), { folders: [], exclude: ["**/node_modules", "dist"] });
+    put(JSON.stringify({ exclude: { dist: true } }));
+    assert.deepEqual((await readExplorerView(root)).exclude, []);
+    put(JSON.stringify({ settings: { "files.exclude": { dist: true }, "explorer.sortOrder": "modified" } }));
+    assert.deepEqual(await readExplorerView(root), { folders: [], exclude: [] });
   });
 });
 
@@ -195,12 +190,11 @@ describe("the tree's own edits", () => {
     assert.deepEqual(stored(), { commands: ["keep"] });
   });
 
-  it("excludes a path the way VS Code stores it, keeping the other patterns", async () => {
-    put(JSON.stringify({ settings: { "files.exclude": { dist: true }, "explorer.sortOrder": "type" } }));
+  it("excludes a path by appending it once, keeping the other patterns and keys", async () => {
+    put(JSON.stringify({ exclude: ["dist"], commands: ["keep"] }));
     await addExclude(root, "build/out");
-    assert.deepEqual(stored(), {
-      settings: { "files.exclude": { dist: true, "build/out": true }, "explorer.sortOrder": "type" }
-    });
+    await addExclude(root, "build/out");
+    assert.deepEqual(stored(), { exclude: ["dist", "build/out"], commands: ["keep"] });
   });
 
   it("keeps every change of edits made at once, each reading what the last one wrote", async () => {
@@ -213,7 +207,7 @@ describe("the tree's own edits", () => {
     assert.deepEqual(stored(), {
       commands: ["a"],
       folders: [{ path: "." }, { path: "src" }],
-      settings: { "files.exclude": { dist: true, out: true } }
+      exclude: ["dist", "out"]
     });
   });
 });
@@ -223,10 +217,9 @@ describe("a hand-written tet.json", () => {
     "{",
     "\t// Run from the tab strip.",
     '\t"commands": ["npm test",],',
-    '\t"settings": {',
-    '\t\t"files.exclude": { "dist": true }, // build output',
-    '\t\t"explorer.sortOrder": "type",',
-    "\t},",
+    '\t"exclude": [',
+    '\t\t"dist", // build output',
+    "\t],",
     "}",
     ""
   ].join("\r\n");
@@ -244,7 +237,7 @@ describe("a hand-written tet.json", () => {
     await addExclude(root, "out");
     await addFolder(root, "src");
     const text = fs.readFileSync(file(), "utf8");
-    for (const kept of ["\t// Run from the tab strip.", '"explorer.sortOrder": "type"', "// build output"]) {
+    for (const kept of ["\t// Run from the tab strip.", "// build output"]) {
       assert.ok(text.includes(kept), kept);
     }
     assert.equal(text.replace(/\r\n/g, "").includes("\n"), false, "CRLF stays CRLF");
@@ -257,13 +250,13 @@ describe("a hand-written tet.json", () => {
     assert.equal(fs.readFileSync(file(), "utf8").includes('"folders"'), false, "the key goes with the last folder");
   });
 
-  it("creates a missing file as plain JSON, and replaces a settings key that isn't an object", async () => {
+  it("creates a missing file as plain JSON, and replaces an exclude key that isn't a list", async () => {
     await addExclude(root, "dist");
-    assert.deepEqual(stored(), { settings: { "files.exclude": { dist: true } } });
+    assert.deepEqual(stored(), { exclude: ["dist"] });
     assert.ok(fs.readFileSync(file(), "utf8").endsWith("}\n"));
-    put(JSON.stringify({ settings: "junk" }));
+    put(JSON.stringify({ exclude: "junk" }));
     await addExclude(root, "dist");
-    assert.deepEqual(stored(), { settings: { "files.exclude": { dist: true } } });
+    assert.deepEqual(stored(), { exclude: ["dist"] });
   });
 
   it("refuses to edit a file whose top level isn't an object", async () => {

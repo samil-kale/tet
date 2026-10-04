@@ -17,11 +17,10 @@ import { isRecord } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 
 /** A project's saved commands, Explorer folders and excludes and SBX settings, in its own root so
- *  it travels with the repository; a linked worktree has none of its own (configRoot). Shaped like
- *  a VS Code `.code-workspace`: `folders` at the top, the excludes under `settings` by their VS
- *  Code name (`readExplorerView`). A file missing or oddly shaped is no commands and the default
- *  view; a broken one its last readable version (`read`). The watcher reports every write of it as
- *  `commands:changed`. */
+ *  it travels with the repository; a linked worktree has none of its own (configRoot). The
+ *  Explorer's `folders` and `exclude` list lie at the top (`readExplorerView`). A file missing or
+ *  oddly shaped is no commands and the default view; a broken one its last readable version
+ *  (`read`). The watcher reports every write of it as `commands:changed`. */
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
@@ -34,20 +33,17 @@ type StoredCommand =
 interface ProjectFile {
   commands?: StoredCommand[];
   folders?: unknown;
-  settings?: unknown;
+  exclude?: unknown;
   /** The sbx-settings dialog's state (readSbxSettings/writeSbxSettings). Never a credential. */
   sbx?: unknown;
 }
-
-/** The key inside `settings`, as VS Code spells it. */
-const KEY_EXCLUDE = "files.exclude";
 
 /** What of the Explorer's view is the project's; anything of the wrong shape is its default. */
 export interface ExplorerView {
   /** Top-level nodes; empty means the whole repository as one tree. They may overlap, each file is
    *  still listed once. A `name` is file-only: the tree's menu writes paths alone. */
   folders: ExplorerRoot[];
-  /** `files.exclude`'s globs, matched against repository-relative paths. */
+  /** The `exclude` list's globs, matched against repository-relative paths. */
   exclude: string[];
 }
 
@@ -135,8 +131,9 @@ async function read(filePath: string): Promise<ProjectFile | null> {
   return last;
 }
 
-/** A value to set at a path inside the file; undefined removes the key. */
-type Change = [JSONPath, unknown];
+/** A value to set at a path inside the file; undefined removes the key. `insert` puts it into the
+ *  array at the index the path ends in instead, leaving the array's other entries as written. */
+type Change = [JSONPath, unknown, insert?: true];
 
 /** The patch underway per file: commands, the Explorer menu, the SBX Settings and tet-ctl all write
  *  it, and two read-modify-writes at once keep only the last one's change. */
@@ -175,8 +172,8 @@ async function patchNow(
   }
   const formattingOptions = { insertSpaces: true, tabSize: 2, eol: text?.includes("\r\n") ? "\r\n" : "\n" };
   let next = text ?? "";
-  for (const [jsonPath, value] of changes) {
-    next = applyEdits(next, modify(next, jsonPath, value, { formattingOptions }));
+  for (const [jsonPath, value, insert] of changes) {
+    next = applyEdits(next, modify(next, jsonPath, value, { formattingOptions, isArrayInsertion: insert }));
   }
   await writeFileAtomic(filePath, text === null ? `${next}\n` : next, "utf8");
 }
@@ -292,20 +289,14 @@ function toSettings(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
 }
 
-/** `files.exclude`: VS Code's map of glob → true; only `true` counts. */
+/** `exclude`: a list of globs; an entry that isn't a non-blank string is no pattern. */
 function toExclude(value: unknown): string[] {
-  return Object.entries(toSettings(value))
-    .filter(([pattern, enabled]) => enabled === true && pattern.trim())
-    .map(([pattern]) => pattern);
+  return Array.isArray(value) ? value.filter((pattern): pattern is string => typeof pattern === "string" && pattern.trim() !== "") : [];
 }
 
 export async function readExplorerView(root: string): Promise<ExplorerView> {
   const content = (await read(file(root))) ?? {};
-  const settings = toSettings(content.settings);
-  return {
-    folders: toFolders(content.folders, root),
-    exclude: toExclude(settings[KEY_EXCLUDE])
-  };
+  return { folders: toFolders(content.folders, root), exclude: toExclude(content.exclude) };
 }
 
 /** "Add Folder to Explorer". No `folders` means the whole repository, so the first add also writes
@@ -331,23 +322,14 @@ export function removeFolder(root: string, folderPath: string): Promise<void> {
   });
 }
 
-/** A key inside `settings`; a `settings` that isn't an object is replaced, as an edit can't reach into it. */
-function settingChange(content: ProjectFile, key: string, value: unknown): Change {
-  const settings = content.settings;
-  return isRecord(settings)
-    ? [["settings", key], value]
-    : [["settings"], { [key]: value }];
-}
-
-/** "Exclude from Explorer": the path itself as a pattern, set to true. */
+/** "Exclude from Explorer": the path itself as a pattern, appended unless listed; a stored
+ *  `exclude` that isn't a list is replaced, as an edit can't reach into it. */
 export function addExclude(root: string, relPath: string): Promise<void> {
   return patch(root, (content) => {
-    const exclude = toSettings(content.settings)[KEY_EXCLUDE];
-    return [
-      isRecord(exclude)
-        ? [["settings", KEY_EXCLUDE, relPath], true]
-        : settingChange(content, KEY_EXCLUDE, { [relPath]: true })
-    ];
+    if (!Array.isArray(content.exclude)) {
+      return [[["exclude"], [relPath]]];
+    }
+    return content.exclude.includes(relPath) ? [] : [[["exclude", content.exclude.length], relPath, true]];
   });
 }
 

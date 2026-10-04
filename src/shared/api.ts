@@ -208,7 +208,7 @@ export interface TETApi {
     addFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** Removing the last one restores the whole repository as one tree. */
     removeFolder(projectId: string, path: string): Promise<GitActionResult>;
-    /** tet.json's `settings["files.exclude"]` — "Exclude from Explorer". */
+    /** tet.json's `exclude` — "Exclude from Explorer". */
     excludePath(projectId: string, path: string): Promise<GitActionResult>;
     listExplorer(ref: ProjectRef): Promise<ExplorerListing>;
     /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */

@@ -1,11 +1,5 @@
 {
-  "settings": {
-    "files.exclude": {
-      ".github/workflows": true,
-      ".claude": true,
-      ".gitignore": true
-    }
-  },
+  "exclude": [".github/workflows", ".claude", ".gitignore"],
   "commands": [
     {
       "command": "npm run compile",
