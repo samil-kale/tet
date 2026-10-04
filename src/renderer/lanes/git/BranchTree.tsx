@@ -43,7 +43,7 @@ type MenuTarget =
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
 const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or add a worktree";
 
-/** A branch merged into the default branch has its icon in purple. */
+/** A branch merged into the default branch has its icon dimmed. */
 function branchIconClass(merged: boolean): string {
   return merged ? "tree-icon merged" : "tree-icon";
 }
