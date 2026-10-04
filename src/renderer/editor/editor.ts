@@ -137,7 +137,7 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
     theme: highlightTheme(),
     fontFamily,
     fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 21,
     automaticLayout: true,
     minimap: { enabled: false },
     stickyScroll: { enabled: false },

@@ -286,16 +286,16 @@ textarea:focus,
   --list-row-height: 30px;
   /* One height for every single-line field, and for a button beside one: input,
      .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
-  --field-height: 29px;
+  --field-height: 28px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
   --icon-size: 15px;
   /* An action button's box (.icon-button), and what sits in its place or level with it. */
-  --action-size: 24px;
+  --action-size: 22px;
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
   --small-font-size: 12px;
   --tiny-font-size: 11px;
   /* The tabbed dialogs (settings, sbx): their tabs need more than `.dialog`'s width. */
-  --dialog-wide-width: 580px;
+  --dialog-wide-width: 620px;
   /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
      not resize them. Capped to the window. */
   --dialog-tall-height: 420px;
@@ -478,7 +478,7 @@ textarea:focus,
   overflow-y: auto;
 }
 
-/* Every list row is one height. Stated rather than padded, so a row with a 24px action button
+/* Every list row is one height. Stated rather than padded, so a row with a 22px action button
    stands no taller than one holding only text. */
 .project-item,
 .command-item,
@@ -489,7 +489,7 @@ textarea:focus,
 }
 
 /* One row shape for both of the projects lane's lists. No gap: the icon buttons ending a row
-   already carry 4.5px around a 15px drawing in a 24px box. */
+   already carry 3.5px around a 15px drawing in a 22px box. */
 .project-item,
 .command-item {
   display: flex;
@@ -803,7 +803,7 @@ textarea:focus,
   justify-content: center;
   margin-right: 4px;
   font-family: "seti";
-  font-size: 14.6px;
+  font-size: calc(var(--icon-size) * 14.6 / 12);
   line-height: 1;
 }
 
@@ -882,11 +882,11 @@ textarea:focus,
   background: var(--vscode-editor-findMatchHighlightBackground);
 }
 
-/* 1px under --icon-size, like the Explorer's. */
+/* A tree's icons are the size of every other, as IntelliJ's. */
 .tree-icon {
   flex: none;
-  width: calc(var(--icon-size) - 1px);
-  height: calc(var(--icon-size) - 1px);
+  width: var(--icon-size);
+  height: var(--icon-size);
   /* As `.icon-button`. */
   opacity: 0.8;
 }
@@ -1480,11 +1480,6 @@ textarea:focus,
   border-radius: 3px !important;
   background-color: transparent !important;
   opacity: 0.8;
-}
-
-/* Monaco places the close button for its own 16px button; 1px up centers the 24px one. */
-.editor-host .find-widget > .button.codicon-widget-close {
-  top: 4px !important;
 }
 
 /* No replace: the widget's only `.toggle` is the one opening the replace row, which tet offers
@@ -2142,17 +2137,24 @@ textarea:focus,
   cursor: pointer;
 }
 
+/* A row of IntelliJ's checkbox height, 24px, whatever the font's own line height. Stated so the
+   offsets are arithmetic: the box's optical middle, 4px plus half of 15, is where the first line's
+   middle sits. The 15 is not the box: centring the real 18 sits high, the line box holding
+   descender space. The sides are Chromium's own for a checkbox, stated so the icon takes the same
+   column. */
 .dialog-checkbox input,
 .sbx-governance-icon {
   display: grid;
   place-content: center;
-  /* Stated so the offset is arithmetic. The 15 is not the box: centring the real 18 sits high,
-     the line box holding descender space. The sides are Chromium's own for a checkbox, stated so
-     the icon takes the same column. */
   width: 18px;
   height: 18px;
   flex: none;
-  margin: calc((1lh - 15px) / 2) 3px 3px 4px;
+  margin: 4px 3px 2px 4px;
+}
+
+.dialog-checkbox > span,
+.sbx-governance > strong {
+  padding-top: calc((23px - 1lh) / 2);
 }
 
 /* Drawn by tet, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
@@ -2334,7 +2336,7 @@ textarea:focus,
   color: var(--vscode-notificationsWarningIcon-foreground);
 }
 
-/* A prompt's color swatches, in the 24px of every action button. The colors themselves come from
+/* A prompt's color swatches, in the 22px of every action button. The colors themselves come from
    the choices, as theme variables, so the row repaints with the theme. */
 .dialog-colors {
   display: flex;
