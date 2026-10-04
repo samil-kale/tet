@@ -1170,7 +1170,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   flex: none;
-  padding: 0 4px;
+  padding: 0 6px;
 }
 
 /* Anchored at the pointer, so fixed rather than positioned within any pane. */
