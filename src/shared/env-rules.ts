@@ -1,5 +1,5 @@
 /**
- * What a name kept in tet's environment (src/main/store/environment.ts) may be, and why a row of the
+ * What a name kept in TET's environment (src/main/store/environment.ts) may be, and why a row of the
  * Settings' Environment tab cannot be saved — one rule for the tab's marks and the store's refusal.
  * `ignoreCase` is the machine's: win32 takes `a` and `A` for one variable.
  */
@@ -16,8 +16,8 @@ export function envNameKey(name: string, ignoreCase: boolean): string {
   return ignoreCase ? name.toUpperCase() : name;
 }
 
-/** Names tet sets in a tab itself (`PATH` with its launcher dir, `TET_*` for the control channel):
- *  one kept in tet would replace the machine's whole PATH, or be overwritten. */
+/** Names TET sets in a tab itself (`PATH` with its launcher dir, `TET_*` for the control channel):
+ *  one kept in TET would replace the machine's whole PATH, or be overwritten. */
 export function isReservedName(name: string): boolean {
   const upper = name.toUpperCase();
   return upper === "PATH" || upper.startsWith("TET_");

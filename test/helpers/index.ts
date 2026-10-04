@@ -95,7 +95,7 @@ export interface Run {
 }
 
 /**
- * Runs the built CLI with the channel in its environment, as a tet terminal would. Async because
+ * Runs the built CLI with the channel in its environment, as a TET terminal would. Async because
  * in control.test.ts the server runs on this event loop, which a `spawnSync` would block.
  */
 export function tetCtl(args: string[], env: Record<string, string | undefined>, input = ""): Promise<Run> {
@@ -143,7 +143,7 @@ export async function eventually(
  * tet-ctl alone (app.test.ts, agents.test.ts).
  */
 export interface TestApp {
-  /** The electron started here — not the instance a `restart-app` leaves. */
+  /** The electron started here — not the instance a `app-restart` leaves. */
   child: ChildProcess;
   /** Everything that electron wrote to stderr so far. */
   stderr(): string;
@@ -159,7 +159,7 @@ export interface TestApp {
 /** Hidden when run locally, so no window takes the screen; CI runs it shown. */
 export const WINDOW_ARGS: string[] = process.env.CI ? [] : ["--hide-window"];
 
-/** Starts tet and resolves once it answers; a start that never answers is killed before rejecting. */
+/** Starts TET and resolves once it answers; a start that never answers is killed before rejecting. */
 export async function startApp(userData: string, token: string, startupMs: number): Promise<TestApp> {
   // Speaks for no tab: the run's token takes no caller ids, and a run from a TET tab inherits some.
   const env: Record<string, string | undefined> = {

@@ -6,12 +6,12 @@ import { preparedRoot, processAlive, runningUpdater, updateLockPath } from "../s
 import type { UpdateResult } from "../shared/release";
 
 /**
- * Run after tet quits:
+ * Run after TET quits:
  * `tet-update.js <pid> <version> <staged root> <install root> <result file> [<prepared root>]`.
  * Started detached by auto-update.ts under the *new* binary as node from its unpack folder — the
- * installed binary gets replaced, and win32 locks it (and node-pty's native files) until tet's
+ * installed binary gets replaced, and win32 locks it (and node-pty's native files) until TET's
  * process is gone. Hence the wait first. The prepared root is the version already copied whole
- * beside the install while tet ran, leaving only the two renames; a tet that prepared none hands
+ * beside the install while TET ran, leaving only the two renames; a TET that prepared none hands
  * none, and the copy is made here (MIGRATION, below).
  */
 
@@ -53,7 +53,7 @@ function install(pid: number, version: string, staged: string, root: string, res
   while (processAlive(pid) && Date.now() < deadline) {
     sleep(POLL_MS);
   }
-  // Never under a running tet: on macOS a quit can leave a windowless process. The next start finds
+  // Never under a running TET: on macOS a quit can leave a windowless process. The next start finds
   // the version again, and the next quit installs it.
   if (processAlive(pid)) {
     writeResult(resultFile, { version, ok: false, output: `tet (pid ${pid}) was still running after ${EXIT_WAIT_MS / 1000}s` });
@@ -61,11 +61,11 @@ function install(pid: number, version: string, staged: string, root: string, res
   }
 
   // Complete beside the install before the install is touched: moving it aside and this into
-  // place are two renames, and nothing ever removes the install. A tet started meanwhile holds
+  // place are two renames, and nothing ever removes the install. A TET started meanwhile holds
   // its TET.exe and app.asar open, which removing the install under it would leave behind.
   const fresh = prepared ?? preparedRoot(root);
-  // MIGRATION: started by a tet that prepares no copy beside the install, which hands none. Once
-  // no installed tet is that old, remove this branch and make `prepared` required.
+  // MIGRATION: started by a TET that prepares no copy beside the install, which hands none. Once
+  // no installed TET is that old, remove this branch and make `prepared` required.
   if (prepared === undefined) {
     try {
       fs.rmSync(fresh, { recursive: true, force: true });

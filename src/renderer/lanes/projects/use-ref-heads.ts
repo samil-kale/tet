@@ -13,10 +13,10 @@ export function useRefHeads(states: Record<string, RepositoryState>): Record<str
   const headsRef = useRef<Record<string, RefHead>>({});
   return useMemo(() => {
     const next: Record<string, RefHead> = {};
-    for (const [key, state] of Object.entries(states)) {
+    for (const [refKey, state] of Object.entries(states)) {
       const base = state.worktrees.find((worktree) => worktree.current)?.base;
       const target = worktreeBase(state);
-      next[key] = {
+      next[refKey] = {
         head: state.head,
         detached: state.detached,
         upstream: state.upstream,

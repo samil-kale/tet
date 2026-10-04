@@ -5,8 +5,8 @@ import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/con
 import { admitsVerb, HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../shared/control-side";
 
 /**
- * `tet-ctl`: how an agent in a tet terminal asks the app. No electron; bundled on its own
- * (esbuild.js), started by the launcher in ~/.tet/bin; the environment says where tet listens and
+ * `tet-ctl`: how an agent in a TET terminal asks the app. No electron; bundled on its own
+ * (esbuild.js), started by the launcher in ~/.tet/bin; the environment says where TET listens and
  * who the caller is (src/shared/control.ts). Output is for an agent: JSON on stdout, one line on
  * stderr on failure, and an exit code to branch on.
  */
@@ -166,7 +166,7 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
  */
 const HOOK_IDLE_MS = 10_000;
 
-/** The server comes up with the workspace, after the terminal may (and after `restart-app`). */
+/** The server comes up with the workspace, after the terminal may (and after `app-restart`). */
 const CONNECT_RETRY_MS = 5000;
 const CONNECT_RETRY_GAP_MS = 250;
 
@@ -227,7 +227,7 @@ async function main(): Promise<void> {
       worktree: process.env[CONTROL_ENV.worktree] || undefined,
       tabId: process.env[CONTROL_ENV.tabId]
     },
-    // Started when the hook fired, which orders turn signals.
+    // Started when the hook fired, which orders turn reports.
     at: Date.now()
   };
   let response: ControlResponse;

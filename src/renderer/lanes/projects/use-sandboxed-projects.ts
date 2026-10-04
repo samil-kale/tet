@@ -19,7 +19,7 @@ export function useSandboxedProjects(projects: Project[]): SandboxedProjects {
    *  Forgotten with the project, so one added again is read again. */
   const sandboxedRead = useRef(new Set<string>());
 
-  /** A project's sbx switch goes with the project, not with a repository or worktree of it. */
+  /** Whether SBX is enabled for a project goes with the project, not with a repository or worktree of it. */
   const forgetSandboxed = useCallback((projectId: string) => {
     setSandboxed((current) => forget(current, projectId));
     sandboxedRead.current.delete(projectId);
@@ -35,7 +35,7 @@ export function useSandboxedProjects(projects: Project[]): SandboxedProjects {
     for (const project of projects) {
       if (!sandboxedRead.current.has(project.id)) {
         sandboxedRead.current.add(project.id);
-        void window.tet.sbx.getConfig(project.id).then((config) => applySandboxed(project.id, config.enabled));
+        void window.tet.sbx.getSettings(project.id).then((config) => applySandboxed(project.id, config.enabled));
       }
     }
   }, [projects, applySandboxed]);

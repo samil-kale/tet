@@ -23,7 +23,7 @@ import {
 import { ProjectStore } from "../../src/main/store/project-store";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import type { SessionManagerRegistry } from "../../src/main/terminals/session-registry";
-import { readCommands, readSbxConfig, writeCommands } from "../../src/main/store/tet-json";
+import { readCommands, readSbxSettings, writeCommands } from "../../src/main/store/tet-json";
 import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project";
 import { eventually, forkUtilitiesInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
 
@@ -45,8 +45,8 @@ function tetId(folder: string): string | undefined {
   return result.status === 0 ? result.stdout.trim() : undefined;
 }
 
-/** A repository with a remote; `foreign` worktrees made with plain git, each on a published branch. */
-function repository(foreign: string[] = []) {
+/** A repository with a remote; `madeElsewhere` worktrees made with plain git, each on a published branch. */
+function repository(madeElsewhere: string[] = []) {
   const bare = initBare("tet-projects-bare-");
   const main = real(tempDir("tet-projects-main-"));
   git(main, "init", "-q", "--initial-branch=main");
@@ -55,7 +55,7 @@ function repository(foreign: string[] = []) {
   git(main, "push", "-q", "-u", "origin", "main");
   const elsewhere = real(tempDir("tet-projects-elsewhere-"));
   const at = (name: string): string => path.join(elsewhere, name);
-  for (const name of foreign) {
+  for (const name of madeElsewhere) {
     git(main, "worktree", "add", "-q", "--relative-paths", "-b", name, at(name));
     git(at(name), "push", "-q", "-u", "origin", name);
   }
@@ -377,11 +377,11 @@ describe("a worktree's tet.json", () => {
     );
     fs.writeFileSync(path.join(worktree, "tet.json"), JSON.stringify({ commands: ["its own copy"] }));
     assert.deepEqual(await readCommands(worktree), [{ command: "npm test" }]);
-    const config = await readSbxConfig(worktree);
+    const config = await readSbxSettings(worktree);
     assert.equal(config.enabled, true);
     assert.deepEqual(config.hosts, ["example.com"]);
     assert.deepEqual(config.ports, [], "a port reaches the repository's sandbox alone");
-    assert.deepEqual((await readSbxConfig(repo.main)).ports, ports);
+    assert.deepEqual((await readSbxSettings(repo.main)).ports, ports);
     await assert.rejects(writeCommands(worktree, []), /takes its settings from/);
     assert.deepEqual(await readCommands(repo.main), [{ command: "npm test" }], "left as it was");
   });

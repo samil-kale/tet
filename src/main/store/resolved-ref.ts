@@ -14,11 +14,21 @@ export interface ResolvedRef {
   name(): string;
 }
 
+/** What a verb answers for a project id the store does not hold. */
+export const PROJECT_NOT_FOUND = "Project not found";
+
+/** What a verb answers for a repository or worktree that is not open: its name, or that its project
+ *  is unknown. */
+export function notOpenMessage(projects: ProjectLookup, ref: ProjectRef): string {
+  const project = projects.get(ref.projectId);
+  return project ? `${projectRefName(project, ref)} is not open` : PROJECT_NOT_FOUND;
+}
+
 /** The repository or worktree `ref` names, of a project the store holds. */
 export function resolveProjectRef(dataRoot: string, projects: ProjectLookup, ref: ProjectRef): ResolvedRef {
   const project = projects.get(ref.projectId);
   if (!project) {
-    throw new Error(`Project not found: ${ref.projectId}`);
+    throw new Error(PROJECT_NOT_FOUND);
   }
   // Kept for the notices of one closing after its project left the store.
   let name = projectRefName(project, ref);

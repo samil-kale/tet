@@ -1,5 +1,5 @@
 /**
- * `editor.main` pulls in every Monarch language and the language services with their workers; tet
+ * `editor.main` pulls in every Monarch language and the language services with their workers; TET
  * colors through shiki (`editor.ts`). Monaco has no narrower entry point, so this is
  * `editor.main.js`'s import list minus the languages and every contribution that only talks to a
  * language provider (hover, suggestions, format, rename, go-to-definition, ...). Not a public API:

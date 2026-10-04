@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from "react";
-import { projectRef, projectRefKey, worktreeName } from "../../../shared/types/project";
+import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
 import type { Project, ProjectRef, ProjectWorktree } from "../../../shared/types/project";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { GitRun } from "../../git/run-action";
@@ -7,8 +7,8 @@ import {
   askDeleteWorktree,
   askNewWorktree,
   askRenameWorktree,
+  MADE_ELSEWHERE,
   newWorktreeRefusal,
-  NOT_MADE_BY_TET,
   worktreeEntry
 } from "../../git/worktree-questions";
 import { PLATFORM } from "../../platform";
@@ -24,8 +24,8 @@ import type { RefMarks } from "../../tabs/use-tab-marks";
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
 
-/** One action in a row; its click must not reach the row, which selects its repository or
- *  worktree. */
+/** One action in a row; its click must not reach the row, which makes its repository or
+ *  worktree active. */
 function rowButton(title: string, run: () => void, icon: ReactNode) {
   return (
     <IconButton title={title} isolated onClick={run}>
@@ -55,16 +55,16 @@ export interface RefHead {
 
 interface ProjectListProps {
   projects: Project[];
-  /** Every open repository and worktree by key, identity-stable (resolved-ref.ts's `resolvedByKey`). */
+  /** Every open repository and worktree by `refKey`, identity-stable (resolved-ref.ts's `resolvedByRefKey`). */
   resolvedRefs: Record<string, ResolvedRef>;
-  activeKey: string | null;
-  onSelect: (key: string) => void;
+  activeRefKey: string | null;
+  onActivateRef: (refKey: string) => void;
   /** Removes the project, once this list asked about its worktrees. */
   onRemove: (projectId: string) => void;
   /** The full list in the new order. */
   onReorder: (projects: Project[]) => void;
   onAdd: () => void;
-  /** By `projectRefKey`, with a new identity only where the answer changed (`App` ensures it).
+  /** By `refKey`, with a new identity only where the answer changed (`App` ensures it).
    *  Records, not lookup callbacks: a callback closing over every repository's and worktree's state
    *  changes on every push and breaks the memo. */
   heads: Record<string, RefHead>;
@@ -74,26 +74,26 @@ interface ProjectListProps {
   /** Opens a shell tab in that repository or worktree ("open in terminal"). */
   onOpenShellTab: (ref: ProjectRef) => void;
   /** Opens the next working session, one per press. */
-  onShowBusy: (key: string) => void;
+  onShowWorking: (refKey: string) => void;
   /** Opens the oldest finished session; pressing again moves to the next. */
-  onShowFinished: (key: string) => void;
+  onShowFinished: (refKey: string) => void;
   /** The same, for the longest-waiting session. */
-  onShowWaiting: (key: string) => void;
-  /** Shows the repository or worktree, toggling the git lane when it is already selected. */
-  onShowChanges: (key: string) => void;
+  onShowWaiting: (refKey: string) => void;
+  /** Shows the repository or worktree, toggling the git lane when it is already active. */
+  onShowChanges: (refKey: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
   /** `useBranchActions`'s `runIn`: how a command runs in one of these repositories and worktrees — `run` on this
    *  list's bar and failing as a notice, `ask` on the bar of the question that asked for it. */
-  runIn: (key: string) => GitRun;
+  runIn: (refKey: string) => GitRun;
   /** A command started here runs, in any repository or worktree. */
-  gitBusy: boolean;
-  /** git creates worktrees (Requirements.worktrees); else "New worktree" says why not. */
+  busy: boolean;
+  /** git creates worktrees (Requirements.worktrees); else "Add worktree" says why not. */
   worktreesSupported: boolean;
 }
 
 /** The row a menu was opened on: the repository or a worktree TET made, or one made elsewhere. */
-type RowTarget = { kind: "ref"; resolved: ResolvedRef } | { kind: "foreign"; worktree: ProjectWorktree };
+type RowTarget = { kind: "ref"; resolved: ResolvedRef } | { kind: "madeElsewhere"; worktree: ProjectWorktree };
 
 /** A remote's web page, or null. Takes both git spellings: "git@host:owner/repo.git" and a url
  *  with a scheme. */
@@ -127,8 +127,8 @@ function hostName(url: string): string {
 export const ProjectList = memo(function ProjectList({
   projects,
   resolvedRefs,
-  activeKey,
-  onSelect,
+  activeRefKey,
+  onActivateRef,
   onRemove,
   onReorder,
   onAdd,
@@ -136,13 +136,13 @@ export const ProjectList = memo(function ProjectList({
   marks,
   sandboxed,
   onOpenShellTab,
-  onShowBusy,
+  onShowWorking,
   onShowFinished,
   onShowWaiting,
   onShowChanges,
   onSbxSettings,
   runIn,
-  gitBusy,
+  busy,
   worktreesSupported
 }: ProjectListProps) {
   const menu = useContextMenu<RowTarget>();
@@ -167,7 +167,7 @@ export const ProjectList = memo(function ProjectList({
       submit: async (url) =>
         url.trim() === current
           ? undefined
-          : runIn(resolved.key).ask(`Changing the URL of ${remote}...`, () =>
+          : runIn(resolved.refKey).ask(`Changing the URL of ${remote}...`, () =>
               window.tet.repository.setRemoteUrl(resolved.ref, remote, url.trim())
             )
     });
@@ -178,13 +178,13 @@ export const ProjectList = memo(function ProjectList({
     const count = project.worktrees.filter((worktree) => worktree.key !== undefined).length;
     if (count > 0) {
       const answer = await confirmed({
-        title: "Remove repository",
+        title: "Remove project",
         message: `Remove ${project.name}?`,
         detail:
           count === 1
             ? "Its worktree is deleted with its branch: uncommitted changes and commits only there are lost. The repository's folder stays."
             : `Its ${count} worktrees are deleted with their branches: uncommitted changes and commits only there are lost. The repository's folder stays.`,
-        confirmLabel: "Remove repository"
+        confirmLabel: "Remove project"
       });
       if (!answer) {
         return;
@@ -202,8 +202,8 @@ export const ProjectList = memo(function ProjectList({
       }
       return;
     }
-    const { upstream } = heads[resolved.key] ?? {};
-    void askDeleteWorktree(resolved.ref, worktreeName(resolved.worktree), upstream, runIn(resolved.key));
+    const { upstream } = heads[resolved.refKey] ?? {};
+    void askDeleteWorktree(resolved.ref, worktreeName(resolved.worktree), upstream, runIn(resolved.refKey));
   };
 
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
@@ -212,7 +212,7 @@ export const ProjectList = memo(function ProjectList({
   const refEntries = (resolved: ResolvedRef): ContextMenuEntry[] => {
     const { worktree } = resolved;
     const { projectId } = resolved.ref;
-    const { detached, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[resolved.key] ?? {};
+    const { detached, base, baseAt, defaultBranch, remoteName, remoteUrl } = heads[resolved.refKey] ?? {};
     const web = remoteUrl ? webUrl(remoteUrl) : null;
     // The base is recorded at creation (git.ts's worktreeAdd); run where it is checked out.
     const baseResolved =
@@ -227,7 +227,7 @@ export const ProjectList = memo(function ProjectList({
             run:
               base && baseResolved && branch && !detached
                 ? () =>
-                    runIn(baseResolved.key).run(`Merging ${branch} into ${base}...`, () =>
+                    runIn(baseResolved.refKey).run(`Merging ${branch} into ${base}...`, () =>
                       window.tet.repository.merge(baseResolved.ref, branch)
                     )
                 : undefined
@@ -237,7 +237,7 @@ export const ProjectList = memo(function ProjectList({
           worktreeEntry(
             "Rename worktree",
             undefined,
-            branch ? () => void askRenameWorktree(projectId, branch, runIn(projectRefKey(projectRef(projectId)))) : undefined
+            branch ? () => void askRenameWorktree(projectId, branch, runIn(refKeyOf(projectRef(projectId)))) : undefined
           )
         ]
       : [];
@@ -255,9 +255,9 @@ export const ProjectList = memo(function ProjectList({
           },
           SEPARATOR,
           worktreeEntry(
-            "New worktree",
+            "Add worktree",
             newWorktreeRefusal(worktreesSupported),
-            defaultBranch ? () => void askNewWorktree(projectId, runIn(resolved.key), defaultBranch) : undefined
+            defaultBranch ? () => void askNewWorktree(projectId, runIn(resolved.refKey), defaultBranch) : undefined
           )
         ];
     // A worktree takes its project's (tet-json.ts's configRoot).
@@ -271,7 +271,7 @@ export const ProjectList = memo(function ProjectList({
       ...own,
       SEPARATOR,
       ...sbx,
-      { label: worktree ? "Delete worktree..." : "Remove repository", run: () => close(resolved) }
+      { label: worktree ? "Delete worktree..." : "Remove project", run: () => close(resolved) }
     ];
   };
 
@@ -281,17 +281,17 @@ export const ProjectList = memo(function ProjectList({
       : [{ label: "Copy path", run: () => void navigator.clipboard.writeText(target.worktree.path) }];
 
   const refRow = (resolved: ResolvedRef): ReactNode => {
-    const { key, worktree } = resolved;
+    const { refKey, worktree } = resolved;
     const { projectId } = resolved.ref;
     // HEAD, as context rather than name; for a worktree, whose branch is its name, the branch it
     // was made from.
-    const extra = worktree ? heads[key]?.base : heads[key]?.head;
-    const classes = ["project-item", ...(worktree ? ["worktree"] : []), ...(key === activeKey ? ["active"] : [])];
+    const extra = worktree ? heads[refKey]?.base : heads[refKey]?.head;
+    const classes = [worktree ? "worktree-row" : "project-row", ...(refKey === activeRefKey ? ["active"] : [])];
     return (
       <div
-        key={key}
+        key={refKey}
         className={classes.join(" ")}
-        onClick={() => onSelect(key)}
+        onClick={() => onActivateRef(refKey)}
         title={resolved.path}
         onContextMenu={(event) => menu.open(event, { kind: "ref", resolved })}
       >
@@ -301,38 +301,38 @@ export const ProjectList = memo(function ProjectList({
         </span>
         {/* All three session states can hold at once, each a button to a session. No ranking as
             on a tab: a row has no single icon to replace. */}
-        {(marks[key]?.waiting.length ?? 0) > 0 &&
-          rowButton("Open the tab waiting for an answer", () => onShowWaiting(key), <TabMark kind="waiting" />)}
-        {marks[key]?.busy &&
-          rowButton("Open the tab that is working", () => onShowBusy(key), <TabMark kind="working" />)}
+        {(marks[refKey]?.waiting.length ?? 0) > 0 &&
+          rowButton("Open the tab waiting for an answer", () => onShowWaiting(refKey), <TabMark kind="waiting" />)}
+        {marks[refKey]?.working &&
+          rowButton("Open the tab that is working", () => onShowWorking(refKey), <TabMark kind="working" />)}
         {/* Going to the session clears the mark. */}
-        {(marks[key]?.finished.length ?? 0) > 0 &&
-          rowButton("Open the tab that finished", () => onShowFinished(key), <TabMark kind="finished" />)}
+        {(marks[refKey]?.finished.length ?? 0) > 0 &&
+          rowButton("Open the tab that finished", () => onShowFinished(refKey), <TabMark kind="finished" />)}
         {/* From the status every refresh loads — no extra git call. */}
-        {heads[key]?.dirty && rowButton("Uncommitted changes", () => onShowChanges(key), <ChangesIcon />)}
+        {heads[refKey]?.dirty && rowButton("Uncommitted changes", () => onShowChanges(refKey), <ChangesIcon />)}
         {/* The switch is on, not that a tab got a sandbox: when sbx is unavailable a tab stays in
             error rather than running on the host (resolvePlace). */}
         {sandboxed[projectId] &&
           (worktree ? (
             // A worktree's are its project's, set there: a mark, no button.
-            <span className="icon-mark" title="SBX enabled">
+            <span className="status-icon" title="SBX enabled">
               <ShieldIcon />
             </span>
           ) : (
             rowButton("SBX enabled", () => onSbxSettings(projectId), <ShieldIcon />)
           ))}
-        {rowButton(worktree ? "Delete worktree" : "Remove repository", () => close(resolved), <CloseIcon />)}
+        {rowButton(worktree ? "Delete worktree" : "Remove project", () => close(resolved), <CloseIcon />)}
       </div>
     );
   };
 
-  /** A worktree git lists that TET did not make: shown, never opened. */
-  const foreignRow = (worktree: ProjectWorktree): ReactNode => (
+  /** A worktree git lists that was made elsewhere: shown, never opened. */
+  const madeElsewhereRow = (worktree: ProjectWorktree): ReactNode => (
     <div
       key={worktree.path}
-      className="project-item worktree foreign"
-      title={`${worktree.path}\nA worktree ${NOT_MADE_BY_TET}`}
-      onContextMenu={(event) => menu.open(event, { kind: "foreign", worktree })}
+      className="worktree-row made-elsewhere"
+      title={`${worktree.path}\nA worktree ${MADE_ELSEWHERE}`}
+      onContextMenu={(event) => menu.open(event, { kind: "madeElsewhere", worktree })}
     >
       <span className="project-main">
         <span className="project-label">{worktreeName(worktree)}</span>
@@ -344,7 +344,7 @@ export const ProjectList = memo(function ProjectList({
     <Section
       title="PROJECTS"
       count={projects.length}
-      busy={gitBusy}
+      busy={busy}
       actions={
         <IconButton title="Add repository" onClick={onAdd}>
           <PlusIcon />
@@ -353,14 +353,14 @@ export const ProjectList = memo(function ProjectList({
     >
       <div className="project-list" {...listProps}>
         {projects.map((project, index) => {
-          const main = resolvedRefs[projectRefKey(projectRef(project.id))];
+          const main = resolvedRefs[refKeyOf(projectRef(project.id))];
           return (
             <div key={project.id} className={["project-group", ...rowClasses(index)].join(" ")} {...rowProps(index)}>
               {main && refRow(main)}
               {project.worktrees.map((worktree) => {
                 const own =
-                  worktree.key === undefined ? undefined : resolvedRefs[projectRefKey(projectRef(project.id, worktree.key))];
-                return own ? refRow(own) : foreignRow(worktree);
+                  worktree.key === undefined ? undefined : resolvedRefs[refKeyOf(projectRef(project.id, worktree.key))];
+                return own ? refRow(own) : madeElsewhereRow(worktree);
               })}
             </div>
           );

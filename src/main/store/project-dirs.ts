@@ -15,7 +15,7 @@ import { onDisk, relativeInside } from "../util/path-inside";
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
- *       handoffs/                  another agent's session a tab takes over, copied (handOff)
+ *       handovers/                 another agent's session a tab takes over, copied (handOver)
  *       drops/                     pasted or dropped content without a path, for its tabs
  *     <key>/<agent>/               a worktree's
  *   worktrees/<key>/               a git worktree TET made; the key never changes
@@ -25,7 +25,7 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * (data-root.ts's agentConfigDir); only a sandbox, which sees nothing but its own folder, needs its
  * copy here.
  *
- * Never anything a sandbox must not see (settings, tokens, sbx values): an organization governing
+ * Never anything a sandbox must not see (settings, tokens, SBX settings): an organization governing
  * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers).
  */
 export function projectsDir(dataRoot: string): string {
@@ -77,8 +77,8 @@ export function sandboxSessionDir(sandboxDir: string): string {
 
 /** Where a sandboxed tab finds another agent's session it takes over, copied into the same
  *  mounted folder: that agent's own store is out of the sandbox's sight. */
-export function sandboxHandoffDir(sandboxDir: string, from: string, sessionId: string): string {
-  return path.join(sandboxDir, "handoffs", `${from}-${sessionId}`);
+export function sandboxHandoverDir(sandboxDir: string, from: string, sessionId: string): string {
+  return path.join(sandboxDir, "handovers", `${from}-${sessionId}`);
 }
 
 /** Where a sandboxed tab's pasted or dropped content without a path is written, in the same mounted

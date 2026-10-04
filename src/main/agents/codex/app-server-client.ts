@@ -4,7 +4,7 @@ import { killProcessTree, resolveCommand } from "../../util/process";
 import type { AskModel } from "../../../shared/types/agents";
 
 /**
- * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. tet starts one per
+ * `codex app-server` speaks JSONL JSON-RPC 2.0 (without `jsonrpc`) over stdio. TET starts one per
  * request and tears it down, never a persistent one: the shared `$CODEX_HOME` SQLite state has a
  * write-lock race between instances and does not tolerate concurrent cold starts. The startup cost
  * is fine for rare renames; a delete is `codex delete` (sessions.ts).
@@ -112,7 +112,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
   });
 }
 
-/** `model/list`'s rows, as far as tet reads them: `model` is what `--model` takes. */
+/** `model/list`'s rows, as far as TET reads them: `model` is what `--model` takes. */
 interface ModelPage {
   data?: { model?: unknown; displayName?: unknown }[];
   nextCursor?: unknown;

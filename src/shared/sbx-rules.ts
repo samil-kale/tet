@@ -5,7 +5,7 @@
  */
 
 import { envNameKey, isEnvName, isReservedName } from "./env-rules";
-import type { SbxKnowledgeConfig, SbxKnowledgeKind, SbxLocalEdits, SbxOption, SbxPort, SbxProblems, SbxProjectConfig, SbxSecret, SbxVariable } from "./types/sbx";
+import type { SbxKnowledgeSettings, SbxKnowledgeKind, SbxLocalEdits, SbxOption, SbxPort, SbxProblems, SbxProjectSettings, SbxSecret, SbxVariable } from "./types/sbx";
 
 /** Every kind of knowledge, in the Knowledge tab's order. */
 export const SBX_KNOWLEDGE_KINDS: SbxKnowledgeKind[] = ["skills", "plugins", "instructions"];
@@ -28,7 +28,7 @@ export function sbxPortRefusal({ host, container }: SbxPort): string | undefined
 }
 
 /** Why a secret row cannot be saved beside the `others`, or undefined: it needs a variable name of
- *  its own, not one of tet's (isReservedName), and hosts, none with a scheme or port (isBadHost). */
+ *  its own, not one of TET's (isReservedName), and hosts, none with a scheme or port (isBadHost). */
 export function sbxSecretRefusal({ env, hosts }: SbxSecret, others: SbxSecret[]): string | undefined {
   return !isEnvName(env) ||
     isReservedName(env) ||
@@ -43,7 +43,7 @@ export function sbxSecretRefusal({ env, hosts }: SbxSecret, others: SbxSecret[])
  * Why a variable row cannot be saved beside the `others` and the secrets, or undefined: it needs a
  * name no secret or other variable holds — the sandbox sees one value per name, and `sbx run -e
  * NAME` reads a variable's from this machine's environment, which on win32 ignores case
- * (`ignoreCase`, the machine's) — and not one of tet's own (isReservedName): its value is set on
+ * (`ignoreCase`, the machine's) — and not one of TET's own (isReservedName): its value is set on
  * `sbx run` itself (sbx.ts's sandboxEnv).
  */
 export function sbxVariableRefusal(
@@ -62,24 +62,24 @@ export function sbxVariableRefusal(
 }
 
 /**
- * Whether going from `loaded` and `loadedKnowledge` to `config` and `knowledge` reaches a running
+ * Whether going from `loaded` and `loadedKnowledge` to `settings` and `knowledge` reaches a running
  * tab only once it restarts: a mount is added at a tab's start (a removed one goes at Save), and
  * `sbx run -e` sets a variable, a new secret's placeholder included, only there (sbx.ts's
  * prepareSbxRun). Ports, hosts and a secret's value or hosts apply at Save.
  */
 export function sbxNeedsRestart(
-  loaded: SbxProjectConfig,
-  loadedKnowledge: SbxKnowledgeConfig,
-  config: Omit<SbxProjectConfig, "enabled">,
-  knowledge: SbxKnowledgeConfig
+  loaded: SbxProjectSettings,
+  loadedKnowledge: SbxKnowledgeSettings,
+  settings: Omit<SbxProjectSettings, "enabled">,
+  knowledge: SbxKnowledgeSettings
 ): boolean {
-  const names = (variables: SbxProjectConfig["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
+  const names = (variables: SbxProjectSettings["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
   return (
     SBX_KNOWLEDGE_KINDS.some((kind) => knowledge[kind] !== false && knowledge[kind] !== loadedKnowledge[kind]) ||
     (knowledge.skills !== false && knowledge.skillsFolder !== loadedKnowledge.skillsFolder) ||
-    config.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
-    config.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
-    names(config.variables) !== names(loaded.variables)
+    settings.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
+    settings.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
+    names(settings.variables) !== names(loaded.variables)
   );
 }
 
@@ -107,7 +107,7 @@ const SBX_OPTIONS: SbxOption[] = ["knowledge", "ports", "paths", "hosts", "secre
  * What a sandboxed session's start could not apply, one notice per option and reason, its rows
  * listed:
  *
- *   Couldn't set hosts:
+ *   Could not set hosts:
  *    - api.example.com
  *   Forbidden by governance
  */
@@ -116,7 +116,7 @@ export function sbxProblemNotices(problems: SbxProblems): string[] {
     const rows = Object.entries(problems[option] ?? {});
     const reasons = [...new Set(rows.map(([, reason]) => reason))];
     return reasons.map((reason) =>
-      [`Couldn't set ${option}:`, ...rows.filter(([, why]) => why === reason).map(([row]) => ` - ${row}`), reason].join("\n")
+      [`Could not set ${option}:`, ...rows.filter(([, why]) => why === reason).map(([row]) => ` - ${row}`), reason].join("\n")
     );
   });
 }
@@ -142,23 +142,23 @@ export function sbxPortKey(port: SbxPort): string {
 /** What is saved and applied: the rows readSbxProblems found nothing wrong with, a kind of
  *  knowledge with a problem off. */
 export function withoutProblems(
-  config: SbxProjectConfig,
-  knowledge: SbxKnowledgeConfig,
+  settings: SbxProjectSettings,
+  knowledge: SbxKnowledgeSettings,
   problems: SbxProblems
-): { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig } {
+): { settings: SbxProjectSettings; knowledge: SbxKnowledgeSettings } {
   const fine = (option: SbxOption, row: string): boolean => problems[option]?.[row] === undefined;
   const next = { ...knowledge };
   for (const kind of SBX_KNOWLEDGE_KINDS.filter((candidate) => !fine("knowledge", candidate))) {
     next[kind] = false;
   }
   return {
-    config: {
-      ...config,
-      ports: config.ports.filter((port) => fine("ports", sbxPortKey(port))),
-      paths: config.paths.filter((entry) => fine("paths", entry.path)),
-      hosts: config.hosts.filter((host) => fine("hosts", host)),
-      secrets: config.secrets.filter((secret) => fine("secrets", secret.env)),
-      variables: config.variables.filter((variable) => fine("variables", variable.env))
+    settings: {
+      ...settings,
+      ports: settings.ports.filter((port) => fine("ports", sbxPortKey(port))),
+      paths: settings.paths.filter((entry) => fine("paths", entry.path)),
+      hosts: settings.hosts.filter((host) => fine("hosts", host)),
+      secrets: settings.secrets.filter((secret) => fine("secrets", secret.env)),
+      variables: settings.variables.filter((variable) => fine("variables", variable.env))
     },
     knowledge: next
   };

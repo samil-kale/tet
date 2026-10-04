@@ -118,7 +118,7 @@ export function cancelSbxSetup(): void {
 export const SBX_VERIFIED_VERSION = "0.45.1";
 
 /** As long as an agent's version check, for `sbx version` and probeSbx's reads beside it: a hung
- *  daemon must hold neither the startup, the SBX dialog nor a tab's start. */
+ *  daemon must hold neither the startup, the SBX Settings nor a tab's start. */
 export const SBX_PROBE_TIMEOUT_MS = 10_000;
 
 /**
@@ -146,7 +146,7 @@ export function sbxVersionSupported(version: string): boolean {
 }
 
 /**
- * sbx shows a one-time wizard on a machine's first interactive `sbx run` (a tet tab is one). Any
+ * sbx shows a one-time wizard on a machine's first interactive `sbx run` (a TET tab is one). Any
  * valid JSON at its marker file (Platform.sbxFirstRunMarker) suppresses it; an existing file is
  * kept. Loses the wizard's MCP-server import (`sbx mcp add` by hand). A no-op where sbx shows no
  * wizard. Best-effort.
@@ -171,7 +171,7 @@ export async function suppressSbxFirstRunWizard(): Promise<void> {
 }
 
 /** `sbx login` opens the browser and waits on its own callback; no console needed. */
-export async function runSbxLogin(): Promise<boolean> {
+export async function runSbxSignIn(): Promise<boolean> {
   return (await runSbx(["login"], { cancellable: true })).ok;
 }
 
@@ -199,14 +199,14 @@ export async function readSbxUser(cancellable: boolean): Promise<string | undefi
  * keeps running sandboxes running and listed, a refused one keeps the sign-in there was;
  * governance follows the account at once.
  */
-export async function runSbxTokenLogin(user: string, token: string, cancellable: boolean): Promise<string | undefined> {
+export async function runSbxTokenSignIn(user: string, token: string, cancellable: boolean): Promise<string | undefined> {
   const result = await runSbx(["login", "--username", user, "--password-stdin"], { stdin: token, cancellable });
   return result.ok ? undefined : sbxFailure(result, "sbx login");
 }
 
 /** `sbx logout` stops every running local sandbox; `--yes` skips its "Proceed y/N?", which a closed
  *  stdin would cancel. */
-export async function runSbxLogout(): Promise<string | undefined> {
+export async function runSbxSignOut(): Promise<string | undefined> {
   const result = await runSbx(["logout", "--yes"]);
   return result.ok ? undefined : sbxFailure(result, "sbx logout");
 }

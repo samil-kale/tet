@@ -113,9 +113,9 @@ interface PaneProps {
   /** Only on pane "a". */
   chrome?: PaneChrome;
   /** One of this pane's tabs starting, or — only where `chrome` is — a project-wide reason. */
-  showProgress: boolean;
+  busy: boolean;
   /**
-   * Pixels: one of the two for a divider-sized pane, neither for the filling one. Numbers, not a
+   * Pixels: one of the two for a sash-sized pane, neither for the filling one. Numbers, not a
    * style object, so the memo sees an unchanged size as the same prop.
    */
   width?: number;
@@ -158,7 +158,7 @@ export const Pane = memo(function Pane({
   finishedTabIds,
   waitingTabIds,
   chrome,
-  showProgress,
+  busy,
   dragOver,
   onDragStart,
   onDragOverChange,
@@ -201,7 +201,7 @@ export const Pane = memo(function Pane({
 
   const createTab = useCallback(
     async (agentId: AgentId) => {
-      const descriptor = await window.tet.terminals.create(at, agentId);
+      const descriptor = await window.tet.tabs.create(at, agentId);
       onActivate(descriptor.tabId, paneId);
     },
     [at, paneId, onActivate]
@@ -219,21 +219,21 @@ export const Pane = memo(function Pane({
         onCloseEditors(editorIds);
       }
       if (terminalIds.length > 0) {
-        void window.tet.terminals.close(at, terminalIds);
+        void window.tet.tabs.close(at, terminalIds);
       }
     },
     [at, onCloseEditors]
   );
 
   const restartTab = useCallback(
-    (tabId: string) => void window.tet.terminals.restart(at, tabId),
+    (tabId: string) => void window.tet.tabs.restart(at, tabId),
     [at]
   );
 
   /** The new tab opens beside this one; no question is up to show a refusal, so it is a notice. */
-  const handOff = useCallback(
+  const handOver = useCallback(
     async (tabId: string, agentId: AgentId) => {
-      const result = await window.tet.terminals.handOff(at, tabId, agentId);
+      const result = await window.tet.tabs.handOver(at, tabId, agentId);
       if (result.tab) {
         onActivate(result.tab.tabId, paneId);
       } else {
@@ -260,7 +260,7 @@ export const Pane = memo(function Pane({
         confirmLabel: "Rename",
         maxLength: MAX_TITLE_LENGTH,
         submit: async (name) =>
-          refusal(await window.tet.terminals.rename(at, tab.tabId, name), "Could not rename the session")
+          refusal(await window.tet.tabs.rename(at, tab.tabId, name), "Could not rename the session")
       });
     },
     [at]
@@ -350,16 +350,16 @@ export const Pane = memo(function Pane({
     const hasSessions = agentInfo(agents, terminal.agentId)?.hasSessions === true;
     // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
     // before the session is persisted.
-    const handOffAgents = agents.filter((agent) => agent.takesPrompt && agent.id !== terminal.agentId);
-    const handOffEntries: ContextMenuEntry[] =
-      hasSessions && handOffAgents.length > 0
+    const handOverAgents = agents.filter((agent) => agent.takesPrompt && agent.id !== terminal.agentId);
+    const handOverEntries: ContextMenuEntry[] =
+      hasSessions && handOverAgents.length > 0
         ? [
             SEPARATOR,
-            ...handOffAgents.map(
+            ...handOverAgents.map(
               (agent): ContextMenuEntry => ({
                 label: `Hand over to ${agent.displayName}`,
                 icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
-                run: withSession ? () => void handOff(withSession.tabId, agent.id) : undefined
+                run: withSession ? () => void handOver(withSession.tabId, agent.id) : undefined
               })
             )
           ]
@@ -385,7 +385,7 @@ export const Pane = memo(function Pane({
             }
           ] satisfies ContextMenuEntry[])
         : []),
-      ...handOffEntries,
+      ...handOverEntries,
       ...moveEntries
     ];
   };
@@ -483,7 +483,7 @@ export const Pane = memo(function Pane({
                 ) : waitingTabIds.includes(tab.tabId) ? (
                   <TabMark kind="waiting" className="tab-icon" />
                 ) : isWorking(tab) ? (
-                  // A question hidden on the tab in front (left out of `waitingTabIds`) gets no
+                  // A question hidden on the tab on screen (left out of `waitingTabIds`) gets no
                   // spinner: a session stopped on a question is not working.
                   <TabMark kind="working" className="tab-icon" />
                 ) : finishedTabIds.includes(tab.tabId) ? (
@@ -522,7 +522,7 @@ export const Pane = memo(function Pane({
         </div>
         {/* This pane's one progress bar: a tab starting, an editor tab busy, or in pane "a" the
             bootstrap session listing. */}
-        {(showProgress || editorBusy) && <ProgressBar />}
+        {(busy || editorBusy) && <ProgressBar />}
         <div className="new-tab">
           <button
             className="icon-button"

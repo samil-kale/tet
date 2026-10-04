@@ -6,7 +6,7 @@ interface ElementSize {
 }
 
 /**
- * `ref`'s element's size, what a divider's share multiplies (TabArea's grid, EditorHost's
+ * `ref`'s element's size, what a sash's share multiplies (TabArea's grid, EditorHost's
  * preview); null until measured.
  *
  * A layout effect seeded with a synchronous `getBoundingClientRect()`, since the observer's first

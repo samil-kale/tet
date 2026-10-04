@@ -1,10 +1,10 @@
 import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, sbxPortKey, sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig } from "../../shared/types/sbx";
+import type { SbxKnowledgeSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import type { SandboxedAgent } from "../agents/agent";
-import { readSbxConfig, writeSbxConfig } from "../store/tet-json";
+import { readSbxSettings, writeSbxSettings } from "../store/tet-json";
 import { runSbx, sbxJson } from "./sbx-cli";
 import type { SandboxList } from "./sbx-status";
 import { contractHome, normalizeHostPath } from "../util/path-inside";
@@ -13,7 +13,7 @@ import { ensureRunning, grantsOf, revokeMounts } from "./sbx-mounts";
 import { allowHosts, applyPortChanges, applySecrets, readSandboxPorts, removeSandbox, sandboxName, type LiveSecret } from "./sbx";
 
 /**
- * The agent of a sandbox tet made (sandboxName) for this workspace under another id, as for a
+ * The agent of a sandbox TET made (sandboxName) for this workspace under another id, as for a
  * copied folder given a new one. Nothing reaches it, yet it keeps grants, rules and secrets of its
  * own; undefined for any other sandbox.
  */
@@ -23,7 +23,7 @@ function orphanAgent(name: string, workspaces: string[], target: SbxSaveTarget):
 }
 
 /**
- * Each sandbox's Allowed hosts as sbx has them, what saveSbxConfig brings in line with tet.json,
+ * Each sandbox's Allowed hosts as sbx has them, what saveSbxSettings brings in line with tet.json,
  * from one `policy ls`. A rule counts when an allow scoped `sandbox:<name>` and editable, as
  * `sbx policy allow network --sandbox` makes it; a kit's rule is not editable, a global one is the
  * machine's. One rule per resource, so the list is their union. Inactive rules count too:
@@ -128,7 +128,7 @@ async function applyProjectPorts(names: string[], ports: SbxPort[], read?: Map<s
   return refused;
 }
 
-/** A repository or worktree whose sandboxes a Save brings in line (saveSbxConfig), with its
+/** A repository or worktree whose sandboxes a Save brings in line (saveSbxSettings), with its
  *  folder. */
 export interface SbxSaveTarget {
   ref: ProjectRef;
@@ -146,7 +146,7 @@ interface SaveReads {
 }
 
 /**
- * Rejects a Save sbx cannot answer for, before it changes anything (saveSbxConfig): what a kept
+ * Rejects a Save sbx cannot answer for, before it changes anything (saveSbxSettings): what a kept
  * sandbox holds must be readable, or a row sbx merely could not list would go as refused — a
  * secret with its stored value, which sbx never gives back — and be taken back from every sandbox.
  * Ports are listed only by a running sandbox (readSandboxPorts), so theirs are started here.
@@ -200,7 +200,7 @@ export interface SbxRemoved {
 
 /**
  * The dialog's Save of the rows readSbxProblems passed (saveProjectSbx): every sandbox goes if
- * sandboxing is off, one with another workspace too (see ensureSandboxExists; rebuilt at its next
+ * SBX is disabled, one with another workspace too (see ensureSandboxExists; rebuilt at its next
  * tab), and one another id of the project left (orphanAgent). The others are brought in line:
  * ports (applyProjectPorts), hosts both ways without governance (revokeStaleHosts, allowHosts) and
  * secrets (applySecrets), each against the sandboxes' own (readSandboxPorts, readSandboxHosts,
@@ -217,11 +217,11 @@ export interface SbxRemoved {
  * of theirs just lost its sandbox; those of other ids; what sbx refused; what could not be taken
  * back; and what tet.json and the knowledge now hold.
  */
-export async function saveSbxConfig(
+export async function saveSbxSettings(
   project: SbxSaveTarget,
   worktrees: readonly SbxSaveTarget[],
-  request: SbxProjectConfig,
-  knowledge: { previous: SbxKnowledgeConfig; current: SbxKnowledgeConfig },
+  request: SbxProjectSettings,
+  knowledge: { previous: SbxKnowledgeSettings; current: SbxKnowledgeSettings },
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>,
   organization: string | undefined,
@@ -232,11 +232,11 @@ export async function saveSbxConfig(
   orphans: SbxRemoved[];
   refused: SbxProblems;
   failures: string[];
-  config: SbxProjectConfig;
-  knowledge: SbxKnowledgeConfig;
+  settings: SbxProjectSettings;
+  knowledge: SbxKnowledgeSettings;
 }> {
-  const previous = await readSbxConfig(project.path);
-  const config = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
+  const previous = await readSbxSettings(project.path);
+  const settings = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
   const targets = [project, ...worktrees];
   const removed: SbxRemoved[] = [];
   const orphans: SbxRemoved[] = [];
@@ -258,7 +258,7 @@ export async function saveSbxConfig(
       if (existing === undefined) {
         continue;
       }
-      if (config.enabled && sameSet(existing, [target.path])) {
+      if (settings.enabled && sameSet(existing, [target.path])) {
         kept.push({ agent, name, projectId: target.ref.projectId, ports: target === project });
       } else {
         dropped.push({ name, ref: target.ref, agentId });
@@ -267,8 +267,8 @@ export async function saveSbxConfig(
   }
   const reads = await assertReadable(
     kept,
-    config.secrets.length > 0 || previous.secrets.length > 0,
-    config.ports.length > 0 || previous.ports.length > 0,
+    settings.secrets.length > 0 || previous.secrets.length > 0,
+    settings.ports.length > 0 || previous.ports.length > 0,
     !organization
   );
   for (const { name, ref, agentId } of orphaned) {
@@ -285,7 +285,7 @@ export async function saveSbxConfig(
   }
   // Brings every kept sandbox to `target`. The listings answer for every sandbox at once, so they
   // are asked together, and only when the project has one: each is an sbx process.
-  const apply = async (target: SbxProjectConfig, first?: SaveReads): Promise<SbxProblems> => {
+  const apply = async (target: SbxProjectSettings, first?: SaveReads): Promise<SbxProblems> => {
     const refused: SbxProblems = {};
     if (kept.length === 0) {
       return refused;
@@ -329,16 +329,16 @@ export async function saveSbxConfig(
     }
     return refused;
   };
-  const refused = await apply(config, reads);
+  const refused = await apply(settings, reads);
   const refusedPort = (port: SbxPort): boolean => refused.ports?.[sbxPortKey(port)] !== undefined;
-  const applied: SbxProjectConfig = {
-    ...config,
+  const applied: SbxProjectSettings = {
+    ...settings,
     ports: [
-      ...config.ports.filter((port) => !refusedPort(port)),
-      ...previous.ports.filter((port) => refusedPort(port) && !config.ports.some((next) => sbxPortKey(next) === sbxPortKey(port)))
+      ...settings.ports.filter((port) => !refusedPort(port)),
+      ...previous.ports.filter((port) => refusedPort(port) && !settings.ports.some((next) => sbxPortKey(next) === sbxPortKey(port)))
     ],
-    hosts: config.hosts.filter((host) => refused.hosts?.[host] === undefined),
-    secrets: config.secrets.filter((secret) => refused.secrets?.[secret.env] === undefined)
+    hosts: settings.hosts.filter((host) => refused.hosts?.[host] === undefined),
+    secrets: settings.secrets.filter((secret) => refused.secrets?.[secret.env] === undefined)
   };
   const failures =
     Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];
@@ -366,6 +366,6 @@ export async function saveSbxConfig(
   for (const [option, rows] of Object.entries(unrevoked) as [SbxOption, Record<string, string>][]) {
     addProblems(refused, option, rows);
   }
-  await writeSbxConfig(project.path, applied);
-  return { removed, orphans, refused, failures, config: applied, knowledge: appliedKnowledge };
+  await writeSbxSettings(project.path, applied);
+  return { removed, orphans, refused, failures, settings: applied, knowledge: appliedKnowledge };
 }

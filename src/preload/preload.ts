@@ -41,20 +41,20 @@ const api: TETApi = {
   },
   sbx: {
     status: (projectId: string) => invoke("sbx:status", projectId),
-    login: () => invoke("sbx:login"),
+    signInInBrowser: () => invoke("sbx:sign-in-browser"),
     signedInUser: () => invoke("sbx:signed-in-user"),
     accounts: () => invoke("sbx:accounts"),
     signIn: (user, token, accountId) => invoke("sbx:sign-in", user, token, accountId),
-    logout: () => invoke("sbx:logout"),
+    signOut: () => invoke("sbx:sign-out"),
     saveAccounts: (edits) => invoke("sbx:save-accounts", edits),
     initPolicy: () => invoke("sbx:init-policy"),
     cancelSetup: () => send("sbx:cancel-setup"),
-    getConfig: (projectId) => invoke("sbx:get-config", projectId),
+    getSettings: (projectId) => invoke("sbx:get-settings", projectId),
     stored: (projectId) => invoke("sbx:stored", projectId),
     knowledgeSources: () => invoke("sbx:knowledge-sources"),
-    saveConfig: (projectId, request, local) => invoke("sbx:save-config", projectId, request, local),
-    problems: (projectId, config, knowledge, values, status) =>
-      invoke("sbx:problems", projectId, config, knowledge, values, status)
+    saveSettings: (projectId, request, local) => invoke("sbx:save-settings", projectId, request, local),
+    problems: (projectId, settings, knowledge, values, status) =>
+      invoke("sbx:problems", projectId, settings, knowledge, values, status)
   },
   settings: {
     get: () => invoke("settings:get"),
@@ -82,12 +82,12 @@ const api: TETApi = {
     setNamespace: (accountId, namespace) => invoke("providers:set-namespace", accountId, namespace),
     repos: (accountId) => invoke("providers:repos", accountId)
   },
-  environment: {
-    list: () => invoke("environment:list"),
-    save: (rows) => invoke("environment:save", rows),
-    answer: (id, answer) => invoke("environment:answer", id, answer),
-    onRequest: (listener) => subscribe("environment:request", listener),
-    onWithdrawn: (listener) => subscribe("environment:withdrawn", listener)
+  env: {
+    list: () => invoke("env:list"),
+    save: (rows) => invoke("env:save", rows),
+    answer: (id, answer) => invoke("env:answer", id, answer),
+    onRequest: (listener) => subscribe("env:request", listener),
+    onWithdrawn: (listener) => subscribe("env:withdrawn", listener)
   },
   repository: {
     state: (ref) => invoke("repository:state", ref),
@@ -156,27 +156,27 @@ const api: TETApi = {
     run: (ref, command) => invoke("commands:run", ref, command),
     onChanged: (listener) => subscribe("commands:changed", listener)
   },
-  terminals: {
-    list: (ref) => invoke("terminals:list", ref),
-    create: (ref, agentId) => invoke("terminals:create", ref, agentId),
-    close: (ref, tabIds) => invoke("terminals:close", ref, tabIds),
-    rename: (ref, tabId, title) => invoke("terminals:rename", ref, tabId, title),
-    handOff: (ref, tabId, agentId) => invoke("terminals:handoff", ref, tabId, agentId),
-    restart: (ref, tabId) => invoke("terminals:restart", ref, tabId),
-    seen: (ref, tabId) => send("terminals:seen", ref, tabId),
-    inFront: (ref, tabIds) => send("terminals:in-front", ref, tabIds),
-    input: (ref, tabId, data) => send("terminals:input", ref, tabId, data),
-    resize: (ref, tabId, cols, rows) => send("terminals:resize", ref, tabId, cols, rows),
-    onTabs: (listener) => subscribe("terminals:tabs", listener),
-    onOutput: (listener) => subscribe("terminals:output", listener),
-    onStatus: (listener) => subscribe("terminals:status", listener),
-    onStartupProgress: (listener) => subscribe("terminals:startup-progress", listener),
-    onShow: (listener) => subscribe("terminals:show", listener),
+  tabs: {
+    list: (ref) => invoke("tabs:list", ref),
+    create: (ref, agentId) => invoke("tabs:create", ref, agentId),
+    close: (ref, tabIds) => invoke("tabs:close", ref, tabIds),
+    rename: (ref, tabId, title) => invoke("tabs:rename", ref, tabId, title),
+    handOver: (ref, tabId, agentId) => invoke("tabs:handover", ref, tabId, agentId),
+    restart: (ref, tabId) => invoke("tabs:restart", ref, tabId),
+    seen: (ref, tabId) => send("tabs:seen", ref, tabId),
+    reportOnScreen: (ref, tabIds) => send("tabs:on-screen", ref, tabIds),
+    input: (ref, tabId, data) => send("tabs:input", ref, tabId, data),
+    resize: (ref, tabId, cols, rows) => send("tabs:resize", ref, tabId, cols, rows),
+    onTabs: (listener) => subscribe("tabs:changed", listener),
+    onOutput: (listener) => subscribe("tabs:output", listener),
+    onStatus: (listener) => subscribe("tabs:status", listener),
+    onStartupProgress: (listener) => subscribe("tabs:startup-progress", listener),
+    onShow: (listener) => subscribe("tabs:show", listener),
     onTextRequest: (listener) =>
-      subscribe("terminals:text-request", ({ ref, tabId, reply }) => {
+      subscribe("tabs:text-request", ({ ref, tabId, reply }) => {
         void listener(ref, tabId).then((text) => send(reply, text));
       }),
-    starting: (ref) => invoke("terminals:starting", ref)
+    starting: (ref) => invoke("tabs:starting", ref)
   },
   agents: {
     list: () => invoke("agents:list")

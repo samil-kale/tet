@@ -12,7 +12,7 @@ interface TerminalHostProps {
   shiftEnter: string | undefined;
   /** The one on screen in its pane; the others keep their layout but stay hidden. */
   active: boolean;
-  /** Whether the pane itself is on screen — the repository or worktree is the one selected. */
+  /** Whether the pane itself is on screen — the repository or worktree is the active one. */
   visible: boolean;
   /** In the repository's or worktree's focused pane, which gets keyboard focus. */
   focused: boolean;
@@ -22,7 +22,7 @@ interface TerminalHostProps {
  * Where one xterm is mounted. The instance lives outside React in `terminal-views.ts`; attaching
  * moves it into the DOM.
  *
- * Attached the first time the tab is in front of the user, not on mount: building every tab's
+ * Attached the first time the tab is on screen, not on mount: building every tab's
  * xterm at startup costs most of the window's start. Nothing is lost: a tab's process starts on its
  * first fit, which needs the view.
  *
@@ -33,7 +33,7 @@ export function TerminalHost({ at, tabId, shiftEnter, active, visible, focused }
   const container = useRef<HTMLDivElement>(null);
   const shown = active && visible;
 
-  // Refit on coming in front: hidden, its size went stale. The resize also starts its process.
+  // Refit on coming on screen: hidden, its size went stale. The resize also starts its process.
   // Shown before the fit, since the renderer decides the cell width the fit measures
   // (`showTerminal`).
   useEffect(() => {

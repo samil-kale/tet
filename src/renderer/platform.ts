@@ -26,6 +26,6 @@ export function isModifierKey(event: KeyboardEvent): boolean {
 }
 
 /** A `/`-separated relative path as a native absolute one, for the clipboard. */
-export function absolutePath(projectPath: string, relative: string): string {
-  return [projectPath, ...relative.split("/")].join(PLATFORM.pathSeparator);
+export function absolutePath(folder: string, relative: string): string {
+  return [folder, ...relative.split("/")].join(PLATFORM.pathSeparator);
 }

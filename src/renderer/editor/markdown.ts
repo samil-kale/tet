@@ -36,7 +36,7 @@ let sheet: CSSStyleSheet | undefined;
 
 /** A preview's scroller, in the page for its scrollbars, and the element in its shadow root that
  *  `renderMarkdown`'s content goes into. */
-export function createPreview(): { scroller: HTMLDivElement; body: HTMLDivElement } {
+export function createMarkdownPreview(): { scroller: HTMLDivElement; body: HTMLDivElement } {
   const scroller = document.createElement("div");
   scroller.className = "markdown-preview";
   if (!sheet) {

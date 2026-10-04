@@ -6,7 +6,7 @@ import type { Platform } from "./platform";
  * Shared by src/main/update/auto-update.ts, src/cli/tet-update.ts and the install scripts
  * (scripts/install.sh, scripts/install.ps1). One archive per platform and architecture on the tag's
  * GitHub Release (electron-builder.yml). The scripts keep their own copy of these names: they run
- * before tet is on the machine. A change to a name updates the scripts too.
+ * before TET is on the machine. A change to a name updates the scripts too.
  */
 
 /** `<url>/latest` redirects to the newest tag; `<url>/download/v<version>/<asset>` is a file. */
@@ -22,7 +22,7 @@ export function installRoot(executable: string, platform: Platform): string {
   return platform.appBundle ? path.resolve(executable, "..", "..", "..") : path.dirname(executable);
 }
 
-/** An update complete beside the install root, prepared while tet runs: the quit only swaps them. */
+/** An update complete beside the install root, prepared while TET runs: the quit only swaps them. */
 export function preparedRoot(root: string): string {
   return `${root}.new`;
 }
@@ -55,7 +55,7 @@ export interface UpdateResult {
 /**
  * The pid of the running src/cli/tet-update.ts, in `<update dir>/update.lock`: written by
  * auto-update.ts as it starts the updater, removed by the updater when done. While that process
- * lives, a tet started meanwhile leaves the update folder alone — the updater runs from it — and
+ * lives, a TET started meanwhile leaves the update folder alone — the updater runs from it — and
  * reports its result only once written.
  */
 export function updateLockPath(updateDir: string): string {
@@ -72,9 +72,9 @@ export function processAlive(pid: number): boolean {
   }
 }
 
-/** Far past the updater's longest run (tet-update.ts: a minute's wait for tet to exit, then
+/** Far past the updater's longest run (tet-update.ts: a minute's wait for TET to exit, then
  *  half-minute retry windows). An older lock outlived its updater — killed by a shutdown before its
- *  `finally` — and its pid may since name another process, which would hold every later tet back. */
+ *  `finally` — and its pid may since name another process, which would hold every later TET back. */
 const UPDATER_MAX_LIFE_MS = 10 * 60_000;
 
 /** The lock's pid while that process lives; a crashed updater's lock counts as none. */

@@ -166,8 +166,8 @@ export async function resolveRoot(cwd: string): Promise<string | undefined> {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The repository's project id, `tet.id` in its own config (`--local`: a linked worktree reads its
- * main one's, which is the point); undefined where it has none, or none valid. Rejects where git
+ * The repository's project id, `tet.id` in its own config (`--local`: a linked worktree reads the
+ * repository's, which is the point); undefined where it has none, or none valid. Rejects where git
  * cannot say (the folder gone, git not started): no answer is not "none", which would replace it.
  */
 export async function readProjectId(cwd: string): Promise<string | undefined> {
@@ -613,19 +613,19 @@ async function readOperation(gitDir: string): Promise<GitOperation | undefined> 
 
 /**
  * The worktrees, read off the common git directory as git keeps them — no `git worktree list` per
- * refresh: its `HEAD` for the main one, and per linked one under `worktrees/<id>` a `gitdir`
+ * refresh: its `HEAD` for the repository, and per linked one under `worktrees/<id>` a `gitdir`
  * naming the worktree's `.git` (relative with `--relative-paths`) and its own `HEAD`.
  */
 async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
-  const worktree = async (worktreePath: string, adminDir: string, main: boolean): Promise<WorktreeInfo> => {
+  const worktree = async (worktreePath: string, adminDir: string, isRepository: boolean): Promise<WorktreeInfo> => {
     const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
     return {
       // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
       path: await fs.realpath(worktreePath).catch(() => worktreePath),
       branch: headBranch(head),
-      main,
+      isRepository,
       current: adminDir === gitDir
     };
   };
@@ -651,7 +651,7 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
 
 /**
  * `init.defaultBranch`, else "main": GitHub Desktop's default branch where no remote names one. And
- * every `branch.<name>.base` tet recorded (worktreeAdd), by branch. One process for both, asked of
+ * every `branch.<name>.base` TET recorded (worktreeAdd), by branch. One process for both, asked of
  * git, not parsed out of the config file: git owns that format. Off the refresh path — Repository
  * reads this on open, after a `.git/config` change, and after the actions that write a base.
  */
@@ -744,22 +744,22 @@ async function run(cwd: string, args: string[], options?: GitOptions): Promise<G
 
 /** The env of every command reaching a remote. git must never ask for a password: there is no
  *  terminal, and a waiting command holds the repository's one action slot forever. Credentials come
- *  from the user's credential helper, else a login typed into tet (`NetworkLogin`), which git then
- *  stores in that helper itself; tet writes nothing into it. */
+ *  from the user's credential helper, else a login typed into TET (`NetworkLogin`), which git then
+ *  stores in that helper itself; TET writes nothing into it. */
 const NETWORK_ENV: NodeJS.ProcessEnv = {
   GIT_TERMINAL_PROMPT: "0",
   // Set but empty: unset, git falls back to the terminal.
   GIT_ASKPASS: "",
   SSH_ASKPASS: "",
   // Git Credential Manager ignores GIT_TERMINAL_PROMPT and waits on a window of its own. Told never
-  // to, it gives up at once, git fails for want of a login and tet asks; a login that then works
+  // to, it gives up at once, git fails for want of a login and TET asks; a login that then works
   // through askpass it still stores.
   GCM_INTERACTIVE: "never",
   // A stalled connection is given up: git's http transport aborts below the limit for the time. The
   // ssh equivalent is in networkEnv.
   GIT_HTTP_LOW_SPEED_LIMIT: "1000",
   GIT_HTTP_LOW_SPEED_TIME: "60",
-  // AUTH_FAILURES matches git's messages as text into `authRequired`, on which tet asks for a login,
+  // AUTH_FAILURES matches git's messages as text into `authRequired`, on which TET asks for a login,
   // and git translates them (LANG=de_DE: "Authentifizierung fehlgeschlagen").
   LC_ALL: "C"
 };
@@ -807,7 +807,7 @@ async function networkEnv(cwd: string, sshCommand?: string): Promise<NodeJS.Proc
     : { ...NETWORK_ENV, GIT_SSH_COMMAND: "ssh -oBatchMode=yes -oServerAliveInterval=15 -oServerAliveCountMax=4" };
 }
 
-/** A login typed into tet, or kept by it, for a command's http(s) remote; `askpassDir` is where
+/** A login typed into TET, or kept by it, for a command's http(s) remote; `askpassDir` is where
  *  the answering script goes (ensureAskpass). */
 export interface NetworkLogin extends GitLogin {
   askpassDir: string;
@@ -927,7 +927,7 @@ export function clone(url: string, directory: string, login?: NetworkLogin): Pro
   return runNetwork(os.homedir(), ["clone", "--", url, directory], { login });
 }
 
-/** Whether git has a credential helper for this url, which then keeps a login that worked; tet
+/** Whether git has a credential helper for this url, which then keeps a login that worked; TET
  *  keeps it only where there is none (GitLoginStore). An empty value clears the list. */
 export async function hasCredentialHelper(cwd: string, url: string): Promise<boolean> {
   const helper = await git(cwd, ["config", "--get-urlmatch", "credential.helper", url]);
@@ -966,10 +966,10 @@ const ASKPASS_SCRIPT = [
   ""
 ].join("\n");
 
-/** The script in `dir` (tet's data folder), written when missing or from another tet — not on
+/** The script in `dir` (TET's data folder), written when missing or from another TET — not on
  *  every call: on Windows a rename over the script while an sh reads it fails, and two commands
  *  reaching remotes at once (the periodic fetches) would race. Not the temp directory: git executes
- *  the script itself, which a `noexec` /tmp refuses, and a long-running tet would find it cleaned
+ *  the script itself, which a `noexec` /tmp refuses, and a long-running TET would find it cleaned
  *  away. */
 export async function ensureAskpass(dir: string): Promise<string> {
   const file = path.join(dir, "askpass.sh");
@@ -1301,7 +1301,7 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
 }
 
 /**
- * A worktree always with a new branch of its own at `base`, the default branch: tet couples the
+ * A worktree always with a new branch of its own at `base`, the default branch: TET couples the
  * two, so deleting one does the other, and the worktree is named by its branch. `--no-track`, as
  * `createBranch`: the first push publishes it. `--relative-paths` links the two `.git`s relatively,
  * so the link holds in an sbx sandbox, where the paths differ from the host's on Windows. It sets

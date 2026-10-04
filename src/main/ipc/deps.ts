@@ -1,6 +1,4 @@
-import { EMPTY_REPOSITORY_STATE } from "../../shared/types/git";
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { RepositoryState } from "../../shared/types/git";
 import type { ControlRecords } from "../control/control-records";
 import type { EnvRequests } from "../control/env-requests";
 import type { EnvStore } from "../store/environment";
@@ -19,7 +17,7 @@ export interface IpcDeps {
   store: ProjectStore;
   settings: SettingsAccess;
   accounts: AccountStore;
-  /** The logins typed into tet for git hosts without a credential helper. */
+  /** The logins typed into TET for git hosts without a credential helper. */
   logins: GitLoginStore;
   sbxLocal: SbxLocalStore;
   sbxAccounts: SbxAccountStore;
@@ -37,10 +35,7 @@ export interface IpcDeps {
   /** Opens the stored projects, once, when the requirements are met; resolves once their ids are
    *  read, so the window's first list has them. */
   openWorkspace: () => Promise<void>;
-  /** main.ts's one way out, shared with the control channel's `restart-app`. */
+  /** main.ts's one way out, shared with the control channel's `app-restart`. */
   shutdown: (relaunch: boolean) => void;
 }
-
-/** The answer of every verb addressed to a project that is not open. */
-export const MISSING_REPOSITORY: RepositoryState = { ...EMPTY_REPOSITORY_STATE, error: "Repository not open" };
 

@@ -61,7 +61,7 @@ const changed = async (): Promise<string[]> =>
   (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
 
 describe("git's version", () => {
-  it("reads as its number, and the worktrees tet makes need 2.48", async () => {
+  it("reads as its number, and the worktrees TET makes need 2.48", async () => {
     assert.match((await version()) ?? "", /^\d+\.\d+\.\d+/);
     for (const [printed, supported] of [
       ["2.47.3", false],
@@ -575,7 +575,7 @@ describe("a network command's ssh", () => {
     run("remote", "add", "origin", bare);
     // Without core.sshCommand, over no ssh at all.
     assert.deepEqual(await fetch(cwd), { ok: true });
-    // Set later, the way a user does in a terminal: the ssh must be theirs, not tet's.
+    // Set later, the way a user does in a terminal: the ssh must be theirs, not TET's.
     const marker = path.join(cwd, "ssh-ran").replace(/\\/g, "/");
     const node = process.execPath.replace(/\\/g, "/");
     run("config", "core.sshCommand", `'${node}' -e "require('fs').writeFileSync(process.argv[1], '')" '${marker}'`);
@@ -625,7 +625,7 @@ describe("a submodule opened as a project", () => {
     const sub = fs.realpathSync.native(path.join(parent, "sub"));
     const { worktrees } = await readState(sub);
     assert.deepEqual(
-      worktrees.map((worktree) => [worktree.path, worktree.main, worktree.current]),
+      worktrees.map((worktree) => [worktree.path, worktree.isRepository, worktree.current]),
       [[sub, true, true]]
     );
   });

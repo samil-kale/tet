@@ -102,7 +102,7 @@ describe("Claude Code's transcripts", () => {
     await claudeSessionProvider.remove("claude", cwd, "s");
     await assert.rejects(claudeSessionProvider.rename("claude", cwd, "s", "  "), /non-empty/);
     // Gone, it is not written back as a session of one title line.
-    await assert.rejects(claudeSessionProvider.rename("claude", cwd, "s", "Renamed"), /Claude session not found/);
+    await assert.rejects(claudeSessionProvider.rename("claude", cwd, "s", "Renamed"), /Claude Code session not found/);
     assert.deepEqual(fs.readdirSync(dir), []);
   });
 
@@ -377,7 +377,7 @@ describe("pi's transcripts", () => {
 });
 
 /**
- * The providers read through the directory tet mounts into an sbx sandbox: paths are the
+ * The providers read through the directory TET mounts into an sbx sandbox: paths are the
  * container's (`/c/work/...`, as `toContainerPath` makes them) and the root is the mounted host
  * directory. The CLI writes byte-for-byte what it writes on the host; only these two inputs differ.
  */

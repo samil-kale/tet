@@ -52,7 +52,7 @@ describe("a tree of repository paths", () => {
     ]);
   });
 
-  it("folds only-child folder chains into one row, never a root", () => {
+  it("compacts only-child folder chains into one row, never a root", () => {
     const root: TreeNode = { id: "", name: "Changes", path: "", children: buildTree(["a/b/c/x.ts"]), root: true };
     const [compacted] = compactTree([root]);
     assert.deepEqual(outline([compacted]), ["Changes", "  a/b/c", "    x.ts"]);

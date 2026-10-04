@@ -12,7 +12,7 @@ interface SessionCallbacks {
 // Stopping writes the Ctrl+C bytes an agent quits on (`AgentTerminal.quitPresses`) before a
 // kill, so the CLI runs its exit handlers. Claude Code arms a record in `~/.claude.json` while its
 // fullscreen renderer boots and clears it ten seconds later; a process dying in between counts as a
-// strike, and two turn fullscreen off machine-wide — a tab spawned at tet's startup is in that
+// strike, and two turn fullscreen off machine-wide — a tab spawned at TET's startup is in that
 // window. `\x03` is safe only because an agent TUI in raw mode reads it as a byte; in cooked mode
 // ConPTY makes it a CTRL_C_EVENT that kills without running anything.
 
@@ -93,7 +93,7 @@ export class TerminalSession {
       this.process = spawnAgentProcess(this.executable, this.args, { ...this.spawn, cols, rows });
     } catch (error) {
       logError(`failed to spawn ${this.executable}`, error);
-      this.callbacks.onOutput(`\r\n[tet] failed to spawn ${this.executable}:\r\n${errorMessage(error)}\r\n`);
+      this.callbacks.onOutput(`\r\n[TET] failed to spawn ${this.executable}:\r\n${errorMessage(error)}\r\n`);
       this.setStatus("error");
       return;
     }
@@ -103,7 +103,7 @@ export class TerminalSession {
     this.process.onExit(({ exitCode }) => {
       this.process = undefined;
       if (!this.intentionalStop) {
-        this.callbacks.onOutput(`\r\n[tet] ${this.executable} exited with code ${exitCode}\r\n`);
+        this.callbacks.onOutput(`\r\n[TET] ${this.executable} exited with code ${exitCode}\r\n`);
       }
       // By exit code, so a passed build is no error; killed by us is "stopped" whatever the code.
       this.setStatus(this.intentionalStop || exitCode === 0 ? "stopped" : "error");

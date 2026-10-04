@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, it } from "node:test";
-import { EMPTY_SBX_CONFIG } from "../../src/shared/types/sbx";
+import { EMPTY_SBX_SETTINGS } from "../../src/shared/types/sbx";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import {
   addExclude,
@@ -11,11 +11,11 @@ import {
   readChanged,
   readCommands,
   readExplorerView,
-  readSbxConfig,
+  readSbxSettings,
   removeFolder,
   tetJsonProblem,
   writeCommands,
-  writeSbxConfig
+  writeSbxSettings
 } from "../../src/main/store/tet-json";
 import { tempDir } from "../helpers";
 
@@ -84,7 +84,7 @@ describe("readCommands", () => {
     put("{ not json");
     assert.equal(await tetJsonProblem(root), "tet.json is not valid JSON");
     assert.deepEqual(await readCommands(root), [{ command: "npm test" }]);
-    assert.equal((await readSbxConfig(root)).enabled, true, "sandboxing is never taken for off");
+    assert.equal((await readSbxSettings(root)).enabled, true, "SBX is never taken for disabled");
     await assert.rejects(writeCommands(root, [{ command: "x" }]), /not valid JSON/);
     assert.equal(fs.readFileSync(file(), "utf8"), "{ not json", "untouched");
     put(JSON.stringify({ commands: ["npm run lint"] }));
@@ -294,12 +294,12 @@ describe("a hand-written tet.json", () => {
   });
 });
 
-describe("readSbxConfig", () => {
+describe("readSbxSettings", () => {
   it("is disabled and empty for a project with no tet.json at all", async () => {
-    assert.deepEqual(await readSbxConfig(root), EMPTY_SBX_CONFIG);
+    assert.deepEqual(await readSbxSettings(root), EMPTY_SBX_SETTINGS);
   });
 
-  it("round-trips what writeSbxConfig wrote, keeping a saved command and another OS's paths alongside it", async () => {
+  it("round-trips what writeSbxSettings wrote, keeping a saved command and another OS's paths alongside it", async () => {
     const otherOs = "aix";
     const theirs = { path: "/their/data", access: "ro", os: otherOs };
     const stale = [
@@ -321,8 +321,8 @@ describe("readSbxConfig", () => {
       secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }],
       variables: [{ env: "NPM_TOKEN" }]
     };
-    await writeSbxConfig(root, config);
-    assert.deepEqual(await readSbxConfig(root), config, "the rows that apply here come back, the other OS's does not");
+    await writeSbxSettings(root, config);
+    assert.deepEqual(await readSbxSettings(root), config, "the rows that apply here come back, the other OS's does not");
     const file = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown; hosts: unknown } };
     assert.equal(file.sbx.knowledge, undefined, "knowledge, kept on this machine, is dropped from tet.json");
     assert.deepEqual(file.commands, ["keep"], "the saved command survives");
@@ -372,7 +372,7 @@ describe("readSbxConfig", () => {
         }
       })
     );
-    assert.deepEqual(await readSbxConfig(root), {
+    assert.deepEqual(await readSbxSettings(root), {
       enabled: true,
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],

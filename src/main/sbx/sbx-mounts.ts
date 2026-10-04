@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { SBX_KNOWLEDGE_KINDS, addProblems, forbiddenBy } from "../../shared/sbx-rules";
-import type { SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../../shared/types/sbx";
+import type { SbxKnowledgeSettings, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../../shared/types/sbx";
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";
@@ -19,7 +19,7 @@ import { logError } from "../util/error-log";
  * `HOST:CTR_TARGET`. `sbx mount` would parse `HOST:ro`'s "ro" as the target, so the target is
  * always spelled out — via `toContainerPath`, since the host path as target breaks on Windows (two
  * drive colons). Read-write is the same form without a suffix. `mount` carries the access, so equal
- * `mount`s are the same grant (saveSbxConfig narrows by it, mountAll compares by it). A single file
+ * `mount`s are the same grant (saveSbxSettings narrows by it, mountAll compares by it). A single file
  * takes both forms.
  */
 interface MountSpec {
@@ -41,7 +41,7 @@ export function pathMountSpecs(entry: SbxPath): MountSpec {
 export type SandboxPaths = Pick<AgentPaths, "agentDir">;
 
 /**
- * tet's own mount for every sandboxed tab: its agent's sandbox folder rw (hook settings, agents'
+ * TET's own mount for every sandboxed tab: its agent's sandbox folder rw (hook settings, agents'
  * records), and nothing else of `~/.tet`. A live mount, since a create positional cannot change
  * afterwards. The repository or worktree stays create-time: `sbx run` has no `--workdir`, and
  * without a positional the agent starts in an empty `/home/agent/workspace`. It lands at the host
@@ -58,7 +58,7 @@ export function fixedMountSpecs(paths: SandboxPaths): MountSpec[] {
 
 /**
  * A linked worktree's repository `.git`, rw: the worktree's own `.git` is a file pointing there, and
- * without it git fails in the sandbox ("not a git repository"). tet creates worktrees with relative
+ * without it git fails in the sandbox ("not a git repository"). TET creates worktrees with relative
  * links (git.ts's worktreeAdd), which hold at the container paths. Live, like fixedMountSpecs.
  */
 export function worktreeMountSpecs(projectRefPath: string): MountSpec[] {
@@ -128,7 +128,7 @@ interface Grant extends MountSpec {
  * Knowledge is bind-mounted (`HOST:TARGET[:ro]`), not symlinked: sbx cannot follow a link out of
  * its workspace.
  */
-export async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeConfig, paths: SbxPath[]): Promise<Grant[]> {
+export async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeSettings, paths: SbxPath[]): Promise<Grant[]> {
   const entries = await sandboxKnowledgeFor(agent, knowledge.skillsFolder);
   return [
     ...SBX_KNOWLEDGE_KINDS.flatMap((kind) => {
@@ -193,8 +193,8 @@ const mountSetups = new Map<string, Promise<unknown>>();
 
 /**
  * The paths dropped into a sandbox's tabs (mountDropped), by sandbox name: the user's, never in
- * tet.json, held until tet quits — every start's mountAll is handed them, or it would take them out
- * again. The first start after tet quits does.
+ * tet.json, held until TET quits — every start's mountAll is handed them, or it would take them out
+ * again. The first start after TET quits does.
  */
 const droppedMounts = new Map<string, string[]>();
 
@@ -273,8 +273,8 @@ export async function mountDropped(name: string, seen: string[], hostPaths: stri
  * Brings a sandbox's live mounts to `specs` at every start, against what it holds
  * (readRuntimeMounts): a mount it lacks is mounted, one it holds that `specs` has not — another
  * access included — unmounted.
- * - mounts survive a stop, access included. `sbx stop` can happen outside tet, so the sandbox is
- *   asked each time rather than tet remembering.
+ * - mounts survive a stop, access included. `sbx stop` can happen outside TET, so the sandbox is
+ *   asked each time rather than TET remembering.
  * - mounting what is mounted is not idempotent (a read-only file fails, a folder is bound twice),
  *   hence only what is missing.
  * - a mount whose host path is gone keeps the sandbox from starting; `sbx umount` takes it out of a
@@ -349,7 +349,7 @@ export interface SbxSessionMount {
  * The host side is created first (directory or empty file) — `sbx mount` needs it. The container
  * side need not exist, and a mount wins over a template's volume there (Claude's
  * `~/.claude/projects`). A host side that cannot be created is left out; one sbx refuses stops the
- * tab like tet's own mounts (prepareSbxRun).
+ * tab like TET's own mounts (prepareSbxRun).
  */
 export async function sessionMountSpecs(mounts: SbxSessionMount[]): Promise<MountSpec[]> {
   const specs: MountSpec[] = [];

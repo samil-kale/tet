@@ -42,12 +42,12 @@ let next: string;
 let served: string;
 const archives = new Map<string, string>();
 /**
- * Found once before tet starts: asked while tet listens, `findControlPort` names the next free
- * port. Both starts share the profile, so tet takes the same port again.
+ * Found once before TET starts: asked while TET listens, `findControlPort` names the next free
+ * port. Both starts share the profile, so TET takes the same port again.
  */
 let port: number;
 
-/** Where the script puts tet, under the throwaway home. */
+/** Where the script puts TET, under the throwaway home. */
 function installedRoot(): string {
   switch (PLATFORM.id) {
     case "win32":
@@ -82,9 +82,9 @@ function tetLog(): string {
   }
 }
 
-/** `what`, followed by what tet wrote so far. */
+/** `what`, followed by what TET wrote so far. */
 function withLog(what: string): () => string {
-  return () => `${what}\n--- tet's output ---\n${tetLog()}`;
+  return () => `${what}\n--- TET's output ---\n${tetLog()}`;
 }
 
 /**
@@ -106,7 +106,7 @@ function startTet(): void {
   fs.closeSync(log);
 }
 
-/** A verb's result, or undefined when tet does not answer. */
+/** A verb's result, or undefined when TET does not answer. */
 async function ask(args: string[]): Promise<unknown> {
   // No caller ids, which a run from a TET tab inherits: the run's token speaks for no tab.
   const answer = await tetCtl(args, {
@@ -123,7 +123,7 @@ async function version(): Promise<{ version: string; pid: number } | undefined> 
 }
 
 /**
- * The update armed for the quit, as tet announces it: its notice is sent only once the update is
+ * The update armed for the quit, as TET announces it: its notice is sent only once the update is
  * unpacked and pending. Its files on disk come a moment earlier, and a quit in between installs
  * nothing.
  */
@@ -168,7 +168,7 @@ function packageNext(): string {
   return path.join(output, ASSET);
 }
 
-describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 20 * 60_000 }, () => {
+describe("TET installed by its script, and updated", { skip: !ENABLED, timeout: 20 * 60_000 }, () => {
   before(async () => {
     const built = path.join(ROOT, "release", ASSET);
     assert.ok(fs.existsSync(built), `${built} — run \`npm run dist\` first`);
@@ -216,10 +216,10 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     const running = await version().catch(() => undefined);
     if (running) {
       killApp(running.pid, "SIGKILL");
-      await eventually("tet gone", () => !processAlive(running.pid), 30_000).catch(() => undefined);
+      await eventually("TET gone", () => !processAlive(running.pid), 30_000).catch(() => undefined);
     }
     server?.close();
-    // On win32 a killed tet's processes and a pty's console host hold files a while longer.
+    // On win32 a killed TET's processes and a pty's console host hold files a while longer.
     await eventually(
       `${work} removed`,
       () => {
@@ -257,16 +257,16 @@ describe("tet installed by its script, and updated", { skip: !ENABLED, timeout: 
     }
     served = next;
     startTet();
-    await eventually(withLog("tet answering"), async () => (await version())?.version === current, STARTUP_MS);
+    await eventually(withLog("TET answering"), async () => (await version())?.version === current, STARTUP_MS);
   });
 
-  it("fetches the newer version, and installs it once tet has quit", async () => {
+  it("fetches the newer version, and installs it once TET has quit", async () => {
     const running = await version();
-    assert.ok(running, "tet running");
+    assert.ok(running, "TET running");
     await eventually(withLog("the update armed"), updateArmed, 5 * 60_000);
     assert.ok(fs.existsSync(rootExecutable(preparedRoot(installedRoot()), PLATFORM)), "the new version beside the install");
     quit(running.pid);
-    await eventually(withLog("tet gone"), () => !processAlive(running.pid), 60_000);
+    await eventually(withLog("TET gone"), () => !processAlive(running.pid), 60_000);
     const resultFile = path.join(userData, "update", "result.json");
     await eventually(withLog("the update's result"), () => fs.existsSync(resultFile), 5 * 60_000);
     const result = JSON.parse(fs.readFileSync(resultFile, "utf8")) as UpdateResult;

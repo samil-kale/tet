@@ -4,7 +4,7 @@ import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
 import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote } from "../../shared/types/git";
-import { projectRefKey } from "../../shared/types/project";
+import { refKeyOf } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult, HeadBlob } from "../../shared/types/files";
 import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
@@ -62,7 +62,8 @@ const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
  *  `git status`. Not the place for status's own index write: `--no-optional-locks` (readStatus).
- *  `ownWorktree` is a linked worktree's id under `.git/worktrees/`, undefined for the repository. */
+ *  `ownWorktree` is the name of a linked worktree's admin folder under `.git/worktrees/` (git's, not
+ *  an id of TET's), undefined for the repository. */
 function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
   const normalized = relativePath.replace(/\\/g, "/");
   // Another worktree's admin directory: of it, a refresh reads only `HEAD` and `gitdir`
@@ -319,9 +320,9 @@ export class Repository {
       });
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
-      // Only a linked worktree carries a base and a key; the main one was made with the repository.
-      base: worktree.main || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch],
-      key: worktree.main ? undefined : this.worktreeKeyOf(worktree.path)
+      // Only a linked worktree carries a base and a key; the repository has neither.
+      base: worktree.isRepository || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch],
+      key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path)
     }));
     const next: RepositoryState = { ...read, remotes, worktrees };
     this.reportError(next);
@@ -960,7 +961,7 @@ export class Repository {
   }
 }
 
-/** A Repository per open repository and worktree, by `projectRefKey`. */
+/** A Repository per open repository and worktree, by `refKey`. */
 export class RepositoryManager {
   private readonly repositories = new Map<string, Repository>();
 
@@ -977,7 +978,7 @@ export class RepositoryManager {
 
   open(resolved: ResolvedRef): Repository {
     const { ref } = resolved;
-    const existing = this.repositories.get(projectRefKey(ref));
+    const existing = this.repositories.get(refKeyOf(ref));
     if (existing) {
       return existing;
     }
@@ -997,19 +998,19 @@ export class RepositoryManager {
       this.logins,
       () => [...this.repositories.values()].filter((other) => other !== repository && other.at.ref.projectId === ref.projectId)
     );
-    this.repositories.set(projectRefKey(ref), repository);
+    this.repositories.set(refKeyOf(ref), repository);
     void repository.start();
     return repository;
   }
 
   get(ref: ProjectRef): Repository | undefined {
-    return this.repositories.get(projectRefKey(ref));
+    return this.repositories.get(refKeyOf(ref));
   }
 
   /** Resolves once its git commands have ended (Repository.dispose); it is gone at once. */
   close(ref: ProjectRef): Promise<void> {
-    const closing = this.repositories.get(projectRefKey(ref))?.dispose();
-    this.repositories.delete(projectRefKey(ref));
+    const closing = this.repositories.get(refKeyOf(ref))?.dispose();
+    this.repositories.delete(refKeyOf(ref));
     return closing ?? Promise.resolve();
   }
 

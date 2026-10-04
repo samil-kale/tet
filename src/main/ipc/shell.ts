@@ -48,7 +48,7 @@ export async function fetchHttpsImage(url: string, fetchFn: FetchLike = net.fetc
   return undefined;
 }
 
-/** What tet hands to the OS: links, files and folders. */
+/** What TET hands to the OS: links, files and folders. */
 export function registerShellIpc({
   repositories,
   notice

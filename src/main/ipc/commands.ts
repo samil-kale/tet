@@ -4,7 +4,8 @@ import type { GitActionResult } from "../../shared/types/git";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { readCommands, writeCommands } from "../store/tet-json";
-import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
+import { PROJECT_NOT_FOUND } from "../store/resolved-ref";
+import type { IpcDeps } from "./deps";
 
 /** The project's saved commands (tet.json), and running one in a tab of its own. */
 export function registerCommandsIpc({ store, tabManagers }: Pick<IpcDeps, "store" | "tabManagers">): void {
@@ -20,7 +21,7 @@ export function registerCommandsIpc({ store, tabManagers }: Pick<IpcDeps, "store
     async (_event, projectId: string, commands: ProjectCommand[]): Promise<GitActionResult> => {
       const project = store.get(projectId);
       if (!project) {
-        return { ok: false, error: MISSING_REPOSITORY.error };
+        return { ok: false, error: PROJECT_NOT_FOUND };
       }
       try {
         await writeCommands(project.path, commands);

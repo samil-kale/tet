@@ -15,7 +15,7 @@ const DEFAULTS: AppSettings = {
   },
   notifications: {
     finished: true,
-    needsYou: true,
+    waiting: true,
     idleReminder: false
   },
   files: {
@@ -43,7 +43,7 @@ export interface SettingsAccess {
 }
 
 /**
- * The settings dialog's values in tet's data folder (data-root.ts). Written whole, read back
+ * The settings dialog's values in TET's data folder (data-root.ts). Written whole, read back
  * defensively: a key of the wrong type falls back to its default rather than reaching an agent as
  * `undefined`.
  */
@@ -154,7 +154,7 @@ function suggester(value: unknown): Suggester {
 }
 
 /**
- * A non-string, or tet's own default text verbatim, is stored as "", so a later improved default
+ * A non-string, or TET's own default text verbatim, is stored as "", so a later improved default
  * still reaches the user (`effectivePrompt` fills it in).
  */
 function promptTexts(texts: Record<string, unknown>): PromptTexts {

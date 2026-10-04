@@ -1,4 +1,4 @@
-/** A username and password (or token) typed into tet for a git host. */
+/** A username and password (or token) typed into TET for a git host. */
 export interface GitLogin {
   username: string;
   password: string;
@@ -83,14 +83,14 @@ export interface WorktreeInfo {
   path: string;
   /** Its checked-out branch; absent while detached. */
   branch?: string;
-  /** The branch a linked worktree's branch was made from, as tet records it (`branch.<name>.base`
+  /** The branch a linked worktree's branch was made from, as TET records it (`branch.<name>.base`
    *  in the repository's config, git.ts's worktreeAdd); absent for one made elsewhere. Laid over
    *  the read by `Repository.emit`, with the remote urls, not read per refresh. */
   base?: string;
   /** The one holding the repository's `.git`, which is never renamed or deleted. */
-  main: boolean;
-  /** TET's key for a worktree it made (project-dirs.ts's worktreeKeyOf); absent for the main one and
-   *  for one made elsewhere. Laid over the read by `Repository.emit`, like `base`. */
+  isRepository: boolean;
+  /** TET's key for a worktree it made (project-dirs.ts's worktreeKeyOf); absent for the repository
+   *  and for one made elsewhere. Laid over the read by `Repository.emit`, like `base`. */
   key?: string;
   /** The worktree this state was read in. */
   current: boolean;
@@ -146,7 +146,7 @@ export interface CheckoutTarget {
 export const WORKTREES_NEED_GIT = "needs git 2.48 or newer";
 
 /**
- * Whether `git --version`'s answer has `worktree add --relative-paths`, which tet's worktrees are
+ * Whether `git --version`'s answer has `worktree add --relative-paths`, which TET's worktrees are
  * made with (git.ts's worktreeAdd). Renaming (the branch alone) and deleting need nothing new.
  */
 export function worktreesSupported(version: string | undefined): boolean {
@@ -163,8 +163,8 @@ export function worktreeBase(state: RepositoryState): CheckoutTarget | undefined
   if (state.defaultBranch) {
     return state.defaultBranch;
   }
-  const main = state.worktrees.find((worktree) => worktree.main)?.branch;
-  return main === undefined ? undefined : { name: main };
+  const head = state.worktrees.find((worktree) => worktree.isRepository)?.branch;
+  return head === undefined ? undefined : { name: head };
 }
 
 /** The remote a command uses where no branch names one (tags, publishing a branch): the first,

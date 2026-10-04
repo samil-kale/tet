@@ -5,19 +5,19 @@ import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, F
 import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
-import type { SbxAccount, SbxAccountEdit, SbxKnowledgeConfig, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "./types/sbx";
+import type { SbxAccount, SbxAccountEdit, SbxKnowledgeSettings, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "./types/sbx";
 import type { AppSettings, LaneSettings, SettingsEdits } from "./types/settings";
-import type { HandoffResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
+import type { HandoverResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
 export interface TETApi {
-  /** The programs tet cannot run without; the app shows only once they are there. */
+  /** The programs TET cannot run without; the app shows only once they are there. */
   startup: {
     /** Runs the check and, when it passes, brings the stored projects up. */
     check(): Promise<Requirements>;
     /** Whether any agent CLI is installed now — what makes a project sbx-only. Spawns the checks
-     *  fresh: ask where tet already refreshes host state, never on a timer. */
+     *  fresh: ask where TET already refreshes host state, never on a timer. */
     anyAgentInstalled(): Promise<boolean>;
     /** For the user who would rather install first. */
     quit(): void;
@@ -27,7 +27,7 @@ export interface TETApi {
     info(): Promise<AppInfo>;
     /** For `tet-ctl notices-list`. */
     reportNotice(report: NoticeReport): void;
-    /** Ends every session and starts tet again, as `tet-ctl restart-app` does. */
+    /** Ends every session and starts TET again, as `tet-ctl app-restart` does. */
     restart(): void;
   };
   /** Docker Sandboxes, opt-in per project through the project row's "SBX Settings". */
@@ -36,7 +36,7 @@ export interface TETApi {
      *  again" follows an install. Per project: the policy must allow the project's folder. */
     status(projectId: string): Promise<SbxStatus>;
     /** Opens the OAuth page in the browser and waits; no terminal. */
-    login(): Promise<boolean>;
+    signInInBrowser(): Promise<boolean>;
     /** Who sbx says is signed in; only once `status` said someone is. */
     signedInUser(): Promise<string | undefined>;
     /** The access tokens kept for every project — never a token. */
@@ -45,15 +45,15 @@ export interface TETApi {
      *  account is kept (or its token replaced) only once sbx took it. */
     signIn(user: string, token: string, accountId?: string): Promise<SbxSignInResult>;
     /** `sbx logout`, which stops every running sandbox; what sbx said on failing. */
-    logout(): Promise<string | undefined>;
+    signOut(): Promise<string | undefined>;
     /** The General tab's access token rows at Save; what refused them, else undefined. */
     saveAccounts(edits: SbxAccountEdit[]): Promise<string | undefined>;
     /** Sets the machine-wide network policy to "balanced", Docker's recommended default. */
     initPolicy(): Promise<boolean>;
-    /** Kills a running `login`/`signedInUser`/`initPolicy` — the Cancel button. */
+    /** Kills a running `signInInBrowser`/`signedInUser`/`initPolicy` — the Cancel button. */
     cancelSetup(): void;
     /** From tet.json. */
-    getConfig(projectId: string): Promise<SbxProjectConfig>;
+    getSettings(projectId: string): Promise<SbxProjectSettings>;
     /** What the dialog keeps on this machine — never a value. */
     stored(projectId: string): Promise<SbxStoredLocal>;
     /** The agents installed here and what each brings of its own knowledge. */
@@ -61,14 +61,14 @@ export interface TETApi {
     /** Stores `local` (the values typed at this Save, the knowledge) on this machine, then saves
      *  and applies the rows without a problem (sbx-settings.ts's saveProjectSbx); a sandbox whose
      *  folders changed is removed. */
-    saveConfig(projectId: string, request: SbxProjectConfig, local: SbxLocalSave): Promise<SbxSaveResult>;
+    saveSettings(projectId: string, request: SbxProjectSettings, local: SbxLocalSave): Promise<SbxSaveResult>;
     /** What of the rows cannot be applied here, for their marks; `values` the env names that hold
      *  a value, as the rows have them; `status` the governance the dialog read (no check reads it
      *  again). */
     problems(
       projectId: string,
-      config: SbxProjectConfig,
-      knowledge: SbxKnowledgeConfig,
+      settings: SbxProjectSettings,
+      knowledge: SbxKnowledgeSettings,
       values: Record<SbxValueKind, string[]>,
       status: Pick<SbxStatus, "organization">
     ): Promise<SbxProblems>;
@@ -117,7 +117,7 @@ export interface TETApi {
     /** The full dragged order of ids. */
     reorder(projectIds: string[]): Promise<void>;
     /** A project or worktree was opened or closed, or a worktree's branch changed. `show` is what the
-     *  user (or tet-ctl) just opened, to bring to the front. */
+     *  user (or tet-ctl) just opened, to make active. */
     onChanged(listener: (payload: ProjectsChange & { projects: Project[] }) => void): Unsubscribe;
   };
   providers: {
@@ -131,7 +131,7 @@ export interface TETApi {
     /** Most recently active first. */
     repos(accountId: string): Promise<ListRepositoriesResult>;
   };
-  environment: {
+  env: {
     /** Never the values. */
     list(): Promise<EnvVarInfo[]>;
     /** The Settings' Environment tab, whole: why it could not be saved, else nothing. */
@@ -253,12 +253,12 @@ export interface TETApi {
     save(projectId: string, commands: ProjectCommand[]): Promise<GitActionResult>;
     /** A tab whose process is the command; null when nothing can run it. */
     run(ref: ProjectRef, command: ProjectCommand): Promise<TabDescriptor | null>;
-    /** tet.json changed on disk, whoever wrote it: its commands and sbx switch as they now read. */
+    /** tet.json changed on disk, whoever wrote it: its commands and whether SBX is enabled as they now read. */
     onChanged(
       listener: (payload: { projectId: string; commands: ProjectCommand[]; sbxEnabled: boolean }) => void
     ): Unsubscribe;
   };
-  terminals: {
+  tabs: {
     list(ref: ProjectRef): Promise<TabDescriptor[]>;
     /** The session starts on first resize. */
     create(ref: ProjectRef, agentId: AgentId): Promise<TabDescriptor>;
@@ -267,14 +267,14 @@ export interface TETApi {
     /** Answers what the agent refused, for the question still up to show it at its field. */
     rename(ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult>;
     /** A tab of `agentId` taking over this tab's session; this tab stays. */
-    handOff(ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoffResult>;
+    handOver(ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult>;
     /** Respawns a saved command in the same tab. */
     restart(ref: ProjectRef, tabId: string): Promise<void>;
-    /** Clears `finishedAt` — only the renderer knows which tab is in front. */
+    /** Clears `finishedAt` — only the renderer knows which tab is on screen. */
     seen(ref: ProjectRef, tabId: string): void;
-    /** The shown project's tabs in front of the user (on screen, focused window, no dialog); a turn
+    /** The active repository's or worktree's tabs on screen (focused window, no dialog); a turn
      *  there raises no notification. Sent whenever the set changes. */
-    inFront(ref: ProjectRef | null, tabIds: string[]): void;
+    reportOnScreen(ref: ProjectRef | null, tabIds: string[]): void;
     input(ref: ProjectRef, tabId: string, data: string): void;
     /** The first resize starts the process (lazy spawn). */
     resize(ref: ProjectRef, tabId: string, cols: number, rows: number): void;

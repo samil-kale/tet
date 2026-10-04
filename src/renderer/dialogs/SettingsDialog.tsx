@@ -17,7 +17,7 @@ import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, DialogError, Field, FieldColumn, FieldGroup, FieldRow } from "../ui/Field";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
-import { useRunning } from "../ui/use-running";
+import { useBusy } from "../ui/use-busy";
 import { PLATFORM } from "../platform";
 import { atLeastOne, EditRow, firstMark, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
@@ -92,23 +92,23 @@ const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
 
 const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message",
-  handoff: "Session handoff"
+  handover: "Session handover"
 };
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
-  { key: "finished", label: "Finished — the turn ended and nothing it started is still running" },
-  { key: "needsYou", label: "Action needed — waiting on a permission prompt or a question" },
+  { key: "finished", label: "Finished - the turn ended" },
+  { key: "waiting", label: "Waiting for an answer - a permission prompt or a question" },
   // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
   // so it reaches tabs started afterwards (AgentPaths.idleReminder).
-  { key: "idleReminder", label: "Still waiting — no new prompt for a while (Claude Code only, from the next tab on)" }
+  { key: "idleReminder", label: "Still waiting - no new prompt for a while (Claude Code only)" }
 ];
 
 const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
-  { key: "checkNewChanges", label: "Check new changes in LOCAL CHANGES for the next commit" },
+  { key: "checkNewChanges", label: "Check new changes for the next commit" },
   { key: "pushOnCommit", label: "Also push when committing" },
-  { key: "deleteBranchOnRemote", label: "Also delete a deleted branch's upstream on the remote" },
-  { key: "deleteTagOnRemote", label: "Also delete a deleted tag on the remote" },
-  { key: "deleteWorktreeOnRemote", label: "Also delete a deleted worktree's upstream on the remote" }
+  { key: "deleteBranchOnRemote", label: "Also delete branch on the remote" },
+  { key: "deleteTagOnRemote", label: "Also delete tag on the remote" },
+  { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" }
 ];
 
 /**
@@ -135,7 +135,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 ];
 
 /**
- * Everything tet keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits
+ * Everything TET keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits
  * its own copy and writes on Save; Cancel and Escape drop the edits. A setting reaches an agent
  * through `AgentPaths` at `AgentHost.prepare`, once per agent (HostSetups), as does the color theme. Deliberately
  * not in here: the tab marks.
@@ -162,8 +162,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const [listingModels, setListingModels] = useState(false);
 
   /** The settings as opened, on the header's bar; what could not be read stands in their place
-   *  (`DialogError`), as the SBX dialog's does. */
-  const { running: loading, run: load } = useRunning(true);
+   *  (`DialogError`), as the SBX Settings's does. */
+  const { busy: loading, run: load } = useBusy(true);
   const [loadFailed, setLoadFailed] = useState<string | undefined>(undefined);
   useEffect(() => {
     void load(() =>
@@ -171,7 +171,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
         window.tet.settings.get().then(setSettings),
         // Cannot change while the process runs.
         window.tet.app.info().then(setInfo),
-        window.tet.environment.list().then((list) => {
+        window.tet.env.list().then((list) => {
           setVariables(atLeastOne(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })), BLANK_ENV_ROW));
           setLoadedVariables(list.map((variable) => variable.name));
         })
@@ -180,7 +180,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   }, [load]);
 
   // Read once, on open; Save goes through setExplorerSetting (tet-json.ts), which reads the file fresh
-  // and leaves other keys alone. Keyed by id: the project list is rebuilt whole when a project is
+  // and leaves other keys alone. Keyed by id: the open projects are rebuilt whole when a project is
   // added elsewhere, and a new object for the same project must not discard the edits.
   const activeProjectId = activeProject?.id;
   useEffect(() => {
@@ -203,7 +203,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     async () => {
       if (variablesEdited.current) {
         const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
-        const refusal = await window.tet.environment.save(rows);
+        const refusal = await window.tet.env.save(rows);
         if (refusal) {
           return refusal;
         }
@@ -270,7 +270,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const scheme = settings?.appearance.colorScheme ?? "system";
   const chosenKind = schemeKind(scheme, window.matchMedia("(prefers-color-scheme: dark)").matches);
 
-  /** Tet's own text is stored as "", as in settings.ts; the reset button reads that. */
+  /** TET's own text is stored as "", as in settings.ts; the reset button reads that. */
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { texts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } } });
 
@@ -316,7 +316,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       message={
         (kindSwitched || envRestart) && (
           <>
-            {kindSwitched && <span className="restart-note">Switching between light and dark applies after tet is restarted.</span>}
+            {kindSwitched && <span className="restart-note">Switching between light and dark applies after TET is restarted.</span>}
             {kindSwitched && envRestart && " "}
             {envRestart && <RestartNote />}
           </>
@@ -367,7 +367,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       )}
       {shown === "files" && (
         <>
-          <FieldGroup label={activeProject ? `EXPLORER view, for ${activeProject.name}` : "EXPLORER view"}>
+          <FieldGroup label={activeProject ? `Explorer settings, for ${activeProject.name}` : "Explorer settings"}>
             {!activeProject && <p className="dialog-detail">Open a project to edit it</p>}
             {activeProject && explorerSettings && (
               <>
@@ -377,7 +377,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                   onChange={(next) => editExplorerSetting("excludeGitIgnore", next)}
                 />
                 <Checkbox
-                  label="Compact folders that only contain another folder into one row"
+                  label="Compact single-child folders"
                   checked={explorerSettings.compactFolders}
                   onChange={(next) => editExplorerSetting("compactFolders", next)}
                 />
@@ -398,7 +398,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
             />
           </Field>
-          <p className="dialog-detail">Presets from popular editors and IDEs - only for what the file editor supports</p>
         </>
       )}
       {shown === "git" && (
@@ -428,7 +427,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
               </button>
             </FieldRow>
           </FieldGroup>
-          {/* Only for a prompt tet asks in the background; a handoff's goes to the tab taking over. */}
+          {/* Only for a prompt TET asks in the background; a handover's goes to the tab taking over. */}
           {promptId === "commitMessage" && (
             <FieldGroup label="Suggested by">
               {suggesterRef ? (

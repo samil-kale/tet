@@ -1,15 +1,15 @@
 /**
- * Generates src/renderer/lanes/files/file-icons.ts, the Explorer's file marks, and copies Seti's font
+ * Generates src/renderer/lanes/files/file-icons.ts, the Explorer's file icons, and copies Seti's font
  * beside it as src/renderer/lanes/files/seti.woff:
  *
  *   node scripts/file-icons.js <VS Code's resources/app>
  *
- * The marks are Seti's — VS Code's default file icon theme, read from the installation along with
+ * The icons are Seti's — VS Code's default file icon theme, read from the installation along with
  * the language each built-in extension claims a file for, since Seti maps most files by language
  * id. They are resolved the way VS Code resolves an icon theme: the file name, then each extension
- * from the longest, then the language. A mark is a glyph of Seti's font and its color, named by
- * Seti's palette; a file Seti leaves on its default icon gets no mark, and a Seti grey or white is
- * a mark in its own color.
+ * from the longest, then the language. A file icon is a glyph of Seti's font and its color, named by
+ * Seti's palette; a file Seti leaves on its default icon gets none, and a Seti grey or white is
+ * an icon in its own color.
  *
  * Re-run it on a VS Code upgrade and read the diff.
  */
@@ -77,13 +77,13 @@ function iconOf(name) {
   return setiTheme.names[name] ?? byExtension ?? (language && setiTheme.languages[language]);
 }
 
-/** [glyph, color?], or null for no mark. */
-function markOf(name) {
-  const icon = iconOf(name);
-  if (!icon || icon === seti.file) {
+/** [glyph, color?], or null for no file icon. */
+function fileIconOf(name) {
+  const definitionId = iconOf(name);
+  if (!definitionId || definitionId === seti.file) {
     return null;
   }
-  const { fontCharacter, fontColor } = seti.iconDefinitions[icon];
+  const { fontCharacter, fontColor } = seti.iconDefinitions[definitionId];
   // `\E001`, CSS's escape, as the character itself.
   const glyph = String.fromCodePoint(parseInt(fontCharacter.slice(1), 16));
   const color = PALETTE[fontColor?.toLowerCase()];
@@ -93,7 +93,7 @@ function markOf(name) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // The tables hold only what the lookup could not work out from a shorter key: an extension whose
-// mark differs from its next shorter extension's, a name whose mark differs from its extensions'.
+// icon differs from its next shorter extension's, a name whose icon differs from its extensions'.
 const fileExtensions = new Map();
 const firstExtension = (candidates) => {
   const suffix = candidates.find((candidate) => fileExtensions.has(candidate));
@@ -102,33 +102,33 @@ const firstExtension = (candidates) => {
 const byExtensions = (name) => firstExtension(suffixes(name));
 const allExtensions = new Set([...Object.keys(setiTheme.extensions), ...Object.keys(languageExtensions)]);
 for (const extension of [...allExtensions].sort((a, b) => a.split(".").length - b.split(".").length)) {
-  const mark = markOf(`x.${extension}`);
-  if (!same(mark, firstExtension(suffixes(`x.${extension}`).slice(1)))) {
-    fileExtensions.set(extension, mark);
+  const fileIcon = fileIconOf(`x.${extension}`);
+  if (!same(fileIcon, firstExtension(suffixes(`x.${extension}`).slice(1)))) {
+    fileExtensions.set(extension, fileIcon);
   }
 }
 const fileNames = new Map();
 const allNames = new Set([...Object.keys(setiTheme.names), ...Object.keys(languageNames)]);
 for (const name of allNames) {
-  const mark = markOf(name);
-  if (!same(mark, byExtensions(name))) {
-    fileNames.set(name, mark);
+  const fileIcon = fileIconOf(name);
+  if (!same(fileIcon, byExtensions(name))) {
+    fileNames.set(name, fileIcon);
   }
 }
 
 // The lookup Explorer.tsx does, checked against the full resolution on every key read.
 const lookup = (name) => (fileNames.has(name) ? fileNames.get(name) : byExtensions(name));
 for (const name of [...allNames, ...[...allExtensions].flatMap((extension) => [`x.${extension}`, `.${extension}`, `a.b.${extension}`])]) {
-  if (!same(lookup(name), markOf(name))) {
+  if (!same(lookup(name), fileIconOf(name))) {
     throw new Error(`the tables disagree with the resolution for ${name}`);
   }
 }
 
-/** A mark as source text, its glyph escaped: a private-use character reads as nothing in an editor. */
-const markSource = (mark) =>
-  mark === null
+/** A file icon as source text, its glyph escaped: a private-use character reads as nothing in an editor. */
+const fileIconSource = (fileIcon) =>
+  fileIcon === null
     ? "null"
-    : `[${mark.map((part, index) => (index === 0 ? `"\\u${part.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}"` : JSON.stringify(part))).join(", ")}]`;
+    : `[${fileIcon.map((part, index) => (index === 0 ? `"\\u${part.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}"` : JSON.stringify(part))).join(", ")}]`;
 
 const vscodeVersion = readJson(path.join(vscodeApp, "package.json")).version;
 const sorted = (map) => [...map].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
@@ -139,19 +139,19 @@ const lines = [
   "//",
   "// Seti (github.com/jesseweed/seti-ui): MIT.",
   "",
-  `type FileMarkColor = ${[...new Set(Object.values(PALETTE))].map((color) => JSON.stringify(color)).join(" | ")};`,
+  `type FileIconColor = ${[...new Set(Object.values(PALETTE))].map((color) => JSON.stringify(color)).join(" | ")};`,
   "",
   "/** A glyph of seti.woff, and its color if Seti gives it one. */",
-  "export type FileMark = readonly [glyph: string, color?: FileMarkColor];",
+  "export type FileIcon = readonly [glyph: string, color?: FileIconColor];",
   "",
-  "/** Lowercased extension, without its leading dot, to its mark; null for none. */",
-  "export const FILE_EXTENSIONS: Record<string, FileMark | null> = {",
-  ...sorted(fileExtensions).map(([key, mark], index) => `  ${JSON.stringify(key)}: ${markSource(mark)}${index < fileExtensions.size - 1 ? "," : ""}`),
+  "/** Lowercased extension, without its leading dot, to its file icon; null for none. */",
+  "export const FILE_EXTENSIONS: Record<string, FileIcon | null> = {",
+  ...sorted(fileExtensions).map(([key, fileIcon], index) => `  ${JSON.stringify(key)}: ${fileIconSource(fileIcon)}${index < fileExtensions.size - 1 ? "," : ""}`),
   "};",
   "",
-  "/** Lowercased file name to its mark, where it differs from its extensions'; null for none. */",
-  "export const FILE_NAMES: Record<string, FileMark | null> = {",
-  ...sorted(fileNames).map(([key, mark], index) => `  ${JSON.stringify(key)}: ${markSource(mark)}${index < fileNames.size - 1 ? "," : ""}`),
+  "/** Lowercased file name to its file icon, where it differs from its extensions'; null for none. */",
+  "export const FILE_NAMES: Record<string, FileIcon | null> = {",
+  ...sorted(fileNames).map(([key, fileIcon], index) => `  ${JSON.stringify(key)}: ${fileIconSource(fileIcon)}${index < fileNames.size - 1 ? "," : ""}`),
   "};",
   ""
 ];

@@ -14,11 +14,11 @@ import { jsonOf, readSbxVersion, runSbx, SBX_PROBE_TIMEOUT_MS, sbxFailure, sbxVe
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
  *  by prepareControl (control-channel.ts). Unset without a control channel, and then nothing of it reaches a sandbox. */
 let control: { cliPath: string; port: number } | undefined;
-/** tet's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
-let storageRoot: string | undefined;
-export function configureSandboxes(cliPath: string, port: number, dataRoot: string): void {
+/** TET's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
+let dataRoot: string | undefined;
+export function configureSandboxes(cliPath: string, port: number, root: string): void {
   control = { cliPath, port };
-  storageRoot = dataRoot;
+  dataRoot = root;
 }
 
 /** The control channel configureSandboxes was given, for a sandboxed tab's env and launcher
@@ -39,7 +39,7 @@ export type SandboxList = Map<string, string[]>;
  * Before every sandboxed spawn (`resolvePlace`): the first unmet precondition as a notice, or the
  * sandbox listing the sign-in probe's `sbx ls` produced and the filesystem rules the policy check
  * read, for `prepareSbxRun`. The policy check (readSbxBlockers) repeats the dialog's: a policy
- * changes outside tet, and an agent whose hooks cannot reach tet or whose folders are unmounted
+ * changes outside TET, and an agent whose hooks cannot reach TET or whose folders are unmounted
  * runs with no turn marks and no reason given.
  */
 export async function checkSbxReady(
@@ -74,7 +74,7 @@ export interface SbxReading {
 
 /**
  * What the sbx-settings dialog asks before showing its fields. PATH is re-read: "Check again"
- * follows an install. Nothing cached — sbx changes from outside tet at any time.
+ * follows an install. Nothing cached — sbx changes from outside TET at any time.
  */
 export async function readSbxStatus(projectRefPath: string, ref: ProjectRef): Promise<SbxStatus> {
   return (await readSbxReading(projectRefPath, ref, true)).status;
@@ -102,7 +102,7 @@ function folderRule(folder: string): string {
 
 /**
  * What sbx's policy must still allow for a sandboxed tab: the control channel
- * (isControlChannelAllowed), the repository or worktree as workspace, and tet's mounted folders —
+ * (isControlChannelAllowed), the repository or worktree as workspace, and TET's mounted folders —
  * each agent's sandbox folder rw (fixedMountSpecs). Checked as mounted, asked for as one rule over
  * projectsDir, which covers a worktree TET made as well, read and write. `rules` are the probe's
  * (probeSbx), evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
@@ -121,10 +121,10 @@ async function readSbxBlockers(
   }
   const blockers: SbxBlocker[] = [];
   if (!channelAllowed) {
-    blockers.push({ what: "tet's hooks", allow: "localhost (network, no port)" });
+    blockers.push({ what: "TET's hooks", allow: "localhost (network, no port)" });
   }
   const mountable = mountableBy(rules);
-  const projects = storageRoot === undefined ? undefined : projectsDir(storageRoot);
+  const projects = dataRoot === undefined ? undefined : projectsDir(dataRoot);
   // A worktree TET made lies under projectsDir, which the rule below covers.
   const ownWorktree = ref.worktree !== undefined;
   if (!ownWorktree && !mountable(projectRefPath, "rw")) {
@@ -134,13 +134,13 @@ async function readSbxBlockers(
   if (repositoryGitDir !== undefined && !mountable(repositoryGitDir, "rw")) {
     blockers.push({ what: "The worktree's repository", allow: `${folderRule(repositoryGitDir)} (read and write)` });
   }
-  if (storageRoot !== undefined && projects !== undefined) {
-    const root = storageRoot;
+  if (dataRoot !== undefined && projects !== undefined) {
+    const root = dataRoot;
     const own =
       SANDBOXED_AGENTS.every((agent) => mountable(sandboxDir(root, ref, agent.id), "rw")) &&
       (!ownWorktree || mountable(projectRefPath, "rw"));
     if (!own) {
-      blockers.push({ what: "tet's project data", allow: `${folderRule(projects)} (read and write)` });
+      blockers.push({ what: "TET's project data", allow: `${folderRule(projects)} (read and write)` });
     }
   }
   return { blockers, rules };
@@ -151,7 +151,7 @@ function hostFlavor(): PathFlavor {
   return { platform: PLATFORM, home: os.homedir() };
 }
 
-/** What one `sbx policy ls --type filesystem --json` says: the filesystem rules, evaluated in tet
+/** What one `sbx policy ls --type filesystem --json` says: the filesystem rules, evaluated in TET
  *  (sbx-policy.ts: sbx has no `policy check` for them), and the organization managing the policy. */
 export interface SbxPolicy {
   rules: FilesystemRule[];
@@ -205,7 +205,7 @@ export async function readHostAllowed(host: string): Promise<boolean> {
  * policy (readSbxBlockers).
  */
 async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList; policy?: SbxPolicy }> {
-  const status: SbxStatus = { installed: false, loggedIn: false, policyInitialized: false, blockers: [] };
+  const status: SbxStatus = { installed: false, signedIn: false, policyInitialized: false, blockers: [] };
   if (refreshPath) {
     await augmentAgentPath();
   }
@@ -220,7 +220,7 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
     return { status };
   }
   if (version && !sbxVersionSupported(version)) {
-    status.failure = `version ${version} is too old, tet needs 0.45 or later`;
+    status.failure = `version ${version} is too old, TET needs 0.45 or later`;
     return { status };
   }
   const sandboxes = parseSandboxes(list);
@@ -232,7 +232,7 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
     }
     return { status };
   }
-  status.loggedIn = true;
+  status.signedIn = true;
   status.policyInitialized = policy !== undefined;
   status.organization = policy?.organization;
   return { status, sandboxes, policy };

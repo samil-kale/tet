@@ -7,7 +7,7 @@ export interface ThemeDefinition {
   id: string;
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
-  /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is tet's own
+  /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is TET's own
    *  (src/renderer/themes/dark-slate.json), the IntelliJ, GameBoy and Claude themes' their
    *  extensions', beside it. */
   shikiTheme:

@@ -190,7 +190,7 @@ describe("pi's extension", () => {
       assert.equal(hookSessionId(String(channel.reports[0].args.payload)), "019eba31-566c-7911-bf09-14afe53d7c36");
       assert.equal(hookSessionId(String(channel.reports[2].args.payload)), undefined, "a context without a session");
       assert.equal(channel.reports[0].verb, "hook");
-      // Reports are not awaited and race; tet orders them by the time each carries.
+      // Reports are not awaited and race; TET orders them by the time each carries.
       assert.ok(
         channel.reports.every((report) => typeof report.at === "number" && report.at > 0),
         "every report says when it was made"
@@ -208,12 +208,12 @@ describe("pi's extension", () => {
 
   // Written on the host, read inside a container too: nothing in it may depend on where it runs.
   it("writes one file that reads the channel from its environment", () => {
-    const storageDir = tempDir("tet-pi-sbx-");
-    const file = writePiExtension(storageDir);
+    const agentDir = tempDir("tet-pi-sbx-");
+    const file = writePiExtension(agentDir);
     const source = fs.readFileSync(file, "utf8");
 
-    assert.equal(file, path.join(storageDir, "tet", "index.ts"), "pi lists it by its folder's name");
-    assert.deepEqual(fs.readdirSync(path.join(storageDir, "tet")), ["index.ts"], "no notify script, no marker directories");
+    assert.equal(file, path.join(agentDir, "tet", "index.ts"), "pi lists it by its folder's name");
+    assert.deepEqual(fs.readdirSync(path.join(agentDir, "tet")), ["index.ts"], "no notify script, no marker directories");
     assert.ok(source.includes(JSON.stringify(CONTROL_ENV)), "the channel is read from the environment, not baked in");
   });
 });

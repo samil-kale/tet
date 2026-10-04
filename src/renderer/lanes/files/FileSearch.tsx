@@ -1,10 +1,10 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../../shared/types/files";
 import { baseName, parentOf } from "../../paths";
-import { FileMarkIcon } from "./file-mark";
-import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../../ui/tree-row";
+import { FileIconView } from "./file-icon";
+import { INDENT_BASE, MATCH_INDENT, TreeRow, ChevronBox } from "../../ui/tree-row";
 import { FilterField } from "../../ui/FilterField";
-import type { FoldAll } from "../../ui/FoldAllButton";
+import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 import { IconButton } from "../../ui/IconButton";
 import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../../ui/icons";
 
@@ -34,7 +34,7 @@ export function searchSummary(result: FileSearchResult): string {
 }
 
 /** For the SEARCH header's title-bar buttons. */
-export interface FileSearchHandle extends FoldAll {
+export interface FileSearchHandle extends CollapseExpandAll {
   clear(): void;
 }
 
@@ -44,15 +44,15 @@ interface FileSearchProps {
   /** The field asks for a search here, or for none; the section runs it and shows it running. */
   runSearch: (query: FileSearchQuery | null) => void;
   onOpenMatch: (path: string, match: FileSearchMatch) => void;
-  /** What the header's fold button does next, reported as it changes: collapse while a file is
-   *  open, else expand. */
+  /** What the header's collapse/expand button does next, reported as it changes: collapse while a
+   *  file is expanded, else expand. */
   onExpanded: (expanded: boolean) => void;
   ref?: React.Ref<FileSearchHandle>;
 }
 
 /**
  * The SEARCH section: VS Code's search box, its own query, over what that query finds in the files'
- * lines. Listed as VS Code's search view does — a row per file, folded away until it is opened,
+ * lines. Listed as VS Code's search view does — a row per file, collapsed until it is expanded,
  * and under it a row per match with the match marked; the summary is the section's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
@@ -62,22 +62,22 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
   const asked = search.text.trim() ? search : null;
   useEffect(() => runSearch(asked), [asked, runSearch]);
 
-  const [opened, setOpened] = useState<Record<string, boolean>>({});
-  // Every search lists its files folded away again; the previous one's opened ones are gone.
+  const [expandedFiles, setExpandedFiles] = useState<Record<string, boolean>>({});
+  // Every search lists its files collapsed again; the previous one's expanded ones are gone.
   const [listed, setListed] = useState(result);
   if (listed !== result) {
     setListed(result);
-    setOpened({});
+    setExpandedFiles({});
   }
   const files = result?.files ?? [];
-  const anyExpanded = files.some((file) => opened[file.path]);
+  const anyExpanded = files.some((file) => expandedFiles[file.path]);
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   useImperativeHandle(ref, () => ({
     // The text alone: the toggles are the field's own, as VS Code keeps them.
     clear: () => setSearch((current) => ({ ...current, text: "" })),
-    expandAll: () => setOpened(Object.fromEntries(files.map((file) => [file.path, true]))),
-    collapseAll: () => setOpened({})
+    expandAll: () => setExpandedFiles(Object.fromEntries(files.map((file) => [file.path, true]))),
+    collapseAll: () => setExpandedFiles({})
   }));
 
   return (
@@ -95,7 +95,7 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
       </div>
       <div className="tree">
         {files.map((file) => {
-          const open = opened[file.path] ?? false;
+          const expanded = expandedFiles[file.path] ?? false;
           const name = baseName(file.path);
           const dir = parentOf(file.path);
           return (
@@ -103,11 +103,11 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
               <TreeRow
                 indent={INDENT_BASE}
                 title={file.path}
-                onClick={() => setOpened((current) => ({ ...current, [file.path]: !open }))}
+                onClick={() => setExpandedFiles((current) => ({ ...current, [file.path]: !expanded }))}
                 icon={
                   <>
-                    <Twistie open={open} />
-                    <FileMarkIcon name={name} />
+                    <ChevronBox expanded={expanded} />
+                    <FileIconView name={name} />
                   </>
                 }
                 label={name}
@@ -115,7 +115,7 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
                 {dir && <span className="tree-dir">{dir}</span>}
                 <span className="count-badge search-count">{file.matches.length}</span>
               </TreeRow>
-              {open &&
+              {expanded &&
                 file.matches.map((match) => (
                   <TreeRow
                     key={`${match.line}:${match.column}`}

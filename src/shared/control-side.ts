@@ -30,7 +30,7 @@ export interface ControlSide {
 const OWN_LIMITS = [
   "Without flags, a verb acts on where the tab it is run from runs: its project's repository or",
   "one of its worktrees. --project <id> alone means that project's repository,",
-  "--worktree <branch> one of its worktrees. A worktree listed without a key (projects-list) was",
+  "--worktree <key or branch> one of its worktrees. A worktree listed without a key (projects-list) was",
   "made outside TET, with plain git: TET shows it greyed and cannot open it."
 ];
 

@@ -25,7 +25,7 @@ export interface SpawnOptions {
   side?: TabSide;
 }
 
-/** The control channel's port and token, set by prepareControl (control-channel.ts). Above `process.env`, since a tet started
+/** The control channel's port and token, set by prepareControl (control-channel.ts). Above `process.env`, since a TET started
  *  from its own shell tab inherits the outer one's; kept out of it so git does not carry them. */
 let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
@@ -36,7 +36,7 @@ export function setControlEnv(vars: Record<string, string>, binDir: string | und
   launcherDir = binDir;
 }
 
-/** The environment variables the user keeps in tet (environment.ts), read at every spawn so a
+/** The environment variables the user keeps in TET (environment.ts), read at every spawn so a
  *  restarted tab sees what was saved meanwhile. */
 let storedEnv: () => Record<string, string> = () => ({});
 
@@ -56,14 +56,14 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
 }
 
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), the
- *  variables kept in tet over it where its side takes them (TabSide.storedEnv), then tet's own
+ *  variables kept in TET over it where its side takes them (TabSide.storedEnv), then TET's own
  *  (controlEnv, options.own) with the tab's own control token in place of the run's
  *  (control-token.ts), then options.envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">): Record<string, string> {
   const side = options.side ?? HOST_TAB;
   const stored = side.storedEnv ? storedEnv() : {};
   const inherited = withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored));
-  // Never an outer tet's caller ids (a tet started from a tet tab): only `own` names this tab.
+  // Never an outer TET's caller ids (a TET started from a TET tab): only `own` names this tab.
   for (const name of [CONTROL_ENV.projectId, CONTROL_ENV.worktree, CONTROL_ENV.tabId]) {
     delete inherited[name];
   }
@@ -74,7 +74,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     ...controlEnv,
     ...options.own
   };
-  // Never an outer tet's: this tab got exactly `stored`.
+  // Never an outer TET's: this tab got exactly `stored`.
   delete env[KEPT_ENV_NAME];
   if (Object.keys(stored).length > 0) {
     env[KEPT_ENV_NAME] = Object.keys(stored).join(",");

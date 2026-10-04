@@ -90,8 +90,8 @@ export function visibleTabIds(layout: ProjectLayout): string[] {
   return Object.values(layout.activeTab).filter((id): id is string => id != null);
 }
 
-/** The tabs in front of the user: those shown, none while the window is unfocused or covered. */
-export function tabsInFront(layout: ProjectLayout, focused: boolean, covered: boolean): string[] {
+/** The tabs on screen: those shown, none while the window is unfocused or covered. */
+export function tabsOnScreen(layout: ProjectLayout, focused: boolean, covered: boolean): string[] {
   return focused && !covered ? visibleTabIds(layout) : [];
 }
 
@@ -368,7 +368,7 @@ function collapsePanes(layout: ProjectLayout, emptied: PaneId[], tabs: LayoutTab
   return next === layout ? layout : collapseTrailing(next, tabs);
 }
 
-/** A box as fractions of `.panes-grid` — the unit of the snap zones and the preview. */
+/** A box as fractions of `.panes-grid` — the unit of the snap zones and the snap preview. */
 export interface FractionBox {
   left: number;
   top: number;
@@ -428,17 +428,17 @@ export const SNAP_TRANSITIONS: Record<SplitPreset, Partial<Record<SnapZone, Snap
 };
 
 /**
- * The three divider lines as shares of `.panes-grid`. Per *line*, not per preset, so a preset
- * switch moves no line.
+ * The three sashes as shares of `.panes-grid`. Per *sash*, not per preset, so a preset
+ * switch moves none.
  */
-interface DividerShares {
+interface SashShares {
   col: number;
   rowLeft: number;
   rowRight: number;
 }
 
-/** Each pane's box given the lines — the preview of the pane a drop would add. */
-const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, (shares: DividerShares) => FractionBox>>> = {
+/** Each pane's box given the sashes — the snap preview of the pane a drop would add. */
+const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, (shares: SashShares) => FractionBox>>> = {
   single: { a: () => ({ left: 0, top: 0, width: 1, height: 1 }) },
   cols2: {
     a: ({ col }) => ({ left: 0, top: 0, width: col, height: 1 }),
@@ -457,7 +457,7 @@ const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, (shares: DividerSha
   }
 };
 
-export function paneBox(preset: SplitPreset, paneId: PaneId, shares: DividerShares): FractionBox | null {
+export function paneBox(preset: SplitPreset, paneId: PaneId, shares: SashShares): FractionBox | null {
   return PANE_BOXES[preset][paneId]?.(shares) ?? null;
 }
 
@@ -522,7 +522,7 @@ export function placeCommandTab(
 }
 
 /**
- * How far past its zone the pointer may stray; stops the preview flickering between two zones.
+ * How far past its zone the pointer may stray; stops the snap preview flickering between two zones.
  */
 const SNAP_STICKY = 0.03;
 
@@ -554,18 +554,18 @@ export function snapZoneAt(
 
 /**
  * `localStorage` under `layout-storage.ts`'s namespace: layout describes the window, not the
- * repository. Per repository or worktree (its key), unlike `useStoredSize`/`useStoredToggle`'s fixed
- * keys. `suffix` tells the layout from `TabArea`'s divider positions.
+ * repository. Per repository or worktree (its `refKey`), unlike `useStoredSize`/`useStoredToggle`'s fixed
+ * keys. `suffix` tells the layout from `TabArea`'s sash positions.
  */
-export function layoutStorageKey(key: string, suffix: string): string {
-  return layoutKey(`terminals.${key}.${suffix}`);
+export function layoutStorageKey(refKey: string, suffix: string): string {
+  return layoutKey(`terminals.${refKey}.${suffix}`);
 }
 
 /**
  * What survives a restart: preset, focused pane, each tab's pane — keyed by *session id*. A new
  * tab's `new-N` id restarts from zero each run and returns, if at all, under its session id. So
  * both are one entry, and what cannot return (a shell tab, no session persisted) is dropped.
- * The divider shares are persisted beside it (`useDividerFraction`).
+ * The sash shares are persisted beside it (`useSashFraction`).
  */
 interface PersistedLayout {
   preset: SplitPreset;
@@ -584,10 +584,10 @@ interface PersistedLayout {
  * Read defensively: a bad shape falls back to a fresh layout. Entries of vanished sessions stay
  * (`normalizeLayout`). Session ids come back as tab ids, hence the editor tab's unlike id.
  */
-export function loadLayout(key: string): ProjectLayout {
+export function loadLayout(refKey: string): ProjectLayout {
   const fallback = defaultLayout();
   try {
-    const raw = localStorage.getItem(layoutStorageKey(key, "layout"));
+    const raw = localStorage.getItem(layoutStorageKey(refKey, "layout"));
     if (raw === null) {
       return fallback;
     }
@@ -668,14 +668,14 @@ export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): strin
   return JSON.stringify(persisted);
 }
 
-export function saveLayout(key: string, serialized: string): void {
-  localStorage.setItem(layoutStorageKey(key, "layout"), serialized);
+export function saveLayout(refKey: string, serialized: string): void {
+  localStorage.setItem(layoutStorageKey(refKey, "layout"), serialized);
 }
 
-/** Drops everything stored under a repository's or worktree's key: removed, it never comes back
+/** Drops everything stored under a repository's or worktree's refKey: removed, it never comes back
  *  under it. */
-export function dropStoredLayout(key: string): void {
-  const prefix = layoutStorageKey(key, "");
+export function dropStoredLayout(refKey: string): void {
+  const prefix = layoutStorageKey(refKey, "");
   const stored = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index));
   for (const entry of stored) {
     if (entry?.startsWith(prefix)) {

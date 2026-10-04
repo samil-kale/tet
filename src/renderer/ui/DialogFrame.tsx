@@ -5,7 +5,7 @@ import { IconButton } from "./IconButton";
 import { CircleAlertIcon, CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { useEscape } from "./use-escape";
-import { useRunning } from "./use-running";
+import { useBusy } from "./use-busy";
 import { useCoversWindow } from "./window-covered";
 
 /**
@@ -24,7 +24,7 @@ export function useSubmit(
   submit: () => Promise<void>;
   changing: <A extends unknown[]>(set: (...args: A) => void) => (...args: A) => void;
 } {
-  const { running: busy, run: holdBusy } = useRunning();
+  const { busy, run: holdBusy } = useBusy();
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const submit = async (): Promise<void> => {
     if (busy) {
@@ -49,7 +49,7 @@ export function useSubmit(
 
 /** A dialog's cancel for ×, its Cancel button and Escape alike (`DialogFrame`'s `onCancel`): nothing
  *  while `locked`, so what runs finishes before the dialog goes. What runs and may be cut short
- *  instead is `abort`ed first (the SBX dialog's setup, a suggested commit message). */
+ *  instead is `abort`ed first (the SBX Settings's setup, a suggested commit message). */
 function useCancel(cancel: () => void, locked: boolean, abort?: () => void): () => void {
   const guarded = (): void => {
     if (!locked) {
@@ -143,7 +143,7 @@ interface DialogFrameProps<T extends string> {
  *
  * The focus goes to the open tab's first field, on opening and on each tab switch — once one is
  * there, as a body that loads shows its fields later — and failing one to the primary button, so
- * Enter answers; the user's own click or key ends that. While one is up, no tab is in front
+ * Enter answers; the user's own click or key ends that. While one is up, no tab is on screen
  * (`window-covered.ts`).
  *
  * A modal `<dialog>`: the rest of the window is inert, so Tab cannot leave for the terminal or the

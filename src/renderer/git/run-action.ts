@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { GitActionResult, GitLogin } from "../../shared/types/git";
 import { refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
-import { useRunning } from "../ui/use-running";
+import { useBusy } from "../ui/use-busy";
 import { askLogin } from "./GitLogin";
 
 /**
@@ -38,10 +38,10 @@ export interface GitRun {
  *  questions itself, knowing which remote holds a branch and where HEAD is. */
 export interface BranchActions extends GitRun {
   /** A command runs in this repository or worktree; no second one is offered. */
-  busy: boolean;
+  locked: boolean;
   /** That command was started here, so the git lane's bar shows it; one started from the project
    *  list shows in that list's bar instead. */
-  startedHere: boolean;
+  busy: boolean;
 }
 
 /** How a view hands a git command to App's runner, which answers with the result as it is. */
@@ -73,7 +73,7 @@ function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
 /**
  * An action whose first try may answer `needsConfirmation`: its run ends there, bar and lock
  * released, and the follow-up question comes after it; a yes starts the confirmed action as a new
- * run. The bar shows tet working, never tet waiting on the user. `start` is how the view runs an
+ * run. The bar shows TET working, never TET waiting on the user. `start` is how the view runs an
  * action (`act`, a `GitRun`'s `run`); `ask` the question, handed the first try's answer.
  */
 export function runWithFollowUp(
@@ -116,21 +116,21 @@ export function notifying<A extends unknown[]>(
  * the main process refuses while another runs (a context menu entry during a commit) ends first,
  * and must not clear the mark of the one still running.
  */
-export function useFileAct(key: string): { acting: boolean; act: FileAct; ask: FileAsk } {
+export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask: FileAsk } {
   const [actingIn, setActingIn] = useState<ReadonlyMap<string, number>>(() => new Map());
   const count = useCallback(
     (delta: number): void =>
       setActingIn((current) => {
         const next = new Map(current);
-        const running = (next.get(key) ?? 0) + delta;
+        const running = (next.get(refKey) ?? 0) + delta;
         if (running > 0) {
-          next.set(key, running);
+          next.set(refKey, running);
         } else {
-          next.delete(key);
+          next.delete(refKey);
         }
         return next;
       }),
-    [key]
+    [refKey]
   );
   const ask: FileAsk = useCallback(async (action) => refusal(await action(), "Git command failed"), []);
   const act: FileAct = useMemo(
@@ -145,7 +145,7 @@ export function useFileAct(key: string): { acting: boolean; act: FileAct; ask: F
       }),
     [count, ask]
   );
-  return { acting: actingIn.has(key), act, ask };
+  return { acting: actingIn.has(refKey), act, ask };
 }
 
 /**
@@ -154,12 +154,12 @@ export function useFileAct(key: string): { acting: boolean; act: FileAct; ask: F
  * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
  * question asked for runs on the question's bar.
  */
-function useStartedHere<A extends unknown[], R>(
+function useBusyStart<A extends unknown[], R>(
   run: (...args: A) => Promise<R>
-): { startedHere: boolean; start: (...args: A) => Promise<R> } {
-  const { running, run: hold } = useRunning();
+): { busy: boolean; start: (...args: A) => Promise<R> } {
+  const { busy, run: hold } = useBusy();
   const start = useCallback((...args: A) => hold(() => run(...args)), [hold, run]);
-  return { startedHere: running, start };
+  return { busy, start };
 }
 
 /**
@@ -170,26 +170,26 @@ function useStartedHere<A extends unknown[], R>(
  * question that asked for it shows that one) and the project list's way of running a command in
  * any repository or worktree it lists (`runIn`, on the list's bar, `projectListBusy`).
  */
-export function useBranchActions(activeKey: string | null): {
+export function useBranchActions(activeRefKey: string | null): {
   activeBranch: BranchActions;
   projectListBusy: boolean;
-  runIn: (key: string) => GitRun;
+  runIn: (refKey: string) => GitRun;
 } {
   /** Repositories and worktrees with a branch command in flight: a fetch ending in A must not free B. */
   const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Read synchronously: a second double-click can land before a re-render. */
   const branchActionsRef = useRef(new Set<string>());
   const runBranchAction = useCallback(
-    async (key: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
-      if (branchActionsRef.current.has(key)) {
+    async (refKey: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
+      if (branchActionsRef.current.has(refKey)) {
         return { ok: false, error: "Another command is running in this repository" };
       }
-      branchActionsRef.current.add(key);
+      branchActionsRef.current.add(refKey);
       setBranchActions(new Set(branchActionsRef.current));
       try {
         return await action();
       } finally {
-        branchActionsRef.current.delete(key);
+        branchActionsRef.current.delete(refKey);
         setBranchActions(new Set(branchActionsRef.current));
       }
     },
@@ -197,24 +197,24 @@ export function useBranchActions(activeKey: string | null): {
   );
   const runActiveBranchAction = useCallback(
     (action: () => Promise<GitActionResult>): Promise<GitActionResult> =>
-      activeKey ? runBranchAction(activeKey, action) : Promise.resolve({ ok: true }),
-    [activeKey, runBranchAction]
+      activeRefKey ? runBranchAction(activeRefKey, action) : Promise.resolve({ ok: true }),
+    [activeRefKey, runBranchAction]
   );
-  const { startedHere: gitLaneActing, start: runActiveHere } = useStartedHere(runActiveBranchAction);
+  const { busy: gitLaneBusy, start: runActiveHere } = useBusyStart(runActiveBranchAction);
   const activeBranch = useMemo<BranchActions>(
     () => ({
-      busy: activeKey !== null && branchActions.has(activeKey),
-      startedHere: gitLaneActing,
+      locked: activeRefKey !== null && branchActions.has(activeRefKey),
+      busy: gitLaneBusy,
       ...gitRun(runActiveHere, runActiveBranchAction)
     }),
-    [branchActions, activeKey, gitLaneActing, runActiveHere, runActiveBranchAction]
+    [branchActions, activeRefKey, gitLaneBusy, runActiveHere, runActiveBranchAction]
   );
-  const { startedHere: projectListBusy, start: runProjectListHere } = useStartedHere(runBranchAction);
+  const { busy: projectListBusy, start: runProjectListHere } = useBusyStart(runBranchAction);
   const runIn = useCallback(
-    (key: string): GitRun =>
+    (refKey: string): GitRun =>
       gitRun(
-        (action) => runProjectListHere(key, action),
-        (action) => runBranchAction(key, action)
+        (action) => runProjectListHere(refKey, action),
+        (action) => runBranchAction(refKey, action)
       ),
     [runProjectListHere, runBranchAction]
   );

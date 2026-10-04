@@ -1,7 +1,7 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
 import { defaultRemote, refName, upstreamName } from "../../../shared/types/git";
-import { projectRef, projectRefKey, worktreeName } from "../../../shared/types/project";
+import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 import { runWithFollowUp, type BranchActions } from "../../git/run-action";
@@ -11,7 +11,7 @@ import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "
 import { TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { notify } from "../../ui/Notices";
-import { useCollapsedSections } from "../../ui/layout-storage";
+import { useCollapsedGroups } from "../../ui/layout-storage";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -22,15 +22,15 @@ import {
   ChevronIcon,
   WorktreeIcon
 } from "../../ui/icons";
-import { askDeleteWorktree, askRenameWorktree, NOT_MADE_BY_TET, worktreeEntry } from "../../git/worktree-questions";
+import { askDeleteWorktree, askRenameWorktree, MADE_ELSEWHERE, worktreeEntry } from "../../git/worktree-questions";
 
 interface BranchTreeProps {
   resolved: ResolvedRef;
   state: RepositoryState;
   branch: BranchActions;
-  /** Brings a repository or worktree of the project to the front, by its key — as a projects lane
+  /** Makes a repository or worktree of the project active, by its `refKey` — as a projects lane
    *  row does. */
-  onSelect: (key: string) => void;
+  onActivateRef: (refKey: string) => void;
 }
 
 /** The row the menu was opened on. */
@@ -41,7 +41,7 @@ type MenuTarget =
   | { kind: "worktree"; worktree: WorktreeInfo };
 
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
-const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or create a new worktree";
+const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or add a worktree";
 
 /** A branch merged into the default branch has its icon in purple. */
 function branchIconClass(merged: boolean): string {
@@ -49,10 +49,10 @@ function branchIconClass(merged: boolean): string {
 }
 
 /**
- * One collapsible section of the tree. `rows` is called only while the section is open, so a
+ * One collapsible group of the tree. `rows` is called only while the group is expanded, so a
  * collapsed one with thousands of tags builds no elements.
  */
-function TreeSection({
+function TreeGroup({
   label,
   count,
   collapsed,
@@ -66,7 +66,7 @@ function TreeSection({
   rows: () => ReactNode;
 }) {
   return (
-    <div className="tree-section">
+    <div className="tree-group">
       <button className="tree-header" onClick={onToggle}>
         <ChevronIcon expanded={!collapsed} className="tree-icon" />
         <span>{label}</span>
@@ -78,16 +78,16 @@ function TreeSection({
 }
 
 export const BranchTree = memo(function BranchTree({
-  resolved: shown,
+  resolved,
   state,
   branch,
-  onSelect
+  onActivateRef
 }: BranchTreeProps) {
-  const at = shown.ref;
-  const projectId = shown.ref.projectId;
+  const at = resolved.ref;
+  const projectId = resolved.ref.projectId;
   const [filter, setFilter] = useState("");
-  // Only local branches start open, as in GitHub Desktop; folds persist.
-  const [isCollapsed, toggle] = useCollapsedSections("branch-tree.sections", ["remotes", "tags", "stashes"]);
+  // Only local branches start expanded, as in GitHub Desktop; collapsing persists.
+  const [isCollapsed, toggle] = useCollapsedGroups("branch-tree.groups", ["remotes", "tags", "stashes"]);
   const menu = useContextMenu<MenuTarget>();
 
   const query = filter.trim().toLowerCase();
@@ -95,9 +95,9 @@ export const BranchTree = memo(function BranchTree({
 
   // Plain computations, not memos: `state` is a new object on every push and `query` changes per
   // keystroke, so a memo would miss whenever it matters, to filter a few hundred strings.
-  // The linked ones alone: the main one is the repository itself, not a worktree made from it. A
-  // linked worktree and its branch are one (projects.ts), listed under WORKTREES only.
-  const linkedWorktrees = state.worktrees.filter((worktree) => !worktree.main);
+  // The linked ones alone: the repository itself is not a worktree made from it. A linked
+  // worktree and its branch are one (projects.ts), listed under WORKTREES only.
+  const linkedWorktrees = state.worktrees.filter((worktree) => !worktree.isRepository);
   const ownBranches = state.localBranches.filter((name) => !linkedWorktrees.some((worktree) => worktree.branch === name));
   const localBranches = ownBranches.filter(matches);
   const remotes = state.remotes.map((remote) => ({ ...remote, branches: remote.branches.filter(matches) }));
@@ -126,15 +126,15 @@ export const BranchTree = memo(function BranchTree({
       ? state.worktrees.find((worktree) => !worktree.current && worktree.branch === target.name)
       : undefined;
 
-  /** Brings a worktree of the repository to the front: the main one, or one TET made; one made
-   *  elsewhere is never opened, so it is only told. */
+  /** Makes the repository or a worktree TET made active; a worktree made elsewhere is never
+   *  opened, so it is only told. */
   const openWorktree = (worktree: WorktreeInfo): void => {
-    if (worktree.main) {
-      onSelect(projectRefKey(projectRef(projectId)));
+    if (worktree.isRepository) {
+      onActivateRef(refKeyOf(projectRef(projectId)));
     } else if (worktree.key !== undefined) {
-      onSelect(projectRefKey(projectRef(projectId, worktree.key)));
+      onActivateRef(refKeyOf(projectRef(projectId, worktree.key)));
     } else {
-      notify("info", `${worktreeName(worktree)} is checked out in ${worktree.path}, a worktree ${NOT_MADE_BY_TET}`);
+      notify("info", `${worktreeName(worktree)} is checked out in ${worktree.path}, a worktree ${MADE_ELSEWHERE}`);
     }
   };
 
@@ -401,7 +401,7 @@ export const BranchTree = memo(function BranchTree({
     return [
       ...abortEntries(),
       worktree.key === undefined
-        ? { label: `Open (${NOT_MADE_BY_TET})` }
+        ? { label: `Open (${MADE_ELSEWHERE})` }
         : { label: "Open", run: worktree.current ? undefined : () => openWorktree(worktree) },
       worktree.current
         ? updateFromDefault()
@@ -415,12 +415,12 @@ export const BranchTree = memo(function BranchTree({
       SEPARATOR,
       worktreeEntry(
         "Rename worktree",
-        own ? undefined : NOT_MADE_BY_TET,
+        own ? undefined : MADE_ELSEWHERE,
         own && merged ? () => void askRenameWorktree(projectId, merged, branch) : undefined
       ),
       worktreeEntry(
         "Delete worktree",
-        own ? undefined : NOT_MADE_BY_TET,
+        own ? undefined : MADE_ELSEWHERE,
         own ? () => void askDeleteWorktree(own, name, mergedUpstream, branch) : undefined
       ),
       SEPARATOR,
@@ -442,11 +442,11 @@ export const BranchTree = memo(function BranchTree({
   };
 
   return (
-    <div className={`branch-tree${branch.busy ? " busy" : ""}`}>
+    <div className={`branch-tree${branch.locked ? " locked" : ""}`}>
       <FilterField placeholder="Search branches..." value={filter} onChange={setFilter} />
 
       <div className="tree">
-        <TreeSection
+        <TreeGroup
           label="LOCAL BRANCHES"
           count={ownBranches.length}
           collapsed={isCollapsed("local")}
@@ -485,7 +485,7 @@ export const BranchTree = memo(function BranchTree({
             })}
         />
 
-        <TreeSection
+        <TreeGroup
           label="WORKTREES"
           count={linkedWorktrees.length}
           collapsed={isCollapsed("worktrees")}
@@ -495,7 +495,7 @@ export const BranchTree = memo(function BranchTree({
               <TreeRow
                 key={worktree.path}
                 className={worktree.current ? "current" : undefined}
-                title={`${worktree.path}${worktree.key === undefined ? `\nA worktree ${NOT_MADE_BY_TET}` : worktree.current ? "" : "\nDouble-click to open"}`}
+                title={`${worktree.path}${worktree.key === undefined ? `\nA worktree ${MADE_ELSEWHERE}` : worktree.current ? "" : "\nDouble-click to open"}`}
                 onDoubleClick={() => !worktree.current && worktree.key !== undefined && openWorktree(worktree)}
                 onContextMenu={(event) => menu.open(event, { kind: "worktree", worktree })}
                 icon={<WorktreeIcon className="tree-icon" />}
@@ -508,7 +508,7 @@ export const BranchTree = memo(function BranchTree({
             ))}
         />
 
-        <TreeSection
+        <TreeGroup
           label="REMOTES"
           count={state.remotes.length}
           collapsed={isCollapsed("remotes")}
@@ -547,7 +547,7 @@ export const BranchTree = memo(function BranchTree({
             ))}
         />
 
-        <TreeSection
+        <TreeGroup
           label="TAGS"
           count={state.tags.length}
           collapsed={isCollapsed("tags")}
@@ -565,7 +565,7 @@ export const BranchTree = memo(function BranchTree({
             ))}
         />
 
-        <TreeSection
+        <TreeGroup
           label="STASHES"
           count={state.stashes.length}
           collapsed={isCollapsed("stashes")}

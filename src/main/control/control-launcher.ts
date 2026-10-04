@@ -6,7 +6,7 @@ import { PLATFORM } from "../util/host-platform";
 /**
  * The `tet-ctl` launcher, rewritten into the data folder at every start (install and `npm start`
  * run from different places) and prepended to each pty's PATH in `spawnAgentProcess`, never
- * installed machine-wide. Runs the CLI with tet's own electron under `ELECTRON_RUN_AS_NODE`: a
+ * installed machine-wide. Runs the CLI with TET's own electron under `ELECTRON_RUN_AS_NODE`: a
  * `node` is not a given (Codex ships a native binary).
  */
 export function writeLaunchers(dataRoot: string, cliPath: string): string {

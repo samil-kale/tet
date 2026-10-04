@@ -58,14 +58,14 @@ export interface NotificationSettings {
   /** The agent finished responding, with nothing it started still running. */
   finished: boolean;
   /** Blocked mid-turn on a permission prompt, an elicitation, or a question. */
-  needsYou: boolean;
+  waiting: boolean;
   /** Idle waiting for the next prompt; only Claude Code raises this event. */
   idleReminder: boolean;
 }
 
-export const NOTIFICATION_IDS = ["finished", "needsYou", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
+export const NOTIFICATION_IDS = ["finished", "waiting", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
 
-/** The Files tab's part kept by tet; its Explorer view is the project's, in tet.json. */
+/** The Files tab's part kept by TET; its Explorer view is the project's, in tet.json. */
 export interface FilesSettings {
   /** An id out of `KEYBINDING_PRESETS`. */
   editorKeybindingPreset: string;
@@ -83,12 +83,12 @@ export interface GitSettings {
   deleteWorktreeOnRemote: boolean;
 }
 
-/** What tet asks of an agent (prompts.ts), in the Prompts tab's picker. */
-export const PROMPT_IDS = ["commitMessage", "handoff"] as const;
+/** What TET asks of an agent (prompts.ts), in the Prompts tab's picker. */
+export const PROMPT_IDS = ["commitMessage", "handover"] as const;
 
 export type PromptId = (typeof PROMPT_IDS)[number];
 
-/** An empty string means tet's own (`DEFAULT_PROMPTS`). */
+/** An empty string means TET's own (`DEFAULT_PROMPTS`). */
 export type PromptTexts = Record<PromptId, string>;
 
 /** The Prompts tab. */
@@ -98,7 +98,7 @@ export interface PromptSettings {
   commitSuggester: Suggester;
 }
 
-/** What tet keeps about itself, not about a repository; written whole, one object per tab of the
+/** What TET keeps about itself, not about a repository; written whole, one object per tab of the
  *  settings dialog that has values here (Environment keeps its own store, Info none). */
 export interface AppSettings {
   appearance: AppearanceSettings;

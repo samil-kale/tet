@@ -26,7 +26,7 @@ interface SashProps {
 }
 
 /**
- * The draggable divider between two areas. It sizes the area in front of it and the rest of the
+ * The draggable line between two areas. It sizes the area in front of it and the rest of the
  * container absorbs the difference, so only one side carries a size.
  */
 export function Sash({ orientation, size, min, minOther, reverse, onResize }: SashProps) {

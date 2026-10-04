@@ -92,7 +92,8 @@ project's tabs.
   tabs, git and the Explorer run — it is addressed by a `ProjectRef { projectId, worktree? }`
   (without `worktree`: the repository), resolved to its folder and name as a `ResolvedRef`, and
   said as "the repository or a worktree". A worktree has no id of its own; one string
-  (`projectRefKey`) only where a single key is unavoidable.
+  (`refKeyOf`, a `refKey` where held) only where a single key is unavoidable. A bare `key` is a
+  worktree's folder key alone. The one whose tabs are shown is the active one (`activeRef`).
 - A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
   laid out in the data model below.
@@ -101,7 +102,7 @@ project's tabs.
   nothing configured, broken never does — a project whose file is broken is neither added nor
   opened at start (kept, with all TET has of it, until added again), and one broken while open
   counts as its last readable version, said in a notice. Nothing writes over a broken file. A
-  worktree has none of its own: it takes its project's (`configRoot`) and its sbx values, forwards
+  worktree has none of its own: it takes its project's (`configRoot`) and its SBX settings, forwards
   none of the ports, and changes nothing of it — its row, Explorer and COMMANDS offer no settings,
   `tet-ctl` refuses them.
 
@@ -123,7 +124,7 @@ marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of 
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
-      handoffs/                    another agent's session a tab here takes over, copied
+      handovers/                   another agent's session a tab here takes over, copied
       drops/                       pasted or dropped content without a path, for its tabs
     sandboxes/<key>/<agent>/       a worktree's
     worktrees/<key>/               a worktree TET made
@@ -142,14 +143,14 @@ marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of 
 - **Split only where a sandbox forces it.** Repository, worktree and agent divide `sandboxes/`
   alone, since each is its own sandbox; a folder beneath `projects/<id>/` or an agent folder is
   flat, its entries kept apart by their names (one subfolder per entry where it goes as a whole,
-  as `handoffs/`).
+  as `handovers/`).
 - **What exists is handed over, never copied.** A host tab gets the original path. A path dropped
   into a sandboxed tab outside its sight is mounted rw at its container path, never written into
   `tet.json`, and held until TET quits (every start's `mountAll` is handed it); a notice says it
   was mounted, or that governance refuses it. `worktree-agent-merge` hands a conflicted worktree to
   the repository tab that merges it the same way, and deleting a worktree releases every such mount
   of its folder (`releaseDropped`). Only what has no path of its own (a browser's drop, a pasted
-  image) is written, into `drops/` on either side; a handoff copies what sits in another agent's
+  image) is written, into `drops/` on either side; a handover copies what sits in another agent's
   store, which no sandbox may see.
 - **A store written by a Save someone waits on writes before it changes** (`writeJson`,
   `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
@@ -175,7 +176,7 @@ marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of 
 ## Never assume the agents behave alike
 
 Claude Code, Codex and pi are three products in the same kind of tab, alike in nothing:
-readiness, how Ctrl+C quits, the right mouse button, colors, turn signals, resize redraw, how a
+readiness, how Ctrl+C quits, the right mouse button, colors, turn reports, resize redraw, how a
 pasted path is quoted (`quotePath`). So anything about how a CLI is driven is an `AgentDefinition`
 field with a value per agent (or what its `host.prepare` returns, e.g. the fullscreen args that
 make a resize redraw in place), found through this same pty for that agent, never taken from
@@ -222,7 +223,7 @@ others.
 
 ## Read structure, never messages
 
-What a CLI tells tet is read from its exit code or its `--json` (`sbx policy ls --json`'s
+What a CLI tells TET is read from its exit code or its `--json` (`sbx policy ls --json`'s
 `organization`), never from the words of an error or of human-facing output: those change with
 the version and the locale. Text is matched only where the tool offers nothing else (git has no
 error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
@@ -239,9 +240,9 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   `git/run-action.ts` — `useBranchActions` for branch commands, `useFileAct` for the changes list
   and the Explorer). Reads run beside it, and so does the periodic fetch, which actions wait on.
 - Remote commands run with `NETWORK_ENV`. **TET writes into no credential helper itself**: a login
-  typed into tet reaches git through askpass (`GitLoginStore.run`), and git stores it in the
-  user's helper; where there is none, tet keeps it sealed in `~/.tet/git-logins.json`.
-- tet never diffs: it hands monaco's diff editor two texts (`Repository.readFile`).
+  typed into TET reaches git through askpass (`GitLoginStore.run`), and git stores it in the
+  user's helper; where there is none, TET keeps it sealed in `~/.tet/git-logins.json`.
+- TET never diffs: it hands monaco's diff editor two texts (`Repository.readFile`).
 - **A linked worktree is a worktree and belongs to its project; it is not a project.** It only
   behaves like one in places (its own row, tabs and git lane) — never design from "a worktree is a
   project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>`; the key is
@@ -251,7 +252,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   no key: shown greyed, never opened, never renamed or deleted by TET. A worktree
   and its branch are one: made together at the default branch (`worktreeBase`), named by the
   branch, deleted together, and never switched; renaming it renames the branch alone, its folder
-  and tabs stay. Its base is tet's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
+  and tabs stay. Its base is TET's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
   Removing a project deletes the worktrees TET made, with their branches.
 
 **Scope.** Everything the git lane does fits in a context menu, an icon button or a question. Of
@@ -279,6 +280,10 @@ or a per-line decision is for an agent.
   layout storage. The tab strip is the agent, shell and editor
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
+- **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
+  `CommandList`, BRANCHES `BranchTree`, LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
+  EXPLORER `Explorer`; each title heads a `Section`, drawn by `ProjectList` and `CommandList`
+  themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.
@@ -305,7 +310,7 @@ or a per-line decision is for an agent.
   one mark; on a dialog tab, `DialogTab.mark`); else left in the button row, level with the
   buttons (`DialogFrame`'s `error`) where the fields are several or across tabs — what was typed
   is held so it can be corrected, and it is git's own words for a name it will not take, never
-  tet's guess at them. A list that could not be loaded shows its failure in its place
+  TET's guess at them. A list that could not be loaded shows its failure in its place
   (`DialogError`).
   What the unsaved edits as a whole lead to goes in the same place (`DialogFrame`'s `message`),
   e.g. `RestartNote` while they reach running tabs only once restarted. A notice is for what has
@@ -325,13 +330,13 @@ or a per-line decision is for an agent.
     happens whole or not at all — and that waits on something outside TET (a browser, an agent, a
     provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
     (`DialogFrame`'s `abort`, a prompt's `PromptOptions.abort`) and its answer is dropped. Today:
-    the SBX dialog's setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
+    the SBX Settings' setup and sign-in (`sbx login`, `policy init`), the commit prompt's suggested
     message, the Add Repository dialog's listing and the Settings dialog's model listing.
 
   A new run is held unless it meets both conditions; a dialog's Save is always held.
 - **A follow-up question comes after its run** (`runWithFollowUp`): an action answering
   `needsConfirmation` ends there, its bar and lock released, and a yes runs the confirmed action
-  anew — a bar shows tet working, never tet waiting on the user.
+  anew — a bar shows TET working, never TET waiting on the user.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account adding and
   removal and namespace pick, which act at once. A setting reaches an agent at its setup
@@ -345,7 +350,7 @@ or a per-line decision is for an agent.
   held by a nested view is lifted to the view owning the frame (`hold`). No spinners for progress:
   the one spinner is a session's working mark. The one determinate bar is the update download's,
   in its notice (`showProgress`), which runs the indeterminate one while the update is prepared.
-- **The keyboard belongs to the terminal**: tet's key handler runs before xterm and takes nothing
+- **The keyboard belongs to the terminal**: TET's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.
 - **The renderer**: terminal output never goes through React state — xterms and editors live
@@ -402,7 +407,7 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
 and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all (`ControlDeps`,
 `ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
 
-- `restart-app` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
+- `app-restart` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
 - Agents learn of `tet-ctl` once per session: `systemPrompt`
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
@@ -428,7 +433,7 @@ and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all
   the worktree verbs and every tab verb reach its repository and every worktree (`ownProject`), a
   tab verb only a tab running in a sandbox (`CallerSide.reachesTab`) — a host tab is the machine's,
   and its output may print the host's control token — and a tab it opens runs in one too; what acts
-  on this machine (its settings, projects, environment, the sbx settings but `sbx-get` and the
+  on this machine (its settings, projects, environment, the SBX settings but `sbx-get` and the
   variables, a saved command, restarting TET) is refused; the other verbs answer for the caller's
   own repository or worktree only. **Refuse a sandbox only what it cannot do itself**: where it
   already can and `tet-ctl` doing it changes nothing beyond that, the verb answers there.
@@ -473,7 +478,7 @@ the `sbx` CLI.
   saying what is wrong — never that it will not be saved.
 - **A session's start applies tet.json as it stands and never writes it.** What the policy forbids
   or this machine lacks is skipped and told in one notice per dialog tab and reason, its rows
-  listed (`Couldn't set hosts:` … `Forbidden by governance`): how a user learns that governance
+  listed (`Could not set hosts:` … `Forbidden by governance`): how a user learns that governance
   took over.
 
 ## Startup
@@ -521,10 +526,10 @@ When asked for a release, run it:
    its end: `Thanks @<login> (#<pr>).` Commit it on its own (`changelog for <version>`), before
    `npm version`, which refuses a dirty tree.
    A section is its GitHub Release's notes, so a release edited by hand there is copied back into
-   `CHANGELOG.md`: the published notes are the text, tet's file follows.
+   `CHANGELOG.md`: the published notes are the text, TET's file follows.
 2. `npm version patch` (or `minor` / `major`), then `git push && git push --tags`.
 
 The tag push runs `.github/workflows/build.yml`, which publishes the GitHub Release only when every
-platform passed. tet ships as archives installed by `scripts/install.sh`/`install.ps1` — no
+platform passed. TET ships as archives installed by `scripts/install.sh`/`install.ps1` — no
 installer, no npm package (reasons in `electron-builder.yml`). An update is put in place only after
-tet quits, never mid-session.
+TET quits, never mid-session.

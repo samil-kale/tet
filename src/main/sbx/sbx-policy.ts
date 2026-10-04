@@ -1,5 +1,5 @@
 /**
- * sbx's filesystem policy, evaluated in tet: sbx has `policy check network` but no filesystem
+ * sbx's filesystem policy, evaluated in TET: sbx has `policy check network` but no filesystem
  * counterpart. This only predicts sbx's own enforcement, for the dialog's marks and what a Save or
  * a spawn leaves out (sbx.ts's readSbxProblems); a mount sbx refuses all the same is left out and
  * told too (prepareSbxRun). Pure, so testable.
@@ -46,7 +46,7 @@ export function sbxNotReady(status: SbxStatus): string | undefined {
   if (status.failure) {
     return `SBX failed: ${status.failure}`;
   }
-  if (!status.loggedIn) {
+  if (!status.signedIn) {
     return "SBX is not signed in to Docker";
   }
   if (!status.policyInitialized) {

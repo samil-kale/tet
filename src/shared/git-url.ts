@@ -1,4 +1,4 @@
-/** What tet reads off a remote's url for a login: the host it is for, the user it names, and the
+/** What TET reads off a remote's url for a login: the host it is for, the user it names, and the
  *  url as it may be shown. An scp-style `git@host:path` is no url at all here, and gets nothing. */
 
 /** "https://host[:port]" for an http(s) url, username and path dropped; "" for anything else — an

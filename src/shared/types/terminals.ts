@@ -3,7 +3,7 @@ import type { GitActionResult } from "./git";
 import type { ProjectRef } from "./project";
 
 /** The tab taking over a session, or why there is none. */
-export interface HandoffResult extends GitActionResult {
+export interface HandoverResult extends GitActionResult {
   tab?: TabDescriptor;
 }
 
@@ -38,12 +38,12 @@ export interface TabDescriptor {
   finishedAt?: number;
   /** Working a turn — reported by the agent at both ends, never read off the TUI. False once the
    *  process has ended. */
-  busy?: boolean;
+  inTurn?: boolean;
   /** This tab's pane shows the progress bar: runtime being prepared, or CLI before its first frame.
    *  Read off the session manager's per-tab indicator count at each snapshot. */
   starting?: boolean;
   /** Stopped mid-turn on an unanswered question, ms since epoch. Cleared like `finishedAt` and by
-   *  either end of a turn. Not a shade of `busy`: such a session is *not* working. */
+   *  either end of a turn. Not a shade of `inTurn`: such a session is *not* working. */
   waitingAt?: number;
   /** Runs in its sbx sandbox: where its latest start ran it, until then where its session lives. */
   sandboxed?: boolean;
@@ -54,7 +54,7 @@ export interface TabDescriptor {
   command?: string;
 }
 
-/** As every spinner shows it: never while waiting on a question, whatever `busy` says. */
+/** As every spinner shows it: never while waiting on a question, whatever `inTurn` says. */
 export function isWorking(tab: TabDescriptor): boolean {
-  return tab.busy === true && tab.waitingAt === undefined;
+  return tab.inTurn === true && tab.waitingAt === undefined;
 }

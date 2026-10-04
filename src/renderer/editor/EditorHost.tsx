@@ -37,7 +37,7 @@ const whole = (snapshot: EditorSnapshot): EditorSnapshot => snapshot;
 const busy = (snapshot: EditorSnapshot): boolean => snapshot.loading || snapshot.building || snapshot.saving;
 const preview = (snapshot: EditorSnapshot): boolean => snapshot.preview;
 
-/** Whether the tab is the preview — the tab strip's italics. */
+/** Whether the tab is the preview tab — the tab strip's italics. */
 export function useEditorPreview(tabId: string): boolean {
   return useEditorStore(tabId, preview);
 }
@@ -73,11 +73,11 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   const { path, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
-  const previewFrame = useRef<HTMLDivElement>(null);
+  const markdownPreviewFrame = useRef<HTMLDivElement>(null);
   const kind = editorKind(file);
   const shown = diffShown(snapshot);
   const withheld = previewWithheld(snapshot);
-  const previewShown = markdownPreview && !withheld;
+  const markdownPreviewShown = markdownPreview && !withheld;
 
   useEffect(() => {
     if (frame.current) {
@@ -86,10 +86,10 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   }, [tabId, path]);
 
   useEffect(() => {
-    if (previewShown && previewFrame.current) {
-      attachMarkdownPreview(tabId, previewFrame.current);
+    if (markdownPreviewShown && markdownPreviewFrame.current) {
+      attachMarkdownPreview(tabId, markdownPreviewFrame.current);
     }
-  }, [tabId, path, previewShown]);
+  }, [tabId, path, markdownPreviewShown]);
 
   // As `TerminalHost`'s focus rule: the focused pane's active tab, once the file is in the editor.
   const ready = kind === "text" && !building;
@@ -99,17 +99,17 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   }, [visible, active, focused, ready, tabId, path]);
 
-  // One share for every tab's preview, as for the split view's panes; half until dragged.
-  const [previewShare, setPreviewShare] = useStoredShare("markdown-preview", 1 / 2);
-  const splitWidth = useElementSize(split, previewShown)?.width ?? 0;
-  const previewWidth = Math.round(splitWidth * previewShare);
-  const resizePreview = useCallback(
+  // One share for every tab's Markdown preview, as for the split view's panes; half until dragged.
+  const [markdownPreviewShare, setMarkdownPreviewShare] = useStoredShare("markdown-preview", 1 / 2);
+  const splitWidth = useElementSize(split, markdownPreviewShown)?.width ?? 0;
+  const markdownPreviewWidth = Math.round(splitWidth * markdownPreviewShare);
+  const resizeMarkdownPreview = useCallback(
     (width: number) => {
       if (splitWidth > 0) {
-        setPreviewShare(width / splitWidth);
+        setMarkdownPreviewShare(width / splitWidth);
       }
     },
-    [setPreviewShare, splitWidth]
+    [setMarkdownPreviewShare, splitWidth]
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -158,13 +158,13 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           >
             {unchangedCollapsed ? <ExpandAllIcon /> : <CollapseAllIcon />}
           </IconButton>
-          {/* Disabled beside a diff, which withholds the preview (`previewWithheld`). */}
+          {/* Disabled beside a diff, which withholds the Markdown preview (`previewWithheld`). */}
           {isMarkdown(path) && (
             <IconButton
-              active={previewShown}
-              title={`${previewShown ? "Hide" : "Show"} Preview (${PLATFORM.modifierLabel}+Shift+V)`}
+              active={markdownPreviewShown}
+              title={`${markdownPreviewShown ? "Hide" : "Show"} Markdown Preview (${PLATFORM.modifierLabel}+Shift+V)`}
               disabled={withheld}
-              onClick={() => showMarkdownPreview(tabId, !previewShown)}
+              onClick={() => showMarkdownPreview(tabId, !markdownPreviewShown)}
             >
               <ScanEyeIcon />
             </IconButton>
@@ -182,18 +182,18 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
         {/* Hidden, not unmounted, so the editor stays attached. */}
         <div ref={split} className={`editor-split${ready ? "" : " hidden"}`}>
           <div ref={frame} className="editor-frame" />
-          {previewShown && (
+          {markdownPreviewShown && (
             <>
               <Sash
                 orientation="vertical"
-                size={previewWidth}
+                size={markdownPreviewWidth}
                 min={MIN_AREA_WIDTH}
                 minOther={MIN_AREA_WIDTH}
                 reverse
-                onResize={resizePreview}
+                onResize={resizeMarkdownPreview}
               />
-              {/* As the editor's frame: the preview lives in `editor-views.ts`. */}
-              <div ref={previewFrame} className="markdown-frame" style={{ width: previewWidth }} />
+              {/* As the editor's frame: the Markdown preview lives in `editor-views.ts`. */}
+              <div ref={markdownPreviewFrame} className="markdown-frame" style={{ width: markdownPreviewWidth }} />
             </>
           )}
         </div>

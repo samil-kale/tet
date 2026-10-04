@@ -132,7 +132,7 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   const trimmed = requireTitle(title);
   const projectDir = await findProjectDir(root, cwd);
   if (!projectDir) {
-    throw new Error("Claude project directory not found");
+    throw new Error("Claude Code project directory not found");
   }
   const line = JSON.stringify({ type: "custom-title", customTitle: trimmed, sessionId }) + "\n";
   // Appended to, never created: a transcript gone would come back as a session of one title line,
@@ -146,13 +146,13 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
     }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error("Claude session not found", { cause: error });
+      throw new Error("Claude Code session not found", { cause: error });
     }
     throw error;
   }
 }
 
-/** Claude Code's config root, where its sessions and knowledge live; tet never overrides it. */
+/** Claude Code's config root, where its sessions and knowledge live; TET never overrides it. */
 export function claudeConfigDir(): string {
   return process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
 }

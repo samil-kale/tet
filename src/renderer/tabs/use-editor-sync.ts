@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { projectRefKey } from "../../shared/types/project";
+import { refKeyOf } from "../../shared/types/project";
 import type { RepositoryState } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { forget, sameList, sameRecord } from "../identity";
@@ -20,7 +20,7 @@ function diffVersion(state: RepositoryState | undefined, filePath: string, write
 
 /**
  * What App keeps the editors and main in step with, derived from the editor tabs, the layouts and
- * the repository states, each by `projectRefKey`: each repository's or worktree's active editor tab
+ * the repository states, each by `refKey`: each repository's or worktree's active editor tab
  * — reported to main for `tet-ctl editor-state`, and answering its content request — the open paths
  * main watches for writes, and each tab's `diffVersion`, which decides a reload. `forgetProjectRef`
  * drops a closed repository's or worktree's write counts; the tabs themselves are App's.
@@ -29,10 +29,10 @@ export function useEditorSync(
   editorTabs: Record<string, EditorTab[]>,
   layouts: Record<string, ProjectLayout>,
   states: Record<string, RepositoryState>
-): { activeEditors: Record<string, string>; forgetProjectRef: (key: string) => void } {
+): { activeEditors: Record<string, string>; forgetProjectRef: (refKey: string) => void } {
   /** Per repository or worktree, per watched path: writes on disk — see diffVersion. */
   const [fileWrites, setFileWrites] = useState<Record<string, Record<string, number>>>({});
-  const forgetProjectRef = useCallback((key: string) => setFileWrites((current) => forget(current, key)), []);
+  const forgetProjectRef = useCallback((refKey: string) => setFileWrites((current) => forget(current, refKey)), []);
 
   /**
    * Each repository's or worktree's active editor tab (`activeEditorTab`) — the file the Explorer
@@ -42,14 +42,14 @@ export function useEditorSync(
   const activeEditorsRef = useRef<Record<string, string>>({});
   const activeEditors = useMemo(() => {
     const next: Record<string, string> = {};
-    for (const [key, editors] of Object.entries(editorTabs)) {
+    for (const [refKey, editors] of Object.entries(editorTabs)) {
       const tabId = activeEditorTab(
-        layouts[key] ?? DEFAULT_LAYOUT,
+        layouts[refKey] ?? DEFAULT_LAYOUT,
         editors.map((tab) => tab.tabId),
-        activeEditorsRef.current[key]
+        activeEditorsRef.current[refKey]
       );
       if (tabId !== undefined) {
-        next[key] = tabId;
+        next[refKey] = tabId;
       }
     }
     activeEditorsRef.current = sameRecord(activeEditorsRef.current, next);
@@ -58,18 +58,18 @@ export function useEditorSync(
   useEffect(
     () =>
       window.tet.repository.onEditorContentRequest((ref) => {
-        const tabId = activeEditorsRef.current[projectRefKey(ref)];
+        const tabId = activeEditorsRef.current[refKeyOf(ref)];
         return tabId === undefined ? undefined : editorContent(tabId);
       }),
     []
   );
-  // Reported to main as App's `inFront` is: only the renderer knows. A repository or worktree whose
+  // Reported to main as App's `onScreenTabIds` is: only the renderer knows. A repository or worktree whose
   // last editor tab closed reports nothing; main finds no report under the old id.
   const reportedActive = useRef<Record<string, string>>({});
   useEffect(() => {
-    for (const [key, tabId] of Object.entries(activeEditors)) {
-      const ref = editorTabs[key]?.find((tab) => tab.tabId === tabId)?.ref;
-      if (reportedActive.current[key] !== tabId && ref) {
+    for (const [refKey, tabId] of Object.entries(activeEditors)) {
+      const ref = editorTabs[refKey]?.find((tab) => tab.tabId === tabId)?.ref;
+      if (reportedActive.current[refKey] !== tabId && ref) {
         window.tet.repository.reportActiveEditor(ref, tabId);
       }
     }
@@ -82,20 +82,20 @@ export function useEditorSync(
   useEffect(() => {
     const previous = watchedFiles.current;
     const next: Record<string, { ref: ProjectRef; paths: string[] }> = {};
-    for (const [key, editors] of Object.entries(editorTabs)) {
+    for (const [refKey, editors] of Object.entries(editorTabs)) {
       const [first] = editors;
       if (first) {
-        const paths = sameList(previous[key]?.paths, editors.map((tab) => tab.path).sort(), NO_PATHS);
-        next[key] = { ref: first.ref, paths };
+        const paths = sameList(previous[refKey]?.paths, editors.map((tab) => tab.path).sort(), NO_PATHS);
+        next[refKey] = { ref: first.ref, paths };
       }
     }
-    for (const [key, { ref, paths }] of Object.entries(next)) {
-      if (previous[key]?.paths !== paths) {
+    for (const [refKey, { ref, paths }] of Object.entries(next)) {
+      if (previous[refKey]?.paths !== paths) {
         void window.tet.repository.watchFiles(ref, paths);
       }
     }
-    for (const [key, { ref }] of Object.entries(previous)) {
-      if (!(key in next)) {
+    for (const [refKey, { ref }] of Object.entries(previous)) {
+      if (!(refKey in next)) {
         void window.tet.repository.watchFiles(ref, NO_PATHS);
       }
     }
@@ -105,10 +105,10 @@ export function useEditorSync(
     () =>
       // Only watched paths are reported; a count left by a closed tab is inert.
       window.tet.repository.onFileChanged(({ ref, path }) => {
-        const key = projectRefKey(ref);
+        const refKey = refKeyOf(ref);
         setFileWrites((current) => ({
           ...current,
-          [key]: { ...current[key], [path]: (current[key]?.[path] ?? 0) + 1 }
+          [refKey]: { ...current[refKey], [path]: (current[refKey]?.[path] ?? 0) + 1 }
         }));
       }),
     []
@@ -116,9 +116,9 @@ export function useEditorSync(
   // Reloads an open file only when its diffVersion changes, not on every push: a reload re-reads
   // and recolours the whole diff.
   useEffect(() => {
-    for (const [key, editors] of Object.entries(editorTabs)) {
+    for (const [refKey, editors] of Object.entries(editorTabs)) {
       for (const { tabId, path } of editors) {
-        setEditorVersion(tabId, diffVersion(states[key], path, fileWrites[key]?.[path]));
+        setEditorVersion(tabId, diffVersion(states[refKey], path, fileWrites[refKey]?.[path]));
       }
     }
   }, [editorTabs, states, fileWrites]);

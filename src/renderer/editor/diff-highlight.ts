@@ -35,7 +35,7 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "light-claude": () => import("../themes/light-claude.json") as unknown as Promise<{ default: ThemeRegistration }>
 };
 
-/** Shiki theme `name` with its editor surface patched from tet's --vscode-* values, for shiki and
+/** Shiki theme `name` with its editor surface patched from TET's --vscode-* values, for shiki and
  *  the monaco theme built on it (editor.ts). */
 async function loadTheme(name: ThemeDefinition["shikiTheme"]): Promise<ThemeRegistration> {
   const { default: registration } = await THEME_MODULES[name]();

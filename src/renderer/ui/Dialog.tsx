@@ -206,7 +206,7 @@ export async function askName({ title, detail, confirmLabel, current, maxLength,
 
 function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" }> }) {
   const [checked, setChecked] = useState(dialog.checkboxLabel !== undefined && (dialog.checkboxChecked ?? false));
-  const { busy: running, refused, submit } = useSubmit(
+  const { busy, refused, submit } = useSubmit(
     async () => {
       await dialog.submit?.(checked);
       return undefined;
@@ -217,7 +217,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
   return (
     <DialogFrame
       header={{ title: dialog.title }}
-      busy={running}
+      busy={busy}
       error={refused}
       onCancel={dialog.cancel}
       primary={{ label: dialog.confirmLabel, run: () => void submit() }}
@@ -235,7 +235,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   const field = useRef<HTMLInputElement>(null);
 
   /** What `submit` refused is handed to the fields (`error`). */
-  const { busy: running, refused, submit, changing } = useSubmit(
+  const { busy, refused, submit, changing } = useSubmit(
     async () => (dialog.submit ? dialog.submit(value) : undefined),
     () => dialog.answer(value)
   );
@@ -251,15 +251,15 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   return (
     <DialogFrame
       header={{ title: dialog.title }}
-      busy={running || held}
-      locked={running || (held && !dialog.abort)}
+      busy={busy || held}
+      locked={busy || (held && !dialog.abort)}
       onCancel={dialog.cancel}
       abort={dialog.abort}
       // Plain to see why it waits: a field left empty (AGENTS.md's exception to a blocked reason).
       primary={{ label: dialog.confirmLabel, disabled: held || !dialog.ready(value), run: () => void submit() }}
       selectField
     >
-      {dialog.render({ value, onChange, error: refused, busy: running, field, hold: setHeld })}
+      {dialog.render({ value, onChange, error: refused, busy, field, hold: setHeld })}
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
     </DialogFrame>
   );

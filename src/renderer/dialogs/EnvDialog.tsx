@@ -5,7 +5,7 @@ import { EditRow, OverridesMachine, RowInput, RowSection, SecretInput } from "..
 
 interface EnvDialogProps {
   request: EnvRequest;
-  /** Who asks, as the window names that tab: "Claude in autocontract". */
+  /** Who asks, as the window names that tab: "Claude Code in autocontract". */
   requester: string;
   /** Answered, withdrawn or put off: App takes the dialog down. */
   onClose: () => void;
@@ -28,17 +28,17 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
 
   // The asking tab restarts once saved, so it takes up the values (pty.ts).
   const { busy, refused, submit: save, changing } = useSubmit(
-    () => window.tet.environment.answer(request.id, rows.map((row) => ({ name: row.name, value: row.value }))),
+    () => window.tet.env.answer(request.id, rows.map((row) => ({ name: row.name, value: row.value }))),
     () => {
       if (tab) {
-        void window.tet.terminals.restart(tab.ref, tab.tabId);
+        void window.tet.tabs.restart(tab.ref, tab.tabId);
       }
       onClose();
     }
   );
 
   const cancel = (): void => {
-    void window.tet.environment.answer(request.id, null);
+    void window.tet.env.answer(request.id, null);
     onClose();
   };
 

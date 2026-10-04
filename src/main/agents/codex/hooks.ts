@@ -8,9 +8,9 @@ import { systemPrompt } from "../system-prompt";
 /**
  * Codex runs only *trusted* hooks: a sha256 over the normalized event name, matcher and command,
  * matched against a `trusted_hash` in its config. An unknown hash opens a blocking "Hooks need
- * review" screen, so tet reproduces the hash and passes it with the hook.
+ * review" screen, so TET reproduces the hash and passes it with the hook.
  *
- * `timeout` is hashed at its effective value, 600 (the default for every event tet uses). Keys
+ * `timeout` is hashed at its effective value, 600 (the default for every event TET uses). Keys
  * sort recursively alphabetical (`matcher` after `hooks`). `async` stays `false`: Codex refuses
  * async hooks and drops them from the trust listing.
  *
@@ -116,7 +116,7 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  * TET's system prompt is `SessionStart`'s added context, not `-c developer_instructions`, which
  * replaces the user's own; `-c hooks` adds to the user's hooks.
  *
- * No end-of-turn guard: a subagent-only turn reports through `SubagentStop`, which tet does not hook.
+ * No end-of-turn guard: a subagent-only turn reports through `SubagentStop`, which TET does not hook.
  */
 export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
   const entries: HookEntry[] = [

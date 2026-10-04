@@ -172,7 +172,7 @@ function sessionsRoot(): string {
   return path.join(piAgentDir(), "sessions");
 }
 
-/** pi's agent dir, where its sessions and knowledge live; tet never sets it. */
+/** pi's agent dir, where its sessions and knowledge live; TET never sets it. */
 export function piAgentDir(): string {
   return process.env.PI_CODING_AGENT_DIR ?? path.join(os.homedir(), ".pi", "agent");
 }

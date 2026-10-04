@@ -44,7 +44,7 @@
   --vscode-tab-activeForeground: #c4bebb;
   /* Not the theme's #9a2257: the tab's own background, so the active tab has no line under it. */
   --vscode-tab-activeBorder: #494786;
-  /* tet's own: a tab mark on the active tab or row takes its text color, not the accent. */
+  /* TET's own: a tab mark on the active tab or row takes its text color, not the accent. */
   --tet-tabMark-activeForeground: #c4bebb;
   --vscode-tab-inactiveBackground: #c4bebb;
   --vscode-tab-inactiveForeground: #494786;
@@ -52,13 +52,13 @@
      tabs: the theme's border color. */
   --vscode-tab-border: #494786;
 
-  /* tet's own, the same as Dark Modern's — see the note there; not the theme's #49478640, the one
-     hover grey every tet theme shares. */
+  /* TET's own, the same as Dark Modern's — see the note there; not the theme's #49478640, the one
+     hover grey every TET theme shares. */
   --vscode-toolbar-hoverBackground: #5a5d5e50;
 
   --vscode-list-activeSelectionBackground: #494786;
   --vscode-list-activeSelectionForeground: #c4bebb;
-  /* Not the theme's opaque #56549f, which leaves a hovered row's text unreadable — tet draws no
+  /* Not the theme's opaque #56549f, which leaves a hovered row's text unreadable — TET draws no
      list.hoverForeground to turn with it: the theme's own hover tint, off its toolbar. */
   --vscode-list-hoverBackground: #49478640;
 

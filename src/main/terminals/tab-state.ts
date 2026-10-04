@@ -1,6 +1,6 @@
 import type { AgentDefinition } from "../agents/agent";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import type { HandoffFiles, TabPlace } from "./tab-place";
+import type { HandoverFiles, TabPlace } from "./tab-place";
 
 /** A tab as its session manager holds it, and what reads or sets its marks. */
 
@@ -19,15 +19,15 @@ export interface TabState extends TabDescriptor {
   /** Where its latest start ran it (resolvePlace); until then where its session lives (placeOf). */
   place?: TabPlace;
   /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolvePlace), or the
-   *  sandbox could switch sbx off in tet.json and open itself a tab on this machine. */
+   *  sandbox could disable SBX in tet.json and open itself a tab on this machine. */
   sandboxOnly?: true;
   /** When the running turn was reported started — what a turn end is dated against. */
-  busySince?: number;
+  turnStartedAt?: number;
   /**
-   * When the latest applied turn signal was made (ControlRequest.at). Two hooks can race to the
+   * When the latest applied turn report was made (ControlRequest.at). Two hooks can race to the
    * channel (a question just before the turn ends); an older one is dropped (turn-order.ts).
    */
-  signalAt?: number;
+  turnReportAt?: number;
   /** A saved command's program, when not this agent's executable. */
   executable?: string;
   /** A saved command's arguments — its program's, or a shell's when it asked for one. */
@@ -39,12 +39,12 @@ export interface TabState extends TabDescriptor {
   /** The prompt a new tab starts with (AgentTerminal.initialPromptArgs), on its first start only:
    *  a restart would submit it again. */
   initialPrompt?: string;
-  /** Another agent's session this tab takes over (handOff), handed over as it is — never converted,
+  /** Another agent's session this tab takes over (handOver), handed over as it is — never converted,
    *  so no format change of the agent's breaks it — and made its first prompt on its first start,
    *  once it is known where the tab runs. Dropped then, like `initialPrompt`. */
-  handoff?: HandoffFiles;
-  /** A handoff's copy its start made (Launch.handoffDir), deleted with the tab. */
-  handoffDir?: string;
+  handover?: HandoverFiles;
+  /** A handover's copy its start made (Launch.handoverDir), deleted with the tab. */
+  handoverDir?: string;
 }
 
 /** This tab's hooks named a session it has not claimed: its first, or one it moved on to. */
@@ -67,12 +67,12 @@ export function titleUnsettled(tab: TabState): boolean {
  * Only pi reports an answered question (`answered`), so another agent's permission granted
  * mid-turn keeps the mark until the tab is typed into.
  */
-export function setTurn(tab: TabState, busy: boolean, at: number, keepQuestion = false): void {
-  tab.busy = busy;
-  tab.signalAt = at;
-  if (busy) {
+export function setTurn(tab: TabState, inTurn: boolean, at: number, keepQuestion = false): void {
+  tab.inTurn = inTurn;
+  tab.turnReportAt = at;
+  if (inTurn) {
     tab.waitingAt = undefined;
-    tab.busySince = at;
+    tab.turnStartedAt = at;
     return;
   }
   if (keepQuestion && tab.waitingAt !== undefined) {
@@ -113,7 +113,7 @@ export function answersQuestion(data: string): boolean {
 
 /** `starting` comes from the caller's `indicators`, `sandboxed` from its `placeOf`. */
 export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean): TabDescriptor {
-  const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
+  const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, inTurn, waitingAt, command } = tab;
   return {
     tabId,
     agentId,
@@ -122,7 +122,7 @@ export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolea
     createdAt,
     status,
     finishedAt,
-    busy,
+    inTurn,
     waitingAt,
     starting,
     sandboxed,

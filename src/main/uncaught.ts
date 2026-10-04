@@ -8,7 +8,7 @@ import { appendLog, openErrorLog } from "./util/error-log";
  */
 
 /** Starts every report; test/e2e/app.test.ts fails a run on it. */
-export const UNCAUGHT_MARKER = "[tet] uncaught exception";
+export const UNCAUGHT_MARKER = "[TET] uncaught exception";
 
 /** One notice per distinct error per run; every occurrence is still logged, numbered. */
 const seen = new Map<string, number>();

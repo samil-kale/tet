@@ -3,7 +3,7 @@ import { HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlRequest, ControlVerbName } from "../../shared/control";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
-import { projectRefKey, projectRefsOf, sameProjectRef } from "../../shared/types/project";
+import { projectRefsOf, sameProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
@@ -32,6 +32,7 @@ import {
   type Handler,
   type RefFrom
 } from "./control-verb";
+import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 
 /** `tabs-wait` default timeout and poll interval. */
 const WAIT_TIMEOUT_S = 30;
@@ -52,7 +53,7 @@ export function verbs(deps: ControlDeps): Handlers {
   const projectById = (id: string): Project => {
     const found = store.get(id);
     if (!found) {
-      throw new ControlError("not_found", `unknown project: ${id}`);
+      throw new ControlError("not_found", PROJECT_NOT_FOUND);
     }
     return found;
   };
@@ -62,7 +63,7 @@ export function verbs(deps: ControlDeps): Handlers {
   const terminals = (ref: ProjectRef): ControlTerminals => {
     const manager = tabManagers.get(ref);
     if (!manager) {
-      throw new ControlError("internal", `${projectRefKey(ref)} has no tabs`);
+      throw new ControlError("internal", notOpenMessage(store, ref));
     }
     return manager;
   };
@@ -101,15 +102,15 @@ export function verbs(deps: ControlDeps): Handlers {
     const id = text(args, "agent", hint);
     const agent = deps.agents.find((candidate) => candidate.id === id);
     if (!agent) {
-      throw new ControlError("bad_args", `unknown agent: ${id} (see list-agents)`);
+      throw new ControlError("bad_args", `unknown agent: ${id} (see agents-list)`);
     }
     return agent;
   };
 
   /** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
-   *  opens only an sbx agent's tab, held to the sandbox (createTab, handOff). */
+   *  opens only an sbx agent's tab, held to the sandbox (createTab, handOver). */
   const openableAgent = (args: Record<string, unknown>, caller: Caller): AgentDefinition => {
-    const agent = knownAgent(args, "agent: pass --agent <id> (see list-agents)");
+    const agent = knownAgent(args, "agent: pass --agent <id> (see agents-list)");
     if (!caller.side.opens(agent)) {
       throw new ControlError("unauthorized", `a ${agent.id} tab does not run in a sandbox, so a sandbox cannot open one`);
     }
@@ -122,11 +123,11 @@ export function verbs(deps: ControlDeps): Handlers {
 
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
-    "list-themes": () => ({ result: THEMES.map(({ id, label, kind }) => ({ id, label, kind })) }),
+    "themes-list": () => ({ result: THEMES.map(({ id, label, kind }) => ({ id, label, kind })) }),
 
-    "list-keybinding-presets": () => ({ result: KEYBINDING_PRESETS.map(({ id, label }) => ({ id, label })) }),
+    "keybinding-presets-list": () => ({ result: KEYBINDING_PRESETS.map(({ id, label }) => ({ id, label })) }),
 
-    "list-agents": async () => ({ result: await deps.listAgents() }),
+    "agents-list": async () => ({ result: await deps.listAgents() }),
 
     "settings-get": () => ({ result: settings.get() }),
 
@@ -135,7 +136,7 @@ export function verbs(deps: ControlDeps): Handlers {
       // The store keeps any string and silently falls back (settings.ts); refuse it here instead.
       const theme = THEMES.find((candidate) => candidate.id === id);
       if (!theme) {
-        throw new ControlError("bad_args", `unknown theme: ${id} (see list-themes)`);
+        throw new ControlError("bad_args", `unknown theme: ${id} (see themes-list)`);
       }
       // Shown at once if the window is in that kind. The flag is for the agent to relay; restarting
       // is the user's call.
@@ -172,7 +173,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "settings-set-prompt": (args) => {
       const id = oneOf(args, "id", "prompt", PROMPT_IDS);
-      // No text resets: "" means tet's own prompt, read by ipc/repository.ts when asking.
+      // No text resets: "" means TET's own prompt, read by ipc/repository.ts when asking.
       const value = args.text;
       settings.patch({ prompts: { texts: { [id]: typeof value === "string" ? value : "" } } });
       return { result: { saved: true } };
@@ -182,7 +183,7 @@ export function verbs(deps: ControlDeps): Handlers {
       const id = text(args, "preset", "keybinding preset id");
       // The store keeps any string and the editor falls back (settings.ts); refuse it here instead.
       if (!KEYBINDING_PRESETS.some((preset) => preset.id === id)) {
-        throw new ControlError("bad_args", `unknown keybinding preset: ${id} (see list-keybinding-presets)`);
+        throw new ControlError("bad_args", `unknown keybinding preset: ${id} (see keybinding-presets-list)`);
       }
       // An editor reads its keybindings once, when it is made (editor-views.ts's editorSetup).
       settings.patch({ files: { editorKeybindingPreset: id } });
@@ -220,7 +221,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "projects-list": (_args, caller) => ({ result: caller.side.projects(store.list(), caller) }),
 
-    "repo-state": (args, caller) => ({ result: repository(refFrom(args, caller).ref).getState() }),
+    "repository-state": (args, caller) => ({ result: repository(refFrom(args, caller).ref).getState() }),
 
     "projects-add": async (args) => {
       const added = await deps.addProject(text(args, "path", "path"));
@@ -315,17 +316,17 @@ export function verbs(deps: ControlDeps): Handlers {
       if (args.session === true) {
         conditions.push(["bound to a session", (tab) => tab.sessionId !== undefined]);
       }
-      if (args.busy === true) {
+      if (args.working === true) {
         conditions.push(["working a turn", isWorking]);
       }
-      if (args.idle === true) {
-        conditions.push(["idle", (tab) => !isWorking(tab)]);
+      if (args.stopped === true) {
+        conditions.push(["stopped", (tab) => !isWorking(tab)]);
       }
       if (status !== undefined) {
         conditions.push([status, (tab) => tab.status === status]);
       }
       if (conditions.length === 0) {
-        throw new ControlError("bad_args", "nothing to wait for: pass --session, --busy, --idle or --status <status>");
+        throw new ControlError("bad_args", "nothing to wait for: pass --session, --working, --stopped or --status <status>");
       }
       const deadline = Date.now() + count(args, "timeout", WAIT_TIMEOUT_S) * 1000;
       while (!gone.aborted) {
@@ -397,7 +398,7 @@ export function verbs(deps: ControlDeps): Handlers {
       const { ref } = refFrom(args, caller);
       const root = deps.projectRefPath(ref);
       if (root === undefined) {
-        throw new ControlError("not_found", `${projectRefKey(ref)} is not open`);
+        throw new ControlError("not_found", notOpenMessage(store, ref));
       }
       const typed = text(args, "path", "path");
       const filePath = repositoryRelative(root, path.resolve(root, typed));
@@ -436,9 +437,9 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: tab };
     },
 
-    "tabs-handoff": async (args, caller) => {
+    "tabs-hand-over": async (args, caller) => {
       const { tabs, tabId, ref } = ownedTab(args, caller);
-      const handed = await tabs.handOff(tabId, openableAgent(args, caller).id, caller.side.holdsTabs);
+      const handed = await tabs.handOver(tabId, openableAgent(args, caller).id, caller.side.holdsTabs);
       if (typeof handed === "string") {
         // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
         throw new ControlError("internal", handed);
@@ -485,11 +486,11 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { renamed: tabId } };
     },
 
-    "restart-app": (args) => {
+    "app-restart": (args) => {
       if (args.confirm !== true) {
         throw new ControlError(
           "bad_args",
-          "restart-app ends every terminal in every open project, this one included. Ask the user, then pass --confirm."
+          "app-restart ends every terminal in every open project, this one included. Ask the user, then pass --confirm."
         );
       }
       return { result: { restarting: true }, after: () => deps.shutdown(true) };
@@ -497,7 +498,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     notify: (args, caller) => {
       const body = args.body;
-      // From one of tet's terminals, the notification is about that tab.
+      // From one of TET's terminals, the notification is about that tab.
       const own = callerRef(caller);
       const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;
       deps.showDesktopNotification(text(args, "title", "title"), typeof body === "string" ? body : "", target);

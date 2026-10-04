@@ -21,7 +21,7 @@ export interface SbxPath {
 /** Which non-identity host knowledge to mount into the sandbox, with which access; `false` is off.
  *  Agent-agnostic — the paths per agent are `AgentSandbox.knowledge`. Kept on this
  *  machine per project, never in tet.json (sbx-local.ts): it names this machine's folders. */
-export interface SbxKnowledgeConfig {
+export interface SbxKnowledgeSettings {
   skills: SbxAccess | false;
   plugins: SbxAccess | false;
   /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */
@@ -32,7 +32,7 @@ export interface SbxKnowledgeConfig {
 }
 
 /** The kinds of knowledge, each switched on with an access. */
-export type SbxKnowledgeKind = Exclude<keyof SbxKnowledgeConfig, "skillsFolder">;
+export type SbxKnowledgeKind = Exclude<keyof SbxKnowledgeSettings, "skillsFolder">;
 
 /** One piece of host knowledge, and where the sandboxed CLI reads it. */
 export interface SbxKnowledgeEntry {
@@ -73,7 +73,7 @@ export interface SbxVariable {
 
 /** Per project, for every sandboxed tab whatever its agent. No authentication: each agent signs in
  *  inside the sandbox, pi excepted (a credential from sbx's own store, see pi's `sandbox.kit`). */
-export interface SbxProjectConfig {
+export interface SbxProjectSettings {
   enabled: boolean;
   ports: SbxPort[];
   paths: SbxPath[];
@@ -90,7 +90,7 @@ export type SbxValueKind = "secrets" | "variables";
 /** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets and
  *  Variables rows hold a value here — never a value — and the knowledge. */
 export interface SbxStoredLocal extends Record<SbxValueKind, string[]> {
-  knowledge: SbxKnowledgeConfig;
+  knowledge: SbxKnowledgeSettings;
 }
 
 /**
@@ -104,13 +104,13 @@ export interface SbxLocalEdits {
 }
 
 export interface SbxLocalSave extends Record<SbxValueKind, SbxLocalEdits> {
-  knowledge: SbxKnowledgeConfig;
+  knowledge: SbxKnowledgeSettings;
 }
 
 /** Every kind off, each agent's own skills: no knowledge stored for a project. */
-export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeConfig = { skills: false, plugins: false, instructions: false };
+export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeSettings = { skills: false, plugins: false, instructions: false };
 
-/** A rule sbx's policy must allow before tet can sandbox a project (sbx-status.ts's
+/** A rule sbx's policy must allow before TET can sandbox a project (sbx-status.ts's
  *  readSbxBlockers). */
 export interface SbxBlocker {
   /** What it is for, a word or two. */
@@ -119,13 +119,13 @@ export interface SbxBlocker {
   allow: string;
 }
 
-/** Checked before the sbx dialog shows its fields (sbx-status.ts's readSbxStatus). Each field means
+/** Checked before the SBX Settings show its fields (sbx-status.ts's readSbxStatus). Each field means
  *  something only when the one above is true. */
 export interface SbxStatus {
   installed: boolean;
-  loggedIn: boolean;
+  signedIn: boolean;
   /** sbx's own error when it failed for a reason other than being signed out (a hung daemon), or
-   *  that it is older than tet drives (sbx-cli.ts's sbxVersionSupported), with `loggedIn` false;
+   *  that it is older than TET drives (sbx-cli.ts's sbxVersionSupported), with `signedIn` false;
    *  signing in would not help. Or, signed in, that its policy could not be read (readSbxStatus). */
   failure?: string;
   policyInitialized: boolean;
@@ -176,7 +176,7 @@ export interface SbxSaveResult extends GitActionResult {
 }
 
 /** No `sbx` section in tet.json; also the dialog's initial state. */
-export const EMPTY_SBX_CONFIG: SbxProjectConfig = {
+export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {
   enabled: false,
   ports: [],
   paths: [],

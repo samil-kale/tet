@@ -3,7 +3,7 @@ import type { Requirements } from "../shared/types/agents";
 import type { LaneSettings } from "../shared/types/settings";
 import { App } from "./App";
 import { RequirementsDialog } from "./dialogs/RequirementsDialog";
-import { useRunning } from "./ui/use-running";
+import { useBusy } from "./ui/use-busy";
 
 /**
  * The app, once its requirements are met. Main opens the stored projects only after the check
@@ -13,7 +13,7 @@ import { useRunning } from "./ui/use-running";
 export function Startup() {
   const [requirements, setRequirements] = useState<Requirements | null>(null);
   const [lanes, setLanes] = useState<LaneSettings | null>(null);
-  const { running: checking, run } = useRunning(true);
+  const { busy, run } = useBusy(true);
 
   const check = useCallback(
     () => run(async () => setRequirements(await window.tet.startup.check())),
@@ -36,7 +36,7 @@ export function Startup() {
   ) : (
     // In `.app` for its shared sizes (styles.css); the overlay is fixed, so the box adds no layout.
     <div className="app">
-      <RequirementsDialog requirements={requirements} checking={checking} onRecheck={() => void check()} />
+      <RequirementsDialog requirements={requirements} busy={busy} onRecheck={() => void check()} />
     </div>
   );
 }

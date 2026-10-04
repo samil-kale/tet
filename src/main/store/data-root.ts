@@ -7,7 +7,7 @@ import type { AgentId } from "../../shared/types/agents";
  * projects and their data (project-dirs.ts), the agents' host setup (agentConfigDir), accounts,
  * logs, the tet-ctl launcher, updates.
  * Electron's `userData` keeps only Chromium's profile. One fixed path lets an sbx organization allow
- * tet's mounted folders with one rule (sbx-status.ts's readSbxBlockers) and keeps logs out of a
+ * TET's mounted folders with one rule (sbx-status.ts's readSbxBlockers) and keeps logs out of a
  * roaming Windows profile.
  * `--user-data-dir` (the tests' profile, main.ts) puts both in that folder.
  */

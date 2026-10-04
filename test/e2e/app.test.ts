@@ -28,11 +28,11 @@ let userData: string;
 let profileDir: string;
 let repo: string;
 let app: TestApp | undefined;
-/** The instance answering right now — a different process after restart-app. */
+/** The instance answering right now — a different process after app-restart. */
 let pid: number | undefined;
 
 function started(): TestApp {
-  assert.ok(app, "tet started");
+  assert.ok(app, "TET started");
   return app;
 }
 
@@ -40,9 +40,9 @@ async function ctl(...args: string[]) {
   return started().ctl(...args);
 }
 
-describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
+describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
   before(async () => {
-    // Through a link, as macOS's /var or a Windows 8.3 %TEMP% reach a folder: a path tet makes under
+    // Through a link, as macOS's /var or a Windows 8.3 %TEMP% reach a folder: a path TET makes under
     // the profile still has to match the on-disk spelling git and the project list use.
     profileDir = tempDir("tet-app-");
     userData = `${profileDir}-link`;
@@ -57,14 +57,14 @@ describe("tet, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     if (pid !== undefined) {
       killApp(pid);
     }
-    await eventually("tet gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
+    await eventually("TET gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
     for (const dir of [userData, profileDir, repo]) {
       // A pty's conhost can hold a file a moment longer than the app; in the temp dir that's fine.
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     }
     // After the cleanup: an unhandled exception fails the run even when every assertion passed —
     // otherwise it shows only as what it broke (e.g. a timeout behind Electron's frozen dialog).
-    // Covers the spawned instance only; the one `restart-app` leaves is not on this pipe.
+    // Covers the spawned instance only; the one `app-restart` leaves is not on this pipe.
     const stderr = app?.stderr() ?? "";
     const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
     if (uncaught >= 0) {
@@ -91,7 +91,7 @@ ${stderr.slice(uncaught)}`);
     const tab = created.result as TabDescriptor;
     const tabs = async (): Promise<TabDescriptor[]> =>
       (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
-    // "running" is the whole chain: terminals:show reached the window, which drew the tab, whose
+    // "running" is the whole chain: tabs:show reached the window, which drew the tab, whose
     // first resize spawned the process.
     await eventually(
       "the shell tab running",
@@ -112,8 +112,8 @@ ${stderr.slice(uncaught)}`);
     const open = async (): Promise<string> =>
       ((await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TabDescriptor).tabId;
     const tab = await open();
-    // A second tab takes the front: the renderer clears a finished mark on the tab in front.
-    const inFront = await open();
+    // A second tab becomes active: the renderer clears a finished mark on the active tab.
+    const activeTab = await open();
     const hook = (event: string): Promise<{ status: number; stdout: string }> =>
       tetCtl(["hook", event], started().asTab(project.id, tab), "{}");
     const state = async (): Promise<TabDescriptor | undefined> =>
@@ -122,12 +122,12 @@ ${stderr.slice(uncaught)}`);
     const start = await hook("prompt-submit");
     assert.equal(start.status, 0);
     assert.equal(start.stdout, "", "nothing for the prompt: TET's system prompt went in at spawn");
-    await eventually("the tab busy", async () => (await state())?.busy === true, 10_000);
+    await eventually("the tab working", async () => (await state())?.inTurn === true, 10_000);
 
     assert.equal((await hook("stop")).status, 0);
-    await eventually("the turn ended", async () => (await state())?.busy === false, 10_000);
+    await eventually("the turn ended", async () => (await state())?.inTurn === false, 10_000);
     assert.notEqual((await state())?.finishedAt, undefined, "and left the mark that outlives it");
-    for (const id of [tab, inFront]) {
+    for (const id of [tab, activeTab]) {
       assert.equal((await ctl("tabs-close", id, "--project", project.id)).status, 0);
     }
   });
@@ -169,11 +169,11 @@ ${stderr.slice(uncaught)}`);
     assert.ok(cols >= 40 && rows >= 10, `a window's size, not ${size}`);
     assert.notEqual(size, "120x30", "fitted by the window, not started by tet-ctl's default");
 
-    // Shown in front of the first, which stays as it was while hidden.
+    // Shown over the first, which stays as it was while hidden.
     const second = await run();
     assert.deepEqual(await reported(second), [size]);
 
-    // Closing the tab in front shows its left neighbour again.
+    // Closing the active tab shows its left neighbour again.
     await close(second);
     // Four at once: the window renders once for several of their shows, so one behind the last may
     // never have been drawn — still "ready", as a process starts on its tab's first fit. The server
@@ -181,15 +181,15 @@ ${stderr.slice(uncaught)}`);
     const burst = new Set(await Promise.all([run(), run(), run(), run()]));
     const listed = async (): Promise<TabDescriptor[]> =>
       ((await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[]).filter((entry) => burst.has(entry.tabId));
-    const inFront = (await listed()).at(-1)!.tabId;
-    assert.deepEqual(await reported(inFront), [size]);
-    const behind = (await listed()).filter((entry) => entry.tabId !== inFront);
+    const activeTab = (await listed()).at(-1)!.tabId;
+    assert.deepEqual(await reported(activeTab), [size]);
+    const behind = (await listed()).filter((entry) => entry.tabId !== activeTab);
     const unseen = [...behind].reverse().find((entry) => entry.status === "ready") ?? behind.at(-1)!;
-    // Closing a hidden tab shows nothing; closing the one in front shows its left neighbour.
+    // Closing a hidden tab shows nothing; closing the active one shows its left neighbour.
     for (const entry of behind.slice(behind.indexOf(unseen) + 1)) {
       await close(entry.tabId);
     }
-    await close(inFront);
+    await close(activeTab);
     assert.deepEqual(await reported(unseen.tabId), [size], unseen.status === "ready" ? "shown for the first time" : "shown again");
 
     // By now every fit of the switches above has settled, the debounced one included.
@@ -264,7 +264,7 @@ ${stderr.slice(uncaught)}`);
   it("reflects a commit made in a terminal, as the git lane would", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const state = async (): Promise<RepositoryState> =>
-      (await ctl("repo-state", "--project", project.id)).result as RepositoryState;
+      (await ctl("repository-state", "--project", project.id)).result as RepositoryState;
     await eventually("the first read", async () => (await state()).error === undefined && (await state()).head !== "", STARTUP_MS);
     fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
     await eventually(
@@ -304,7 +304,7 @@ ${stderr.slice(uncaught)}`);
     const { worktree, path: files } = added.result as { worktree: string; path: string };
     // By its key: the branch that names it is what changes.
     const head = async (): Promise<string | undefined> =>
-      ((await ctl("repo-state", "--project", main.id, "--worktree", worktree)).result as RepositoryState).head;
+      ((await ctl("repository-state", "--project", main.id, "--worktree", worktree)).result as RepositoryState).head;
     try {
       await eventually("the first read", async () => (await head()) === "in-worktree", STARTUP_MS);
       assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: files }).status, 0);
@@ -337,9 +337,9 @@ ${stderr.slice(uncaught)}`);
             ?.worktrees.some((entry) => entry.branch === "elsewhere" && entry.key === undefined) === true,
         STARTUP_MS
       );
-      const refused = await ctl("repo-state", "--project", main.id, "--worktree", "elsewhere");
+      const refused = await ctl("repository-state", "--project", main.id, "--worktree", "elsewhere");
       assert.notEqual(refused.status, 0);
-      assert.match(refused.stderr, /not made by TET/);
+      assert.match(refused.stderr, /made elsewhere/);
     } finally {
       spawnSync("git", ["worktree", "remove", "--force", elsewhere], { cwd: repo });
       spawnSync("git", ["branch", "-D", "elsewhere"], { cwd: repo });
@@ -357,7 +357,7 @@ ${stderr.slice(uncaught)}`);
     await eventually(
       "the new branch read",
       async () =>
-        ((await ctl("repo-state", "--project", main.id, "--worktree", "from/ctl")).result as RepositoryState).head === "from/ctl",
+        ((await ctl("repository-state", "--project", main.id, "--worktree", "from/ctl")).result as RepositoryState).head === "from/ctl",
       STARTUP_MS
     );
     const deleted = await ctl("worktree-delete", "from/ctl", "--project", main.id);
@@ -365,7 +365,7 @@ ${stderr.slice(uncaught)}`);
     assert.ok(!fs.existsSync(worktree.path));
     const listed = ((await ctl("projects-list")).result as Project[]).find((project) => project.id === main.id);
     assert.ok(!listed?.worktrees.some((entry) => entry.key === worktree.worktree));
-    const branches = ((await ctl("repo-state", "--project", main.id)).result as RepositoryState).localBranches;
+    const branches = ((await ctl("repository-state", "--project", main.id)).result as RepositoryState).localBranches;
     assert.ok(!branches.includes("from/ctl"), "its branch went with it");
   });
 
@@ -380,7 +380,7 @@ ${stderr.slice(uncaught)}`);
   it("restarts on --confirm and comes back with the same profile", async () => {
     const before = pid;
     const [project] = (await ctl("projects-list")).result as Project[];
-    assert.deepEqual((await ctl("restart-app", "--confirm")).result, { restarting: true });
+    assert.deepEqual((await ctl("app-restart", "--confirm")).result, { restarting: true });
     await new Promise<void>((resolve) => app?.child.once("exit", () => resolve()));
     await eventually(
       "the new instance",

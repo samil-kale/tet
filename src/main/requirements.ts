@@ -50,7 +50,7 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
 
 /**
  * Needed before the app opens: git, and an agent or sbx — a sandboxed tab runs the agent's CLI in
- * its container (session-manager's AgentRuntime.sbxOnly). Met, ipc/app.ts's `startup:check` opens the
+ * its sandbox (session-manager's AgentRuntime.sbxOnly). Met, ipc/app.ts's `startup:check` opens the
  * workspace. Never answered from memory: each re-check
  * re-scans the managers' bin dirs (`augmentAgentPath`); an install elsewhere needs a restart.
  * Projects opened afterwards reuse this answer (`agentInstalled`).
@@ -79,8 +79,8 @@ export async function checkRequirements(): Promise<Requirements> {
 }
 
 /**
- * Whether any agent CLI is installed now — deciding sbx-only: add-repository opens the sbx settings
- * when none is, and SbxSettingsDialog locks on it. Never stored or polled; asked where tet refreshes
+ * Whether any agent CLI is installed now — deciding sbx-only: add-repository opens the SBX Settings
+ * when none is, and SbxSettingsDialog locks on it. Never stored or polled; asked where TET refreshes
  * host state, PATH re-read first since the user may just have installed one (`augmentAgentPath`
  * joins a running call, so beside `sbx:status` it costs one login shell).
  */

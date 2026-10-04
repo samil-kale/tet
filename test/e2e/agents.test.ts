@@ -22,7 +22,7 @@ import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
- * The agents' CLIs and sbx as installed on this machine, driven the way tet drives them — what the
+ * The agents' CLIs and sbx as installed on this machine, driven the way TET drives them — what the
  * AgentDefinitions, sbx.ts and the sbx-*.ts beside it rely on. Run it before relying on an update.
  *
  * Only on a machine where they are installed and signed in, each part on its own switch:
@@ -41,7 +41,7 @@ import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "..
 const HOST = process.env.TET_AGENT_TEST === "1";
 const SBX = process.env.TET_SBX_TEST === "1";
 
-/** Run as tet runs a command: no shell, a win32 shim through cmd.exe. Blocks the event loop. */
+/** Run as TET runs a command: no shell, a win32 shim through cmd.exe. Blocks the event loop. */
 function run(command: string, args: string[], input?: string): { status: number | null; stdout: string; stderr: string } {
   const resolved = resolveCommand(command, args);
   const result = spawnSync(resolved.command, resolved.args, {
@@ -102,7 +102,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   }
 
   function started(): TestApp {
-    assert.ok(app, "tet started");
+    assert.ok(app, "TET started");
     return app;
   }
 
@@ -135,7 +135,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     return events.filter((event) => event.tabId === tabId && event.kind === "hook" && event.at >= since);
   }
 
-  /** The sessions as tet lists them, read here straight from where the CLI keeps them. */
+  /** The sessions as TET lists them, read here straight from where the CLI keeps them. */
   function listSessions(agent: AgentDefinition): Promise<AgentSessionInfo[]> {
     assert.ok(agent.sessions, `${agent.displayName} has sessions`);
     return agent.sessions.list(currentProject().path);
@@ -157,7 +157,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     if (pid !== undefined) {
       killApp(pid);
     }
-    await eventually("tet gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
+    await eventually("TET gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
     for (const dir of [userData, AGENT_REPO]) {
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     }
@@ -244,7 +244,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
             if (last?.waitingAt !== undefined) {
               assert.fail(`${agent.displayName} stopped for the user instead of answering:\n${output}`);
             }
-            return events.some((event) => event.event === "stop") && last?.busy === false;
+            return events.some((event) => event.event === "stop") && last?.inTurn === false;
           },
           TURN_MS
         );
@@ -364,7 +364,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     }
   });
 
-  it("answers the questions before a spawn in the shapes tet reads", () => {
+  it("answers the questions before a spawn in the shapes TET reads", () => {
     const listed = sbx("ls", "--json");
     assert.equal(listed.status, 0, `signed in: ${listed.stderr}`);
     assert.ok(Array.isArray((JSON.parse(listed.stdout) as { sandboxes?: unknown }).sandboxes), `sandboxes[] in ${listed.stdout}`);
@@ -387,7 +387,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     const again = sbx("create", "claude", WORKSPACE, "--name", NAME, "--skills=off");
     assert.notEqual(again.status, 0, "a second create fails");
     assert.match(again.stderr, /already exists/);
-    // The store would sit read-only where tet mounts the agent's skills.
+    // The store would sit read-only where TET mounts the agent's skills.
     assert.notEqual(inSandbox("test -e ~/.claude/skills").status, 0, "no skills directory bound by sbx");
   });
 
@@ -440,7 +440,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     const again = sbx("mount", NAME, file.mount);
     assert.notEqual(again.status, 0, "a read-only file is not mounted twice");
     assert.match(again.stderr, /read-only file system/);
-    // Listed as tet spells its mounts (readRuntimeMounts).
+    // Listed as TET spells its mounts (readRuntimeMounts).
     const inspected = JSON.parse(sbx("inspect", NAME, "--json").stdout) as {
       runtime_mounts: { host_path: string; container_target: string; read_only?: boolean }[];
     };
@@ -499,7 +499,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     const { port } = server.address() as AddressInfo;
     try {
-      // tet allows `localhost:<port>` for the machine (isControlChannelAllowed); scoped to this
+      // TET allows `localhost:<port>` for the machine (isControlChannelAllowed); scoped to this
       // sandbox here, so the rule goes with it. The proxy rewrites host.docker.internal to localhost.
       const allowed = sbx("policy", "allow", "network", "--sandbox", NAME, `localhost:${port}`);
       assert.equal(allowed.status, 0, allowed.stderr);

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { SbxAccess, SbxKnowledgeConfig, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxLocalEdits, SbxLocalSave, SbxPath, SbxPort, SbxProblems, SbxProjectConfig, SbxStoredLocal } from "../../shared/types/sbx";
+import type { SbxAccess, SbxKnowledgeSettings, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxLocalEdits, SbxLocalSave, SbxPath, SbxPort, SbxProblems, SbxProjectSettings, SbxStoredLocal } from "../../shared/types/sbx";
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
@@ -13,7 +13,7 @@ const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
   { value: "rw", label: "Read+Write" }
 ];
 
-/** Where the skills come from: `SbxKnowledgeConfig.skillsFolder` absent, or set. */
+/** Where the skills come from: `SbxKnowledgeSettings.skillsFolder` absent, or set. */
 type SkillsSource = "agents" | "folder";
 
 const SKILLS_SOURCE_OPTIONS: { value: SkillsSource; label: string }[] = [
@@ -35,7 +35,7 @@ const CHECK_DELAY_MS = 500;
 export interface FieldsState {
   /** This machine's (`sbx:stored`); what each kind mounts is `AgentSandbox.knowledge`.
    *  `skillsFolder` is "" while "A folder" is chosen and none picked yet. */
-  knowledge: SbxKnowledgeConfig;
+  knowledge: SbxKnowledgeSettings;
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];
   hosts: Row<{ host: string }>[];
@@ -53,26 +53,26 @@ const BLANK_HOST = { host: "" };
 const BLANK_SECRET = { env: "", hosts: "", value: "" };
 const BLANK_VARIABLE = { env: "", value: "" };
 
-/** `sbx:get-config`'s and `sbx:stored`'s answers as rows. Only the user's paths: tet's directories
+/** `sbx:get-settings`'s and `sbx:stored`'s answers as rows. Only the user's paths: TET's directories
  *  and each agent's session directory are always mounted (sbx-mounts.ts's fixedMountSpecs,
  *  sessionMountSpecs), not shown. */
-export function fromConfig(config: SbxProjectConfig, stored: SbxStoredLocal): FieldsState {
+export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLocal): FieldsState {
   return {
     knowledge: stored.knowledge,
-    ports: atLeastOne(config.ports.map(withId), BLANK_PORT),
-    paths: config.paths.map(withId),
+    ports: atLeastOne(settings.ports.map(withId), BLANK_PORT),
+    paths: settings.paths.map(withId),
     hosts: atLeastOne(
-      config.hosts.map((host) => withId({ host })),
+      settings.hosts.map((host) => withId({ host })),
       BLANK_HOST
     ),
     secrets: atLeastOne(
-      config.secrets.map((secret) =>
+      settings.secrets.map((secret) =>
         withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })
       ),
       BLANK_SECRET
     ),
     variables: atLeastOne(
-      config.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
+      settings.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
       BLANK_VARIABLE
     )
   };
@@ -145,7 +145,7 @@ export function saveBlocked(state: FieldsState): string | undefined {
 }
 
 /** The inverse, for Save: ids dropped, as are empty port, host, secret and variable rows. */
-export function toConfig(state: FieldsState): Omit<SbxProjectConfig, "enabled"> {
+export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enabled"> {
   return {
     ports: state.ports
       .map(({ host, container }) => ({ host: host.trim(), container: container.trim() }))
@@ -170,7 +170,7 @@ function toLocalEdits(rows: { env: string; value: string; from?: string }[]): Sb
 
 /** The knowledge as Save stores it: "A folder" with none picked, while skills are off, is each
  *  agent's own (saveBlocked refuses it while they are on). */
-function toKnowledge(knowledge: SbxKnowledgeConfig): SbxKnowledgeConfig {
+function toKnowledge(knowledge: SbxKnowledgeSettings): SbxKnowledgeSettings {
   const { skillsFolder, ...kinds } = knowledge;
   return skillsFolder ? knowledge : kinds;
 }
@@ -186,7 +186,7 @@ export function toLocalSave(state: FieldsState): SbxLocalSave {
 }
 
 /** What `source` mounts for `kind`, for its icon: its own, or for skills the chosen folder. */
-function knowledgeEntries(source: SbxKnowledgeSource, kind: SbxKnowledgeKind, knowledge: SbxKnowledgeConfig): SbxKnowledgeEntry[] {
+function knowledgeEntries(source: SbxKnowledgeSource, kind: SbxKnowledgeKind, knowledge: SbxKnowledgeSettings): SbxKnowledgeEntry[] {
   const folder = knowledge.skillsFolder;
   if (kind !== "skills" || folder === undefined) {
     return source.own[kind];
@@ -201,9 +201,9 @@ function holdsValue(row: { from?: string }, stored: readonly string[]): boolean 
 
 /** Whether the edits since opening reach a running tab only once it restarts (sbxNeedsRestart);
  *  a variable's value is set by `sbx run -e` too. */
-export function needsRestart(loaded: SbxProjectConfig, loadedKnowledge: SbxKnowledgeConfig, state: FieldsState): boolean {
+export function needsRestart(loaded: SbxProjectSettings, loadedKnowledge: SbxKnowledgeSettings, state: FieldsState): boolean {
   return (
-    sbxNeedsRestart(loaded, loadedKnowledge, toConfig(state), toKnowledge(state.knowledge)) ||
+    sbxNeedsRestart(loaded, loadedKnowledge, toSettings(state), toKnowledge(state.knowledge)) ||
     state.variables.some((row) => row.value !== "")
   );
 }
@@ -229,10 +229,10 @@ export function useSbxProblems(
   organization: string | undefined
 ): SbxProblems {
   const [problems, setProblems] = useState<SbxProblems>({});
-  const config = { enabled: true, ...toConfig(state) };
+  const settings = { enabled: true, ...toSettings(state) };
   const knowledge = toKnowledge(state.knowledge);
   const values = { secrets: valueNames(state.secrets, stored.secrets), variables: valueNames(state.variables, stored.variables) };
-  const key = JSON.stringify([config, knowledge, values, organization]);
+  const key = JSON.stringify([settings, knowledge, values, organization]);
   /** The loaded rows go at once; an edit waits (CHECK_DELAY_MS). */
   const opened = useRef(true);
   useEffect(() => {
@@ -244,7 +244,7 @@ export function useSbxProblems(
     let current = true;
     const timer = setTimeout(() => {
       // Where sbx cannot say, the marks stay as they were; Save asks again and stops.
-      void window.tet.sbx.problems(projectId, config, knowledge, values, { organization }).then(
+      void window.tet.sbx.problems(projectId, settings, knowledge, values, { organization }).then(
         (answer) => {
           if (current) {
             setProblems(answer);

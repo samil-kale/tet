@@ -1,7 +1,7 @@
 /** A tree of repository paths, for the Explorer and LOCAL CHANGES alike. */
 export interface TreeNode {
   /** Key for `expanded`, the row map and React. The path; in the Explorer with `folders`, prefixed
-   *  by the root's index ("1:src/a.ts"), so a file under two roots folds and scrolls independently. */
+   *  by the root's index ("1:src/a.ts"), so a file under two roots expands and scrolls independently. */
   id: string;
   /** A compacted chain's is `a/b/c`. */
   name: string;
@@ -10,7 +10,7 @@ export interface TreeNode {
   /** Present exactly for a folder. */
   children?: TreeNode[];
   /** A top-level node standing for more than a folder (an Explorer `folders` entry, the changes'
-   *  "Changes"): open by default, never compacted. */
+   *  "Changes"): expanded by default, never compacted. */
   root?: true;
 }
 
@@ -82,18 +82,18 @@ export function buildTree(
 }
 
 /** VS Code's `explorer.compactFolders`: a chain of only-child folders becomes one row, acting as the
- *  innermost folder for folding, reveal and the menu. Roots are never compacted. */
+ *  innermost folder for collapsing, reveal and the menu. Roots are never compacted. */
 export function compactTree(nodes: TreeNode[]): TreeNode[] {
   return nodes.map((node) => {
     if (!node.children) {
       return node;
     }
-    let folded = node;
-    while (!folded.root && folded.children!.length === 1 && folded.children![0].children) {
-      const inner = folded.children![0];
-      folded = { id: inner.id, name: `${folded.name}/${inner.name}`, path: inner.path, children: inner.children };
+    let compacted = node;
+    while (!compacted.root && compacted.children!.length === 1 && compacted.children![0].children) {
+      const inner = compacted.children![0];
+      compacted = { id: inner.id, name: `${compacted.name}/${inner.name}`, path: inner.path, children: inner.children };
     }
-    return { ...folded, children: compactTree(folded.children!) };
+    return { ...compacted, children: compactTree(compacted.children!) };
   });
 }
 
@@ -118,8 +118,8 @@ export function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
   return result;
 }
 
-/** A folder's fold state: a root starts open, everything else closed. */
-export function isOpen(node: TreeNode, expanded: Record<string, boolean>): boolean {
+/** Whether a folder is expanded: a root starts expanded, everything else collapsed. */
+export function isExpanded(node: TreeNode, expanded: Record<string, boolean>): boolean {
   return expanded[node.id] ?? node.root === true;
 }
 
@@ -146,24 +146,24 @@ export function filesByNode(nodes: TreeNode[]): Map<string, string[]> {
   return files;
 }
 
-/** A row on screen: the tree flattened to what open folders show, as VS Code's list renders it. */
+/** A row on screen: the tree flattened to what expanded folders show, as VS Code's list renders it. */
 export interface VisibleRow {
   node: TreeNode;
   depth: number;
-  open: boolean;
+  expanded: boolean;
 }
 
 export function visibleRows(
   nodes: TreeNode[],
-  open: (node: TreeNode) => boolean,
+  isExpanded: (node: TreeNode) => boolean,
   depth = 0,
   out: VisibleRow[] = []
 ): VisibleRow[] {
   for (const node of nodes) {
-    const shown = open(node);
-    out.push({ node, depth, open: shown });
-    if (node.children && shown) {
-      visibleRows(node.children, open, depth + 1, out);
+    const expanded = isExpanded(node);
+    out.push({ node, depth, expanded });
+    if (node.children && expanded) {
+      visibleRows(node.children, isExpanded, depth + 1, out);
     }
   }
   return out;

@@ -7,11 +7,11 @@ import { LINUX, WINDOWS } from "../../src/shared/platform";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { toContainerPath } from "../../src/main/agents/hook-target";
-import { readSbxConfig, writeSbxConfig } from "../../src/main/store/tet-json";
+import { readSbxSettings, writeSbxSettings } from "../../src/main/store/tet-json";
 import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../../src/main/sbx/sbx";
 import { parseSignedInUser, sbxError, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
 import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../../src/main/sbx/sbx-mounts";
-import { saveSbxConfig } from "../../src/main/sbx/sbx-save";
+import { saveSbxSettings } from "../../src/main/sbx/sbx-save";
 import { listSandboxes, readHostAllowed } from "../../src/main/sbx/sbx-status";
 import { contractHome } from "../../src/main/util/path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../../src/main/sbx/sbx-policy";
@@ -19,7 +19,7 @@ import { SbxAccountStore } from "../../src/main/sbx/sbx-accounts";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { sandboxDir } from "../../src/main/store/project-dirs";
 import { sbxProblemNotices, sbxSecretRefusal, withoutProblems } from "../../src/shared/sbx-rules";
-import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, type SbxPath, type SbxPort, type SbxProjectConfig } from "../../src/shared/types/sbx";
+import { EMPTY_SBX_SETTINGS, EMPTY_SBX_KNOWLEDGE, type SbxPath, type SbxPort, type SbxProjectSettings } from "../../src/shared/types/sbx";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
 /** sbx/: sandbox names and mounts, ports, secrets, the SBX Settings' Save, policy and status. */
@@ -88,7 +88,7 @@ describe("sbx sandbox naming and mounts", () => {
     assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).unmount, `${home}:${toContainerPath(home)}`);
   });
 
-  it("mounts tet's own dir live — the sandbox's agentDir read-write, nothing else", () => {
+  it("mounts TET's own dir live — the sandbox's agentDir read-write, nothing else", () => {
     const agentDir = sandboxDir(os.tmpdir(), { projectId: "p" }, "claude");
     assert.deepEqual(
       fixedMountSpecs({ agentDir }).map((spec) => spec.mount),
@@ -125,7 +125,7 @@ describe("a sandbox's published ports", () => {
  * publishes is the delta against what the sandbox *has* (`sbx ports --json`), never against
  * tet.json's previous rows — those may list a port sbx refused at the last Save.
  */
-describe("saving an sbx config", () => {
+describe("saving SBX settings", () => {
   const projectId = "a project with one sandbox";
   const main = { projectId };
   const name = sandboxName(main, "claude");
@@ -137,7 +137,7 @@ describe("saving an sbx config", () => {
   const port = (number: number): SbxPort => ({ host: String(number), container: String(number) });
   /** One entry of `sbx ports --json` (see "a sandbox's published ports"). */
   const listed = (number: number) => ({ host_ip: "127.0.0.1", host_port: number, sandbox_port: number, protocol: "tcp4" });
-  const config = (ports: SbxPort[]): SbxProjectConfig => ({ ...EMPTY_SBX_CONFIG, enabled: true, ports });
+  const settings = (ports: SbxPort[]): SbxProjectSettings => ({ ...EMPTY_SBX_SETTINGS, enabled: true, ports });
 
   /**
    * A stand-in `sbx` first on PATH (a `.cmd` on win32, an `sh` script elsewhere): it appends every
@@ -159,14 +159,14 @@ describe("saving an sbx config", () => {
     filesystemRules?: object[];
     /** Calls that fail with nothing on stdout, by how their arguments start: sbx that cannot say. */
     fail?: string[];
-  }): { dir: string; projectPath: string } {
+  }): { dir: string; repoFolder: string } {
     const dir = tempDir("tet-sbx-save-");
-    const projectPath = path.join(dir, "repo");
-    fs.mkdirSync(projectPath);
+    const repoFolder = path.join(dir, "repo");
+    fs.mkdirSync(repoFolder);
     const answerFile = path.join(dir, "answers.json");
     fs.writeFileSync(
       answerFile,
-      JSON.stringify({ ...answers, refusal, name, workspaces: [projectPath], log: path.join(dir, "calls.log") })
+      JSON.stringify({ ...answers, refusal, name, workspaces: [repoFolder], log: path.join(dir, "calls.log") })
     );
     const script = path.join(dir, "sbx.js");
     fs.writeFileSync(
@@ -217,7 +217,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     } else {
       fs.writeFileSync(path.join(dir, "sbx"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
     }
-    return { dir, projectPath };
+    return { dir, repoFolder };
   }
 
   /**
@@ -235,21 +235,21 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     }
   }
 
-  /** saveSbxConfig as sbx-settings.ts runs it: with the listing taken for its check. */
-  async function saveListed(...args: Parameters<typeof saveSbxConfig> extends [...infer A, unknown] ? A : never) {
+  /** saveSbxSettings as sbx-settings.ts runs it: with the listing taken for its check. */
+  async function saveListed(...args: Parameters<typeof saveSbxSettings> extends [...infer A, unknown] ? A : never) {
     const sandboxes = await listSandboxes();
     assert.ok(sandboxes, "sbx lists the sandboxes");
-    return saveSbxConfig(...args, sandboxes);
+    return saveSbxSettings(...args, sandboxes);
   }
 
   /** Saves `now` over a tet.json holding `before`, against a sandbox that has `has` published. */
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
-    const { dir, projectPath } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
-    await writeSbxConfig(projectPath, config(setup.before.map(port)));
+    const { dir, repoFolder } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
+    await writeSbxSettings(repoFolder, settings(setup.before.map(port)));
     const saved = await withSbx(dir, () =>
-      saveListed({ ref: main, path: projectPath }, [], config(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], settings(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
-    return { ...saved, projectPath };
+    return { ...saved, repoFolder };
   }
 
   it("publishes a port tet.json already listed, because the sandbox never published it", async () => {
@@ -262,18 +262,18 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       `ports ${name} --json`,
       `ports ${name} --publish 3000:3000`
     ]);
-    assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], config: config([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
+    assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], settings: settings([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
   });
 
   it("brings a worktree's sandbox in line along with the project's, all but the ports", async () => {
     const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
     const worktreeName = sandboxName(worktree.ref, "claude");
-    const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
+    const { dir, repoFolder } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
       saveListed(
-        { ref: main, path: projectPath },
+        { ref: main, path: repoFolder },
         [worktree],
-        { ...config([port(3000)]), hosts: ["example.com"] },
+        { ...settings([port(3000)]), hosts: ["example.com"] },
         NO_KNOWLEDGE,
         new Map(),
         new Set(),
@@ -291,12 +291,12 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     }
   });
 
-  it("removes a worktree's sandbox along with the project's when sandboxing goes off", async () => {
+  it("removes a worktree's sandbox along with the project's when SBX is disabled", async () => {
     const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
     const worktreeName = sandboxName(worktree.ref, "claude");
-    const { dir, projectPath } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
+    const { dir, repoFolder } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: projectPath }, [worktree], EMPTY_SBX_CONFIG, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [worktree], EMPTY_SBX_SETTINGS, NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(result.removed, [
       { ref: main, agentId: "claude" },
@@ -314,12 +314,12 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   it("leaves a port sbx refuses out of tet.json, with sbx's reason, and saves the rest", async () => {
-    const { result, projectPath } = await save({ has: [], before: [], now: [3000, 5000], refuse: "3000:3000" });
+    const { result, repoFolder } = await save({ has: [], before: [], now: [3000, 5000], refuse: "3000:3000" });
     assert.deepEqual(result.refused, {
       ports: { "3000:3000": "publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published" }
     });
     assert.deepEqual(result.failures, [], "nothing to take back");
-    assert.deepEqual((await readSbxConfig(projectPath)).ports, [port(5000)]);
+    assert.deepEqual((await readSbxSettings(repoFolder)).ports, [port(5000)]);
   });
 
   it("does not start the sandbox where no port is configured and none was", async () => {
@@ -331,13 +331,13 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     // Two folders that exist: only what exists is a grant.
     const held: SbxPath = { path: os.tmpdir(), access: "rw" };
     const unheld: SbxPath = { path: os.homedir(), access: "ro" };
-    const { dir, projectPath } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
-    await writeSbxConfig(projectPath, { ...config([]), paths: [held, unheld] });
+    const { dir, repoFolder } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
+    await writeSbxSettings(repoFolder, { ...settings([]), paths: [held, unheld] });
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
-    assert.deepEqual([result.refused, result.config.paths], [{}, []]);
+    assert.deepEqual([result.refused, result.settings.paths], [{}, []]);
   });
 
   it("releases the dropped paths in or under a folder that goes, from every sandbox holding one", async () => {
@@ -362,7 +362,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   it("brings the sandbox's secrets in line, values through stdin, leaving one set by hand alone", async () => {
     const live = (env: string, hosts: string[]) => ({ scope: name, targets: hosts, env: "", placeholder: secretPlaceholder(projectId, env) });
-    const { dir, projectPath } = fakeSbx({
+    const { dir, repoFolder } = fakeSbx({
       published: [],
       secrets: [
         live("KEPT", ["kept.example.com"]),
@@ -378,7 +378,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       { env: "REHOSTED", hosts: ["old.example.com"] },
       { env: "DROPPED", hosts: ["dropped.example.com"] }
     ];
-    await writeSbxConfig(projectPath, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: before });
+    await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: before });
     const now = [
       { env: "KEPT", hosts: ["kept.example.com"] },
       { env: "CHANGED", hosts: ["changed.example.com"] },
@@ -392,7 +392,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ["ADDED", "v-added"]
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -409,8 +409,8 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       "stdin v-added"
     ]);
     assert.deepEqual([result.refused, result.failures], [{}, []]);
-    assert.deepEqual((await readSbxConfig(projectPath)).secrets, now, "tet.json holds names and hosts");
-    assert.ok(!fs.readFileSync(path.join(projectPath, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
+    assert.deepEqual((await readSbxSettings(repoFolder)).secrets, now, "tet.json holds names and hosts");
+    assert.ok(!fs.readFileSync(path.join(repoFolder, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
   });
 
   it("asks the policy about a secret host, but not about a wildcard it cannot answer", async () => {
@@ -423,7 +423,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   it("removes a sandbox an earlier id of the project left, and no other", async () => {
-    const { dir, projectPath } = fakeSbx({
+    const { dir, repoFolder } = fakeSbx({
       published: [],
       others: [
         { name: "tet-codex-aaaaaaaaaaaa" },
@@ -432,7 +432,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ]
     });
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: projectPath }, [], config([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
     );
     assert.deepEqual(result.orphans, [{ ref: main, agentId: "codex" }]);
     assert.deepEqual(
@@ -442,36 +442,36 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   it("stops a Save where sbx does not list the secrets, changing nothing", async () => {
-    const { dir, projectPath } = fakeSbx({ published: [], secretsFail: true });
+    const { dir, repoFolder } = fakeSbx({ published: [], secretsFail: true });
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
-    const before = await readSbxConfig(projectPath);
+    const before = await readSbxSettings(repoFolder);
     await assert.rejects(
       withSbx(dir, () =>
-        saveListed({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+        saveListed({ ref: main, path: repoFolder }, [], { ...EMPTY_SBX_SETTINGS, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
       ),
       /could not list the sandboxes' secrets/
     );
     const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
     assert.ok(!/secret rm|secret set-custom|^rm /m.test(calls), calls);
-    assert.deepEqual(await readSbxConfig(projectPath), before, "tet.json as it was");
+    assert.deepEqual(await readSbxSettings(repoFolder), before, "tet.json as it was");
   });
 
   for (const [what, fail, message] of [
     ["the sandboxes' allowed hosts", "policy ls --type network", /could not list the sandboxes' allowed hosts/]
   ] as const) {
     it(`stops a Save where sbx does not list ${what}, changing nothing`, async () => {
-      const { dir, projectPath } = fakeSbx({ published: [], fail: [fail] });
-      await writeSbxConfig(projectPath, { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["old.example.com"] });
-      const before = await readSbxConfig(projectPath);
+      const { dir, repoFolder } = fakeSbx({ published: [], fail: [fail] });
+      await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["old.example.com"] });
+      const before = await readSbxSettings(repoFolder);
       await assert.rejects(
         withSbx(dir, () =>
-          saveListed({ ref: main, path: projectPath }, [], { ...EMPTY_SBX_CONFIG, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+          saveListed({ ref: main, path: repoFolder }, [], { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
         ),
         message
       );
       const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
       assert.ok(!/policy rm|policy allow|^rm /m.test(calls), calls);
-      assert.deepEqual(await readSbxConfig(projectPath), before, "tet.json as it was");
+      assert.deepEqual(await readSbxSettings(repoFolder), before, "tet.json as it was");
     });
   }
 
@@ -479,14 +479,14 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     ["the governed policy", "policy check", { hosts: ["closed.example.com"] }],
     ["the filesystem rules", "policy ls --type filesystem", { paths: [{ path: os.tmpdir(), access: "ro" }] }],
     ["the published ports", "ports", { ports: [port(3000)] }]
-  ] satisfies [string, string, Partial<SbxProjectConfig>][]) {
+  ] satisfies [string, string, Partial<SbxProjectSettings>][]) {
     it(`rejects where sbx does not answer for ${what}, rather than finding a problem`, async () => {
       const { dir } = fakeSbx({ published: [], fail: [fail] });
       await assert.rejects(
         withSbx(dir, () =>
           readSbxProblems({
             projectId,
-            config: { ...EMPTY_SBX_CONFIG, enabled: true, ...rows },
+            settings: { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows },
             knowledge: EMPTY_SBX_KNOWLEDGE,
             values: { secrets: new Set(), variables: new Set() },
             agents: [claudeAgent],
@@ -500,19 +500,19 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   }
 
   it("finds what cannot be applied here: under governance a host its policy refuses, a missing or refused path, a secret or variable without a value", async () => {
-    const { dir, projectPath } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
+    const { dir, repoFolder } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
     const missing = path.join(dir, "gone");
     const problems = await withSbx(dir, () =>
       readSbxProblems({
         projectId,
-        config: {
-          ...EMPTY_SBX_CONFIG,
+        settings: {
+          ...EMPTY_SBX_SETTINGS,
           enabled: true,
           hosts: ["open.example.com", "closed.example.com"],
           // `policy ls` answers no filesystem rules, so nothing may be mounted.
           paths: [
             { path: missing, access: "ro" },
-            { path: projectPath, access: "rw" }
+            { path: repoFolder, access: "rw" }
           ],
           secrets: [{ env: "TOKEN", hosts: ["open.example.com"] }],
           variables: [{ env: "SET" }, { env: "UNSET" }]
@@ -526,7 +526,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     );
     assert.deepEqual(problems.result, {
       hosts: { "closed.example.com": "Forbidden by governance" },
-      paths: { [missing]: "Does not exist on this machine", [projectPath]: "Forbidden by governance" },
+      paths: { [missing]: "Does not exist on this machine", [repoFolder]: "Forbidden by governance" },
       secrets: { TOKEN: "No value on this machine" },
       variables: { UNSET: "No value on this machine" }
     });
@@ -534,9 +534,9 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   for (const created of [true, false]) {
     it(`${created ? "removes the sandbox a start created" : "keeps a sandbox the start found"} when the start fails after it`, async () => {
-      const { dir, projectPath } = fakeSbx({ published: [], fail: ["policy ls --type filesystem"] });
+      const { dir, repoFolder } = fakeSbx({ published: [], fail: ["policy ls --type filesystem"] });
       // Listed at another folder, the sandbox is rebuilt: removed, then created at this one.
-      const at = created ? path.join(dir, "moved") : projectPath;
+      const at = created ? path.join(dir, "moved") : repoFolder;
       const { calls } = await withSbx(dir, () =>
         assert.rejects(
           prepareSbxRun({
@@ -544,9 +544,9 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             name,
             ref: main,
             projectRefPath: at,
-            config: { ...EMPTY_SBX_CONFIG, enabled: true, paths: [{ path: os.tmpdir(), access: "ro" }] },
+            settings: { ...EMPTY_SBX_SETTINGS, enabled: true, paths: [{ path: os.tmpdir(), access: "ro" }] },
             knowledge: EMPTY_SBX_KNOWLEDGE,
-            sandboxes: new Map([[name, [projectPath]]]),
+            sandboxes: new Map([[name, [repoFolder]]]),
             paths: { agentDir: sandboxDir(dir, main, "claude") },
             agentArgs: [],
             secretValues: new Map(),
@@ -572,16 +572,16 @@ describe("what of the SBX Settings could not be applied", () => {
 
   it("is told once per option and reason, its rows listed, in the dialog's tab order", () => {
     assert.deepEqual(sbxProblemNotices(problems), [
-      "Couldn't set knowledge:\n - plugins\nForbidden by governance",
-      "Couldn't set paths:\n - /data/one\nDoes not exist on this machine",
-      "Couldn't set paths:\n - /data/two\nForbidden by governance",
-      "Couldn't set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance"
+      "Could not set knowledge:\n - plugins\nForbidden by governance",
+      "Could not set paths:\n - /data/one\nDoes not exist on this machine",
+      "Could not set paths:\n - /data/two\nForbidden by governance",
+      "Could not set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance"
     ]);
   });
 
   it("is left out of what is saved and applied, a kind of knowledge turned off", () => {
-    const config = {
-      ...EMPTY_SBX_CONFIG,
+    const settings = {
+      ...EMPTY_SBX_SETTINGS,
       enabled: true,
       hosts: ["a.example.com", "c.example.com"],
       paths: [
@@ -590,15 +590,15 @@ describe("what of the SBX Settings could not be applied", () => {
       ]
     };
     const knowledge = { skills: "ro" as const, plugins: "rw" as const, instructions: false as const };
-    assert.deepEqual(withoutProblems(config, knowledge, problems), {
-      config: { ...config, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
+    assert.deepEqual(withoutProblems(settings, knowledge, problems), {
+      settings: { ...settings, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
       knowledge: { skills: "ro", plugins: false, instructions: false }
     });
   });
 });
 
 describe("an SBX Settings secret row", () => {
-  it("is refused a name tet sets itself, as a variable row is", () => {
+  it("is refused a name TET sets itself, as a variable row is", () => {
     const hosts = ["api.example.com"];
     assert.equal(sbxSecretRefusal({ env: "TOKEN", hosts }, []), undefined);
     for (const env of ["PATH", "path", "TET_TAB_ID"]) {
@@ -609,8 +609,8 @@ describe("an SBX Settings secret row", () => {
 
 describe("a sandboxed tab's variables", () => {
   it("put a secret's placeholder on the command line and a variable's value only in the environment", () => {
-    const config = {
-      ...EMPTY_SBX_CONFIG,
+    const settings = {
+      ...EMPTY_SBX_SETTINGS,
       enabled: true,
       secrets: [
         { env: "GITLAB_TOKEN", hosts: ["gitlab.example.com"] },
@@ -621,7 +621,7 @@ describe("a sandboxed tab's variables", () => {
     };
     const result = sandboxEnv({
       ref: { projectId: "p" },
-      config,
+      settings,
       env: ["AGENT_SET=agent"],
       secretValues: new Map([["GITLAB_TOKEN", "glpat-real"]]),
       variableValues: new Map([

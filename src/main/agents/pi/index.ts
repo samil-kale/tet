@@ -30,7 +30,7 @@ const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prom
  */
 export const piAgent: SandboxedAgent = {
   id: "pi",
-  displayName: "Pi",
+  displayName: "pi",
   icon: piIcon,
   // Its input field is no shell: only a space needs quoting, in double quotes.
   quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
@@ -102,7 +102,7 @@ export const piAgent: SandboxedAgent = {
     sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
     // pi has no built-in kit, so it is the community kit, whose image sbx pulls on the first
     // create; home is `/home/agent` like every built-in. It is `create`'s first positional (`--kit`
-    // means a mixin); `sbx run` reattaches by `--name` with plain `pi`. Auth is not tet's: the kit
+    // means a mixin); `sbx run` reattaches by `--name` with plain `pi`. Auth is not TET's: the kit
     // takes an Anthropic credential from sbx's store, without which every model call fails.
     kit: "docker.io/sbx/pi-kit:latest",
     sessions: piSandboxSessions

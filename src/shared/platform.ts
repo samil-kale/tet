@@ -82,7 +82,7 @@ export interface Platform {
   readonly modifierLabel: string;
   /** The context menu entry showing a file in the file manager. */
   readonly revealLabel: string;
-  /** Monaco's own Replace key, which tet unbinds (editor-views.ts). */
+  /** Monaco's own Replace key, which TET unbinds (editor-views.ts). */
   readonly replaceKey: string;
 }
 

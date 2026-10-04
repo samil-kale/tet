@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/control";
 import type { Project } from "../../shared/types/project";
-import type { SbxKnowledgeConfig, SbxProjectConfig, SbxSecret, SbxVariable } from "../../shared/types/sbx";
+import type { SbxKnowledgeSettings, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { SBX_ACCESS } from "../../shared/types/sbx";
 import {
   SBX_KNOWLEDGE_KINDS,
@@ -48,16 +48,16 @@ export function sbxVerbs(
   /**
    * One SBX Settings field changed, then saved as the dialog's Save does, everything else as it
    * stands: a row that cannot be applied here is left out and answered as `notApplied`. As the
-   * dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch while sandboxing
-   * is off. A stored value stays with its row's name; a removed row's goes. Refused for a worktree
+   * dialog's tabs: only once sbx is ready (readySbx), and nothing but the switch while SBX is disabled.
+   * A stored value stays with its row's name; a removed row's goes. Refused for a worktree
    * before anything is read, as it takes its project's (tet-json.ts's configRoot).
    */
   const editSbx = async (
     args: Record<string, unknown>,
     caller: ControlRequest["caller"],
-    edit: (loaded: { config: SbxProjectConfig; knowledge: SbxKnowledgeConfig }) => {
-      config?: SbxProjectConfig;
-      knowledge?: SbxKnowledgeConfig;
+    edit: (loaded: { settings: SbxProjectSettings; knowledge: SbxKnowledgeSettings }) => {
+      settings?: SbxProjectSettings;
+      knowledge?: SbxKnowledgeSettings;
       variableValues?: Record<string, string>;
     },
     switching = false
@@ -70,13 +70,13 @@ export function sbxVerbs(
       );
     }
     const reading = await readySbx(found);
-    const config = await deps.sbx.config(found);
+    const settings = await deps.sbx.settings(found);
     const { knowledge } = deps.sbx.stored(found.id);
-    if (!config.enabled && !switching) {
-      throw new ControlError("bad_args", `SBX sandboxing is off for ${found.name}: sbx-set-enabled on first`);
+    if (!settings.enabled && !switching) {
+      throw new ControlError("bad_args", `SBX is disabled for ${found.name}: sbx-set-enabled on first`);
     }
-    const next = edit({ config, knowledge });
-    const request = next.config ?? config;
+    const next = edit({ settings, knowledge });
+    const request = next.settings ?? settings;
     const nextKnowledge = next.knowledge ?? knowledge;
     const saved = await deps.sbx.save(
       found,
@@ -93,7 +93,7 @@ export function sbxVerbs(
     }
     const problems = saved.problems ?? {};
     const applied = withoutProblems(request, nextKnowledge, problems);
-    const restartRequired = sbxNeedsRestart(config, knowledge, applied.config, applied.knowledge);
+    const restartRequired = sbxNeedsRestart(settings, knowledge, applied.settings, applied.knowledge);
     return { result: { saved: true, restartRequired, ...(Object.keys(problems).length > 0 ? { notApplied: problems } : {}) } };
   };
 
@@ -119,11 +119,11 @@ export function sbxVerbs(
   return {
     // The machine's, not a project's: one sbx ls says whether it is signed in (readSbxSignedIn).
     "sbx-accounts": async () => {
-      const loggedIn = await deps.sbx.signedIn();
-      const account = loggedIn ? await deps.sbx.signedInUser() : undefined;
+      const signedIn = await deps.sbx.signedIn();
+      const account = signedIn ? await deps.sbx.signedInUser() : undefined;
       return {
         result: {
-          signedIn: loggedIn,
+          signedIn,
           ...(account !== undefined ? { account } : {}),
           accounts: deps.sbx.accounts().map((kept) => kept.user)
         }
@@ -152,18 +152,18 @@ export function sbxVerbs(
     "sbx-get": async (args, caller) => {
       const found = project(args, caller);
       const stored = deps.sbx.stored(found.id);
-      const [reading, config] = await Promise.all([deps.sbx.status(found), deps.sbx.config(found)]);
-      const problems = await deps.sbx.problems(found, config, stored.knowledge, stored, reading);
-      return { result: { status: reading.status, config, stored, problems } };
+      const [reading, settings] = await Promise.all([deps.sbx.status(found), deps.sbx.settings(found)]);
+      const problems = await deps.sbx.problems(found, settings, stored.knowledge, stored, reading);
+      return { result: { status: reading.status, settings, stored, problems } };
     },
 
     "sbx-set-enabled": async (args, caller) => {
       const enabled = onOff(args, "value");
       // As the dialog's switch, locked where no agent runs on this machine.
       if (!enabled && !(await deps.sbx.anyAgentInstalled())) {
-        throw new ControlError("bad_args", "no agent is installed on this machine, so sandboxing cannot be switched off");
+        throw new ControlError("bad_args", "no agent is installed on this machine, so SBX cannot be disabled");
       }
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, enabled } }), true);
+      return editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, enabled } }), true);
     },
 
     "sbx-set-ports": (args, caller) => {
@@ -178,7 +178,7 @@ export function sbxVerbs(
         }
         return { host, container };
       });
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, ports } }));
+      return editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, ports } }));
     },
 
     "sbx-set-paths": (args, caller) => {
@@ -191,14 +191,14 @@ export function sbxVerbs(
         }
         return { path: absolute(entry.slice(0, at)), access };
       });
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, paths } }));
+      return editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, paths } }));
     },
 
     "sbx-set-hosts": (args, caller) => {
       const hosts = list(args, "hosts")
         .map((host) => host.trim())
         .filter(Boolean);
-      return editSbx(args, caller, ({ config }) => ({ config: { ...config, hosts } }));
+      return editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, hosts } }));
     },
 
     "sbx-set-secrets": (args, caller) => {
@@ -220,9 +220,9 @@ export function sbxVerbs(
           throw new ControlError("bad_args", `${refusal}: ${secret.env}`);
         }
       });
-      return editSbx(args, caller, ({ config }) => {
-        refuseVariables(config.variables, secrets);
-        return { config: { ...config, secrets } };
+      return editSbx(args, caller, ({ settings }) => {
+        refuseVariables(settings.variables, secrets);
+        return { settings: { ...settings, secrets } };
       });
     },
 
@@ -237,9 +237,9 @@ export function sbxVerbs(
       });
       const variables = entries.map(({ env }) => ({ env }));
       const variableValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
-      return editSbx(args, caller, ({ config }) => {
-        refuseVariables(variables, config.secrets);
-        return { config: { ...config, variables }, variableValues };
+      return editSbx(args, caller, ({ settings }) => {
+        refuseVariables(variables, settings.secrets);
+        return { settings: { ...settings, variables }, variableValues };
       });
     },
 

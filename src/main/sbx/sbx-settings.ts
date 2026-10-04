@@ -3,12 +3,12 @@ import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../
 import { projectRef, projectRefName } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { Project, ProjectRef } from "../../shared/types/project";
-import type { SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxStatus } from "../../shared/types/sbx";
+import type { SbxKnowledgeSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxStatus } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import { logFailure } from "../util/json-file";
 import { inTurn } from "../util/async";
 import { readSbxProblems } from "./sbx";
-import { saveSbxConfig, type SbxSaveTarget } from "./sbx-save";
+import { saveSbxSettings, type SbxSaveTarget } from "./sbx-save";
 import { listSandboxes, readPolicy, type SandboxList, type SbxReading } from "./sbx-status";
 import type { SbxLocalStore } from "./sbx-local";
 
@@ -29,8 +29,8 @@ interface ValueNames {
 /** A Save's check, for every agent's sandbox: all of it is applied now. */
 function checkProject(
   project: Project,
-  config: SbxProjectConfig,
-  knowledge: SbxKnowledgeConfig,
+  settings: SbxProjectSettings,
+  knowledge: SbxKnowledgeSettings,
   values: ValueNames,
   organization: string | undefined,
   sandboxes?: SandboxList,
@@ -38,7 +38,7 @@ function checkProject(
 ): Promise<SbxProblems> {
   return readSbxProblems({
     projectId: project.id,
-    config,
+    settings,
     knowledge,
     values: { secrets: new Set(values.secrets), variables: new Set(values.variables) },
     agents: SANDBOXED_AGENTS,
@@ -61,12 +61,12 @@ async function organizationOf(known: KnownOrganization | undefined): Promise<str
  */
 export async function readProjectSbxProblems(
   project: Project,
-  config: SbxProjectConfig,
-  knowledge: SbxKnowledgeConfig,
+  settings: SbxProjectSettings,
+  knowledge: SbxKnowledgeSettings,
   values: ValueNames,
   known?: Known
 ): Promise<SbxProblems> {
-  return checkProject(project, config, knowledge, values, await organizationOf(known), known?.sandboxes, known?.rules);
+  return checkProject(project, settings, knowledge, values, await organizationOf(known), known?.sandboxes, known?.rules);
 }
 
 /** The Save underway per project (saveProjectSbx). */
@@ -76,7 +76,7 @@ const saves = new Map<string, Promise<unknown>>();
  * The SBX Settings' Save, for both transports: the dialog (ipc/sbx.ts) and `tet-ctl`'s `sbx-set-*`
  * verbs. Stores the typed values first, so a machine without a keyring changes nothing. A row that
  * cannot be applied here (readSbxProblems) is neither saved nor applied, the rest is; what sbx then
- * refuses is left out too (saveSbxConfig), so tet.json holds what was applied, and only its rows
+ * refuses is left out too (saveSbxSettings), so tet.json holds what was applied, and only its rows
  * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
  * nothing marked them before. Notices for the sandboxes it removed. The project's worktrees take its tet.json (tet-json.ts's configRoot), so their
  * sandboxes are saved along. One Save at a time per project, each after the last however that one
@@ -86,7 +86,7 @@ const saves = new Map<string, Promise<unknown>>();
 export function saveProjectSbx(
   deps: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
   project: Project,
-  request: SbxProjectConfig,
+  request: SbxProjectSettings,
   local: SbxLocalSave,
   known?: KnownOrganization
 ): Promise<SbxSaveResult> {
@@ -96,7 +96,7 @@ export function saveProjectSbx(
 async function saveNow(
   { sbxLocal, notice }: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
   project: Project,
-  request: SbxProjectConfig,
+  request: SbxProjectSettings,
   local: SbxLocalSave,
   known?: KnownOrganization
 ): Promise<SbxSaveResult> {
@@ -123,17 +123,17 @@ async function saveNow(
         })
       : {};
     const wanted = withoutProblems(request, knowledge, problems);
-    const { removed, orphans, refused, failures, config, knowledge: applied } = await saveSbxConfig(
+    const { removed, orphans, refused, failures, settings, knowledge: applied } = await saveSbxSettings(
       { ref: { projectId: project.id }, path: project.path },
       worktrees,
-      wanted.config,
+      wanted.settings,
       { previous, current: wanted.knowledge },
       secretValues,
       new Set(Object.keys(local.secrets.values)),
       organization,
       sandboxes
     );
-    sbxLocal.update(project.id, { secrets: keptValues(config.secrets), variables: keptValues(config.variables), knowledge: applied });
+    sbxLocal.update(project.id, { secrets: keptValues(settings.secrets), variables: keptValues(settings.variables), knowledge: applied });
     for (const { ref, agentId } of removed) {
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed and is rebuilt when its next tab starts.`
@@ -151,7 +151,7 @@ async function saveNow(
     return unexpected.length > 0 ? { ok: false, error: unexpected.join("\n\n"), problems: left } : { ok: true, problems: left };
   } catch (error) {
     // What was stored before; failing that too, the first failure is still the one to tell.
-    logFailure("restore the sbx values", () => sbxLocal.restore(project.id, stored));
+    logFailure("restore the SBX settings", () => sbxLocal.restore(project.id, stored));
     return { ok: false, error: errorMessage(error) };
   }
 }

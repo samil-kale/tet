@@ -18,7 +18,7 @@ import {
   StashIcon,
   SyncIcon
 } from "../../ui/icons";
-import { FoldAllButton } from "../../ui/FoldAllButton";
+import { CollapseExpandAllButton } from "../../ui/CollapseExpandAllButton";
 import { useStoredToggle } from "../../ui/layout-storage";
 import { Section } from "../../ui/Section";
 
@@ -35,7 +35,7 @@ interface GitLaneProps {
    *  asked. */
   onOpenDiff: (path: string, how?: OpenEditor) => void;
   /** See BranchTree. */
-  onSelect: (key: string) => void;
+  onActivateRef: (refKey: string) => void;
 }
 
 /** The git lane: branches over the changed files, nothing else. */
@@ -47,9 +47,9 @@ export const GitLane = memo(function GitLane({
   treeHeight,
   onTreeHeight,
   onOpenDiff,
-  onSelect
+  onActivateRef
 }: GitLaneProps) {
-  const { acting, act, ask } = useFileAct(resolved.key);
+  const { acting, act, ask } = useFileAct(resolved.refKey);
   const changesRef = useRef<ChangesListHandle>(null);
   /** What the LOCAL CHANGES header's buttons stand for, reported by the list that holds the state. */
   const [checked, setChecked] = useState<string[]>([]);
@@ -59,15 +59,15 @@ export const GitLane = memo(function GitLane({
   // Hidden, the lane keeps the state it last showed: every push re-rendered the whole tree and list
   // for nobody. A repository or worktree switch is never held — the keyed views would get another
   // repository's.
-  const held = useRef({ key: resolved.key, state: latestState });
-  if (shown || held.current.key !== resolved.key) {
-    held.current = { key: resolved.key, state: latestState };
+  const held = useRef({ refKey: resolved.refKey, state: latestState });
+  if (shown || held.current.refKey !== resolved.refKey) {
+    held.current = { refKey: resolved.refKey, state: latestState };
   }
   const state = held.current.state;
 
   // Fetch, pull and push share the one action slot with discard and stash.
   const { remote, canSync } = syncRemote(state);
-  const locked = branch.busy || acting;
+  const locked = branch.locked || acting;
   // Named as GitHub Desktop names them: by the remote, not the branch. A local upstream is pulled
   // from, named by its branch, but pushed to the remote like any other.
   const pullFrom = state.branchUpstreams[state.head]?.remote ?? state.upstream;
@@ -77,7 +77,7 @@ export const GitLane = memo(function GitLane({
       {/* This section's bar — everything `branch.run` covers. */}
       <Section
         title="BRANCHES"
-        busy={branch.startedHere}
+        busy={branch.busy}
         height={treeHeight}
         actions={
           <>
@@ -111,11 +111,11 @@ export const GitLane = memo(function GitLane({
       >
         {/* Keyed: a menu left open across a switch of repository or worktree would act on the next one. */}
         <BranchTree
-          key={resolved.key}
+          key={resolved.refKey}
           resolved={resolved}
           state={state}
           branch={branch}
-          onSelect={onSelect}
+          onActivateRef={onActivateRef}
         />
       </Section>
       <Sash
@@ -159,14 +159,14 @@ export const GitLane = memo(function GitLane({
             <IconButton title={asTree ? "View as List" : "View as Tree"} onClick={() => setAsTree(!asTree)}>
               {asTree ? <ListIcon /> : <ListTreeIcon />}
             </IconButton>
-            <FoldAllButton expanded={expanded} disabled={!asTree || state.changes.length === 0} tree={changesRef} />
+            <CollapseExpandAllButton expanded={expanded} disabled={!asTree || state.changes.length === 0} tree={changesRef} />
           </>
         }
       >
-        {/* Keyed by repository or worktree: the checks and folds are keyed by paths that repeat
+        {/* Keyed by repository or worktree: the checks and expansions are keyed by paths that repeat
             across them. */}
         <ChangesList
-          key={resolved.key}
+          key={resolved.refKey}
           ref={changesRef}
           resolved={resolved}
           state={state}

@@ -29,7 +29,7 @@ const MODEL_ALIASES: AskModel[] = [
 
 export const claudeAgent: SandboxedAgent = {
   id: "claude",
-  displayName: "Claude",
+  displayName: "Claude Code",
   icon: claudeIcon,
   // Its input field is no shell: only a space needs quoting, in double quotes.
   quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),

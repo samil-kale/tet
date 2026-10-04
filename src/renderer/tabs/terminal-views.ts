@@ -5,7 +5,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
 import { Terminal } from "@xterm/xterm";
 import { CONTROL_START_SIZE } from "../../shared/control";
-import { projectRefKey } from "../../shared/types/project";
+import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
@@ -47,7 +47,7 @@ const views = new Map<string, TerminalView>();
 
 
 function viewKey(ref: ProjectRef, tabId: string): string {
-  return `${projectRefKey(ref)} ${tabId}`;
+  return `${refKeyOf(ref)} ${tabId}`;
 }
 
 /**
@@ -60,7 +60,7 @@ const MAX_EARLY_OUTPUT = 64 * 1024;
 
 
 // Output arrives batched: one message, and one flush, for every terminal.
-window.tet.terminals.onOutput((batch) => {
+window.tet.tabs.onOutput((batch) => {
   for (const { ref, tabId, data } of batch) {
     const key = viewKey(ref, tabId);
     const view = views.get(key);
@@ -72,7 +72,7 @@ window.tet.terminals.onOutput((batch) => {
   }
 });
 
-window.tet.terminals.onTextRequest((ref, tabId) => shownText(ref, tabId));
+window.tet.tabs.onTextRequest((ref, tabId) => shownText(ref, tabId));
 
 /**
  * What the tab's terminal shows, as text — its scrollback and screen, or a fullscreen TUI's screen
@@ -110,7 +110,7 @@ window.addEventListener("blur", () => {
   for (const view of views.values()) {
     if (view.focusOutHeld) {
       view.focusOutHeld = false;
-      window.tet.terminals.input(view.ref, view.tabId, FOCUS_OUT);
+      window.tet.tabs.input(view.ref, view.tabId, FOCUS_OUT);
     }
   }
 });
@@ -192,8 +192,8 @@ function copySelection(term: Terminal): boolean {
  */
 const webglPool = new WebglPool();
 
-/** The terminals in front of the user, as `showTerminal` and `hideTerminal` report them. */
-const inFront = new Set<string>();
+/** The terminals on screen, as `showTerminal` and `hideTerminal` report them. */
+const onScreen = new Set<string>();
 
 /** Decided once, on the first terminal; a failed attach anywhere turns it off for the session. */
 let webglAllowed: boolean | undefined;
@@ -281,7 +281,7 @@ function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void 
       releaseWebgl(view);
       // DOM cells measure differently: refit an on-screen terminal next frame, after the addon's
       // teardown. A hidden one is fitted on show, after `showTerminal` retries WebGL.
-      if (inFront.has(key)) {
+      if (onScreen.has(key)) {
         requestAnimationFrame(() => fitTerminal(ref, tabId));
       }
     });
@@ -290,7 +290,7 @@ function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void 
     // A new canvas stays blank until the next output otherwise.
     view.term.refresh(0, view.term.rows - 1);
   } catch (error) {
-    console.warn("[tet] WebGL unavailable, terminals draw through the DOM:", error);
+    console.warn("[TET] WebGL unavailable, terminals draw through the DOM:", error);
     webglAllowed = false;
     try {
       addon?.dispose();
@@ -349,7 +349,7 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
       view.focusOutHeld = false;
       return;
     }
-    window.tet.terminals.input(ref, tabId, data);
+    window.tet.tabs.input(ref, tabId, data);
   });
 
   // Runs before xterm encodes the key. Takes nothing an agent could receive (see `shortcuts.ts`):
@@ -362,7 +362,7 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) {
-        window.tet.terminals.input(ref, tabId, shiftEnter);
+        window.tet.tabs.input(ref, tabId, shiftEnter);
       }
       return false;
     }
@@ -418,7 +418,7 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
     container.appendChild(view.term.element);
   } else {
     view.term.open(container);
-    // A first open is a tab coming in front, before its host's fit (acquireWebgl). A moved tab keeps
+    // A first open is a tab coming on screen, before its host's fit (acquireWebgl). A moved tab keeps
     // its renderer: the canvas moves with the element.
     acquireWebgl(ref, tabId, view);
   }
@@ -484,13 +484,13 @@ export function fitTerminal(ref: ProjectRef, tabId: string): void {
     return;
   }
   view.sent = { cols, rows };
-  window.tet.terminals.resize(ref, tabId, cols, rows);
+  window.tet.tabs.resize(ref, tabId, cols, rows);
 }
 
-/** In front of the user; called before its fit, which then measures WebGL cells. */
+/** On screen; called before its fit, which then measures WebGL cells. */
 export function showTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
-  inFront.add(key);
+  onScreen.add(key);
   webglPool.show(key);
   const view = views.get(key);
   if (view) {
@@ -507,7 +507,7 @@ let trimQueued = false;
  */
 export function hideTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
-  inFront.delete(key);
+  onScreen.delete(key);
   if (!views.get(key)?.webgl) {
     return;
   }
@@ -586,8 +586,8 @@ function dropView(key: string, view: TerminalView): void {
  * The ptys are already dead (the host disposed the session manager); only buffers and DOM go.
  */
 export function disposeRefTerminals(ref: ProjectRef): void {
-  // A repository's or worktree's key holds no space: no other key starts with it plus the separator
-  // (shared/types/project.ts's projectRefKey).
+  // A repository's or worktree's refKey holds no space: no other refKey starts with it plus the separator
+  // (shared/types/project.ts's refKeyOf).
   const prefix = viewKey(ref, "");
   for (const key of [...earlyOutput.keys()]) {
     if (key.startsWith(prefix)) {

@@ -17,8 +17,8 @@ import type { EnvAsk } from "../../src/main/control/env-requests";
 import { tabControlToken } from "../../src/main/terminals/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/control";
 import { EMPTY_REPOSITORY_STATE, type FileChange, type GitActionResult, type WorktreeInfo } from "../../src/shared/types/git";
-import { type Project, type ProjectCommand, type ProjectRef, projectRefKey } from "../../src/shared/types/project";
-import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, type SbxKnowledgeConfig, type SbxLocalSave, type SbxProblems, type SbxProjectConfig, type SbxStatus } from "../../src/shared/types/sbx";
+import { type Project, type ProjectCommand, type ProjectRef, refKeyOf } from "../../src/shared/types/project";
+import { EMPTY_SBX_SETTINGS, EMPTY_SBX_KNOWLEDGE, type SbxKnowledgeSettings, type SbxLocalSave, type SbxProblems, type SbxProjectSettings, type SbxStatus } from "../../src/shared/types/sbx";
 import { type AppSettings, withSettings } from "../../src/shared/types/settings";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
@@ -50,9 +50,9 @@ const WORKTREE: ProjectRef = { projectId: PROJECT.id, worktree: "k4" };
 
 /** The worktrees of PROJECT's repository, as its repository state lists them. */
 const WORKTREES: WorktreeInfo[] = [
-  { path: "/repo/one", branch: "main", main: true, current: false },
-  { path: "/wt/four", branch: "four", base: "main", key: "k4", main: false, current: false },
-  { path: "/elsewhere/five", branch: "five", main: false, current: false }
+  { path: "/repo/one", branch: "main", isRepository: true, current: false },
+  { path: "/wt/four", branch: "four", base: "main", key: "k4", isRepository: false, current: false },
+  { path: "/elsewhere/five", branch: "five", isRepository: false, current: false }
 ];
 
 const OWN_TAB = "tab-own";
@@ -71,15 +71,15 @@ interface Calls {
   closed: string[];
   renamed: [string, string][];
   created: string[];
-  /** `[tabId, agentId, sandboxOnly]` per handoff. */
+  /** `[tabId, agentId, sandboxOnly]` per handover. */
   handedOff: [string, string, boolean][];
   commands: string[];
   added: string[];
   removed: string[];
-  /** `[projectId, branch]` per worktree-add, `[projectRefKey, force]` per worktree-delete. */
+  /** `[projectId, branch]` per worktree-add, `[refKey, force]` per worktree-delete. */
   worktreesAdded: [string, string][];
   worktreesDeleted: [string, boolean][];
-  /** `[projectRefKey, ref, fastForwardOnto]` per merge. */
+  /** `[refKey, ref, fastForwardOnto]` per merge. */
   merges: [string, string, string | undefined][];
   /** `[tabId, hostPaths]` per path handed to a tab. */
   handed: [string, string[]][];
@@ -98,7 +98,7 @@ interface Calls {
   envAsks: EnvAsk[];
   envWithdrawn: string[][];
   /** Per SBX Settings save, the project, the configuration and what stays on this machine. */
-  sbxSaved: [string, SbxProjectConfig, SbxLocalSave][];
+  sbxSaved: [string, SbxProjectSettings, SbxLocalSave][];
   /** The users sbx was signed in as with a kept access token. */
   sbxSignedIn: string[];
 }
@@ -130,7 +130,7 @@ interface Merging {
 let merging: Merging;
 
 /** Whether "tab-2" is mid-turn. */
-let tab2Busy: boolean;
+let tab2Working: boolean;
 
 /** What the window reported for the editor tabs of PROJECT's worktree. */
 let worktreeEditors: typeof EDITOR_LISTING;
@@ -166,9 +166,9 @@ const DIALOG_STAYS_OPEN = ["(stays open)"];
 /** The faked SBX Settings: sbx's status, and what a save leaves behind. */
 let sbxStatus: SbxStatus;
 
-let sbxConfig: SbxProjectConfig;
+let sbxSettings: SbxProjectSettings;
 
-let sbxKnowledge: SbxKnowledgeConfig;
+let sbxKnowledge: SbxKnowledgeSettings;
 
 /** What the faked check finds, and so what a save leaves out. */
 let sbxProblems: SbxProblems;
@@ -184,7 +184,7 @@ let sbxUser: string | undefined;
 /** Why the faked store could not keep a token sbx took. */
 let sbxNotKept: string | undefined;
 
-/** The terminals of the repository or a worktree, by its key. */
+/** The terminals of the repository or a worktree, by its `refKey`. */
 function terminalsOf(key: string): ControlTerminals {
   return {
     snapshot: () => [tab(OWN_TAB), tab("tab-2")],
@@ -192,7 +192,7 @@ function terminalsOf(key: string): ControlTerminals {
       calls.inspected.push(key);
       return [
         tab(OWN_TAB),
-        { ...tab("tab-2"), sessionId: tab2Session, reportedSessionId: "reported-2", sandbox: "tet-claude-abc", ...(tab2Busy && { busy: true }) }
+        { ...tab("tab-2"), sessionId: tab2Session, reportedSessionId: "reported-2", sandbox: "tet-claude-abc", ...(tab2Working && { inTurn: true }) }
       ];
     },
     // The caller's own tab is running: nothing to start or restart there.
@@ -214,9 +214,9 @@ function terminalsOf(key: string): ControlTerminals {
       return tab("tab-new");
     },
     // The caller's own tab has no session to hand over, as a fresh one has none.
-    handOff: async (tabId, agentId, sandboxOnly) => {
+    handOver: async (tabId, agentId, sandboxOnly) => {
       calls.handedOff.push([tabId, agentId, sandboxOnly]);
-      return tabId === OWN_TAB ? "This Shell tab has no session yet" : tab("tab-handoff");
+      return tabId === OWN_TAB ? "This Shell tab has no session yet" : tab("tab-handover");
     },
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
@@ -257,21 +257,21 @@ function deps(): ControlDeps {
     projects.some((project) => project.id === ref.projectId && (ref.worktree === undefined || project.worktrees.some((worktree) => worktree.key === ref.worktree)));
   return {
     records: {
-      editor: (ref) => (projectRefKey(ref) === PROJECT.id ? ACTIVE_EDITOR : undefined),
+      editor: (ref) => (refKeyOf(ref) === PROJECT.id ? ACTIVE_EDITOR : undefined),
       editors: (ref) =>
-        projectRefKey(ref) === PROJECT.id ? editorListing : projectRefKey(ref) === projectRefKey(WORKTREE) ? worktreeEditors : [],
+        refKeyOf(ref) === PROJECT.id ? editorListing : refKeyOf(ref) === refKeyOf(WORKTREE) ? worktreeEditors : [],
       notices: () => [{ severity: "error", message: "Could not delete", at: 1 }]
     },
     projectRefPath: (ref) => {
       const project = projects.find((entry) => entry.id === ref.projectId);
       return ref.worktree === undefined ? project?.path : project?.worktrees.find((worktree) => worktree.key === ref.worktree)?.path;
     },
-    editorContent: (ref) => Promise.resolve(projectRefKey(ref) === PROJECT.id ? "edited" : undefined),
+    editorContent: (ref) => Promise.resolve(refKeyOf(ref) === PROJECT.id ? "edited" : undefined),
     // The worktree's window question goes unanswered.
     terminalText: (ref, tabId) =>
-      Promise.resolve(projectRefKey(ref) !== PROJECT.id ? undefined : tabId === OWN_TAB ? `${"x".repeat(2048)}end` : "bold line\nnext"),
+      Promise.resolve(refKeyOf(ref) !== PROJECT.id ? undefined : tabId === OWN_TAB ? `${"x".repeat(2048)}end` : "bold line\nnext"),
     openEditor: (ref, filePath, keep) => {
-      calls.editorsOpened.push([projectRefKey(ref), filePath, keep]);
+      calls.editorsOpened.push([refKeyOf(ref), filePath, keep]);
     },
     version: "1.2.3",
     pid: 4242,
@@ -285,22 +285,22 @@ function deps(): ControlDeps {
       }
     },
     tabManagers: {
-      get: (ref) => (open(ref) ? terminalsOf(projectRefKey(ref)) : undefined)
+      get: (ref) => (open(ref) ? terminalsOf(refKeyOf(ref)) : undefined)
     },
     repositories: {
       get: (ref) =>
         open(ref)
           ? {
-              at: { path: projectRefKey(ref) },
+              at: { path: refKeyOf(ref) },
               getState: () => ({
                 ...EMPTY_REPOSITORY_STATE,
-                head: `main-of-${projectRefKey(ref)}`,
+                head: `main-of-${refKeyOf(ref)}`,
                 worktrees:
-                  ref.projectId === OTHER.id ? [] : WORKTREES.map((worktree) => (worktree.main ? { ...worktree, branch: merging.checkedOut } : worktree)),
+                  ref.projectId === OTHER.id ? [] : WORKTREES.map((worktree) => (worktree.isRepository ? { ...worktree, branch: merging.checkedOut } : worktree)),
                 ...(ref.worktree !== undefined && { operation: merging.operation, changes: merging.changes })
               }),
               merge: async (gitRef, fastForwardOnto) => {
-                calls.merges.push([projectRefKey(ref), gitRef, fastForwardOnto]);
+                calls.merges.push([refKeyOf(ref), gitRef, fastForwardOnto]);
                 if (fastForwardOnto !== undefined) {
                   return merging.forwardError === undefined ? { ok: true } : { ok: false, error: merging.forwardError };
                 }
@@ -312,7 +312,7 @@ function deps(): ControlDeps {
                 return merging.merge === "error" ? { ok: false, error: "fatal: refusing to merge unrelated histories" } : { ok: true };
               },
               conflictMarkers: async () => merging.markers,
-              listExplorer: async () => ({ files: [`${projectRefKey(ref)}.txt`], emptyDirs: [], compactFolders: true, sortOrder: "default" as const })
+              listExplorer: async () => ({ files: [`${refKeyOf(ref)}.txt`], emptyDirs: [], compactFolders: true, sortOrder: "default" as const })
             }
           : undefined
     },
@@ -337,7 +337,7 @@ function deps(): ControlDeps {
         : { project: { ...PROJECT, worktrees: [...PROJECT.worktrees, { path: `/wt/${branch}`, branch, key: "k5" }] }, worktree: "k5" };
     },
     deleteWorktree: async (worktree, force) => {
-      calls.worktreesDeleted.push([projectRefKey(worktree), force]);
+      calls.worktreesDeleted.push([refKeyOf(worktree), force]);
       return force ? { ok: true } : (merging.deleteRefused ?? { ok: true });
     },
     readCommands: async () => [{ command: "npm run build", name: "build" }, { command: "a && b" }],
@@ -345,7 +345,7 @@ function deps(): ControlDeps {
       calls.shutdown.push(relaunch);
     },
     showTab: (ref, tabId) => {
-      calls.shown.push([projectRefKey(ref), tabId]);
+      calls.shown.push([refKeyOf(ref), tabId]);
     },
     showDesktopNotification: (title, body, target) => {
       calls.desktopNotifications.push([title, body, target]);
@@ -376,24 +376,24 @@ function deps(): ControlDeps {
     sbx: {
       status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
-      config: async () => structuredClone(sbxConfig),
+      settings: async () => structuredClone(sbxSettings),
       stored: () => ({ secrets: ["API_KEY"], variables: [], knowledge: structuredClone(sbxKnowledge) }),
       problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);
-        sbxConfig = { ...request, hosts: request.hosts.filter((host) => sbxProblems.hosts?.[host] === undefined) };
+        sbxSettings = { ...request, hosts: request.hosts.filter((host) => sbxProblems.hosts?.[host] === undefined) };
         sbxKnowledge = local.knowledge;
         return { ok: true, problems: sbxProblems };
       },
       accounts: () => sbxAccounts.map((user) => ({ id: `id-${user}`, user })),
-      signedIn: async () => sbxStatus.loggedIn,
+      signedIn: async () => sbxStatus.signedIn,
       signedInUser: async () => sbxUser,
       signIn: async (account) => {
         if (sbxRefusal !== undefined) {
           return { signedIn: false, error: sbxRefusal };
         }
         calls.sbxSignedIn.push(account.user);
-        sbxStatus = { ...sbxStatus, loggedIn: true };
+        sbxStatus = { ...sbxStatus, signedIn: true };
         sbxUser = account.user;
         return sbxNotKept === undefined ? { signedIn: true, account } : { signedIn: true, error: sbxNotKept };
       }
@@ -474,7 +474,7 @@ describe("tet-ctl against the control server", () => {
         lightTheme: "light-modern",
         lanes: { pinned: ["projects"], order: ["projects", "git", "files"] }
       },
-      notifications: { finished: true, needsYou: true, idleReminder: false },
+      notifications: { finished: true, waiting: true, idleReminder: false },
       files: { editorKeybindingPreset: "tet" },
       git: {
         checkNewChanges: false,
@@ -483,21 +483,21 @@ describe("tet-ctl against the control server", () => {
         deleteTagOnRemote: false,
         deleteWorktreeOnRemote: false
       },
-      prompts: { texts: { commitMessage: "", handoff: "" }, commitSuggester: { agentId: "", model: "" } }
+      prompts: { texts: { commitMessage: "", handover: "" }, commitSuggester: { agentId: "", model: "" } }
     };
     for (const list of Object.values(calls)) {
       list.length = 0;
     }
     tab2Session = undefined;
-    tab2Busy = false;
+    tab2Working = false;
     worktreeEditors = [];
     merging = { checkedOut: "main", changes: [], markers: [], deleteRefused: { ok: false, needsConfirmation: "uncommitted" } };
     themeWaits = false;
     refuseRename = undefined;
     envNames = ["GITLAB_TOKEN"];
     dialogAnswer = undefined;
-    sbxStatus = { installed: true, loggedIn: true, policyInitialized: true, blockers: [] };
-    sbxConfig = { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
+    sbxStatus = { installed: true, signedIn: true, policyInitialized: true, blockers: [] };
+    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
     sbxKnowledge = EMPTY_SBX_KNOWLEDGE;
     sbxProblems = {};
     sbxAccounts = ["skale", "work"];
@@ -510,7 +510,7 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["help"], { [CONTROL_ENV.port]: undefined, [CONTROL_ENV.host]: undefined });
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
-    assert.match(run.stdout, /restart-app --confirm/);
+    assert.match(run.stdout, /app-restart --confirm/);
     // An agent's shell gives up on a command after its own timeout (Claude Code: 2 minutes), which
     // takes the dialog down before the user has seen it.
     assert.match(run.stdout, /env-request waits[^.]*timeout/);
@@ -530,7 +530,7 @@ describe("tet-ctl against the control server", () => {
     assert.match(run.stdout, /runs in an sbx sandbox/);
   });
 
-  it("says where it is when not inside a tet terminal", async () => {
+  it("says where it is when not inside a TET terminal", async () => {
     const run = await tetCtl(["version"], { [CONTROL_ENV.port]: undefined });
     assert.equal(run.status, EXIT_CODES.internal);
     assert.match(run.stderr, /not inside a TET terminal/);
@@ -610,7 +610,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("lists the themes with their kind", async () => {
-    const run = await tetCtl(["list-themes"]);
+    const run = await tetCtl(["themes-list"]);
     assert.equal(run.status, EXIT_CODES.ok);
     const themes = (run.result as { id: string; kind: string }[]).map(({ id, kind }) => `${id}:${kind}`);
     assert.deepEqual(themes, [
@@ -686,7 +686,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(settings.appearance.lanes.order, ["files", "git", "projects"]);
   });
 
-  it("sets a prompt's text, puts tet's own back without one, and refuses an unknown id", async () => {
+  it("sets a prompt's text, puts TET's own back without one, and refuses an unknown id", async () => {
     const set = await tetCtl(["settings-set-prompt", "commitMessage", "write a subject"]);
     assert.deepEqual(set.result, { saved: true });
     assert.equal(settings.prompts.texts.commitMessage, "write a subject");
@@ -699,7 +699,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("lists the keybinding presets", async () => {
-    const run = await tetCtl(["list-keybinding-presets"]);
+    const run = await tetCtl(["keybinding-presets-list"]);
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual((run.result as { id: string; label: string }[])[0], { id: "vscode", label: "VS Code (default)" });
   });
@@ -719,13 +719,13 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(on.result, { saved: true });
     const off = await tetCtl(["settings-set-notification", "finished", "off"]);
     assert.equal(off.status, EXIT_CODES.ok);
-    assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: true });
+    assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: true });
     const unknown = await tetCtl(["settings-set-notification", "errors", "on"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
     assert.match(unknown.stderr, /unknown notification: errors/);
-    const badValue = await tetCtl(["settings-set-notification", "needsYou", "yes"]);
+    const badValue = await tetCtl(["settings-set-notification", "waiting", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
-    assert.equal(settings.notifications.needsYou, true);
+    assert.equal(settings.notifications.waiting, true);
   });
 
   it("sets who suggests a commit message and refuses an agent or model that cannot", async () => {
@@ -737,7 +737,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
     const model = await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]);
     assert.equal(model.status, EXIT_CODES.usage);
-    assert.match(model.stderr, /unknown Claude model: gpt \(known: fable, opus, sonnet, haiku\)/);
+    assert.match(model.stderr, /unknown Claude Code model: gpt \(known: fable, opus, sonnet, haiku\)/);
     const shell = await tetCtl(["settings-set-commit-suggester", "shell"]);
     assert.equal(shell.status, EXIT_CODES.usage);
     assert.match(shell.stderr, /shell cannot suggest a commit message/);
@@ -752,19 +752,19 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(calls.inspected, [PROJECT.id]);
     await tetCtl(["tabs-list"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
-    assert.deepEqual(calls.inspected, [PROJECT.id, projectRefKey(WORKTREE)], "a worktree tab's is its worktree");
+    assert.deepEqual(calls.inspected, [PROJECT.id, refKeyOf(WORKTREE)], "a worktree tab's is its worktree");
   });
 
   it("finds a worktree TET made by its branch or key, never one made elsewhere", async () => {
-    const head = async (args: string[]): Promise<string> => ((await tetCtl(["repo-state", ...args])).result as { head: string }).head;
-    assert.equal(await head(["--worktree", "four"]), `main-of-${projectRefKey(WORKTREE)}`);
-    assert.equal(await head(["--worktree", "k4"]), `main-of-${projectRefKey(WORKTREE)}`);
+    const head = async (args: string[]): Promise<string> => ((await tetCtl(["repository-state", ...args])).result as { head: string }).head;
+    assert.equal(await head(["--worktree", "four"]), `main-of-${refKeyOf(WORKTREE)}`);
+    assert.equal(await head(["--worktree", "k4"]), `main-of-${refKeyOf(WORKTREE)}`);
     assert.equal(await head(["--project", PROJECT.id]), "main-of-p1", "--project alone is the repository");
     assert.equal(await head([]), "main-of-p1");
-    const foreign = await tetCtl(["repo-state", "--worktree", "five"]);
-    assert.equal(foreign.status, EXIT_CODES.usage);
-    assert.match(foreign.stderr, /not made by TET/);
-    assert.match((await tetCtl(["repo-state", "--worktree", "nope"])).stderr, /has no worktree nope/);
+    const madeElsewhere = await tetCtl(["repository-state", "--worktree", "five"]);
+    assert.equal(madeElsewhere.status, EXIT_CODES.usage);
+    assert.match(madeElsewhere.stderr, /made elsewhere/);
+    assert.match((await tetCtl(["repository-state", "--worktree", "nope"])).stderr, /has no worktree nope/);
   });
 
   it("takes a worktree tab's ids only with its own token", async () => {
@@ -777,13 +777,13 @@ describe("tet-ctl against the control server", () => {
     const fromWorktree = { [CONTROL_ENV.worktree]: WORKTREE.worktree };
     assert.equal((await tetCtl(["tabs-output", "tab-2", "--project", PROJECT.id], fromWorktree)).status, EXIT_CODES.ok, "its project's main");
     const sandboxed = { ...fromWorktree, [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    assertRefused(await tetCtl(["repo-state", "--project", PROJECT.id], sandboxed), /own repository or worktree/, "the repository from a worktree's sandbox");
-    assert.equal((await tetCtl(["repo-state"], sandboxed)).status, EXIT_CODES.ok, "its own");
+    assertRefused(await tetCtl(["repository-state", "--project", PROJECT.id], sandboxed), /own repository or worktree/, "the repository from a worktree's sandbox");
+    assert.equal((await tetCtl(["repository-state"], sandboxed)).status, EXIT_CODES.ok, "its own");
   });
 
   it("answers the repository's state for the caller's project, or the one given", async () => {
-    assert.equal(((await tetCtl(["repo-state"])).result as { head: string }).head, "main-of-p1");
-    assert.equal(((await tetCtl(["repo-state", "--project", OTHER.id])).result as { head: string }).head, "main-of-p2");
+    assert.equal(((await tetCtl(["repository-state"])).result as { head: string }).head, "main-of-p1");
+    assert.equal(((await tetCtl(["repository-state", "--project", OTHER.id])).result as { head: string }).head, "main-of-p2");
   });
 
   it("takes --project over the caller's own", async () => {
@@ -794,7 +794,7 @@ describe("tet-ctl against the control server", () => {
   it("refuses an unknown project", async () => {
     const run = await tetCtl(["tabs-list", "--project", "p9"]);
     assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /unknown project: p9/);
+    assert.match(run.stderr, /Project not found/);
   });
 
   it("needs a project when the caller has none", async () => {
@@ -827,17 +827,17 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("hands a tab's session to another agent and brings the new tab to the front", async () => {
-    assert.deepEqual((await tetCtl(["tabs-handoff", "tab-2", "--agent", "claude"])).result, tab("tab-handoff"));
+    assert.deepEqual((await tetCtl(["tabs-hand-over", "tab-2", "--agent", "claude"])).result, tab("tab-handover"));
     assert.deepEqual(calls.handedOff, [["tab-2", "claude", false]]);
-    assert.deepEqual(calls.shown, [[PROJECT.id, "tab-handoff"]]);
+    assert.deepEqual(calls.shown, [[PROJECT.id, "tab-handover"]]);
   });
 
   it("says why a session cannot be handed over, and refuses an agent it does not know", async () => {
-    const fresh = await tetCtl(["tabs-handoff", OWN_TAB, "--agent", "claude"]);
+    const fresh = await tetCtl(["tabs-hand-over", OWN_TAB, "--agent", "claude"]);
     assert.equal(fresh.status, EXIT_CODES.internal);
     assert.match(fresh.stderr, /no session yet/);
-    assert.equal((await tetCtl(["tabs-handoff", "tab-2", "--agent", "gpt"])).status, EXIT_CODES.usage);
-    assert.equal((await tetCtl(["tabs-handoff", "tab-2"])).status, EXIT_CODES.usage, "no agent");
+    assert.equal((await tetCtl(["tabs-hand-over", "tab-2", "--agent", "gpt"])).status, EXIT_CODES.usage);
+    assert.equal((await tetCtl(["tabs-hand-over", "tab-2"])).status, EXIT_CODES.usage, "no agent");
     assert.deepEqual(calls.shown, []);
   });
 
@@ -1014,7 +1014,7 @@ describe("tet-ctl against the control server", () => {
       ["settings-set-keybindings", "jetbrains"],
       ["settings-set-notification", "finished", "off"],
       ["settings-set-commit-suggester", "claude"],
-      ["restart-app", "--confirm"],
+      ["app-restart", "--confirm"],
       ["env-request", "GITLAB_TOKEN"],
       ["env-list"],
       ["env-remove", "GITLAB_TOKEN"],
@@ -1039,7 +1039,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("signs sbx in with a kept access token only, and says who is signed in", async () => {
-    sbxStatus = { ...sbxStatus, loggedIn: false };
+    sbxStatus = { ...sbxStatus, signedIn: false };
     assert.deepEqual((await tetCtl(["sbx-accounts"])).result, { signedIn: false, accounts: ["skale", "work"] });
     assert.equal((await tetCtl(["sbx-sign-in", "stranger"])).status, EXIT_CODES.usage, "no token kept for that user");
     sbxRefusal = "auth login failed: docker access-token request failed with status 400";
@@ -1058,7 +1058,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(hosts.result, { saved: true, restartRequired: false }, "a host applies at once");
     const [[projectId, request, local]] = calls.sbxSaved;
     assert.equal(projectId, PROJECT.id);
-    assert.deepEqual(request, { ...EMPTY_SBX_CONFIG, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }], hosts: ["example.com", "*.example.org:8080"] });
+    assert.deepEqual(request, { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }], hosts: ["example.com", "*.example.org:8080"] });
     assert.deepEqual(local, {
       secrets: { values: {}, from: { API_KEY: "API_KEY" } },
       variables: { values: {}, from: {} },
@@ -1067,14 +1067,14 @@ describe("tet-ctl against the control server", () => {
     const folder = path.resolve("/data/one");
     const paths = await tetCtl(["sbx-set-paths", `${folder}:ro`]);
     assert.deepEqual(paths.result, { saved: true, restartRequired: true }, "a mount is added at a tab's start");
-    assert.deepEqual(sbxConfig.paths, [{ path: folder, access: "ro" }]);
+    assert.deepEqual(sbxSettings.paths, [{ path: folder, access: "ro" }]);
     assert.equal((await tetCtl(["sbx-set-ports", "8080:80"])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxConfig.ports, [{ host: "8080", container: "80" }]);
+    assert.deepEqual(sbxSettings.ports, [{ host: "8080", container: "80" }]);
     assert.equal((await tetCtl(["sbx-set-variables", "DB_URL"])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxConfig.variables, [{ env: "DB_URL" }]);
+    assert.deepEqual(sbxSettings.variables, [{ env: "DB_URL" }]);
     assert.deepEqual(calls.sbxSaved.at(-1)?.[2].variables, { values: {}, from: { DB_URL: "DB_URL" } }, "a bare name types no value");
     assert.equal((await tetCtl(["sbx-set-variables", "DB_URL=a=b", "MODE="])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxConfig.variables, [{ env: "DB_URL" }, { env: "MODE" }]);
+    assert.deepEqual(sbxSettings.variables, [{ env: "DB_URL" }, { env: "MODE" }]);
     assert.deepEqual(
       calls.sbxSaved.at(-1)?.[2].variables,
       { values: { DB_URL: "a=b" }, from: { DB_URL: "DB_URL", MODE: "MODE" } },
@@ -1086,10 +1086,10 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["sbx-set-skills-folder"])).status, EXIT_CODES.ok, "no path: each agent's own");
     assert.deepEqual(sbxKnowledge, { ...EMPTY_SBX_KNOWLEDGE, skills: "ro" });
     assert.equal((await tetCtl(["sbx-set-hosts"])).status, EXIT_CODES.ok, "none clears them");
-    assert.deepEqual(sbxConfig.hosts, []);
+    assert.deepEqual(sbxSettings.hosts, []);
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
-      config: sbxConfig,
+      settings: sbxSettings,
       stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge },
       problems: {}
     });
@@ -1112,7 +1112,7 @@ describe("tet-ctl against the control server", () => {
     for (const args of refused) {
       assert.equal((await tetCtl(args)).status, EXIT_CODES.usage, args.join(" "));
     }
-    sbxStatus = { installed: true, loggedIn: false, policyInitialized: false, blockers: [] };
+    sbxStatus = { installed: true, signedIn: false, policyInitialized: false, blockers: [] };
     assert.match((await tetCtl(["sbx-set-enabled", "on"])).stderr, /not signed in/);
     assert.deepEqual(calls.sbxSaved, []);
   });
@@ -1121,20 +1121,20 @@ describe("tet-ctl against the control server", () => {
     sbxProblems = { hosts: { "closed.example.com": "Forbidden by governance" } };
     const saved = await tetCtl(["sbx-set-hosts", "open.example.com", "closed.example.com"]);
     assert.deepEqual(saved.result, { saved: true, restartRequired: false, notApplied: sbxProblems });
-    assert.deepEqual(sbxConfig.hosts, ["open.example.com"]);
+    assert.deepEqual(sbxSettings.hosts, ["open.example.com"]);
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
-      config: sbxConfig,
+      settings: sbxSettings,
       stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge },
       problems: sbxProblems
     });
   });
 
-  it("changes nothing but the switch while sandboxing is off", async () => {
-    sbxConfig = EMPTY_SBX_CONFIG;
+  it("changes nothing but the switch while SBX is disabled", async () => {
+    sbxSettings = EMPTY_SBX_SETTINGS;
     assert.match((await tetCtl(["sbx-set-hosts", "example.com"])).stderr, /sbx-set-enabled on first/);
     assert.deepEqual((await tetCtl(["sbx-set-enabled", "on"])).result, { saved: true, restartRequired: false });
-    assert.equal(sbxConfig.enabled, true);
+    assert.equal(sbxSettings.enabled, true);
   });
 
   it("changes no SBX Settings of a worktree, which takes its project's", async () => {
@@ -1154,7 +1154,7 @@ describe("tet-ctl against the control server", () => {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own project/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
-    for (const args of [["repo-state"], ["explorer-list"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
+    for (const args of [["repository-state"], ["explorer-list"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own repository or worktree/, args[0]);
       assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
@@ -1176,7 +1176,7 @@ describe("tet-ctl against the control server", () => {
       ["tabs-close", OWN_TAB],
       ["tabs-rename", OWN_TAB, "x"],
       ["tabs-output", OWN_TAB],
-      ["tabs-handoff", OWN_TAB, "--agent", "claude"]
+      ["tabs-hand-over", OWN_TAB, "--agent", "claude"]
     ]) {
       const run = await tetCtl(args, fromSandbox);
       assert.equal(run.status, EXIT_CODES.usage, args[0]);
@@ -1184,13 +1184,13 @@ describe("tet-ctl against the control server", () => {
     }
     assert.equal((await tetCtl(["tabs-rename", "tab-2", "x"], fromSandbox)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], fromSandbox)).result, { output: "bold line\nnext" });
-    assert.equal((await tetCtl(["tabs-handoff", "tab-2", "--agent", "claude"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["tabs-hand-over", "tab-2", "--agent", "claude"], fromSandbox)).status, EXIT_CODES.ok);
     assert.deepEqual(calls.handedOff, [["tab-2", "claude", true]], "held to the sandbox");
   });
 
   it("starts, restarts, presses keys and types in and waits on a sandboxed tab of its project, never a host tab", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    for (const args of [["tabs-start", OWN_TAB], ["tabs-restart", OWN_TAB], ["tabs-keys", OWN_TAB, "enter"], ["tabs-text", OWN_TAB, "hello"], ["tabs-wait", OWN_TAB, "--idle"]]) {
+    for (const args of [["tabs-start", OWN_TAB], ["tabs-restart", OWN_TAB], ["tabs-keys", OWN_TAB, "enter"], ["tabs-text", OWN_TAB, "hello"], ["tabs-wait", OWN_TAB, "--stopped"]]) {
       const run = await tetCtl(args, fromSandbox);
       assert.equal(run.status, EXIT_CODES.usage, args[0]);
       assert.match(run.stderr, /runs on this machine/, args[0]);
@@ -1342,15 +1342,15 @@ describe("tet-ctl against the control server", () => {
     assert.match(refused.stderr, /uncommitted changes/);
     assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"])).result, { deleted: "four" });
     assert.deepEqual(calls.worktreesDeleted, [
-      [projectRefKey(WORKTREE), false],
-      [projectRefKey(WORKTREE), true]
+      [refKeyOf(WORKTREE), false],
+      [refKeyOf(WORKTREE), true]
     ]);
   });
 
   it("deletes only a worktree TET made of the project, and never the caller's own", async () => {
     assert.match((await tetCtl(["worktree-delete", "main"])).stderr, /has no worktree main/);
     assert.match((await tetCtl(["worktree-delete", "four", "--project", OTHER.id])).stderr, /has no worktree four/);
-    assert.match((await tetCtl(["worktree-delete", "five"])).stderr, /not made by TET/);
+    assert.match((await tetCtl(["worktree-delete", "five"])).stderr, /made elsewhere/);
     const own = await tetCtl(["worktree-delete", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
     assert.match(own.stderr, /cannot delete itself/);
     assert.deepEqual(calls.worktreesDeleted, []);
@@ -1366,10 +1366,10 @@ describe("tet-ctl against the control server", () => {
       assert.equal(run.status, EXIT_CODES.ok, run.stderr);
       assert.deepEqual(run.result, { status: "merged", base: "main", branch: "four" });
       assert.deepEqual(calls.merges, [
-        [projectRefKey(WORKTREE), "main", undefined],
+        [refKeyOf(WORKTREE), "main", undefined],
         [PROJECT.id, "four", "main"]
       ]);
-      assert.deepEqual(calls.worktreesDeleted, [[projectRefKey(WORKTREE), false]]);
+      assert.deepEqual(calls.worktreesDeleted, [[refKeyOf(WORKTREE), false]]);
       assert.deepEqual(calls.handed, [], "nothing to resolve, nothing handed");
     });
 
@@ -1398,7 +1398,7 @@ describe("tet-ctl against the control server", () => {
     });
 
     it("refuses what it cannot merge, each time saying what to do, and changes nothing", async () => {
-      assert.match((await tetCtl(["worktree-agent-merge", "five"])).stderr, /not made by TET/);
+      assert.match((await tetCtl(["worktree-agent-merge", "five"])).stderr, /made elsewhere/);
       assert.match((await tetCtl(["worktree-agent-merge", "nine"])).stderr, /has no worktree nine/);
       merging.checkedOut = "develop";
       assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /has develop checked out, not four's base main: run "git switch main" there/);
@@ -1406,15 +1406,15 @@ describe("tet-ctl against the control server", () => {
       merging.changes = [{ path: "b.ts", status: "modified" }];
       assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /uncommitted changes, nothing was merged: have them committed or stashed/);
       merging.changes = [];
-      tab2Busy = true;
+      tab2Working = true;
       assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /mid-turn \(tab tab-2\), nothing was merged: wait until it is done/);
-      tab2Busy = false;
+      tab2Working = false;
       worktreeEditors = EDITOR_LISTING;
       assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /unsaved changes in a\.txt, nothing was merged: ask the user to save/);
       worktreeEditors = [];
       merging.merge = "error";
       assert.match((await tetCtl(["worktree-agent-merge", "four"])).stderr, /unrelated histories — four is unchanged/);
-      assert.deepEqual(calls.merges, [[projectRefKey(WORKTREE), "main", undefined]], "only the failed merge ran");
+      assert.deepEqual(calls.merges, [[refKeyOf(WORKTREE), "main", undefined]], "only the failed merge ran");
       assert.deepEqual(calls.worktreesDeleted, []);
     });
 
@@ -1473,14 +1473,14 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses to restart without --confirm", async () => {
-    const run = await tetCtl(["restart-app"]);
+    const run = await tetCtl(["app-restart"]);
     assert.equal(run.status, EXIT_CODES.usage);
     assert.match(run.stderr, /Ask the user/);
     assert.deepEqual(calls.shutdown, []);
   });
 
   it("answers, then restarts, with --confirm", async () => {
-    assert.deepEqual((await tetCtl(["restart-app", "--confirm"])).result, { restarting: true });
+    assert.deepEqual((await tetCtl(["app-restart", "--confirm"])).result, { restarting: true });
     await eventually("what the answer was followed by", () => calls.shutdown.length === 1);
     assert.deepEqual(calls.shutdown, [true]);
   });
@@ -1614,7 +1614,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.hooks, [], "none of them reached a tab");
   });
 
-  // The agent's turn waits on its hook, so a stalled tet must not hold it up for good.
+  // The agent's turn waits on its hook, so a stalled TET must not hold it up for good.
   it("gives up on a TET that accepts a hook and never answers", async () => {
     const stalled = http.createServer(() => undefined);
     await new Promise<void>((resolve) => stalled.listen(0, "127.0.0.1", () => resolve()));

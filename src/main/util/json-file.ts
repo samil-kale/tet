@@ -7,7 +7,7 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** One of tet's own files, parsed; undefined where there is none yet or it cannot be read — the
+/** One of TET's own files, parsed; undefined where there is none yet or it cannot be read — the
  *  store then starts empty, and its next save writes over it. The shape is the caller's to check. */
 export function readJson(file: string): unknown {
   try {
@@ -35,7 +35,7 @@ export function readRows<T>(
     : [];
 }
 
-/** Writes one of tet's own files as indented JSON, renamed into place; throws when it cannot. For a
+/** Writes one of TET's own files as indented JSON, renamed into place; throws when it cannot. For a
  *  store written from a Save someone waits on: its failure is theirs to see, and the store changes
  *  its contents only once the file has them. */
 export function writeJson(file: string, value: unknown): void {

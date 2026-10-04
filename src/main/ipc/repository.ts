@@ -5,6 +5,7 @@ import { effectivePrompt } from "../../shared/prompts";
 import { failure } from "../../shared/errors";
 import type { AgentId, AskModelsResult, SuggestionResult } from "../../shared/types/agents";
 import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "../../shared/types/files";
+import { EMPTY_REPOSITORY_STATE } from "../../shared/types/git";
 import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import {
@@ -18,7 +19,8 @@ import {
 import { cancelCommitSuggestion, suggestCommitMessage } from "../agents/commit-message";
 import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";
-import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
+import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
+import type { IpcDeps } from "./deps";
 
 /** Everything the git lane and the editor ask of one repository. */
 export function registerRepositoryIpc({
@@ -27,7 +29,7 @@ export function registerRepositoryIpc({
   repositories
 }: Pick<IpcDeps, "settings" | "store" | "repositories">): void {
   handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
-    return repositories.get(ref)?.getState() ?? MISSING_REPOSITORY;
+    return repositories.get(ref)?.getState() ?? { ...EMPTY_REPOSITORY_STATE, error: notOpenMessage(store, ref) };
   });
 
   handle("repository:refresh", (_event, ref: ProjectRef): void => {
@@ -40,7 +42,7 @@ export function registerRepositoryIpc({
     <A extends unknown[]>(run: (repository: Repository, ...args: A) => Promise<GitActionResult>) =>
     async (_event: IpcMainInvokeEvent, ref: ProjectRef, ...args: A): Promise<GitActionResult> => {
       const repository = repositories.get(ref);
-      return repository ? run(repository, ...args) : { ok: false, error: MISSING_REPOSITORY.error };
+      return repository ? run(repository, ...args) : { ok: false, error: notOpenMessage(store, ref) };
     };
 
   /** A write to the project's tet.json, which only its repository has (tet-json.ts's configRoot),
@@ -51,7 +53,7 @@ export function registerRepositoryIpc({
       const project = store.get(projectId);
       return project
         ? write(project.path, ...args).then(() => ({ ok: true }), failure)
-        : { ok: false, error: MISSING_REPOSITORY.error };
+        : { ok: false, error: PROJECT_NOT_FOUND };
     };
 
   handle("repository:checkout", inRepository((repository, target: CheckoutTarget) => repository.checkout(target)));
@@ -170,7 +172,7 @@ export function registerRepositoryIpc({
   handle("repository:read-file", async (_event, ref: ProjectRef, filePath: string): Promise<FileContent> => {
     const repository = repositories.get(ref);
     if (!repository) {
-      return { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false, error: MISSING_REPOSITORY.error };
+      return { path: filePath, content: "", mtimeMs: 0, binary: false, tooLarge: false, error: notOpenMessage(store, ref) };
     }
     return repository.readFile(filePath);
   });
@@ -180,7 +182,7 @@ export function registerRepositoryIpc({
     async (_event, ref: ProjectRef, filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> => {
       const repository = repositories.get(ref);
       if (!repository) {
-        return { ok: false, error: MISSING_REPOSITORY.error };
+        return { ok: false, error: notOpenMessage(store, ref) };
       }
       return repository.writeFile(filePath, content, expectedMtimeMs);
     }

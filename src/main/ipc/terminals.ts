@@ -1,36 +1,37 @@
 import { handle, on } from "./channels";
-import { projectRefKey } from "../../shared/types/project";
 import type { AgentId } from "../../shared/types/agents";
 import type { EditorReport, NoticeReport } from "../../shared/types/app";
 import type { GitActionResult } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
-import type { HandoffResult, TabDescriptor } from "../../shared/types/terminals";
+import type { HandoverResult, TabDescriptor } from "../../shared/types/terminals";
+import { notOpenMessage } from "../store/resolved-ref";
 import type { IpcDeps } from "./deps";
 
 /** The tab strip: the terminals themselves, plus what only the renderer knows about its editor
  *  tabs and shown notices. */
 export function registerTerminalsIpc({
+  store,
   tabManagers,
   records
-}: Pick<IpcDeps, "tabManagers" | "records">): void {
-  handle("terminals:list", (_event, ref: ProjectRef): TabDescriptor[] => {
+}: Pick<IpcDeps, "store" | "tabManagers" | "records">): void {
+  handle("tabs:list", (_event, ref: ProjectRef): TabDescriptor[] => {
     return tabManagers.get(ref)?.snapshot() ?? [];
   });
 
-  handle("terminals:create", (_event, ref: ProjectRef, agentId: AgentId): TabDescriptor => {
+  handle("tabs:create", (_event, ref: ProjectRef, agentId: AgentId): TabDescriptor => {
     const manager = tabManagers.get(ref);
     if (!manager) {
-      throw new Error(`Not open: ${projectRefKey(ref)}`);
+      throw new Error(notOpenMessage(store, ref));
     }
     return manager.createTab(agentId);
   });
 
-  handle("terminals:close", async (_event, ref: ProjectRef, tabIds: string[]): Promise<void> => {
+  handle("tabs:close", async (_event, ref: ProjectRef, tabIds: string[]): Promise<void> => {
     await tabManagers.get(ref)?.closeTabs(tabIds);
   });
 
   handle(
-    "terminals:rename",
+    "tabs:rename",
     async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
       const refused = await tabManagers.get(ref)?.renameTab(tabId, title);
       return refused === undefined ? { ok: true } : { ok: false, error: refused };
@@ -38,20 +39,20 @@ export function registerTerminalsIpc({
   );
 
   handle(
-    "terminals:handoff",
-    async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoffResult> => {
-      const handed = (await tabManagers.get(ref)?.handOff(tabId, agentId)) ?? `Not open: ${projectRefKey(ref)}`;
+    "tabs:handover",
+    async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> => {
+      const handed = (await tabManagers.get(ref)?.handOver(tabId, agentId)) ?? notOpenMessage(store, ref);
       return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
     }
   );
 
   // The window's restart (the tab menu, the environment dialog): a running tab quits first.
-  handle("terminals:restart", (_event, ref: ProjectRef, tabId: string): void => {
+  handle("tabs:restart", (_event, ref: ProjectRef, tabId: string): void => {
     tabManagers.get(ref)?.restartTab(tabId, true);
   });
 
-  /** The tab is in front of the user: clears its finished-turn mark. Only the renderer knows. */
-  on("terminals:seen", (_event, ref: ProjectRef, tabId: string) => {
+  /** The tab is on screen: clears its finished-turn mark. Only the renderer knows. */
+  on("tabs:seen", (_event, ref: ProjectRef, tabId: string) => {
     tabManagers.get(ref)?.markSeen(tabId);
   });
 
@@ -67,20 +68,20 @@ export function registerTerminalsIpc({
     records.addNotice(report);
   });
 
-  /** Tabs in front of the user get no turn notification. Only the renderer knows them. */
-  on("terminals:in-front", (_event, ref: ProjectRef | null, tabIds: string[]) => {
-    tabManagers.setInFront(ref, tabIds);
+  /** Tabs on screen get no turn notification. Only the renderer knows them. */
+  on("tabs:on-screen", (_event, ref: ProjectRef | null, tabIds: string[]) => {
+    tabManagers.setOnScreen(ref, tabIds);
   });
 
-  on("terminals:input", (_event, ref: ProjectRef, tabId: string, data: string) => {
+  on("tabs:input", (_event, ref: ProjectRef, tabId: string, data: string) => {
     tabManagers.get(ref)?.write(tabId, data);
   });
 
-  on("terminals:resize", (_event, ref: ProjectRef, tabId: string, cols: number, rows: number) => {
+  on("tabs:resize", (_event, ref: ProjectRef, tabId: string, cols: number, rows: number) => {
     tabManagers.get(ref)?.handleResize(tabId, cols, rows);
   });
 
-  handle("terminals:starting", (_event, ref: ProjectRef): boolean => {
+  handle("tabs:starting", (_event, ref: ProjectRef): boolean => {
     return tabManagers.get(ref)?.isStarting() ?? false;
   });
 

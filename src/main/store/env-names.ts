@@ -2,12 +2,12 @@ import { envNameKey } from "../../shared/env-rules";
 import { PLATFORM } from "../util/host-platform";
 
 /**
- * How the environment variables kept in tet (environment.ts) meet this machine's — apart from the
+ * How the environment variables kept in TET (environment.ts) meet this machine's — apart from the
  * store, so the control server and pty.ts reach it without electron. What a name may be is
  * src/shared/env-rules.ts, which the Settings' tab shares.
  */
 
-/** Names the variables a tab got from the ones kept in tet, so a tet started from that tab does
+/** Names the variables a tab got from the ones kept in TET, so a TET started from that tab does
  *  not take them for the machine's (`machineSets`). */
 export const KEPT_ENV_NAME = "TET_KEPT_ENV";
 
@@ -16,8 +16,8 @@ export function machineName(name: string): string {
   return envNameKey(name, PLATFORM.envNamesIgnoreCase);
 }
 
-/** Whether the environment tet was started with — what every tab would inherit — has the name. One
- *  a tet it was started from set itself (a tab of it running `npm start`) is not the machine's. */
+/** Whether the environment TET was started with — what every tab would inherit — has the name. One
+ *  a TET it was started from set itself (a tab of it running `npm start`) is not the machine's. */
 export function machineSets(name: string): boolean {
   const wanted = machineName(name);
   const inherited = (process.env[KEPT_ENV_NAME] ?? "").split(",").map(machineName);

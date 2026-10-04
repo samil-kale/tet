@@ -1,7 +1,7 @@
 import { safeStorage } from "electron";
 
 /**
- * A value encrypted by the OS and base64-wrapped, as tet's own files keep a token or a secret.
+ * A value encrypted by the OS and base64-wrapped, as TET's own files keep a token or a secret.
  * Throws when the OS offers no encryption — on Linux without a keyring, where safeStorage would fall
  * back to a fixed key.
  */

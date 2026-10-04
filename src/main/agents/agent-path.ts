@@ -10,7 +10,7 @@ import { logError } from "../util/error-log";
  * Puts the directories agents are installed in on `process.env.PATH`, at startup and on every
  * requirements re-check — the `<agent> --version` check, every terminal's env (buildEnv) and the
  * git process, which inherits it at the fork (main.ts waits for it), read it. A concurrent call
- * joins the running one. tet may be started by a desktop launcher whose
+ * joins the running one. TET may be started by a desktop launcher whose
  * PATH the login shell never extended (nvm, Homebrew, `~/.local/bin` live in `.zshrc`/`.bashrc`).
  *
  * On macOS/Linux the login shell's PATH *replaces* the inherited one (leftovers go last): an npm

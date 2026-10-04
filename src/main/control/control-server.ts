@@ -169,7 +169,7 @@ export async function startControlServer(
     res.on("error", () => undefined);
   });
 
-  // The OS reclaims a killed run's port, so EADDRINUSE means another tet is listening: let it surface.
+  // The OS reclaims a killed run's port, so EADDRINUSE means another TET is listening: let it surface.
   await bind(server, port);
 
   return {

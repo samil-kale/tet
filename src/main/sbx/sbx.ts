@@ -11,10 +11,10 @@ import {
   sbxPortKey,
   withoutProblems
 } from "../../shared/sbx-rules";
-import { projectRefKey } from "../../shared/types/project";
+import { refKeyOf } from "../../shared/types/project";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { SbxAccess, SbxKnowledgeConfig, SbxOption, SbxPort, SbxProblems, SbxProjectConfig, SbxSecret } from "../../shared/types/sbx";
+import type { SbxAccess, SbxKnowledgeSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings, SbxSecret } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/async";
@@ -43,7 +43,7 @@ import {
  * hyphens and periods.
  */
 export function sandboxName(ref: ProjectRef, agentId: AgentId): string {
-  return `tet-${agentId}-${idHash(projectRefKey(ref))}`;
+  return `tet-${agentId}-${idHash(refKeyOf(ref))}`;
 }
 
 /** An id's share of a sandbox name (a repository's or worktree's) and of a secret placeholder (a
@@ -82,12 +82,12 @@ export async function removeRefSandboxes(refs: ProjectRef[]): Promise<void> {
 /**
  * Ensures a sandbox whose one workspace is this repository or worktree — all else is mounted live,
  * so this is all `sbx create` is told. A different workspace means a rebuild: a repository moved
- * under the same id (`sandboxName` hashes the repository's or worktree's key, and `tet.id` travels
+ * under the same id (`sandboxName` hashes the repository's or worktree's `refKey`, and `tet.id` travels
  * with the repository). Nothing open can be attached to such a sandbox, so it is removed outright.
  * Returns whether it created one, which needs seeding from tet.json (prepareSbxRun's allowHosts).
  *
  * `--skills=off`: sbx otherwise binds its own skills store read-only at the agent's skills
- * directory (`~/.claude/skills`), the very target of tet's knowledge mount, which would stack over
+ * directory (`~/.claude/skills`), the very target of TET's knowledge mount, which would stack over
  * the store and leave it showing once unmounted. Create-time, so a sandbox keeps what it was made
  * with.
  *
@@ -101,28 +101,28 @@ export async function removeRefSandboxes(refs: ProjectRef[]): Promise<void> {
  */
 function ensureSandboxExists(
   agent: SandboxedAgent,
-  projectPath: string,
+  folder: string,
   name: string,
   sandboxes: SandboxList,
   onData?: OnData
 ): Promise<boolean> {
   const listed = sandboxes.get(name);
-  if (listed !== undefined && sameSet(listed, [projectPath])) {
+  if (listed !== undefined && sameSet(listed, [folder])) {
     return Promise.resolve(false);
   }
   return inTurn(sandboxSetups, name, async () => {
     const existing = ((await listSandboxes()) ?? sandboxes).get(name);
-    if (existing !== undefined && sameSet(existing, [projectPath])) {
+    if (existing !== undefined && sameSet(existing, [folder])) {
       return false;
     }
     if (existing !== undefined) {
       await removeSandbox(name, onData);
     }
-    const created = await runSbx(["create", agent.sandbox.kit ?? agent.id, projectPath, "--name", name, "--skills=off"], { onData });
+    const created = await runSbx(["create", agent.sandbox.kit ?? agent.id, folder, "--name", name, "--skills=off"], { onData });
     if (!created.ok) {
       throw new Error(`sbx could not create the ${agent.id} sandbox: ${sbxFailure(created, "sbx create")}`);
     }
-    // A new sandbox holds nothing of the one that had this name — and one removed outside tet
+    // A new sandbox holds nothing of the one that had this name — and one removed outside TET
     // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
     // forgotten. Kept here, the launcher would be skipped and the agent would run without hooks.
     launcherWritten.delete(name);
@@ -168,11 +168,11 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
  * rule lives in sbx's policy store, not the sandbox:
  * - the sandbox must *exist* but need not run, so no ensureRunning; both callers know it exists.
  * - the rule survives a stop and dies with `sbx rm`, so only a *new* sandbox is given tet.json's
- *   (prepareSbxRun); Save brings an existing one in line (saveSbxConfig), a rule set by hand
+ *   (prepareSbxRun); Save brings an existing one in line (saveSbxSettings), a rule set by hand
  *   included.
  * - RESOURCES is comma-separated, one process, idempotent per scope. A host allowed globally still
  *   gets its entry, so the list equals the dialog's.
- * - a change reaches a *running* sandbox at once, so saveSbxConfig applies it too.
+ * - a change reaches a *running* sandbox at once, so saveSbxSettings applies it too.
  * - on a governed account every local `policy allow` fails, so it is never asked there
  *   (readSbxProblems asks the organization's policy instead).
  * sbx refuses a URL or a space inside a name, which lands in `refused` like any refusal. Returns
@@ -250,9 +250,9 @@ export async function applyPortChanges(
 }
 
 /**
- * The placeholder a project's secret goes by in its sandboxes: fixed by tet (`--placeholder`), not
+ * The placeholder a project's secret goes by in its sandboxes: fixed by TET (`--placeholder`), not
  * sbx's random one, so it outlives a changed value and a rebuild, and `sbx run -e` can name it
- * without asking sbx. The prefix tells tet's secrets from ones set in the sandbox's scope by hand.
+ * without asking sbx. The prefix tells TET's secrets from ones set in the sandbox's scope by hand.
  */
 export function secretPlaceholder(projectId: string, env: string): string {
   return `${secretPrefix(projectId)}${env}`;
@@ -274,7 +274,7 @@ export interface LiveSecret {
  * - the proxy swaps the placeholder for the value in any request header to a listed host, Basic
  *   auth's base64 included (so git over HTTPS works), never in the URL or body, never for another
  *   host; the swap reaches a *running* sandbox at once.
- * - sbx sets `--env` in the sandbox only at `sbx create`, so tet leaves it out and passes the
+ * - sbx sets `--env` in the sandbox only at `sbx create`, so TET leaves it out and passes the
  *   placeholder itself with `sbx run -e` (prepareSbxRun), which reaches an existing sandbox too.
  * - `sbx rm` removes the sandbox's secrets with it, and sbx never gives a value back: a new sandbox
  *   is seeded from this machine's store (sbx-local.ts).
@@ -322,13 +322,13 @@ interface SbxRunRequest {
   agent: SandboxedAgent;
   /** Its sandbox's name (SandboxPlace.name). */
   name: string;
-  /** The repository or worktree the tab runs in; its sandbox is its own, its sbx values the
+  /** The repository or worktree the tab runs in; its sandbox is its own, its SBX settings the
    *  project's. */
   ref: ProjectRef;
   projectRefPath: string;
-  config: SbxProjectConfig;
+  settings: SbxProjectSettings;
   /** This machine's knowledge for the project (SbxLocalStore.knowledge). */
-  knowledge: SbxKnowledgeConfig;
+  knowledge: SbxKnowledgeSettings;
   /** What `checkSbxReady` just listed, so it is not listed again. */
   sandboxes: SandboxList;
   /** The organization managing sbx's policy, as `checkSbxReady` read it (readSbxProblems). */
@@ -345,9 +345,9 @@ interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentSandbox.env` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
-  /** This machine's values of `config.secrets`, by env name (SbxLocalStore.values). */
+  /** This machine's values of `settings.secrets`, by env name (SbxLocalStore.values). */
   secretValues: ReadonlyMap<string, string>;
-  /** This machine's values of `config.variables`, likewise. */
+  /** This machine's values of `settings.variables`, likewise. */
   variableValues: ReadonlyMap<string, string>;
   /** Where this agent's sessions land on the host; created if missing, rw, re-applied per spawn. */
   sessionMounts?: SbxSessionMount[];
@@ -359,28 +359,28 @@ interface SbxRunRequest {
  * A sandboxed tab's variables for `sbx run -e`: the agent's own and each secret's placeholder as
  * `NAME=value` (`env`), each variable only by name (`passed`, its value for the environment the
  * caller spawns `sbx run` with, as the control channel's are), since the process list shows a
- * command line and a variable's value is real. A variable a name of tet's own or a secret already
+ * command line and a variable's value is real. A variable a name of TET's own or a secret already
  * holds is left out — tet.json and the dialog refuse one, a hand-edited file may not — as is a
  * secret or variable without a value on this machine (a problem, readSbxProblems).
  */
 export function sandboxEnv({
   ref,
-  config,
+  settings,
   env: agentEnv = [],
   secretValues,
   variableValues
-}: Pick<SbxRunRequest, "ref" | "config" | "env" | "secretValues" | "variableValues">): {
+}: Pick<SbxRunRequest, "ref" | "settings" | "env" | "secretValues" | "variableValues">): {
   env: string[];
   passed: Record<string, string>;
 } {
-  const secrets = config.secrets.filter((secret) => secretValues.has(secret.env));
+  const secrets = settings.secrets.filter((secret) => secretValues.has(secret.env));
   const taken = new Set([
     ...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))),
     ...Object.values(CONTROL_ENV),
-    ...config.secrets.map((secret) => secret.env)
+    ...settings.secrets.map((secret) => secret.env)
   ]);
   const passed: Record<string, string> = {};
-  for (const { env: name } of config.variables.filter((variable) => !taken.has(variable.env))) {
+  for (const { env: name } of settings.variables.filter((variable) => !taken.has(variable.env))) {
     const value = variableValues.get(name);
     if (value !== undefined) {
       passed[name] = value;
@@ -393,14 +393,14 @@ export function sandboxEnv({
 }
 
 /**
- * Readies a tab's sandbox and returns the `sbx run` arguments: tet's mounts, knowledge and Allowed
+ * Readies a tab's sandbox and returns the `sbx run` arguments: TET's mounts, knowledge and Allowed
  * paths, ports, secrets and variables (sandboxEnv: `env` for the caller to spawn `sbx run` with),
  * and with a control channel its env and the `tet-ctl` launcher. Creates the sandbox itself
  * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent.
  * Applies tet.json as it stands and never writes it: what cannot be applied here
  * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
  * tell (sbxProblemNotices) — how a user learns that governance took over. Rejects when creating
- * fails, sbx cannot say what applies (readSbxProblems) or a folder of tet's own cannot be mounted.
+ * fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's own cannot be mounted.
  */
 export async function prepareSbxRun(
   request: SbxRunRequest
@@ -428,12 +428,12 @@ async function readySandboxRun(
   const { projectId } = request.ref;
   const { name } = request;
   // Ports, hosts and secrets only reach a sandbox this call created: they survive a stop, and after
-  // that a Save brings them in line (saveSbxConfig). A port another sandbox of the project forwards
+  // that a Save brings them in line (saveSbxSettings). A port another sandbox of the project forwards
   // is in place already (applyProjectPorts).
-  const forwarded = created && request.config.ports.length > 0 ? await readProjectPorts(projectId, request.sandboxes) : new Set<string>();
+  const forwarded = created && request.settings.ports.length > 0 ? await readProjectPorts(projectId, request.sandboxes) : new Set<string>();
   const problems = await readSbxProblems({
     projectId,
-    config: request.config,
+    settings: request.settings,
     knowledge: request.knowledge,
     values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
     agents: [agent],
@@ -442,9 +442,9 @@ async function readySandboxRun(
     ports: created,
     published: forwarded
   });
-  const { config, knowledge } = withoutProblems(request.config, request.knowledge, problems);
-  const { env, passed } = sandboxEnv({ ...request, config });
-  // tet's own folders are not skipped: without them the agent has no hook settings or listable
+  const { settings, knowledge } = withoutProblems(request.settings, request.knowledge, problems);
+  const { env, passed } = sandboxEnv({ ...request, settings });
+  // TET's own folders are not skipped: without them the agent has no hook settings or listable
   // sessions, silently. Everything else is in place by here, so a refusal is sbx's policy, and the
   // tab stops with sbx's reason in its output.
   const own = [
@@ -452,12 +452,12 @@ async function readySandboxRun(
     ...worktreeMountSpecs(request.projectRefPath),
     ...(await sessionMountSpecs(request.sessionMounts ?? []))
   ];
-  const grants = await grantsOf(agent, knowledge, config.paths);
+  const grants = await grantsOf(agent, knowledge, settings.paths);
   // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
   const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
   const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
   if (ownFailed.length > 0) {
-    throw new Error(`sbx did not mount tet's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
+    throw new Error(`sbx did not mount TET's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
   }
   for (const grant of grants) {
     const reason = refused.get(grant.mount);
@@ -468,14 +468,14 @@ async function readySandboxRun(
   if (created) {
     // Not under governance, where no local rule applies (allowHosts).
     if (!request.organization) {
-      addProblems(problems, "hosts", await allowHosts(name, config.hosts, onData));
+      addProblems(problems, "hosts", await allowHosts(name, settings.hosts, onData));
     }
     // Not `sbx run -p`: the sandbox always exists by here, and `run --name` drops `-p` on an
     // existing one.
-    const added = config.ports.filter((port) => !forwarded.has(sbxPortKey(port)));
+    const added = settings.ports.filter((port) => !forwarded.has(sbxPortKey(port)));
     addProblems(problems, "ports", await applyPortChanges(name, { removed: [], added }, onData));
     // The sandbox's secrets went with any earlier one of its name.
-    addProblems(problems, "secrets", await applySecrets(name, projectId, config.secrets, secretValues, [], new Set(), onData));
+    addProblems(problems, "secrets", await applySecrets(name, projectId, settings.secrets, secretValues, [], new Set(), onData));
   }
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged. The agent positional is only
@@ -509,7 +509,7 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
   if (!sandboxes) {
     throw new Error("SBX could not list the sandboxes.");
   }
-  // A worktree forwards no ports (tet-json.ts's readSbxConfig): only the repository's sandboxes.
+  // A worktree forwards no ports (tet-json.ts's readSbxSettings): only the repository's sandboxes.
   const names = SANDBOXED_AGENTS.map((agent) => sandboxName({ projectId }, agent.id)).filter((name) => sandboxes.has(name));
   const published = await Promise.all(names.map(readSandboxPorts));
   if (published.includes(undefined)) {
@@ -521,8 +521,8 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
 /** What readSbxProblems checks: the rows, and what this machine holds for them. */
 interface SbxCheck {
   projectId: string;
-  config: SbxProjectConfig;
-  knowledge: SbxKnowledgeConfig;
+  settings: SbxProjectSettings;
+  knowledge: SbxKnowledgeSettings;
   /** The env names holding a value here: stored, or typed at this Save. */
   values: { secrets: ReadonlySet<string>; variables: ReadonlySet<string> };
   /** Whose knowledge is mounted: every agent at Save, the starting one at its spawn. */
@@ -545,7 +545,7 @@ interface SbxCheck {
  * session's start (which skips them and tells, prepareSbxRun). As far as it can be known before
  * applying; what sbx refuses then is a problem too.
  * - hosts: only under governance, asked of the organization's policy (readHostAllowed), as no
- *   local rule applies there (allowHosts). Without it tet adds the rule.
+ *   local rule applies there (allowHosts). Without it TET adds the rule.
  * - paths and knowledge: must exist, and sbx's filesystem rules allow the mount with its access
  *   (sbx-policy.ts's prediction: sbx has no `policy check` for them).
  * - ports: the host port is free, unless one of the project's sandboxes holds it.
@@ -555,12 +555,12 @@ interface SbxCheck {
  * could not be asked about is no refusal.
  */
 export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
-  const { config, knowledge, values, organization } = check;
+  const { settings, knowledge, values, organization } = check;
   const forbidden = forbiddenBy(organization);
   const problems: SbxProblems = {};
   const add = (option: SbxOption, row: string, reason: string): void => addProblems(problems, option, { [row]: reason });
   const kinds = SBX_KNOWLEDGE_KINDS.filter((kind) => knowledge[kind] !== false);
-  const secretHosts = [...new Set(config.secrets.flatMap((secret) => secret.hosts))];
+  const secretHosts = [...new Set(settings.secrets.flatMap((secret) => secret.hosts))];
   // A host both allowed and a secret's is asked once.
   const asked = new Map<string, Promise<boolean>>();
   const allowed = (host: string): Promise<boolean> => {
@@ -569,12 +569,12 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     return pending;
   };
   const reachable = async (host: string): Promise<boolean> =>
-    (!organization && config.hosts.includes(host)) || (await allowed(host));
+    (!organization && settings.hosts.includes(host)) || (await allowed(host));
   const [rules, hostsAllowed, secretHostsAllowed, published, own] = await Promise.all([
-    config.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readPolicy().then((policy) => policy?.rules)) : Promise.resolve([]),
-    organization ? Promise.all(config.hosts.map(allowed)) : Promise.resolve(config.hosts.map(() => true)),
+    settings.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readPolicy().then((policy) => policy?.rules)) : Promise.resolve([]),
+    organization ? Promise.all(settings.hosts.map(allowed)) : Promise.resolve(settings.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
-    check.published ?? (check.ports && config.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),
+    check.published ?? (check.ports && settings.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),
     Promise.all(check.agents.map((agent) => sandboxKnowledgeFor(agent, knowledge.skillsFolder)))
   ]);
   if (rules === undefined) {
@@ -592,26 +592,26 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   }
   if (check.ports) {
     const free = await Promise.all(
-      config.ports.map((port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host)))
+      settings.ports.map((port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host)))
     );
-    config.ports.forEach((port, index) => free[index] || add("ports", sbxPortKey(port), SBX_PROBLEM.portInUse));
+    settings.ports.forEach((port, index) => free[index] || add("ports", sbxPortKey(port), SBX_PROBLEM.portInUse));
   }
-  for (const entry of config.paths) {
+  for (const entry of settings.paths) {
     if (!existsSync(normalizeHostPath(entry.path))) {
       add("paths", entry.path, SBX_PROBLEM.missing);
     } else if (!mountable(entry.path, entry.access)) {
       add("paths", entry.path, forbidden);
     }
   }
-  config.hosts.forEach((host, index) => hostsAllowed[index] || add("hosts", host, forbidden));
-  for (const secret of config.secrets) {
+  settings.hosts.forEach((host, index) => hostsAllowed[index] || add("hosts", host, forbidden));
+  for (const secret of settings.secrets) {
     if (!values.secrets.has(secret.env)) {
       add("secrets", secret.env, SBX_PROBLEM.noValue);
     } else if (secret.hosts.some((host) => !secretHostsAllowed[secretHosts.indexOf(host)])) {
       add("secrets", secret.env, forbidden);
     }
   }
-  for (const variable of config.variables) {
+  for (const variable of settings.variables) {
     if (!values.variables.has(variable.env)) {
       add("variables", variable.env, SBX_PROBLEM.noValue);
     }

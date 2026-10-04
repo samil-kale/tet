@@ -16,14 +16,14 @@ import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals
 import type { ResolvedRef } from "../store/resolved-ref";
 import { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";
-import { readSbxConfig } from "../store/tet-json";
+import { readSbxSettings } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";
 import { checkSbxReady } from "../sbx/sbx-status";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../store/settings";
 import { TerminalSession } from "./terminal-session";
 import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
-import type { HandoffFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
+import type { HandoverFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
 import { reportApplies } from "./turn-order";
 import {
   answersQuestion,
@@ -69,7 +69,7 @@ interface AgentRuntime {
   startable: boolean;
   /**
    * No host executable — startable only through the repository's or worktree's sandbox, with
-   * nothing to fall back to. Decided with the project's config; whether the sandbox is *reachable*
+   * nothing to fall back to. Decided with the project's SBX settings; whether the sandbox is *reachable*
    * is resolvePlace's question, per spawn.
    */
   sbxOnly: boolean;
@@ -94,10 +94,10 @@ export interface SessionManagerCallbacks {
   onNotice: (severity: NoticeSeverity, message: string) => void;
 }
 
-/** A handoff's first prompt: the settings' text, then whose transcript it is and where this start
+/** A handover's first prompt: the settings' text, then whose transcript it is and where this start
  *  sees it. */
-function handoffPrompt(text: string, handoff: HandoffFiles, files: string[]): string {
-  return `${text}\n\nThe previous agent: ${getAgent(handoff.from).displayName}. Its session files: ${files.join(", ")}`;
+function handoverPrompt(text: string, handover: HandoverFiles, files: string[]): string {
+  return `${text}\n\nThe previous agent: ${getAgent(handover.from).displayName}. Its session files: ${files.join(", ")}`;
 }
 
 /** One line, as cmd.exe passes a multi-line argument cut short (ask.ts puts its question on stdin). */
@@ -165,14 +165,14 @@ export class TabSessionManager {
     (show) => this.callbacks.onStartupProgress(this.at.ref, show),
     () => this.postTabs()
   );
-  /** The tabs in front of the user, as last reported (`setInFront`). */
-  private inFront: ReadonlySet<string> = new Set();
+  /** The tabs on screen, as last reported (`setOnScreen`). */
+  private onScreen: ReadonlySet<string> = new Set();
 
   constructor(
-    /** The repository or worktree its tabs run in. Its sandboxes take the project's sbx values
+    /** The repository or worktree its tabs run in. Its sandboxes take the project's SBX settings
      *  (sbx-local.ts), as it takes the project's tet.json (tet-json.ts's configRoot). */
     readonly at: ResolvedRef,
-    private readonly storageRoot: string,
+    private readonly dataRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
@@ -288,7 +288,7 @@ export class TabSessionManager {
       runtime.reconciler = new ReconcileScheduler({
         reconcile: () => this.reconcile(runtime),
         titlesUnsettled: () => this.titlesUnsettled(runtime),
-        working: () => this.tabs.some((tab) => tab.agentId === agentId && tab.busy),
+        working: () => this.tabs.some((tab) => tab.agentId === agentId && tab.inTurn),
         disposed: () => this.disposed
       });
     }
@@ -311,7 +311,7 @@ export class TabSessionManager {
   private placeContext(agent: AgentDefinition, executable: string): PlaceContext {
     return {
       at: this.at,
-      storageRoot: this.storageRoot,
+      dataRoot: this.dataRoot,
       agent,
       executable,
       onNotice: (severity, message) => this.callbacks.onNotice(severity, message)
@@ -337,9 +337,9 @@ export class TabSessionManager {
 
     if (agent.install) {
       runtime.startable = await agentInstalled(agent, cwd);
-      // Not here, but the project's sandbox has the CLI. Only the config is read — checkSbxReady
+      // Not here, but the project's sandbox has the CLI. Only the settings are read — checkSbxReady
       // talks to Docker and stays on the spawn (resolvePlace).
-      if (!runtime.startable && runtime.sandbox && (await readSbxConfig(cwd)).enabled) {
+      if (!runtime.startable && runtime.sandbox && (await readSbxSettings(cwd)).enabled) {
         this.markSbxOnly(runtime);
       }
     }
@@ -369,7 +369,7 @@ export class TabSessionManager {
     if (this.disposed) {
       return;
     }
-    // Runs again for an agent startable later (sbxConfigChanged): skip sessions already on screen,
+    // Runs again for an agent startable later (sbxSettingsChanged): skip sessions already on screen,
     // reported but unclaimed, or still being deleted (as in reconcile). A tab's id too: a restored
     // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
     const known = new Set([
@@ -399,11 +399,11 @@ export class TabSessionManager {
 
   /**
    * tet.json was written, by anyone (tet-json.ts's PROJECT_FILE). Picked up now, not at the next
-   * start: `addProject` opens the project before the dialog switching sandboxing on shows, and a
+   * start: `addProject` opens the project before the dialog enabling SBX shows, and a
    * machine with no agent would sit at an empty project. Only unstartable runtimes are acted on.
-   * `enabled` is the file's sbx switch, read once for every repository and worktree (main.ts).
+   * `enabled` is whether the file enables SBX, read once for every repository and worktree (main.ts).
    */
-  async sbxConfigChanged(enabled: boolean): Promise<void> {
+  async sbxSettingsChanged(enabled: boolean): Promise<void> {
     const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => runtime.sandbox !== undefined);
     if (this.disposed || sbxRuntimes.length === 0) {
       return;
@@ -469,9 +469,9 @@ export class TabSessionManager {
   /**
    * A tab of `agentId` taking over this tab's session: the session's files as the agent keeps them,
    * and a prompt to read them (prompts.ts). This tab stays as it is. Answers what went wrong
-   * rather than notifying it, as renameTab does: `tabs-handoff` fails with it, the window notifies.
+   * rather than notifying it, as renameTab does: `tabs-hand-over` fails with it, the window notifies.
    */
-  async handOff(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<TabDescriptor | string> {
+  async handOver(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<TabDescriptor | string> {
     const tab = this.tabOf(tabId);
     if (!tab) {
       return "The tab is closed";
@@ -491,15 +491,15 @@ export class TabSessionManager {
     if (files.length === 0) {
       return `The ${agent.displayName} session's files were not found`;
     }
-    const handoff = { from: tab.agentId, sessionId, files, within: actions?.root };
-    return this.addTab(agentId, { handoff, ...(sandboxOnly && { sandboxOnly }) });
+    const handover = { from: tab.agentId, sessionId, files, within: actions?.root };
+    return this.addTab(agentId, { handover, ...(sandboxOnly && { sandboxOnly }) });
   }
 
   /** Where this tab's pasted or dropped content without a path is written (TabPlace.dropsDir); a
    *  closed tab's in the project's host folder. */
   dropsDir(tabId: string): string {
     const tab = this.tabOf(tabId);
-    return tab ? this.placeOf(tab).dropsDir() : dropsDir(this.storageRoot, this.at.ref.projectId);
+    return tab ? this.placeOf(tab).dropsDir() : dropsDir(this.dataRoot, this.at.ref.projectId);
   }
 
   /** Paths of this machine where the tab sees them (TabPlace.handPaths). A closed tab sees
@@ -520,10 +520,10 @@ export class TabSessionManager {
     return (await this.seenPaths(tabId, hostPaths)).map((handed) => agent.quotePath(handed));
   }
 
-  /** The first prompt's arguments, a handoff's naming `files` as this start sees them. */
-  private promptArgs(tab: TabState, agent: AgentDefinition, files = tab.handoff?.files ?? []): string[] {
-    const prompt = tab.handoff
-      ? handoffPrompt(effectivePrompt(this.settings.get().prompts.texts, "handoff"), tab.handoff, files)
+  /** The first prompt's arguments, a handover's naming `files` as this start sees them. */
+  private promptArgs(tab: TabState, agent: AgentDefinition, files = tab.handover?.files ?? []): string[] {
+    const prompt = tab.handover
+      ? handoverPrompt(effectivePrompt(this.settings.get().prompts.texts, "handover"), tab.handover, files)
       : tab.initialPrompt;
     return prompt !== undefined && agent.terminal ? agent.terminal.initialPromptArgs(singleLine(prompt)) : [];
   }
@@ -625,8 +625,8 @@ export class TabSessionManager {
         const dims = this.lastSizes.get(tabId);
         if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
           // Closed while the setup ran: nothing reads a copy it made.
-          if (launch.handoffDir !== undefined) {
-            this.removeHandoffCopy(launch.handoffDir);
+          if (launch.handoverDir !== undefined) {
+            this.removeHandoverCopy(launch.handoverDir);
           }
           return;
         }
@@ -665,7 +665,7 @@ export class TabSessionManager {
    * A session runs where it lives: a host session fails to resume in a sandbox. A tab with no
    * `sessionId` yet is sandboxed.
    *
-   * Sbx not ready starts nothing and says so, leaving `error` for Restart: a sandboxing project
+   * Sbx not ready starts nothing and says so, leaving `error` for Restart: a project with SBX enabled
    * never runs an agent on this machine behind the user's back (past an organization's policy).
    * Nor is `enabled: false` written back: `sbx ls` fails the same way while the daemon restarts.
    * And never `sbx run` regardless: it prints its interactive sign-in and policy setup.
@@ -686,10 +686,10 @@ export class TabSessionManager {
     if (!sandbox) {
       return onHost;
     }
-    const config = await readSbxConfig(this.at.path);
-    if (!config.enabled) {
+    const sbxSettings = await readSbxSettings(this.at.path);
+    if (!sbxSettings.enabled) {
       // A notice only for a tab that cannot run on this machine.
-      return this.sbxStranded(tab, "sandboxing is switched off for the project") ? "stranded" : onHost;
+      return this.sbxStranded(tab, "SBX is disabled for the project") ? "stranded" : onHost;
     }
     // Started before it is known whether it may be used, since it is the slowest step and the
     // readiness check answers nothing it depends on (why that is safe: ensureRunning). Not for a
@@ -723,14 +723,14 @@ export class TabSessionManager {
         this.sbxPreexistingSaid = true;
         this.callbacks.onNotice(
           "info",
-          `${agent.displayName} tabs from before SBX was enabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`
+          `${agent.displayName} tabs started while SBX was disabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`
         );
       }
       return onHost;
     }
     const { projectId } = this.at.ref;
     return sandbox.starting({
-      config,
+      settings: sbxSettings,
       ready,
       warm,
       idleReminder: this.settings.get().notifications.idleReminder,
@@ -741,21 +741,21 @@ export class TabSessionManager {
     });
   }
 
-  /** What a start hands its place: this tab's arguments, its handoff, where its output goes. */
+  /** What a start hands its place: this tab's arguments, its handover, where its output goes. */
   private launchInput(tab: TabState): LaunchInput {
     const { agent } = this.runtimeFor(tab.agentId);
     return {
       agentArgs: (files) => [...resumeArgsOf(tab, agent), ...this.promptArgs(tab, agent, files)],
-      handoff: tab.handoff,
+      handover: tab.handover,
       onData: (data) => this.reportOutput(tab, data)
     };
   }
 
   /** Not awaited: nothing reads the copy once its tab is gone. */
-  private removeHandoffCopy(dir: string): void {
+  private removeHandoverCopy(dir: string): void {
     fs.promises
       .rm(dir, { recursive: true, force: true })
-      .catch((error: unknown) => logError("could not delete a handoff's copy", error));
+      .catch((error: unknown) => logError("could not delete a handover's copy", error));
   }
 
   /**
@@ -811,7 +811,7 @@ export class TabSessionManager {
 
     // Given once: a restart resumes the session the prompt began.
     tab.initialPrompt = undefined;
-    tab.handoff = undefined;
+    tab.handover = undefined;
     const moved = this.placeOf(tab).sandbox !== place.sandbox;
     tab.place = place;
     // The status alone posts no tabs, and the window's badge follows where the tab runs
@@ -819,7 +819,7 @@ export class TabSessionManager {
     if (moved) {
       this.postTabs();
     }
-    tab.handoffDir = launch.handoffDir ?? tab.handoffDir;
+    tab.handoverDir = launch.handoverDir ?? tab.handoverDir;
 
     const session = new TerminalSession(
       launch.executable,
@@ -859,8 +859,8 @@ export class TabSessionManager {
           if (status === "stopped" || status === "error" || status === "missing") {
             runtime.reconciler?.schedule();
             // A CLI killed mid-turn never reports its end.
-            if (current && (tab.busy || tab.waitingAt !== undefined)) {
-              tab.busy = false;
+            if (current && (tab.inTurn || tab.waitingAt !== undefined)) {
+              tab.inTurn = false;
               tab.waitingAt = undefined;
               this.postTabs();
             }
@@ -979,8 +979,8 @@ export class TabSessionManager {
       if (detached) {
         this.detachedTabs.splice(this.detachedTabs.indexOf(tab), 1);
       }
-      if (tab.handoffDir !== undefined) {
-        this.removeHandoffCopy(tab.handoffDir);
+      if (tab.handoverDir !== undefined) {
+        this.removeHandoverCopy(tab.handoverDir);
       }
     }
     const sessionId = tab.sessionId;
@@ -1038,7 +1038,7 @@ export class TabSessionManager {
   /**
    * A saved command respawns in place (`TerminalSession.restart`). An agent tab with no process
    * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: the sandbox and
-   * its mounts may have changed outside tet, so checks, sandbox and mounts are redone and the
+   * its mounts may have changed outside TET, so checks, sandbox and mounts are redone and the
    * session resumed. With
    * `running`, a running one quits first, then takes the same path — only the window asks that
    * (the tab menu, the environment dialog), never `tabs-restart`, which would let an agent end
@@ -1093,14 +1093,14 @@ export class TabSessionManager {
   }
 
   /**
-   * A tab's hook report — how turns reach tet ("Turns and tab marks" in AGENTS.md); only a turn
+   * A tab's hook report — how turns reach TET ("Turns and tab marks" in AGENTS.md); only a turn
    * the user cut short is ended otherwise (reconcile, AgentSessionInfo.turnEndedAt).
    * Addressed by tab (`TET_TAB_ID` in the hook's environment, passed into a sandbox by
    * prepareSbxRun), so no turn is reported for a session no tab has claimed.
    *
    * Answers the agent's stdout and the notification, composed here so settings are read at the event, not
-   * baked in at setup. Showing a mark is the renderer's call; no notification for a tab in front
-   * (`setInFront`).
+   * baked in at setup. Showing a mark is the renderer's call; no notification for a tab on screen
+   * (`setOnScreen`).
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined, side: ControlSide): HookOutcome {
     const listed = this.tabOf(tabId);
@@ -1137,7 +1137,7 @@ export class TabSessionManager {
     }
     // A stale report gets no mark and no notification, which would contradict the marks — "Finished" over
     // a tab working again (turn-order.ts).
-    const fresh = reportApplies(tab.signalAt, at);
+    const fresh = reportApplies(tab.turnReportAt, at);
     // A report sent before the exit can arrive after it (Codex's aborted hook, an extension's post, a
     // sandbox's latency) and would mark a tab whose process is gone until the next stop.
     const exited = tab.status === "stopped" || tab.status === "error";
@@ -1173,9 +1173,9 @@ export class TabSessionManager {
         if (!fresh || exited) {
           return {};
         }
-        // Not through setTurn: the turn is still open, `busy` is untouched.
+        // Not through setTurn: the turn is still open, `inTurn` is untouched.
         tab.waitingAt = at;
-        tab.signalAt = at;
+        tab.turnReportAt = at;
         this.postTabs();
         return { notification: this.notification(tab, event) };
       case "answered":
@@ -1184,7 +1184,7 @@ export class TabSessionManager {
           return {};
         }
         tab.waitingAt = undefined;
-        tab.signalAt = at;
+        tab.turnReportAt = at;
         this.postTabs();
         return {};
       case "idle":
@@ -1196,7 +1196,7 @@ export class TabSessionManager {
 
   /**
    * Records the session a report names, for a tab with none or one that moved on (`/clear`, `/new`,
-   * `/resume`). Whatever the turn marks' age (`signalAt`), but
+   * `/resume`). Whatever the turn marks' age (`turnReportAt`), but
    * ordered against the reports naming sessions (turn-order.ts): a late hook of the session left
    * behind would take it back. Reconcile claims it once listed; the session left behind becomes its
    * own tab next start.
@@ -1218,13 +1218,13 @@ export class TabSessionManager {
 
   /** Settings read now, so a switch applies to the next turn of every open project. */
   private notification(tab: TabState, kind: "finished" | "permission" | "question" | "idle"): HookNotification | undefined {
-    // As with the marks: a tab in front was never out of sight.
-    if (this.inFront.has(tab.tabId)) {
+    // As with the marks: a tab on screen was never out of sight.
+    if (this.onScreen.has(tab.tabId)) {
       return undefined;
     }
     const { notifications } = this.settings.get();
     const wanted =
-      kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.needsYou;
+      kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.waiting;
     if (!wanted) {
       return undefined;
     }
@@ -1236,16 +1236,16 @@ export class TabSessionManager {
       case "finished":
         return { title: `${name}: Finished`, body: `Finished in ${where}` };
       case "permission":
-        return { title: `${name}: Action needed`, body: `Waiting for input in ${where}` };
+        return { title: `${name}: Waiting for an answer`, body: `Waiting for an answer in ${where}` };
       case "question":
-        return { title: `${name}: Question`, body: `Waiting for your answer in ${where}` };
+        return { title: `${name}: Question`, body: `Waiting for an answer in ${where}` };
       case "idle":
         return { title: `${name}: Still waiting`, body: `No response yet in ${where}` };
     }
   }
 
   /**
-   * A tab in front has its finished turn seen. A question stays: it ends with an answer (`write`,
+   * A tab on screen has its finished turn seen. A question stays: it ends with an answer (`write`,
    * `answered`) or the turn (setTurn).
    */
   markSeen(tabId: string): void {
@@ -1258,8 +1258,8 @@ export class TabSessionManager {
   }
 
   /** Tabs on screen in a focused, uncovered window, as only the renderer knows — no notification there. */
-  setInFront(tabIds: readonly string[]): void {
-    this.inFront = new Set(tabIds);
+  setOnScreen(tabIds: readonly string[]): void {
+    this.onScreen = new Set(tabIds);
   }
 
   /** Whether a tab of the agent still waits for its session or title. Not `tabsOf`, which
@@ -1324,8 +1324,8 @@ export class TabSessionManager {
       tab.provisionalTitle = info.provisionalTitle;
       // No Stop hook fires for a turn the user cut short; the transcript has the end. Only a
       // later end than the turn's start counts, and it leaves no mark — the user was in that tab.
-      if (tab.busy && info.turnEndedAt !== undefined && info.turnEndedAt > (tab.busySince ?? 0)) {
-        tab.busy = false;
+      if (tab.inTurn && info.turnEndedAt !== undefined && info.turnEndedAt > (tab.turnStartedAt ?? 0)) {
+        tab.inTurn = false;
         // A question can only stand within a turn, as in setTurn.
         tab.waitingAt = undefined;
         changed = true;

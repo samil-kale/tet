@@ -2,7 +2,7 @@
  * Which terminals may hold a WebGL context, apart from xterm and the DOM so the rules run in node
  * (test/renderer/webgl-pool.test.ts). Contexts live in terminal-views.ts; keys are its view keys.
  *
- * A terminal in front of the user always gets one; a hidden one only while among the most recently
+ * A terminal on screen always gets one; a hidden one only while among the most recently
  * hidden — each costs GPU memory, and switching back to a warm one shows no DOM frame.
  */
 
@@ -28,7 +28,7 @@ export class WebglPool {
   private readonly hidden: string[] = [];
   private readonly losses = new Map<string, number[]>();
 
-  /** In front of the user: no longer counts against the hidden budget. */
+  /** On screen: no longer counts against the hidden budget. */
   show(key: string): void {
     this.remove(key);
   }

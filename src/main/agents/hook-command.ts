@@ -8,7 +8,7 @@ import type { HookEvent } from "../../shared/control";
  * cmd.exe on win32). All three resolve a bare name off PATH; anything richer differs between them.
  * The launchers making the name resolve are control-launcher.ts's.
  *
- * The event is tet's vocabulary; each agent's setup maps its own events onto it.
+ * The event is TET's vocabulary; each agent's setup maps its own events onto it.
  */
 export function hookCommand(event: HookEvent): string {
   return `tet-ctl hook ${event}`;

@@ -15,7 +15,7 @@ import {
   serializeLayout,
   snapTab,
   snapZoneAt,
-  tabsInFront,
+  tabsOnScreen,
   visibleTabIds
 } from "../../src/renderer/tabs/pane-layout";
 import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
@@ -30,7 +30,7 @@ function tab(tabId: string, updatedAt?: number, sessionId?: string): TabDescript
 
 const NONE: TabDescriptor[] = [];
 
-describe("tabsInFront", () => {
+describe("tabsOnScreen", () => {
   it("is every pane's shown tab, and none without the focus or under a dialog", () => {
     const layout: ProjectLayout = {
       ...defaultLayout(),
@@ -38,9 +38,9 @@ describe("tabsInFront", () => {
       tabPane: { t1: "a", t2: "b", t3: "b" },
       activeTab: { a: "t1", b: "t2" }
     };
-    assert.deepEqual(tabsInFront(layout, true, false), ["t1", "t2"]);
-    assert.deepEqual(tabsInFront(layout, false, false), [], "another window in front, or minimized");
-    assert.deepEqual(tabsInFront(layout, true, true), [], "a dialog over the window");
+    assert.deepEqual(tabsOnScreen(layout, true, false), ["t1", "t2"]);
+    assert.deepEqual(tabsOnScreen(layout, false, false), [], "another window in front, or minimized");
+    assert.deepEqual(tabsOnScreen(layout, true, true), [], "a dialog over the window");
   });
 });
 
@@ -613,7 +613,7 @@ describe("an editor tab", () => {
     assert.equal(collapseEmpty(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs).preset, "cols2");
   });
 
-  it("is the active one when in front of the focused pane, else the first on screen, else the last kept", () => {
+  it("is the active one when shown in the focused pane, else the first on screen, else the last kept", () => {
     const e2 = nextEditorTabId();
     const editors = [EDITOR_TAB_ID, e2];
     const tabs = [tab("t1", 1), editor, { ...editor, tabId: e2 }];

@@ -77,7 +77,7 @@ export interface SessionProvider {
   /** Renames the persisted title; rejects on failure. */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void>;
   /** The files holding the session's transcript, as the agent keeps them, for another agent to
-   *  read (a handoff). [] where there are none. */
+   *  read (a handover). [] where there are none. */
   files(cwd: string, sessionId: string): Promise<string[]>;
   /** Calls `onChange` when this repository's or worktree's sessions change, so the manager
    *  re-lists without waiting for a tab's output. */
@@ -194,7 +194,7 @@ export interface AgentTurns {
   questionOutlivesTurn?: boolean;
   /**
    * Whether a `stop` report leaves the session working: its turn ended, but work it started runs on
-   * and reports back in a turn of its own. The tab stays busy, no notification. Omitted: `stop` ends it.
+   * and reports back in a turn of its own. The tab stays working, no notification. Omitted: `stop` ends it.
    */
   workOutlivesStop?(payload: string): boolean;
   /**
@@ -241,7 +241,7 @@ export interface AgentSandbox {
    * Absolute container path where the sandboxed CLI reads `~/.agents/skills`, the skills folder no
    * agent owns: mounted whether or not the agent is installed here, unless one of its own skills
    * folders already takes that target (sbx-mounts.ts's sandboxKnowledgeFor). Omitted by an agent
-   * that does not read that folder — tet never stands it in for one the CLI does read.
+   * that does not read that folder — TET never stands it in for one the CLI does read.
    */
   sharedSkillsTarget?: string;
   /**

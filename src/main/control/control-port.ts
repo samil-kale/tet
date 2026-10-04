@@ -11,7 +11,7 @@ function hashPort(dataRoot: string): number {
 }
 
 /**
- * Derived from the data folder (data-root.ts), so two accounts, or a test profile beside the tet it
+ * Derived from the data folder (data-root.ts), so two accounts, or a test profile beside the TET it
  * runs in, get ports of their own. Probed by binding: Windows excludes pieces of the dynamic range,
  * failing with `EACCES`, and keeps them long enough to reuse the probed port. Not OS-assigned: the
  * port must be in every terminal's environment (setControlEnv) before the server starts.

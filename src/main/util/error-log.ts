@@ -23,7 +23,7 @@ export function openErrorLog(file: string): void {
  *  notification); never throws. The console gets it too, for tests driving the app. */
 export function logError(line: string, error?: unknown): void {
   const detail = error === undefined ? "" : `\n${error instanceof Error ? (error.stack ?? String(error)) : String(error)}`;
-  appendLog(`[tet] ${line} ${new Date().toISOString()}${detail}\n`);
+  appendLog(`[TET] ${line} ${new Date().toISOString()}${detail}\n`);
 }
 
 /** Writes an entry as it stands, to the console and errors.log; never throws. */

@@ -8,13 +8,13 @@ import { runWithFollowUp, type FileAct, type FileAsk } from "../../git/run-actio
 import { baseName, extensionOf, parentOf } from "../../paths";
 import { openEntries, pathEntries } from "../../editor/file-menu";
 import { buildTree, compactTree, compareGrouped, compareNames, filesByNode, foldersIn, sortTree, visibleRows, type TreeNode } from "../../ui/tree";
-import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, Twistie, type CheckState } from "../../ui/tree-row";
+import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, ChevronBox, type CheckState } from "../../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
 import { askLogin } from "../../git/GitLogin";
 import { Checkbox, SuggestField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
-import type { FoldAll } from "../../ui/FoldAllButton";
+import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 import { notify } from "../../ui/Notices";
 
 interface ChangesListProps {
@@ -30,14 +30,14 @@ interface ChangesListProps {
   /** What the header's Commit and Discard act on, reported as it changes: the checked files the
    *  filter shows — one it hides is never committed or discarded unseen. */
   onChecked: (paths: string[]) => void;
-  /** What the header's fold button does next, reported as it changes: collapse while a folder
-   *  under the root is open, else expand. */
+  /** What the header's collapse/expand button does next, reported as it changes: collapse while a
+   *  folder under the root is expanded, else expand. */
   onExpanded: (expanded: boolean) => void;
   ref?: React.Ref<ChangesListHandle>;
 }
 
-/** For the LOCAL CHANGES header's fold button. */
-export type ChangesListHandle = FoldAll;
+/** For the LOCAL CHANGES header's collapse/expand button. */
+export type ChangesListHandle = CollapseExpandAll;
 
 const STATUS_LETTER: Record<ChangeStatus, string> = {
   modified: "M",
@@ -186,7 +186,7 @@ export const ChangesList = memo(function ChangesList({
   const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
   /** The files listed last, so a later one is told from those already there. */
   const listed = useRef<ReadonlySet<string>>(new Set());
-  /** Folders start open; only what was folded is kept. */
+  /** Folders start expanded; only what was collapsed is kept. */
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const menu = useContextMenu<TreeNode>();
 
@@ -251,9 +251,9 @@ export const ChangesList = memo(function ChangesList({
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   useImperativeHandle(ref, () => ({
-    // Folders start open, so nothing folded is everything open.
+    // Folders start expanded, so nothing collapsed is everything expanded.
     expandAll: () => setExpanded({}),
-    // The root stays open: what is folded is every folder under it.
+    // The root stays expanded: what is collapsed is every folder under it.
     collapseAll: () => setExpanded(Object.fromEntries(foldersIn(root.children!).map((id) => [id, false])))
   }));
 
@@ -290,7 +290,7 @@ export const ChangesList = memo(function ChangesList({
     const ignore = (scope: "file" | "extension") => () =>
       act(() => window.tet.repository.ignore(resolved.ref, change.path, scope));
     const entries: ContextMenuEntry[] = [
-      { label: "Open diff", run: () => onOpenDiff(change.path) },
+      { label: "Open Changes", run: () => onOpenDiff(change.path) },
       ...openEntries(resolved.ref, change.path, true, true, (how) => onOpenDiff(change.path, how)),
       ...pathEntries(resolved, [change.path], "file path")
     ];
@@ -308,7 +308,7 @@ export const ChangesList = memo(function ChangesList({
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
       <div className="tree">
         {changes.length > 0 &&
-          rows.map(({ node, depth, open }) => {
+          rows.map(({ node, depth, expanded: isExpanded }) => {
             const change = node.children ? undefined : byPath.get(node.path);
             const box = <TreeCheckbox checked={checkState(node)} onToggle={() => toggleChecked(node)} />;
             return (
@@ -325,7 +325,7 @@ export const ChangesList = memo(function ChangesList({
                 onClick={
                   change
                     ? () => onOpenDiff(change.path)
-                    : () => setExpanded((current) => ({ ...current, [node.id]: !open }))
+                    : () => setExpanded((current) => ({ ...current, [node.id]: !isExpanded }))
                 }
                 // As the Explorer: a single click previews, a double click keeps.
                 onDoubleClick={change ? () => onOpenDiff(change.path, { keep: true }) : undefined}
@@ -333,13 +333,13 @@ export const ChangesList = memo(function ChangesList({
                 icon={
                   change ? (
                     <>
-                      <Twistie />
+                      <ChevronBox />
                       {box}
                       <span className={`tree-icon change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
                     </>
                   ) : (
                     <>
-                      <Twistie open={open} />
+                      <ChevronBox expanded={isExpanded} />
                       {box}
                     </>
                   )

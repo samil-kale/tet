@@ -4,7 +4,7 @@ import { DialogFrame } from "../ui/DialogFrame";
 /** The command to try in a terminal on the left, what the check found on the right. */
 function RequirementRow({ requirement }: { requirement: Requirement }) {
   return (
-    <div className="requirement-item">
+    <div className="requirement-row">
       <span className="requirement-command">{requirement.command}</span>
       <span className={requirement.installed ? "requirement-state found" : "requirement-state"}>
         {requirement.installed ? "Installed" : "Missing"}
@@ -16,22 +16,22 @@ function RequirementRow({ requirement }: { requirement: Requirement }) {
 interface RequirementsDialogProps {
   requirements: Requirements;
   /** A check is running: the header's bar meanwhile. */
-  checking: boolean;
+  busy: boolean;
   onRecheck: () => void;
 }
 
 /** What is missing. Not in Dialog.tsx: a wall, not a question — it stands until the programs are
  *  there, with no Escape. Installs nothing: no command works on all three platforms. */
-export function RequirementsDialog({ requirements, checking, onRecheck }: RequirementsDialogProps) {
+export function RequirementsDialog({ requirements, busy, onRecheck }: RequirementsDialogProps) {
   return (
     <DialogFrame
       // No cancel: nothing stands behind this yet.
       header={{ title: "Missing requirements" }}
-      busy={checking}
+      busy={busy}
       // The check only reads, so Quit stays open while it runs.
       locked={false}
       actions={[{ label: "Quit", secondary: true, run: () => window.tet.startup.quit() }]}
-      primary={{ label: "Check again", disabled: checking, run: onRecheck }}
+      primary={{ label: "Check again", disabled: busy, run: onRecheck }}
     >
       <p className="dialog-message">Git is required:</p>
       <div className="requirement-list">

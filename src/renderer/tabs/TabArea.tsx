@@ -15,13 +15,13 @@ import { isEditorTab, type PaneTab } from "../editor/editor-tab";
 import { NO_TABS } from "./use-project-layouts";
 
 /**
- * A divider's position as a *share* of its room (`usePersistedShare`): `pixelsFor` multiplies it
- * by `.panes-grid`'s live measurement, so an undragged divider is an even split at any size. A
- * drag, in `Sash`'s pixels, is turned back into a fraction (`divider` below). Persisted per
+ * A sash's position as a *share* of its room (`usePersistedShare`): `pixelsFor` multiplies it
+ * by `.panes-grid`'s live measurement, so an undragged sash is an even split at any size. A
+ * drag, in `Sash`'s pixels, is turned back into a fraction (`sash` below). Persisted per
  * repository or worktree (`layoutStorageKey`).
  */
-function useDividerFraction(key: string, name: string, initial: number): [number, (fraction: number) => void] {
-  return usePersistedShare(layoutStorageKey(key, `divider.${name}`), initial);
+function useSashFraction(refKey: string, name: string, initial: number): [number, (fraction: number) => void] {
+  return usePersistedShare(layoutStorageKey(refKey, `sash.${name}`), initial);
 }
 
 /** `pixels` within the same bounds `Sash` applies to a drag. */
@@ -30,14 +30,14 @@ function clampPixels(pixels: number, min: number, minOther: number, containerSiz
 }
 
 /**
- * A divider's pixels: `fraction` of `containerSize`, clamped — a share set in a wider room can ask
+ * A sash's pixels: `fraction` of `containerSize`, clamped — a share set in a wider room can ask
  * for more than a narrower one has. `null` (not measured yet) gives `min`.
  */
 function pixelsFor(fraction: number, min: number, minOther: number, containerSize: number | null): number {
   return containerSize === null ? min : clampPixels(Math.round(containerSize * fraction), min, minOther, containerSize);
 }
 
-/** Every divider's default share, and what "single" resets to. */
+/** Every sash's default share, and what "single" resets to. */
 const HALF = 1 / 2;
 
 /** The pane a dragged tab is over, and the snap zone under the pointer, if any. */
@@ -67,12 +67,12 @@ interface TabAreaProps {
   agents: AgentInfo[];
   /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
-  /** By `projectRefKey`, as the layout callbacks below. */
-  onCloseEditors: (key: string, tabIds: string[]) => void;
+  /** By `refKey`, as the layout callbacks below. */
+  onCloseEditors: (refKey: string, tabIds: string[]) => void;
   layout: ProjectLayout;
-  onActivateTab: (key: string, tabId: string, paneId?: PaneId) => void;
-  onSnapTab: (key: string, tabId: string, transition: SnapTransition) => void;
-  onFocusPane: (key: string, paneId: PaneId) => void;
+  onActivateTab: (refKey: string, tabId: string, paneId?: PaneId) => void;
+  onSnapTab: (refKey: string, tabId: string, transition: SnapTransition) => void;
+  onFocusPane: (refKey: string, paneId: PaneId) => void;
   onOpenSettings: () => void;
   /** Tabs whose finished turn is not yet seen — App decides, this draws. */
   finishedTabIds: string[];
@@ -112,7 +112,7 @@ export const TabArea = memo(function TabArea({
   const dragSource = useRef<PaneId | null>(null);
   const knownTabs = useRef<PaneTab[]>([]);
 
-  const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(resolved.key, tabIds), [onCloseEditors, resolved.key]);
+  const onCloseEditorsHere = useCallback((tabIds: string[]) => onCloseEditors(resolved.refKey, tabIds), [onCloseEditors, resolved.refKey]);
 
   // Disposed only for a tab gone for good, not one moved to another pane.
   useEffect(() => {
@@ -127,20 +127,20 @@ export const TabArea = memo(function TabArea({
     }
   }, [tabs, resolved.ref]);
 
-  // One share per divider *line*, not per preset, so a preset switch moves no line on screen.
+  // One share per sash, not per preset, so a preset switch moves no sash on screen.
   // Unconditional: hooks cannot follow the preset.
-  const [colFraction, setColFraction] = useDividerFraction(resolved.key, "col", HALF);
-  const [leftRowFraction, setLeftRowFraction] = useDividerFraction(resolved.key, "row-left", HALF);
-  const [rightRowFraction, setRightRowFraction] = useDividerFraction(resolved.key, "row-right", HALF);
+  const [colFraction, setColFraction] = useSashFraction(resolved.refKey, "col", HALF);
+  const [leftRowFraction, setLeftRowFraction] = useSashFraction(resolved.refKey, "row-left", HALF);
+  const [rightRowFraction, setRightRowFraction] = useSashFraction(resolved.refKey, "row-right", HALF);
 
   const gridRef = useRef<HTMLDivElement>(null);
-  /** `.panes-grid`'s last measured size, what the divider fractions multiply. Re-seeded on coming
+  /** `.panes-grid`'s last measured size, what the sash fractions multiply. Re-seeded on coming
    *  on screen, or a restored split would draw at minimum widths. */
   const gridSize = useElementSize(gridRef, visible);
 
   // Every `Pane` prop stays stable, or its memo is off: focus, spinners and resizes re-render this.
-  /** "single" resets every divider; a switch between two *split* presets does not. */
-  const resetDividerFractions = useCallback(() => {
+  /** "single" resets every sash; a switch between two *split* presets does not. */
+  const resetSashFractions = useCallback(() => {
     setColFraction(HALF);
     setLeftRowFraction(HALF);
     setRightRowFraction(HALF);
@@ -150,20 +150,20 @@ export const TabArea = memo(function TabArea({
   const previousPreset = useRef(layout.preset);
   useEffect(() => {
     if (layout.preset === "single" && previousPreset.current !== "single") {
-      resetDividerFractions();
+      resetSashFractions();
     }
     previousPreset.current = layout.preset;
-  }, [layout.preset, resetDividerFractions]);
+  }, [layout.preset, resetSashFractions]);
 
   const chrome = useMemo<PaneChrome>(
     () => ({ freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings }),
     [freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings]
   );
   const onActivate = useCallback(
-    (tabId: string, paneId: PaneId) => onActivateTab(resolved.key, tabId, paneId),
-    [onActivateTab, resolved.key]
+    (tabId: string, paneId: PaneId) => onActivateTab(resolved.refKey, tabId, paneId),
+    [onActivateTab, resolved.refKey]
   );
-  const onFocus = useCallback((paneId: PaneId) => onFocusPane(resolved.key, paneId), [onFocusPane, resolved.key]);
+  const onFocus = useCallback((paneId: PaneId) => onFocusPane(resolved.refKey, paneId), [onFocusPane, resolved.refKey]);
 
   const setDragTarget = useCallback((next: DragTarget | null) => {
     dragTargetRef.current = next;
@@ -218,15 +218,15 @@ export const TabArea = memo(function TabArea({
       setDragTarget(null);
       dragSource.current = null;
       if (target?.transition) {
-        onSnapTab(resolved.key, tabId, target.transition);
+        onSnapTab(resolved.refKey, tabId, target.transition);
       } else {
         onActivate(tabId, paneId);
       }
     },
-    [setDragTarget, onSnapTab, resolved.key, onActivate]
+    [setDragTarget, onSnapTab, resolved.refKey, onActivate]
   );
 
-  // Unconditional, unlike "left": nothing stale follows a drag's end, and a preview would survive
+  // Unconditional, unlike "left": nothing stale follows a drag's end, and a snap preview would survive
   // an Escape.
   const onDragEnd = useCallback(() => {
     setDragTarget(null);
@@ -292,7 +292,7 @@ export const TabArea = memo(function TabArea({
       waitingTabIds={waitingTabIds}
       chrome={first ? chrome : undefined}
       // Pane "a" also carries the strip-wide reason.
-      showProgress={(first && externalBusy) || (startingHere[paneId] ?? false)}
+      busy={(first && externalBusy) || (startingHere[paneId] ?? false)}
       dragOver={dragOverPane === paneId}
       onDragStart={onDragStart}
       onDragOverChange={onDragOverChange}
@@ -301,7 +301,7 @@ export const TabArea = memo(function TabArea({
     />
   );
 
-  const divider = (
+  const sash = (
     orientation: "vertical" | "horizontal",
     pixels: number,
     min: number,
@@ -326,7 +326,7 @@ export const TabArea = memo(function TabArea({
     />
   );
 
-  // All three lines whatever the preset: the preview needs the lines a switch would keep.
+  // All three sashes whatever the preset: the snap preview needs the ones a switch would keep.
   const width = gridSize?.width ?? null;
   const height = gridSize?.height ?? null;
   const colPixels = pixelsFor(colFraction, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width);
@@ -334,7 +334,7 @@ export const TabArea = memo(function TabArea({
   const rightRowPixels = pixelsFor(rightRowFraction, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height);
 
   // The pane a preset-switching zone drop would add, from the clamped pixels, not the stored
-  // fractions, so the preview agrees with the drop.
+  // fractions, so the snap preview agrees with the drop.
   const snapPreview =
     dragTarget?.transition && dragTarget.transition.preset !== layout.preset && gridSize !== null
       ? paneBox(dragTarget.transition.preset, dragTarget.transition.target, {
@@ -344,10 +344,10 @@ export const TabArea = memo(function TabArea({
         })
       : null;
 
-  // The three lines, once: a preset draws the ones it has.
-  const colDivider = divider("vertical", colPixels, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width, setColFraction);
-  const leftRowDivider = divider("horizontal", leftRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setLeftRowFraction);
-  const rightRowDivider = divider("horizontal", rightRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setRightRowFraction);
+  // The three sashes, once: a preset draws the ones it has.
+  const colSash = sash("vertical", colPixels, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width, setColFraction);
+  const leftRowSash = sash("horizontal", leftRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setLeftRowFraction);
+  const rightRowSash = sash("horizontal", rightRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setRightRowFraction);
 
   const renderGrid = () => {
     switch (layout.preset) {
@@ -357,7 +357,7 @@ export const TabArea = memo(function TabArea({
         return (
           <>
             {renderPane("a", { width: colPixels }, true)}
-            {colDivider}
+            {colSash}
             {renderPane("b", {}, false)}
           </>
         );
@@ -365,10 +365,10 @@ export const TabArea = memo(function TabArea({
         return (
           <>
             {renderPane("a", { width: colPixels }, true)}
-            {colDivider}
+            {colSash}
             <div className="panes-column fill">
               {renderPane("b", { height: rightRowPixels }, false)}
-              {rightRowDivider}
+              {rightRowSash}
               {renderPane("c", {}, false)}
             </div>
           </>
@@ -378,13 +378,13 @@ export const TabArea = memo(function TabArea({
           <>
             <div className="panes-column" style={{ width: colPixels }}>
               {renderPane("a", { height: leftRowPixels }, true)}
-              {leftRowDivider}
+              {leftRowSash}
               {renderPane("c", {}, false)}
             </div>
-            {colDivider}
+            {colSash}
             <div className="panes-column fill">
               {renderPane("b", { height: rightRowPixels }, false)}
-              {rightRowDivider}
+              {rightRowSash}
               {renderPane("d", {}, false)}
             </div>
           </>

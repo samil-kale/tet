@@ -3,7 +3,7 @@ import type { Monaco } from "./editor";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 
 /**
- * tet's own commands, layered under the chosen preset (`keybinding-presets.ts`). No chords, no
+ * TET's own commands, layered under the chosen preset (`keybinding-presets.ts`). No chords, no
  * command that depends on a language provider, no format.
  */
 const DEFAULT_KEYBINDINGS: Record<string, string> = {
@@ -43,7 +43,7 @@ export function parseKeyCombo(monaco: Monaco, combo: string): number | undefined
   return mods | keyCode;
 }
 
-/** The preset's bindings over tet's defaults; an unknown id yields the defaults. */
+/** The preset's bindings over TET's defaults; an unknown id yields the defaults. */
 export function resolveKeybindings(presetId: string): Record<string, string> {
   const preset = KEYBINDING_PRESETS.find((entry) => entry.id === presetId);
   return { ...DEFAULT_KEYBINDINGS, ...preset?.bindings };

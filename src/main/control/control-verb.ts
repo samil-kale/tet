@@ -1,11 +1,11 @@
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/control";
-import { projectRef, projectRefKey } from "../../shared/types/project";
+import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
 import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
 import type { ExplorerListing } from "../../shared/types/files";
 import type { GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { SbxAccount, SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
+import type { SbxAccount, SbxKnowledgeSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxSignInResult, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { NotificationTarget } from "../util/notifications";
@@ -15,6 +15,7 @@ import { type CallerSide } from "./caller-side";
 import type { EnvStore } from "../store/environment";
 import type { EnvRequests } from "./env-requests";
 import type { ProjectLookup } from "../store/project-store";
+import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import type { SettingsAccess } from "../store/settings";
 
 
@@ -107,7 +108,7 @@ export function list(args: Record<string, unknown>, name: string): string[] {
  */
 export interface ControlDeps {
   version: string;
-  /** Lets a test tell that restart-app replaced the process. */
+  /** Lets a test tell that app-restart replaced the process. */
   pid: number;
   store: ProjectLookup;
   settings: SettingsAccess;
@@ -170,20 +171,20 @@ export interface ControlDeps {
   sbx: {
     /** sbx-status.ts's readSbxReading: the status, and what the verb's problems check reuses of it. */
     status(project: Project): Promise<SbxReading>;
-    /** Whether an agent runs on this machine at all: without one, sandboxing cannot be switched off. */
+    /** Whether an agent runs on this machine at all: without one, SBX cannot be disabled. */
     anyAgentInstalled(): Promise<boolean>;
-    config(project: Project): Promise<SbxProjectConfig>;
+    settings(project: Project): Promise<SbxProjectSettings>;
     stored(projectId: string): SbxStoredLocal;
     /** sbx-settings.ts's readProjectSbxProblems. */
     problems(
       project: Project,
-      config: SbxProjectConfig,
-      knowledge: SbxKnowledgeConfig,
+      settings: SbxProjectSettings,
+      knowledge: SbxKnowledgeSettings,
       values: Record<SbxValueKind, string[]>,
       reading?: SbxReading
     ): Promise<SbxProblems>;
     /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */
-    save(project: Project, request: SbxProjectConfig, local: SbxLocalSave, known?: Pick<SbxReading, "status">): Promise<SbxSaveResult>;
+    save(project: Project, request: SbxProjectSettings, local: SbxLocalSave, known?: Pick<SbxReading, "status">): Promise<SbxSaveResult>;
     /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
     accounts(): SbxAccount[];
     /** sbx-status.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the
@@ -211,7 +212,7 @@ export interface ControlTerminals {
    *  for an agent that takes one. */
   createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TabDescriptor;
   /** The new tab taking over the tab's session, or why there is none. */
-  handOff(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
+  handOver(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
   createCommandTab(command: ProjectCommand): TabDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
@@ -236,7 +237,7 @@ export function tetWorktree(project: Project, name: string): { worktree: Project
     throw new ControlError("not_found", `${project.name} has no worktree ${name} (see projects-list)`);
   }
   if (worktree.key === undefined) {
-    throw new ControlError("bad_args", `the worktree of ${name} was not made by TET, which cannot reach it: use git`);
+    throw new ControlError("bad_args", `the worktree of ${name} was made elsewhere, which TET cannot reach: use git`);
   }
   return { worktree, ref: projectRef(project.id, worktree.key) };
 }
@@ -258,7 +259,7 @@ export function resolveCallerRef(
   }
   const project = store.get(projectId);
   if (!project) {
-    throw new ControlError("not_found", `unknown project: ${projectId}`);
+    throw new ControlError("not_found", PROJECT_NOT_FOUND);
   }
   const asked = optionalText(args, "worktree");
   if (asked === undefined) {
@@ -268,10 +269,10 @@ export function resolveCallerRef(
 }
 
 /** The repository's or worktree's git state; one closed meanwhile is an internal error. */
-export function repositoryOf(deps: Pick<ControlDeps, "repositories">, ref: ProjectRef): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> {
+export function repositoryOf(deps: Pick<ControlDeps, "repositories" | "store">, ref: ProjectRef): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> {
   const repo = deps.repositories.get(ref);
   if (!repo) {
-    throw new ControlError("internal", `${projectRefKey(ref)} has no repository`);
+    throw new ControlError("internal", notOpenMessage(deps.store, ref));
   }
   return repo;
 }

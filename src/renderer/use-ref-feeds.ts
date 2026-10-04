@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type RefObject } from "react";
-import { projectRefKey, projectRefsOf } from "../shared/types/project";
+import { refKeyOf, projectRefsOf } from "../shared/types/project";
 import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { TabDescriptor } from "../shared/types/terminals";
@@ -9,11 +9,11 @@ import { useLatest } from "./ui/use-latest";
 
 /**
  * Every repository's and worktree's git state, tabs and whether something starts there, by
- * `projectRefKey`: loaded once with the stored projects (`onProjects`), then kept by main's pushes.
+ * `refKey`: loaded once with the stored projects (`onProjects`), then kept by main's pushes.
  * `projectsRef` is the list after an await: the control channel can add a project meanwhile.
  */
 export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stored: Project[]) => void) {
-  /** Everything here is by `projectRefKey`. */
+  /** Everything here is by `refKey`. */
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
   /** Every repository's and worktree's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TabDescriptor[]>>({});
@@ -31,30 +31,30 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
   useEffect(() => {
     const unsubscribers = [
       window.tet.repository.onState(({ ref, state }) =>
-        setStates((current) => ({ ...current, [projectRefKey(ref)]: state }))
+        setStates((current) => ({ ...current, [refKeyOf(ref)]: state }))
       ),
-      window.tet.terminals.onTabs(({ ref, tabs: list }) =>
-        setTabs((current) => ({ ...current, [projectRefKey(ref)]: list }))
+      window.tet.tabs.onTabs(({ ref, tabs: list }) =>
+        setTabs((current) => ({ ...current, [refKeyOf(ref)]: list }))
       ),
-      window.tet.terminals.onStatus(({ ref, tabId, status }) => {
-        const key = projectRefKey(ref);
+      window.tet.tabs.onStatus(({ ref, tabId, status }) => {
+        const refKey = refKeyOf(ref);
       // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
       // it off screen (main flushes the old output before the status, the new one's has not come).
-        if (status === "running" && tabsRef.current[key]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
+        if (status === "running" && tabsRef.current[refKey]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
           clearTerminal(ref, tabId);
         } else if (status === "running") {
           resetMouseModes(ref, tabId);
         }
         setTabs((current) => {
-          const list = current[key];
+          const list = current[refKey];
           return list
-            ? { ...current, [key]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) }
+            ? { ...current, [refKey]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) }
             : current;
         });
       }),
-      window.tet.terminals.onStartupProgress(({ ref, show }) => {
-        const key = projectRefKey(ref);
-        setStarting((current) => (current[key] === show ? current : { ...current, [key]: show }));
+      window.tet.tabs.onStartupProgress(({ ref, show }) => {
+        const refKey = refKeyOf(ref);
+        setStarting((current) => (current[refKey] === show ? current : { ...current, [refKey]: show }));
       })
     ];
 
@@ -65,16 +65,16 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         stored.flatMap(projectRefsOf).map(async (ref) => {
           const [state, list, isStarting] = await Promise.all([
             window.tet.repository.state(ref),
-            window.tet.terminals.list(ref),
-            window.tet.terminals.starting(ref)
+            window.tet.tabs.list(ref),
+            window.tet.tabs.starting(ref)
           ]);
-          return [projectRefKey(ref), state, list, isStarting] as const;
+          return [refKeyOf(ref), state, list, isStarting] as const;
         })
       );
       // A repository or worktree closed meanwhile was forgotten already: merging its entries would
       // revive it.
-      const open = new Set(projectsRef.current.flatMap(projectRefsOf).map(projectRefKey));
-      const loaded = fetched.filter(([key]) => open.has(key));
+      const open = new Set(projectsRef.current.flatMap(projectRefsOf).map(refKeyOf));
+      const loaded = fetched.filter(([refKey]) => open.has(refKey));
       // Pushes that landed meanwhile are newer than what was fetched.
       setStates((current) => ({
         ...Object.fromEntries(loaded.map(([id, state]) => [id, state])),
@@ -91,10 +91,10 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
   }, [projectsRef, tabsRef, onProjects]);
 
   /** Drops what is held for a closed repository or worktree. */
-  const forgetRef = useCallback((key: string) => {
-    setStates((current) => forget(current, key));
-    setTabs((current) => forget(current, key));
-    setStarting((current) => forget(current, key));
+  const forgetRef = useCallback((refKey: string) => {
+    setStates((current) => forget(current, refKey));
+    setTabs((current) => forget(current, refKey));
+    setStarting((current) => forget(current, refKey));
   }, []);
 
   return { states, tabs, starting, forgetRef };

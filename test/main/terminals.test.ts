@@ -15,7 +15,7 @@ import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/
 import { CONTROL_ENV, type HookEvent } from "../../src/shared/control";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir } from "../helpers";
-import { reportApplies, SIGNAL_STALE_MS } from "../../src/main/terminals/turn-order";
+import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 
 /** terminals/: a tab's turns and marks, its token and environment, when sessions are listed. */
 
@@ -59,10 +59,10 @@ async function withEmptyPath(
 describe("a turn's notification", () => {
   // A shell tab stands in for an agent: no version check and no sessions, so the manager starts
   // nothing.
-  it("is left out for a tab in front of the user, and only while it is", async () => {
+  it("is left out for a tab on screen, and only while it is", async () => {
     const root = tempDir("tet-notification-");
     const settings = new SettingsStore(root);
-    settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
+    settings.patch({ notifications: { finished: true, waiting: true, idleReminder: true } });
     let pushed: TabDescriptor[] = [];
     const manager = new TabSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), new HostSetups(root, settings, () => undefined), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
@@ -74,27 +74,27 @@ describe("a turn's notification", () => {
     const { tabId } = manager.createTab("shell");
     let at = Date.now();
     const hook = (event: HookEvent) => manager.hookEvent(tabId, event, "{}", (at += 1000), HOST_CALLER);
-    const needsYou = ["permission", "question", "idle"] as const;
+    const waitingEvents = ["permission", "question", "idle"] as const;
     try {
-      manager.setInFront([tabId]);
+      manager.setOnScreen([tabId]);
       assert.deepEqual(hook("prompt-submit"), { stdout: "" }, "nothing for the prompt: TET's system prompt went in once per session");
-      assert.equal(hook("stop").notification, undefined, "a turn finished in front of the user");
+      assert.equal(hook("stop").notification, undefined, "a turn finished with its tab on screen");
       assert.notEqual(
         pushed.find((tab) => tab.tabId === tabId)?.finishedAt,
         undefined,
         "the mark is still set: whether it shows is the renderer's call"
       );
-      for (const event of needsYou) {
+      for (const event of waitingEvents) {
         assert.equal(hook(event).notification, undefined, event);
       }
 
-      // The renderer reports another tab in front, or none (focus lost, a dialog up).
-      for (const inFront of [["new-other"], []]) {
-        manager.setInFront(inFront);
+      // The renderer reports another tab on screen, or none (focus lost, a dialog up).
+      for (const onScreen of [["new-other"], []]) {
+        manager.setOnScreen(onScreen);
         hook("prompt-submit");
-        assert.match(hook("stop").notification?.title ?? "", /Finished/, `in front: [${inFront}]`);
-        for (const event of needsYou) {
-          assert.notEqual(hook(event).notification, undefined, `${event}, in front: [${inFront}]`);
+        assert.match(hook("stop").notification?.title ?? "", /Finished/, `on screen: [${onScreen}]`);
+        for (const event of waitingEvents) {
+          assert.notEqual(hook(event).notification, undefined, `${event}, on screen: [${onScreen}]`);
         }
       }
     } finally {
@@ -128,7 +128,7 @@ describe("a question reported answered", () => {
       assert.notEqual(inspected()?.waitingAt, undefined);
       manager.hookEvent(tabId, "answered", "{}", at + 2000, HOST_CALLER);
       assert.equal(inspected()?.waitingAt, undefined);
-      assert.equal(inspected()?.busy, true);
+      assert.equal(inspected()?.inTurn, true);
     });
   });
 });
@@ -137,18 +137,18 @@ describe("a Claude Code turn leaving a background agent running", () => {
   it("keeps the tab working, without a notification, until the stop naming none", async () => {
     await withEmptyPath({}, (manager) => {
       const { tabId } = manager.createTab("claude");
-      const busy = (): boolean | undefined => manager.inspect().find((tab) => tab.tabId === tabId)?.busy;
+      const inTurn = (): boolean | undefined => manager.inspect().find((tab) => tab.tabId === tabId)?.inTurn;
       const stop = (tasks: object[]): string => JSON.stringify({ session_id: "s1", background_tasks: tasks });
       const agent = { id: "a1", type: "subagent", status: "running" };
       const shell = { id: "b1", type: "shell", status: "running" };
       const at = Date.now();
       manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at, HOST_CALLER);
       assert.deepEqual(manager.hookEvent(tabId, "stop", stop([agent, shell]), at + 1000, HOST_CALLER), { stdout: "{}" });
-      assert.equal(busy(), true, "a background agent runs on");
+      assert.equal(inTurn(), true, "a background agent runs on");
       // Its end starts a turn of its own.
       manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at + 2000, HOST_CALLER);
       manager.hookEvent(tabId, "stop", stop([shell]), at + 3000, HOST_CALLER);
-      assert.equal(busy(), false, "a background shell alone does not count");
+      assert.equal(inTurn(), false, "a background shell alone does not count");
     });
   });
 });
@@ -167,14 +167,14 @@ describe("a turn reported after its tab's process exited", () => {
       manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
       assert.deepEqual(manager.hookEvent(tabId, "permission", "{}", at + 1000, HOST_CALLER), { stdout: "" });
       const inspected = manager.inspect().find((candidate) => candidate.tabId === tabId);
-      assert.notEqual(inspected?.busy, true);
+      assert.notEqual(inspected?.inTurn, true);
       assert.equal(inspected?.waitingAt, undefined);
     });
   });
 });
 
 describe("a tab of a missing agent", () => {
-  it("starts once switching sandboxing on makes its agent startable", async () => {
+  it("starts once enabling SBX makes its agent startable", async () => {
     const statuses: string[] = [];
     const notices: string[] = [];
     const callbacks: Partial<SessionManagerCallbacks> = {
@@ -187,7 +187,7 @@ describe("a tab of a missing agent", () => {
       manager.handleResize(tabId, 80, 24);
       await eventually("the tab shows missing", () => statuses.at(-1) === "missing", 10_000);
       fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
-      await manager.sbxConfigChanged(true);
+      await manager.sbxSettingsChanged(true);
       await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
       assert.ok(notices.some((notice) => /only runs in repo's SBX sandbox/.test(notice)), notices.join("\n"));
     });
@@ -206,7 +206,7 @@ describe("a sandboxed tab's control token", () => {
 });
 
 describe("a terminal's environment", () => {
-  it("puts tet's own above the machine's, and a saved command's above all", () => {
+  it("puts TET's own above the machine's, and a saved command's above all", () => {
     process.env.TET_TEST_MACHINE = "machine";
     process.env.TET_TEST_OUTER = "outer";
     setControlEnv({ TET_TEST_OUTER: "inner", TET_TEST_CONTROL: "control" }, "");
@@ -217,8 +217,8 @@ describe("a terminal's environment", () => {
     });
     assert.equal(env.TET_TEST_MACHINE, "machine", "the machine's beats the agent's default");
     assert.equal(env.TET_TEST_AGENT, "agent", "the agent's default stands where the machine has none");
-    // A tet started from its own shell tab has the outer app's value in process.env.
-    assert.equal(env.TET_TEST_OUTER, "inner", "tet's own beats what an outer tet left");
+    // A TET started from its own shell tab has the outer app's value in process.env.
+    assert.equal(env.TET_TEST_OUTER, "inner", "TET's own beats what an outer TET left");
     assert.equal(env.TET_TEST_CONTROL, "own", "the tab's own beats the app-wide");
     assert.equal(env.TET_TEST_OWN, "command", "a saved command's beats everything");
   });
@@ -235,7 +235,7 @@ describe("a terminal's environment", () => {
       assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
       stored = { TET_TEST_STORED: "second" };
       assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
-      // A tet started from a tab of another inherits that one's list; its own tabs get their own.
+      // A TET started from a tab of another inherits that one's list; its own tabs get their own.
       process.env.TET_KEPT_ENV = "OUTER";
       stored = {};
       assert.equal(buildEnv({}).TET_KEPT_ENV, undefined, "none kept, none named");
@@ -271,10 +271,10 @@ describe("a terminal's environment", () => {
     setControlEnv({}, "");
   });
 
-  it("gives a worktree's terminal a token of that worktree, and no outer tet's ids", () => {
+  it("gives a worktree's terminal a token of that worktree, and no outer TET's ids", () => {
     setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
     const inherited = { worktree: process.env[CONTROL_ENV.worktree], tab: process.env[CONTROL_ENV.tabId] };
-    // A tet started from a worktree tab of another tet inherits that tab's ids.
+    // A TET started from a worktree tab of another TET inherits that tab's ids.
     process.env[CONTROL_ENV.worktree] = "outer";
     process.env[CONTROL_ENV.tabId] = "outer-tab";
     try {
@@ -309,7 +309,7 @@ describe("a terminal's environment", () => {
 
   it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
     setControlEnv({}, "");
-    // A tet started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
+    // A TET started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
     const env = buildEnv({ own: { Path: "inherited" }, envOverride: { PATH: "command" } });
     const names = Object.keys(env).filter((name) => name.toUpperCase() === "PATH");
     assert.deepEqual(names.map((name) => env[name]), ["command"]);
@@ -404,6 +404,6 @@ describe("which of two turn reports counts", () => {
     assert.equal(reportApplies(now, now), true, "the same moment still counts");
     assert.equal(reportApplies(now, now + 5), true, "newer than the last one");
     assert.equal(reportApplies(now, now - 200), false, "still in flight when the newer one landed");
-    assert.equal(reportApplies(now, now - SIGNAL_STALE_MS - 1), true, "a clock that moved, not a race");
+    assert.equal(reportApplies(now, now - REPORT_STALE_MS - 1), true, "a clock that moved, not a race");
   });
 });

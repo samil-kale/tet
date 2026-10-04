@@ -62,7 +62,7 @@ export function registerProjectsIpc({
   );
 
   // Separate handler: ["openFile", "openDirectory"] together works only on macOS; Windows and Linux
-  // silently show the directory selector. Hence two buttons in the sbx dialog.
+  // silently show the directory selector. Hence two buttons in the SBX Settings.
   handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
     const result = await dialog.showOpenDialog({ title, properties: ["openFile"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);

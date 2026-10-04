@@ -14,7 +14,7 @@ import { resumableDownload } from "./resumable-download";
 import { runProcess } from "../util/process";
 import { logError } from "../util/error-log";
 
-/** Not urgent: an update installs only once tet quits. */
+/** Not urgent: an update installs only once TET quits. */
 const CHECK_INTERVAL_MS = 4 * 60 * 60_000;
 
 const CHECK_TIMEOUT_MS = 15_000;
@@ -156,7 +156,7 @@ function findRoot(dir: string): string | undefined {
 
 /**
  * Fetches and unpacks a version, then copies it beside the install root (`preparedRoot`), so the
- * quit only swaps the two and a tet started right after it rarely finds the old one. The unpacked
+ * quit only swaps the two and a TET started right after it rarely finds the old one. The unpacked
  * folder stays: the updater runs from it, and on win32 a folder a process runs from cannot be
  * renamed into place. Plain fetch, never electron's download manager: on macOS it quarantines the
  * file, and Gatekeeper would refuse the ad-hoc signed bundle. A failed download keeps its part for
@@ -208,7 +208,7 @@ async function stage(
  * fetched, unpacked and copied beside the install at once — one notice from the download's share
  * to the announcement it ends on, which goes silently if any step fails — announced once, and
  * installed on quit (`installPendingUpdate`) —
- * never mid-session, a tab being a live agent session. If tet cannot replace its own folder, the
+ * never mid-session, a tab being a live agent session. If TET cannot replace its own folder, the
  * notice carries the install command instead.
  *
  * `releasesUrl` is `RELEASES_URL` except for test/e2e/install.test.ts.
@@ -291,7 +291,7 @@ export function startAutoUpdate(
 
 /**
  * Starts the pending update to run after this process exits: at the end of a quit, not a restart
- * (a relaunched tet would hold the folder being replaced). Run by the *new* binary as node from its
+ * (a relaunched TET would hold the folder being replaced). Run by the *new* binary as node from its
  * unpack folder — no node on the machine to count on, and the installed binary gets replaced — and
  * handed the copy beside the install to swap in.
  */
@@ -320,7 +320,7 @@ export function installPendingUpdate(): void {
     });
     child.on("error", (error) => logError("could not start the update", error));
     child.unref();
-    // Written here, not by the updater: a tet started right after this quit must already see it.
+    // Written here, not by the updater: a TET started right after this quit must already see it.
     if (child.pid !== undefined) {
       writeFileAtomic.sync(updateLockPath(updateDir()), String(child.pid));
     }

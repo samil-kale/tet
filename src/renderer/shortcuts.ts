@@ -14,7 +14,7 @@ export type ShortcutId =
   | "toggleProjects"
   | "toggleGit"
   | "toggleFiles"
-  | "needsAttention"
+  | "jumpToWaiting"
   | "nextTab"
   | "previousTab"
   | "newShellTab";
@@ -37,7 +37,7 @@ const DEFS: ShortcutDef[] = [
   { id: "toggleGit", description: "Show or hide git", shift: true, key: "g", label: "G" },
   { id: "toggleFiles", description: "Show or hide files", shift: true, key: "e", label: "E" },
   {
-    id: "needsAttention",
+    id: "jumpToWaiting",
     description: "Jump to the waiting tab",
     shift: true,
     key: "u",

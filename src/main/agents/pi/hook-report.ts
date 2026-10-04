@@ -10,11 +10,11 @@ import { CONTROL_ENV, CONTROL_HOST } from "../../../shared/control";
  * the tab to its session (`hookSessionId`).
  */
 export function renderHookReport(): string {
-  return `// The names only: the port and token behind them are new on every start of tet, and baking
+  return `// The names only: the port and token behind them are new on every start of TET, and baking
 // them in would change this file on every start.
 const CONTROL = ${JSON.stringify(CONTROL_ENV)};
 
-// This tab's own turn, reported to tet over its control channel, from inside this process.
+// This tab's own turn, reported to TET over its control channel, from inside this process.
 function report(event: string, sessionId: string | undefined): void {
   const port = process.env[CONTROL.port];
   const token = process.env[CONTROL.token];

@@ -11,7 +11,7 @@ import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
-import { readChanged, readCommands, readSbxConfig } from "./store/tet-json";
+import { readChanged, readCommands, readSbxSettings } from "./store/tet-json";
 import { prepareControl } from "./control/control-channel";
 import { ControlRecords } from "./control/control-records";
 import { startControlServer } from "./control/control-server";
@@ -56,8 +56,8 @@ import { PLATFORM } from "./util/host-platform";
 
 /**
  * A separate profile for tests driving the real app via tet-ctl (test/e2e/app.test.ts): own
- * projects, settings and socket, and — the lock being per profile — a second tet beside the working
- * one. Both Chromium's profile and tet's data folder (data-root.ts), set before either is asked
+ * projects, settings and socket, and — the lock being per profile — a second TET beside the working
+ * one. Both Chromium's profile and TET's data folder (data-root.ts), set before either is asked
  * for. Only then is the control token taken from the environment.
  */
 const USER_DATA_ARG = "--user-data-dir=";
@@ -67,7 +67,7 @@ if (userDataArg) {
 }
 /** For tests run locally (test/helpers/): the window is drawn but never shown. */
 const HIDE_WINDOW = process.argv.includes("--hide-window");
-/** tet's own data; `userData` is left to Chromium's profile. */
+/** TET's own data; `userData` is left to Chromium's profile. */
 const dataRoot = resolveDataRoot(userDataArg);
 try {
   fs.mkdirSync(dataRoot, { recursive: true });
@@ -83,8 +83,8 @@ try {
  * install.ps1's `TET.lnk` rewritten in place; a development run's electron.exe reads "Electron".
  *
  * Windows remembers what it decided about an id, so `npm start` gets its own id — else one dev
- * notification leaves the installed tet reading "Electron". The CLSID is fixed, not Electron's per-run
- * random one, so a notification clicked after tet quit starts the COM server the entry names. Both are set
+ * notification leaves the installed TET reading "Electron". The CLSID is fixed, not Electron's per-run
+ * random one, so a notification clicked after TET quit starts the COM server the entry names. Both are set
  * before the workspace: a hook can report a turn once the first terminal is up. The id is
  * electron-builder.yml's `appId`, which Windows' existing decisions about it are keyed on.
  */
@@ -141,10 +141,10 @@ const envRequests = new EnvRequests(
     if (!appWindow.listening()) {
       return false;
     }
-    send("environment:request", request);
+    send("env:request", request);
     // Out of sight, told as a question is (session-manager's notification): the agent's shell gives up
     // waiting at some point, and the dialog with it.
-    if (appWindow.inBackground() && settings.get().notifications.needsYou) {
+    if (appWindow.inBackground() && settings.get().notifications.waiting) {
       const tab = request.ref && request.tabId ? findTab(request.ref, request.tabId) : undefined;
       const agent = AGENTS.find((entry) => entry.id === tab?.agentId)?.displayName ?? "An agent";
       showDesktopNotification(
@@ -155,7 +155,7 @@ const envRequests = new EnvRequests(
     }
     return true;
   },
-  (id) => send("environment:withdrawn", id)
+  (id) => send("env:withdrawn", id)
 );
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
@@ -184,12 +184,12 @@ const repositories = new RepositoryManager(
         return;
       }
       send("commands:changed", { projectId, commands, sbxEnabled: sbx.enabled });
-      // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
+      // tet.json also holds whether SBX is enabled, which sbx-only agents must hear (sbxSettingsChanged) — in
       // every repository and worktree of the project.
       for (const manager of tabManagers.forProject(projectId)) {
         void manager
-          .sbxConfigChanged(sbx.enabled)
-          .catch((error: unknown) => logError("could not apply the sbx config change", error));
+          .sbxSettingsChanged(sbx.enabled)
+          .catch((error: unknown) => logError("could not apply the SBX settings change", error));
       }
     });
   },
@@ -199,7 +199,7 @@ const repositories = new RepositoryManager(
 );
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (ref, tabs) => {
-    send("terminals:tabs", { ref, tabs });
+    send("tabs:changed", { ref, tabs });
     awaitedNotificationTab(ref);
   },
   onOutput: (ref, tabId, data) => {
@@ -209,9 +209,9 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
     // Output batched before the change goes first, so a status never overtakes it (a restart's
     // clear in App.tsx would otherwise run before the dying process's last bytes arrive).
     appWindow.flushOutput();
-    send("terminals:status", { ref, tabId, status });
+    send("tabs:status", { ref, tabId, status });
   },
-  onStartupProgress: (ref, show) => send("terminals:startup-progress", { ref, show }),
+  onStartupProgress: (ref, show) => send("tabs:startup-progress", { ref, show }),
   onNotice: notice
 });
 
@@ -270,7 +270,7 @@ function showNotificationTarget(target: { ref: ProjectRef; tabId: string; sessio
     findTab(target.ref, target.tabId) ??
     (target.sessionId !== undefined ? findTab(target.ref, target.sessionId) : undefined);
   if (tab) {
-    send("terminals:show", { ref: target.ref, tabId: tab.tabId });
+    send("tabs:show", { ref: target.ref, tabId: tab.tabId });
   }
   return tab !== undefined;
 }
@@ -317,7 +317,7 @@ async function startControl(): Promise<void> {
         openEditor: (ref, filePath, keep) => send("editor:open", { ref, path: filePath, keep }),
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
-        showTab: (ref, tabId) => send("terminals:show", { ref, tabId }),
+        showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
         showDesktopNotification,
         environment,
         envRequests,
@@ -325,7 +325,7 @@ async function startControl(): Promise<void> {
           // No PATH re-read: tet-ctl follows no install, the dialog's "Check again" does.
           status: (project) => readSbxReading(project.path, { projectId: project.id }, false),
           anyAgentInstalled,
-          config: (project) => readSbxConfig(project.path),
+          settings: (project) => readSbxSettings(project.path),
           stored: (projectId) => sbxLocal.stored(projectId),
           problems: readProjectSbxProblems,
           save: (project, request, local, known) => saveProjectSbx({ sbxLocal, notice }, project, request, local, known),
@@ -506,7 +506,7 @@ app.on("before-quit", (event) => {
 /**
  * Keeps electron's own handling of these signals, a quit through before-quit. write-file-atomic
  * listens on them during each write, and libuv resets a signal to its default when its last
- * listener goes, after which SIGTERM would kill tet outright — no tabs ended, no update
+ * listener goes, after which SIGTERM would kill TET outright — no tabs ended, no update
  * installed. A listener of our own, added before electron installs its handler, keeps libuv from
  * touching the disposition; the quit here is only its fallback.
  */

@@ -1,12 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
-import { projectRefKey, projectRefsOf } from "../shared/types/project";
+import { refKeyOf, projectRefsOf } from "../shared/types/project";
 import type { AgentInfo } from "../shared/types/agents";
 import type { EnvRequest } from "../shared/types/environment";
 import type { Project, ProjectRef } from "../shared/types/project";
 import type { TabDescriptor } from "../shared/types/terminals";
-import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
+import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { CommandList } from "./lanes/projects/CommandList";
@@ -19,7 +19,7 @@ import { GitLane } from "./lanes/git/GitLane";
 import { Notices, notify, showProgress } from "./ui/Notices";
 import { ProjectList } from "./lanes/projects/ProjectList";
 import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
-import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-project";
+import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-ref";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { useStoredSize } from "./ui/layout-storage";
 import { useLanes } from "./lanes/use-lanes";
@@ -35,7 +35,7 @@ import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { agentName, useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
 import { PLATFORM } from "./platform";
-import { defaultLayout, paneOf, tabsInFront } from "./tabs/pane-layout";
+import { defaultLayout, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./tabs/use-project-layouts";
 import type { EditorTab, PaneTab } from "./editor/editor-tab";
 import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
@@ -46,7 +46,7 @@ import { useWindowFocused } from "./ui/use-window-focused";
 import { useWindowShortcuts } from "./ui/use-window-shortcuts";
 import { useRefFeeds } from "./use-ref-feeds";
 
-/** Who asks for environment variables, as the window names that tab: "Claude (fix login) in
+/** Who asks for environment variables, as the window names that tab: "Claude Code (fix login) in
  *  autocontract". */
 function requesterOf(
   request: EnvRequest,
@@ -54,8 +54,8 @@ function requesterOf(
   tabs: Record<string, TabDescriptor[]>,
   agents: AgentInfo[]
 ): string {
-  const resolved = request.ref && resolvedRefs[projectRefKey(request.ref)];
-  const tab = resolved && tabs[resolved.key]?.find((entry) => entry.tabId === request.tabId);
+  const resolved = request.ref && resolvedRefs[refKeyOf(request.ref)];
+  const tab = resolved && tabs[resolved.refKey]?.find((entry) => entry.tabId === request.tabId);
   const agent = tab && agentName(agents, tab.agentId);
   const who = agent ? (tab.title ? `${agent} (${tab.title})` : agent) : "An agent";
   return resolved ? `${who} in ${resolved.name}` : who;
@@ -72,22 +72,22 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const [projects, setProjects] = useState<Project[]>([]);
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useLatest(projects);
-  /** Each project's repository and the worktrees TET made, by the key every
-   *  record below is kept under (`projectRefKey`). Identity-stable where unchanged. */
+  /** Each project's repository and the worktrees TET made, by the `refKey` every
+   *  record below is kept under. Identity-stable where unchanged. */
   const refsHeld = useRef<Record<string, ResolvedRef>>({});
-  const resolvedRefs = useMemo(() => resolvedByKey(refsHeld, projects), [projects]);
-  /** The repository or worktree in front, by key. */
-  const [activeKey, setActiveKey] = useState<string | null>(null);
-  /** For callbacks the project list gets, read on a click: depending on `activeKey` would remake
+  const resolvedRefs = useMemo(() => resolvedByRefKey(refsHeld, projects), [projects]);
+  /** The active repository or worktree, by `refKey`. */
+  const [activeRefKey, setActiveRefKey] = useState<string | null>(null);
+  /** For callbacks the project list gets, read on a click: depending on `activeRefKey` would remake
    *  them, and every row's props, on every switch. */
-  const activeKeyRef = useLatest(activeKey);
-  useEffect(() => rememberActive(activeKey), [activeKey]);
+  const activeRefKeyRef = useLatest(activeRefKey);
+  useEffect(() => rememberActive(activeRefKey), [activeRefKey]);
   const loadedProjects = useCallback((stored: Project[]) => {
     setProjects(stored);
-    setActiveKey((current) => current ?? activeAtStart(stored));
+    setActiveRefKey((current) => current ?? activeAtStart(stored));
   }, []);
   /** Each repository's or worktree's git state, tabs and starting flag (use-ref-feeds.ts);
-   *  everything below is by `projectRefKey` too, but `sandboxed`. */
+   *  everything below is by `refKey` too, but `sandboxed`. */
   const { states, tabs, starting, forgetRef: forgetFeeds } = useRefFeeds(projectsRef, loadedProjects);
   /**
    * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
@@ -104,8 +104,8 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
     const next: Record<string, PaneTab[]> = { ...tabs };
-    for (const [key, editors] of Object.entries(editorTabs)) {
-      next[key] = sameList(stripTabsRef.current[key], [...(tabs[key] ?? []), ...editors], NO_TABS);
+    for (const [refKey, editors] of Object.entries(editorTabs)) {
+      next[refKey] = sameList(stripTabsRef.current[refKey], [...(tabs[refKey] ?? []), ...editors], NO_TABS);
     }
     stripTabsRef.current = next;
     return next;
@@ -122,7 +122,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
-  const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
+  const { activeBranch, projectListBusy, runIn } = useBranchActions(activeRefKey);
   /** Pin and Unpin, on a right-click on any of a lane's section headers. */
   const laneMenu = useContextMenu<Lane>();
   // Section defaults and limits.
@@ -149,7 +149,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     movePinned,
     moveToggle,
     showChanges
-  } = useLanes(lanes, activeKeyRef, setActiveKey);
+  } = useLanes(lanes, activeRefKeyRef, setActiveRefKey);
   /** A pinned lane moves by its headers, among the pinned ones. */
   const laneDrag = useDragReorder({
     dragType: LANE_DRAG_TYPE,
@@ -164,7 +164,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
   /** What an agent asked for with `tet-ctl env-request`; main sends one at a time. */
   const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
-  /** Each project's sbx switch (use-sandboxed-projects.ts). */
+  /** Each project's SBX enabled state (use-sandboxed-projects.ts). */
   const { sandboxed, forgetSandboxed } = useSandboxedProjects(projects);
 
   // Before onNotice, whose subscription tells main the window listens.
@@ -174,8 +174,8 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     []
   );
 
-  /** A repository's or worktree's key, as a row or the git lane selects it. */
-  const select = useCallback((key: string) => setActiveKey(key), []);
+  /** Makes a repository or worktree active, by its `refKey`, as a row or the git lane picks it. */
+  const activateRef = useCallback((refKey: string) => setActiveRefKey(refKey), []);
 
   /** The project row's remove, once the row asked about its worktrees; the list follows through
    *  `projects:changed`. */
@@ -196,73 +196,73 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   }, []);
 
   /**
-   * Shows a tab opened from outside the tab area, bringing its repository or worktree to
-   * front — a one-off write into the layout (`placeTab`: a saved command's goes where its line last
+   * Shows a tab opened from outside the tab area, making its repository or worktree
+   * active — a one-off write into the layout (`placeTab`: a saved command's goes where its line last
    * lay).
    */
   const showTab = useCallback(
-    (key: string, tabId: string, command?: string) => {
-      setActiveKey(key);
-      placeTab(key, tabId, command);
+    (refKey: string, tabId: string, command?: string) => {
+      setActiveRefKey(refKey);
+      placeTab(refKey, tabId, command);
     },
     [placeTab]
   );
 
   // A control-channel tab, shown like a saved command's: drawing it starts its process.
   useEffect(
-    () => window.tet.terminals.onShow(({ ref, tabId }) => showTab(projectRefKey(ref), tabId)),
+    () => window.tet.tabs.onShow(({ ref, tabId }) => showTab(refKeyOf(ref), tabId)),
     [showTab]
   );
 
   const focused = useWindowFocused();
   const covered = useWindowCovered();
 
-  const activeResolved = (activeKey ? resolvedRefs[activeKey] : undefined) ?? null;
+  const activeResolved = (activeRefKey ? resolvedRefs[activeRefKey] : undefined) ?? null;
 
   /**
-   * The active repository's or worktree's tabs in front of the user (`tabsInFront`) — the one
-   * definition marks, `seen` and notifications (`terminals.inFront`) go by. Identity-stable: it is
+   * The active repository's or worktree's tabs on screen (`tabsOnScreen`) — the one
+   * definition marks, `seen` and notifications (`terminals.reportOnScreen`) go by. Identity-stable: it is
    * reported on change.
    */
-  const inFrontRef = useRef<string[]>(NO_IDS);
-  const inFront = useMemo(() => {
-    const next = activeKey ? tabsInFront(layouts[activeKey] ?? DEFAULT_LAYOUT, focused, covered) : NO_IDS;
-    inFrontRef.current = sameList(inFrontRef.current, next, NO_IDS);
-    return inFrontRef.current;
-  }, [focused, covered, activeKey, layouts]);
+  const onScreenTabIdsRef = useRef<string[]>(NO_IDS);
+  const onScreenTabIds = useMemo(() => {
+    const next = activeRefKey ? tabsOnScreen(layouts[activeRefKey] ?? DEFAULT_LAYOUT, focused, covered) : NO_IDS;
+    onScreenTabIdsRef.current = sameList(onScreenTabIdsRef.current, next, NO_IDS);
+    return onScreenTabIdsRef.current;
+  }, [focused, covered, activeRefKey, layouts]);
 
   // May include editor tabs, which match no tab in the main process.
   const activeRef = activeResolved?.ref ?? null;
   useEffect(() => {
-    window.tet.terminals.inFront(activeRef, inFront);
-  }, [activeRef, inFront]);
+    window.tet.tabs.reportOnScreen(activeRef, onScreenTabIds);
+  }, [activeRef, onScreenTabIds]);
 
-  /** Finished, waiting, starting and busy tabs, and the ways to them (use-tab-marks.ts). */
-  const { marks, showBusy, showFinished, showWaiting, showNeedsAttention, forgetProjectRef: forgetMarks } =
-    useTabMarks(tabs, activeKey, activeRef, inFront, showTab);
+  /** Finished, waiting, starting and working tabs, and the ways to them (use-tab-marks.ts). */
+  const { marks, showWorking, showFinished, showWaiting, jumpToWaiting, forgetProjectRef: forgetMarks } =
+    useTabMarks(tabs, activeRefKey, activeRef, onScreenTabIds, showTab);
 
   /** Drops everything held for a repository or worktree; the project list is the caller's. */
   const forgetProjectRef = useCallback((ref: ProjectRef) => {
-    const key = projectRefKey(ref);
-    forgetFeeds(key);
-    setEditorTabs((current) => forget(current, key));
-    forgetEditorSync(key);
+    const refKey = refKeyOf(ref);
+    forgetFeeds(refKey);
+    setEditorTabs((current) => forget(current, refKey));
+    forgetEditorSync(refKey);
     disposeRefEditors(ref);
-    forgetLayout(key);
-    forgetMarks(key);
+    forgetLayout(refKey);
+    forgetMarks(refKey);
     // The xterms live outside React; this is where a repository or worktree ends for good.
     disposeRefTerminals(ref);
   }, [forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks]);
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git lane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
-  // opened where no agent is installed can only run sandboxed, so its sbx settings open at once,
+  // opened where no agent is installed can only run sandboxed, so its SBX Settings open at once,
   // locked (SbxSettingsDialog); not a worktree, which has none.
   useEffect(
     () =>
       window.tet.projects.onChanged(({ projects: list, added, removed, show }) => {
         setProjects(list);
-        setActiveKey((current) => activeAfterChange(current, list, removed, show));
+        setActiveRefKey((current) => activeAfterChange(current, list, removed, show));
         for (const ref of removed ?? []) {
           forgetProjectRef(ref);
           if (ref.worktree === undefined) {
@@ -288,7 +288,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   /** A shell tab, for a project row's "New shell tab" entry. */
   const openShellTab = useCallback(
     (ref: ProjectRef) => {
-      void window.tet.terminals.create(ref, "shell").then((tab) => showTab(projectRefKey(ref), tab.tabId));
+      void window.tet.tabs.create(ref, "shell").then((tab) => showTab(refKeyOf(ref), tab.tabId));
     },
     [showTab]
   );
@@ -296,19 +296,19 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   /** Ctrl/Cmd+Shift+./, — within the focused pane. */
   const cycleTab = useCallback(
     (direction: 1 | -1) => {
-      if (!activeKey) {
+      if (!activeRefKey) {
         return;
       }
-      const layout = layouts[activeKey] ?? DEFAULT_LAYOUT;
-      const list = (stripTabs[activeKey] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
+      const layout = layouts[activeRefKey] ?? DEFAULT_LAYOUT;
+      const list = (stripTabs[activeRefKey] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
       if (list.length === 0) {
         return;
       }
       const at = list.findIndex((tab) => tab.tabId === layout.activeTab[layout.focusedPane]);
       const next = list[(at + direction + list.length) % list.length];
-      activateTab(activeKey, next.tabId, layout.focusedPane);
+      activateTab(activeRefKey, next.tabId, layout.focusedPane);
     },
-    [activeKey, stripTabs, layouts, activateTab]
+    [activeRefKey, stripTabs, layouts, activateTab]
   );
 
   /** Ctrl/Cmd+Shift+T. */
@@ -340,14 +340,14 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     toggleProjects: () => toggleLane("projects"),
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
-    needsAttention: showNeedsAttention,
+    jumpToWaiting,
     nextTab: () => cycleTab(1),
     previousTab: () => cycleTab(-1),
     newShellTab
   });
 
-  const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
-  /** Git and files need a repository or worktree in front; without one the projects stand in. */
+  const activeState = (activeRefKey ? states[activeRefKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
+  /** Git and files need an active repository or worktree; without one the projects stand in. */
   const shownLanes: ReadonlySet<Lane> = activeResolved ? openLanes : new Set(openLanes.size > 0 ? ["projects"] : []);
   /** The pinned lanes in the user's order, then one sliding in, then the free one, then those
    *  in, unseen at width 0. A lane sliding in stays where it stood until its slide ends: moving
@@ -377,12 +377,12 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     editorTabsRef,
     setEditorTabs,
     activateTab,
-    select,
+    activateRef,
     activeRef
   );
   useEffect(() => {
-    const offRequest = window.tet.environment.onRequest(setEnvRequest);
-    const offWithdrawn = window.tet.environment.onWithdrawn((id) =>
+    const offRequest = window.tet.env.onRequest(setEnvRequest);
+    const offWithdrawn = window.tet.env.onWithdrawn((id) =>
       setEnvRequest((current) => (current?.id === id ? null : current))
     );
     return () => {
@@ -434,8 +434,8 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                       <ProjectList
                         projects={projects}
                         resolvedRefs={resolvedRefs}
-                        activeKey={activeKey}
-                        onSelect={select}
+                        activeRefKey={activeRefKey}
+                        onActivateRef={activateRef}
                         onRemove={removeProject}
                         onReorder={reorderProjects}
                         onAdd={openAdd}
@@ -444,12 +444,12 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                         sandboxed={sandboxed}
                         onShowChanges={showChanges}
                         onOpenShellTab={openShellTab}
-                        onShowBusy={showBusy}
+                        onShowWorking={showWorking}
                         onShowFinished={showFinished}
                         onShowWaiting={showWaiting}
                         onSbxSettings={openSbxSettings}
                         runIn={runIn}
-                        gitBusy={projectListBusy}
+                        busy={projectListBusy}
                         worktreesSupported={worktreesSupported}
                       />
                       <Sash
@@ -467,7 +467,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                     <FilesLane
                       resolved={activeResolved}
                       shown={shown}
-                      openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
+                      openPath={editorTabs[activeResolved.refKey]?.find((tab) => tab.tabId === activeEditors[activeResolved.refKey])?.path ?? null}
                       onOpenFile={openEditor}
                       searchHeight={fileSearchHeight}
                       onSearchHeight={setFileSearchHeight}
@@ -482,7 +482,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                       treeHeight={branchTreeHeight}
                       onTreeHeight={setBranchTreeHeight}
                       onOpenDiff={openActiveDiff}
-                      onSelect={select}
+                      onActivateRef={activateRef}
                     />
                   )}
                 </SectionHandle.Provider>
@@ -508,26 +508,26 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
               and processes. */}
           {Object.values(resolvedRefs).map((resolved) => (
             <TabArea
-              key={resolved.key}
+              key={resolved.refKey}
               resolved={resolved}
-              tabs={stripTabs[resolved.key] ?? NO_TABS}
-              visible={resolved.key === activeKey}
+              tabs={stripTabs[resolved.refKey] ?? NO_TABS}
+              visible={resolved.refKey === activeRefKey}
               freeLane={freeLane}
               toggleOrder={toggleOrder}
               onToggleLane={toggleLane}
               onMoveToggle={moveToggle}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
-              externalBusy={starting[resolved.key] === true && (marks[resolved.key]?.starting ?? NO_IDS).length === 0}
+              externalBusy={starting[resolved.refKey] === true && (marks[resolved.refKey]?.starting ?? NO_IDS).length === 0}
               onCloseEditors={closeEditors}
-              layout={layouts[resolved.key] ?? DEFAULT_LAYOUT}
+              layout={layouts[resolved.refKey] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}
               onFocusPane={focusPane}
               onOpenSettings={openSettings}
-              finishedTabIds={marks[resolved.key]?.finished ?? NO_IDS}
-              waitingTabIds={marks[resolved.key]?.waiting ?? NO_IDS}
-              startingTabIds={marks[resolved.key]?.starting ?? NO_IDS}
+              finishedTabIds={marks[resolved.refKey]?.finished ?? NO_IDS}
+              waitingTabIds={marks[resolved.refKey]?.waiting ?? NO_IDS}
+              startingTabIds={marks[resolved.refKey]?.starting ?? NO_IDS}
             />
           ))}
           {!activeResolved && (

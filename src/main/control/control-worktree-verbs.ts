@@ -32,7 +32,7 @@ export function worktreeVerbs(
       const added = await deps.addWorktree(project(args, caller).id, branch);
       const worktree = added.project && worktreeOf(added.project, projectRef(added.project.id, added.worktree));
       if (!added.project || !worktree) {
-        throw new ControlError("bad_args", added.error ?? "could not create the worktree");
+        throw new ControlError("bad_args", added.error ?? "could not add the worktree");
       }
       return { result: { projectId: added.project.id, worktree: worktree.key, branch: worktree.branch ?? branch, path: worktree.path } };
     },
@@ -81,7 +81,7 @@ export function worktreeVerbs(
       if (base === undefined) {
         throw new ControlError("bad_args", `${branch} has no recorded base, so TET cannot tell where it goes: merge it with git yourself`);
       }
-      const checkedOut = listed.find((entry) => entry.main)?.branch;
+      const checkedOut = listed.find((entry) => entry.isRepository)?.branch;
       if (checkedOut !== base) {
         throw new ControlError(
           "bad_args",

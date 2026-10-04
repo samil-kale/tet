@@ -16,7 +16,7 @@ import { IconButton } from "../ui/IconButton";
 import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RowMark } from "../ui/RowSection";
-import { useRunning } from "../ui/use-running";
+import { useBusy } from "../ui/use-busy";
 
 /** Picked off an account's list, cloned from a url, or added from disk — initialized there where it
  *  holds no repository yet. Not in Dialog.tsx, which asks one question. */
@@ -52,11 +52,11 @@ function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (p
 
 /**
  * What the account form hands the dialog's frame while it is up: the frame's primary button is
- * this form's ("Add account"), so Enter in its fields runs it, and `running` holds the frame as a
+ * this form's ("Add account"), so Enter in its fields runs it, and `busy` holds the frame as a
  * Save does. Lifted as the bar's `busy` is (AGENTS.md); the host's refusal stays with the form,
  * under the token field.
  */
-type AccountSubmission = DialogPrimary & { running: boolean };
+type AccountSubmission = DialogPrimary & { busy: boolean };
 
 interface AccountFormProps {
   onAdded: (account: ProviderAccount) => void;
@@ -93,7 +93,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   const submitRef = useLatest(submit);
   useEffect(() => {
     // Plain to see why it waits: host or token left empty.
-    onForm({ label: "Add account", disabled: !ready, running: busy, run: () => void submitRef.current() });
+    onForm({ label: "Add account", disabled: !ready, busy, run: () => void submitRef.current() });
     return () => onForm(null);
   }, [ready, busy, onForm, submitRef]);
 
@@ -278,7 +278,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
         {(accounts ?? []).map((account) => (
           <div
             key={account.id}
-            className={`account-item${account.id === selectedId && !adding ? " active" : ""}${locked ? " disabled" : ""}`}
+            className={`account-row${account.id === selectedId && !adding ? " active" : ""}${locked ? " disabled" : ""}`}
             onClick={() => {
               if (!locked) {
                 setSelectedId(account.id);
@@ -327,7 +327,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
             )}
             <div className="repository-list">
               {filtered.map((repo) => (
-                <div className="repository-item" key={repo.fullName}>
+                <div className="repository-row" key={repo.fullName}>
                   <span className="repository-name">{repo.fullName}</span>
                   <button
                     type="button"
@@ -355,7 +355,7 @@ interface AddRepositoryDialogProps {
   onClose: () => void;
 }
 
-/** The one place tet talks to a host rather than a repository, so provider accounts live here. */
+/** The one place TET talks to a host rather than a repository, so provider accounts live here. */
 export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");
@@ -378,7 +378,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
    *  (AccountSubmission). */
   const [accountForm, setAccountForm] = useState<AccountSubmission | null>(null);
   /** The remote tab's account removal underway (`RemoteTabProps.runHeld`). */
-  const { running: removing, run: runRemoval } = useRunning();
+  const { busy: removing, run: runRemoval } = useBusy();
   const loginField = useRef<HTMLInputElement>(null);
 
   // The login's first field, once the clone asks for it.
@@ -438,7 +438,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const switchMode = changing(setMode);
 
   // The listing only reads, and its late answer is dropped (RemoteTab): it holds no Cancel.
-  const locked = adding || removing || accountForm?.running === true;
+  const locked = adding || removing || accountForm?.busy === true;
   const busy = locked || listing;
   const primary: DialogPrimary | undefined = accountForm
     ? { ...accountForm, disabled: accountForm.disabled || busy }

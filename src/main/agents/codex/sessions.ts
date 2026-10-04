@@ -22,7 +22,7 @@ import { mapLimited } from "../../util/async";
 import { PLATFORM } from "../../util/host-platform";
 import { openInside, removeInside } from "../../util/path-inside";
 
-/** Codex's config root; tet never overrides it. */
+/** Codex's config root; TET never overrides it. */
 export function codexHome(): string {
   return process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex");
 }

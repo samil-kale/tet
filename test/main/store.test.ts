@@ -62,7 +62,7 @@ describe("the environment variables kept in TET", () => {
       { name: "GITLAB_TOKEN", overridesMachine: false },
       { name: "STRIPE_KEY", overridesMachine: false }
     ]);
-    // Its own name: the first one in process.env may be one a tet this runs in kept (TET_KEPT_ENV).
+    // Its own name: the first one in process.env may be one a TET this runs in kept (TET_KEPT_ENV).
     process.env.TET_TEST_MACHINE = "machine";
     try {
       store.set([row("TET_TEST_MACHINE", "x")]);
@@ -88,13 +88,13 @@ describe("the environment variables kept in TET", () => {
     assert.deepEqual(store.values(), {});
   });
 
-  it("tell the machine's variables from those a tet it was started from set", () => {
+  it("tell the machine's variables from those a TET it was started from set", () => {
     const inherited = process.env.TET_KEPT_ENV;
     process.env.TET_TEST_FROM_OUTER = "outer";
     process.env.TET_TEST_OWN_MACHINE = "machine";
     process.env.TET_KEPT_ENV = "TET_TEST_FROM_OUTER";
     try {
-      assert.equal(machineSets("TET_TEST_FROM_OUTER"), false, "an outer tet's, not the machine's");
+      assert.equal(machineSets("TET_TEST_FROM_OUTER"), false, "an outer TET's, not the machine's");
       assert.equal(machineSets("TET_TEST_OWN_MACHINE"), true);
     } finally {
       delete process.env.TET_TEST_FROM_OUTER;
@@ -220,14 +220,14 @@ describe("the stores", () => {
       file,
       JSON.stringify({
         appearance: { colorScheme: "sepia", darkTheme: "solarized", lanes: { pinned: ["git", "nope", "git"], order: ["files", 3, "files"] } },
-        notifications: { finished: false, needsYou: "yes" },
+        notifications: { finished: false, waiting: "yes" },
         files: { editorKeybindingPreset: "" },
         git: { pushOnCommit: true, checkNewChanges: "yes" },
         prompts: { texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }, commitSuggester: "claude" }
       })
     );
     const settings = new SettingsStore(dir).get();
-    assert.deepEqual(settings.notifications, { finished: false, needsYou: true, idleReminder: false });
+    assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: false });
     assert.deepEqual(settings.git, {
       checkNewChanges: false,
       pushOnCommit: true,
@@ -244,10 +244,10 @@ describe("the stores", () => {
       "no lane named twice or unknown, the order takes the ones it misses at its end"
     );
     assert.equal(settings.files.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
-    assert.deepEqual(settings.prompts.texts, { commitMessage: "", handoff: "" }, "tet's own text spelled out is stored as none");
+    assert.deepEqual(settings.prompts.texts, { commitMessage: "", handover: "" }, "TET's own text spelled out is stored as none");
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "", model: "" });
     assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
-    assert.equal(effectivePrompt({ commitMessage: "write a subject", handoff: "" }, "commitMessage"), "write a subject");
+    assert.equal(effectivePrompt({ commitMessage: "write a subject", handover: "" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
     store.patch({ appearance: { colorScheme: "light" } });
     assert.equal(new SettingsStore(dir).get().appearance.colorScheme, "light", "written and read back");
@@ -312,12 +312,12 @@ describe("a settings write", () => {
     const stored = {
       appearance: { colorScheme: "light", darkTheme: "dark-modern" },
       prompts: { texts: { a: "", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
-      notifications: { finished: false, needsYou: true }
+      notifications: { finished: false, waiting: true }
     };
     assert.deepEqual(withSettings(stored as never, { appearance: { darkTheme: "dark-slate" }, prompts: { texts: { a: "mine" } as never } }), {
       appearance: { colorScheme: "light", darkTheme: "dark-slate" },
       prompts: { texts: { a: "mine", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
-      notifications: { finished: false, needsYou: true }
+      notifications: { finished: false, waiting: true }
     });
   });
 });

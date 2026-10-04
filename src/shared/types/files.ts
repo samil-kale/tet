@@ -70,7 +70,7 @@ export type ExplorerSortOrder = (typeof EXPLORER_SORT_ORDERS)[number];
 export interface ExplorerSettings {
   /** `explorer.excludeGitIgnore`: hide what git ignores too. */
   excludeGitIgnore: boolean;
-  /** `explorer.compactFolders`: fold `src/main/java` into one row. */
+  /** `explorer.compactFolders`: compact `src/main/java` into one row. */
   compactFolders: boolean;
   /** `explorer.sortOrder`. */
   sortOrder: ExplorerSortOrder;

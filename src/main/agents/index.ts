@@ -78,7 +78,7 @@ export async function removeAllSessions(cwd: string): Promise<void> {
   );
 }
 
-/** `tet-ctl list-agents`' answer: every agent with whether it is installed (agentInstalled). */
+/** `tet-ctl agents-list`' answer: every agent with whether it is installed (agentInstalled). */
 export function listInstalledAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]> {
   return Promise.all(
     AGENTS.map(async (agent) => ({ id: agent.id, name: agent.displayName, installed: await agentInstalled(agent, os.tmpdir()) }))

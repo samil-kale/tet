@@ -10,7 +10,7 @@ import { useFileSearch } from "./use-file-search";
 import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
 import { ClearIcon, NewFileIcon, NewFolderIcon } from "../../ui/icons";
-import { FoldAllButton } from "../../ui/FoldAllButton";
+import { CollapseExpandAllButton } from "../../ui/CollapseExpandAllButton";
 import { Section } from "../../ui/Section";
 
 interface FilesLaneProps {
@@ -56,7 +56,7 @@ export const FilesLane = memo(function FilesLane({
   searchHeight,
   onSearchHeight
 }: FilesLaneProps) {
-  const { acting, act, ask } = useFileAct(resolved.key);
+  const { acting, act, ask } = useFileAct(resolved.refKey);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(resolved, shown);
   const { searchResult, searching, search } = useFileSearch(resolved);
   const explorerRef = useRef<ExplorerHandle>(null);
@@ -66,8 +66,8 @@ export const FilesLane = memo(function FilesLane({
   const [explorerExpanded, setExplorerExpanded] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
   // A file action shows at once, as the git lane's changes list does.
-  const showProgress = useDelayed(listing, PROGRESS_DELAY_MS) || acting;
-  const showSearchProgress = useDelayed(searching, PROGRESS_DELAY_MS);
+  const explorerBusy = useDelayed(listing, PROGRESS_DELAY_MS) || acting;
+  const searchBusy = useDelayed(searching, PROGRESS_DELAY_MS);
   /** A match row: the file at the match, which its editor selects. */
   const onOpenMatch = useCallback(
     (path: string, match: FileSearchMatch) =>
@@ -81,7 +81,7 @@ export const FilesLane = memo(function FilesLane({
       <Section
         title="EXPLORER"
         count={explorerListing?.files.length}
-        busy={showProgress}
+        busy={explorerBusy}
         actions={
           <>
             <IconButton
@@ -105,14 +105,14 @@ export const FilesLane = memo(function FilesLane({
             >
               <ClearIcon />
             </IconButton>
-            <FoldAllButton expanded={explorerExpanded} disabled={!explorerListing} tree={explorerRef} />
+            <CollapseExpandAllButton expanded={explorerExpanded} disabled={!explorerListing} tree={explorerRef} />
           </>
         }
       >
-        {/* Keyed by repository or worktree: fold and filter state is keyed by paths that repeat
+        {/* Keyed by repository or worktree: expand and filter state is keyed by paths that repeat
             across them. */}
         <Explorer
-          key={resolved.key}
+          key={resolved.refKey}
           ref={explorerRef}
           resolved={resolved}
           files={explorerListing}
@@ -139,7 +139,7 @@ export const FilesLane = memo(function FilesLane({
         title="SEARCH"
         count={searchResult && searchSummary(searchResult)}
         countError={Boolean(searchResult?.error)}
-        busy={showSearchProgress}
+        busy={searchBusy}
         height={searchHeight}
         actions={
           <>
@@ -150,7 +150,7 @@ export const FilesLane = memo(function FilesLane({
             >
               <ClearIcon />
             </IconButton>
-            <FoldAllButton
+            <CollapseExpandAllButton
               expanded={searchExpanded}
               disabled={searchResult === undefined || searchResult.files.length === 0}
               tree={searchRef}
@@ -160,7 +160,7 @@ export const FilesLane = memo(function FilesLane({
       >
         {/* Its own query — the tree above filters by name, this looks inside the files. */}
         <FileSearch
-          key={resolved.key}
+          key={resolved.refKey}
           ref={searchRef}
           result={searchResult}
           runSearch={search}

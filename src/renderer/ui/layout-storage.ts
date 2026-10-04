@@ -72,10 +72,10 @@ export function useStoredChoice<T extends string>(
 }
 
 /**
- * Which sections of a tree the user has folded, restored on the next start, in layout storage.
- * `initial` names what starts folded; a key never toggled stands open.
+ * Which groups of a tree the user has collapsed, restored on the next start, in layout storage.
+ * `initial` names what starts collapsed; a key never toggled stands expanded.
  */
-export function useCollapsedSections(key: string, initial: string[]): [(section: string) => boolean, (section: string) => void] {
+export function useCollapsedGroups(key: string, initial: string[]): [(group: string) => boolean, (group: string) => void] {
   const storageKey = STORAGE_PREFIX + key;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try {
@@ -86,12 +86,12 @@ export function useCollapsedSections(key: string, initial: string[]): [(section:
     } catch {
       // Unreadable storage is the initial state.
     }
-    return Object.fromEntries(initial.map((section) => [section, true]));
+    return Object.fromEntries(initial.map((group) => [group, true]));
   });
-  const isCollapsed = useCallback((section: string) => collapsed[section] ?? false, [collapsed]);
+  const isCollapsed = useCallback((group: string) => collapsed[group] ?? false, [collapsed]);
   const toggle = useCallback(
-    (section: string) => {
-      const next = { ...collapsed, [section]: !(collapsed[section] ?? false) };
+    (group: string) => {
+      const next = { ...collapsed, [group]: !(collapsed[group] ?? false) };
       setCollapsed(next);
       localStorage.setItem(storageKey, JSON.stringify(next));
     },

@@ -19,7 +19,7 @@ export function useFileSearch(resolved: ResolvedRef): {
   searching: boolean;
   search: (query: FileSearchQuery | null) => void;
 } {
-  const [held, setHeld] = useState<{ key: string; result: FileSearchResult } | undefined>(undefined);
+  const [held, setHeld] = useState<{ refKey: string; result: FileSearchResult } | undefined>(undefined);
   const [searching, setSearching] = useState(false);
   const asked = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -39,7 +39,7 @@ export function useFileSearch(resolved: ResolvedRef): {
         setSearching(true);
         void window.tet.repository.searchFiles(resolved.ref, query).then((result) => {
           if (asked.current === seq) {
-            setHeld({ key: resolved.key, result });
+            setHeld({ refKey: resolved.refKey, result });
             setSearching(false);
           }
         });
@@ -48,5 +48,5 @@ export function useFileSearch(resolved: ResolvedRef): {
     [resolved]
   );
 
-  return { searchResult: held?.key === resolved.key ? held.result : undefined, searching, search };
+  return { searchResult: held?.refKey === resolved.refKey ? held.result : undefined, searching, search };
 }

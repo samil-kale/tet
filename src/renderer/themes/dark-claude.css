@@ -46,7 +46,7 @@
   --vscode-panel-border: #ffffff1a;
 
   --vscode-tab-activeBackground: #151515;
-  /* Unset; tet underlines the active tab in the accent, as the theme's tab.activeBorderTop. */
+  /* Unset; TET underlines the active tab in the accent, as the theme's tab.activeBorderTop. */
   --vscode-tab-activeBorder: #d87757;
   --vscode-tab-activeForeground: #c3c1ba;
   --vscode-tab-inactiveBackground: #111111;
@@ -54,8 +54,8 @@
   --vscode-tab-inactiveForeground: #898781;
   --vscode-tab-border: #111111;
 
-  /* tet's own, the same as Dark Modern's — see the note there; not the theme's #303030, the one
-     hover grey every tet theme shares. */
+  /* TET's own, the same as Dark Modern's — see the note there; not the theme's #303030, the one
+     hover grey every TET theme shares. */
   --vscode-toolbar-hoverBackground: #5a5d5e50;
 
   /* Not the theme's #3e3e38 and #c3c1ba: claude.ai's selected sidebar row — as the menu's. */

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { errorMessage } from "../../shared/errors";
 import type { SbxAccount, SbxAccountEdit, SbxSignInResult } from "../../shared/types/sbx";
 import { readRows, writeJson } from "../util/json-file";
-import { readSbxUser, runSbxTokenLogin } from "./sbx-cli";
+import { readSbxUser, runSbxTokenSignIn } from "./sbx-cli";
 import { seal, unseal } from "../util/sealed";
 
 /** What the file holds: the account plus its token, encrypted by the OS and base64-wrapped. */
@@ -18,7 +18,7 @@ function toAccount(entry: StoredSbxAccount): SbxAccount {
 /**
  * The Docker access tokens of the SBX Settings' General tab, one list for every project — sbx has
  * one sign-in per machine. A token leaves this class only decrypted into `sbx login`'s stdin
- * (sbx-cli.ts's runSbxTokenLogin); the renderer never sees one.
+ * (sbx-cli.ts's runSbxTokenSignIn); the renderer never sees one.
  */
 export class SbxAccountStore {
   private readonly file: string;
@@ -104,7 +104,7 @@ export async function signInToSbx(
   if (token === undefined) {
     return { signedIn: false, error: "No access token stored for this account on this machine; enter it again" };
   }
-  const refused = await runSbxTokenLogin(user, token, false);
+  const refused = await runSbxTokenSignIn(user, token, false);
   if (refused !== undefined) {
     return { signedIn: false, error: refused };
   }

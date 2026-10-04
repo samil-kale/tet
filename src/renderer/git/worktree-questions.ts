@@ -14,16 +14,16 @@ import { askName, confirm, confirmedFollowUp } from "../ui/Dialog";
  * A worktree and its branch are one (projects.ts): made together, named by the branch, deleted
  * together.
  */
-/** Why a worktree git lists offers nothing but its path: TET never opens one it did not make. */
-export const NOT_MADE_BY_TET = "not created by TET";
+/** Why a worktree git lists offers nothing but its path: TET never opens one made elsewhere. */
+export const MADE_ELSEWHERE = "made elsewhere";
 
 /** A worktree entry in a menu, disabled saying `why` where there is a reason: git too old to create
- *  one (Requirements.worktrees), or one TET did not make. */
+ *  one (Requirements.worktrees), or one made elsewhere. */
 export function worktreeEntry(label: string, why: string | undefined, run: (() => void) | undefined): ContextMenuEntry {
   return why === undefined ? { label: `${label}...`, run } : { label: `${label} (${why})` };
 }
 
-/** Why "New worktree" is disabled, if it is. */
+/** Why "Add worktree" is disabled, if it is. */
 export function newWorktreeRefusal(supported: boolean): string | undefined {
   return supported ? undefined : WORKTREES_NEED_GIT;
 }
@@ -31,12 +31,12 @@ export function newWorktreeRefusal(supported: boolean): string | undefined {
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
 export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
   await askName({
-    title: "New worktree",
+    title: "Add worktree",
     detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/projects.`,
-    confirmLabel: "Create worktree",
+    confirmLabel: "Add worktree",
     // The name is the branch's, so git refuses the same names here; shown at the field.
     submit: (name) =>
-      run.ask(`Creating worktree ${name}...`, async () => {
+      run.ask(`Adding worktree ${name}...`, async () => {
         const added = await window.tet.projects.addWorktree(projectId, name);
         return added.project ? { ok: true } : { ok: false, error: added.error };
       })

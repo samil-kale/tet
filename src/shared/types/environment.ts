@@ -1,6 +1,6 @@
 import type { ProjectRef } from "./project";
 
-/** An environment variable tet sets in every tab it starts, a sandboxed one excepted, over the
+/** An environment variable TET sets in every tab it starts, a sandboxed one excepted, over the
  *  machine's own. Its value is kept main-side and reaches only a tab's environment. */
 export interface EnvVarInfo {
   name: string;

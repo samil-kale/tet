@@ -114,9 +114,9 @@ textarea:disabled,
 .icon-button:disabled,
 .context-menu-item.disabled,
 .dialog-tab.disabled,
-.account-item.disabled,
-/* A worktree TET did not make: listed, never opened. */
-.project-item.foreign,
+.account-row.disabled,
+/* A worktree made elsewhere: listed, never opened. */
+.worktree-row.made-elsewhere,
 /* An agent a knowledge row brings nothing to. */
 .sbx-knowledge-agent.dimmed {
   opacity: 0.4;
@@ -167,7 +167,7 @@ textarea:focus,
    and :hover rule here, so its highlighted row cannot be themed. */
 .dropdown-trigger {
   text-align: left;
-  /* Room for `.select-arrow`, drawn over this button's right edge. */
+  /* Room for `.select-chevron`, drawn over this button's right edge. */
   padding-right: 26px;
 }
 
@@ -230,7 +230,7 @@ textarea:focus,
   border-color: var(--vscode-radio-activeBorder);
 }
 
-/* Anchors `.select-arrow` over the dropdown's right edge. */
+/* Anchors `.select-chevron` over the dropdown's right edge. */
 .select-field {
   position: relative;
   display: flex;
@@ -258,7 +258,7 @@ textarea:focus,
   visibility: hidden;
 }
 
-.select-arrow {
+.select-chevron {
   position: absolute;
   right: 10px;
   top: 50%;
@@ -377,10 +377,10 @@ textarea:focus,
   color: var(--vscode-titleBar-activeForeground);
 }
 
-/* Just enough room around the icon for the hover background. An `.icon-mark` is a status in an
+/* Just enough room around the icon for the hover background. A `.status-icon` is a status in an
    action's place: the same box and dimming, with nothing to click. */
 .icon-button,
-.icon-mark {
+.status-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -403,7 +403,7 @@ textarea:focus,
    svg rounds its box apart from the button's on a fractional scale, off the middle by up to a
    pixel. A percentage padding is of the box's width, so this holds for every square box. */
 .icon-button svg,
-.icon-mark svg {
+.status-icon svg {
   width: 100%;
   height: 100%;
   padding: calc((100% - var(--icon-size)) / 2);
@@ -513,10 +513,11 @@ textarea:focus,
 
 /* Every list row is one height. Stated rather than padded, so a row with a 22px action button
    stands no taller than one holding only text. */
-.project-item,
-.command-item,
+.project-row,
+.worktree-row,
+.command-row,
 .tree-header,
-.tree-item {
+.tree-row {
   height: var(--list-row-height);
   flex: none;
 }
@@ -524,8 +525,9 @@ textarea:focus,
 /* One row shape for both of the projects lane's lists. The icon buttons ending a row stand apart
    as everywhere else; the label before them needs no more, the buttons carrying 4px around a
    14px drawing in a 22px box. */
-.project-item,
-.command-item {
+.project-row,
+.worktree-row,
+.command-row {
   display: flex;
   align-items: center;
   gap: var(--action-gap);
@@ -533,30 +535,31 @@ textarea:focus,
   font-size: var(--vscode-font-size);
 }
 
-.project-item {
+.project-row,
+.worktree-row {
   cursor: pointer;
 }
 
-/* A worktree under its project's row, indented as `.tree-item.nested`. */
-.project-item.worktree {
+/* A worktree under its project's row, indented as `.tree-row.nested`. */
+.worktree-row {
   padding-left: 30px;
 }
 
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees, a pinned
    lane by its headers. */
 .project-group.dragging,
-.command-item.dragging,
+.command-row.dragging,
 .lane.dragging,
 .lane-toggle.dragging {
   opacity: 0.5;
 }
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
-.command-item.drop-before {
+.command-row.drop-before {
   box-shadow: inset 0 1px 0 var(--vscode-focusBorder);
 }
 
-.command-item.drop-after {
+.command-row.drop-after {
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
@@ -660,11 +663,11 @@ textarea:focus,
 /* Branch tree ----------------------------------------------------------------------------- */
 
 /* A branch command is running; a second one would race it for the index lock. */
-.branch-tree.busy .tree-item {
+.branch-tree.locked .tree-row {
   pointer-events: none;
 }
 
-.branch-tree.busy .tree {
+.branch-tree.locked .tree {
   cursor: progress;
 }
 
@@ -752,12 +755,12 @@ textarea:focus,
   align-items: center;
   gap: 4px;
   width: 100%;
-  /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's marks. */
+  /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's file icons. */
   padding: 0 6px 0 9px;
   font-weight: 400;
 }
 
-.tree-item {
+.tree-row {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -767,41 +770,43 @@ textarea:focus,
   font-size: var(--vscode-font-size);
 }
 
-.tree-item.nested {
+.tree-row.nested {
   padding-left: 43px;
 }
 
 /* Every list's rows, one hover and one selection. */
-.command-item:hover,
-.project-item:not(.foreign):hover,
+.command-row:hover,
+.project-row:hover,
+.worktree-row:not(.made-elsewhere):hover,
 .tree-header:hover,
-.tree-item:hover,
-.account-item:not(.disabled):hover,
-.repository-item:hover {
+.tree-row:hover,
+.account-row:not(.disabled):hover,
+.repository-row:hover {
   background: var(--vscode-list-hoverBackground);
 }
 
 /* After the hover rule: a selected row keeps its selection colour while hovered. HEAD gets a
    background, not a recolored label, which keeps a track badge legible. */
-.project-item.active,
-.tree-item.current,
-.tree-item.selected,
-.account-item.active {
+.project-row.active,
+.worktree-row.active,
+.tree-row.current,
+.tree-row.selected,
+.account-row.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-list-activeSelectionForeground);
 }
 
 /* The files lane's EXPLORER tree, and the SEARCH section under it, whose rows are of the same shape.
    It nests arbitrarily deep, so rows set `padding-left` inline. The Explorer's row: no flex gap,
-   the twistie and the file mark carry their own. */
-.explorer-tree .tree-item {
+   the chevron and the file icon carry their own. */
+.explorer-tree .tree-row {
   height: 24px;
   gap: 0;
 }
 
-/* A file mark is a glyph of Seti's font (lanes/files/file-icons.ts), centred in the chevron's
+/* A file icon is a glyph of Seti's font (lanes/files/file-icons.ts), centred in the chevron's
    `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
-   (TWISTIE_WIDTH + TWISTIE_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
+   (CHEVRON_WIDTH + CHEVRON_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
   src: url("./lanes/files/seti.woff") format("woff");
@@ -809,7 +814,7 @@ textarea:focus,
   font-style: normal;
 }
 
-.explorer-tree .file-mark,
+.explorer-tree .file-icon,
 .change-status {
   display: flex;
   align-items: center;
@@ -817,13 +822,13 @@ textarea:focus,
   margin-right: 4px;
 }
 
-.explorer-tree .file-mark {
+.explorer-tree .file-icon {
   font-family: "seti";
   font-size: calc(var(--icon-size) * 14.6 / 12);
   line-height: 1;
 }
 
-/* Seti's palette (FileMarkColor in lanes/files/file-icons.ts) in the terminal's ANSI colors, which every
+/* Seti's palette (FileIconColor in lanes/files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
   color: var(--vscode-terminal-ansiBlue);
@@ -946,7 +951,7 @@ textarea:focus,
 }
 
 /* One project's split: 1–4 `.pane`s ("Split view" in AGENTS.md). A row, since every
-   preset's first divider is vertical; stacked panes nest in a column. Relative for
+   preset's first sash is vertical; stacked panes nest in a column. Relative for
    `.snap-preview`; no stacking context. */
 .panes-grid {
   position: relative;
@@ -1065,7 +1070,7 @@ textarea:focus,
 .tab {
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
-  padding: 0 4px 0 10px;
+  padding: 0 6px 0 12px;
   max-width: 270px;
   background: var(--vscode-tab-inactiveBackground);
   cursor: pointer;
@@ -1089,7 +1094,7 @@ textarea:focus,
   gap: var(--action-gap);
   flex: none;
   border-right: 1px solid var(--vscode-panel-border);
-  padding: 0 8px;
+  padding: 0 6px;
 }
 
 .tab.inactive .tab-label {
@@ -1111,7 +1116,8 @@ textarea:focus,
 
 /* On the active tab or row's selection background. */
 .tab.active .tab-mark:not(.tab-mark-error),
-.project-item.active .tab-mark:not(.tab-mark-error) {
+.project-row.active .tab-mark:not(.tab-mark-error),
+.worktree-row.active .tab-mark:not(.tab-mark-error) {
   color: var(--tet-tabMark-activeForeground, var(--vscode-focusBorder));
 }
 
@@ -1198,7 +1204,7 @@ textarea:focus,
   color: var(--vscode-menu-selectionForeground);
 }
 
-/* A submenu's arrow, at the entry's right edge as in VS Code's menus. */
+/* A submenu's chevron, at the entry's right edge as in VS Code's menus. */
 .context-menu-chevron {
   flex: none;
   width: var(--icon-size);
@@ -1335,8 +1341,8 @@ textarea:focus,
   display: none;
 }
 
-/* git's letter for the change, in the theme's SCM colour, in a file mark's place and gap
-   (`.file-mark`), so file and folder labels stay level. `renamed` has none: git treats it as a
+/* git's letter for the change, in the theme's SCM colour, in a file icon's place and gap
+   (`.file-icon`), so file and folder labels stay level. `renamed` has none: git treats it as a
    modification of a moved file. */
 .change-status {
   margin-top: 2px;
@@ -1435,7 +1441,7 @@ textarea:focus,
 }
 
 /* The find widget's buttons as icon-buttons. `!important`: monaco's findWidget.css is bundled
-   after this file and wins on order. The color is tet's own `.button` undone: monaco names these
+   after this file and wins on order. The color is TET's own `.button` undone: monaco names these
    `button` too, and a rule matching them beats the color they would inherit from the widget. */
 .editor-host .find-widget .button {
   color: var(--vscode-editorWidget-foreground);
@@ -1446,7 +1452,7 @@ textarea:focus,
   opacity: 0.8;
 }
 
-/* No replace: the widget's only `.toggle` is the one opening the replace row, which tet offers
+/* No replace: the widget's only `.toggle` is the one opening the replace row, which TET offers
    neither in the context menu nor on a key (`configureEditor`). */
 .editor-host .find-widget .button.toggle,
 .editor-host .find-widget > .replace-part {
@@ -1550,7 +1556,7 @@ textarea:focus,
   color: var(--vscode-descriptionForeground);
 }
 
-/* Picks the comparison layout; the active one takes an active tab's underline. */
+/* Picks the diff layout; the active one takes an active tab's underline. */
 .image-diff-modes {
   display: flex;
   align-items: center;
@@ -1745,7 +1751,7 @@ textarea:focus,
 .dialog {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   width: 500px;
   max-width: calc(100vw - 32px);
   padding: 16px;
@@ -1777,7 +1783,7 @@ textarea:focus,
 }
 
 .dialog-tab {
-  padding: 0 14px;
+  padding: 0 12px;
 }
 
 /* `.dialog-tab.active` is `.tab.active`'s. */
@@ -1785,8 +1791,7 @@ textarea:focus,
 /* The rows' mark (.row-mark) repeated on their tab, so it shows from any tab. */
 .dialog-tab-mark {
   display: flex;
-  margin-top: 3px;
-  margin-left: 4px;
+  margin-left: 6px;
   color: var(--vscode-errorForeground);
 }
 
@@ -1990,7 +1995,7 @@ textarea:focus,
 }
 
 /* Fixed height: switching tabs must not resize the dialog, and rows that outgrow it scroll in their
-   own box rather than growing it. Capped to the window, the sbx dialog's only with the fields or the
+   own box rather than growing it. Capped to the window, the SBX Settings' only with the fields or the
    account up (SbxSettingsDialog's `showsAccount`); the checks before them are short. */
 .settings-dialog,
 .sbx-settings-dialog,
@@ -2133,10 +2138,10 @@ textarea:focus,
 
 .dialog-checkbox > span,
 .sbx-governance > strong {
-  padding-top: calc((23px - 1lh) / 2);
+  padding-top: 5px;
 }
 
-/* Drawn by tet, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
+/* Drawn by TET, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
    dark, never a theme's colors. A tree row's (ui/tree-row.tsx) is the same box. */
 .dialog-checkbox input,
 .tree-checkbox {
@@ -2198,7 +2203,7 @@ textarea:focus,
 /* The Environment tab fills the body (`FieldColumn`'s `fill`), and only its rows scroll: the text
    above them stays put, and the body never needs a bar of its own besides theirs. The rows' box is
    as tall as its rows, so "+ Add" follows the last one, and shrinks to scroll once they outgrow it.
-   The same for the sbx dialog's rows: a tab's one section, and the Docker account's tokens. */
+   The same for the SBX Settings' rows: a tab's one section, and the Docker account's tokens. */
 .settings-environment .dialog-field,
 .sbx-settings-tab > .dialog-field,
 .sbx-account .dialog-field {
@@ -2323,7 +2328,7 @@ textarea:focus,
   margin-bottom: 8px;
 }
 
-.requirement-item {
+.requirement-row {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -2360,6 +2365,7 @@ textarea:focus,
   gap: 12px;
   flex: 1;
   min-height: 0;
+  margin-top: 4px;
 }
 
 .account-list {
@@ -2377,7 +2383,7 @@ textarea:focus,
 }
 
 /* Two lines, so content-high. The 5px is what a 28px row leaves around its text. */
-.account-item {
+.account-row {
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2400,7 +2406,7 @@ textarea:focus,
 }
 
 /* Keeps the description readable on the selection blue, where its usual grey is not. */
-.account-item.active .account-host {
+.account-row.active .account-host {
   color: inherit;
   opacity: 0.8;
 }
@@ -2411,7 +2417,7 @@ textarea:focus,
   overflow-y: auto;
 }
 
-.repository-item {
+.repository-row {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2433,7 +2439,7 @@ textarea:focus,
   font-size: var(--small-font-size);
 }
 
-.repository-item:hover .repository-clone {
+.repository-row:hover .repository-clone {
   visibility: visible;
 }
 

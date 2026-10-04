@@ -3,7 +3,7 @@ import type { AgentIcon } from "../../../shared/types/agents";
 /** Claude Code's own extension icon, drawn two pixels over the shared size to grow the glyph in the shared box. */
 export const claudeIcon: AgentIcon = {
   kind: "fill",
-  extent: 19.2,
+  extent: 19.01,
   cx: 12,
   cy: 11.67,
   grid: 24,

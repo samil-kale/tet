@@ -16,7 +16,7 @@ interface StoredLogin {
 }
 
 /**
- * The logins typed into tet for a host where git has no credential helper to keep them (on Linux
+ * The logins typed into TET for a host where git has no credential helper to keep them (on Linux
  * by default). Where there is one, git stores the login there itself and nothing lands here. A
  * password leaves this class only decrypted into a git command's environment (git.ts's askpass).
  */

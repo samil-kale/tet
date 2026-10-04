@@ -10,14 +10,14 @@ import { COMMAND_COLORS } from "../../shared/types/project";
 import { SBX_ACCESS } from "../../shared/types/sbx";
 import type { ExplorerRoot, ExplorerSettings } from "../../shared/types/files";
 import type { CommandColor, ProjectCommand } from "../../shared/types/project";
-import type { SbxPath, SbxPort, SbxProjectConfig, SbxSecret, SbxVariable } from "../../shared/types/sbx";
+import type { SbxPath, SbxPort, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
 import { readRepositoryPath } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";
 import { isRecord } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 
-/** A project's saved commands, Explorer view and sbx settings, in its own root so it travels with
+/** A project's saved commands, Explorer view and SBX settings, in its own root so it travels with
  *  the repository; a linked worktree has none of its own (configRoot). Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
  *  their VS Code name (`readExplorerView`). A file missing or oddly shaped is no commands and the
  *  default view; a broken one its last readable version (`read`). The watcher reports every write
@@ -35,7 +35,7 @@ interface ProjectFile {
   commands?: StoredCommand[];
   folders?: unknown;
   settings?: unknown;
-  /** The sbx-settings dialog's state (readSbxConfig/writeSbxConfig). Never a credential. */
+  /** The sbx-settings dialog's state (readSbxSettings/writeSbxSettings). Never a credential. */
   sbx?: unknown;
 }
 
@@ -112,19 +112,19 @@ async function problemAt(filePath: string): Promise<string | undefined> {
 
 /**
  * A write of the repository's file, as its watcher reports it, read once for every listener: why it
- * cannot be used, and its commands and sbx settings — its last readable version's while broken,
+ * cannot be used, and its commands and SBX settings — its last readable version's while broken,
  * none where it never was readable.
  */
 export async function readChanged(
   root: string
-): Promise<{ problem: string | undefined; commands?: ProjectCommand[]; sbx?: SbxProjectConfig }> {
+): Promise<{ problem: string | undefined; commands?: ProjectCommand[]; sbx?: SbxProjectSettings }> {
   const own = configRoot(root);
   const filePath = path.join(own, PROJECT_FILE);
   const problem = await problemAt(filePath);
   const content = lastReadable.get(filePath);
   return content === undefined
     ? { problem }
-    : { problem, commands: toCommands(content), sbx: toSbxConfig(content, own !== root) };
+    : { problem, commands: toCommands(content), sbx: toSbxSettings(content, own !== root) };
 }
 
 /** The file's contents, or **null** when there is none. A broken file counts as its last readable
@@ -141,7 +141,7 @@ async function read(filePath: string): Promise<ProjectFile | null> {
 /** A value to set at a path inside the file; undefined removes the key. */
 type Change = [JSONPath, unknown];
 
-/** The patch underway per file: commands, the Explorer menu, the sbx dialog and tet-ctl all write
+/** The patch underway per file: commands, the Explorer menu, the SBX Settings and tet-ctl all write
  *  it, and two read-modify-writes at once keep only the last one's change. */
 const patches = new Map<string, Promise<unknown>>();
 
@@ -436,7 +436,7 @@ function toSbxSecrets(value: unknown): SbxSecret[] {
 }
 
 /** A row needs an env name, trimmed; a repeated one (on win32 in any case, as the environment
- *  `sbx run -e NAME` reads it from), one a secret already holds, or one of tet's own dropped — the
+ *  `sbx run -e NAME` reads it from), one a secret already holds, or one of TET's own dropped — the
  *  sandbox sees one value per name, and a secret's is its placeholder (sbx.ts's sandboxEnv). */
 function toSbxVariables(value: unknown, secrets: SbxSecret[]): SbxVariable[] {
   const variables = objectRows(value, ({ env }) => {
@@ -448,7 +448,7 @@ function toSbxVariables(value: unknown, secrets: SbxSecret[]): SbxVariable[] {
 }
 
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path
- *  means nothing on another OS, so readSbxConfig reads and writeSbxConfig replaces only this
+ *  means nothing on another OS, so readSbxSettings reads and writeSbxSettings replaces only this
  *  platform's rows. A `~/…` row carries no `os` and applies everywhere. */
 interface StoredSbxPath extends SbxPath {
   os?: string;
@@ -475,17 +475,17 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
   return toSettings(content.sbx);
 }
 
-/** The sbx settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
+/** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
  *  hosts and the variables' names. Never holds a token: each sandboxed agent signs in with its own
  *  `/login` inside the sandbox, and a secret's or variable's value stays on this machine, as does
  *  the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this machine reaches one
  *  sandbox, and its repository's has it. */
-export async function readSbxConfig(root: string): Promise<SbxProjectConfig> {
+export async function readSbxSettings(root: string): Promise<SbxProjectSettings> {
   const own = configRoot(root);
-  return toSbxConfig(await read(path.join(own, PROJECT_FILE)), own !== root);
+  return toSbxSettings(await read(path.join(own, PROJECT_FILE)), own !== root);
 }
 
-function toSbxConfig(content: ProjectFile | null, worktree: boolean): SbxProjectConfig {
+function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProjectSettings {
   const sbx = sbxSection(content ?? {});
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
@@ -502,7 +502,7 @@ function toSbxConfig(content: ProjectFile | null, worktree: boolean): SbxProject
 }
 
 /** Replaces only the rows that apply here — see StoredSbxPath. */
-export function writeSbxConfig(root: string, config: SbxProjectConfig): Promise<void> {
+export function writeSbxSettings(root: string, config: SbxProjectSettings): Promise<void> {
   return patch(root, (content) => {
     const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));
     const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: PLATFORM.id }));

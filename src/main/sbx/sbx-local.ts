@@ -1,13 +1,13 @@
 import * as path from "node:path";
 import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../../shared/types/sbx";
-import type { SbxAccess, SbxKnowledgeConfig, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
+import type { SbxAccess, SbxKnowledgeSettings, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
 import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
 import { seal, unseal } from "../util/sealed";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
  *  base64-wrapped, and the knowledge unless it is all off (EMPTY_SBX_KNOWLEDGE). */
 interface StoredSbxLocal extends Record<SbxValueKind, Record<string, string>> {
-  knowledge?: SbxKnowledgeConfig;
+  knowledge?: SbxKnowledgeSettings;
 }
 
 function emptyLocal(): StoredSbxLocal {
@@ -21,12 +21,12 @@ function stringsOf(value: unknown): Record<string, string> {
 }
 
 /** A malformed kind reads as off, a malformed folder as each agent's own. */
-function toKnowledge(value: unknown): SbxKnowledgeConfig | undefined {
+function toKnowledge(value: unknown): SbxKnowledgeSettings | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
   const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((access) => access === field) ?? false;
-  const knowledge: SbxKnowledgeConfig = {
+  const knowledge: SbxKnowledgeSettings = {
     skills: toAccess(value.skills),
     plugins: toAccess(value.plugins),
     instructions: toAccess(value.instructions)
@@ -37,7 +37,7 @@ function toKnowledge(value: unknown): SbxKnowledgeConfig | undefined {
   return isEmptyKnowledge(knowledge) ? undefined : knowledge;
 }
 
-function isEmptyKnowledge(knowledge: SbxKnowledgeConfig): boolean {
+function isEmptyKnowledge(knowledge: SbxKnowledgeSettings): boolean {
   return JSON.stringify(knowledge) === JSON.stringify(EMPTY_SBX_KNOWLEDGE);
 }
 
@@ -52,7 +52,7 @@ function toLocal(project: Record<string, unknown>): StoredSbxLocal {
 }
 
 /**
- * The values of the sbx dialog's Secrets and Variables, which tet.json never holds (its rows are
+ * The values of the SBX Settings' Secrets and Variables, which tet.json never holds (its rows are
  * only names and hosts), and its Knowledge, which names this machine's folders. A secret's is kept because sbx cannot give one back and forgets a
  * sandbox's with `sbx rm`, so a rebuilt sandbox is seeded from here (sbx.ts's applySecrets). A value
  * leaves this class only decrypted into `sbx secret set-custom` or a sandboxed tab's `sbx run`
@@ -78,7 +78,7 @@ export class SbxLocalStore {
   }
 
   /** What a sandboxed tab of the project mounts of this machine's knowledge (sbx.ts's prepareSbxRun). */
-  knowledge(projectId: string): SbxKnowledgeConfig {
+  knowledge(projectId: string): SbxKnowledgeSettings {
     return structuredClone(this.projects[projectId]?.knowledge ?? EMPTY_SBX_KNOWLEDGE);
   }
 
@@ -124,7 +124,7 @@ export class SbxLocalStore {
   /** A removed project's values: its sandboxes' names (sbx.ts's sandboxName) never come back. Left
    *  behind, they are only unused, so a failure is logged: the removal is not undone for it. */
   forgetProject(projectId: string): void {
-    logFailure("forget the project's sbx values", () => this.setProject(projectId, emptyLocal()));
+    logFailure("forget the project's SBX settings", () => this.setProject(projectId, emptyLocal()));
   }
 
   /** The project's values as stored, still encrypted — for `restore` when a Save fails

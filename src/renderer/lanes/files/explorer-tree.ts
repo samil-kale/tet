@@ -1,6 +1,6 @@
 import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../../shared/types/files";
 import { extensionOf } from "../../paths";
-import { buildTree, compareGrouped, compareNames, isOpen, sortTree, type TreeNode } from "../../ui/tree";
+import { buildTree, compareGrouped, compareNames, isExpanded, sortTree, type TreeNode } from "../../ui/tree";
 
 /** `explorer.sortOrder`: `default` (and `foldersNestsFiles`) folders first, then name; `mixed` name
  *  alone; `filesFirst` files first; `type` by extension, then name; `modified` newest first. */
@@ -44,7 +44,7 @@ export function buildForest(files: ExplorerListing): TreeNode[] {
 export function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolean>): boolean {
   return roots.some(
     (root) =>
-      isOpen(root, expanded) &&
+      isExpanded(root, expanded) &&
       root.children!.some((child) => child.children && (expanded[child.id] ?? false))
   );
 }

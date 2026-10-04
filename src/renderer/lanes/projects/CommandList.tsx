@@ -137,17 +137,17 @@ function describe(command: ProjectCommand): string {
 }
 
 interface CommandListProps {
-  /** The repository or worktree in front; null when no project is open. */
+  /** The active repository or worktree; null when no project is open. */
   resolved: ResolvedRef | null;
   /** Set by the sash above the list. */
   height: number;
   /** Brings a started command's tab to front in the pane the command last ran in — hence the
-      command line. By resolved key. */
-  onOpenTab: (key: string, tabId: string, command?: string) => void;
+      command line. By `refKey`. */
+  onOpenTab: (refKey: string, tabId: string, command?: string) => void;
 }
 
 /** A project's saved commands, from tet.json in the repository root, so they travel with the
- *  project. Running one opens a terminal tab in the repository or worktree in front. One list
+ *  project. Running one opens a terminal tab in the active repository or worktree. One list
  *  serves every project: the active one's. */
 export const CommandList = memo(function CommandList({ resolved, height, onOpenTab }: CommandListProps) {
   const projectId = resolved?.ref.projectId ?? null;
@@ -160,8 +160,8 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
   const menu = useContextMenu<ProjectCommand>();
   /** The current list, for callbacks created before its last change; tagged like `held`. */
   const latest = useRef<{ projectId: string; commands: ProjectCommand[] } | undefined>(undefined);
-  /** The project currently shown, for the same callbacks. */
-  const shownProject = useRef(projectId);
+  /** The active project's id, for the same callbacks. */
+  const activeProjectId = useRef(projectId);
 
   const { rowProps, listProps, rowClasses } = useDragReorder({
     dragType: DRAG_TYPE,
@@ -174,7 +174,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
   });
 
   useEffect(() => {
-    shownProject.current = projectId;
+    activeProjectId.current = projectId;
     if (!projectId) {
       return;
     }
@@ -204,16 +204,16 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
     setHeld(tagged);
   };
 
-  /** The latest list if it is the shown project's, else none. */
+  /** The latest list if it is the active project's, else none. */
   const latestCommands = (): ProjectCommand[] =>
-    latest.current?.projectId === shownProject.current ? latest.current.commands : [];
+    latest.current?.projectId === activeProjectId.current ? latest.current.commands : [];
 
   /** Writes the list whole, handing back what refused it — for the questions that stay up to show
    *  it at their field (`prompt`'s `submit`). */
   const saveAsked = async (next: ProjectCommand[]): Promise<string | undefined> => {
     // A dialog answered after the project changed built `next` from the other project's list, and
     // one answered before this project's list arrived from none.
-    if (!projectId || projectId !== shownProject.current || latest.current?.projectId !== projectId) {
+    if (!projectId || projectId !== activeProjectId.current || latest.current?.projectId !== projectId) {
       return undefined;
     }
     const refused = refusal(await window.tet.commands.save(projectId, next), "Could not save the commands");
@@ -293,15 +293,15 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
     }
   };
 
-  /** Opens the command's tab in the repository or worktree in front and switches to it. */
+  /** Opens the command's tab in the active repository or worktree and switches to it. */
   const run = (command: ProjectCommand): void => {
     if (!resolved) {
       return;
     }
-    const { key, ref } = resolved;
+    const { refKey, ref } = resolved;
     void window.tet.commands.run(ref, command).then((tab) => {
       if (tab) {
-        onOpenTab(key, tab.tabId, tab.command);
+        onOpenTab(refKey, tab.tabId, tab.command);
       }
     });
   };
@@ -334,7 +334,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
           <div
             // The position, as in the hook's payload above.
             key={index}
-            className={["command-item", ...rowClasses(index)].join(" ")}
+            className={["command-row", ...rowClasses(index)].join(" ")}
             title={describe(command)}
             {...(editable ? rowProps(index) : {})}
             onContextMenu={(event) => menu.open(event, command)}

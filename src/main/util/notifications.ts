@@ -1,6 +1,6 @@
 import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
-import { projectRef, projectRefKey } from "../../shared/types/project";
+import { projectRef, refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { logError } from "./error-log";
 import { PLATFORM } from "./host-platform";
@@ -13,7 +13,7 @@ export interface NotificationTarget {
 
 /** What the desktop notifications need of the app around them (the window, AppWindow, and the tabs; handed in by main.ts). */
 interface NotificationDeps {
-  /** Only an installed tet asks for the notification presenter: in a checkout it would write a
+  /** Only an installed TET asks for the notification presenter: in a checkout it would write a
    *  Start menu entry reading "Electron". */
   installed: boolean;
   /** Brings the window back from minimized and focuses it. */
@@ -29,7 +29,7 @@ interface NotificationDeps {
 let deps: NotificationDeps;
 
 /**
- * A clicked notification's tab not yet restored (the click started tet). Looked for on each `onTabs` of
+ * A clicked notification's tab not yet restored (the click started TET). Looked for on each `onTabs` of
  * its repository or worktree; replaced by a later click.
  */
 let notificationTargetAwaited: (NotificationTarget & { sessionId?: string }) | undefined;
@@ -46,7 +46,7 @@ function repeatedNotification(title: string, body: string, target?: Notification
       recentNotifications.delete(seen);
     }
   }
-  const key = `${title}\u0000${body}\u0000${target ? projectRefKey(target.ref) : ""}\u0000${target?.tabId ?? ""}`;
+  const key = `${title}\u0000${body}\u0000${target ? refKeyOf(target.ref) : ""}\u0000${target?.tabId ?? ""}`;
   if (recentNotifications.has(key)) {
     return true;
   }
@@ -77,7 +77,7 @@ function holdNotification(notification: Notification): void {
 export function awaitedNotificationTab(ref: ProjectRef): void {
   if (
     notificationTargetAwaited !== undefined &&
-    projectRefKey(notificationTargetAwaited.ref) === projectRefKey(ref) &&
+    refKeyOf(notificationTargetAwaited.ref) === refKeyOf(ref) &&
     deps.showTab(notificationTargetAwaited)
   ) {
     notificationTargetAwaited = undefined;
@@ -85,7 +85,7 @@ export function awaitedNotificationTab(ref: ProjectRef): void {
 }
 
 /**
- * Wires the notifications up and, on win32, takes every notification click — whether tet runs or the click
+ * Wires the notifications up and, on win32, takes every notification click — whether TET runs or the click
  * started it — carrying the `launch` string from `windowsToastXml`; Electron's own notification has none,
  * so no tab would be known.
  */
@@ -96,7 +96,7 @@ export function startNotifications(started: NotificationDeps): void {
   }
   void app.whenReady().then(() => {
     // Electron registers the COM activator only once its notification presenter exists, which the
-    // first Notification or this call creates — asked at once, or a click that started tet reaches
+    // first Notification or this call creates — asked at once, or a click that started TET reaches
     // no one. Installed only: the presenter also writes the Start menu entry ("Electron" in dev).
     if (deps.installed) {
       Notification.isSupported();
@@ -122,7 +122,7 @@ function escapeXml(text: string): string {
 
 /**
  * Electron's notification plus a `launch` string Windows hands back on a click. `type` and `tag` are
- * Electron's keys, so it still finds the Notification while tet runs; the session id outlives a
+ * Electron's keys, so it still finds the Notification while TET runs; the session id outlives a
  * quit (showNotificationTarget).
  */
 function windowsToastXml(id: string, title: string, body: string, target?: NotificationTarget): string {
@@ -147,10 +147,10 @@ function windowsToastXml(id: string, title: string, body: string, target?: Notif
 
 /**
  * The desktop notification behind the `hook` and `notify` verbs — this process holds the desktop session
- * (a sandboxed hook has none). No `icon`: Windows takes tet's (APP_USER_MODEL_ID).
+ * (a sandboxed hook has none). No `icon`: Windows takes TET's (APP_USER_MODEL_ID).
  *
  * A click brings the window and the notification's tab to the front — on win32 via
- * `Notification.handleActivation` (also after tet quit), elsewhere via the notification's `click`.
+ * `Notification.handleActivation` (also after TET quit), elsewhere via the notification's `click`.
  */
 export function showDesktopNotification(title: string, body: string, target?: NotificationTarget): void {
   if (repeatedNotification(title, body, target)) {

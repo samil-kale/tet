@@ -13,8 +13,8 @@ import type {
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { SbxKnowledgeConfig, SbxProjectConfig } from "../../shared/types/sbx";
-import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoffDir, sandboxSessionDir } from "../store/project-dirs";
+import type { SbxKnowledgeSettings, SbxProjectSettings } from "../../shared/types/sbx";
+import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoverDir, sandboxSessionDir } from "../store/project-dirs";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { prepareSbxRun, sandboxName } from "../sbx/sbx";
 import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
@@ -34,7 +34,7 @@ export interface SessionActions {
 }
 
 /** Another agent's session a new tab takes over: its transcript on the host (SessionProvider.files). */
-export interface HandoffFiles {
+export interface HandoverFiles {
   from: AgentId;
   sessionId: string;
   files: string[];
@@ -45,9 +45,9 @@ export interface HandoffFiles {
 /** What a start hands its place. */
 export interface LaunchInput {
   /** The agent's arguments after its setup's: resume and the first prompt, the prompt naming a
-   *  handoff's files as `files` gives them. */
+   *  handover's files as `files` gives them. */
   agentArgs(files: string[] | undefined): string[];
-  handoff?: HandoffFiles;
+  handover?: HandoverFiles;
   /** Setup output, forwarded live to the tab. */
   onData(data: string): void;
 }
@@ -59,8 +59,8 @@ export interface Launch {
   env?: Record<string, string>;
   /** Over the machine's variables. */
   envOverride?: Record<string, string>;
-  /** A handoff's copy this start made for the tab alone, deleted with it. */
-  handoffDir?: string;
+  /** A handover's copy this start made for the tab alone, deleted with it. */
+  handoverDir?: string;
 }
 
 /**
@@ -99,7 +99,7 @@ export interface StartingPlace extends TabPlace {
 /** What both places are built from: one agent's tabs in one repository or worktree. */
 export interface PlaceContext<A extends AgentDefinition = AgentDefinition> {
   at: ResolvedRef;
-  storageRoot: string;
+  dataRoot: string;
   agent: A;
   /** The agent's host executable (AgentDefinition.executable), for its session operations too. */
   executable: string;
@@ -118,7 +118,7 @@ export class HostPlace implements StartingPlace {
   ) {}
 
   dropsDir(): string {
-    return dropsDir(this.context.storageRoot, this.context.at.ref.projectId);
+    return dropsDir(this.context.dataRoot, this.context.at.ref.projectId);
   }
 
   handPaths(hostPaths: string[]): Promise<string[]> {
@@ -160,18 +160,22 @@ export class HostPlace implements StartingPlace {
     };
   }
 
-  /** A handoff's files are read where the other agent keeps them. */
+  /** A handover's files are read where the other agent keeps them. */
   launch(input: LaunchInput): Promise<Launch> {
     const preparation = this.preparation();
     return Promise.resolve({
       executable: preparation?.executable ?? this.context.executable,
-      args: [...(preparation?.args ?? []), ...input.agentArgs(input.handoff?.files)],
+      args: [...(preparation?.args ?? []), ...input.agentArgs(input.handover?.files)],
       env: preparation?.env
     });
   }
 }
 
-/** A saved command's program, arguments and variables (the session manager's createCommandTab). */
+/**
+ * A saved command resolved to the program, arguments and variables a tab starts (the session
+ * manager's createCommandTab); `ProjectCommand` (shared/types/project.ts) is the tet.json entry it
+ * comes from.
+ */
 export interface SavedCommand {
   executable: string;
   args: string[];
@@ -199,15 +203,15 @@ export class CommandPlace extends HostPlace {
 /** What the session manager's resolvePlace read before choosing the sandbox, so the launch does not
  *  read it again. */
 export interface SbxStart {
-  config: SbxProjectConfig;
+  settings: SbxProjectSettings;
   ready: Exclude<Awaited<ReturnType<typeof checkSbxReady>>, { notReady: string }>;
   /** The `ensureRunning` begun alongside the readiness check (SbxRunRequest.warm). */
   warm?: Promise<boolean>;
   /** The window's settings the sandbox setup takes (AgentPaths). */
   idleReminder: boolean;
   theme: AgentPaths["theme"];
-  /** This machine's sbx values for the project (SbxLocalStore). */
-  knowledge: SbxKnowledgeConfig;
+  /** This machine's SBX settings for the project (SbxLocalStore). */
+  knowledge: SbxKnowledgeSettings;
   secretValues: ReadonlyMap<string, string>;
   variableValues: ReadonlyMap<string, string>;
 }
@@ -227,7 +231,7 @@ export class SandboxPlace implements TabPlace {
 
   constructor(protected readonly context: PlaceContext<SandboxedAgent>) {
     this.name = sandboxName(context.at.ref, context.agent.id);
-    this.agentDir = sandboxDir(context.storageRoot, context.at.ref, context.agent.id);
+    this.agentDir = sandboxDir(context.dataRoot, context.at.ref, context.agent.id);
     this.sessions = context.agent.sandbox.sessions?.at(sandboxSessionDir(this.agentDir), toContainerPath(context.at.path), this.agentDir);
   }
 
@@ -278,7 +282,7 @@ export class SandboxPlace implements TabPlace {
   }
 
   /** Its sessions, each named with this sandbox (AgentSessionInfo.sandbox); none where the agent
-   *  keeps none in a sandbox. Listed whether or not sandboxing is on: they stay resumable there. */
+   *  keeps none in a sandbox. Listed whether or not SBX is enabled: they stay resumable there. */
   async listSessions(): Promise<AgentSessionInfo[]> {
     if (!this.sessions) {
       return [];
@@ -321,7 +325,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
 
   /**
    * `sbx run` (prepareSbxRun), tet.json as it stands: what could not be applied is said, one
-   * notice per option and reason (sbxProblemNotices). A handoff's files are copied into the agent
+   * notice per option and reason (sbxProblemNotices). A handover's files are copied into the agent
    * folder, since the other agent's store is out of the sandbox's sight.
    */
   async launch(input: LaunchInput): Promise<Launch> {
@@ -330,18 +334,18 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
     const { agent } = this.context;
     const paths = this.paths(start.idleReminder, start.theme);
     const hooks = agent.sandbox.prepare(paths);
-    const handoffDir = input.handoff && sandboxHandoffDir(this.agentDir, input.handoff.from, input.handoff.sessionId);
+    const handoverDir = input.handover && sandboxHandoverDir(this.agentDir, input.handover.from, input.handover.sessionId);
     try {
       const files =
-        input.handoff && handoffDir !== undefined
-          ? (await copyInto(input.handoff, handoffDir, this.agentDir)).map(toContainerPath)
+        input.handover && handoverDir !== undefined
+          ? (await copyInto(input.handover, handoverDir, this.agentDir)).map(toContainerPath)
           : undefined;
       const { args, env, problems } = await prepareSbxRun({
         agent,
         name: this.name,
         ref: at.ref,
         projectRefPath: at.path,
-        config: start.config,
+        settings: start.settings,
         knowledge: start.knowledge,
         sandboxes: start.ready.sandboxes,
         organization: start.ready.organization,
@@ -358,11 +362,11 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
       for (const notice of sbxProblemNotices(problems)) {
         onNotice("warning", notice);
       }
-      return { executable: "sbx", args, envOverride: env, handoffDir };
+      return { executable: "sbx", args, envOverride: env, handoverDir };
     } catch (error) {
       // No tab keeps a copy for a start that failed; a restart copies again.
-      if (handoffDir) {
-        await fs.promises.rm(handoffDir, { recursive: true, force: true }).catch(() => undefined);
+      if (handoverDir) {
+        await fs.promises.rm(handoverDir, { recursive: true, force: true }).catch(() => undefined);
       }
       throw error;
     }
@@ -370,11 +374,11 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
 }
 
 /**
- * Copies a handoff's files into `dir`, inside the sandbox's `agentDir`, answering the copies' paths.
+ * Copies a handover's files into `dir`, inside the sandbox's `agentDir`, answering the copies' paths.
  * Both sides may be a sandbox's folder, so neither follows a link out of it (openInside): a copy is
  * created anew, never written through what lies at its path.
  */
-async function copyInto({ files, within }: HandoffFiles, dir: string, agentDir: string): Promise<string[]> {
+async function copyInto({ files, within }: HandoverFiles, dir: string, agentDir: string): Promise<string[]> {
   await fs.promises.mkdir(dir, { recursive: true });
   return Promise.all(
     files.map(async (file) => {

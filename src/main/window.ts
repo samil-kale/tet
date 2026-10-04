@@ -4,7 +4,7 @@ import { WINDOW_ARGS } from "../shared/api";
 import type { EventChannels, WindowReply } from "../shared/ipc";
 import type { ThemeDefinition } from "../shared/themes";
 import type { LaneSettings } from "../shared/types/settings";
-import { projectRefKey } from "../shared/types/project";
+import { refKeyOf } from "../shared/types/project";
 import type { Notice, NoticeProgress, NoticeSeverity } from "../shared/types/app";
 import type { ProjectRef } from "../shared/types/project";
 import type { TerminalOutput } from "../shared/types/terminals";
@@ -105,7 +105,7 @@ export class AppWindow {
   /** What a tab's terminal shows (ControlDeps.terminalText), its batched output handed over first. */
   terminalText = (ref: ProjectRef, tabId: string): Promise<string | undefined> => {
     this.flushOutput();
-    return this.askWindow((reply) => this.send("terminals:text-request", { ref, tabId, reply }));
+    return this.askWindow((reply) => this.send("tabs:text-request", { ref, tabId, reply }));
   };
 
   /** Asks the window on a per-question reply channel; undefined when it does not answer. */
@@ -129,7 +129,7 @@ export class AppWindow {
   }
 
   queueOutput(ref: ProjectRef, tabId: string, data: string): void {
-    const key = `${projectRefKey(ref)}\u0000${tabId}`;
+    const key = `${refKeyOf(ref)}\u0000${tabId}`;
     const pending = this.pendingOutput.get(key);
     if (pending) {
       pending.data += data;
@@ -153,7 +153,7 @@ export class AppWindow {
     const live = [...this.pendingOutput.values()].filter((pending) => this.deps.hasTab(pending.ref, pending.tabId));
     this.pendingOutput.clear();
     if (live.length > 0) {
-      this.send("terminals:output", live);
+      this.send("tabs:output", live);
     }
   }
 
@@ -290,11 +290,11 @@ export class AppWindow {
       }
     });
 
-    // Nothing in the page takes the window away from tet or opens another: a link or form in a
+    // Nothing in the page takes the window away from TET or opens another: a link or form in a
     // Markdown preview, a stray drop. A new window is what monaco's ctrl-clicked link asks for, so
     // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves. A
     // navigation to `about:blank` reaches neither event, so only the page's own script could blank
-    // the window, and there is none but tet's.
+    // the window, and there is none but TET's.
     window.webContents.on("will-navigate", (event) => event.preventDefault());
     window.webContents.setWindowOpenHandler(({ url }) => {
       if (isOpenableUrl(url)) {

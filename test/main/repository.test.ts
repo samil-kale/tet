@@ -271,14 +271,14 @@ describe("worktrees, each with a branch of its own", () => {
 
   it("lists the worktrees off the disk, main first, with their branches, bases and TET's keys", async () => {
     assert.deepEqual(await repository.addWorktree(at("second"), "second", { name: "main" }), { ok: true });
-    // One made outside tet has no base.
+    // One made outside TET has no base.
     git(dir, "worktree", "add", "-q", "-b", "third", at("third"));
     const { worktrees: listed } = await repository.refresh();
-    assert.deepEqual(listed[0], { path: real(dir), branch: "main", base: undefined, key: undefined, main: true, current: true });
+    assert.deepEqual(listed[0], { path: real(dir), branch: "main", base: undefined, key: undefined, isRepository: true, current: true });
     assert.deepEqual(listed.slice(1), [
-      { path: real(at("fresh")), branch: "fresh", base: "base", key: undefined, main: false, current: false },
-      { path: real(at("second")), branch: "second", base: "main", key: "k2", main: false, current: false },
-      { path: real(at("third")), branch: "third", base: undefined, key: undefined, main: false, current: false }
+      { path: real(at("fresh")), branch: "fresh", base: "base", key: undefined, isRepository: false, current: false },
+      { path: real(at("second")), branch: "second", base: "main", key: "k2", isRepository: false, current: false },
+      { path: real(at("third")), branch: "third", base: undefined, key: undefined, isRepository: false, current: false }
     ]);
     git(dir, "worktree", "remove", at("third"));
     git(at("fresh"), "switch", "-q", "--detach");
@@ -453,7 +453,7 @@ describe("a remote over http that wants a login", () => {
       assert.equal(logins.get(remote.url), undefined, "and not kept");
 
       assert.deepEqual(await repository.push(login), { ok: true });
-      assert.deepEqual(logins.get(remote.url), login, "no credential helper: tet keeps it");
+      assert.deepEqual(logins.get(remote.url), login, "no credential helper: TET keeps it");
       assert.equal(git(dir, "rev-parse", "origin/main"), git(dir, "rev-parse", "main"));
 
       fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
@@ -492,7 +492,7 @@ describe("a remote over http that wants a login", () => {
     try {
       assert.equal((await repository.push()).loginUrl, remote.url);
       assert.deepEqual(await repository.push(login), { ok: true });
-      assert.equal(logins.get(remote.url), undefined, "tet keeps nothing");
+      assert.equal(logins.get(remote.url), undefined, "TET keeps nothing");
       assert.match(fs.readFileSync(helperFile, "utf8"), /saka:right@127\.0\.0\.1/, "git stored it in the helper");
       assert.deepEqual(await repository.fetch(), { ok: true }, "the helper answers from then on");
 

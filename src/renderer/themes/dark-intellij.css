@@ -43,14 +43,14 @@
   --vscode-panel-border: #393b40;
 
   --vscode-tab-activeBackground: #1e1f22;
-  /* tet underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --vscode-tab-activeBorder: #3574f0;
   --vscode-tab-activeForeground: #dfe1e5;
   --vscode-tab-inactiveBackground: #1e1f22;
   --vscode-tab-inactiveForeground: #bbbdc0;
   --vscode-tab-border: #1e1f22;
 
-  /* tet's own, the same as Dark Modern's — see the note there. */
+  /* TET's own, the same as Dark Modern's — see the note there. */
   --vscode-toolbar-hoverBackground: #5a5d5e50;
 
   --vscode-list-activeSelectionBackground: #2e436e;
@@ -131,7 +131,7 @@
   --vscode-editorCursor-foreground: #aeafad;
   --vscode-editor-selectionBackground: #214283;
   --vscode-editor-inactiveSelectionBackground: #1e468480;
-  /* The theme's lineHighlightBackground, as the border tet draws it with. */
+  /* The theme's lineHighlightBackground, as the border TET draws it with. */
   --vscode-editor-lineHighlightBorder: #26282d;
   --vscode-editor-findMatchBackground: #214283;
   --vscode-editor-findMatchHighlightBackground: #1da6c94d;

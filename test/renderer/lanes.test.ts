@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { activeAfterChange, activeAtStart, rememberActive } from "../../src/renderer/lanes/projects/active-project";
+import { activeAfterChange, activeAtStart, rememberActive } from "../../src/renderer/lanes/projects/active-ref";
 import type { Project } from "../../src/shared/types/project";
 
 const main: Project = { id: "main", path: "/repo", name: "repo", worktrees: [{ path: "/wt/feature", branch: "feature", key: "k1" }] };
@@ -9,7 +9,7 @@ const other: Project = { id: "other", path: "/other", name: "other", worktrees: 
 const worktree = { projectId: "main", worktree: "k1" };
 const worktreeKey = "main-k1";
 
-describe("the repository or worktree in front after the list changed", () => {
+describe("the active repository or worktree after the list changed", () => {
   it("gives a deleted worktree's place to its project's repository, not the first", () => {
     assert.equal(activeAfterChange(worktreeKey, [other, main], [worktree], undefined), "main");
   });
@@ -19,31 +19,31 @@ describe("the repository or worktree in front after the list changed", () => {
     assert.equal(activeAfterChange("other", [], [{ projectId: "other" }], undefined), null);
   });
 
-  it("brings what the user just opened to the front", () => {
+  it("makes what the user just opened active", () => {
     assert.equal(activeAfterChange("main", [main], [], worktree), worktreeKey);
     assert.equal(activeAfterChange(null, [main], undefined, { projectId: "main" }), "main");
   });
 
-  it("leaves the front alone when one out of sight is removed", () => {
+  it("leaves the active one alone when one out of sight is removed", () => {
     assert.equal(activeAfterChange("other", [other, main], [worktree], undefined), "other");
   });
 });
 
-describe("the repository or worktree in front at startup", () => {
+describe("the active repository or worktree at startup", () => {
   const storage = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => void storage.set(key, value)
   };
 
-  it("is the one in front when tet last closed, while it is still open", () => {
+  it("is the one active when TET last closed, while it is still open", () => {
     assert.equal(activeAtStart([other, main]), "other", "none remembered: the first");
     rememberActive("main");
     assert.equal(activeAtStart([other, main]), "main");
     rememberActive(worktreeKey);
     assert.equal(activeAtStart([other, main]), worktreeKey, "a worktree too");
     rememberActive(null);
-    assert.equal(activeAtStart([other, main]), worktreeKey, "nothing in front forgets nothing");
+    assert.equal(activeAtStart([other, main]), worktreeKey, "nothing active forgets nothing");
     assert.equal(activeAtStart([other]), "other", "closed since: the first project");
     assert.equal(activeAtStart([]), null);
   });

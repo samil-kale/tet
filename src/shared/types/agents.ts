@@ -1,5 +1,5 @@
 /** An agent's id, as its definition names it (src/main/agents/): the registry is the one list of
- *  them, handed to the window and `tet-ctl` (`agents:list`, `list-agents`). */
+ *  them, handed to the window and `tet-ctl` (`agents:list`, `agents-list`). */
 export type AgentId = string;
 
 /** One shape of an icon: an SVG element and its attributes, under React's names. */
@@ -33,9 +33,9 @@ export interface AgentInfo {
   sandboxed: boolean;
 }
 
-/** A program tet needs, and whether the startup check found it. */
+/** A program TET needs, and whether the startup check found it. */
 export interface Requirement {
-  /** Its download name — "Git", "Claude". */
+  /** Its download name — "Git", "Claude Code". */
   name: string;
   /** The executable looked for, for the user to try in their own terminal. */
   command: string;

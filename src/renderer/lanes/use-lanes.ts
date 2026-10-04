@@ -37,19 +37,19 @@ interface Lanes {
   movePinned: (from: number, to: number) => void;
   /** A toggle dragged from `from` to insertion index `to` of `toggleOrder`. */
   moveToggle: (from: number, to: number) => void;
-  showChanges: (key: string) => void;
+  showChanges: (refKey: string) => void;
 }
 
 /**
  * Pins and order are settings (`appearance.lanes`, `initial` as read at the start); which lane is
  * free and the widths are layout storage. The strip's toggles drive the free lane alone, one at a
- * time as VS Code's Explorer and Source Control. `activeKeyRef` is the repository or worktree in
- * front, `setActiveKey` how a row's git mark brings its own there.
+ * time as VS Code's Explorer and Source Control. `activeRefKeyRef` is the active repository or
+ * worktree, `setActiveRefKey` how a row's git mark makes its own active.
  */
 export function useLanes(
   initial: LaneSettings,
-  activeKeyRef: RefObject<string | null>,
-  setActiveKey: (key: string) => void
+  activeRefKeyRef: RefObject<string | null>,
+  setActiveRefKey: (refKey: string) => void
 ): Lanes {
   const [lanes, setLanes] = useState(initial);
   // Set by `tet-ctl`, or the window's own write coming back, which keeps what is shown.
@@ -89,7 +89,7 @@ export function useLanes(
     setLanes(next);
     window.tet.settings
       .patch({ appearance: { lanes: next } })
-      .catch((error: unknown) => notify("error", `Couldn't keep the lanes: ${errorMessage(error)}`));
+      .catch((error: unknown) => notify("error", `Could not keep the lanes: ${errorMessage(error)}`));
   }, []);
   /**
    * Gates a lane's width transition to its slide alone — a lane stays in the DOM at width 0
@@ -160,18 +160,18 @@ export function useLanes(
     [live, writeLanes]
   );
   /**
-   * A row's git mark: switches to the repository or worktree and slides git out; on the one shown,
+   * A row's git mark: switches to the repository or worktree and slides git out; on the active one,
    * the strip's toggle.
    */
   const showChanges = useCallback(
-    (key: string) => {
-      setActiveKey(key);
+    (refKey: string) => {
+      setActiveRefKey(refKey);
       const { pinnedLanes: pinned, freeLane: free } = live.current;
-      if (key === activeKeyRef.current || (!pinned.has("git") && free !== "git")) {
+      if (refKey === activeRefKeyRef.current || (!pinned.has("git") && free !== "git")) {
         toggleLane("git");
       }
     },
-    [activeKeyRef, setActiveKey, live, toggleLane]
+    [activeRefKeyRef, setActiveRefKey, live, toggleLane]
   );
 
   return {

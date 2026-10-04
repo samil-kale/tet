@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode, type Ref, type RefObject } from "r
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
 import { SparkleIcon } from "./icons";
-import { useRunning } from "./use-running";
+import { useBusy } from "./use-busy";
 
 /**
  * What refused an answer, where the answer was given: under the field to blame (`Field`), in a
@@ -177,7 +177,7 @@ interface SuggestFieldProps {
 
 /** A text field with a wand beside it that fills it, e.g. a model's commit message. */
 export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
-  const { running: suggesting, run } = useRunning();
+  const { busy: suggesting, run } = useBusy();
   const [refused, setRefused] = useState<string>();
   useEffect(() => onSuggesting?.(suggesting), [suggesting, onSuggesting]);
 
@@ -266,14 +266,14 @@ export function ColorField({ label, choices, value, onChange }: ColorFieldProps)
 }
 
 interface CheckboxProps {
-  /** A node, not a string: the sbx switch carries a description under its title. */
+  /** A node, not a string: the SBX switch carries a description under its title. */
   label: ReactNode;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
 }
 
-/** A checkbox with its label beside it; the box itself is drawn by tet, never by Chrome. */
+/** A checkbox with its label beside it; the box itself is drawn by TET, never by Chrome. */
 export function Checkbox({ label, checked, onChange, disabled }: CheckboxProps) {
   return (
     <label className="dialog-checkbox">

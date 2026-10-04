@@ -29,7 +29,7 @@ const ENVIRONMENT_SENTENCE =
 /** A worktree made by git or by an agent's own worktree tools lands outside TET's worktrees, which
  *  TET shows greyed and never opens. */
 const WORKTREE_SENTENCE =
-  " To create or delete a git worktree, use tet-ctl rather than git or your own worktree tools: TET opens only the worktrees it made.";
+  " To add or delete a git worktree, use tet-ctl rather than git or your own worktree tools: TET opens only the worktrees it made.";
 
 /** In a sandbox too: tabs-create opens an sbx agent's tab there. An agent's own subagents are no
  *  tabs, so it is told which work gets one. */

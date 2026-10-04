@@ -63,7 +63,7 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
           selected?.label
         )}
       </button>
-      <ChevronIcon expanded className="select-arrow" />
+      <ChevronIcon expanded className="select-chevron" />
       {menu.render(() => entries, "dropdown-menu")}
     </div>
   );

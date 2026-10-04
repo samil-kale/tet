@@ -20,17 +20,17 @@ export interface InvokeChannels {
   "startup:any-agent-installed": TETApi["startup"]["anyAgentInstalled"];
   "app:info": TETApi["app"]["info"];
   "sbx:status": TETApi["sbx"]["status"];
-  "sbx:login": TETApi["sbx"]["login"];
+  "sbx:sign-in-browser": TETApi["sbx"]["signInInBrowser"];
   "sbx:signed-in-user": TETApi["sbx"]["signedInUser"];
   "sbx:accounts": TETApi["sbx"]["accounts"];
   "sbx:sign-in": TETApi["sbx"]["signIn"];
-  "sbx:logout": TETApi["sbx"]["logout"];
+  "sbx:sign-out": TETApi["sbx"]["signOut"];
   "sbx:save-accounts": TETApi["sbx"]["saveAccounts"];
   "sbx:init-policy": TETApi["sbx"]["initPolicy"];
-  "sbx:get-config": TETApi["sbx"]["getConfig"];
+  "sbx:get-settings": TETApi["sbx"]["getSettings"];
   "sbx:stored": TETApi["sbx"]["stored"];
   "sbx:knowledge-sources": TETApi["sbx"]["knowledgeSources"];
-  "sbx:save-config": TETApi["sbx"]["saveConfig"];
+  "sbx:save-settings": TETApi["sbx"]["saveSettings"];
   "sbx:problems": TETApi["sbx"]["problems"];
   "settings:get": TETApi["settings"]["get"];
   "settings:patch": TETApi["settings"]["patch"];
@@ -50,9 +50,9 @@ export interface InvokeChannels {
   "providers:remove-account": TETApi["providers"]["removeAccount"];
   "providers:set-namespace": TETApi["providers"]["setNamespace"];
   "providers:repos": TETApi["providers"]["repos"];
-  "environment:list": TETApi["environment"]["list"];
-  "environment:save": TETApi["environment"]["save"];
-  "environment:answer": TETApi["environment"]["answer"];
+  "env:list": TETApi["env"]["list"];
+  "env:save": TETApi["env"]["save"];
+  "env:answer": TETApi["env"]["answer"];
   "repository:state": TETApi["repository"]["state"];
   "repository:refresh": TETApi["repository"]["refresh"];
   "repository:checkout": TETApi["repository"]["checkout"];
@@ -98,13 +98,13 @@ export interface InvokeChannels {
   "commands:list": TETApi["commands"]["list"];
   "commands:save": TETApi["commands"]["save"];
   "commands:run": TETApi["commands"]["run"];
-  "terminals:list": TETApi["terminals"]["list"];
-  "terminals:create": TETApi["terminals"]["create"];
-  "terminals:close": TETApi["terminals"]["close"];
-  "terminals:rename": TETApi["terminals"]["rename"];
-  "terminals:handoff": TETApi["terminals"]["handOff"];
-  "terminals:restart": TETApi["terminals"]["restart"];
-  "terminals:starting": TETApi["terminals"]["starting"];
+  "tabs:list": TETApi["tabs"]["list"];
+  "tabs:create": TETApi["tabs"]["create"];
+  "tabs:close": TETApi["tabs"]["close"];
+  "tabs:rename": TETApi["tabs"]["rename"];
+  "tabs:handover": TETApi["tabs"]["handOver"];
+  "tabs:restart": TETApi["tabs"]["restart"];
+  "tabs:starting": TETApi["tabs"]["starting"];
   "agents:list": TETApi["agents"]["list"];
   "drops:write-drop": TETApi["drops"]["writeDrop"];
   "drops:clipboard-image": TETApi["drops"]["clipboardImage"];
@@ -128,10 +128,10 @@ export interface SendChannels {
   "repository:cancel-commit-suggestion": TETApi["repository"]["cancelCommitSuggestion"];
   "editor:report": TETApi["repository"]["reportEditor"];
   "editor:active": TETApi["repository"]["reportActiveEditor"];
-  "terminals:seen": TETApi["terminals"]["seen"];
-  "terminals:in-front": TETApi["terminals"]["inFront"];
-  "terminals:input": TETApi["terminals"]["input"];
-  "terminals:resize": TETApi["terminals"]["resize"];
+  "tabs:seen": TETApi["tabs"]["seen"];
+  "tabs:on-screen": TETApi["tabs"]["reportOnScreen"];
+  "tabs:input": TETApi["tabs"]["input"];
+  "tabs:resize": TETApi["tabs"]["resize"];
   [reply: WindowReply]: (answer: string | undefined) => void;
 }
 
@@ -142,8 +142,8 @@ export interface EventChannels {
   "app:theme": Payload<TETApi["onTheme"]>;
   "app:lanes": Payload<TETApi["onLanes"]>;
   "projects:changed": Payload<TETApi["projects"]["onChanged"]>;
-  "environment:request": Payload<TETApi["environment"]["onRequest"]>;
-  "environment:withdrawn": Payload<TETApi["environment"]["onWithdrawn"]>;
+  "env:request": Payload<TETApi["env"]["onRequest"]>;
+  "env:withdrawn": Payload<TETApi["env"]["onWithdrawn"]>;
   "repository:state-changed": Payload<TETApi["repository"]["onState"]>;
   "repository:files-changed": Payload<TETApi["repository"]["onFilesChanged"]>;
   "repository:file-changed": Payload<TETApi["repository"]["onFileChanged"]>;
@@ -151,11 +151,11 @@ export interface EventChannels {
   "editor:content-request": { ref: ProjectRef; reply: WindowReply };
   "editor:open": Payload<TETApi["repository"]["onOpenEditor"]>;
   "commands:changed": Payload<TETApi["commands"]["onChanged"]>;
-  "terminals:tabs": Payload<TETApi["terminals"]["onTabs"]>;
-  "terminals:output": Payload<TETApi["terminals"]["onOutput"]>;
-  "terminals:status": Payload<TETApi["terminals"]["onStatus"]>;
-  "terminals:startup-progress": Payload<TETApi["terminals"]["onStartupProgress"]>;
-  "terminals:show": Payload<TETApi["terminals"]["onShow"]>;
+  "tabs:changed": Payload<TETApi["tabs"]["onTabs"]>;
+  "tabs:output": Payload<TETApi["tabs"]["onOutput"]>;
+  "tabs:status": Payload<TETApi["tabs"]["onStatus"]>;
+  "tabs:startup-progress": Payload<TETApi["tabs"]["onStartupProgress"]>;
+  "tabs:show": Payload<TETApi["tabs"]["onShow"]>;
   /** `onTextRequest`'s question; the answer goes back on `reply`. */
-  "terminals:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
+  "tabs:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
 }

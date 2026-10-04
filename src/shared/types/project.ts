@@ -36,9 +36,9 @@ export function projectRef(projectId: string, worktree?: string): ProjectRef {
 /**
  * The pair as one string, for what can hold only one (a map, localStorage, a sandbox's name, a
  * notification): the project id alone for the repository. Never passed on as an address. No space (a
- * project's terminals are disposed by the prefix `${key} `) and no ":" (Monaco's URI authority).
+ * project's terminals are disposed by the prefix `${refKey} `) and no ":" (Monaco's URI authority).
  */
-export function projectRefKey(ref: ProjectRef): string {
+export function refKeyOf(ref: ProjectRef): string {
   return ref.worktree === undefined ? ref.projectId : `${ref.projectId}-${ref.worktree}`;
 }
 
@@ -52,7 +52,7 @@ export function projectRefsOf(project: Project): ProjectRef[] {
 
 /** Two refs of one repository or worktree. */
 export function sameProjectRef(a: ProjectRef, b: ProjectRef | undefined): boolean {
-  return b !== undefined && projectRefKey(a) === projectRefKey(b);
+  return b !== undefined && refKeyOf(a) === refKeyOf(b);
 }
 
 /** The worktree of the project a ref names; undefined for the repository, and for a key the
@@ -62,7 +62,7 @@ export function worktreeOf(project: Project, ref: ProjectRef): ProjectWorktree |
 }
 
 /** What the window is told of a change to the projects (projects.ts): repositories and worktrees
- *  opened and closed, and the one the user (or tet-ctl) just opened, to bring to the front. */
+ *  opened and closed, and the one the user (or tet-ctl) just opened, to make active. */
 export interface ProjectsChange {
   added?: ProjectRef[];
   removed?: ProjectRef[];
@@ -82,7 +82,7 @@ export function projectRefName(project: Project, ref: ProjectRef): string {
 }
 
 /** Open/clone/initialize/new worktree: the project, or git's message. `worktree` names the worktree it
- *  was about, to bring to the front. */
+ *  was about, to make active. */
 export interface AddRepositoryResult {
   project?: Project;
   worktree?: string;
@@ -101,7 +101,10 @@ export const COMMAND_COLORS = ["red", "green", "yellow", "blue", "magenta", "cya
 
 export type CommandColor = (typeof COMMAND_COLORS)[number];
 
-/** A project's saved shell command. */
+/**
+ * A saved command as tet.json holds it (the line, label, color, folder and variables);
+ * `SavedCommand` (main/terminals/tab-place.ts) is the same command resolved to what a tab starts.
+ */
 export interface ProjectCommand {
   command: string;
   /** The row's label; the line is what runs. */

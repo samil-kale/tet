@@ -20,7 +20,7 @@ export function openEntries(
   const previewEnabled = enabled && !previewWithheldAt(ref, path, diff);
   return [
     ...(isMarkdown(path)
-      ? [{ label: "Open Preview", run: previewEnabled ? () => open({ markdownPreview: true }) : undefined }]
+      ? [{ label: "Open Markdown Preview", run: previewEnabled ? () => open({ markdownPreview: true }) : undefined }]
       : []),
     {
       label: "Open in external editor",

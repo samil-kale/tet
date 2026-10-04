@@ -13,7 +13,7 @@ import type { HookEvent } from "../../../shared/control";
  *
  * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (on win32 a bash,
  * where only the extensionless launcher resolves; control-launcher.ts).
- * One `UserPromptSubmit` command marks the session busy; its answer is empty, since TET's system
+ * One `UserPromptSubmit` command marks the session working; its answer is empty, since TET's system
  * prompt goes in once at spawn (index.ts).
  */
 export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TARGET): string[] {

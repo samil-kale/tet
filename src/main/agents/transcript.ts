@@ -90,7 +90,7 @@ export function listTranscriptDir(
 
 /**
  * Evicts cached transcripts under `root` no longer among `present` (the agent's picker deletes
- * them behind tet's back); both are absolute paths. Scoped to `root`: a sandbox root
+ * them behind TET's back); both are absolute paths. Scoped to `root`: a sandbox root
  * (AgentSandbox.sessions) shares these caches, and each pass would evict the other root's
  * entries. A prefix, so it serves an agent keeping its transcripts in one directory and one
  * nesting them (Codex's `YYYY/MM/DD`) alike.

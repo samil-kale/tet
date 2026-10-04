@@ -21,26 +21,26 @@ import { forget } from "../identity";
 export const NO_TABS: PaneTab[] = [];
 
 /**
- * A repository's or worktree's layout (by its key): what is held, else what the last run saved.
- * Loaded at first sight, not up front: tabs can arrive before the project list, and a layout
+ * A repository's or worktree's layout (by its refKey): what is held, else what the last run saved.
+ * Loaded at first sight, not up front: tabs can arrive before the open projects, and a layout
  * written then would overwrite the restore. `localStorage` is synchronous, so safe in an updater.
  */
-function layoutOf(layouts: Record<string, ProjectLayout>, key: string): ProjectLayout {
-  return layouts[key] ?? loadLayout(key);
+function layoutOf(layouts: Record<string, ProjectLayout>, refKey: string): ProjectLayout {
+  return layouts[refKey] ?? loadLayout(refKey);
 }
 
 /** Every repository's and worktree's split state, and the callbacks `App` hands the panes. */
 interface ProjectLayouts {
   layouts: Record<string, ProjectLayout>;
-  activateTab: (key: string, tabId: string, paneId?: PaneId) => void;
-  snapTab: (key: string, tabId: string, transition: SnapTransition) => void;
-  focusPane: (key: string, paneId: PaneId) => void;
-  placeTab: (key: string, tabId: string, command?: string) => void;
-  forgetLayout: (key: string) => void;
+  activateTab: (refKey: string, tabId: string, paneId?: PaneId) => void;
+  snapTab: (refKey: string, tabId: string, transition: SnapTransition) => void;
+  focusPane: (refKey: string, paneId: PaneId) => void;
+  placeTab: (refKey: string, tabId: string, command?: string) => void;
+  forgetLayout: (refKey: string) => void;
 }
 
 /**
- * Each repository's or worktree's split state, by `projectRefKey`. Held in `App`: the shortcuts and
+ * Each repository's or worktree's split state, by `refKey`. Held in `App`: the shortcuts and
  * marks/seen need what is on screen across panes (AGENTS.md, "Split view"). Reconciled against
  * `tabs`, persisted once `starting` first reports a repository or worktree not starting.
  */
@@ -75,18 +75,18 @@ export function useProjectLayouts(
     const reconciled = reconciledRef.current;
     setLayouts((current) => {
       let next: Record<string, ProjectLayout> | undefined;
-      for (const key of Object.keys(tabs)) {
-        const list = tabs[key] ?? NO_TABS;
-        const held = current[key];
-        if (held && list === previousTabs[key] && reconciled.get(held) === list) {
+      for (const refKey of Object.keys(tabs)) {
+        const list = tabs[refKey] ?? NO_TABS;
+        const held = current[refKey];
+        if (held && list === previousTabs[refKey] && reconciled.get(held) === list) {
           continue;
         }
         // The close trigger of the collapse; the move trigger is `activateTab` below.
-        const layout = collapseClosed(layoutOf(current, key), list, previousTabs[key] ?? NO_TABS);
+        const layout = collapseClosed(layoutOf(current, refKey), list, previousTabs[refKey] ?? NO_TABS);
         reconciled.set(layout, list);
-        if (layout !== current[key]) {
+        if (layout !== current[refKey]) {
           next ??= { ...current };
-          next[key] = layout;
+          next[refKey] = layout;
         }
       }
       return next ?? current;
@@ -109,34 +109,34 @@ export function useProjectLayouts(
    */
   const settledProjects = useRef(new Set<string>());
   useEffect(() => {
-    for (const [key, isStarting] of Object.entries(starting)) {
-      if (isStarting || settledProjects.current.has(key)) {
+    for (const [refKey, isStarting] of Object.entries(starting)) {
+      if (isStarting || settledProjects.current.has(refKey)) {
         continue;
       }
-      settledProjects.current.add(key);
+      settledProjects.current.add(refKey);
       // Every restored pane now has its sessions or never will: collapse the empty ones first.
       setLayouts((current) => {
-        const layout = layoutOf(current, key);
-        const collapsed = collapseEmpty(layout, tabsRef.current[key] ?? NO_TABS);
-        return collapsed === layout ? current : { ...current, [key]: collapsed };
+        const layout = layoutOf(current, refKey);
+        const collapsed = collapseEmpty(layout, tabsRef.current[refKey] ?? NO_TABS);
+        return collapsed === layout ? current : { ...current, [refKey]: collapsed };
       });
     }
   }, [starting, tabsRef]);
   useEffect(() => {
-    for (const [key, layout] of Object.entries(layouts)) {
-      if (!settledProjects.current.has(key)) {
+    for (const [refKey, layout] of Object.entries(layouts)) {
+      if (!settledProjects.current.has(refKey)) {
         continue;
       }
-      const list = tabs[key] ?? NO_TABS;
-      const last = serializedRef.current[key];
+      const list = tabs[refKey] ?? NO_TABS;
+      const last = serializedRef.current[refKey];
       if (last?.layout === layout && last.tabs === list) {
         continue;
       }
-      serializedRef.current[key] = { layout, tabs: list };
+      serializedRef.current[refKey] = { layout, tabs: list };
       const serialized = serializeLayout(layout, list);
-      if (savedLayoutsRef.current[key] !== serialized) {
-        savedLayoutsRef.current[key] = serialized;
-        saveLayout(key, serialized);
+      if (savedLayoutsRef.current[refKey] !== serialized) {
+        savedLayoutsRef.current[refKey] = serialized;
+        saveLayout(refKey, serialized);
       }
     }
   }, [layouts, tabs, starting]);
@@ -147,30 +147,30 @@ export function useProjectLayouts(
    * other collapse trigger is a close, in the reconcile effect. A `paneId` the preset no longer has
    * (collapsed while a new tab was being created) resolves the same way, or the tab is drawn nowhere.
    */
-  const activateTab = useCallback((key: string, tabId: string, paneId?: PaneId) => {
+  const activateTab = useCallback((refKey: string, tabId: string, paneId?: PaneId) => {
     setLayouts((current) => {
-      const layout = layoutOf(current, key);
+      const layout = layoutOf(current, refKey);
       const target = paneId && PRESET_PANES[layout.preset].includes(paneId) ? paneId : paneOf(layout, tabId);
       return {
         ...current,
-        [key]: activateTabLayout(layout, tabId, target, tabsRef.current[key] ?? [])
+        [refKey]: activateTabLayout(layout, tabId, target, tabsRef.current[refKey] ?? [])
       };
     });
   }, [tabsRef]);
 
   /** A tab dropped on a snap zone — see `snapTab`. */
-  const snapTab = useCallback((key: string, tabId: string, transition: SnapTransition) => {
+  const snapTab = useCallback((refKey: string, tabId: string, transition: SnapTransition) => {
     setLayouts((current) => ({
       ...current,
-      [key]: snapTabLayout(layoutOf(current, key), tabId, transition, tabsRef.current[key] ?? [])
+      [refKey]: snapTabLayout(layoutOf(current, refKey), tabId, transition, tabsRef.current[refKey] ?? [])
     }));
   }, [tabsRef]);
 
   /** A pane taking focus without its active tab changing — a click on its terminal. */
-  const focusPane = useCallback((key: string, paneId: PaneId) => {
+  const focusPane = useCallback((refKey: string, paneId: PaneId) => {
     setLayouts((current) => {
-      const layout = layoutOf(current, key);
-      return layout.focusedPane === paneId ? current : { ...current, [key]: { ...layout, focusedPane: paneId } };
+      const layout = layoutOf(current, refKey);
+      return layout.focusedPane === paneId ? current : { ...current, [refKey]: { ...layout, focusedPane: paneId } };
     });
   }, []);
 
@@ -180,28 +180,28 @@ export function useProjectLayouts(
    * channel opened (its push precedes the show).
    */
   const placeTab = useCallback(
-    (key: string, tabId: string, command?: string) => {
-      const line = command ?? tabsRef.current[key]?.find((tab) => tab.tabId === tabId)?.command;
+    (refKey: string, tabId: string, command?: string) => {
+      const line = command ?? tabsRef.current[refKey]?.find((tab) => tab.tabId === tabId)?.command;
       if (line === undefined) {
-        activateTab(key, tabId);
+        activateTab(refKey, tabId);
         return;
       }
       setLayouts((current) => ({
         ...current,
-        [key]: placeCommandTab(layoutOf(current, key), tabId, line, tabsRef.current[key] ?? [])
+        [refKey]: placeCommandTab(layoutOf(current, refKey), tabId, line, tabsRef.current[refKey] ?? [])
       }));
     },
     [activateTab, tabsRef]
   );
 
   /** Lets go of a removed repository's or worktree's state, what is stored of it too. */
-  const forgetLayout = useCallback((key: string) => {
-    setLayouts((current) => forget(current, key));
-    dropStoredLayout(key);
-    delete previousTabsRef.current[key];
-    delete savedLayoutsRef.current[key];
-    delete serializedRef.current[key];
-    settledProjects.current.delete(key);
+  const forgetLayout = useCallback((refKey: string) => {
+    setLayouts((current) => forget(current, refKey));
+    dropStoredLayout(refKey);
+    delete previousTabsRef.current[refKey];
+    delete savedLayoutsRef.current[refKey];
+    delete serializedRef.current[refKey];
+    settledProjects.current.delete(refKey);
   }, []);
 
   return { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout };

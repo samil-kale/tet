@@ -21,6 +21,7 @@ import { releaseDropped } from "./sbx/sbx-mounts";
 import type { SbxLocalStore } from "./sbx/sbx-local";
 import type { ProjectStore } from "./store/project-store";
 import type { SessionManagerRegistry } from "./terminals/session-registry";
+import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
 import { tetJsonProblem } from "./store/tet-json";
 import { logError } from "./util/error-log";
 
@@ -179,7 +180,7 @@ export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
     const problem = problems[index];
     if (problem !== undefined) {
       deps.store.hold(project.id);
-      deps.notice("error", `${project.name} was not opened: ${problem}. Fix it, then add the repository again.`);
+      deps.notice("error", `${project.name} was not opened: ${problem}. Fix it, then add the project again.`);
       continue;
     }
     for (const ref of projectRefsOf(project)) {
@@ -198,7 +199,7 @@ function closeProjectRef({ repositories, tabManagers, records }: ProjectDeps, re
 
 /** The sandboxes of closed repositories and worktrees and a folder of TET's data; what cannot go is
  *  logged, not thrown: the repositories and worktrees are gone either way. */
-async function dropRefData(refs: ProjectRef[], folders: string[]): Promise<void> {
+async function deleteRefData(refs: ProjectRef[], folders: string[]): Promise<void> {
   await removeRefSandboxes(refs);
   for (const folder of folders) {
     await fs.promises
@@ -209,9 +210,9 @@ async function dropRefData(refs: ProjectRef[], folders: string[]): Promise<void>
 
 /** A worktree's folders, then `worktrees/` and `sandboxes/` if it was their last: rmdir refuses one
  *  that still holds another's. */
-async function dropWorktreeData(dataRoot: string, refs: ProjectRef[], projectId: string, key: string): Promise<void> {
+async function deleteWorktreeData(dataRoot: string, refs: ProjectRef[], projectId: string, key: string): Promise<void> {
   const folders = worktreeFolders(dataRoot, projectId, key);
-  await dropRefData(refs, folders);
+  await deleteRefData(refs, folders);
   for (const folder of folders) {
     await fs.promises.rmdir(path.dirname(folder)).catch(() => undefined);
   }
@@ -220,7 +221,7 @@ async function dropWorktreeData(dataRoot: string, refs: ProjectRef[], projectId:
 /**
  * Removes the project: the worktrees TET made are deleted with their branches, one after another
  * through the repository's Repository, and the first that fails stops it with the project left
- * open. Then its sandboxes, its sbx values, its `tet.id` and TET's folder of it; the repository's
+ * open. Then its sandboxes, its SBX settings, its `tet.id` and TET's folder of it; the repository's
  * own folder stays, and so do worktrees made elsewhere. A repository whose folder is gone has no git
  * to ask: its worktrees are only closed, their folders going with TET's.
  */
@@ -228,7 +229,7 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
   return inTurn(changes, CHANGE, async () => {
     const project = deps.store.get(projectId);
     if (!project) {
-      return { ok: false, error: "Project not found" };
+      return { ok: false, error: PROJECT_NOT_FOUND };
     }
     const there = fs.existsSync(project.path);
     const [main, ...worktrees] = projectRefsOf(project);
@@ -253,7 +254,7 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
         logError(`could not unset tet.id in ${project.path}: ${unset.error}`);
       }
     }
-    await dropRefData(closing, [projectDir(deps.dataRoot, projectId)]);
+    await deleteRefData(closing, [projectDir(deps.dataRoot, projectId)]);
     if (!there) {
       // Their folders went with TET's; with the repository there, deleteWorktree took them.
       for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {
@@ -273,8 +274,11 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
   return inTurn(changes, CHANGE, async () => {
     const branch = typed.trim();
     const repository = deps.repositories.get(projectRef(projectId));
-    if (!deps.store.get(projectId) || !repository) {
-      return { error: "Project not found" };
+    if (!deps.store.get(projectId)) {
+      return { error: PROJECT_NOT_FOUND };
+    }
+    if (!repository) {
+      return { error: notOpenMessage(deps.store, projectRef(projectId)) };
     }
     const base = worktreeBase(repository.getState());
     if (!base) {
@@ -282,7 +286,7 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
     }
     // Asked here too, not only in the menus: `tet-ctl worktree-add` has none.
     if (!worktreesSupported(await git.version())) {
-      return { error: `Creating a worktree ${WORKTREES_NEED_GIT}` };
+      return { error: `Adding a worktree ${WORKTREES_NEED_GIT}` };
     }
     const key = newWorktreeKey(deps.dataRoot, projectId);
     const ref = projectRef(projectId, key);
@@ -303,7 +307,7 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
 }
 
 /**
- * Deletes a worktree TET made and its branch, which tet couples: its changes are asked about first —
+ * Deletes a worktree TET made and its branch, which TET couples: its changes are asked about first —
  * answered as `uncommitted` before anything is closed — and forced once confirmed; a folder already
  * gone is pruned. The branch goes after the worktree (git refuses one checked out), and with
  * `onRemote` its upstream too, as a branch's own delete does. On failure the worktree opens again;
@@ -353,7 +357,7 @@ export async function deleteWorktree(
       deps.openProjectRef(ref);
       return result;
     }
-    await dropWorktreeData(deps.dataRoot, [], ref.projectId, ref.worktree!);
+    await deleteWorktreeData(deps.dataRoot, [], ref.projectId, ref.worktree!);
     // Only once it is gone: a worktree that stays keeps its sessions. Not waited on — each may
     // start its agent's CLI, and nothing here needs them gone.
     void removeAllSessions(worktree.path);
@@ -377,7 +381,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     return;
   }
   const listed: ProjectWorktree[] = state.worktrees
-    .filter((worktree) => !worktree.main)
+    .filter((worktree) => !worktree.isRepository)
     .map(({ path: worktreePath, branch, key }) => ({ path: worktreePath, branch, key }));
   const unlisted = project.worktrees.filter(
     (worktree) => worktree.key !== undefined && !listed.some((entry) => entry.key === worktree.key)
@@ -391,7 +395,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
   for (const worktree of gone) {
     const ref = projectRef(projectId, worktree.key);
     void closeProjectRef(deps, ref)
-      .then(() => dropWorktreeData(deps.dataRoot, [ref], projectId, worktree.key!))
+      .then(() => deleteWorktreeData(deps.dataRoot, [ref], projectId, worktree.key!))
       .then(() => removeAllSessions(worktree.path))
       .catch((error: unknown) => logError(`could not clean up after the worktree ${worktree.path}`, error));
   }

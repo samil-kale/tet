@@ -1,5 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { projectRefKey } from "../../../shared/types/project";
+import { refKeyOf } from "../../../shared/types/project";
 import type { ExplorerListing } from "../../../shared/types/files";
 import type { GitActionResult } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
@@ -9,13 +9,13 @@ import type { FileAct, FileAsk } from "../../git/run-action";
 import { openEntries, pathEntries } from "../../editor/file-menu";
 import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
 import { baseName, parentOf } from "../../paths";
-import { FileMarkIcon } from "./file-mark";
-import { compactTree, filterTree, foldersIn, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../../ui/tree";
-import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../../ui/tree-row";
+import { FileIconView } from "./file-icon";
+import { compactTree, filterTree, foldersIn, isExpanded, visibleRows, type TreeNode, type VisibleRow } from "../../ui/tree";
+import { INDENT_BASE, INDENT_STEP, TreeRow, ChevronBox } from "../../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirmed } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
-import type { FoldAll } from "../../ui/FoldAllButton";
+import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 
 interface ExplorerRowProps extends VisibleRow {
   selected: boolean;
@@ -25,9 +25,9 @@ interface ExplorerRowProps extends VisibleRow {
   rows: Map<string, HTMLButtonElement>;
 }
 
-/** Memoized with stable handlers: a fold, a selection or a menu re-renders only the rows it
- *  changes, not the whole open tree. */
-const ExplorerRow = memo(function ExplorerRow({ node, depth, open, selected, toggle, onOpen, onContextMenu, rows }: ExplorerRowProps) {
+/** Memoized with stable handlers: a collapse, a selection or a menu re-renders only the rows it
+ *  changes, not the whole expanded tree. */
+const ExplorerRow = memo(function ExplorerRow({ node, depth, expanded, selected, toggle, onOpen, onContextMenu, rows }: ExplorerRowProps) {
   const isFolder = node.children !== undefined;
   const register = useCallback(
     (element: HTMLButtonElement | null) => {
@@ -50,7 +50,7 @@ const ExplorerRow = memo(function ExplorerRow({ node, depth, open, selected, tog
       // already opened the file, so this only keeps.
       onDoubleClick={() => !isFolder && onOpen(node.path, { keep: true })}
       onContextMenu={(event) => onContextMenu(event, node)}
-      icon={isFolder ? <Twistie open={open} /> : <FileMarkIcon name={node.name} />}
+      icon={isFolder ? <ChevronBox expanded={expanded} /> : <FileIconView name={node.name} />}
       label={node.name}
     />
   );
@@ -77,14 +77,14 @@ interface ExplorerProps {
   onExplorerChanged: () => void;
   /** What the header's clear button stands for, reported as it changes: the tree holds the filter. */
   onFiltering: (filtering: boolean) => void;
-  /** What the header's fold button does next, reported as it changes: collapse while a folder at
-   *  the top is open — any open folder shows under one — else expand. */
+  /** What the header's collapse/expand button does next, reported as it changes: collapse while a
+   *  folder at the top is expanded — any expanded folder shows under one — else expand. */
   onExpanded: (expanded: boolean) => void;
   ref?: React.Ref<ExplorerHandle>;
 }
 
 /** For the EXPLORER header's title-bar buttons. */
-export interface ExplorerHandle extends FoldAll {
+export interface ExplorerHandle extends CollapseExpandAll {
   newFile(): void;
   newFolder(): void;
   clearFilter(): void;
@@ -126,7 +126,7 @@ export const Explorer = memo(function Explorer({
   const filtering = query.length > 0;
   // The clear button is the header's; only the tree knows whether there is a filter to clear.
   useEffect(() => onFiltering(filtering), [filtering, onFiltering]);
-  // Compacted after filtering: a folder pruned to one subfolder folds with it.
+  // Compacted after filtering: a folder pruned to one subfolder is compacted with it.
   const shown = useMemo(() => {
     const filtered = query ? filterTree(tree, query) : tree;
     return files?.compactFolders ? compactTree(filtered) : filtered;
@@ -165,8 +165,8 @@ export const Explorer = memo(function Explorer({
     });
   }, [selected, roots]);
   // The scroll, once the row exists: re-run on `expanded` (a collapsed folder's rows aren't in the
-  // DOM yet) and `shown` (the listing arrives after the view opens). The pending ref keeps a fold
-  // toggle from yanking back to an old selection; it stays pending while hidden behind git.
+  // DOM yet) and `shown` (the listing arrives after the view opens). The pending ref keeps an expand
+  // or collapse from yanking back to an old selection; it stays pending while hidden behind git.
   useEffect(() => {
     if (visible && pendingReveal.current) {
       const row = rows.current.get(pendingReveal.current);
@@ -178,20 +178,20 @@ export const Explorer = memo(function Explorer({
   }, [selected, expanded, shown, visible]);
 
   const toggle = useCallback(
-    (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isOpen(node, current) })),
+    (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isExpanded(node, current) })),
     []
   );
   const flat = useMemo(
-    () => visibleRows(shown, (node) => filtering || isOpen(node, expanded)),
+    () => visibleRows(shown, (node) => filtering || isExpanded(node, expanded)),
     [shown, expanded, filtering]
   );
-  const anyExpanded = tree.some((node) => node.children !== undefined && isOpen(node, expanded));
+  const anyExpanded = tree.some((node) => node.children !== undefined && isExpanded(node, expanded));
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
-  // Folds by ids of the uncompacted `tree`, which compacted rows keep.
-  const setAll = (ids: string[], open: boolean): void =>
-    setExpanded((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, open])) }));
-  /** "Collapse Folders in Explorer" in two stages: what is open below the roots, then everything
+  // Expands and collapses by ids of the uncompacted `tree`, which compacted rows keep.
+  const setAll = (ids: string[], expand: boolean): void =>
+    setExpanded((current) => ({ ...current, ...Object.fromEntries(ids.map((id) => [id, expand])) }));
+  /** "Collapse Folders in Explorer" in two stages: what is expanded below the roots, then everything
    *  (at once without roots). */
   const collapseAll = (): void =>
     setAll(
@@ -357,7 +357,7 @@ export function useExplorerListing(
   resolved: ResolvedRef,
   shown: boolean
 ): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
-  const [held, setHeld] = useState<{ key: string; listing: ExplorerListing } | undefined>(undefined);
+  const [held, setHeld] = useState<{ refKey: string; listing: ExplorerListing } | undefined>(undefined);
   const [listing, setListing] = useState(false);
   const [explorerVersion, setExplorerVersion] = useState(0);
   const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
@@ -371,7 +371,7 @@ export function useExplorerListing(
       }
     });
     const unsubscribeFiles = window.tet.repository.onFilesChanged((payload) => {
-      if (projectRefKey(payload.ref) === resolved.key) {
+      if (refKeyOf(payload.ref) === resolved.refKey) {
         bump();
       }
     });
@@ -392,8 +392,8 @@ export function useExplorerListing(
     void window.tet.repository.listExplorer(resolved.ref).then((result) => {
       if (!cancelled) {
         setHeld((previous) => ({
-          key: resolved.key,
-          listing: keepRoots(previous?.key === resolved.key ? previous.listing : undefined, result)
+          refKey: resolved.refKey,
+          listing: keepRoots(previous?.refKey === resolved.refKey ? previous.listing : undefined, result)
         }));
         setListing(false);
       }
@@ -402,7 +402,7 @@ export function useExplorerListing(
       cancelled = true;
     };
   }, [resolved, explorerVersion, shown]);
-  return { explorerListing: held?.key === resolved.key ? held.listing : undefined, listing, refreshExplorer };
+  return { explorerListing: held?.refKey === resolved.refKey ? held.listing : undefined, listing, refreshExplorer };
 }
 
 /** The listing with the previous `roots` where unchanged: the reveal effect depends on it, and a

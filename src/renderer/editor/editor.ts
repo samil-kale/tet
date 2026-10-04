@@ -156,7 +156,7 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
  * The diff half. Inline or side by side, the whole file or its unchanged regions collapsed, as the
  * user last chose (`applyDiffOptions`, editor-views.ts); side by side stays two columns in a narrow
  * pane too. The overview ruler beside the scrollbar is how changes are found (a click scrolls).
- * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's. tet
+ * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's. TET
  * never diffs: it hands monaco two texts. The modified (right-hand) side is the editable one.
  *
  * Left at default on purpose: `renderGutterMenu` and `renderMarginRevertIcon` (their reverts edit

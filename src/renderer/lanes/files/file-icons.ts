@@ -3,13 +3,13 @@
 //
 // Seti (github.com/jesseweed/seti-ui): MIT.
 
-type FileMarkColor = "blue" | "green" | "yellow" | "orange" | "red" | "purple" | "pink";
+type FileIconColor = "blue" | "green" | "yellow" | "orange" | "red" | "purple" | "pink";
 
 /** A glyph of seti.woff, and its color if Seti gives it one. */
-export type FileMark = readonly [glyph: string, color?: FileMarkColor];
+export type FileIcon = readonly [glyph: string, color?: FileIconColor];
 
-/** Lowercased extension, without its leading dot, to its mark; null for none. */
-export const FILE_EXTENSIONS: Record<string, FileMark | null> = {
+/** Lowercased extension, without its leading dot, to its file icon; null for none. */
+export const FILE_EXTENSIONS: Record<string, FileIcon | null> = {
   "3dm": ["\uE091", "blue"],
   "3ds": ["\uE091", "blue"],
   "ad": ["\uE003", "blue"],
@@ -513,8 +513,8 @@ export const FILE_EXTENSIONS: Record<string, FileMark | null> = {
   "zshrc": ["\uE089", "green"]
 };
 
-/** Lowercased file name to its mark, where it differs from its extensions'; null for none. */
-export const FILE_NAMES: Record<string, FileMark | null> = {
+/** Lowercased file name to its file icon, where it differs from its extensions'; null for none. */
+export const FILE_NAMES: Record<string, FileIcon | null> = {
   ".ember-cli": ["\uE055", "yellow"],
   ".envrc": ["\uE089", "green"],
   ".flaskenv": ["\uE019"],
