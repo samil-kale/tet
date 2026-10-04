@@ -138,13 +138,35 @@ textarea:focus,
   border-color: var(--vscode-focusBorder);
 }
 
+/* Text cut short with an ellipsis rather than wrapped or pushing its row wider: the label, name or
+   path that shares a row with something that keeps its room. */
+.titlebar-name,
+.project-label,
+.command-label,
+.command-extra,
+.project-extra,
+.tree-extra,
+.section-title,
+.tree-dir,
+.tree-label,
+.tab-label,
+.dialog-title,
+.editor-path,
+.sbx-path-value,
+.account-user,
+.account-host,
+.repository-name,
+.dropdown-trigger,
+.dropdown-menu .context-menu-item {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Styled like a `<select>`: a native select's open list is drawn by Chrome, ignoring every color
    and :hover rule here, so its highlighted row cannot be themed. */
 .dropdown-trigger {
   text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   /* Room for `.select-arrow`, drawn over this button's right edge. */
   padding-right: 26px;
 }
@@ -304,6 +326,19 @@ textarea:focus,
   --dialog-max-height: calc(100vh - 32px);
 }
 
+/* A column that takes the room its parent leaves and can shrink below its content, so a scroller
+   inside it scrolls instead of growing it. */
+.lane-content,
+.branch-tree,
+.explorer-tree,
+.editor-body,
+.image-diff {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 /* Title bar ------------------------------------------------------------------------------ */
 
 .titlebar {
@@ -336,33 +371,15 @@ textarea:focus,
 
 /* The one thing in the bar that may be cut; the icon beside it keeps its box. */
 .titlebar-name {
-  overflow: hidden;
   font-size: var(--small-font-size);
   font-weight: 600;
   letter-spacing: 1.5px;
   color: var(--vscode-titleBar-activeForeground);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-/* Just enough room around the icon for the hover background. */
-.icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--action-size);
-  height: var(--action-size);
-  flex: none;
-  /* The reset above keeps Chrome's default button padding, which with border-box squeezes every
-     icon. */
-  padding: 0;
-  border-radius: 3px;
-  color: inherit;
-  /* Barely dimmed: line drawings on a dark ground lose readable contrast fast. */
-  opacity: 0.8;
-}
-
-/* A status in an action's place: the icon button's box and dimming, with nothing to click. */
+/* Just enough room around the icon for the hover background. An `.icon-mark` is a status in an
+   action's place: the same box and dimming, with nothing to click. */
+.icon-button,
 .icon-mark {
   display: inline-flex;
   align-items: center;
@@ -370,7 +387,16 @@ textarea:focus,
   width: var(--action-size);
   height: var(--action-size);
   flex: none;
+  /* Barely dimmed: line drawings on a dark ground lose readable contrast fast. */
   opacity: 0.8;
+}
+
+.icon-button {
+  /* The reset above keeps Chrome's default button padding, which with border-box squeezes every
+     icon. */
+  padding: 0;
+  border-radius: 3px;
+  color: inherit;
 }
 
 /* The svg fills the box and its padding insets the drawing to --icon-size: centring a smaller
@@ -456,6 +482,14 @@ textarea:focus,
   font-family: var(--vscode-editor-font-family);
 }
 
+/* The titles of a lane's sections and of a tree's groups: one type. */
+.section-header,
+.tree-header {
+  font-size: var(--small-font-size);
+  letter-spacing: 0.3px;
+  color: var(--vscode-sideBarSectionHeader-foreground);
+}
+
 /* The tab strip's 35px, border included, so titles and tabs line up. The line above is drawn by
    whatever the section sits under, so no header draws two. */
 .section-header {
@@ -469,10 +503,7 @@ textarea:focus,
   flex: none;
   padding: 0 6px 0 10px;
   border-bottom: 1px solid var(--vscode-panel-border);
-  font-size: var(--small-font-size);
   font-weight: 600;
-  letter-spacing: 0.3px;
-  color: var(--vscode-sideBarSectionHeader-foreground);
 }
 
 .project-list {
@@ -614,9 +645,6 @@ textarea:focus,
 .command-label {
   flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* A command's variables, a repository's branch, a worktree's base. Declared together so they
@@ -625,21 +653,11 @@ textarea:focus,
 .project-extra,
 .tree-extra {
   flex: 0 1 auto;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--tiny-font-size);
   color: var(--vscode-descriptionForeground);
 }
 
 /* Branch tree ----------------------------------------------------------------------------- */
-
-.branch-tree {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
 
 /* A branch command is running; a second one would race it for the index lock. */
 .branch-tree.busy .tree-item {
@@ -736,10 +754,7 @@ textarea:focus,
   width: 100%;
   /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's marks. */
   padding: 0 6px 0 9px;
-  font-size: var(--small-font-size);
   font-weight: 400;
-  letter-spacing: 0.3px;
-  color: var(--vscode-sideBarSectionHeader-foreground);
 }
 
 .tree-item {
@@ -777,15 +792,8 @@ textarea:focus,
 }
 
 /* The files pane's EXPLORER tree, and the SEARCH pane under it, whose rows are of the same shape.
-   It nests arbitrarily deep, so rows set `padding-left` inline. */
-.explorer-tree {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-/* The Explorer's row. No flex gap: the twistie and the file mark carry their own. */
+   It nests arbitrarily deep, so rows set `padding-left` inline. The Explorer's row: no flex gap,
+   the twistie and the file mark carry their own. */
 .explorer-tree .tree-item {
   height: 24px;
   gap: 0;
@@ -801,11 +809,15 @@ textarea:focus,
   font-style: normal;
 }
 
-.explorer-tree .file-mark {
+.explorer-tree .file-mark,
+.change-status {
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 4px;
+}
+
+.explorer-tree .file-mark {
   font-family: "seti";
   font-size: calc(var(--icon-size) * 14.6 / 12);
   line-height: 1;
@@ -848,9 +860,6 @@ textarea:focus,
    before the header's buttons. */
 .section-title {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* A regex that will not parse takes the SEARCH summary's place. */
@@ -861,9 +870,6 @@ textarea:focus,
 /* The folder a file sits in, after its name as VS Code's result rows show it: SEARCH's results,
    the flat LOCAL CHANGES. */
 .tree-dir {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-left: 6px;
   color: var(--vscode-descriptionForeground);
   font-size: var(--small-font-size);
@@ -886,19 +892,14 @@ textarea:focus,
   background: var(--vscode-editor-findMatchHighlightBackground);
 }
 
-/* A tree's icons are the size of every other, as IntelliJ's. */
-.tree-icon {
+/* A tree's and a tab's icons are the size of every other, as IntelliJ's. */
+.tree-icon,
+.tab-icon {
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
   /* As `.icon-button`. */
   opacity: 0.8;
-}
-
-.tree-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .count-badge {
@@ -955,22 +956,19 @@ textarea:focus,
   min-height: 0;
 }
 
-/* Two stacked panes; a sized column carries its width inline. */
-.panes-column {
+/* The grid's two boxes; `min-*: 0` lets a sized neighbour push the others below their content. Two
+   stacked panes are a column, which carries its width inline when sized. */
+.panes-column,
+.terminal-pane {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
 
-/* One pane: tab strip and terminal stack. Relative for `.drag-over`'s overlay; `min-*: 0` lets a
-   sized neighbour push the others below their content. */
+/* One pane: tab strip and terminal stack. Relative for `.drag-over`'s overlay. */
 .terminal-pane {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
 }
 
 .terminal-pane.fill,
@@ -978,25 +976,23 @@ textarea:focus,
   flex: 1;
 }
 
-/* The pane a dragged tab would land in. An overlay: a border would shrink the box its children
-   measure, and an inset box-shadow's top edge paints behind the opaque tab strip. */
-.terminal-pane.drag-over::after {
-  content: "";
+/* The frames of a drag: the pane a dragged tab would land in, the pane it would add (at even
+   shares, `PANE_BOXES`) and a terminal a file is held over. Overlays all: a border would shrink the
+   box its children measure, an inset box-shadow's top edge paints behind the opaque tab strip, and
+   panes keep their sizes until the drop, or every pty under them refits mid-drag. Above the layers
+   beneath them, which xterm's decorations reach 7 of. */
+.terminal-pane.drag-over::after,
+.snap-preview,
+.terminal-host.drag-over::after {
   position: absolute;
-  inset: 0;
   border: 2px solid var(--vscode-focusBorder);
-  /* Above `.terminal-host`'s own layers. */
   z-index: 10;
   pointer-events: none;
 }
 
-/* The pane a dragged tab would add, at even shares (`PANE_BOXES`). An overlay: panes keep their
-   sizes until the drop, or every pty under them refits mid-drag. */
-.snap-preview {
-  position: absolute;
-  border: 2px solid var(--vscode-focusBorder);
-  z-index: 10;
-  pointer-events: none;
+.terminal-pane.drag-over::after {
+  content: "";
+  inset: 0;
 }
 
 .tab-strip {
@@ -1013,7 +1009,8 @@ textarea:focus,
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
    travel (`--travel`) and duration absolutely, so it looks alike in a 300px section and a 900px
    pane. */
-.progress-bar {
+.progress-bar,
+.notice-progress {
   position: absolute;
   left: 0;
   right: 0;
@@ -1055,17 +1052,22 @@ textarea:focus,
   display: none;
 }
 
-.tab {
+/* A tab of the strip, and of a dialog's header (`.dialog-tab`). */
+.tab,
+.dialog-tab {
   display: flex;
   align-items: center;
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-tab-inactiveForeground);
+  border-right: 1px solid var(--vscode-tab-border);
+}
+
+.tab {
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 4px 0 10px;
   max-width: 270px;
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-tab-inactiveForeground);
   background: var(--vscode-tab-inactiveBackground);
-  border-right: 1px solid var(--vscode-tab-border);
   cursor: pointer;
 }
 
@@ -1088,12 +1090,6 @@ textarea:focus,
   flex: none;
   border-right: 1px solid var(--vscode-panel-border);
   padding: 0 8px;
-}
-
-.tab-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .tab.inactive .tab-label {
@@ -1122,13 +1118,6 @@ textarea:focus,
 /* Not a fourth turn state: red is the one colour Dark Modern names for this meaning. */
 .session-mark-error {
   color: var(--vscode-errorForeground);
-}
-
-.tab-icon {
-  flex: none;
-  width: var(--icon-size);
-  height: var(--icon-size);
-  opacity: 0.8;
 }
 
 /* Holds the tab's icon or mark and, on a sandboxed tab, the badge over its lower right. */
@@ -1239,8 +1228,6 @@ textarea:focus,
 /* Plain text, no icon or arrow: a block, which can end in an ellipsis. */
 .dropdown-menu .context-menu-item {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .new-session-menu .context-menu-item,
@@ -1287,14 +1274,9 @@ textarea:focus,
    measures, so every drag would refit it and resize the pty. */
 .terminal-host.drag-over::after {
   content: "";
-  position: absolute;
   /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
      edges, where no line is drawn. */
   inset: -6px -5px -5px -6px;
-  border: 2px solid var(--vscode-focusBorder);
-  /* Above xterm's layers, which reach 7 for decorations. */
-  z-index: 10;
-  pointer-events: none;
 }
 
 /*
@@ -1337,11 +1319,7 @@ textarea:focus,
 
 
 .lane-content {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
   min-width: var(--pane-min-width);
-  min-height: 0;
   /* Replays on every view switch: leaving `display: none` restarts an animation. */
   animation: lane-fade-in 0.1s ease-out;
 }
@@ -1362,10 +1340,6 @@ textarea:focus,
    modification of a moved file. */
 .change-status {
   margin-top: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 4px;
   font-family: var(--vscode-editor-font-family);
   font-size: var(--small-font-size);
   opacity: 1;
@@ -1401,23 +1375,23 @@ textarea:focus,
   background: var(--vscode-editor-background);
 }
 
-/* Descendants too, `!important`: monaco's diff editor writes `visibility: visible` inline on both
-   editors (for its accessible diff viewer), showing them through a hidden ancestor. */
+/* Descendants too, `!important`: monaco writes `visibility: visible` inline on its editors (the
+   diff editor on both, for its accessible diff viewer), showing them through a hidden ancestor.
+   `.editor-host` is the editor the tab isn't showing: its box stays laid out, so the switch needs
+   no relayout. */
 .editor-tab.hidden,
 .editor-tab.hidden *,
 .editor-split.hidden,
-.editor-split.hidden * {
+.editor-split.hidden *,
+.editor-host.hidden,
+.editor-host.hidden * {
   visibility: hidden !important;
 }
 
 /* Below the bar: a placeholder or the image view in flow, the editor's split over them. */
 .editor-body {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
   min-width: 0;
-  min-height: 0;
 }
 
 /* The editor, and a Markdown file's preview beside it. */
@@ -1447,14 +1421,6 @@ textarea:focus,
 .editor-host {
   position: absolute;
   inset: 0;
-}
-
-/* The editor the tab isn't showing. Hidden by visibility and `!important` like `.editor-split`,
-   for the same reason: monaco writes `visibility: visible` inline on its editors, and the box
-   stays laid out, so the switch needs no relayout. */
-.editor-host.hidden,
-.editor-host.hidden * {
-  visibility: hidden !important;
 }
 
 /* Unsaved edits: on from the first keystroke until Ctrl+S reaches disk. */
@@ -1511,9 +1477,6 @@ textarea:focus,
 .editor-path {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--vscode-font-size);
 }
 
@@ -1524,11 +1487,10 @@ textarea:focus,
   color: var(--vscode-focusBorder);
 }
 
+/* The checkerboard an image viewer puts behind transparency: the pair's images and the stack's
+   backdrop alike. */
 .image-diff {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
+  --checkerboard: repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
 }
 
 .image-diff-pair {
@@ -1563,8 +1525,7 @@ textarea:focus,
   content: "";
   position: absolute;
   inset: 16px;
-  background:
-    repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
+  background: var(--checkerboard);
 }
 
 .image-diff-stack img {
@@ -1580,9 +1541,7 @@ textarea:focus,
 
 .image-diff-pair img {
   max-width: 100%;
-  /* The checkerboard an image viewer puts behind transparency. */
-  background:
-    repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
+  background: var(--checkerboard);
   border: 1px solid var(--vscode-panel-border);
 }
 
@@ -1818,12 +1777,7 @@ textarea:focus,
 }
 
 .dialog-tab {
-  display: flex;
-  align-items: center;
   padding: 0 14px;
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-tab-inactiveForeground);
-  border-right: 1px solid var(--vscode-tab-border);
 }
 
 /* `.dialog-tab.active` is `.tab.active`'s. */
@@ -1852,9 +1806,6 @@ textarea:focus,
 .dialog-title {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: var(--vscode-font-size);
   font-weight: 600;
 }
@@ -1969,9 +1920,6 @@ textarea:focus,
   flex: 1;
   min-width: 0;
   line-height: var(--field-height);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-family: var(--vscode-editor-font-family);
 }
 
@@ -2041,17 +1989,23 @@ textarea:focus,
   min-width: 0;
 }
 
-/* Fixed height, as the settings dialog's: switching tabs must not resize it, and rows that outgrow
-   it scroll in their own box (below) rather than growing it. Capped to the window. */
-.sbx-settings-dialog {
-  min-width: var(--dialog-wide-width);
+/* Fixed height: switching tabs must not resize the dialog, and rows that outgrow it scroll in their
+   own box rather than growing it. Capped to the window, the sbx dialog's only with the fields or the
+   account up (SbxSettingsDialog's `showsAccount`); the checks before them are short. */
+.settings-dialog,
+.sbx-settings-dialog,
+.add-repository-dialog {
   height: var(--dialog-tall-height);
 }
 
-/* Only with the fields or the account up (SbxSettingsDialog's `showsAccount`); the checks before
-   them are short. */
+.settings-dialog,
+.add-repository-dialog,
 .sbx-settings-dialog.ready {
   max-height: var(--dialog-max-height);
+}
+
+.sbx-settings-dialog {
+  min-width: var(--dialog-wide-width);
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
@@ -2089,6 +2043,64 @@ textarea:focus,
 .dialog-detail {
   margin: 0;
   color: var(--vscode-descriptionForeground);
+}
+
+/* A field's label over its control, and every column of fields in a dialog (`FieldColumn`), spaced
+   alike. */
+.dialog-field,
+.dialog-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Takes the room its parent leaves, across or down, so a scrollbox inside can shrink into it. */
+.dialog-column.fill {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.dialog-field span {
+  color: var(--vscode-descriptionForeground);
+}
+
+/* A checkbox's label in a field group is a control's, not the group's label. */
+.dialog-field .dialog-checkbox > span {
+  color: var(--vscode-foreground);
+}
+
+/* Every row of controls in a dialog (`FieldRow`), spaced alike. */
+.dialog-field-row {
+  display: flex;
+  gap: 8px;
+}
+
+/* A button keeps its label whole; the field or the dropdown beside it gives way. */
+.dialog-field-row .button {
+  flex: none;
+}
+
+.dialog-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Who suggests: the model takes what the agent leaves. */
+.dialog-field-row .select-field:not(.fit) {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The agent: 20px of room past its longest name, before the arrow's 26. */
+.dialog-field-row .select-field.fit .dropdown-trigger {
+  padding-right: 46px;
+}
+
+/* Just its wand: squared off, as tall as the field beside it. */
+.dialog-suggest {
+  align-self: stretch;
+  padding: 0 8px;
 }
 
 /* Aligned to the top: a label that wraps would leave a centred box between its lines. The SBX
@@ -2174,12 +2186,9 @@ textarea:focus,
   margin-right: 6px;
 }
 
-/* Wider than a question, for the rows of switches and the Prompts tab's text box. Fixed height:
-   switching tabs must not resize the dialog under the pointer. */
+/* Wider than a question, for the rows of switches and the Prompts tab's text box. */
 .settings-dialog {
   width: var(--dialog-wide-width);
-  height: var(--dialog-tall-height);
-  max-height: var(--dialog-max-height);
 }
 
 .settings-dialog .dialog-body {
@@ -2232,31 +2241,6 @@ textarea:focus,
   width: 85px;
   flex: none;
   color: var(--vscode-descriptionForeground);
-}
-
-/* A field's label over its control, and every column of fields in a dialog (`FieldColumn`), spaced
-   alike. */
-.dialog-field,
-.dialog-column {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* Takes the room its parent leaves, across or down, so a scrollbox inside can shrink into it. */
-.dialog-column.fill {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-.dialog-field span {
-  color: var(--vscode-descriptionForeground);
-}
-
-/* A checkbox's label in a field group is a control's, not the group's label. */
-.dialog-field .dialog-checkbox > span {
-  color: var(--vscode-foreground);
 }
 
 /* What refused an answer, wherever the answer was given (`DialogError`): the error mark's colour,
@@ -2369,8 +2353,6 @@ textarea:focus,
 
 .add-repository-dialog {
   width: 700px;
-  height: var(--dialog-tall-height);
-  max-height: var(--dialog-max-height);
 }
 
 .remote-tab {
@@ -2412,13 +2394,6 @@ textarea:focus,
   min-width: 0;
 }
 
-.account-user,
-.account-host {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .account-host {
   font-size: var(--small-font-size);
   color: var(--vscode-descriptionForeground);
@@ -2449,9 +2424,6 @@ textarea:focus,
 .repository-name {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* Shown on hover only. */
@@ -2463,39 +2435,6 @@ textarea:focus,
 
 .repository-item:hover .repository-clone {
   visibility: visible;
-}
-
-/* Every row of controls in a dialog (`FieldRow`), spaced alike. */
-.dialog-field-row {
-  display: flex;
-  gap: 8px;
-}
-
-/* A button keeps its label whole; the field or the dropdown beside it gives way. */
-.dialog-field-row .button {
-  flex: none;
-}
-
-.dialog-field-row input {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Who suggests: the model takes what the agent leaves. */
-.dialog-field-row .select-field:not(.fit) {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The agent: 20px of room past its longest name, before the arrow's 26. */
-.dialog-field-row .select-field.fit .dropdown-trigger {
-  padding-right: 46px;
-}
-
-/* Just its wand: squared off, as tall as the field beside it. */
-.dialog-suggest {
-  align-self: stretch;
-  padding: 0 8px;
 }
 
 /* Notices -------------------------------------------------------------------------------- */
@@ -2579,14 +2518,8 @@ textarea:focus,
   line-height: 22px;
 }
 
-/* VS Code's notification progress: 2px along the bottom edge, inside the border's radius. */
+/* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
 .notice-progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  overflow: hidden;
   border-radius: 0 0 3px 3px;
 }
 
