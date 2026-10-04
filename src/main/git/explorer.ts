@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import type { ExplorerListing, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
+import type { ExplorerListing, ExplorerSettings, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
 import type { GitActionResult } from "../../shared/types/git";
 import { readExplorerView } from "../store/tet-json";
 import { walkExplorer } from "./explorer-read";
@@ -19,10 +19,10 @@ import { logError } from "../util/error-log";
 /** Every file, plus empty directories — see `ExplorerListing` — walked in the Explorer's process
  *  (explorer-read.ts's `walkExplorer`). Git's ignore list is one `ls-files` per walk, never on the
  *  refresh path. A process that died walks here instead: the Explorer waits on an answer. */
-export async function listExplorer(root: string): Promise<ExplorerListing> {
+export async function listExplorer(root: string, settings: ExplorerSettings): Promise<ExplorerListing> {
   const view = await readExplorerView(root);
-  const wantMtimes = view.sortOrder === "modified";
-  const ignored = view.excludeGitIgnore ? await git.listIgnored(root).catch(() => []) : [];
+  const wantMtimes = settings.sortOrder === "modified";
+  const ignored = settings.excludeGitIgnore ? await git.listIgnored(root).catch(() => []) : [];
   const walked = await explorerRead.walkExplorer(root, view, ignored, wantMtimes).catch((error: unknown) => {
     logError("the Explorer's process failed to list", error);
     return walkExplorer(root, view, ignored, wantMtimes);
@@ -31,8 +31,8 @@ export async function listExplorer(root: string): Promise<ExplorerListing> {
     files: walked.files,
     emptyDirs: walked.emptyDirs,
     roots: view.folders.length > 0 ? view.folders : undefined,
-    compactFolders: view.compactFolders,
-    sortOrder: view.sortOrder,
+    compactFolders: settings.compactFolders,
+    sortOrder: settings.sortOrder,
     mtimes: walked.mtimes
   };
 }

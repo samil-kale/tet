@@ -41,7 +41,7 @@ export interface FileWriteResult extends GitActionResult {
 /**
  * The Explorer tree's files — a filesystem scan, not `git ls-files`, which cannot represent an empty
  * directory. `emptyDirs` holds only directories no file implies. `.git` is always left out. Carries
- * `tet.json`'s view settings too, for one read; `roots` is absent without a `folders` list. Paths
+ * the view settings too, for one read; `roots` is absent without a `folders` list. Paths
  * are repository-relative, each file listed once whatever roots contain it.
  */
 export interface ExplorerListing {
@@ -66,7 +66,10 @@ export const EXPLORER_SORT_ORDERS = ["default", "mixed", "filesFirst", "type", "
 
 export type ExplorerSortOrder = (typeof EXPLORER_SORT_ORDERS)[number];
 
-/** What the settings dialog's Files tab edits of the Explorer view, read on its own. */
+/** The Explorer settings by name, as `tet-ctl` sets them. */
+export const EXPLORER_SETTING_IDS = ["excludeGitIgnore", "compactFolders", "sortOrder"] as const;
+
+/** How the Explorer lists every project: the settings dialog's Files tab (`FilesSettings`). */
 export interface ExplorerSettings {
   /** `explorer.excludeGitIgnore`: hide what git ignores too. */
   excludeGitIgnore: boolean;

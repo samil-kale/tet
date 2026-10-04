@@ -475,7 +475,7 @@ describe("tet-ctl against the control server", () => {
         lanes: { pinned: ["projects"], order: ["projects", "git", "files"] }
       },
       notifications: { finished: true, waiting: true, idleReminder: false },
-      files: { editorKeybindingPreset: "tet" },
+      files: { editorKeybindingPreset: "tet", excludeGitIgnore: false, compactFolders: true, sortOrder: "default" },
       git: {
         checkNewChanges: false,
         pushOnCommit: false,
@@ -726,6 +726,28 @@ describe("tet-ctl against the control server", () => {
     const badValue = await tetCtl(["settings-set-notification", "waiting", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
     assert.equal(settings.notifications.waiting, true);
+  });
+
+  it("sets one Explorer setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
+    const hide = await tetCtl(["settings-set-explorer", "excludeGitIgnore", "on"]);
+    assert.deepEqual(hide.result, { saved: true });
+    const sort = await tetCtl(["settings-set-explorer", "sortOrder", "modified"]);
+    assert.equal(sort.status, EXIT_CODES.ok);
+    assert.deepEqual(settings.files, {
+      editorKeybindingPreset: "tet",
+      excludeGitIgnore: true,
+      compactFolders: true,
+      sortOrder: "modified"
+    });
+    const unknown = await tetCtl(["settings-set-explorer", "nesting", "on"]);
+    assert.equal(unknown.status, EXIT_CODES.usage);
+    assert.match(unknown.stderr, /unknown explorer setting: nesting/);
+    const badOrder = await tetCtl(["settings-set-explorer", "sortOrder", "sideways"]);
+    assert.equal(badOrder.status, EXIT_CODES.usage);
+    const badValue = await tetCtl(["settings-set-explorer", "compactFolders", "yes"]);
+    assert.equal(badValue.status, EXIT_CODES.usage);
+    assert.equal(settings.files.sortOrder, "modified");
+    assert.equal(settings.files.compactFolders, true);
   });
 
   it("sets who suggests a commit message and refuses an agent or model that cannot", async () => {
@@ -1013,6 +1035,7 @@ describe("tet-ctl against the control server", () => {
       ["settings-set-prompt", "commitMessage", "x"],
       ["settings-set-keybindings", "jetbrains"],
       ["settings-set-notification", "finished", "off"],
+      ["settings-set-explorer", "sortOrder", "type"],
       ["settings-set-commit-suggester", "claude"],
       ["app-restart", "--confirm"],
       ["env-request", "GITLAB_TOKEN"],

@@ -375,7 +375,7 @@ describe("the Explorer's search, VS Code's search in files", () => {
   it("reads neither what git ignores nor a binary file, both of which the tree lists", async () => {
     assert.deepEqual(found(await search({ text: "needle" })).filter((match) => match.startsWith("out/")), []);
     assert.deepEqual(found(await search({ text: "n" })).filter((match) => match.startsWith("src/bin")), []);
-    const listing = await repository.listExplorer();
+    const listing = await repository.listExplorer({ excludeGitIgnore: false, compactFolders: true, sortOrder: "default" });
     assert.deepEqual(listing.files.includes("out/built.js") && listing.files.includes("src/bin.dat"), true);
   });
 

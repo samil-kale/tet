@@ -115,8 +115,6 @@ const api: TETApi = {
     checkoutTag: (ref, name) => invoke("repository:checkout-tag", ref, name),
     commitAll: (ref, message) => invoke("repository:commit-all", ref, message),
     commitPaths: (ref, message, paths) => invoke("repository:commit-paths", ref, message, paths),
-    suggestionAgents: (ref) => invoke("repository:suggestion-agents", ref),
-    suggestionModels: (ref, agentId) => invoke("repository:suggestion-models", ref, agentId),
     suggestCommitMessage: (ref, paths) => invoke("repository:suggest-commit-message", ref, paths),
     cancelCommitSuggestion: () => send("repository:cancel-commit-suggestion"),
     stashPush: (ref, message) => invoke("repository:stash-push", ref, message),
@@ -130,11 +128,8 @@ const api: TETApi = {
     addFolder: (projectId, folderPath) => invoke("repository:add-folder", projectId, folderPath),
     removeFolder: (projectId, folderPath) => invoke("repository:remove-folder", projectId, folderPath),
     excludePath: (projectId, relPath) => invoke("repository:exclude-path", projectId, relPath),
-    setExplorerSetting: (projectId, key, value) =>
-      invoke("repository:set-explorer-setting", projectId, key, value),
     listExplorer: (ref) => invoke("repository:list-explorer", ref),
     searchFiles: (ref, query) => invoke("repository:search-files", ref, query),
-    explorerSettings: (projectId) => invoke("repository:explorer-settings", projectId),
     readFile: (ref, filePath) => invoke("repository:read-file", ref, filePath),
     writeFile: (ref, filePath, content, expectedMtimeMs) =>
       invoke("repository:write-file", ref, filePath, content, expectedMtimeMs),
@@ -179,7 +174,9 @@ const api: TETApi = {
     starting: (ref) => invoke("tabs:starting", ref)
   },
   agents: {
-    list: () => invoke("agents:list")
+    list: () => invoke("agents:list"),
+    askable: () => invoke("agents:askable"),
+    askModels: (agentId) => invoke("agents:ask-models", agentId)
   },
   drops: {
     // The file's path, which the renderer cannot read; preload-only under contextIsolation.

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import type { AgentId, AskModelsResult, Suggester } from "../../shared/types/agents";
-import type { ProjectRef } from "../../shared/types/project";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, FieldRow } from "../ui/Field";
 import { agentName, useAgents } from "../ui/use-agents";
@@ -9,12 +8,10 @@ import { agentName, useAgents } from "../ui/use-agents";
 const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };
 
 interface SuggesterPickerProps {
-  /** Where the agents and models are listed (`suggestionAgents`). */
-  ref: ProjectRef;
   value: Suggester;
   /** What the user picks. */
   onChange: (suggester: Suggester) => void;
-  /** What stands in for a pick not offered at `ref`: shown, never saved. */
+  /** What stands in for a pick not offered: shown, never saved. */
   onReplace: (suggester: Suggester) => void;
   /** The models' listing underway, on the dialog's bar (as `PromptFields.hold`): it asks the agent,
    *  changes nothing and its late answer is dropped, so it holds no Cancel. */
@@ -26,7 +23,7 @@ interface SuggesterPickerProps {
  * one no longer offered — the first agent with its default model, as the commit prompt's suggestion
  * takes it (`repository:suggest-commit-message`).
  */
-export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: SuggesterPickerProps) {
+export function SuggesterPicker({ value, onChange, onReplace, hold }: SuggesterPickerProps) {
   const agents = useAgents();
   const [agentIds, setAgentIds] = useState<AgentId[]>();
   const [listed, setListed] = useState<{ agentId: AgentId; result: AskModelsResult }>();
@@ -34,7 +31,7 @@ export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: Sugge
 
   useEffect(() => {
     let cancelled = false;
-    void window.tet.repository.suggestionAgents(ref).then((ids) => {
+    void window.tet.agents.askable().then((ids) => {
       if (!cancelled) {
         setAgentIds(ids);
       }
@@ -42,7 +39,7 @@ export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: Sugge
     return () => {
       cancelled = true;
     };
-  }, [ref]);
+  }, []);
 
   useEffect(() => {
     if (agentIds?.[0] !== undefined && !agentIds.includes(value.agentId)) {
@@ -57,8 +54,8 @@ export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: Sugge
     let cancelled = false;
     let fetching = true;
     hold(true);
-    void window.tet.repository
-      .suggestionModels(ref, value.agentId)
+    void window.tet.agents
+      .askModels(value.agentId)
       .then((result) => {
         if (!cancelled) {
           setListed({ agentId: value.agentId, result });
@@ -77,7 +74,7 @@ export function SuggesterPicker({ ref, value, onChange, onReplace, hold }: Sugge
         hold(false);
       }
     };
-  }, [ref, agentIds, value.agentId, hold]);
+  }, [agentIds, value.agentId, hold]);
 
   useEffect(() => {
     if (models && value.model !== "" && !models.models.some((model) => model.id === value.model)) {

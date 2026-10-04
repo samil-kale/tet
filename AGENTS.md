@@ -98,7 +98,7 @@ project's tabs.
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
   laid out in the data model below.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer view and `sbx`. Read defensively (`src/main/store/tet-json.ts`): missing means
+  the Explorer's `folders` and excludes and `sbx`. Read defensively (`src/main/store/tet-json.ts`): missing means
   nothing configured, broken never does — a project whose file is broken is neither added nor
   opened at start (kept, with all TET has of it, until added again), and one broken while open
   counts as its last readable version, said in a notice. Nothing writes over a broken file. A
@@ -158,9 +158,10 @@ marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of 
   stop what it cleans up after, logs instead (`logFailure`).
 - **`settings.json` is one object per tab of the settings dialog**, named by the tab
   (`AppSettings`, `src/shared/types/settings.ts`): a new setting joins its tab's object, never the
-  top level; a tab that stores nothing has none (Environment keeps `environment.json`, the Files
-  tab's Explorer view is the project's `tet.json`). `withSettings` merges each object by its keys,
-  and `normalize` (`store/settings.ts`) reads every key back defensively, with its default.
+  top level; a tab that stores nothing has none (Environment keeps `environment.json`). The dialog
+  holds no setting of a project: those are `tet.json`'s, edited where they show. `withSettings`
+  merges each object by its keys, and `normalize` (`store/settings.ts`) reads every key back
+  defensively, with its default.
 - **A host setup knows no project.** `host.prepare` is handed no project path and writes only into
   `config/<agent>`: one set of files serves every repository and worktree, rewritten once when a
   setting in it changes.

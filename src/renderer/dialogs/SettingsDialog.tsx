@@ -8,10 +8,9 @@ import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings }
 import type { Suggester } from "../../shared/types/agents";
 import type { AppInfo } from "../../shared/types/app";
 import type { EnvEdit } from "../../shared/types/environment";
-import type { ExplorerSettings, ExplorerSortOrder } from "../../shared/types/files";
-import type { Project, ProjectRef } from "../../shared/types/project";
+import type { ExplorerSortOrder } from "../../shared/types/files";
 import type { AppSettings, ColorScheme, GitSettings, NotificationSettings, PromptId, SettingsEdits } from "../../shared/types/settings";
-import { confirm, refusal } from "../ui/Dialog";
+import { confirm } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, DialogError, Field, FieldColumn, FieldGroup, FieldRow } from "../ui/Field";
@@ -24,9 +23,6 @@ import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { SuggesterPicker } from "./SuggesterPicker";
 
 interface SettingsDialogProps {
-  /** Whose tet.json the Files tab's Explorer view edits, and where the Prompts tab lists who
-   *  suggests a commit message; null hides both. */
-  activeProject: Project | null;
   onClose: () => void;
 }
 
@@ -113,7 +109,7 @@ const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
 
 /**
  * `foldersNestsFiles` is left out: without file nesting it sorts like `default`. A hand-written
- * tet.json can still hold it.
+ * settings.json can still hold it.
  */
 const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "default", label: "Default" },
@@ -122,9 +118,6 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "type", label: "Type" },
   { id: "modified", label: "Modified" }
 ];
-
-/** The Files tab's tet.json keys, one write each, in Save's order. */
-const EXPLORER_KEYS: (keyof ExplorerSettings)[] = ["excludeGitIgnore", "compactFolders", "sortOrder"];
 
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "version", label: "TET" },
@@ -140,17 +133,14 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
  * through `AgentPaths` at `AgentHost.prepare`, once per agent (HostSetups), as does the color theme. Deliberately
  * not in here: the tab marks.
  */
-export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
+export function SettingsDialog({ onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
-  const [explorerSettings, setExplorerSettings] = useState<ExplorerSettings | null>(null);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
   /** What Save writes: the keys the dialog touched, and no others. tet-ctl may set another one
    *  while the dialog stands open, and Save must not take it back (settings.ts's patch). */
   const edits = useRef<SettingsEdits>({});
-  /** tet.json as opened: Save writes only the keys that differ. */
-  const loadedExplorer = useRef<ExplorerSettings | null>(null);
   /** The Environment tab's rows: `from` the stored variable a row shows, `value` only what was
    *  typed since opening — a stored one never reaches the renderer. */
   const [variables, setVariables] = useState<EnvRow[]>([]);
@@ -179,26 +169,8 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
     ).catch((error: unknown) => setLoadFailed(errorMessage(error)));
   }, [load]);
 
-  // Read once, on open; Save goes through setExplorerSetting (tet-json.ts), which reads the file fresh
-  // and leaves other keys alone. Keyed by id: the open projects are rebuilt whole when a project is
-  // added elsewhere, and a new object for the same project must not discard the edits.
-  const activeProjectId = activeProject?.id;
-  useEffect(() => {
-    if (!activeProjectId) {
-      loadedExplorer.current = null;
-      setExplorerSettings(null);
-      return;
-    }
-    void window.tet.repository.explorerSettings(activeProjectId).then((view) => {
-      loadedExplorer.current = view;
-      setExplorerSettings(view);
-    });
-  }, [activeProjectId]);
-
-  /** The Environment tab if touched, one tet.json write per changed Explorer key, then one
-   *  settings.json write — last, since it applies at once (the theme among it) and Cancel could not
-   *  take it back after a later write refused. What refuses it goes in the button row: it is about
-   *  tet.json, not about one of the switches on the Files tab. */
+  /** The Environment tab if touched, then the settings.json write — last, since it applies at once
+   *  (the theme among it) and Cancel could not take it back after a later write refused. */
   const { busy: saving, refused, submit: save, changing } = useSubmit(
     async () => {
       if (variablesEdited.current) {
@@ -208,21 +180,6 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           return refusal;
         }
         variablesEdited.current = false;
-      }
-      const loaded = loadedExplorer.current;
-      if (activeProject && explorerSettings && loaded) {
-        for (const key of EXPLORER_KEYS) {
-          if (explorerSettings[key] === loaded[key]) {
-            continue;
-          }
-          const refused = refusal(
-            await window.tet.repository.setExplorerSetting(activeProject.id, key, explorerSettings[key]),
-            "Could not update tet.json"
-          );
-          if (refused !== undefined) {
-            return refused;
-          }
-        }
       }
       if (Object.keys(edits.current).length > 0) {
         await window.tet.settings.patch(edits.current);
@@ -274,20 +231,11 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { texts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } } });
 
-  const suggesterRef = useMemo<ProjectRef | undefined>(
-    () => (activeProjectId ? { projectId: activeProjectId } : undefined),
-    [activeProjectId]
-  );
-  /** A pick not offered in the active project is shown replaced, not saved: another project may
-   *  offer it. */
+  /** A pick not offered on this machine is shown replaced, not saved: another machine may offer it. */
   const replaceSuggester = useCallback(
     (suggester: Suggester): void => setSettings((current) => (current ? { ...current, prompts: { ...current.prompts, commitSuggester: suggester } } : current)),
     []
   );
-
-  const editExplorerSetting = changing(<K extends keyof ExplorerSettings>(key: K, value: ExplorerSettings[K]): void => {
-    setExplorerSettings((current) => (current ? { ...current, [key]: value } : current));
-  });
 
   const editVariables = changing((change: (rows: typeof variables) => typeof variables): void => {
     variablesEdited.current = true;
@@ -367,24 +315,23 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
       )}
       {shown === "files" && (
         <>
-          <FieldGroup label={activeProject ? `Explorer settings, for ${activeProject.name}` : "Explorer settings"}>
-            {!activeProject && <p className="dialog-detail">Open a project to edit it</p>}
-            {activeProject && explorerSettings && (
+          <FieldGroup label="Explorer settings">
+            {settings && (
               <>
                 <Checkbox
                   label="Hide what git ignores too"
-                  checked={explorerSettings.excludeGitIgnore}
-                  onChange={(next) => editExplorerSetting("excludeGitIgnore", next)}
+                  checked={settings.files.excludeGitIgnore}
+                  onChange={(next) => edit({ files: { excludeGitIgnore: next } })}
                 />
                 <Checkbox
                   label="Compact single-child folders"
-                  checked={explorerSettings.compactFolders}
-                  onChange={(next) => editExplorerSetting("compactFolders", next)}
+                  checked={settings.files.compactFolders}
+                  onChange={(next) => edit({ files: { compactFolders: next } })}
                 />
                 <Field label="Sort order">
                   <Dropdown
-                    value={explorerSettings.sortOrder}
-                    onChange={(order) => editExplorerSetting("sortOrder", order)}
+                    value={settings.files.sortOrder}
+                    onChange={(order) => edit({ files: { sortOrder: order } })}
                     options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
                   />
                 </Field>
@@ -430,17 +377,12 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
           {/* Only for a prompt TET asks in the background; a handover's goes to the tab taking over. */}
           {promptId === "commitMessage" && (
             <FieldGroup label="Suggested by">
-              {suggesterRef ? (
-                <SuggesterPicker
-                  ref={suggesterRef}
-                  value={settings.prompts.commitSuggester}
-                  onChange={(suggester) => edit({ prompts: { commitSuggester: suggester } })}
-                  onReplace={replaceSuggester}
-                  hold={setListingModels}
-                />
-              ) : (
-                <p className="dialog-detail">Open a project to pick the agent</p>
-              )}
+              <SuggesterPicker
+                value={settings.prompts.commitSuggester}
+                onChange={(suggester) => edit({ prompts: { commitSuggester: suggester } })}
+                onReplace={replaceSuggester}
+                hold={setListingModels}
+              />
             </FieldGroup>
           )}
           {/* Always the text the agent gets, never a placeholder. Read when the suggestion is

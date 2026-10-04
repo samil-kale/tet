@@ -5,10 +5,9 @@ import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError
 import writeFileAtomic from "write-file-atomic";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
-import { EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { COMMAND_COLORS } from "../../shared/types/project";
 import { SBX_ACCESS } from "../../shared/types/sbx";
-import type { ExplorerRoot, ExplorerSettings } from "../../shared/types/files";
+import type { ExplorerRoot } from "../../shared/types/files";
 import type { CommandColor, ProjectCommand } from "../../shared/types/project";
 import type { SbxPath, SbxPort, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
@@ -17,11 +16,12 @@ import { inTurn } from "../util/async";
 import { isRecord } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 
-/** A project's saved commands, Explorer view and SBX settings, in its own root so it travels with
- *  the repository; a linked worktree has none of its own (configRoot). Shaped like a VS Code `.code-workspace`: `folders` at the top, view settings under `settings` by
- *  their VS Code name (`readExplorerView`). A file missing or oddly shaped is no commands and the
- *  default view; a broken one its last readable version (`read`). The watcher reports every write
- *  of it as `commands:changed`. */
+/** A project's saved commands, Explorer folders and excludes and SBX settings, in its own root so
+ *  it travels with the repository; a linked worktree has none of its own (configRoot). Shaped like
+ *  a VS Code `.code-workspace`: `folders` at the top, the excludes under `settings` by their VS
+ *  Code name (`readExplorerView`). A file missing or oddly shaped is no commands and the default
+ *  view; a broken one its last readable version (`read`). The watcher reports every write of it as
+ *  `commands:changed`. */
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
@@ -39,14 +39,11 @@ interface ProjectFile {
   sbx?: unknown;
 }
 
-/** The view settings' keys inside `settings`, as VS Code spells them. */
+/** The key inside `settings`, as VS Code spells it. */
 const KEY_EXCLUDE = "files.exclude";
-const KEY_EXCLUDE_GIT_IGNORE = "explorer.excludeGitIgnore";
-const KEY_COMPACT_FOLDERS = "explorer.compactFolders";
-const KEY_SORT_ORDER = "explorer.sortOrder";
 
-/** How the Explorer shows this project; anything of the wrong shape is its default. */
-export interface ExplorerView extends ExplorerSettings {
+/** What of the Explorer's view is the project's; anything of the wrong shape is its default. */
+export interface ExplorerView {
   /** Top-level nodes; empty means the whole repository as one tree. They may overlap, each file is
    *  still listed once. A `name` is file-only: the tree's menu writes paths alone. */
   folders: ExplorerRoot[];
@@ -307,23 +304,9 @@ export async function readExplorerView(root: string): Promise<ExplorerView> {
   const settings = toSettings(content.settings);
   return {
     folders: toFolders(content.folders, root),
-    exclude: toExclude(settings[KEY_EXCLUDE]),
-    excludeGitIgnore: booleanOr(settings[KEY_EXCLUDE_GIT_IGNORE], DEFAULT_EXPLORER_VIEW.excludeGitIgnore),
-    compactFolders: booleanOr(settings[KEY_COMPACT_FOLDERS], DEFAULT_EXPLORER_VIEW.compactFolders),
-    sortOrder: EXPLORER_SORT_ORDERS.find((order) => order === settings[KEY_SORT_ORDER]) ?? DEFAULT_EXPLORER_VIEW.sortOrder
+    exclude: toExclude(settings[KEY_EXCLUDE])
   };
 }
-
-function booleanOr(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
-}
-
-/** `readExplorerView`'s defaults, and ipc/repository.ts's for a missing repository. */
-export const DEFAULT_EXPLORER_VIEW: ExplorerSettings = {
-  excludeGitIgnore: false,
-  compactFolders: true,
-  sortOrder: "default"
-};
 
 /** "Add Folder to Explorer". No `folders` means the whole repository, so the first add also writes
  *  that root. Existing entries are kept as written. */
@@ -366,22 +349,6 @@ export function addExclude(root: string, relPath: string): Promise<void> {
         : settingChange(content, KEY_EXCLUDE, { [relPath]: true })
     ];
   });
-}
-
-const EXPLORER_SETTING_KEYS: Record<keyof ExplorerSettings, string> = {
-  excludeGitIgnore: KEY_EXCLUDE_GIT_IGNORE,
-  compactFolders: KEY_COMPACT_FOLDERS,
-  sortOrder: KEY_SORT_ORDER
-};
-
-/** The Explorer view's three settings, set from the settings dialog's Files tab: one key inside
- *  `settings`, every other key kept. */
-export function setExplorerSetting<K extends keyof ExplorerSettings>(
-  root: string,
-  key: K,
-  value: ExplorerSettings[K]
-): Promise<void> {
-  return patch(root, (content) => [settingChange(content, EXPLORER_SETTING_KEYS[key], value)]);
 }
 
 /**

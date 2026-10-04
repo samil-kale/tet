@@ -1,9 +1,10 @@
 import * as path from "node:path";
 import { DEFAULT_THEME_IDS, type ThemeKind } from "../../shared/themes";
 import { DEFAULT_PROMPTS } from "../../shared/prompts";
+import { EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, LANES, PROMPT_IDS, withSettings } from "../../shared/types/settings";
 import type { Suggester } from "../../shared/types/agents";
-import type { AppearanceSettings, AppSettings, Lane, LaneSettings, PromptSettings, PromptTexts, SettingsEdits } from "../../shared/types/settings";
+import type { AppearanceSettings, AppSettings, FilesSettings, Lane, LaneSettings, PromptSettings, PromptTexts, SettingsEdits } from "../../shared/types/settings";
 import { isRecord, readJson, writeJson } from "../util/json-file";
 
 const DEFAULTS: AppSettings = {
@@ -19,7 +20,10 @@ const DEFAULTS: AppSettings = {
     idleReminder: false
   },
   files: {
-    editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID
+    editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
+    excludeGitIgnore: false,
+    compactFolders: true,
+    sortOrder: "default"
   },
   git: {
     checkNewChanges: false,
@@ -91,7 +95,7 @@ function normalize(stored: unknown): AppSettings {
   return {
     appearance: appearance(record(value.appearance)),
     notifications: switches(record(value.notifications), DEFAULTS.notifications),
-    files: { editorKeybindingPreset: presetId(record(value.files).editorKeybindingPreset) },
+    files: files(record(value.files)),
     git: switches(record(value.git), DEFAULTS.git),
     prompts: prompts(record(value.prompts))
   };
@@ -127,6 +131,19 @@ function switches<T extends object>(value: Record<string, unknown>, defaults: T)
   return Object.fromEntries(
     Object.entries(defaults).map(([id, fallback]) => [id, typeof value[id] === "boolean" ? value[id] : fallback])
   ) as T;
+}
+
+function files(value: Record<string, unknown>): FilesSettings {
+  const { excludeGitIgnore, compactFolders } = switches(value, {
+    excludeGitIgnore: DEFAULTS.files.excludeGitIgnore,
+    compactFolders: DEFAULTS.files.compactFolders
+  });
+  return {
+    editorKeybindingPreset: presetId(value.editorKeybindingPreset),
+    excludeGitIgnore,
+    compactFolders,
+    sortOrder: EXPLORER_SORT_ORDERS.find((order) => order === value.sortOrder) ?? DEFAULTS.files.sortOrder
+  };
 }
 
 /** A non-string is the default; an unknown id is kept — the renderer falls back to VS Code's

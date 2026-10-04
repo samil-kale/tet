@@ -137,13 +137,7 @@ describe("writeCommands", () => {
 
 describe("readExplorerView", () => {
   it("is the whole repository with defaults when there is nothing to read", async () => {
-    assert.deepEqual(await readExplorerView(root), {
-      folders: [],
-      exclude: [],
-      excludeGitIgnore: false,
-      compactFolders: true,
-      sortOrder: "default"
-    });
+    assert.deepEqual(await readExplorerView(root), { folders: [], exclude: [] });
     put("[]");
     assert.deepEqual((await readExplorerView(root)).folders, []);
   });
@@ -172,7 +166,7 @@ describe("readExplorerView", () => {
     ]);
   });
 
-  it("reads the settings the way VS Code spells them, and only what is well-formed", async () => {
+  it("reads the excludes the way VS Code spells them, and only what is well-formed", async () => {
     put(
       JSON.stringify({
         settings: {
@@ -183,17 +177,7 @@ describe("readExplorerView", () => {
         }
       })
     );
-    assert.deepEqual(await readExplorerView(root), {
-      folders: [],
-      exclude: ["**/node_modules"],
-      excludeGitIgnore: true,
-      compactFolders: false,
-      sortOrder: "modified"
-    });
-    put(JSON.stringify({ settings: { "explorer.sortOrder": "sideways", "explorer.compactFolders": "no" } }));
-    const view = await readExplorerView(root);
-    assert.equal(view.sortOrder, "default");
-    assert.equal(view.compactFolders, true, "not false is on");
+    assert.deepEqual(await readExplorerView(root), { folders: [], exclude: ["**/node_modules"] });
   });
 });
 
@@ -251,7 +235,7 @@ describe("a hand-written tet.json", () => {
     put(handWritten);
     assert.deepEqual(await readCommands(root), [{ command: "npm test" }]);
     const view = await readExplorerView(root);
-    assert.deepEqual([view.exclude, view.sortOrder], [["dist"], "type"]);
+    assert.deepEqual(view.exclude, ["dist"]);
   });
 
   it("keeps comments, indentation and line endings through every edit", async () => {

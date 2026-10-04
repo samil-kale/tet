@@ -544,13 +544,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
-      {/* A worktree takes its project's Explorer view and never changes it (tet-json.ts's configRoot). */}
-      {settingsOpen && (
-        <SettingsDialog
-          activeProject={activeRef?.worktree === undefined ? (projects.find((project) => project.id === activeRef?.projectId) ?? null) : null}
-          onClose={closeSettings}
-        />
-      )}
+      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
       {envRequest && (
         <EnvDialog

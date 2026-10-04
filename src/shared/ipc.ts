@@ -74,8 +74,6 @@ export interface InvokeChannels {
   "repository:checkout-tag": TETApi["repository"]["checkoutTag"];
   "repository:commit-all": TETApi["repository"]["commitAll"];
   "repository:commit-paths": TETApi["repository"]["commitPaths"];
-  "repository:suggestion-agents": TETApi["repository"]["suggestionAgents"];
-  "repository:suggestion-models": TETApi["repository"]["suggestionModels"];
   "repository:suggest-commit-message": TETApi["repository"]["suggestCommitMessage"];
   "repository:stash-push": TETApi["repository"]["stashPush"];
   "repository:stash": TETApi["repository"]["stash"];
@@ -88,10 +86,8 @@ export interface InvokeChannels {
   "repository:add-folder": TETApi["repository"]["addFolder"];
   "repository:remove-folder": TETApi["repository"]["removeFolder"];
   "repository:exclude-path": TETApi["repository"]["excludePath"];
-  "repository:set-explorer-setting": TETApi["repository"]["setExplorerSetting"];
   "repository:list-explorer": TETApi["repository"]["listExplorer"];
   "repository:search-files": TETApi["repository"]["searchFiles"];
-  "repository:explorer-settings": TETApi["repository"]["explorerSettings"];
   "repository:read-file": TETApi["repository"]["readFile"];
   "repository:write-file": TETApi["repository"]["writeFile"];
   "repository:watch-files": TETApi["repository"]["watchFiles"];
@@ -106,6 +102,8 @@ export interface InvokeChannels {
   "tabs:restart": TETApi["tabs"]["restart"];
   "tabs:starting": TETApi["tabs"]["starting"];
   "agents:list": TETApi["agents"]["list"];
+  "agents:askable": TETApi["agents"]["askable"];
+  "agents:ask-models": TETApi["agents"]["askModels"];
   "drops:write-drop": TETApi["drops"]["writeDrop"];
   "drops:clipboard-image": TETApi["drops"]["clipboardImage"];
   "drops:hand-paths": TETApi["drops"]["handPaths"];

@@ -1,7 +1,7 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
-import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
+import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
 import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
@@ -183,10 +183,6 @@ export interface TETApi {
     commitAll(ref: ProjectRef, message: string): Promise<GitActionResult>;
     /** These files alone, untracked included; nothing else staged goes with them. */
     commitPaths(ref: ProjectRef, message: string, paths: string[]): Promise<GitActionResult>;
-    /** The installed agents that can suggest a value here (`AgentAsk`), in registration order. */
-    suggestionAgents(ref: ProjectRef): Promise<AgentId[]>;
-    /** The models `agentId` can suggest with here. */
-    suggestionModels(ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult>;
     /** The settings' `prompts.commitSuggester` suggests one subject for all changes, or only `paths`. */
     suggestCommitMessage(ref: ProjectRef, paths?: string[]): Promise<SuggestionResult>;
     /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
@@ -214,17 +210,9 @@ export interface TETApi {
     removeFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** tet.json's `settings["files.exclude"]` — "Exclude from Explorer". */
     excludePath(projectId: string, path: string): Promise<GitActionResult>;
-    /** One of the Explorer view's settings, from the settings dialog's Files tab. */
-    setExplorerSetting<K extends keyof ExplorerSettings>(
-      projectId: string,
-      key: K,
-      value: ExplorerSettings[K]
-    ): Promise<GitActionResult>;
     listExplorer(ref: ProjectRef): Promise<ExplorerListing>;
     /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */
     searchFiles(ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult>;
-    /** tet.json alone, no filesystem walk. */
-    explorerSettings(projectId: string): Promise<ExplorerSettings>;
     readFile(ref: ProjectRef, path: string): Promise<FileContent>;
     /** Nothing is written unless `expectedMtimeMs` matches the disk. */
     writeFile(ref: ProjectRef, path: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult>;
@@ -296,6 +284,10 @@ export interface TETApi {
   };
   agents: {
     list(): Promise<AgentInfo[]>;
+    /** The installed agents that can suggest a value (`AgentAsk`), in registration order. */
+    askable(): Promise<AgentId[]>;
+    /** The models `agentId` can suggest with. */
+    askModels(agentId: AgentId): Promise<AskModelsResult>;
   };
   drops: {
     /** A dropped file's real path, or "" for content only. */

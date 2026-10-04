@@ -1,21 +1,14 @@
 import type { IpcMainInvokeEvent } from "electron";
 import { handle, on } from "./channels";
-import { getAgent, listAskableAgents, listAskModels } from "../agents";
+import { listAskableAgents } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { failure } from "../../shared/errors";
-import type { AgentId, AskModelsResult, SuggestionResult } from "../../shared/types/agents";
-import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "../../shared/types/files";
+import type { SuggestionResult } from "../../shared/types/agents";
+import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "../../shared/types/files";
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types/git";
 import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
-import {
-  addExclude,
-  addFolder,
-  DEFAULT_EXPLORER_VIEW,
-  readExplorerView,
-  removeFolder,
-  setExplorerSetting
-} from "../store/tet-json";
+import { addExclude, addFolder, removeFolder } from "../store/tet-json";
 import { cancelCommitSuggestion, suggestCommitMessage } from "../agents/commit-message";
 import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";
@@ -91,14 +84,6 @@ export function registerRepositoryIpc({
   handle("repository:commit-paths", inRepository((repository, message: string, paths: string[]) =>
     repository.commitPaths(message, paths))
   );
-  handle("repository:suggestion-agents", async (_event, ref: ProjectRef): Promise<AgentId[]> => {
-    const repository = repositories.get(ref);
-    return repository ? listAskableAgents(repository.at.path) : [];
-  });
-  handle("repository:suggestion-models", async (_event, ref: ProjectRef, agentId: AgentId): Promise<AskModelsResult> => {
-    const repository = repositories.get(ref);
-    return repository ? listAskModels(getAgent(agentId), repository.at.path) : { models: [] };
-  });
   handle(
     "repository:suggest-commit-message",
     async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
@@ -135,34 +120,14 @@ export function registerRepositoryIpc({
   handle("repository:add-folder", inProjectFile((root, folderPath: string) => addFolder(root, folderPath)));
   handle("repository:remove-folder", inProjectFile((root, folderPath: string) => removeFolder(root, folderPath)));
   handle("repository:exclude-path", inProjectFile((root, relPath: string) => addExclude(root, relPath)));
-  handle("repository:set-explorer-setting", inProjectFile((root, key: keyof ExplorerSettings, value: ExplorerSettings[keyof ExplorerSettings]) =>
-      setExplorerSetting(root, key, value))
-  );
 
   handle("repository:list-explorer", async (_event, ref: ProjectRef): Promise<ExplorerListing> => {
-    return (
-      (await repositories.get(ref)?.listExplorer()) ?? {
-        files: [],
-        emptyDirs: [],
-        compactFolders: DEFAULT_EXPLORER_VIEW.compactFolders,
-        sortOrder: DEFAULT_EXPLORER_VIEW.sortOrder
-      }
-    );
+    const { compactFolders, sortOrder } = settings.get().files;
+    return (await repositories.get(ref)?.listExplorer(settings.get().files)) ?? { files: [], emptyDirs: [], compactFolders, sortOrder };
   });
 
   handle("repository:search-files", async (_event, ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult> => {
     return (await repositories.get(ref)?.searchFiles(query)) ?? { files: [], truncated: false };
-  });
-
-  // The settings Files tab: the Explorer view's settings in tet.json only, no walk; folders and
-  // exclude globs stay the Explorer's own.
-  handle("repository:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
-    const project = store.get(projectId);
-    if (!project) {
-      return DEFAULT_EXPLORER_VIEW;
-    }
-    const { excludeGitIgnore, compactFolders, sortOrder } = await readExplorerView(project.path);
-    return { excludeGitIgnore, compactFolders, sortOrder };
   });
 
   handle("repository:watch-files", (_event, ref: ProjectRef, paths: string[]): void => {

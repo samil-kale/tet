@@ -2,7 +2,7 @@ import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
 import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
-import type { ExplorerListing } from "../../shared/types/files";
+import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { SbxAccount, SbxKnowledgeSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxSignInResult, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
@@ -120,7 +120,7 @@ export interface ControlDeps {
       | {
           at: { path: string };
           getState(): RepositoryState;
-          listExplorer(): Promise<ExplorerListing>;
+          listExplorer(settings: ExplorerSettings): Promise<ExplorerListing>;
           merge(ref: string, fastForwardOnto?: string): Promise<GitActionResult>;
           conflictMarkers(base: string): Promise<string[]>;
         }

@@ -1,4 +1,5 @@
 import type { Suggester } from "./agents";
+import type { ExplorerSettings } from "./files";
 
 export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
@@ -65,8 +66,9 @@ export interface NotificationSettings {
 
 export const NOTIFICATION_IDS = ["finished", "waiting", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
 
-/** The Files tab's part kept by TET; its Explorer view is the project's, in tet.json. */
-export interface FilesSettings {
+/** The Files tab: how the Explorer lists every project (its folders and excludes are the project's,
+ *  in tet.json) and the file editor. */
+export interface FilesSettings extends ExplorerSettings {
   /** An id out of `KEYBINDING_PRESETS`. */
   editorKeybindingPreset: string;
 }

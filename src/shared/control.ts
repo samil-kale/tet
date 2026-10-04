@@ -1,4 +1,5 @@
 import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
+import { EXPLORER_SORT_ORDERS } from "./types/files";
 import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
 
@@ -228,6 +229,13 @@ const VERBS = [
     usage: `settings-set-notification <${NOTIFICATION_IDS.join("|")}> <on|off>`,
     summary:
       "Switch a desktop notification on or off: a finished turn, an agent waiting for an answer, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
+    positionals: ["id", "value"]
+  },
+  {
+    verb: "settings-set-explorer",
+    group: "TET itself",
+    usage: `settings-set-explorer <excludeGitIgnore|compactFolders> <on|off> | settings-set-explorer sortOrder <${EXPLORER_SORT_ORDERS.join("|")}>`,
+    summary: "Set how the Explorer lists every project: hide what git ignores too, compact single-child folders, or the sort order. Shown at once.",
     positionals: ["id", "value"]
   },
   {

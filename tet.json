@@ -4,8 +4,7 @@
       ".github/workflows": true,
       ".claude": true,
       ".gitignore": true
-    },
-    "explorer.excludeGitIgnore": true
+    }
   },
   "commands": [
     {

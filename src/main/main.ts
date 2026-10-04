@@ -357,6 +357,9 @@ const settingsAccess: SettingsAccess = {
     if (edits.appearance?.lanes) {
       appWindow.showLanes(settings.get().appearance.lanes);
     }
+    if (edits.files?.excludeGitIgnore !== undefined || edits.files?.compactFolders !== undefined || edits.files?.sortOrder !== undefined) {
+      repositories.announceFilesChanged();
+    }
     return restartRequired;
   }
 };

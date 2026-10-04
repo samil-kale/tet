@@ -3,6 +3,7 @@ import { HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlRequest, ControlVerbName } from "../../shared/control";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
+import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
@@ -193,6 +194,17 @@ export function verbs(deps: ControlDeps): Handlers {
     "settings-set-notification": (args) => {
       const id = oneOf(args, "id", "notification", NOTIFICATION_IDS);
       settings.patch({ notifications: { [id]: onOff(args, "value") } });
+      return { result: { saved: true } };
+    },
+
+    "settings-set-explorer": (args) => {
+      const id = oneOf(args, "id", "explorer setting", EXPLORER_SETTING_IDS);
+      // Announced to every open Explorer by main.ts's settingsAccess.
+      if (id === "sortOrder") {
+        settings.patch({ files: { sortOrder: oneOf(args, "value", "sort order", EXPLORER_SORT_ORDERS) } });
+      } else {
+        settings.patch({ files: { [id]: onOff(args, "value") } });
+      }
       return { result: { saved: true } };
     },
 
@@ -418,7 +430,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "editor-list": (args, caller) => ({ result: deps.records.editors(refFrom(args, caller).ref) }),
 
-    "explorer-list": async (args, caller) => ({ result: await repository(refFrom(args, caller).ref).listExplorer() }),
+    "explorer-list": async (args, caller) => ({ result: await repository(refFrom(args, caller).ref).listExplorer(settings.get().files) }),
 
     "notices-list": () => ({ result: deps.records.notices() }),
 

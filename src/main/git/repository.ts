@@ -6,7 +6,7 @@ import { errorMessage, failure } from "../../shared/errors";
 import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote } from "../../shared/types/git";
 import { refKeyOf } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult, HeadBlob } from "../../shared/types/files";
+import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult, HeadBlob } from "../../shared/types/files";
 import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { PROJECT_FILE } from "../store/tet-json";
@@ -704,8 +704,8 @@ export class Repository {
   }
 
   /** The Explorer's listing (explorer.ts): a filesystem walk off the index lock `runAction` holds. */
-  listExplorer(): Promise<ExplorerListing> {
-    return listExplorer(this.at.path);
+  listExplorer(settings: ExplorerSettings): Promise<ExplorerListing> {
+    return listExplorer(this.at.path, settings);
   }
 
   /** The SEARCH section's matches (explorer.ts); a search is given up once the next one is asked for. */
@@ -1005,6 +1005,14 @@ export class RepositoryManager {
 
   get(ref: ProjectRef): Repository | undefined {
     return this.repositories.get(refKeyOf(ref));
+  }
+
+  /** Every open repository and worktree lists its files anew, e.g. after a setting of the Explorer's
+   *  listing changed. */
+  announceFilesChanged(): void {
+    for (const repository of this.repositories.values()) {
+      this.onFilesChanged(repository.at.ref);
+    }
   }
 
   /** Resolves once its git commands have ended (Repository.dispose); it is gone at once. */

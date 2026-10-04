@@ -221,7 +221,7 @@ describe("the stores", () => {
       JSON.stringify({
         appearance: { colorScheme: "sepia", darkTheme: "solarized", lanes: { pinned: ["git", "nope", "git"], order: ["files", 3, "files"] } },
         notifications: { finished: false, waiting: "yes" },
-        files: { editorKeybindingPreset: "" },
+        files: { editorKeybindingPreset: "", excludeGitIgnore: true, compactFolders: "no", sortOrder: "sideways" },
         git: { pushOnCommit: true, checkNewChanges: "yes" },
         prompts: { texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }, commitSuggester: "claude" }
       })
@@ -243,7 +243,12 @@ describe("the stores", () => {
       { pinned: ["git"], order: ["files", "projects", "git"] },
       "no lane named twice or unknown, the order takes the ones it misses at its end"
     );
-    assert.equal(settings.files.editorKeybindingPreset, DEFAULT_KEYBINDING_PRESET_ID);
+    assert.deepEqual(settings.files, {
+      editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
+      excludeGitIgnore: true,
+      compactFolders: true,
+      sortOrder: "default"
+    });
     assert.deepEqual(settings.prompts.texts, { commitMessage: "", handover: "" }, "TET's own text spelled out is stored as none");
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "", model: "" });
     assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);

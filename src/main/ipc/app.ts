@@ -1,7 +1,8 @@
+import * as os from "node:os";
 import { app } from "electron";
 import { handle, on } from "./channels";
-import { listAgents } from "../agents";
-import type { Requirements } from "../../shared/types/agents";
+import { getAgent, listAgents, listAskableAgents, listAskModels } from "../agents";
+import type { AgentId, AskModelsResult, Requirements } from "../../shared/types/agents";
 import type { AppInfo } from "../../shared/types/app";
 import type { AppSettings, SettingsEdits } from "../../shared/types/settings";
 import { anyAgentInstalled, checkRequirements } from "../requirements";
@@ -54,4 +55,8 @@ export function registerAppIpc({
   });
 
   handle("agents:list", () => listAgents());
+
+  // The settings Prompts tab's picker, which belongs to no project.
+  handle("agents:askable", (): Promise<AgentId[]> => listAskableAgents(os.tmpdir()));
+  handle("agents:ask-models", (_event, agentId: AgentId): Promise<AskModelsResult> => listAskModels(getAgent(agentId), os.tmpdir()));
 }
