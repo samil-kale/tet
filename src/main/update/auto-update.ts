@@ -23,7 +23,7 @@ const DOWNLOAD_TIMEOUT_MS = 15 * 60_000;
 /** An updater lives for a minute or two at most (tet-update.ts's waits). */
 const UPDATER_POLL_MS = 2000;
 
-type Notify = (severity: NoticeSeverity, message: string) => void;
+type Notice = (severity: NoticeSeverity, message: string) => void;
 type ShowProgress = (progress: NoticeProgress) => void;
 
 /**
@@ -59,7 +59,7 @@ async function updaterDone(): Promise<void> {
 }
 
 /** The last update's result, reported once and deleted. */
-function reportLastUpdate(notify: Notify): void {
+function reportLastUpdate(notice: Notice): void {
   const file = resultPath();
   const result = readJson(file) as UpdateResult | undefined;
   if (result === undefined) {
@@ -67,10 +67,10 @@ function reportLastUpdate(notify: Notify): void {
   }
   fs.rmSync(file, { force: true });
   if (result.ok) {
-    notify("info", `Updated to ${result.version}`);
+    notice("info", `Updated to ${result.version}`);
   } else {
     logError(`update to ${result.version} failed:\n${result.output}`);
-    notify("error", `Update to ${result.version} failed, update with: ${PLATFORM.installCommand}`);
+    notice("error", `Update to ${result.version} failed, update with: ${PLATFORM.installCommand}`);
   }
 }
 
@@ -217,7 +217,7 @@ export function startAutoUpdate(
   installed: boolean,
   releasesUrl: string,
   tetDataRoot: string,
-  notify: Notify,
+  notice: Notice,
   showProgress: ShowProgress
 ): void {
   dataRoot = tetDataRoot;
@@ -243,7 +243,7 @@ export function startAutoUpdate(
       }
       if (!writable) {
         announced = latest;
-        notify("info", `Update ${latest} available, update with: ${PLATFORM.installCommand}`);
+        notice("info", `Update ${latest} available, update with: ${PLATFORM.installCommand}`);
         return;
       }
       // The copy beside the install is about to change: no quit installs it until it is whole again.
@@ -282,7 +282,7 @@ export function startAutoUpdate(
   };
 
   void updaterDone().then(async () => {
-    reportLastUpdate(notify);
+    reportLastUpdate(notice);
     await sweepUpdateDir(asset, root);
     await check();
     setInterval(() => void check(), CHECK_INTERVAL_MS);

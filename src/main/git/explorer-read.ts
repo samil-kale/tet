@@ -16,7 +16,7 @@ import { PLATFORM } from "../util/host-platform";
 export const MAX_EDIT_BYTES = 4 * 1024 * 1024;
 
 /** A search's cap, counted in matches, since every one of them is a row the renderer draws. A
- *  one-character query in a large repository stops here instead of filling the pane. */
+ *  one-character query in a large repository stops here instead of filling the section. */
 const MAX_SEARCH_MATCHES = 2000;
 /** Files read at once; beyond a handful only file handles are spent. */
 const SEARCH_READERS = 8;
@@ -144,7 +144,7 @@ export async function walkExplorer(
 }
 
 /**
- * The SEARCH pane's matches, VS Code's "search in files": every line of every listed
+ * The SEARCH section's matches, VS Code's "search in files": every line of every listed
  * file the query matches. The Explorer's own file set, always without what git ignores — VS
  * Code's `search.useIgnoreFiles`, which the tree's `excludeGitIgnore` does not decide, and a
  * search must not read `node_modules`. The files are read a few at a time (more only costs file

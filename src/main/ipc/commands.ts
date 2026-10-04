@@ -2,12 +2,12 @@ import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import type { GitActionResult } from "../../shared/types/git";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import { readCommands, writeCommands } from "../store/tet-json";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
 /** The project's saved commands (tet.json), and running one in a tab of its own. */
-export function registerCommandsIpc({ store, sessions }: Pick<IpcDeps, "store" | "sessions">): void {
+export function registerCommandsIpc({ store, tabManagers }: Pick<IpcDeps, "store" | "tabManagers">): void {
   handle("commands:list", async (_event, projectId: string): Promise<ProjectCommand[]> => {
     const project = store.get(projectId);
     return project ? readCommands(project.path) : [];
@@ -34,8 +34,8 @@ export function registerCommandsIpc({ store, sessions }: Pick<IpcDeps, "store" |
   /** Opens a tab whose process is the command. */
   handle(
     "commands:run",
-    (_event, ref: ProjectRef, command: ProjectCommand): TerminalDescriptor | null => {
-      return sessions.get(ref)?.createCommandTab(command) ?? null;
+    (_event, ref: ProjectRef, command: ProjectCommand): TabDescriptor | null => {
+      return tabManagers.get(ref)?.createCommandTab(command) ?? null;
     }
   );
 }

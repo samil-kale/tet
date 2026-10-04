@@ -3,7 +3,7 @@ import { isWorking } from "../../shared/types/terminals";
 import type { Lane } from "../../shared/types/settings";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
@@ -20,7 +20,7 @@ import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
 import { useDragReorder } from "../ui/drag-reorder";
 import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
-import { SessionMark } from "../ui/SessionMark";
+import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
 /** What VS Code's own tab rename accepts. */
@@ -56,7 +56,7 @@ export interface PaneChrome {
 /** The lanes' toggles, drawn in `toggleOrder`. */
 const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
   projects: { noun: "projects", Icon: ProjectsIcon },
-  git: { noun: "repository", Icon: GitIcon },
+  git: { noun: "git", Icon: GitIcon },
   files: { noun: "files", Icon: FilesIcon }
 };
 
@@ -82,7 +82,7 @@ function LaneToggles({ chrome }: { chrome: PaneChrome }) {
         className={["lane-toggle", ...rowClasses(index)].join(" ")}
         active={freeLane === lane}
         onClick={() => onToggleLane(lane)}
-        title={`${freeLane === lane ? "Hide" : "Show"} the ${noun}`}
+        title={`${freeLane === lane ? "Hide" : "Show"} ${noun}`}
       >
         <Icon />
       </IconButton>
@@ -120,7 +120,7 @@ interface PaneProps {
    */
   width?: number;
   height?: number;
-  /** Whether the drop would land here — `TerminalsPane` decides. */
+  /** Whether the drop would land here — `TabArea` decides. */
   dragOver: boolean;
   onDragStart: (paneId: PaneId) => void;
   onDragOverChange: (paneId: PaneId, position: DragPosition | null) => void;
@@ -253,7 +253,7 @@ export const Pane = memo(function Pane({
   }, [tabMenu.target, tabMenuOpen, closeTabMenu]);
 
   const askRename = useCallback(
-    async (tab: TerminalDescriptor) => {
+    async (tab: TabDescriptor) => {
       await askName({
         title: "Rename session",
         current: tab.title,
@@ -305,7 +305,7 @@ export const Pane = memo(function Pane({
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
-    const terminal = tabs.find((tab): tab is TerminalDescriptor => tab.tabId === tabId && !isEditorTab(tab));
+    const terminal = tabs.find((tab): tab is TabDescriptor => tab.tabId === tabId && !isEditorTab(tab));
     const withSession = terminal?.sessionId !== undefined ? terminal : undefined;
     // A saved command restarts anytime; an agent once started — a running one quits first and its
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
@@ -391,12 +391,12 @@ export const Pane = memo(function Pane({
   };
 
   // Built only while the menu is open: a pane re-renders on every tab push, and icons are elements.
-  const newSessionEntries = (): ContextMenuEntry[] =>
+  const newTabEntries = (): ContextMenuEntry[] =>
     agents.map((agent) => agentEntry(agent, () => void createTab(agent.id)));
 
   return (
     <div
-      className={`terminal-pane${width === undefined && height === undefined ? " fill" : ""}${dragOver ? " drag-over" : ""}`}
+      className={`pane${width === undefined && height === undefined ? " fill" : ""}${dragOver ? " drag-over" : ""}`}
       style={width !== undefined ? { width } : height !== undefined ? { height } : undefined}
       // Capture: xterm's mousedown calls stopPropagation() once a TUI turns on mouse tracking.
       onMouseDownCapture={() => onFocus(paneId)}
@@ -475,19 +475,19 @@ export const Pane = memo(function Pane({
             >
               <span className="tab-icon-box">
                 {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
-                    > finished ("Turns and session marks" in AGENTS.md). */}
+                    > finished ("Turns and tab marks" in AGENTS.md). */}
                 {isEditorTab(tab) ? (
                   <FilesIcon className="tab-icon" />
                 ) : tab.status === "missing" || tab.status === "error" ? (
-                  <SessionMark kind="error" className="tab-icon" />
+                  <TabMark kind="error" className="tab-icon" />
                 ) : waitingTabIds.includes(tab.tabId) ? (
-                  <SessionMark kind="waiting" className="tab-icon" />
+                  <TabMark kind="waiting" className="tab-icon" />
                 ) : isWorking(tab) ? (
                   // A question hidden on the tab in front (left out of `waitingTabIds`) gets no
                   // spinner: a session stopped on a question is not working.
-                  <SessionMark kind="working" className="tab-icon" />
+                  <TabMark kind="working" className="tab-icon" />
                 ) : finishedTabIds.includes(tab.tabId) ? (
-                  <SessionMark kind="finished" className="tab-icon" />
+                  <TabMark kind="finished" className="tab-icon" />
                 ) : (
                   <AgentIcon agentId={tab.agentId} className="tab-icon" />
                 )}
@@ -526,7 +526,7 @@ export const Pane = memo(function Pane({
         <div className="new-tab">
           <button
             className="icon-button"
-            title="New session"
+            title="New tab"
             onMouseDown={plusMenu.open}
           >
             <PlusIcon />
@@ -534,7 +534,7 @@ export const Pane = memo(function Pane({
         </div>
       </div>
 
-      <div className="terminal-stack">
+      <div className="pane-body">
         {tabs.map((tab) =>
           isEditorTab(tab) ? (
             <EditorHost
@@ -556,11 +556,11 @@ export const Pane = memo(function Pane({
             />
           )
         )}
-        {tabs.length === 0 && <div className="placeholder">No sessions open.</div>}
+        {tabs.length === 0 && <div className="placeholder">No tabs open.</div>}
       </div>
 
       {tabMenuOpen && tabMenu.render(tabMenuEntries)}
-      {plusMenu.render(newSessionEntries, "new-session-menu")}
+      {plusMenu.render(newTabEntries, "new-tab-menu")}
     </div>
   );
 });

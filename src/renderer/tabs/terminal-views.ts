@@ -139,7 +139,7 @@ function pastePaths(view: TerminalView, words: string[]): void {
 
 /** Types paths of this machine as the tab sees them (handPaths), in the order given. */
 async function handPaths(view: TerminalView, paths: string[]): Promise<void> {
-  pastePaths(view, await window.tet.files.handPaths(view.ref, view.tabId, paths));
+  pastePaths(view, await window.tet.drops.handPaths(view.ref, view.tabId, paths));
 }
 
 /**
@@ -150,8 +150,8 @@ async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<voi
   const paths: string[] = [];
   for (const file of files) {
     const filePath =
-      window.tet.files.pathOf(file) ||
-      (await window.tet.files.writeDrop(view.ref, view.tabId, file.name, toBase64(await file.arrayBuffer())));
+      window.tet.drops.pathOf(file) ||
+      (await window.tet.drops.writeDrop(view.ref, view.tabId, file.name, toBase64(await file.arrayBuffer())));
     if (filePath) {
       paths.push(filePath);
     }
@@ -161,7 +161,7 @@ async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<voi
 
 /** A copied image has no path either — written into the drops folder too. */
 async function pasteClipboardImage(view: TerminalView): Promise<boolean> {
-  const file = await window.tet.files.clipboardImage(view.ref, view.tabId);
+  const file = await window.tet.drops.clipboardImage(view.ref, view.tabId);
   if (file === null) {
     return false;
   }

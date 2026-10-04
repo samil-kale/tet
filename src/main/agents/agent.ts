@@ -103,7 +103,7 @@ export interface AgentPaths {
   agentDir: string;
   /**
    * The one notification setting handed to an agent: every other one is read when a report
-   * arrives (session-manager's `toast`), but the idle reminder has no mark, so its hook is only
+   * arrives (session-manager's `notification`), but the idle reminder has no mark, so its hook is only
    * registered when wanted — which is why this switch applies only to tabs started after it.
    */
   idleReminder: boolean;
@@ -155,7 +155,7 @@ export interface AgentTerminal {
    * strip's progress bar hides. Output reaches the terminal throughout. No CLI signals readiness, so
    * this is a per-agent guess at "the first real frame is drawn".
    */
-  createIsSessionReady(): (chunk: string) => boolean;
+  createIsCliReady(): (chunk: string) => boolean;
   /** Ctrl+C presses that make the CLI quit by itself, sent before a kill (TerminalSession.stop). */
   quitPresses: number;
   /**
@@ -194,7 +194,7 @@ export interface AgentTurns {
   questionOutlivesTurn?: boolean;
   /**
    * Whether a `stop` report leaves the session working: its turn ended, but work it started runs on
-   * and reports back in a turn of its own. The tab stays busy, no toast. Omitted: `stop` ends it.
+   * and reports back in a turn of its own. The tab stays busy, no notification. Omitted: `stop` ends it.
    */
   workOutlivesStop?(payload: string): boolean;
   /**
@@ -222,7 +222,7 @@ export interface AgentSandbox {
   /**
    * AgentHost.prepare for the sandbox: generated for POSIX regardless of the host's platform, paths
    * in the sandbox's view (`SANDBOX_TARGET`, hook-target.ts). Hooks report over the control
-   * channel, so the host shows the toast.
+   * channel, so the host shows the notification.
    *
    * Returns args after `sbx run`'s "--"; constants for its environment go in `env`. No executable
    * override: the sandbox's bundled binary runs. Synchronous.

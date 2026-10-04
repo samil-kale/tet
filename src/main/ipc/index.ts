@@ -2,7 +2,7 @@ import { registerAppIpc } from "./app";
 import { registerCommandsIpc } from "./commands";
 import { registerEnvironmentIpc } from "./environment";
 import type { IpcDeps } from "./deps";
-import { registerFilesIpc } from "./files";
+import { registerDropsIpc } from "./drops";
 import { registerProjectsIpc } from "./projects";
 import { registerRepositoryIpc } from "./repository";
 import { registerSbxIpc } from "./sbx";
@@ -22,5 +22,5 @@ export function registerIpc(deps: IpcDeps): void {
   registerCommandsIpc(deps);
   registerTerminalsIpc(deps);
   registerShellIpc(deps);
-  registerFilesIpc(deps);
+  registerDropsIpc(deps);
 }

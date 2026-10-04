@@ -283,7 +283,7 @@ function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblem
   return variableRefusal(row, state) ?? problems.variables?.[row.env.trim()];
 }
 
-/** Each tab's mark: its first marked row's, repeated on the tab so it shows from any pane. */
+/** Each tab's mark: its first marked row's, repeated on the tab so it shows from any tab. */
 export function tabMarks(state: FieldsState, problems: SbxProblems): Partial<Record<keyof FieldsState, string>> {
   return {
     knowledge: firstMark(KNOWLEDGE_LABELS.map(({ kind }) => problems.knowledge?.[kind])),

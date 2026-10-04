@@ -6,7 +6,7 @@ import { useLatest } from "./use-latest";
 /** One entry of a context menu; an action with neither `run` nor `entries` renders disabled. */
 interface ContextMenuAction {
   label: string;
-  /** Leads the label, e.g. an agent's icon in the new-session menu. */
+  /** Leads the label, e.g. an agent's icon in the new-tab menu. */
   icon?: ReactNode;
   run?: () => void;
   /** A submenu, opened on hover or click, in place of a `run`. */

@@ -18,7 +18,7 @@ import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
 import type { ControlEvent } from "../../src/shared/control";
 import type { AgentId } from "../../src/shared/types/agents";
 import type { Project } from "../../src/shared/types/project";
-import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
@@ -87,7 +87,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
   const RENAMED = "tet agents test";
 
   /** `tabs-list` answers the manager's inspection, which adds this to a descriptor. */
-  type ListedTab = TerminalDescriptor & { reportedSessionId?: string };
+  type ListedTab = TabDescriptor & { reportedSessionId?: string };
 
   let userData: string;
   let app: TestApp | undefined;
@@ -195,7 +195,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
         // The prompt as the CLI's own argument, submitted once it is up, past the trust question.
         const created = await ctl("tabs-create", "--agent", agentId, "--prompt", PROMPT, "--project", currentProject().id);
         assert.equal(created.status, 0, created.stderr);
-        const tabId = (created.result as TerminalDescriptor).tabId;
+        const tabId = (created.result as TabDescriptor).tabId;
         state.tabId = tabId;
         let last: ListedTab | undefined;
         await eventually(

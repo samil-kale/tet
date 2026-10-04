@@ -1,5 +1,5 @@
 import type { ProjectRef } from "../../shared/types/project";
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview
@@ -51,7 +51,7 @@ export interface EditorTab {
 }
 
 /** What a tab strip holds: a project's terminals, then its editor tabs. */
-export type PaneTab = TerminalDescriptor | EditorTab;
+export type PaneTab = TabDescriptor | EditorTab;
 
 export function isEditorTabId(tabId: string): boolean {
   return tabId.startsWith(EDITOR_TAB_PREFIX);

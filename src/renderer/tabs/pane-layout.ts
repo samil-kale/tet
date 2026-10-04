@@ -1,9 +1,9 @@
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import { sameRecord } from "../identity";
 import { layoutKey } from "../ui/layout-storage";
 
 /**
- * A terminal split view: fixed presets, not a nestable tree (AGENTS.md, "Split view"). At most
+ * The tab area's split view: fixed presets, not a nestable tree (AGENTS.md, "Split view"). At most
  * four panes, so a letter identifies one; "a" is top left in every preset.
  */
 export type PaneId = "a" | "b" | "c" | "d";
@@ -26,7 +26,7 @@ function isSplitPreset(value: unknown): value is SplitPreset {
 }
 
 /** A tab dragged onto another pane — its own MIME, so a dropped file is never mistaken for one. */
-export const TAB_DRAG_TYPE = "application/x-tet-terminal-tab";
+export const TAB_DRAG_TYPE = "application/x-tet-tab";
 
 /** Which panes exist for a preset, in reading order — also the "move to" menu's order. */
 export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
@@ -48,9 +48,9 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
  * What the layout reads of a tab: id, session (persistence), saved command (`placeCommandTab`),
  * last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id, so is never written.
  */
-export type LayoutTab = Pick<TerminalDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
+export type LayoutTab = Pick<TabDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
 
-/** A project's split state — held in `App`, not in `TerminalsPane` (see AGENTS.md). */
+/** A project's split state — held in `App`, not in `TabArea` (see AGENTS.md). */
 export interface ProjectLayout {
   preset: SplitPreset;
   /** Where a new tab lands and what the tab shortcuts act on; keyboard focus follows it. */
@@ -554,8 +554,8 @@ export function snapZoneAt(
 
 /**
  * `localStorage` under `layout-storage.ts`'s namespace: layout describes the window, not the
- * repository. Per repository or worktree (its key), unlike `usePaneSize`/`usePaneToggle`'s fixed
- * keys. `suffix` tells the layout from `TerminalsPane`'s divider positions.
+ * repository. Per repository or worktree (its key), unlike `useStoredSize`/`useStoredToggle`'s fixed
+ * keys. `suffix` tells the layout from `TabArea`'s divider positions.
  */
 export function layoutStorageKey(key: string, suffix: string): string {
   return layoutKey(`terminals.${key}.${suffix}`);

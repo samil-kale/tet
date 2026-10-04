@@ -158,7 +158,7 @@ export class AppWindow {
   }
 
   /**
-   * A toast disappears; this lasts until the window is focused (the `focus` handler): taskbar flash
+   * A notification disappears; this lasts until the window is focused (the `focus` handler): taskbar flash
    * on Windows, dock bounce on macOS, urgency hint on Linux. No badge count: only macOS has one
    * everywhere.
    */
@@ -207,7 +207,7 @@ export class AppWindow {
     const window = new BrowserWindow({
       width: 1400,
       height: 900,
-      // The panes' floors summed (--pane-min-width twice, --content-min-width, the stacked sections,
+      // The areas' floors summed (--area-min-width twice, --content-min-width, the stacked sections,
       // title and branch bars); below this something clips.
       minWidth: 800,
       minHeight: 340,

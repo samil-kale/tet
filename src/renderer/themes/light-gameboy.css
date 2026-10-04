@@ -4,7 +4,7 @@
  * extension's theme file as it ships, renamed. See dark-modern.css for the layer. A color the
  * theme leaves unset takes VS Code's registry fallback — what VS Code draws with this theme — or,
  * for a border, the theme's own border color; each is marked below. Exceptions: the hovered row,
- * the tabs' borders, the session marks on the active one and the progress bar, each marked where
+ * the tabs' borders, the tab marks on the active one and the progress bar, each marked where
  * it stands.
  */
 :root[data-theme="light-gameboy"] {
@@ -44,8 +44,8 @@
   --vscode-tab-activeForeground: #c4bebb;
   /* Not the theme's #9a2257: the tab's own background, so the active tab has no line under it. */
   --vscode-tab-activeBorder: #494786;
-  /* tet's own: a session mark on the active tab or row takes its text color, not the accent. */
-  --tet-sessionMark-activeForeground: #c4bebb;
+  /* tet's own: a tab mark on the active tab or row takes its text color, not the accent. */
+  --tet-tabMark-activeForeground: #c4bebb;
   --vscode-tab-inactiveBackground: #c4bebb;
   --vscode-tab-inactiveForeground: #494786;
   /* Not the theme's #c4bebb, the inactive tab's own background, which hides the line between

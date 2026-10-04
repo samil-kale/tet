@@ -5,7 +5,7 @@ import { projectRefKey, projectRefsOf } from "../shared/types/project";
 import type { AgentInfo } from "../shared/types/agents";
 import type { EnvRequest } from "../shared/types/environment";
 import type { Project, ProjectRef } from "../shared/types/project";
-import type { TerminalDescriptor } from "../shared/types/terminals";
+import type { TabDescriptor } from "../shared/types/terminals";
 import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
@@ -21,15 +21,15 @@ import { ProjectList } from "./lanes/projects/ProjectList";
 import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
-import { usePaneSize } from "./ui/layout-storage";
+import { useStoredSize } from "./ui/layout-storage";
 import { useLanes } from "./lanes/use-lanes";
 import { LANES, type Lane, type LaneSettings } from "../shared/types/settings";
 import { useDragReorder } from "./ui/drag-reorder";
 import { SectionHandle } from "./ui/Section";
-import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
-import { TerminalsPane } from "./tabs/TerminalsPane";
+import { MIN_CONTENT_WIDTH, MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "./ui/Sash";
+import { TabArea } from "./tabs/TabArea";
 import { disposeRefTerminals } from "./tabs/terminal-views";
-import { NO_IDS, useSessionMarks } from "./tabs/use-session-marks";
+import { NO_IDS, useTabMarks } from "./tabs/use-tab-marks";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { agentName, useAgents } from "./ui/use-agents";
@@ -51,7 +51,7 @@ import { useRefFeeds } from "./use-ref-feeds";
 function requesterOf(
   request: EnvRequest,
   resolvedRefs: Record<string, ResolvedRef>,
-  tabs: Record<string, TerminalDescriptor[]>,
+  tabs: Record<string, TabDescriptor[]>,
   agents: AgentInfo[]
 ): string {
   const resolved = request.ref && resolvedRefs[projectRefKey(request.ref)];
@@ -111,7 +111,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     return next;
   }, [tabs, editorTabs]);
   /**
-   * Split state lives here, not in `TerminalsPane`: shortcuts and marks/seen need what is on screen
+   * Split state lives here, not in `TabArea`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
    * through `onActivateTab`. See "Split view" in AGENTS.md.
    */
@@ -125,14 +125,14 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
   /** Pin and Unpin, on a right-click on any of a lane's section headers. */
   const laneMenu = useContextMenu<Lane>();
-  // Pane defaults and limits.
-  const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
-  const [fileSearchHeight, setFileSearchHeight] = usePaneSize("file-search", 260, MIN_PANE_HEIGHT);
+  // Section defaults and limits.
+  const [branchTreeHeight, setBranchTreeHeight] = useStoredSize("branch-tree", 260, MIN_AREA_HEIGHT);
+  const [fileSearchHeight, setFileSearchHeight] = useStoredSize("file-search", 260, MIN_AREA_HEIGHT);
   // 40% of the window it first opens in.
-  const [commandsHeight, setCommandsHeight] = usePaneSize(
+  const [commandsHeight, setCommandsHeight] = useStoredSize(
     "commands",
     Math.round(window.innerHeight * 0.4),
-    MIN_PANE_HEIGHT
+    MIN_AREA_HEIGHT
   );
   /** The lanes out and pinned, their widths and slide (use-lanes.ts). */
   const {
@@ -196,7 +196,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   }, []);
 
   /**
-   * Shows a tab opened from outside the terminals pane, bringing its repository or worktree to
+   * Shows a tab opened from outside the tab area, bringing its repository or worktree to
    * front — a one-off write into the layout (`placeTab`: a saved command's goes where its line last
    * lay).
    */
@@ -221,7 +221,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
 
   /**
    * The active repository's or worktree's tabs in front of the user (`tabsInFront`) — the one
-   * definition marks, `seen` and toasts (`terminals.inFront`) go by. Identity-stable: it is
+   * definition marks, `seen` and notifications (`terminals.inFront`) go by. Identity-stable: it is
    * reported on change.
    */
   const inFrontRef = useRef<string[]>(NO_IDS);
@@ -237,9 +237,9 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     window.tet.terminals.inFront(activeRef, inFront);
   }, [activeRef, inFront]);
 
-  /** Finished, waiting, starting and busy tabs, and the ways to them (use-session-marks.ts). */
+  /** Finished, waiting, starting and busy tabs, and the ways to them (use-tab-marks.ts). */
   const { marks, showBusy, showFinished, showWaiting, showNeedsAttention, forgetProjectRef: forgetMarks } =
-    useSessionMarks(tabs, activeKey, activeRef, inFront, showTab);
+    useTabMarks(tabs, activeKey, activeRef, inFront, showTab);
 
   /** Drops everything held for a repository or worktree; the project list is the caller's. */
   const forgetProjectRef = useCallback((ref: ProjectRef) => {
@@ -285,8 +285,8 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
   const heads = useRefHeads(states);
 
-  /** A shell tab — a row's "terminal". */
-  const openTerminal = useCallback(
+  /** A shell tab, for a project row's "New shell tab" entry. */
+  const openShellTab = useCallback(
     (ref: ProjectRef) => {
       void window.tet.terminals.create(ref, "shell").then((tab) => showTab(projectRefKey(ref), tab.tabId));
     },
@@ -314,9 +314,9 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   /** Ctrl/Cmd+Shift+T. */
   const newShellTab = useCallback(() => {
     if (activeRef) {
-      openTerminal(activeRef);
+      openShellTab(activeRef);
     }
-  }, [activeRef, openTerminal]);
+  }, [activeRef, openShellTab]);
 
   /**
    * Refresh on window focus, for changes the watcher missed. Only the repository or worktree on
@@ -359,7 +359,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     ...LANES.filter((lane) => shownLanes.has(lane) && !pinnedLanes.has(lane)),
     ...LANES.filter((lane) => !shownLanes.has(lane) && !slidingIn(lane))
   ];
-  /** What the lanes out take together; a sash leaves the terminals their floor beside it. */
+  /** What the lanes out take together; a sash leaves the tab area its floor beside it. */
   const lanesWidth = LANES.reduce((sum, lane) => (shownLanes.has(lane) ? sum + widthOf(lane)[0] : sum), 0);
 
   // Stable handles, so memoized views re-render only for what they show.
@@ -443,7 +443,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                         marks={marks}
                         sandboxed={sandboxed}
                         onShowChanges={showChanges}
-                        onOpenTerminal={openTerminal}
+                        onOpenShellTab={openShellTab}
                         onShowBusy={showBusy}
                         onShowFinished={showFinished}
                         onShowWaiting={showWaiting}
@@ -455,8 +455,8 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                       <Sash
                         orientation="horizontal"
                         size={commandsHeight}
-                        min={MIN_PANE_HEIGHT}
-                        minOther={MIN_PANE_HEIGHT}
+                        min={MIN_AREA_HEIGHT}
+                        minOther={MIN_AREA_HEIGHT}
                         reverse
                         onResize={setCommandsHeight}
                       />
@@ -491,7 +491,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                 <Sash
                   orientation="vertical"
                   size={width}
-                  min={MIN_PANE_WIDTH}
+                  min={MIN_AREA_WIDTH}
                   minOther={MIN_CONTENT_WIDTH + lanesWidth - width}
                   onResize={setWidth}
                 />
@@ -507,7 +507,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
           {/* Every repository's and worktree's terminals stay mounted, so switching keeps buffers
               and processes. */}
           {Object.values(resolvedRefs).map((resolved) => (
-            <TerminalsPane
+            <TabArea
               key={resolved.key}
               resolved={resolved}
               tabs={stripTabs[resolved.key] ?? NO_TABS}

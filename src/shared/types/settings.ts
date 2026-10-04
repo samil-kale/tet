@@ -4,7 +4,7 @@ export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
-/** The lanes left of the terminals, in their order until the user moves one. */
+/** The lanes left of the tab area, in their order until the user moves one. */
 export const LANES = ["projects", "git", "files"] as const;
 
 export type Lane = (typeof LANES)[number];
@@ -65,7 +65,7 @@ export interface NotificationSettings {
 
 export const NOTIFICATION_IDS = ["finished", "needsYou", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
 
-/** The Files tab's part kept by tet; its Explorer settings are the project's, in tet.json. */
+/** The Files tab's part kept by tet; its Explorer view is the project's, in tet.json. */
 export interface FilesSettings {
   /** An id out of `KEYBINDING_PRESETS`. */
   editorKeybindingPreset: string;

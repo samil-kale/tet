@@ -12,7 +12,7 @@ import { hookTrustedHash, setupCodexHooks } from "../../src/main/agents/codex/ho
 import { hookSessionId } from "../../src/main/agents/hook-payload";
 import { renderPiExtension, writePiExtension } from "../../src/main/agents/pi/extension";
 import { systemPrompt } from "../../src/main/agents/system-prompt";
-import { createByteThresholdCheck } from "../../src/main/agents/session-ready";
+import { createByteThresholdCheck } from "../../src/main/agents/cli-ready";
 import { HOST_TARGET, SANDBOX_TARGET } from "../../src/main/agents/hook-target";
 import { checkAgentInstalled } from "../../src/main/agents/install-check";
 import { CONTROL_ENV, type ControlRequest } from "../../src/shared/control";

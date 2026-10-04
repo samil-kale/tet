@@ -3,8 +3,8 @@
 ## What this is
 
 TET is a git workspace for coding agents: Electron + React + xterm.js, several repositories open
-at once, each with its own git lane and its own agent and shell terminals. Git is for navigation
-and control of the repository state; the work happens in the terminals, so anything git can't do
+at once, each with its own git lane and its own agent and shell tabs. Git is for navigation
+and control of the repository state; the work happens in the tabs, so anything git can't do
 in two clicks belongs in an agent or a shell, not in a new dialog.
 
 This file holds rules of conduct, cross-file invariants and where things live. A reason that fits
@@ -21,7 +21,7 @@ classic layout, Dark Modern's palette, tab semantics, theme names; **Monaco** fo
 
 Agents run *inside* TET, as terminal tabs; killing the Electron process kills your own session.
 Build and typecheck freely, but ask the user to restart — and before anything that tears down a
-project's terminals.
+project's tabs.
 
 ## Where things live
 
@@ -70,7 +70,7 @@ project's terminals.
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
      (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
-     Explorer tree, the SEARCH pane, Seti's file icons) — and imports no other lane; beside them,
+     Explorer tree, the SEARCH section, Seti's file icons) — and imports no other lane; beside them,
      their state (`use-lanes.ts`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the fonts the app ships
@@ -234,7 +234,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   `git-host.ts` imports electron, everything crossing the boundary survives a structured clone.
 - Starting git is the cost, so count invocations: anything added to the refresh path must earn its
   process (the budget is commented at `git.ts`'s `readState`).
-- `Repository` is the single source of truth for the git lane and the terminals; every git command
+- `Repository` is the single source of truth for the git lane and the tabs; every git command
   that changes an open repository goes through `Repository.runAction` (renderer:
   `git/run-action.ts` — `useBranchActions` for branch commands, `useFileAct` for the changes list
   and the Explorer). Reads run beside it, and so does the periodic fetch, which actions wait on.
@@ -251,7 +251,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   no key: shown greyed, never opened, never renamed or deleted by TET. A worktree
   and its branch are one: made together at the default branch (`worktreeBase`), named by the
   branch, deleted together, and never switched; renaming it renames the branch alone, its folder
-  and terminals stay. Its base is tet's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
+  and tabs stay. Its base is tet's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
   Removing a project deletes the worktrees TET made, with their branches.
 
 **Scope.** Everything the git lane does fits in a context menu, an icon button or a question. Of
@@ -276,7 +276,7 @@ or a per-line decision is for an agent.
   lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
   by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
   the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
-  layout storage. The tab strip is the terminals and editor
+  layout storage. The tab strip is the agent, shell and editor
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
@@ -287,7 +287,7 @@ or a per-line decision is for an agent.
   setting kept, so it shows again once the diff is off.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
-  message of its own but the SEARCH pane, whose failure stands in its header as VS Code's does:
+  message of its own but the SEARCH section, whose failure stands in its header as VS Code's does:
   it follows each keystroke; a status (marks, progress bar) is not a notice.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
@@ -376,7 +376,7 @@ or a per-line decision is for an agent.
 - When two things that should look identical don't, measure them (`getComputedStyle` on the built
   stylesheet) instead of guessing.
 
-## Turns and session marks
+## Turns and tab marks
 
 A tab and its project row show *working* (spinner), *waiting for an answer* (question mark) or
 *finished out of sight* (speech bubble); on a tab they replace the agent icon, ranked error/missing
@@ -388,8 +388,8 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   agent's hook fires for a turn the user cut short, so reconcile ends a turn by the agent's own
   session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
-  shown (`useSessionMarks`) and clears what was seen (`terminals.seen`).
-- A session is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a
+  shown (`useTabMarks`) and clears what was seen (`terminals.seen`).
+- A tab is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a
   CLI's exit handlers.
 
 ## The control channel: `tet-ctl`

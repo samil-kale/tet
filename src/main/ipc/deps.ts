@@ -27,7 +27,7 @@ export interface IpcDeps {
   /** Shared with the control channel's `env-request`. */
   envRequests: EnvRequests;
   repositories: RepositoryManager;
-  sessions: SessionManagerRegistry;
+  tabManagers: SessionManagerRegistry;
   /** The window's reports for the control verbs. */
   records: ControlRecords;
   /** Shared with the control channel (main.ts). */

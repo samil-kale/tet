@@ -91,10 +91,10 @@ export interface ExplorerHandle extends FoldAll {
 }
 
 /**
- * The files pane's tree of every repository file. No ↑/↓ of its own. Shaped by tet.json via the
+ * The files lane's tree of every repository file. No ↑/↓ of its own. Shaped by tet.json via the
  * listing: `folders` make it multi-root (overlap allowed); `exclude`/`excludeGitIgnore` are already
  * applied; `sortOrder`/`compactFolders` are applied here. Its field filters it by name; what a
- * search finds in the files' lines is the pane under it (`FileSearch`).
+ * search finds in the files' lines is the section under it (`FileSearch`).
  */
 export const Explorer = memo(function Explorer({
   resolved,
@@ -207,9 +207,9 @@ export const Explorer = memo(function Explorer({
       }
       return result;
     });
-  /** The pane's `ask`, re-reading: for the questions that stay up to show what refused them. */
+  /** The lane's `ask`, re-reading: for the questions that stay up to show what refused them. */
   const runAsked: FileAsk = (action) => ask(reread(action));
-  /** The pane's `act`, likewise, for a menu entry that asks nothing. */
+  /** The lane's `act`, likewise, for a menu entry that asks nothing. */
   const run: FileAct = (action) => act(reread(action));
 
   const under = (dir: string, name: string): string => (dir ? `${dir}/${name}` : name);
@@ -260,7 +260,7 @@ export const Explorer = memo(function Explorer({
     clearFilter: () => setFilter("")
   }));
 
-  /** `ChangesList`'s menu minus the change-only entries, plus new/rename/delete and the workspace
+  /** `ChangesList`'s menu minus the change-only entries, plus new/rename/delete and the Explorer view's
    *  entries writing tet.json. A root is a view onto a folder, so it is never renamed or deleted. */
   const menuEntries = (node: TreeNode | null): ContextMenuEntry[] => {
     const dir = node ? (node.children !== undefined ? node.path : parentOf(node.path)) : "";
@@ -283,23 +283,23 @@ export const Explorer = memo(function Explorer({
           ]
         : [];
     const viewEntries: ContextMenuEntry[] = [];
-    // A worktree shows its project's view and never changes it (tet-json.ts's configRoot).
+    // A worktree shows its project's Explorer view and never changes it (tet-json.ts's configRoot).
     if (node && resolved.ref.worktree === undefined) {
       viewEntries.push(SEPARATOR);
       if (isRoot) {
         viewEntries.push({
-          label: "Remove Folder from Workspace",
+          label: "Remove Folder from Explorer",
           run: () => run(() => window.tet.repository.removeFolder(resolved.ref.projectId, node.path))
         });
       } else {
         if (!isFile) {
           viewEntries.push({
-            label: "Add Folder to Workspace",
+            label: "Add Folder to Explorer",
             run: () => run(() => window.tet.repository.addFolder(resolved.ref.projectId, node.path))
           });
         }
         viewEntries.push({
-          label: "Exclude from Files",
+          label: "Exclude from Explorer",
           run: () => run(() => window.tet.repository.excludePath(resolved.ref.projectId, node.path))
         });
       }
@@ -350,7 +350,7 @@ export const Explorer = memo(function Explorer({
  * ignore file changed), on tet.json writes, on window focus for what the watcher missed (a network
  * share watches nothing), and via `refreshExplorer` after the tree's own edits.
  *
- * Held with its repository or worktree: one files pane serves all, and a switch must not show the
+ * Held with its repository or worktree: one files lane serves all, and a switch must not show the
  * previous tree.
  */
 export function useExplorerListing(

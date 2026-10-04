@@ -48,7 +48,7 @@ export async function askNewWorktree(projectId: string, run: GitRun, base: strin
 export async function askRenameWorktree(projectId: string, branch: string, run: GitRun): Promise<void> {
   await askName({
     title: "Rename worktree",
-    detail: "Renames its branch. Its terminals keep running.",
+    detail: "Renames its branch. Its tabs keep running.",
     current: branch,
     confirmLabel: "Rename",
     submit: (name) => run.ask(`Renaming ${branch}...`, () => window.tet.repository.renameBranch({ projectId }, branch, name))

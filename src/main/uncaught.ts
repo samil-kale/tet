@@ -13,7 +13,7 @@ export const UNCAUGHT_MARKER = "[tet] uncaught exception";
 /** One notice per distinct error per run; every occurrence is still logged, numbered. */
 const seen = new Map<string, number>();
 
-export function installUncaughtHandler(logFile: string, notify: (severity: NoticeSeverity, message: string) => void): void {
+export function installUncaughtHandler(logFile: string, notice: (severity: NoticeSeverity, message: string) => void): void {
   openErrorLog(logFile);
   // Unhandled rejections arrive here too; `origin` tells them apart.
   process.on("uncaughtException", (error: unknown, origin: string) => {
@@ -25,7 +25,7 @@ export function installUncaughtHandler(logFile: string, notify: (severity: Notic
     // Console too: tests driving the app read stderr.
     appendLog(report);
     if (count === 1) {
-      notify("error", `TET hit an unexpected error and kept running: ${summary}. The details are in errors.log in TET's data folder (~/.tet).`);
+      notice("error", `TET hit an unexpected error and kept running: ${summary}. The details are in errors.log in TET's data folder (~/.tet).`);
     }
   });
 }

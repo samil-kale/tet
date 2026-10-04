@@ -389,7 +389,7 @@ export const BranchTree = memo(function BranchTree({
 
   /**
    * A linked worktree's — its branch's too, which is listed nowhere else: merged into this one's
-   * HEAD, or, on the worktree this pane shows, updated from the default branch as HEAD's row does.
+   * HEAD, or, on the worktree this lane shows, updated from the default branch as HEAD's row does.
    */
   const worktreeEntries = (worktree: WorktreeInfo): ContextMenuEntry[] => {
     const name = worktreeName(worktree);

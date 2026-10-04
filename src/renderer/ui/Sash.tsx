@@ -1,32 +1,32 @@
 import { useRef, useState, type PointerEvent } from "react";
 
 /**
- * The floor every pane shares, one per direction: a section header (35px) plus three 28px rows
+ * The floor every lane and section shares, one per direction: a section header (35px) plus three 28px rows
  * high, and as wide as the widest such header needs with its actions — the Explorer's four. Kept in
- * step with `styles.css`'s `--pane-min-width`/`--pane-min-height`: a sash bounds only a drag, a
+ * step with `styles.css`'s `--area-min-width`/`--area-min-height`: a sash bounds only a drag, a
  * shrinking window bypasses it.
  */
-export const MIN_PANE_WIDTH = 230;
-export const MIN_PANE_HEIGHT = 120;
-/** The floor for the terminals, the one pane no sash sizes directly. */
+export const MIN_AREA_WIDTH = 230;
+export const MIN_AREA_HEIGHT = 120;
+/** The floor for the tab area, the one area no sash sizes directly. */
 export const MIN_CONTENT_WIDTH = 320;
 
 interface SashProps {
   /** A vertical sash is dragged left and right, a horizontal one up and down. */
   orientation: "vertical" | "horizontal";
-  /** Current size of the pane it resizes. */
+  /** Current size of the area it resizes. */
   size: number;
-  /** How small that pane may be dragged, in pixels. */
+  /** How small that area may be dragged, in pixels. */
   min: number;
-  /** How much of the container must be left for the pane on the other side. */
+  /** How much of the container must be left for the area on the other side. */
   minOther: number;
-  /** Sizes the pane *behind* it rather than in front, e.g. the commands list. */
+  /** Sizes the area *behind* it rather than in front, e.g. the commands list. */
   reverse?: boolean;
   onResize: (size: number) => void;
 }
 
 /**
- * The draggable divider between two panes. It sizes the pane in front of it and the rest of the
+ * The draggable divider between two areas. It sizes the area in front of it and the rest of the
  * container absorbs the difference, so only one side carries a size.
  */
 export function Sash({ orientation, size, min, minOther, reverse, onResize }: SashProps) {
@@ -49,7 +49,7 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize }: Sa
       origin: vertical ? event.clientX : event.clientY,
       size,
       // Negative margins take the sash out of the layout, so the container's size is what the two
-      // panes share. Measured once per drag: it cannot change during one.
+      // areas share. Measured once per drag: it cannot change during one.
       total: vertical ? container.clientWidth : container.clientHeight
     };
     setDragging(true);

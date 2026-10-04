@@ -6,9 +6,9 @@ import type { ExplorerListing } from "../../shared/types/files";
 import type { GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { SbxAccount, SbxKnowledgeConfig, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { ToastTarget } from "../util/notifications";
+import type { NotificationTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
 import { type CallerSide } from "./caller-side";
@@ -111,7 +111,7 @@ export interface ControlDeps {
   pid: number;
   store: ProjectLookup;
   settings: SettingsAccess;
-  sessions: {
+  tabManagers: {
     get(ref: ProjectRef): ControlTerminals | undefined;
   };
   repositories: {
@@ -159,10 +159,10 @@ export interface ControlDeps {
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
   showTab(ref: ProjectRef, tabId: string): void;
-  /** A desktop toast from this process, which holds the desktop session (a sandboxed hook has
-   *  none). Must never throw: `hook` toasts on the way to answering a turn. A click brings
+  /** A desktop notification from this process, which holds the desktop session (a sandboxed hook has
+   *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front. */
-  notify(title: string, body: string, target?: ToastTarget): void;
+  showDesktopNotification(title: string, body: string, target?: NotificationTarget): void;
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;
@@ -198,7 +198,7 @@ export interface ControlDeps {
 
 /** The slice of TabSessionManager the verbs use. */
 export interface ControlTerminals {
-  snapshot(): TerminalDescriptor[];
+  snapshot(): TabDescriptor[];
   inspect(): InspectedTab[];
   /** At the last fitted size or a default; false unless the tab awaits its first start. */
   start(tabId: string): boolean;
@@ -209,10 +209,10 @@ export interface ControlTerminals {
   events(): ControlEvent[];
   /** `sandboxOnly`: opened from a sandbox, so it never runs on this machine. `prompt`: its first,
    *  for an agent that takes one. */
-  createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TerminalDescriptor;
+  createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TabDescriptor;
   /** The new tab taking over the tab's session, or why there is none. */
-  handOff(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TerminalDescriptor | string>;
-  createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined;
+  handOff(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
+  createCommandTab(command: ProjectCommand): TabDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
   /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;

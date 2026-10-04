@@ -110,7 +110,7 @@ textarea:disabled,
 .action-link:disabled,
 .radio-option:disabled,
 .dialog-color:disabled,
-/* Its own pane's bar says it is busy. */
+/* Its own section's bar says it is busy. */
 .icon-button:disabled,
 .context-menu-item.disabled,
 .dialog-tab.disabled,
@@ -267,7 +267,7 @@ textarea:focus,
   color: var(--vscode-input-foreground);
 }
 
-/* Scrollbars: no arrows, no track, a translucent slider. A pane wanting none hides them itself. */
+/* Scrollbars: no arrows, no track, a translucent slider. A view wanting none hides them itself. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -300,10 +300,10 @@ textarea:focus,
      border between panes is 1px --vscode-panel-border; anything that marks or points at something
      is 1px --vscode-focusBorder. */
   --bar-height: 35px;
-  /* Pane floors, as MIN_PANE_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
+  /* Pane floors, as MIN_AREA_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
-  --pane-min-width: 230px;
-  --pane-min-height: 120px;
+  --area-min-width: 230px;
+  --area-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 30px;
   /* One height for every single-line field, and for a button beside one: input,
@@ -455,7 +455,7 @@ textarea:focus,
   display: flex;
   flex-direction: column;
   flex: 0 1 auto;
-  min-height: var(--pane-min-height);
+  min-height: var(--area-min-height);
 }
 
 .section.grows {
@@ -675,7 +675,7 @@ textarea:focus,
   opacity: 0.7;
 }
 
-/* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH pane's box,
+/* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH section's box,
    which adds to it below. */
 .filter-field {
   position: relative;
@@ -697,7 +697,7 @@ textarea:focus,
   pointer-events: none;
 }
 
-/* The SEARCH pane's box, VS Code's: the three toggles stand inside the field, which leaves its own
+/* The SEARCH section's box, VS Code's: the three toggles stand inside the field, which leaves its own
    padding to the row. */
 .filter-row {
   padding: 8px 6px;
@@ -722,7 +722,7 @@ textarea:focus,
 }
 
 /* `.icon-button` in every other respect, `active` included: only the box shrinks, since VS Code's
-   input actions are 20px and three of the pane's own would take a narrow pane's whole row. */
+   input actions are 20px and three of the section's own would take a narrow section's whole row. */
 .filter-row .icon-button {
   width: 20px;
   height: 20px;
@@ -742,7 +742,7 @@ textarea:focus,
   flex: 1;
   overflow-y: auto;
   padding-bottom: 8px;
-  /* 1px narrower than the pane: at a fractional scale the pane's edge can take the last device
+  /* 1px narrower than the lane: at a fractional scale the lane's edge can take the last device
      pixel, and with it the right side of a focused row's outline. */
   margin-left: 1px;
 }
@@ -791,7 +791,7 @@ textarea:focus,
   color: var(--vscode-list-activeSelectionForeground);
 }
 
-/* The files pane's EXPLORER tree, and the SEARCH pane under it, whose rows are of the same shape.
+/* The files lane's EXPLORER tree, and the SEARCH section under it, whose rows are of the same shape.
    It nests arbitrarily deep, so rows set `padding-left` inline. The Explorer's row: no flex gap,
    the twistie and the file mark carry their own. */
 .explorer-tree .tree-item {
@@ -936,16 +936,16 @@ textarea:focus,
   height: calc(var(--icon-size) - 2px);
 }
 
-/* Terminals ------------------------------------------------------------------------------ */
+/* Tab area ------------------------------------------------------------------------------- */
 
-.pane-layout {
+.tab-area {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: 0;
 }
 
-/* One project's split: 1–4 `.terminal-pane`s ("Split view" in AGENTS.md). A row, since every
+/* One project's split: 1–4 `.pane`s ("Split view" in AGENTS.md). A row, since every
    preset's first divider is vertical; stacked panes nest in a column. Relative for
    `.snap-preview`; no stacking context. */
 .panes-grid {
@@ -959,19 +959,19 @@ textarea:focus,
 /* The grid's two boxes; `min-*: 0` lets a sized neighbour push the others below their content. Two
    stacked panes are a column, which carries its width inline when sized. */
 .panes-column,
-.terminal-pane {
+.pane {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
 
-/* One pane: tab strip and terminal stack. Relative for `.drag-over`'s overlay. */
-.terminal-pane {
+/* One pane: tab strip and body. Relative for `.drag-over`'s overlay. */
+.pane {
   position: relative;
 }
 
-.terminal-pane.fill,
+.pane.fill,
 .panes-column.fill {
   flex: 1;
 }
@@ -981,7 +981,7 @@ textarea:focus,
    box its children measure, an inset box-shadow's top edge paints behind the opaque tab strip, and
    panes keep their sizes until the drop, or every pty under them refits mid-drag. Above the layers
    beneath them, which xterm's decorations reach 7 of. */
-.terminal-pane.drag-over::after,
+.pane.drag-over::after,
 .snap-preview,
 .terminal-host.drag-over::after {
   position: absolute;
@@ -990,7 +990,7 @@ textarea:focus,
   pointer-events: none;
 }
 
-.terminal-pane.drag-over::after {
+.pane.drag-over::after {
   content: "";
   inset: 0;
 }
@@ -1036,7 +1036,7 @@ textarea:focus,
   }
 }
 
-/* Only the tabs scroll: an overflow container would clip the new-session menu below it. */
+/* Only the tabs scroll: an overflow container would clip the new-tab menu below it. */
 .tabs {
   display: flex;
   align-items: stretch;
@@ -1104,19 +1104,19 @@ textarea:focus,
 
 /* Spinner while a turn runs, question mark while it waits, speech bubble once it finished out of
    sight. One rule for all three, on tab and project row; colour only, size is the site's. */
-.session-mark {
+.tab-mark {
   flex: none;
   color: var(--vscode-focusBorder);
 }
 
 /* On the active tab or row's selection background. */
-.tab.active .session-mark:not(.session-mark-error),
-.project-item.active .session-mark:not(.session-mark-error) {
-  color: var(--tet-sessionMark-activeForeground, var(--vscode-focusBorder));
+.tab.active .tab-mark:not(.tab-mark-error),
+.project-item.active .tab-mark:not(.tab-mark-error) {
+  color: var(--tet-tabMark-activeForeground, var(--vscode-focusBorder));
 }
 
 /* Not a fourth turn state: red is the one colour Dark Modern names for this meaning. */
-.session-mark-error {
+.tab-mark-error {
   color: var(--vscode-errorForeground);
 }
 
@@ -1209,12 +1209,12 @@ textarea:focus,
 }
 
 /* Compact lists of choices: the context menu without its padding. */
-.new-session-menu,
+.new-tab-menu,
 .dropdown-menu {
   border-radius: 3px;
 }
 
-.new-session-menu {
+.new-tab-menu {
   min-width: 120px;
 }
 
@@ -1230,7 +1230,7 @@ textarea:focus,
   display: block;
 }
 
-.new-session-menu .context-menu-item,
+.new-tab-menu .context-menu-item,
 .dropdown-menu .context-menu-item {
   height: auto;
   padding: 5px 12px;
@@ -1242,7 +1242,7 @@ textarea:focus,
   border-bottom: 1px solid var(--vscode-menu-separatorBackground);
 }
 
-.terminal-stack {
+.pane-body {
   position: relative;
   flex: 1;
   min-height: 0;
@@ -1300,7 +1300,7 @@ textarea:focus,
 
 /* Lanes ---------------------------------------------------------------------------------- */
 
-/* A lane, left of the terminals; its width comes from its sash (default and limits
+/* A lane, left of the tab area; its width comes from its sash (default and limits
    in use-lanes.ts). */
 .lane {
   display: flex;
@@ -1319,7 +1319,7 @@ textarea:focus,
 
 
 .lane-content {
-  min-width: var(--pane-min-width);
+  min-width: var(--area-min-width);
   /* Replays on every view switch: leaving `display: none` restarts an animation. */
   animation: lane-fade-in 0.1s ease-out;
 }
@@ -1365,7 +1365,7 @@ textarea:focus,
   color: var(--vscode-gitDecoration-conflictingResourceForeground);
 }
 
-/* The editor tab's slot in `.terminal-stack`, over its padding: monaco has its own gutter. Hidden
+/* The editor tab's slot in `.pane-body`, over its padding: monaco has its own gutter. Hidden
    by visibility, like `.terminal-host`, so monaco keeps a laid-out box. */
 .editor-tab {
   position: absolute;
@@ -1405,14 +1405,14 @@ textarea:focus,
 .editor-frame {
   position: relative;
   flex: 1;
-  min-width: var(--pane-min-width);
+  min-width: var(--area-min-width);
 }
 
 /* Where `attachMarkdownPreview` moves the preview's scroller; sized by the sash. */
 .markdown-frame {
   position: relative;
   flex: none;
-  min-width: var(--pane-min-width);
+  min-width: var(--area-min-width);
 }
 
 /* Where monaco mounts. Two per tab, stacked: the diff editor and the plain one (`applyMode`). No
@@ -1782,7 +1782,7 @@ textarea:focus,
 
 /* `.dialog-tab.active` is `.tab.active`'s. */
 
-/* The rows' mark (.row-mark) repeated on their tab, so it shows from any pane. */
+/* The rows' mark (.row-mark) repeated on their tab, so it shows from any tab. */
 .dialog-tab-mark {
   display: flex;
   margin-top: 3px;
@@ -1932,7 +1932,7 @@ textarea:focus,
   font-family: var(--vscode-editor-font-family);
 }
 
-/* A row Save, sbx's policy or an action refuses: the error mark's colour, as .session-mark-error,
+/* A row Save, sbx's policy or an action refuses: the error mark's colour, as .tab-mark-error,
    in any row. Also scoped to `.dialog-field` to outrank `.dialog-field span`, which would grey it. */
 .row-mark,
 .dialog-field .row-mark {
@@ -2018,7 +2018,7 @@ textarea:focus,
 }
 
 /* Each tab scrolls on its own once its rows outgrow the dialog. */
-.sbx-settings-pane {
+.sbx-settings-tab {
   overflow-y: auto;
 }
 
@@ -2200,14 +2200,14 @@ textarea:focus,
    as tall as its rows, so "+ Add" follows the last one, and shrinks to scroll once they outgrow it.
    The same for the sbx dialog's rows: a tab's one section, and the Docker account's tokens. */
 .settings-environment .dialog-field,
-.sbx-settings-pane > .dialog-field,
+.sbx-settings-tab > .dialog-field,
 .sbx-account .dialog-field {
   flex: 1;
   min-height: 0;
 }
 
 .settings-environment .row-section-rows,
-.sbx-settings-pane .row-section-rows,
+.sbx-settings-tab .row-section-rows,
 .sbx-account .row-section-rows {
   flex: 0 1 auto;
   min-height: 0;
@@ -2244,7 +2244,7 @@ textarea:focus,
 }
 
 /* What refused an answer, wherever the answer was given (`DialogError`): the error mark's colour,
-   as .session-mark-error. Words alone, no mark — the colour and the place already say it. Its own
+   as .tab-mark-error. Words alone, no mark — the colour and the place already say it. Its own
    class rather than a span, which `.dialog-field span` above would grey. A path or a branch name
    in git's message breaks anywhere, as .dialog-message. */
 .dialog-error {
@@ -2439,7 +2439,7 @@ textarea:focus,
 
 /* Notices -------------------------------------------------------------------------------- */
 
-/* Over the bottom right corner, so a message never resizes the panes. Only the messages take the
+/* Over the bottom right corner, so a notice never resizes the panes. Only the notices take the
    pointer. */
 .notices {
   position: absolute;
@@ -2478,7 +2478,7 @@ textarea:focus,
   background: var(--vscode-notifications-background);
   border: 1px solid var(--vscode-notifications-border);
   border-radius: 4px;
-  /* Classic VS Code's toast shadow, all around rather than dropped. */
+  /* VS Code's notification shadow, all around rather than dropped. */
   box-shadow: 0 0 8px 2px var(--vscode-widget-shadow);
   /* VS Code's slide in from below. */
   animation: notice-slide-in 0.3s ease-out;
@@ -2491,7 +2491,7 @@ textarea:focus,
   }
 }
 
-/* Only the icon carries the severity's colour: a whole message in red is harder to read. */
+/* Only the icon carries the severity's colour: a whole notice in red is harder to read. */
 .notice-icon {
   flex: none;
   /* Optical: half the gap between the first line's height and the icon's own. */

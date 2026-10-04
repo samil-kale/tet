@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type RefObject } from "react";
 import { projectRefKey, projectRefsOf } from "../shared/types/project";
 import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
-import type { TerminalDescriptor } from "../shared/types/terminals";
+import type { TabDescriptor } from "../shared/types/terminals";
 import { forget } from "./identity";
 import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
 import { useLatest } from "./ui/use-latest";
@@ -16,7 +16,7 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
   /** Everything here is by `projectRefKey`. */
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
   /** Every repository's and worktree's tabs: the project list needs all of them at once. */
-  const [tabs, setTabs] = useState<Record<string, TerminalDescriptor[]>>({});
+  const [tabs, setTabs] = useState<Record<string, TabDescriptor[]>>({});
   /**
    * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
    * pane's props, on every push.

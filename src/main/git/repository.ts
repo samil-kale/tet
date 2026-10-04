@@ -707,7 +707,7 @@ export class Repository {
     return listExplorer(this.at.path);
   }
 
-  /** The SEARCH pane's matches (explorer.ts); a search is given up once the next one is asked for. */
+  /** The SEARCH section's matches (explorer.ts); a search is given up once the next one is asked for. */
   searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
     this.search?.abort();
     this.search = new AbortController();

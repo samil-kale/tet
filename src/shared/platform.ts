@@ -64,9 +64,9 @@ export interface Platform {
   readonly centersTitle: boolean;
   /** The app quits with its last window; macOS keeps it running. */
   readonly quitsWithLastWindow: boolean;
-  /** Toasts go through Windows' activator (an AppUserModelID, toast XML), clicked even after TET
+  /** Notifications go through Windows' activator (an AppUserModelID, notification XML), clicked even after TET
    *  quit; elsewhere Electron's own notification, held while it shows. */
-  readonly windowsToasts: boolean;
+  readonly windowsNotifications: boolean;
   /** The file whose presence keeps Docker Sandboxes' first-run wizard out of a tab (sbx-cli.ts);
    *  undefined where sbx shows none. */
   sbxFirstRunMarker(env: Record<string, string | undefined>): string | undefined;
@@ -126,7 +126,7 @@ export const WINDOWS: Platform = {
   titleBarOverlay: true,
   centersTitle: false,
   quitsWithLastWindow: true,
-  windowsToasts: true,
+  windowsNotifications: true,
   sbxFirstRunMarker: (env) =>
     env.LOCALAPPDATA ? `${env.LOCALAPPDATA}\\DockerSandboxes\\sandboxes\\config\\first-run-import.json` : undefined,
   checksGpu: false,
@@ -163,7 +163,7 @@ export const MAC: Platform = {
   titleBarOverlay: false,
   centersTitle: true,
   quitsWithLastWindow: false,
-  windowsToasts: false,
+  windowsNotifications: false,
   checksGpu: false,
   startsWithoutChromeSandbox: false,
   modifierKey: "Meta",
@@ -196,7 +196,7 @@ export const LINUX: Platform = {
   titleBarOverlay: true,
   centersTitle: false,
   quitsWithLastWindow: true,
-  windowsToasts: false,
+  windowsNotifications: false,
   checksGpu: true,
   startsWithoutChromeSandbox: true,
   modifierKey: "Control",

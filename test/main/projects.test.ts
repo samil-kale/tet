@@ -28,7 +28,7 @@ import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project"
 import { eventually, forkUtilitiesInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
 
 /**
- * projects.ts against the real git and real Repositories, the sessions faked: a project's id in its
+ * projects.ts against the real git and real Repositories, the tab managers faked: a project's id in its
  * git config, the worktrees TET makes under the project's folder, what closing their terminals may
  * leave behind, what a delete and a project's removal take along. electron's `utilityProcess` serves
  * git.ts in this process, as in repository.test.ts.
@@ -66,7 +66,7 @@ const managers: RepositoryManager[] = [];
 after(() => managers.forEach((manager) => manager.disposeAll()));
 
 /**
- * The deps main.ts hands projects.ts. `onClose` runs as the sessions of the repository or a
+ * The deps main.ts hands projects.ts. `onClose` runs as the tabs of the repository or a
  * worktree end — where a quitting agent could still write.
  */
 function open(onClose: (ref: ProjectRef) => void = () => undefined) {
@@ -87,7 +87,7 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
   const deps: ProjectDeps = {
     store,
     repositories,
-    sessions: {
+    tabManagers: {
       close: async (ref: ProjectRef) => onClose(ref),
       open: () => undefined
     } as unknown as SessionManagerRegistry,

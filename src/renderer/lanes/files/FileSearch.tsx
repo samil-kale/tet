@@ -18,7 +18,7 @@ const SEARCH_TOGGLES: { key: "matchCase" | "wholeWord" | "regex"; title: string;
   { key: "regex", title: "Use Regular Expression", Icon: RegexIcon }
 ];
 
-/** VS Code's line above its results, the pane's header here, and what stands in for it when there
+/** VS Code's line above its results, the section's header here, and what stands in for it when there
  *  are none. */
 export function searchSummary(result: FileSearchResult): string {
   const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -41,7 +41,7 @@ export interface FileSearchHandle extends FoldAll {
 interface FileSearchProps {
   /** What the field last asked for, undefined while it is empty (`useFileSearch`). */
   result: FileSearchResult | undefined;
-  /** The field asks for a search here, or for none; the pane runs it and shows it running. */
+  /** The field asks for a search here, or for none; the section runs it and shows it running. */
   runSearch: (query: FileSearchQuery | null) => void;
   onOpenMatch: (path: string, match: FileSearchMatch) => void;
   /** What the header's fold button does next, reported as it changes: collapse while a file is
@@ -51,9 +51,9 @@ interface FileSearchProps {
 }
 
 /**
- * The SEARCH pane: VS Code's search box, its own query, over what that query finds in the files'
+ * The SEARCH section: VS Code's search box, its own query, over what that query finds in the files'
  * lines. Listed as VS Code's search view does — a row per file, folded away until it is opened,
- * and under it a row per match with the match marked; the summary is the pane's header. Rows of the
+ * and under it a row per match with the match marked; the summary is the section's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
 export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMatch, onExpanded, ref }: FileSearchProps) {

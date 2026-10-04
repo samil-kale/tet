@@ -6,7 +6,7 @@
 export class StartIndicators {
   private total = 0;
   /**
-   * Those per tab (`TerminalDescriptor.starting`). A count: a tab's setup and first frame overlap,
+   * Those per tab (`TabDescriptor.starting`). A count: a tab's setup and first frame overlap,
    * and a release for a closed tab must balance its acquire (`closeTabs` can put a tab back).
    */
   private readonly perTab = new Map<string, number>();

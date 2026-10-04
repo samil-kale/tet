@@ -367,7 +367,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         </>
       )}
       {phase.kind === "ready" && tab !== "general" && (
-        <FieldColumn fill className="sbx-settings-pane">
+        <FieldColumn fill className="sbx-settings-tab">
           <SbxSettingsFields
             section={tab}
             state={state}

@@ -9,7 +9,7 @@ import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey } from "../shared/themes";
 import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
-import type { TerminalDescriptor, TerminalStatus } from "../shared/types/terminals";
+import type { TabDescriptor, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readChanged, readCommands, readSbxConfig } from "./store/tet-json";
 import { prepareControl } from "./control/control-channel";
@@ -46,7 +46,7 @@ import { setStoredEnv } from "./terminals/pty";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
 import { logError } from "./util/error-log";
-import { awaitedToastTab, showDesktopNotification, startNotifications } from "./util/notifications";
+import { awaitedNotificationTab, showDesktopNotification, startNotifications } from "./util/notifications";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-registry";
 import { SettingsStore } from "./store/settings";
@@ -76,22 +76,22 @@ try {
 }
 
 /**
- * Who Windows says a toast is from: name and icon come from the Start menu entry carrying this id,
- * never from the notification (so no toast icon). Electron writes that entry on the first toast
+ * Who Windows says a notification is from: name and icon come from the Start menu entry carrying this id,
+ * never from the notification (so no notification icon). Electron writes that entry on the first notification
  * (windows_toast_activator.cc), named after the executable's ProductName, with the id and the
  * activator CLSID. Installed, the executable is `TET.exe` (electron-builder.yml), so the entry is
  * install.ps1's `TET.lnk` rewritten in place; a development run's electron.exe reads "Electron".
  *
  * Windows remembers what it decided about an id, so `npm start` gets its own id — else one dev
- * toast leaves the installed tet reading "Electron". The CLSID is fixed, not Electron's per-run
- * random one, so a toast clicked after tet quit starts the COM server the entry names. Both are set
+ * notification leaves the installed tet reading "Electron". The CLSID is fixed, not Electron's per-run
+ * random one, so a notification clicked after tet quit starts the COM server the entry names. Both are set
  * before the workspace: a hook can report a turn once the first terminal is up. The id is
  * electron-builder.yml's `appId`, which Windows' existing decisions about it are keyed on.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
 const TOAST_ACTIVATOR_CLSID = "{8DA9BB54-C0A5-4BEC-AF76-BE3568344852}";
 const installed = app.isPackaged;
-if (PLATFORM.windowsToasts) {
+if (PLATFORM.windowsNotifications) {
   app.setAppUserModelId(installed ? APP_USER_MODEL_ID : `${APP_USER_MODEL_ID}.dev`);
   if (installed) {
     app.setToastActivatorCLSID(TOAST_ACTIVATOR_CLSID);
@@ -110,7 +110,7 @@ const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_UR
 
 const appWindow: AppWindow = new AppWindow({
   hidden: HIDE_WINDOW,
-  hasTab: (ref, tabId): boolean => sessions.get(ref)?.hasTab(tabId) === true,
+  hasTab: (ref, tabId): boolean => tabManagers.get(ref)?.hasTab(tabId) === true,
   // The environment dialog went with the page.
   onPageLoad: (): void => envRequests.drop()
 });
@@ -142,7 +142,7 @@ const envRequests = new EnvRequests(
       return false;
     }
     send("environment:request", request);
-    // Out of sight, told as a question is (session-manager's toast): the agent's shell gives up
+    // Out of sight, told as a question is (session-manager's notification): the agent's shell gives up
     // waiting at some point, and the dialog with it.
     if (appWindow.inBackground() && settings.get().notifications.needsYou) {
       const tab = request.ref && request.tabId ? findTab(request.ref, request.tabId) : undefined;
@@ -186,7 +186,7 @@ const repositories = new RepositoryManager(
       send("commands:changed", { projectId, commands, sbxEnabled: sbx.enabled });
       // tet.json also holds the sbx switch, which sbx-only agents must hear (sbxConfigChanged) — in
       // every repository and worktree of the project.
-      for (const manager of sessions.forProject(projectId)) {
+      for (const manager of tabManagers.forProject(projectId)) {
         void manager
           .sbxConfigChanged(sbx.enabled)
           .catch((error: unknown) => logError("could not apply the sbx config change", error));
@@ -197,10 +197,10 @@ const repositories = new RepositoryManager(
   (ref, path) => send("repository:file-changed", { ref, path }),
   logins
 );
-const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
+const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (ref, tabs) => {
     send("terminals:tabs", { ref, tabs });
-    awaitedToastTab(ref);
+    awaitedNotificationTab(ref);
   },
   onOutput: (ref, tabId, data) => {
     appWindow.queueOutput(ref, tabId, data);
@@ -218,14 +218,14 @@ const sessions = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
 function openProjectRef(ref: ProjectRef): void {
   const resolved = resolveProjectRef(dataRoot, store, ref);
   repositories.open(resolved);
-  sessions.open(resolved);
+  tabManagers.open(resolved);
 }
 
 /** For opening and closing projects, shared by the window (ipc/) and the control channel. */
 const projectDeps: ProjectDeps = {
   store,
   repositories,
-  sessions,
+  tabManagers,
   records,
   sbxLocal,
   openProjectRef,
@@ -257,15 +257,15 @@ function openWorkspace(): Promise<void> {
 let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
-function findTab(ref: ProjectRef, tabId: string): TerminalDescriptor | undefined {
-  return sessions.get(ref)?.snapshot().find((tab) => tab.tabId === tabId);
+function findTab(ref: ProjectRef, tabId: string): TabDescriptor | undefined {
+  return tabManagers.get(ref)?.snapshot().find((tab) => tab.tabId === tabId);
 }
 
 /**
- * Brings a toast's tab to the front, found by tab id or by session id — the tab id of a restored
- * tab (TerminalDescriptor). Returns whether it was found.
+ * Brings a notification's tab to the front, found by tab id or by session id — the tab id of a restored
+ * tab (TabDescriptor). Returns whether it was found.
  */
-function showToastTarget(target: { ref: ProjectRef; tabId: string; sessionId?: string }): boolean {
+function showNotificationTarget(target: { ref: ProjectRef; tabId: string; sessionId?: string }): boolean {
   const tab =
     findTab(target.ref, target.tabId) ??
     (target.sessionId !== undefined ? findTab(target.ref, target.sessionId) : undefined);
@@ -279,7 +279,7 @@ startNotifications({
   installed,
   revealWindow: appWindow.reveal,
   attractAttention: appWindow.attractAttention,
-  showTab: showToastTarget,
+  showTab: showNotificationTarget,
   sessionIdOf: (target) => findTab(target.ref, target.tabId)?.sessionId
 });
 
@@ -298,7 +298,7 @@ async function startControl(): Promise<void> {
         pid: process.pid,
         store,
         settings: settingsAccess,
-        sessions,
+        tabManagers,
         repositories,
         listAgents: listInstalledAgents,
         agents: AGENTS,
@@ -318,7 +318,7 @@ async function startControl(): Promise<void> {
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("terminals:show", { ref, tabId }),
-        notify: showDesktopNotification,
+        showDesktopNotification,
         environment,
         envRequests,
         sbx: {
@@ -352,7 +352,7 @@ const settingsAccess: SettingsAccess = {
     settings.patch(edits);
     const restartRequired = applyTheme();
     if (edits.notifications?.idleReminder !== undefined) {
-      sessions.idleReminderChanged();
+      tabManagers.idleReminderChanged();
     }
     if (edits.appearance?.lanes) {
       appWindow.showLanes(settings.get().appearance.lanes);
@@ -377,7 +377,7 @@ function applyTheme(): boolean {
   // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
   // restart is not handed to them.
   if (saved.id === appWindow.shownTheme()?.id) {
-    sessions.themeChanged();
+    tabManagers.themeChanged();
   }
   return saved.kind !== kind;
 }
@@ -420,7 +420,7 @@ if (!app.requestSingleInstanceLock()) {
       environment,
       envRequests,
       repositories,
-      sessions,
+      tabManagers,
       records,
       projectDeps,
       notice,
@@ -449,7 +449,7 @@ app.on("window-all-closed", () => {
 });
 
 /**
- * Ending sessions is async (TerminalSession.stop) but electron exits once before-quit returns, so
+ * Ending tabs is async (TerminalSession.stop) but electron exits once before-quit returns, so
  * the quit is held back and re-asked; `quitting` lets the re-ask through. Bounded so a pty that
  * never reports its exit cannot block the quit.
  */
@@ -464,7 +464,7 @@ const QUIT_EXIT_TIMEOUT_MS = 5000;
 let quitting = false;
 
 /**
- * The one way out, for quit and the control channel's restart: sessions first, then the rest.
+ * The one way out, for quit and the control channel's restart: tabs first, then the rest.
  * `relaunch` starts the new instance after this one exits, so the single-instance lock is free.
  */
 function shutdown(relaunch: boolean): void {
@@ -473,10 +473,10 @@ function shutdown(relaunch: boolean): void {
   }
   quitting = true;
   void Promise.race([
-    sessions.disposeAll(),
+    tabManagers.disposeAll(),
     new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))
   ]).catch(
-    (error: unknown) => logError("quit: ending sessions failed", error)
+    (error: unknown) => logError("quit: ending tabs failed", error)
   ).finally(async () => {
     repositories.disposeAll();
     stopGitProcess();
@@ -506,7 +506,7 @@ app.on("before-quit", (event) => {
 /**
  * Keeps electron's own handling of these signals, a quit through before-quit. write-file-atomic
  * listens on them during each write, and libuv resets a signal to its default when its last
- * listener goes, after which SIGTERM would kill tet outright — no sessions ended, no update
+ * listener goes, after which SIGTERM would kill tet outright — no tabs ended, no update
  * installed. A listener of our own, added before electron installs its handler, keeps libuv from
  * touching the disposition; the quit here is only its fallback.
  */

@@ -24,7 +24,7 @@ import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { SuggesterPicker } from "./SuggesterPicker";
 
 interface SettingsDialogProps {
-  /** Whose tet.json the Files tab's Explorer settings edit, and where the Prompts tab lists who
+  /** Whose tet.json the Files tab's Explorer view edits, and where the Prompts tab lists who
    *  suggests a commit message; null hides both. */
   activeProject: Project | null;
   onClose: () => void;
@@ -138,7 +138,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
  * Everything tet keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits
  * its own copy and writes on Save; Cancel and Escape drop the edits. A setting reaches an agent
  * through `AgentPaths` at `AgentHost.prepare`, once per agent (HostSetups), as does the color theme. Deliberately
- * not in here: the session marks.
+ * not in here: the tab marks.
  */
 export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
@@ -236,7 +236,7 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
         void confirm({
           title: "Restart TET",
           message: `Restart TET now to switch to the ${chosenKind} theme?`,
-          detail: "This ends every terminal in every project. Otherwise it applies at the next start.",
+          detail: "This ends every tab in every project. Otherwise it applies at the next start.",
           confirmLabel: "Restart",
           // Never settles: the question stays up, its bar running, until the restart ends the window.
           submit: () => {
@@ -361,13 +361,13 @@ export function SettingsDialog({ activeProject, onClose }: SettingsDialogProps) 
                 />
               ))}
           </FieldGroup>
-          {/* No restart caveat: hooks report every turn, and the toast reads the settings as they
-              stand on arrival (session-manager's `toast`). */}
+          {/* No restart caveat: hooks report every turn, and the notification reads the settings as they
+              stand on arrival (session-manager's `notification`). */}
         </>
       )}
       {shown === "files" && (
         <>
-          <FieldGroup label={activeProject ? `EXPLORER tree, for ${activeProject.name}` : "EXPLORER tree"}>
+          <FieldGroup label={activeProject ? `EXPLORER view, for ${activeProject.name}` : "EXPLORER view"}>
             {!activeProject && <p className="dialog-detail">Open a project to edit it</p>}
             {activeProject && explorerSettings && (
               <>

@@ -4,9 +4,9 @@ import { laneOrders, laneSettings, LANES, withLanePinned, type Lane, type LaneSe
 import { sameList } from "../identity";
 import { useLatest } from "../ui/use-latest";
 import { reorder } from "../ui/drag-reorder";
-import { usePaneChoice, usePaneSize } from "../ui/layout-storage";
+import { useStoredChoice, useStoredSize } from "../ui/layout-storage";
 import { notify } from "../ui/Notices";
-import { MIN_PANE_WIDTH } from "../ui/Sash";
+import { MIN_AREA_WIDTH } from "../ui/Sash";
 
 /** The free lane: one of them, or none while it is in. */
 const FREE_CHOICES: readonly (Lane | "none")[] = [...LANES, "none"];
@@ -67,7 +67,7 @@ export function useLanes(
   );
   const pinnedLanes = useMemo(() => new Set(lanes.pinned), [lanes]);
   const { pinned: pinnedOrder, toggles: toggleOrder } = useMemo(() => laneOrders(lanes), [lanes]);
-  const [freeChoice, setFreeChoice] = usePaneChoice("lanes-free", FREE_CHOICES, "projects");
+  const [freeChoice, setFreeChoice] = useStoredChoice("lanes-free", FREE_CHOICES, "projects");
   // A lane pinned since it was stored is no longer free.
   const freeLane = freeChoice === "none" || pinnedLanes.has(freeChoice) ? null : freeChoice;
   const openLanes = useMemo(
@@ -75,11 +75,11 @@ export function useLanes(
     [pinnedLanes, freeLane]
   );
   const pinnedWidths: Record<Lane, LaneWidth> = {
-    projects: usePaneSize("lane-width-projects", 300, MIN_PANE_WIDTH),
-    git: usePaneSize("lane-width-git", 300, MIN_PANE_WIDTH),
-    files: usePaneSize("lane-width-files", 300, MIN_PANE_WIDTH)
+    projects: useStoredSize("lane-width-projects", 300, MIN_AREA_WIDTH),
+    git: useStoredSize("lane-width-git", 300, MIN_AREA_WIDTH),
+    files: useStoredSize("lane-width-files", 300, MIN_AREA_WIDTH)
   };
-  const freeWidth = usePaneSize("lane-width-free", 300, MIN_PANE_WIDTH);
+  const freeWidth = useStoredSize("lane-width-free", 300, MIN_AREA_WIDTH);
   const widthOf = (lane: Lane): LaneWidth => (pinnedLanes.has(lane) ? pinnedWidths[lane] : freeWidth);
   /** Read on a click, so the callbacks — and every view handed them — stay the same across one. */
   const live = useLatest({ lanes, pinnedLanes, pinnedOrder, toggleOrder, freeLane, pinnedWidths, freeWidth });

@@ -7,7 +7,7 @@ import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
 import { useFileAct } from "../../git/run-action";
 import { useFileSearch } from "./use-file-search";
-import { MIN_PANE_HEIGHT, Sash } from "../../ui/Sash";
+import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
 import { ClearIcon, NewFileIcon, NewFolderIcon } from "../../ui/icons";
 import { FoldAllButton } from "../../ui/FoldAllButton";
@@ -129,8 +129,8 @@ export const FilesLane = memo(function FilesLane({
       <Sash
         orientation="horizontal"
         size={searchHeight}
-        min={MIN_PANE_HEIGHT}
-        minOther={MIN_PANE_HEIGHT}
+        min={MIN_AREA_HEIGHT}
+        minOther={MIN_AREA_HEIGHT}
         reverse
         onResize={onSearchHeight}
       />

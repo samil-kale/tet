@@ -3,7 +3,7 @@ import { createStore, useStore } from "./store";
 
 /**
  * The card dialogs (`DialogFrame`) covering the window, the last opened on top. While one does, no
- * tab is in front: a turn ending behind it keeps its mark and raises a toast. A list, since a
+ * tab is in front: a turn ending behind it keeps its mark and raises a notification. A list, since a
  * question can stand over another dialog.
  */
 const covering = createStore<readonly HTMLDialogElement[]>([]);

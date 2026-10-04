@@ -67,7 +67,7 @@ That created a different set of problems. Which session just finished? Which one
 an answer? Which project should I review next?
 
 TET is built around that workflow. It keeps agents, terminals and repository state visible in
-one place, tells you when a session needs attention, and keeps the diff one click away. It also
+one place, tells you when a tab needs attention, and keeps the diff one click away. It also
 handles the small things that are awkward in a plain terminal, such as dropping files and images
 straight into an agent session.
 
@@ -85,13 +85,13 @@ Not for Hans. Hans can go to hell.
 
 - **Claude Code**, **Codex CLI** and **Pi** run in terminal tabs. TET
   shows when a turn is working, waiting or finished out of sight.
-- A project's terminals can be split into up to four panes. Files and images can be dropped into
+- A project's tabs can be split into up to four panes. Files and images can be dropped into
   an agent session. So you can burn through tokens even faster.
-- The git pane handles branches, tags, stashes, merge, rebase, fetch, pull, push, commit, discard
+- The git lane handles branches, tags, stashes, merge, rebase, fetch, pull, push, commit, discard
   and `.gitignore`. A changed file opens in an editor tab as an inline diff you can edit.
-- An Explorer and a search pane sit next to git. Saved commands in `tet.json` travel with the
-  repository, and there are several themes.
-- Desktop notifications and project marks point to sessions that need attention. Because let's be
+- A files lane with an Explorer and a search sits next to git. Saved commands in `tet.json` travel
+  with the repository, and there are several themes.
+- Desktop notifications and project marks point to tabs that need attention. Because let's be
   real: you're watching YouTube.
 - With the `tet-ctl` interface, your agent can control TET autonomously. So you can watch even more
   YouTube.
@@ -104,7 +104,7 @@ Not for Hans. Hans can go to hell.
 
 Yes, yes... of course it supports worktrees. Why wouldn't it?
 Create a Git worktree from TET when you want an agent to work on a separate branch without
-disturbing your current files. The worktree gets its own row, git pane, and agent and shell tabs,
+disturbing your current files. The worktree gets its own row, git lane, and agent and shell tabs,
 while staying grouped under its repository in the sidebar.
 
 TET treats the worktree and its branch as one: create, rename and delete them together, then merge

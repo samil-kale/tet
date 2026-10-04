@@ -281,8 +281,8 @@ export function ChevronIcon({ expanded, ...props }: IconProps & { expanded: bool
   return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} />;
 }
 
-/** Lucide's `loader-circle`, spun (`spinning`) about its centre as a session's working mark
- *  (`SessionMark`). */
+/** Lucide's `loader-circle`, spun (`spinning`) about its centre as a tab's working mark
+ *  (`TabMark`). */
 export function SpinnerIcon(props: IconProps) {
   return <Lucide {...props} icon={LoaderCircle} />;
 }
@@ -343,15 +343,15 @@ export function QuestionIcon(props: IconProps) {
 
 /**
  * Lucide's `circle-alert` — what cannot work as it stands in a dialog: its row or tab (`RowMark`,
- * `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.session-mark-error`.
+ * `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.tab-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
   return <Lucide {...props} icon={CircleAlert} />;
 }
 
-/** Lucide's `message-circle-x` — a tab whose agent cannot start, among the other session marks'
+/** Lucide's `message-circle-x` — a tab whose agent cannot start, among the other tab marks'
  *  bubbles. Its own color, as `CircleAlertIcon`. */
-export function SessionErrorIcon(props: IconProps) {
+export function TabErrorIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageCircleX} />;
 }
 
@@ -396,7 +396,7 @@ export function ExpandAllIcon(props: IconProps) {
   return <Lucide {...props} icon={ChevronsUpDown} extent={17.38} />;
 }
 
-/** Both files-pane headers' "Clear": Lucide's `list-x`. */
+/** Both files-lane headers' "Clear": Lucide's `list-x`. */
 export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} />;
 }

@@ -12,7 +12,7 @@ import { systemPrompt } from "../../src/main/agents/system-prompt";
 import { findControlPort } from "../../src/main/control/control-port";
 import { startControlServer } from "../../src/main/control/control-server";
 import type { ControlDeps, ControlTerminals } from "../../src/main/control/control-verb";
-import type { ToastTarget } from "../../src/main/util/notifications";
+import type { NotificationTarget } from "../../src/main/util/notifications";
 import type { EnvAsk } from "../../src/main/control/env-requests";
 import { tabControlToken } from "../../src/main/terminals/control-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/control";
@@ -20,7 +20,7 @@ import { EMPTY_REPOSITORY_STATE, type FileChange, type GitActionResult, type Wor
 import { type Project, type ProjectCommand, type ProjectRef, projectRefKey } from "../../src/shared/types/project";
 import { EMPTY_SBX_CONFIG, EMPTY_SBX_KNOWLEDGE, type SbxKnowledgeConfig, type SbxLocalSave, type SbxProblems, type SbxProjectConfig, type SbxStatus } from "../../src/shared/types/sbx";
 import { type AppSettings, withSettings } from "../../src/shared/types/settings";
-import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
 import { spawn } from "node:child_process";
 import { writeLaunchers } from "../../src/main/control/control-launcher";
@@ -61,7 +61,7 @@ const OWN_TAB = "tab-own";
 const SANDBOX_TAB = "tab-sbx";
 
 /** The caller's own tab is a shell; "tab-2" an agent, with a session and a sandbox. */
-function tab(tabId: string): TerminalDescriptor {
+function tab(tabId: string): TabDescriptor {
   return { tabId, agentId: tabId === OWN_TAB ? "shell" : "claude", title: "", status: "running" };
 }
 
@@ -84,7 +84,7 @@ interface Calls {
   /** `[tabId, hostPaths]` per path handed to a tab. */
   handed: [string, string[]][];
   shutdown: boolean[];
-  notified: [string, string, ToastTarget | undefined][];
+  desktopNotifications: [string, string, NotificationTarget | undefined][];
   hooks: [string, string, string][];
   /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -243,10 +243,10 @@ function terminalsOf(key: string): ControlTerminals {
       if (tabId !== OWN_TAB) {
         return { stdout };
       }
-      // As TabSessionManager.hookEvent: neither a session's start nor a prompt toasts.
+      // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifications.
       return event === "session-start" || event === "prompt-submit"
         ? { stdout }
-        : { stdout, toast: { title: "Claude: Finished", body: "Finished in one" } };
+        : { stdout, notification: { title: "Claude: Finished", body: "Finished in one" } };
     }
   };
 }
@@ -284,7 +284,7 @@ function deps(): ControlDeps {
         return themeWaits;
       }
     },
-    sessions: {
+    tabManagers: {
       get: (ref) => (open(ref) ? terminalsOf(projectRefKey(ref)) : undefined)
     },
     repositories: {
@@ -347,8 +347,8 @@ function deps(): ControlDeps {
     showTab: (ref, tabId) => {
       calls.shown.push([projectRefKey(ref), tabId]);
     },
-    notify: (title, body, target) => {
-      calls.notified.push([title, body, target]);
+    showDesktopNotification: (title, body, target) => {
+      calls.desktopNotifications.push([title, body, target]);
     },
     environment: {
       list: () => envNames.map((name) => ({ name, overridesMachine: name === "PATH" })),
@@ -446,7 +446,7 @@ describe("tet-ctl against the control server", () => {
       merges: [],
       handed: [],
       shutdown: [],
-      notified: [],
+      desktopNotifications: [],
       hooks: [],
       hookTimes: [],
       started: [],
@@ -805,7 +805,7 @@ describe("tet-ctl against the control server", () => {
 
   it("opens a tab and brings it to the front", async () => {
     const run = await tetCtl(["tabs-create", "--agent", "shell"]);
-    assert.equal((run.result as TerminalDescriptor).tabId, "tab-new");
+    assert.equal((run.result as TabDescriptor).tabId, "tab-new");
     assert.deepEqual(calls.created, ["shell"]);
     assert.deepEqual(calls.shown, [[PROJECT.id, "tab-new"]]);
   });
@@ -842,7 +842,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("runs a saved command by name, and by its command line", async () => {
-    assert.equal(((await tetCtl(["tabs-run-command", "build"])).result as TerminalDescriptor).tabId, "tab-cmd");
+    assert.equal(((await tetCtl(["tabs-run-command", "build"])).result as TabDescriptor).tabId, "tab-cmd");
     assert.equal((await tetCtl(["tabs-run-command", "npm run build"])).status, EXIT_CODES.ok);
     assert.deepEqual(calls.commands, ["npm run build", "npm run build"]);
     assert.equal(calls.shown.length, 2);
@@ -914,7 +914,7 @@ describe("tet-ctl against the control server", () => {
     setTimeout(() => (tab2Session = "s-2"), 300);
     const run = await tetCtl(["tabs-wait", "tab-2", "--session", "--status", "running"]);
     assert.equal(run.status, EXIT_CODES.ok);
-    assert.equal((run.result as TerminalDescriptor).sessionId, "s-2");
+    assert.equal((run.result as TabDescriptor).sessionId, "s-2");
   });
 
   it("gives up waiting after the timeout, saying what is missing", async () => {
@@ -1203,7 +1203,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["tabs-keys", "tab-2", "enter", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
     assert.equal((await tetCtl(["tabs-text", "tab-2", "hello", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
     assert.equal(calls.written.length, 2);
-    const listed = (await tetCtl(["tabs-list", ...inWorktree], fromSandbox)).result as TerminalDescriptor[];
+    const listed = (await tetCtl(["tabs-list", ...inWorktree], fromSandbox)).result as TabDescriptor[];
     assert.deepEqual(listed.map((entry) => entry.tabId), ["tab-2"], "no host tab listed");
     assertRefused(await tetCtl(["tabs-start", "tab-2", "--project", OTHER.id], fromSandbox), /own project/, "another project");
   });
@@ -1279,7 +1279,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(calls.editorsOpened.length, 4);
   });
 
-  it("lists the files lane's files and the notices shown", async () => {
+  it("lists the Explorer's files and the notices shown", async () => {
     assert.deepEqual(((await tetCtl(["explorer-list"])).result as { files: string[] }).files, ["p1.txt"]);
     assert.deepEqual((await tetCtl(["notices-list"])).result, [{ severity: "error", message: "Could not delete", at: 1 }]);
   });
@@ -1459,17 +1459,17 @@ describe("tet-ctl against the control server", () => {
 
   it("relays a notification to the process behind the control channel", async () => {
     assert.deepEqual((await tetCtl(["notify", "Codex: Finished", "Finished in repo"])).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Codex: Finished", "Finished in repo", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
+    assert.deepEqual(calls.desktopNotifications, [["Codex: Finished", "Finished in repo", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
   });
 
   it("takes a notification that is a title and nothing more", async () => {
     assert.deepEqual((await tetCtl(["notify", "Build finished"])).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Build finished", "", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
+    assert.deepEqual(calls.desktopNotifications, [["Build finished", "", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
   });
 
   it("is about no tab when the caller is not one", async () => {
     assert.deepEqual((await tetCtl(["notify", "Build finished"], { [CONTROL_ENV.tabId]: undefined })).result, { notified: true });
-    assert.deepEqual(calls.notified, [["Build finished", "", undefined]], "a click then brings only the window forward");
+    assert.deepEqual(calls.desktopNotifications, [["Build finished", "", undefined]], "a click then brings only the window forward");
   });
 
   it("refuses to restart without --confirm", async () => {
@@ -1493,7 +1493,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.equal(run.stdout, "", "TET's system prompt went in once per session");
     assert.deepEqual(calls.hooks, [[OWN_TAB, "prompt-submit", payload]]);
-    assert.deepEqual(calls.notified, [], "nothing to toast about a prompt");
+    assert.deepEqual(calls.desktopNotifications, [], "nothing to notify about a prompt");
     // When the hook fired, not when handled: racing reports of one turn are ordered by it, so a
     // finished turn does not go back to working.
     const [at] = calls.hookTimes;
@@ -1508,7 +1508,7 @@ describe("tet-ctl against the control server", () => {
       hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: systemPrompt(HOST_SIDE) }
     });
     assert.deepEqual(calls.hooks, [[OWN_TAB, "session-start", payload]]);
-    assert.deepEqual(calls.notified, [], "nothing to toast about a session");
+    assert.deepEqual(calls.desktopNotifications, [], "nothing to notify about a session");
   });
 
   it("tells a sandboxed session start nothing of the environment variables", async () => {
@@ -1563,12 +1563,12 @@ describe("tet-ctl against the control server", () => {
     await eventually("the dialog withdrawn", () => calls.envWithdrawn.length === 1, 5000);
   });
 
-  it("answers one JSON value where the event has nothing to say, and shows its toast", async () => {
+  it("answers one JSON value where the event has nothing to say, and shows its notification", async () => {
     const run = await tetCtl(["hook", "stop"], {}, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     assert.equal(run.stdout, "{}", "Codex reads its Stop hook's stdout as JSON");
     assert.deepEqual(
-      calls.notified,
+      calls.desktopNotifications,
       [["Claude: Finished", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
       "about the tab that reported, which a click on it brings to the front"
     );
@@ -1578,7 +1578,7 @@ describe("tet-ctl against the control server", () => {
     const run = await tetCtl(["hook", "stop", "--project", OTHER.id], {}, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(
-      calls.notified,
+      calls.desktopNotifications,
       [["Claude: Finished", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
       "a tab speaks for itself, never for a tab of another project"
     );

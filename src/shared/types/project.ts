@@ -35,7 +35,7 @@ export function projectRef(projectId: string, worktree?: string): ProjectRef {
 
 /**
  * The pair as one string, for what can hold only one (a map, localStorage, a sandbox's name, a
- * toast): the project id alone for the repository. Never passed on as an address. No space (a
+ * notification): the project id alone for the repository. Never passed on as an address. No space (a
  * project's terminals are disposed by the prefix `${key} `) and no ":" (Monaco's URI authority).
  */
 export function projectRefKey(ref: ProjectRef): string {
@@ -74,7 +74,7 @@ export function worktreeName(worktree: ProjectWorktree): string {
   return worktree.branch ?? worktree.key ?? worktree.path.split(/[\\/]/).pop() ?? worktree.path;
 }
 
-/** What a notice or toast calls a repository or worktree: the project's name, a worktree's with
+/** What a notice or notification calls a repository or worktree: the project's name, a worktree's with
  *  it. */
 export function projectRefName(project: Project, ref: ProjectRef): string {
   const worktree = worktreeOf(project, ref);

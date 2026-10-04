@@ -3,13 +3,13 @@ import { useLatest } from "../ui/use-latest";
 import { projectRefKey } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import type { ProjectRef } from "../../shared/types/project";
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import { forget, sameList, stableRecord } from "../identity";
 
 /** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
  *  waiting on an answer, and starting (so the pane a new agent opens in shows the bar,
- *  `TerminalsPane`'s `startingHere`). `busy` excludes a session stopped on a question. Decided in
- *  `useSessionMarks`, against what is on screen. */
+ *  `TabArea`'s `startingHere`). `busy` excludes a session stopped on a question. Decided in
+ *  `useTabMarks`, against what is on screen. */
 export interface RefMarks {
   finished: string[];
   waiting: string[];
@@ -20,8 +20,8 @@ export interface RefMarks {
 /** Shared instance, so a pane's props stay identical for a project with none. */
 export const NO_IDS: string[] = [];
 
-/** Every repository's and worktree's session marks, and the project row's ways to them. */
-interface SessionMarks {
+/** Every repository's and worktree's tab marks, and the project row's ways to them. */
+interface TabMarks {
   marks: Record<string, RefMarks>;
   showBusy: (key: string) => void;
   showFinished: (key: string) => void;
@@ -31,17 +31,17 @@ interface SessionMarks {
 }
 
 /**
- * The session marks of every repository's and worktree's tabs, by `projectRefKey`, decided against
+ * The tab marks of every repository's and worktree's tabs, by `projectRefKey`, decided against
  * `inFront`, the active one's (`activeKey`, `activeRef`) tabs in front of the user; `showTab` is how
  * a mark's tab is brought there. `forgetProjectRef` drops a closed one's busy cursor.
  */
-export function useSessionMarks(
-  tabs: Record<string, TerminalDescriptor[]>,
+export function useTabMarks(
+  tabs: Record<string, TabDescriptor[]>,
   activeKey: string | null,
   activeRef: ProjectRef | null,
   inFront: string[],
   showTab: (key: string, tabId: string) => void
-): SessionMarks {
+): TabMarks {
   const tabsRef = useLatest(tabs);
 
   /**
@@ -51,7 +51,7 @@ export function useSessionMarks(
    * decide.
    */
   const markedTabs = useCallback(
-    (key: string, field: "finishedAt" | "waitingAt"): TerminalDescriptor[] => {
+    (key: string, field: "finishedAt" | "waitingAt"): TabDescriptor[] => {
       const onScreen = key === activeKey ? inFront : NO_IDS;
       return (tabs[key] ?? [])
         .filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId))
@@ -65,7 +65,7 @@ export function useSessionMarks(
    * screen included: the bar is about the pane's own tabs.
    */
   const startingTabs = useCallback(
-    (key: string): TerminalDescriptor[] => (tabs[key] ?? []).filter((tab) => tab.starting === true),
+    (key: string): TabDescriptor[] => (tabs[key] ?? []).filter((tab) => tab.starting === true),
     [tabs]
   );
 
@@ -147,7 +147,7 @@ export function useSessionMarks(
    */
   const showNeedsAttention = useCallback(() => {
     // Through `markedTabs`, so the "not on screen" rule stays in one place.
-    const collect = (field: "waitingAt" | "finishedAt"): { key: string; tab: TerminalDescriptor }[] =>
+    const collect = (field: "waitingAt" | "finishedAt"): { key: string; tab: TabDescriptor }[] =>
       Object.keys(tabs)
         .flatMap((key) => markedTabs(key, field).map((tab) => ({ key, tab })))
         .sort((a, b) => (a.tab[field] ?? 0) - (b.tab[field] ?? 0));

@@ -28,7 +28,7 @@ import { logError } from "./util/error-log";
 export interface ProjectDeps {
   store: ProjectStore;
   repositories: RepositoryManager;
-  sessions: SessionManagerRegistry;
+  tabManagers: SessionManagerRegistry;
   records: ControlRecords;
   sbxLocal: SbxLocalStore;
   /** Starts the git and terminals of the repository or a worktree; its project is the store's. */
@@ -188,12 +188,12 @@ export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
   }
 }
 
-/** Stops a repository's or worktree's terminals and git; resolves once its sessions and git
+/** Stops a repository's or worktree's tabs and git; resolves once its tabs and git
  *  commands have ended, so a worktree's folder is removed only then. Its records go once the
- *  sessions have ended: a stopping tab still prints. */
-function closeProjectRef({ repositories, sessions, records }: ProjectDeps, ref: ProjectRef): Promise<void> {
-  const sessionsEnded = sessions.close(ref).finally(() => records.forget(ref));
-  return Promise.all([sessionsEnded, repositories.close(ref)]).then(() => undefined);
+ *  tabs have ended: a stopping tab still prints. */
+function closeProjectRef({ repositories, tabManagers, records }: ProjectDeps, ref: ProjectRef): Promise<void> {
+  const tabsEnded = tabManagers.close(ref).finally(() => records.forget(ref));
+  return Promise.all([tabsEnded, repositories.close(ref)]).then(() => undefined);
 }
 
 /** The sandboxes of closed repositories and worktrees and a folder of TET's data; what cannot go is

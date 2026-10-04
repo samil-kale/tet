@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
-import { createByteThresholdCheck } from "../session-ready";
+import { createByteThresholdCheck } from "../cli-ready";
 import { writeIfChanged } from "../../util/generated-file";
 import { codexIcon } from "./icon";
 import type { ThemeDefinition } from "../../../shared/themes";
@@ -58,7 +58,7 @@ export const codexAgent: SandboxedAgent = {
     // The positional prompt of an interactive session, after the `-c` options.
     initialPromptArgs: (prompt) => [prompt],
     // Above what setup and onboarding print before the first real redraw.
-    createIsSessionReady: () => createByteThresholdCheck(600),
+    createIsCliReady: () => createByteThresholdCheck(600),
     // One Ctrl+C clears a non-empty composer and quits on an empty one; a second byte would land
     // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
     quitPresses: 1,

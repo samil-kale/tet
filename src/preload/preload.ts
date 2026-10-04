@@ -181,12 +181,12 @@ const api: TETApi = {
   agents: {
     list: () => invoke("agents:list")
   },
-  files: {
+  drops: {
     // The file's path, which the renderer cannot read; preload-only under contextIsolation.
     pathOf: (file) => webUtils.getPathForFile(file),
-    writeDrop: (ref, tabId, name, dataBase64) => invoke("files:write-drop", ref, tabId, name, dataBase64),
-    clipboardImage: (ref, tabId) => invoke("files:clipboard-image", ref, tabId),
-    handPaths: (ref, tabId, paths) => invoke("files:hand-paths", ref, tabId, paths)
+    writeDrop: (ref, tabId, name, dataBase64) => invoke("drops:write-drop", ref, tabId, name, dataBase64),
+    clipboardImage: (ref, tabId) => invoke("drops:clipboard-image", ref, tabId),
+    handPaths: (ref, tabId, paths) => invoke("drops:hand-paths", ref, tabId, paths)
   },
   shell: {
     openUrl: (url) => invoke("shell:open-url", url),

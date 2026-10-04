@@ -9,7 +9,7 @@ import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
 import type { RepositoryState } from "../../src/shared/types/git";
 import type { Project } from "../../src/shared/types/project";
 import type { AppSettings } from "../../src/shared/types/settings";
-import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
@@ -88,9 +88,9 @@ ${stderr.slice(uncaught)}`);
     const [project] = (await ctl("projects-list")).result as Project[];
     const created = await ctl("tabs-create", "--agent", "shell", "--project", project.id);
     assert.equal(created.status, 0, created.stderr);
-    const tab = created.result as TerminalDescriptor;
-    const tabs = async (): Promise<TerminalDescriptor[]> =>
-      (await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[];
+    const tab = created.result as TabDescriptor;
+    const tabs = async (): Promise<TabDescriptor[]> =>
+      (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
     // "running" is the whole chain: terminals:show reached the window, which drew the tab, whose
     // first resize spawned the process.
     await eventually(
@@ -110,14 +110,14 @@ ${stderr.slice(uncaught)}`);
   it("marks a tab's turn from its own hook, and adds nothing to the prompt", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const open = async (): Promise<string> =>
-      ((await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TerminalDescriptor).tabId;
+      ((await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TabDescriptor).tabId;
     const tab = await open();
     // A second tab takes the front: the renderer clears a finished mark on the tab in front.
     const inFront = await open();
     const hook = (event: string): Promise<{ status: number; stdout: string }> =>
       tetCtl(["hook", event], started().asTab(project.id, tab), "{}");
-    const state = async (): Promise<TerminalDescriptor | undefined> =>
-      ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).find((entry) => entry.tabId === tab);
+    const state = async (): Promise<TabDescriptor | undefined> =>
+      ((await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[]).find((entry) => entry.tabId === tab);
 
     const start = await hook("prompt-submit");
     assert.equal(start.status, 0);
@@ -149,7 +149,7 @@ ${stderr.slice(uncaught)}`);
         "setInterval(report, 50);\n"
     );
     fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: `node "${probe}"`, name: "size" }] }));
-    const run = async (): Promise<string> => ((await ctl("tabs-run-command", "size", "--project", project.id)).result as TerminalDescriptor).tabId;
+    const run = async (): Promise<string> => ((await ctl("tabs-run-command", "size", "--project", project.id)).result as TabDescriptor).tabId;
     // Every size the tab's program saw, in order; a repaint repeating a line is not a new size.
     const sizes = async (tabId: string): Promise<string[]> => [
       ...new Set([...(await started().output(project.id, tabId)).matchAll(/tet-size (\d+x\d+)/g)].map((match) => match[1]))
@@ -179,8 +179,8 @@ ${stderr.slice(uncaught)}`);
     // never have been drawn — still "ready", as a process starts on its tab's first fit. The server
     // takes them in any order; its list is the strip's.
     const burst = new Set(await Promise.all([run(), run(), run(), run()]));
-    const listed = async (): Promise<TerminalDescriptor[]> =>
-      ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).filter((entry) => burst.has(entry.tabId));
+    const listed = async (): Promise<TabDescriptor[]> =>
+      ((await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[]).filter((entry) => burst.has(entry.tabId));
     const inFront = (await listed()).at(-1)!.tabId;
     assert.deepEqual(await reported(inFront), [size]);
     const behind = (await listed()).filter((entry) => entry.tabId !== inFront);
@@ -207,7 +207,7 @@ ${stderr.slice(uncaught)}`);
       path.join(repo, "tet.json"),
       JSON.stringify({ commands: [{ command: "node -e \"console.log('tet-context-probe')\"", name: "probe" }] })
     );
-    const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TerminalDescriptor;
+    const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TabDescriptor;
     const lines = (): Promise<string> => started().output(project.id, probe.tabId);
     await eventually("the command's line", async () => /tet-context-probe/.test(await lines()), STARTUP_MS);
   });
@@ -215,7 +215,7 @@ ${stderr.slice(uncaught)}`);
   it("answers tet-ctl run inside a tab, which holds only its own tab's token", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: "tet-ctl tabs-list", name: "list" }] }));
-    const list = (await ctl("tabs-run-command", "list", "--project", project.id)).result as TerminalDescriptor;
+    const list = (await ctl("tabs-run-command", "list", "--project", project.id)).result as TabDescriptor;
     const lines = (): Promise<string> => started().output(project.id, list.tabId);
     // Its own id in the listing: the server took the tab's token for the ids the tab reported.
     await eventually("the tab's own listing", async () => (await lines()).includes(list.tabId), STARTUP_MS);
@@ -244,16 +244,16 @@ ${stderr.slice(uncaught)}`);
         ]
       })
     );
-    const tabs = async (): Promise<TerminalDescriptor[]> =>
-      (await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[];
+    const tabs = async (): Promise<TabDescriptor[]> =>
+      (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
     const statusOf = async (tabId: string): Promise<string | undefined> =>
       (await tabs()).find((entry) => entry.tabId === tabId)?.status;
-    const failing = (await ctl("tabs-run-command", "fails", "--project", project.id)).result as TerminalDescriptor;
+    const failing = (await ctl("tabs-run-command", "fails", "--project", project.id)).result as TabDescriptor;
     assert.equal(failing.savedCommand, true);
     await eventually("the failing command's tab in error", async () => (await statusOf(failing.tabId)) === "error", STARTUP_MS);
-    const passing = (await ctl("tabs-run-command", "passes", "--project", project.id)).result as TerminalDescriptor;
+    const passing = (await ctl("tabs-run-command", "passes", "--project", project.id)).result as TabDescriptor;
     await eventually("the passing command's tab stopped", async () => (await statusOf(passing.tabId)) === "stopped", STARTUP_MS);
-    const byPath = (await ctl("tabs-run-command", "relative", "--project", project.id)).result as TerminalDescriptor;
+    const byPath = (await ctl("tabs-run-command", "relative", "--project", project.id)).result as TabDescriptor;
     await eventually("the command by a relative path stopped", async () => (await statusOf(byPath.tabId)) === "stopped", STARTUP_MS);
     const chained = await ctl("tabs-run-command", "chained", "--project", project.id);
     assert.equal(chained.status, 3, "a shell operator is refused");
@@ -399,11 +399,11 @@ ${stderr.slice(uncaught)}`);
     // No wait needed: the control socket exists only once the workspace is open (startControl).
     const created = await ctl("tabs-create", "--agent", "shell", "--project", project.id);
     assert.equal(created.status, 0, created.stderr);
-    const tab = created.result as TerminalDescriptor;
+    const tab = created.result as TabDescriptor;
     await eventually(
       "the tab running",
       async () =>
-        ((await ctl("tabs-list", "--project", project.id)).result as TerminalDescriptor[]).some(
+        ((await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[]).some(
           (entry) => entry.tabId === tab.tabId && entry.status === "running"
         ),
       STARTUP_MS

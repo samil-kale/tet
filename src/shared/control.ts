@@ -98,7 +98,7 @@ export interface ControlVerb {
 /**
  * Hook events in tet's own vocabulary; each agent's hooks (pi: its extension) map its events onto
  * these.
- * `permission` and `question` are one mark with two toast wordings, `answered` clears it;
+ * `permission` and `question` are one mark with two notification wordings, `answered` clears it;
  * `session-start` marks nothing.
  */
 export const HOOK_EVENTS = ["session-start", "prompt-submit", "stop", "permission", "question", "answered", "idle"] as const;
@@ -196,7 +196,7 @@ const VERBS = [
     group: "TET itself",
     usage: `settings-set-lane-pin <${LANES.join("|")}> <on|off>`,
     summary:
-      "Pin a lane, which then stays out beside the terminals after the other pinned ones, or unpin it back behind its toggle. Shown at once.",
+      "Pin a lane, which then stays out beside the tab area after the other pinned ones, or unpin it back behind its toggle. Shown at once.",
     positionals: ["lane", "value"]
   },
   {
@@ -227,7 +227,7 @@ const VERBS = [
     group: "TET itself",
     usage: `settings-set-notification <${NOTIFICATION_IDS.join("|")}> <on|off>`,
     summary:
-      "Switch an OS notification on or off: a finished turn, an agent waiting on the user, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
+      "Switch a desktop notification on or off: a finished turn, an agent waiting on the user, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
     positionals: ["id", "value"]
   },
   {
@@ -377,7 +377,7 @@ const VERBS = [
     verb: "restart-app",
     group: "TET itself",
     usage: "restart-app --confirm",
-    summary: "Restart TET. Ends every terminal in every project, this one included — only when the user asked for it.",
+    summary: "Restart TET. Ends every tab in every project, this one included — only when the user asked for it.",
     positionals: []
   },
   {
@@ -512,7 +512,7 @@ const VERBS = [
     verb: "tabs-close",
     group: "The other tabs",
     usage: "tabs-close <tab-id> [--project <id>]",
-    summary: "Close a tab and end its session. From a sandbox, only a tab running there.",
+    summary: "Close a tab and delete its session. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     sandbox: "ownProject"
   },
@@ -547,7 +547,7 @@ const VERBS = [
     verb: "explorer-list",
     group: "In front of the user",
     usage: "explorer-list [--project <id>]",
-    summary: "What the files lane lists for a project, with tet.json's folders and excludes applied.",
+    summary: "What the Explorer lists for a project, with tet.json's folders and excludes applied.",
     positionals: [],
     sandbox: "ownRef"
   },

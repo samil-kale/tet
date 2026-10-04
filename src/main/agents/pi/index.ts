@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
-import { createByteThresholdCheck } from "../session-ready";
+import { createByteThresholdCheck } from "../cli-ready";
 import { piIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -42,7 +42,7 @@ export const piAgent: SandboxedAgent = {
     initialPromptArgs: (prompt) => [prompt],
     // Above the start-up handshake and below what the project-trust dialog shows while it waits
     // for an answer.
-    createIsSessionReady: () => createByteThresholdCheck(1000),
+    createIsCliReady: () => createByteThresholdCheck(1000),
     // One Ctrl+C clears the editor; two in quick succession exit, which TET's gap between presses
     // meets.
     quitPresses: 2,

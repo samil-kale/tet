@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { createByteThresholdCheck } from "../session-ready";
+import { createByteThresholdCheck } from "../cli-ready";
 import { claudeIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
@@ -39,7 +39,7 @@ export const claudeAgent: SandboxedAgent = {
     // The positional prompt of an interactive session.
     initialPromptArgs: (prompt) => [prompt],
     // Above the start-up handshake, below the chunk that draws the main UI.
-    createIsSessionReady: () => createByteThresholdCheck(500),
+    createIsCliReady: () => createByteThresholdCheck(500),
     // The first only offers to exit, the second takes it up.
     quitPresses: 2,
     // ESC+CR, which its input reads as a newline rather than a submit.

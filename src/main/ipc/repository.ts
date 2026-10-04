@@ -152,8 +152,8 @@ export function registerRepositoryIpc({
     return (await repositories.get(ref)?.searchFiles(query)) ?? { files: [], truncated: false };
   });
 
-  // The settings Files tab: tet.json's view settings only, no walk; folders and exclude globs stay
-  // the tree's own.
+  // The settings Files tab: the Explorer view's settings in tet.json only, no walk; folders and
+  // exclude globs stay the Explorer's own.
   handle("repository:explorer-settings", async (_event, projectId: string): Promise<ExplorerSettings> => {
     const project = store.get(projectId);
     if (!project) {

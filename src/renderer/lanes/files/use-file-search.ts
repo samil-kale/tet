@@ -6,11 +6,11 @@ import type { ResolvedRef } from "../../resolved-ref";
 const SEARCH_DELAY_MS = 300;
 
 /**
- * The SEARCH pane's matches. Held by the files pane, which shows them and the search running
- * (`useFileAct` is held the same way); the field itself lives in the pane and asks for a query
+ * The SEARCH section's matches. Held by the files lane, which shows them and the search running
+ * (`useFileAct` is held the same way); the field itself lives in the section and asks for a query
  * here, or for null where it is empty.
  *
- * Held with its repository or worktree, as the listing is: one files pane serves all, and a switch
+ * Held with its repository or worktree, as the listing is: one files lane serves all, and a switch
  * must not show the previous repository's or worktree's matches. Answers are counted, not flagged —
  * while one search is still running the next has been asked for, and only the newest may be shown.
  */

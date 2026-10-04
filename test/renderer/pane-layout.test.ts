@@ -19,16 +19,16 @@ import {
   visibleTabIds
 } from "../../src/renderer/tabs/pane-layout";
 import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
-import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { nextEditorTabId, type EditorTab } from "../../src/renderer/editor/editor-tab";
 
 /** The split view's rules — pure functions, needing no window. */
 
-function tab(tabId: string, updatedAt?: number, sessionId?: string): TerminalDescriptor {
+function tab(tabId: string, updatedAt?: number, sessionId?: string): TabDescriptor {
   return { tabId, agentId: "shell", title: "", status: "running", updatedAt, sessionId };
 }
 
-const NONE: TerminalDescriptor[] = [];
+const NONE: TabDescriptor[] = [];
 
 describe("tabsInFront", () => {
   it("is every pane's shown tab, and none without the focus or under a dialog", () => {
@@ -130,8 +130,8 @@ describe("moveTab", () => {
 });
 
 describe("placeCommandTab", () => {
-  const command = (tabId: string, line: string): TerminalDescriptor => ({ ...tab(tabId), command: line });
-  const split = (commandPane: ProjectLayout["commandPane"], tabs: TerminalDescriptor[]): ProjectLayout =>
+  const command = (tabId: string, line: string): TabDescriptor => ({ ...tab(tabId), command: line });
+  const split = (commandPane: ProjectLayout["commandPane"], tabs: TabDescriptor[]): ProjectLayout =>
     normalizeLayout(
       { preset: "split-right", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {}, commandPane },
       tabs,
@@ -540,7 +540,7 @@ describe("what is persisted", () => {
       activeTab: {},
       commandPane: { "npm test": { preset: "cols2", pane: "b" }, "npm run build": { preset: "grid2x2", pane: "d" } }
     };
-    const running: TerminalDescriptor = { ...tab("new-1"), command: "npm test" };
+    const running: TabDescriptor = { ...tab("new-1"), command: "npm test" };
     const serialized = serializeLayout(layout, [running]);
     assert.deepEqual(JSON.parse(serialized).commandPane, {
       "npm test": { preset: "split-right", pane: "c" },
@@ -574,7 +574,7 @@ describe("what is persisted", () => {
 describe("an editor tab", () => {
   const EDITOR_TAB_ID = nextEditorTabId();
   const editor: EditorTab = { tabId: EDITOR_TAB_ID, ref: { projectId: "p" }, path: "src/index.ts" };
-  const cols2 = (tabPane: Record<string, "a" | "b">, tabs: (TerminalDescriptor | EditorTab)[]): ProjectLayout =>
+  const cols2 = (tabPane: Record<string, "a" | "b">, tabs: (TabDescriptor | EditorTab)[]): ProjectLayout =>
     normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane, activeTab: {}, commandPane: {} }, tabs, NONE);
 
   it("settles in the focused pane like any tab", () => {

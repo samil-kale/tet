@@ -15,7 +15,7 @@ import { askLogin } from "./GitLogin";
  * is the one indicator while it is up. So `ask` leaves the view's bar alone and only `run`/`act`,
  * which have no dialog to show them, raise it; two bars for one command is the bug this avoids.
  *
- * A file action needs no label — the pane's own bar covers the whole section — while a git command
+ * A file action needs no label — the section's own bar covers the whole section — while a git command
  * says what it is doing.
  */
 export type FileAsk = (action: () => Promise<GitActionResult>) => Promise<string | undefined>;
@@ -200,14 +200,14 @@ export function useBranchActions(activeKey: string | null): {
       activeKey ? runBranchAction(activeKey, action) : Promise.resolve({ ok: true }),
     [activeKey, runBranchAction]
   );
-  const { startedHere: gitPaneActing, start: runActiveHere } = useStartedHere(runActiveBranchAction);
+  const { startedHere: gitLaneActing, start: runActiveHere } = useStartedHere(runActiveBranchAction);
   const activeBranch = useMemo<BranchActions>(
     () => ({
       busy: activeKey !== null && branchActions.has(activeKey),
-      startedHere: gitPaneActing,
+      startedHere: gitLaneActing,
       ...gitRun(runActiveHere, runActiveBranchAction)
     }),
-    [branchActions, activeKey, gitPaneActing, runActiveHere, runActiveBranchAction]
+    [branchActions, activeKey, gitLaneActing, runActiveHere, runActiveBranchAction]
   );
   const { startedHere: projectListBusy, start: runProjectListHere } = useStartedHere(runBranchAction);
   const runIn = useCallback(

@@ -7,7 +7,7 @@ import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, Projects
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
 import type { SbxAccount, SbxAccountEdit, SbxKnowledgeConfig, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectConfig, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "./types/sbx";
 import type { AppSettings, LaneSettings, SettingsEdits } from "./types/settings";
-import type { HandoffResult, TerminalDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
+import type { HandoffResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
@@ -208,20 +208,20 @@ export interface TETApi {
     deletePath(ref: ProjectRef, path: string): Promise<GitActionResult>;
     /** The Explorer's "Rename...". */
     renamePath(ref: ProjectRef, from: string, to: string): Promise<GitActionResult>;
-    /** tet.json's `folders` — "Add Folder to Workspace". */
+    /** tet.json's `folders` — "Add Folder to Explorer". */
     addFolder(projectId: string, path: string): Promise<GitActionResult>;
     /** Removing the last one restores the whole repository as one tree. */
     removeFolder(projectId: string, path: string): Promise<GitActionResult>;
-    /** tet.json's `settings["files.exclude"]` — "Exclude from Files". */
+    /** tet.json's `settings["files.exclude"]` — "Exclude from Explorer". */
     excludePath(projectId: string, path: string): Promise<GitActionResult>;
-    /** A file-only view setting, from the settings dialog's Files tab. */
+    /** One of the Explorer view's settings, from the settings dialog's Files tab. */
     setExplorerSetting<K extends keyof ExplorerSettings>(
       projectId: string,
       key: K,
       value: ExplorerSettings[K]
     ): Promise<GitActionResult>;
     listExplorer(ref: ProjectRef): Promise<ExplorerListing>;
-    /** The SEARCH pane's matches, in the files the tree lists minus what git ignores. */
+    /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */
     searchFiles(ref: ProjectRef, query: FileSearchQuery): Promise<FileSearchResult>;
     /** tet.json alone, no filesystem walk. */
     explorerSettings(projectId: string): Promise<ExplorerSettings>;
@@ -252,16 +252,16 @@ export interface TETApi {
      *  the question that is still up to show it at its field. */
     save(projectId: string, commands: ProjectCommand[]): Promise<GitActionResult>;
     /** A tab whose process is the command; null when nothing can run it. */
-    run(ref: ProjectRef, command: ProjectCommand): Promise<TerminalDescriptor | null>;
+    run(ref: ProjectRef, command: ProjectCommand): Promise<TabDescriptor | null>;
     /** tet.json changed on disk, whoever wrote it: its commands and sbx switch as they now read. */
     onChanged(
       listener: (payload: { projectId: string; commands: ProjectCommand[]; sbxEnabled: boolean }) => void
     ): Unsubscribe;
   };
   terminals: {
-    list(ref: ProjectRef): Promise<TerminalDescriptor[]>;
+    list(ref: ProjectRef): Promise<TabDescriptor[]>;
     /** The session starts on first resize. */
-    create(ref: ProjectRef, agentId: AgentId): Promise<TerminalDescriptor>;
+    create(ref: ProjectRef, agentId: AgentId): Promise<TabDescriptor>;
     /** Also deletes the sessions behind them. */
     close(ref: ProjectRef, tabIds: string[]): Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
@@ -273,13 +273,13 @@ export interface TETApi {
     /** Clears `finishedAt` — only the renderer knows which tab is in front. */
     seen(ref: ProjectRef, tabId: string): void;
     /** The shown project's tabs in front of the user (on screen, focused window, no dialog); a turn
-     *  there raises no toast. Sent whenever the set changes. */
+     *  there raises no notification. Sent whenever the set changes. */
     inFront(ref: ProjectRef | null, tabIds: string[]): void;
     input(ref: ProjectRef, tabId: string, data: string): void;
     /** The first resize starts the process (lazy spawn). */
     resize(ref: ProjectRef, tabId: string, cols: number, rows: number): void;
     /** The project's full tab list on every change. */
-    onTabs(listener: (payload: { ref: ProjectRef; tabs: TerminalDescriptor[] }) => void): Unsubscribe;
+    onTabs(listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void): Unsubscribe;
     /** One message per flush for all terminals. */
     onOutput(listener: (batch: TerminalOutput[]) => void): Unsubscribe;
     onStatus(
@@ -297,7 +297,7 @@ export interface TETApi {
   agents: {
     list(): Promise<AgentInfo[]>;
   };
-  files: {
+  drops: {
     /** A dropped file's real path, or "" for content only. */
     pathOf(file: File): string;
     /** Saves pathless content into the tab's drops folder, returning its path on this machine, for

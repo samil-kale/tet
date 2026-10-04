@@ -22,7 +22,7 @@ export function worktreeVerbs(
   deps: ControlDeps,
   refFrom: RefFrom
 ): Record<Extract<ControlVerbName, `worktree-${string}`>, Handler> {
-  const { sessions } = deps;
+  const { tabManagers } = deps;
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   const repository = (ref: ProjectRef) => repositoryOf(deps, ref);
 
@@ -102,7 +102,7 @@ export function worktreeVerbs(
           `${branch} has uncommitted changes, nothing was merged: have them committed or stashed there (by its agent or the user), then run this again`
         );
       }
-      const working = sessions.get(ref)?.inspect().find(isWorking);
+      const working = tabManagers.get(ref)?.inspect().find(isWorking);
       if (working) {
         throw new ControlError("bad_args", `an agent in ${branch} is mid-turn (tab ${working.tabId}), nothing was merged: wait until it is done, then run this again`);
       }
@@ -116,7 +116,7 @@ export function worktreeVerbs(
         }
         // Where the caller sees the worktree: mounted into its sandbox if it would not.
         const callers = callerRef(caller);
-        const [handed] = callers === undefined || caller.tabId === undefined ? [] : ((await sessions.get(callers)?.seenPaths(caller.tabId, [worktree.path])) ?? []);
+        const [handed] = callers === undefined || caller.tabId === undefined ? [] : ((await tabManagers.get(callers)?.seenPaths(caller.tabId, [worktree.path])) ?? []);
         const at = handed ?? worktree.path;
         return {
           result: {

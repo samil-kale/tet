@@ -23,9 +23,9 @@ import {
 import { isEditorTab, type PaneTab } from "./editor-tab";
 import { IconButton } from "../ui/IconButton";
 import { CollapseAllIcon, CompareIcon, ExpandAllIcon, SaveIcon, ScanEyeIcon, SideBySideIcon } from "../ui/icons";
-import { usePaneShare } from "../ui/layout-storage";
+import { useStoredShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
-import { MIN_PANE_WIDTH, Sash } from "../ui/Sash";
+import { MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { isModifierHeld, PLATFORM } from "../platform";
 
 function useEditorStore<T>(tabId: string, select: (snapshot: EditorSnapshot) => T): T {
@@ -99,8 +99,8 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   }, [visible, active, focused, ready, tabId, path]);
 
-  // One share for every tab's preview, as for the panes; half until dragged.
-  const [previewShare, setPreviewShare] = usePaneShare("markdown-preview", 1 / 2);
+  // One share for every tab's preview, as for the split view's panes; half until dragged.
+  const [previewShare, setPreviewShare] = useStoredShare("markdown-preview", 1 / 2);
   const splitWidth = useElementSize(split, previewShown)?.width ?? 0;
   const previewWidth = Math.round(splitWidth * previewShare);
   const resizePreview = useCallback(
@@ -187,8 +187,8 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
               <Sash
                 orientation="vertical"
                 size={previewWidth}
-                min={MIN_PANE_WIDTH}
-                minOther={MIN_PANE_WIDTH}
+                min={MIN_AREA_WIDTH}
+                minOther={MIN_AREA_WIDTH}
                 reverse
                 onResize={resizePreview}
               />

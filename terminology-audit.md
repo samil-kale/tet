@@ -39,7 +39,7 @@ different things:
 
 Their findings were deduplicated into the list below. Counts are approximate (grep). Line numbers
 are as of commit `50bfb43` plus the working tree at the time and may have drifted. Each item ends
-with a **proposal**; none is decided yet.
+with a **proposal**; none is decided yet. A second pass re-checked every finding against the working tree: all 30 hold in substance, and the counts and line numbers below are the corrected ones. Where the first pass was wrong or incomplete, the correction is folded into the item. Counts are still grep counts; `src/renderer/styles.css` was uncommitted at the time, so its line numbers drift most.
 
 ---
 
@@ -47,15 +47,15 @@ with a **proposal**; none is decided yet.
 
 ### 1. The git lane is called "repository"
 
-- Strip toggle "Show/Hide the **repository**" (`src/renderer/tabs/Pane.tsx:58-59`, noun
+- Strip toggle "Show/Hide the **repository**" (`src/renderer/tabs/Pane.tsx:59`, noun
   `"repository"` in `LANE_TOGGLES`).
 - Shortcut "Show or hide the repository" (`src/renderer/shortcuts.ts:37`, id `toggleGit`).
 - Everywhere else: lane id `git`, `GitLane`, `GitIcon`, `toggleGit`, settings tab "Git", "the git
-  lane" (`src/shared/control.ts`, AGENTS.md ×4). README says "git pane" ×2, CHANGELOG "git pane" ×5.
+  lane" (`src/shared/control.ts`, AGENTS.md ×4). README says "git pane" ×2 (lines 90, 107), CHANGELOG "git pane" ×5 (lines 272, 328, 371, 437, 523).
 - Conflicts with AGENTS.md: "repository" means the folder the user opened, as opposed to a
   worktree — and the git lane shows a worktree's git too.
 
-**Proposal:** "git" (toggle "Show/Hide git", shortcut "Show or hide git").
+**Proposal:** "git" (toggle "Show/Hide git", shortcut "Show or hide git"). The toggle titles are all built in one place (`Pane.tsx:77`, "Show|Hide the <noun>"), so the strip fix is one spot.
 
 ### 2. The files lane: "files" vs "Explorer"
 
@@ -70,9 +70,9 @@ with a **proposal**; none is decided yet.
 - The Explorer's configuration alone has five names: "Workspace" ("Add Folder to Workspace" /
   "Remove Folder from Workspace", `Explorer.tsx:291,297` — VS Code's wording, but TET has no other
   "workspace" noun and AGENTS.md calls TET "a git workspace"), "Files" ("Exclude from Files"),
-  "Explorer view" (`App.tsx:547`, AGENTS.md), "the project's view" (`Explorer.tsx:286`), "EXPLORER
+  "Explorer view" (a comment at `App.tsx:547`, and AGENTS.md), "the project's view" (a comment at `Explorer.tsx:286`), "EXPLORER
   tree", "Explorer settings" (`SettingsDialog.tsx:27`).
-- Counts: "Explorer" ~207 in src, 7 in AGENTS.md, 12 in CHANGELOG; "files lane" 5 in src.
+- Counts: "Explorer" ~172 in src, 7 in AGENTS.md, 12 in CHANGELOG; "files lane" 5 in src.
 
 **Proposal:** the lane is **files**, the tree in it is the **Explorer** (as AGENTS.md has it);
 the verb, its summary, the menu entries and the settings group follow that split. The `files:` IPC
@@ -80,33 +80,33 @@ namespace for drops deserves its own name (e.g. `drops:`).
 
 ### 3. "pane" still means five things
 
-AGENTS.md reserves *pane* for the split view's panes. It is also used for:
+AGENTS.md means the split view's panes by *pane* (but itself writes "SEARCH pane", lines 73 and 290, which belong to the findings below). It is also used for:
 
 - **The lanes:** "files pane" (`lanes/files/Explorer.tsx:94,353`, `lanes/files/use-file-search.ts:9,13`,
-  `styles.css:746`, `ui/icons.tsx:405` "files-pane headers"), "the pane" for the git lane
+  `styles.css:794`, `ui/icons.tsx:399` "files-pane headers"), "the pane" for the git lane
   (`lanes/git/GitLane.tsx:59`, `lanes/git/BranchTree.tsx:392`).
 - **Resizable areas in general, lanes included:** `MIN_PANE_WIDTH` / `MIN_PANE_HEIGHT`
   (`ui/Sash.tsx:4-29`, used for lane widths in `lanes/use-lanes.ts`), `--pane-min-width`
   (`styles.css`), `usePaneSize` / `usePaneToggle` / `usePaneChoice` (`ui/layout-storage.ts`) storing
   lane widths, the free lane and the LOCAL CHANGES list/tree choice.
-- **A lane's section:** "SEARCH pane" (×6 in src; AGENTS.md lines ~72 and ~289), `git/run-action.ts:18`
-  ("the pane's own bar covers the whole section"), `styles.css:84`.
+- **A lane's section:** "SEARCH pane" (×12 in src; AGENTS.md lines 73 and 290), `git/run-action.ts:18`
+  ("the pane's own bar covers the whole section").
 - **A dialog tab's body:** `ui/DialogFrame.tsx:92,98`, `.sbx-settings-pane`
   (`dialogs/SbxSettingsDialog.tsx:370`).
 - **The whole tab area:** `TerminalsPane` (see 4).
 
-**Proposal:** *pane* only for split-view panes; *section* for SEARCH; *lane* for lanes; neutral
+**Proposal:** *pane* only for split-view panes; *section* for SEARCH; *lane* for lanes (AGENTS.md's two "SEARCH pane" follow); neutral
 names for the layout-storage hooks and size floors (e.g. `useStoredSize`, `MIN_AREA_WIDTH`).
 
 ### 4. The tab area has six names — and it isn't only terminals
 
 AGENTS.md calls it "the tab area".
 
-- `TerminalsPane` (component; it isn't a pane), "the terminals pane" (`App.tsx:199`), "the
-  terminals" (`App.tsx:362`, `styles.css:1297`, `ui/Sash.tsx:11`).
-- "split view" (×6; `tabs/pane-layout.ts:6` "terminal split view"), `.pane-layout`, `.panes-grid`.
+- `TerminalsPane` (component; it isn't a pane), "the terminals pane" (a comment at `App.tsx:199`), "the
+  terminals" (`App.tsx:362`, `ui/Sash.tsx:11`; all comments).
+- "split view" (×5; `tabs/pane-layout.ts:6` "terminal split view"), `.pane-layout`, `.panes-grid`.
 - Terminal-named things that also hold editor tabs: `.terminal-pane` (a single pane — clashes
-  with `TerminalsPane`, `styles.css:941`), `.terminal-stack` (`tabs/Pane.tsx:537`; the editor
+  with `TerminalsPane`, `styles.css:962`, whose comment at `:948` already calls it the split view's pane), `.terminal-stack` (`tabs/Pane.tsx:537`; the editor
   tab's slot sits inside it), `TAB_DRAG_TYPE = "application/x-tet-terminal-tab"`
   (`tabs/pane-layout.ts:29`).
 
@@ -115,11 +115,11 @@ AGENTS.md calls it "the tab area".
 
 ### 5. Tab vs session vs terminal
 
-AGENTS.md: a **tab** is the UI unit; a **session** is the agent's own conversation record.
+The distinction applied (AGENTS.md itself only says "Sessions stay the agent's own"): a **tab** is the UI unit; a **session** is the agent's own conversation record.
 
 - "Session" where a tab is meant: the "+" button titled "New session" (`tabs/Pane.tsx:529`) —
   its menu includes Shell, which has no session (VS Code: "New Terminal"); `new-session-menu`
-  (`Pane.tsx:563`, `styles.css:1199`); the empty pane says "No sessions open." (`Pane.tsx:559`)
+  (`Pane.tsx:563`, `styles.css:1212`); the empty pane says "No sessions open." (`Pane.tsx:559`)
   though editor and shell tabs count too; project row buttons "Open the session waiting… / that is
   working / that finished" (`lanes/projects/ProjectList.tsx:305-310`); shortcut "Jump to the
   session that needs you" (`shortcuts.ts:41`); `SessionMark` / `use-session-marks.ts` for marks on
@@ -135,10 +135,10 @@ AGENTS.md: a **tab** is the UI unit; a **session** is the agent's own conversati
 - Prose: "Ends every terminal in every project" (`src/shared/control.ts:380`,
   `SettingsDialog.tsx:239`), "Its terminals keep running" (`git/worktree-questions.ts:51`);
   AGENTS.md mixes "terminals" and "tabs" the same way.
-- **Factually wrong:** `tabs-close` says "Close a tab and **end** its session"
+- **Misleading:** `tabs-close` says "Close a tab and **end** its session"
   (`src/shared/control.ts:515`); the UI says "Close tab and **delete** its session"
-  (`Pane.tsx:512`), which is what happens (`session-manager.ts:136`). An agent reading the help is
-  misled.
+  (`Pane.tsx:512`), which is what happens (`destroyTab` in `session-manager.ts`; the class comment at `:136` says so too). An agent reading the help is
+  misled: "end" suggests the session survives, but `tabs-close` takes the UI's close path and deletes it.
 - Correct as is: "Rename session" (`Pane.tsx:258`) and hand-over really act on the session — but
   `tet-ctl tabs-rename` says "Rename a tab".
 
@@ -155,37 +155,37 @@ AGENTS.md: a **notice** is the in-window message (`notify()` in `ui/Notices.tsx:
 - The `tet-ctl` verb `notify` and `ControlDeps.notify` (`control/control-verb.ts:165`,
   `main.ts:321`, `src/shared/control.ts:566-569`) show a **desktop** notification — `notify` means
   opposite things in the CLI and the code.
-- The desktop notification has four names: "toast" (~95 in code: `util/notifications.ts`
+- The desktop notification has four names: "toast" (~118 in `src/main`: `util/notifications.ts`
   `ToastTarget`, `main.ts:268` `showToastTarget`, session-manager's `toast`), "notification"
   (`showDesktopNotification`, `notifications.ts`, `startNotifications`, settings `notifications.*`,
   `settings-set-notification`), "Desktop notifications" (Settings dialog
   `SettingsDialog.tsx:353`, README), "OS notification" (`settings-set-notification`'s summary,
   `src/shared/control.ts:230`, CHANGELOG); the settings tab says "Notifications".
-- `styles.css:2553` calls notices "messages"; `styles.css:2592` mentions "VS Code's toast shadow".
+- `styles.css` calls notices "messages" (~line 2442) and mentions "VS Code's toast shadow" (~line 2481).
 
 **Proposal:** **notice** for in-window, **desktop notification** for the OS; `notify` only for
 notices (rename the verb's handler side, or the verb).
 
 ### 7. "Remove repository" vs "remove project"
 
-- UI: "Remove repository" (menu entry and confirm dialog, `ProjectList.tsx:181,187,284`),
+- UI: "Remove repository" (menu entry and confirm dialog, `ProjectList.tsx:181,187,274,324`),
   "Add repository" (`ProjectList.tsx:349`, `App.tsx:538`), notice "add the repository again"
   (`src/main/projects.ts:182`).
 - `tet-ctl`: `projects-remove` "Remove a project", `projects-add` "Open a folder as a project";
   IPC `projects:open`, `projects:remove`; the lane header says "PROJECTS".
 - AGENTS.md: "Removing a project deletes the worktrees…" — exactly what the "Remove repository"
   dialog does, while its wording suggests the worktrees survive.
-- "Add repository" follows GitHub Desktop; "Remove repository" misleads.
+- "Add repository" follows GitHub Desktop; "Remove repository" misleads. The same entry reads "Delete worktree" on a worktree's row, so the term changes by kind.
 
 **Proposal:** "Remove project"; "Add repository" may stay.
 
 ### 8. Worktree wording against AGENTS.md
 
-- `WorktreeInfo.main` (shared) and "the main one" (`lanes/git/BranchTree.tsx:128`),
-  `linkedWorktrees = …filter(!worktree.main)` (`BranchTree.tsx:100,132`) — AGENTS.md forbids
+- `WorktreeInfo.main` (shared) and "the main one" (comments at `lanes/git/BranchTree.tsx:98,129`, the first already saying "the repository itself"),
+  `linkedWorktrees = …filter(!worktree.main)` (`BranchTree.tsx:100`; `:132` is an `if (worktree.main)`) — AGENTS.md forbids
   "main worktree".
 - A worktree TET didn't make: `foreign` (×7: `ProjectList.tsx:96,330,333`, CSS
-  `.project-item.foreign`), `NOT_MADE_BY_TET` (×9), "did not make" (×4), "made elsewhere" (×2, the
+  `.project-item.foreign`), `NOT_MADE_BY_TET` (×9), "did not make" (×4), "made elsewhere" (×7, the
   AGENTS.md phrase).
 - Worktree rows carry the class `.project-item` (`ProjectList.tsx:289,333`) although a worktree is
   not a project.
@@ -201,10 +201,10 @@ worktree TET didn't make ("made elsewhere"); a row class not named after project
 
 ### 9. "Waiting" has five names
 
-- `waiting` (~43, dominant: `SessionMark kind="waiting"`, `waitingTabIds`, `onShowWaiting`).
+- `waiting` (~58, dominant: `SessionMark kind="waiting"`, `waitingTabIds`, `onShowWaiting`).
 - `needsAttention` / `showNeedsAttention` (×8: `shortcuts.ts:17,40`, `App.tsx:343`,
   `tabs/use-session-marks.ts:29,148`).
-- `needsYou` (settings key, `store/settings.ts:18`, `main.ts:147`, `SettingsDialog.tsx:100`) —
+- `needsYou` (settings key, `store/settings.ts:18`, `main.ts:147`, `SettingsDialog.tsx:100`, `session-manager.ts:1227`, `shared/types/settings.ts:61,66`) —
   its siblings `finished` and `idleReminder` are named after the event.
 - Labels: "Action needed" (`SettingsDialog.tsx:100`), "the session that needs you"
   (`shortcuts.ts:41`), "waiting for an answer" (row tooltip, AGENTS.md), "Waiting for input" /
@@ -221,12 +221,12 @@ answer").
   `App.tsx:240`).
 - `tet-ctl tabs-wait --busy/--idle` (`src/shared/control.ts:437`): "--idle" means "not working a
   turn", while the hook event `idle` and the setting `idleReminder` use "idle" for something else.
-- Showing a progress bar has about seven names: `busy` (prop on `DialogFrame`/`Section`),
-  `running` (`useRunning`, aliased in `ui/Dialog.tsx:209,238`, `ui/DialogFrame.tsx:27`),
+- Showing a progress bar has about ten names: `busy` (prop on `DialogFrame`/`Section`),
+  `running` (`useRunning`, aliased as `busy` in `ui/DialogFrame.tsx:27` and as `checking` in `Startup.tsx:16`; `ui/Dialog.tsx:209,238` destructure `busy: running` from `useSubmit`),
   `showProgress`, `showSearchProgress` (`FilesLane.tsx:84,142`), `acting`, `branch.startedHere`
-  (`GitLane.tsx:70,80,134`), `gitBusy` (`ProjectList.tsx:347`), `checking`.
+  (`GitLane.tsx:70,80,134`), `gitBusy` (`ProjectList.tsx:347`), `projectListBusy` (`App.tsx:125`), `externalBusy` (`App.tsx:521`), `startingHere`, `checking`.
 - Clash: `showProgress` is a boolean in `FilesLane` and a function raising a progress notice in
-  `ui/Notices.tsx:48`.
+  `ui/Notices.tsx:48`, and a prop in `tabs/Pane.tsx:116`.
 
 **Proposal:** **working** for a turn, **busy** for a progress bar; `tabs-wait --working/--done`
 or similar.
@@ -236,9 +236,9 @@ or similar.
 | Title on screen | Code / comments | AGENTS.md |
 |---|---|---|
 | PROJECTS | `ProjectList`, "project list" (×10; also means the projects data, `tabs/use-project-layouts.ts:25`) | "projects lane" |
-| COMMANDS | `CommandList`, "commands list" (`ui/Sash.tsx:23`), "saved command" (×11) | COMMANDS, saved commands |
+| COMMANDS | `CommandList`, "commands list" (`ui/Sash.tsx:23`), "saved command" (×39) | COMMANDS, saved commands |
 | BRANCHES (`GitLane.tsx:79`) | `BranchTree`, "branch tree" (×7), `.branch-tree`, key `branch-tree.sections` | "the branch tree" |
-| LOCAL CHANGES (`GitLane.tsx:132`) | `ChangesList`, "changes list" (×5) | "the changes" |
+| LOCAL CHANGES (`GitLane.tsx:132`) | `ChangesList`, "changes list" (×10) | "the changes" |
 | SEARCH | `FileSearch`, `use-file-search`, "search view" (`FileSearch.tsx:55`) | "SEARCH pane" |
 | EXPLORER | `Explorer`, "Explorer tree" | Explorer |
 
@@ -252,7 +252,7 @@ tree is fine if stated once).
   `sbx/sbx-local.ts:55`, `sbx/sbx-cli.ts:121`, `ipc/projects.ts:65`), "sbx settings"
   (`requirements.ts:82`, `store/tet-json.ts:478`), "SBX configuration"
   (`dialogs/SbxSettingsDialog.tsx:201`), "sbx values" (AGENTS.md; `projects.ts:223`,
-  `sbx/sbx.ts:325`, `terminals/tab-place.ts:209`); in code `SbxProjectConfig` (~31),
+  `sbx/sbx.ts:325`, `terminals/tab-place.ts:209`); in code `SbxProjectConfig` (~49),
   `readSbxConfig`, `saveSbxConfig`, IPC `sbx:get-config` whose verb twin is `sbx-get`; log "could
   not apply the sbx config change" (`main.ts:192`).
 - The switch: `sbx.enabled` / `sbx-set-enabled`, "the sbx switch" (`main.ts:187`,
@@ -261,13 +261,13 @@ tree is fine if stated once).
   `control-sbx-verbs.ts:76` mixes two in one message.
 - Sign-in: `signedIn` / `signIn` (~44, dominant, user text "SBX is not signed in to Docker") vs
   `loggedIn` (×7, `SbxStatus.loggedIn`: `sbx/sbx-status.ts:208,235`, `sbx/sbx-policy.ts:49`,
-  `ipc/sbx.ts:25`), `runSbxLogin` / `runSbxLogout`, IPC `sbx:login` / `sbx:logout` next to
+  `ipc/sbx.ts:25`, `shared/types/sbx.ts:126,128`, `SbxSettingsDialog.tsx:155`), `runSbxLogin` / `runSbxLogout`, IPC `sbx:login` / `sbx:logout` next to
   `sbx:sign-in` (`ipc/sbx.ts:30-37`); `control-sbx-verbs.ts:122-126` reads
   `const loggedIn = await deps.sbx.signedIn(); … signedIn: loggedIn`. (`sbx login` the CLI command
   is legitimately "login".)
-- Casing in messages: "SBX" ×31 in UI and main errors, but lowercase "sbx could not create…"
+- Casing in messages: "SBX" ~58 in UI and main error strings, but lowercase "sbx could not create…"
   (`sbx/sbx.ts:123,460`), "sbx login failed" (`control-sbx-verbs.ts:141`), "At least one agent or
-  sbx" (`dialogs/RequirementsDialog.tsx:41`), "Refused by sbx" (`src/shared/sbx-rules.ts:92`).
+  sbx" (`dialogs/RequirementsDialog.tsx:40`), "Refused by sbx" (`src/shared/sbx-rules.ts:92`).
 - The sandbox called "container": "its container" (`requirements.ts:53`), "a container's [clock]"
   (`terminals/turn-order.ts:7`). ("container path" / `toContainerPath` are sbx's own vocabulary —
   fine.)
@@ -283,15 +283,15 @@ tree is fine if stated once).
   (`sbx/sbx-status.ts:124,143`), "tet needs 0.45 or later" (`sbx-status.ts:223`), "tet's own
   folder" (`sbx/sbx.ts:460`), "before tet can sandbox" (`SbxSettingsDialog.tsx`), the `[tet]`
   prefix printed into terminals (`terminals/terminal-session.ts:96,106`).
-- ~97 user-facing strings say "TET"; CHANGELOG prose tet ×21 / TET ×10; AGENTS.md tet ×12 /
-  TET ×27; README only TET. (The install scripts' `tet:` prefix is the command name — fine.)
+- ~102 user-facing strings say "TET"; CHANGELOG prose tet ×22 / TET ×10; AGENTS.md tet ×12 /
+  TET ×27; README TET ×20 and one lowercase `tet` that is the typed command (line 150). (The install scripts' `tet:` prefix is the command name — fine.)
 
 **Proposal:** **TET** in prose and user-facing text; `tet` only for the command.
 
 ### 14. The data folder: `dataRoot` vs `storageRoot`
 
 - `dataRoot` (~103) and "data folder" in prose — dominant, matches `data-root.ts` and AGENTS.md.
-- `storageRoot` (~14) for the same value: `sbx/sbx-status.ts:18-21` (`storageRoot = dataRoot`),
+- `storageRoot` (~17) for the same value: `sbx/sbx-status.ts:18-21` (`storageRoot = dataRoot`),
   `terminals/tab-place.ts:102,121,230`, `terminals/session-registry.ts:19,24`,
   `terminals/session-manager.ts:175,314,502`.
 - pi's extension calls its agent folder `storageDir` (`agents/pi/extension.ts:12`); elsewhere
@@ -301,14 +301,14 @@ tree is fine if stated once).
 
 ### 15. "key" means two things
 
-- A worktree's folder key (AGENTS.md): `worktree.key` (×10).
-- The `projectRefKey` string for the repository or a worktree: `resolved.key` (×41), `activeKey`
-  (×42), comments "a repository's or worktree's key" (`App.tsx:177`, `pane-layout.ts:675`,
-  `terminal-views.ts:589`, `use-project-layouts.ts:24`).
+- A worktree's folder key (AGENTS.md): `worktree.key` (×23).
+- The `projectRefKey` string for the repository or a worktree: `resolved.key` (×38), `activeKey`
+  (×29), comments "a repository's or worktree's key" (`App.tsx:177`, `pane-layout.ts:675`,
+  `terminal-views.ts:589`, `sbx/sbx.ts:85`).
 - Error messages show the raw `projectRefKey` (`ipc/terminals.ts:23` "Not open: …",
   `control/control-verbs.ts:65,400`, `control/control-verb.ts:274`) — AGENTS.md: a key only where
   unavoidable; the display name (`ResolvedRef.name()`) is dominant elsewhere.
-- "Not found" errors in four wordings: "Project not found" (`projects.ts:231,277`,
+- "Not found" errors in about five wordings (the "not open" ones in three variants): "Project not found" (`projects.ts:231,277`,
   `store/resolved-ref.ts:21`), "unknown project: …" (`control-verb.ts:261`,
   `control-verbs.ts:55`), "Repository not open" (`MISSING_REPOSITORY`, `ipc/deps.ts:45`), "… is
   not open".
@@ -320,7 +320,7 @@ names, not keys, in messages; one "not open" wording.
 
 ### 16. "in front" vs active vs selected
 
-- Comments: "in front" (~30).
+- Comments: "in front" (~51); `control.ts` (`editor-open`) and "bring it to the front" use it for plain visibility, a different sense.
 - Identifiers: `activeKey`, `activeRef`, `activeResolved`, `active-project.ts`, `rememberActive`,
   `activeAtStart`; `onSelect` / `setActiveKey` ("as a row or the git lane selects it",
   `App.tsx:177`); `resolved: shown` in `BranchTree.tsx`; `activeProject` in `SettingsDialog.tsx`.
@@ -336,7 +336,7 @@ names, not keys, in messages; one "not open" wording.
 - `signalAt` also means an AbortSignal's argument index in `util/utility-client.ts:73`,
   `util/utility-host.ts:15`.
 
-**Proposal:** **report** (dominant, ~120).
+**Proposal:** **report** (dominant: 58 of the 261 lines with "report" are about hook or turn reports; most "signal" hits are AbortSignal or OS signals).
 
 ### 18. IPC channels vs `tet-ctl` verbs, and verb naming
 
@@ -347,7 +347,7 @@ names, not keys, in messages; one "not open" wording.
   `tabs-list`, `editor-list`, `explorer-list`, `notices-list`, `env-list`.
 - Singular vs plural: `worktree-*`, `editor-*` vs `projects-*`, `tabs-*`, `notices-*`.
 - Create vs add: `tabs-create` and the UI's "Create worktree" / "New worktree"
-  (`git/worktree-questions.ts:34-36`) vs `worktree-add`, `projects-add`, IPC
+  (`src/renderer/git/worktree-questions.ts:34-36`) vs `worktree-add`, `projects-add`, IPC
   `projects:add-worktree`; AGENTS.md "worktrees (add, rename, delete)".
 - Usage lines show only `[--project <id>]`; `--worktree` appears only in the help's limits text as
   `--worktree <branch>` (`src/shared/control-side.ts:33`) although it also takes a key.
@@ -363,7 +363,7 @@ of add/create; "the repository or a worktree" in summaries.
 - `displayName` "Claude" (`agents/claude/index.ts:32`) → menu "Hand over to Claude"; Settings and
   `tet-ctl` say "Claude Code only" (`SettingsDialog.tsx:103`, `src/shared/control.ts:230`);
   AGENTS.md and README "Claude Code"; a theme is also named "Claude".
-- "Pi" (`displayName`, README) vs "pi" (AGENTS.md, CHANGELOG ×9).
+- "Pi" (`displayName`, README) vs "pi" (AGENTS.md, CHANGELOG ×8).
 - "Codex CLI" (README ×2) vs "Codex".
 
 **Proposal:** each product's own name, once: "Claude Code", "Codex", "pi" or "Pi".
@@ -375,7 +375,7 @@ of add/create; "the repository or a worktree" in summaries.
 - The tet.json entry type `ProjectCommand` (shared) vs the launch form `SavedCommand`
   (`terminals/tab-place.ts:175`); also `createCommandTab`, `CommandPlace`, IPC `commands:list`.
 
-**Proposal:** `SavedCommand` for both, or say the distinction in a comment.
+They are two forms of one concept, not synonyms: `ProjectCommand` is the tet.json entry (`command`, `name`, `color`, `cwd`), `SavedCommand` the resolved launch form (`executable`, `args`, `env`). **Proposal:** two names for two shapes are fine if a comment says so at both types; otherwise unify.
 
 ---
 
@@ -384,10 +384,10 @@ of add/create; "the repository or a worktree" in summaries.
 ### 21. "mark" for file icons
 
 `FileMark`, `FileMarkIcon`, `FileMarkColor`, `.file-mark` (`lanes/files/file-mark.tsx`,
-`styles.css:761-781`), "the Explorer's marks" (`styles.css:733`) — all from `file-icons.ts`;
+`styles.css:812,820`), "the Explorer's marks" (`styles.css:755`) — all from `file-icons.ts`;
 AGENTS.md says "Seti's file icons", VS Code "file icon theme". Clashes with AGENTS.md's marks
 (`RowMark` "the one mark", session marks). `.icon-mark` is used for plain status icons too
-(`dialogs/SbxAccounts.tsx:133`, `ProjectList.tsx:318`).
+(`dialogs/SbxAccounts.tsx:134`, `ProjectList.tsx:318`).
 **Proposal:** **file icon**.
 
 ### 22. Expand/collapse vs fold/open
@@ -403,7 +403,7 @@ Regions".
 
 `Twistie` / `TWISTIE_WIDTH` (`ui/tree-row.tsx`), `ChevronIcon` and "chevron" in
 `BranchTree.tsx:71,524`, `.select-arrow` (`ui/Dropdown.tsx:66`), `.context-menu-chevron`
-commented "A submenu's arrow" (`styles.css:1188`).
+commented "A submenu's arrow" (`styles.css:1201`).
 **Proposal:** **chevron** (or VS Code's "twistie" for trees only).
 
 ### 24. "section" means three things
@@ -416,8 +416,8 @@ A lane's `Section` / `.section-header` (AGENTS.md); BranchTree's groups `TreeSec
 ### 25. Diff wording
 
 "Open diff" (`lanes/git/ChangesList.tsx:293`) vs the editor toggle "Show/Hide Changes"
-(`editor/EditorHost.tsx:138`); `showDiff`, `CompareIcon`; the image diff's "comparison layout"
-(`styles.css:1575`). VS Code: "Open Changes".
+(`editor/EditorHost.tsx:139`); `showDiff`, `CompareIcon`; the image diff's "comparison layout"
+(`styles.css:1553`). VS Code: "Open Changes".
 **Proposal:** one label for the action.
 
 ### 26. "preview" means three things
@@ -440,7 +440,7 @@ sections; the split view calls the same lines dividers (`useDividerFraction`, `D
 
 ### 28. Row vs item
 
-Comments say "row" (project row ×11, tree row, match row); CSS says `-item` (`.project-item`,
+Comments say "row" (project row ×14, tree row, match row); CSS says `-item` (`.project-item`,
 `.tree-item` rendered by `TreeRow`, `.command-item`, `.account-item`, `.repository-item`).
 **Proposal:** **row**.
 
@@ -449,7 +449,7 @@ Comments say "row" (project row ×11, tree row, match row); CSS says `-item` (`.
 UI "Hand over to X" (`tabs/Pane.tsx:360`), notice "Could not hand the session over"; settings
 "Session handoff" (`SettingsDialog.tsx:95`); code `terminals:handoff`, `handOff`, `handOffAgents`;
 `tabs-handoff` "takes over". Mostly the natural noun/verb pair; the mismatch is "hand off" in code
-vs "hand over" in the UI.
+vs "hand over" in the UI, which itself says both ("Hand over to X", settings "Session handoff").
 **Proposal:** "hand over" / "handover".
 
 ### 30. Smaller items
@@ -458,19 +458,19 @@ vs "hand over" in the UI.
   project row (`ProjectList.tsx:37,53`, `App.tsx:285`; UI "Uncommitted changes",
   `ProjectList.tsx:312`).
 - "title bar": the window's `.titlebar` and `DialogFrame`'s header (`ui/DialogFrame.tsx:97`,
-  `styles.css:1783`).
+  `styles.css:1761`).
 - "prompt" has four meanings: `prompt()` (a question with a field; "the commit prompt"), the
   agents' prompt texts (Prompts tab, `PromptId`), an agent's "permission prompt"
   (`SettingsDialog.tsx:100`), the shell prompt (`terminal-views.ts:554`).
 - "Environment (optional)" in the saved-command dialog (`CommandList.tsx:81`) holds per-command
   variables — the same word as the Environment tab and `env-*`.
-- "Could not" (~56) vs "Couldn't" (2: `lanes/use-lanes.ts`, `src/shared/sbx-rules.ts:119`).
+- "Could not" (~20 capitalised, ~130 in all) vs "Couldn't" (2: `lanes/use-lanes.ts`, `src/shared/sbx-rules.ts:119`).
 - `AgentRuntime.sbxOnly` (agent missing on this machine, runs only in sbx) vs `TabState.sandboxOnly`
   (tab opened from a sandbox) — different meanings, near-identical names; likewise
   `SandboxSessionMount` (relative to the agent folder) vs `SbxSessionMount` (absolute host path).
-- "this machine" (~69) vs "the host" (~54) in comments; user text consistently says "this
+- "this machine" (~112) vs "the host" (~73) in comments; user text consistently says "this
   machine"; "host" is also network hosts and provider hosts.
-- "drop" also means delete: `dropRefData`, `dropWorktreeData` (`projects.ts:212,256`) beside drops
+- "drop" also means delete: `dropRefData`, `dropWorktreeData` (`projects.ts:201,212`) beside drops
   as pasted content.
 - "workspace" is TET's own (`openWorkspace`, `main.ts:243`) and sbx's (the repository's or
   worktree's folder, `sbx/sbx.ts:83`).
@@ -479,8 +479,8 @@ vs "hand over" in the UI.
   accounts), "Password or token" (git login) — different credentials, possibly fine.
 - Sign-in wording in the git login: "Sign in", "Authentication failed", "wants a login"
   (`git/GitLogin.tsx:81-84`).
-- Leftover lane vocabulary in live docs: README "git pane" (lines 84, 104), "search pane" (85),
-  "sidebar" (105); CHANGELOG 0.16.5 (lines 8-9) "Side views… side columns… pinned column". Older
+- Leftover lane vocabulary in live docs: README "git pane" (lines 90, 107), "search pane" (92),
+  "sidebar" (108); CHANGELOG 0.16.5 (lines 8-9) "Side views… side columns… pinned column". Older
   CHANGELOG sections are published release notes (AGENTS.md: the GitHub Release is the text).
 
 ---
@@ -489,10 +489,10 @@ vs "hand over" in the UI.
 
 - Pane ids `a`–`d` vs their labels "Left", "Top Right" (`PANE_LABELS`): ids vs user-facing labels,
   intended.
-- snap zone, free lane / pinned, strip / tab strip, menu "entry": consistent.
-- "repo" in `AddRepositoryDialog` / `providers:repos`: hosted remote repositories from a provider's
+- snap zone, free lane / pinned, strip / tab strip, menu "entry": consistent (spot-checked only).
+- "repo" in `AddRepositoryDialog` / `providers:repos` (the `repo-state` verb and local names use it too): hosted remote repositories from a provider's
   API.
-- folder vs dir: "folder" in user text (~90-111); "dir" only in local variables.
+- folder vs dir: "folder" in user text (~90-111); "dir" in code identifiers (`agentDir`, `projectDir`, `agentConfigDir`, …), an identifier convention, not user-facing.
 - "LOCAL CHANGES" (header) vs "changes list" (prose).
 - secret vs variable in sbx: sbx's own distinction.
 - handoff / take over (noun and verb), control channel / control server (the whole vs its HTTP

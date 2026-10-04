@@ -8,7 +8,7 @@ import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
-import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "../ui/Sash";
+import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
 import type { Lane } from "../../shared/types/settings";
 import { isEditorTab, type PaneTab } from "../editor/editor-tab";
@@ -53,7 +53,7 @@ function percentStyle(box: FractionBox): { left: string; top: string; width: str
   return { left: percent(box.left), top: percent(box.top), width: percent(box.width), height: percent(box.height) };
 }
 
-interface TerminalsPaneProps {
+interface TabAreaProps {
   resolved: ResolvedRef;
   /** This repository's or worktree's tabs, its editor tabs last. Held by App, since the project
    *  list needs all. */
@@ -82,8 +82,8 @@ interface TerminalsPaneProps {
   startingTabIds: string[];
 }
 
-/** One repository's or worktree's terminals: how many panes, how big, which tabs each holds. */
-export const TerminalsPane = memo(function TerminalsPane({
+/** One repository's or worktree's tab area: how many panes, how big, which tabs each holds. */
+export const TabArea = memo(function TabArea({
   resolved,
   tabs,
   visible,
@@ -102,7 +102,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   finishedTabIds,
   waitingTabIds,
   startingTabIds
-}: TerminalsPaneProps) {
+}: TabAreaProps) {
   /**
    * Mirrored in a ref for the drop handler, which reads it synchronously without becoming a new
    * callback on each change. The source pane is a ref alone: set on `dragstart`, before any render.
@@ -329,9 +329,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   // All three lines whatever the preset: the preview needs the lines a switch would keep.
   const width = gridSize?.width ?? null;
   const height = gridSize?.height ?? null;
-  const colPixels = pixelsFor(colFraction, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width);
-  const leftRowPixels = pixelsFor(leftRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
-  const rightRowPixels = pixelsFor(rightRowFraction, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height);
+  const colPixels = pixelsFor(colFraction, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width);
+  const leftRowPixels = pixelsFor(leftRowFraction, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height);
+  const rightRowPixels = pixelsFor(rightRowFraction, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height);
 
   // The pane a preset-switching zone drop would add, from the clamped pixels, not the stored
   // fractions, so the preview agrees with the drop.
@@ -345,9 +345,9 @@ export const TerminalsPane = memo(function TerminalsPane({
       : null;
 
   // The three lines, once: a preset draws the ones it has.
-  const colDivider = divider("vertical", colPixels, MIN_PANE_WIDTH, MIN_PANE_WIDTH, width, setColFraction);
-  const leftRowDivider = divider("horizontal", leftRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setLeftRowFraction);
-  const rightRowDivider = divider("horizontal", rightRowPixels, MIN_PANE_HEIGHT, MIN_PANE_HEIGHT, height, setRightRowFraction);
+  const colDivider = divider("vertical", colPixels, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width, setColFraction);
+  const leftRowDivider = divider("horizontal", leftRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setLeftRowFraction);
+  const rightRowDivider = divider("horizontal", rightRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setRightRowFraction);
 
   const renderGrid = () => {
     switch (layout.preset) {
@@ -393,7 +393,7 @@ export const TerminalsPane = memo(function TerminalsPane({
   };
 
   return (
-    <div className={`pane-layout${visible ? "" : " pane-hidden"}`}>
+    <div className={`tab-area${visible ? "" : " pane-hidden"}`}>
       <div className="panes-grid" ref={gridRef}>
         {renderGrid()}
         {/* An overlay only: panes resize on the drop, since a resize refits every pty

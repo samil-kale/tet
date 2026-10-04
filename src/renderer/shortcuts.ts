@@ -33,12 +33,12 @@ interface ShortcutDef {
 
 const DEFS: ShortcutDef[] = [
   { id: "settings", description: "Open settings", shift: false, key: ",", label: "," },
-  { id: "toggleProjects", description: "Show or hide the projects", shift: true, key: "p", label: "P" },
-  { id: "toggleGit", description: "Show or hide the repository", shift: true, key: "g", label: "G" },
-  { id: "toggleFiles", description: "Show or hide the files", shift: true, key: "e", label: "E" },
+  { id: "toggleProjects", description: "Show or hide projects", shift: true, key: "p", label: "P" },
+  { id: "toggleGit", description: "Show or hide git", shift: true, key: "g", label: "G" },
+  { id: "toggleFiles", description: "Show or hide files", shift: true, key: "e", label: "E" },
   {
     id: "needsAttention",
-    description: "Jump to the session that needs you",
+    description: "Jump to the waiting tab",
     shift: true,
     key: "u",
     label: "U"

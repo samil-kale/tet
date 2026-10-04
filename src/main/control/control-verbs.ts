@@ -47,7 +47,7 @@ const KEY_NAMES = Object.keys(TAB_KEYS).join(", ");
 type Handlers = Record<Exclude<ControlVerbName, typeof HELP_VERB>, Handler>;
 
 export function verbs(deps: ControlDeps): Handlers {
-  const { store, settings, sessions } = deps;
+  const { store, settings, tabManagers } = deps;
 
   const projectById = (id: string): Project => {
     const found = store.get(id);
@@ -60,9 +60,9 @@ export function verbs(deps: ControlDeps): Handlers {
   const refFrom: RefFrom = (args, caller) => resolveCallerRef(store, args, caller);
 
   const terminals = (ref: ProjectRef): ControlTerminals => {
-    const manager = sessions.get(ref);
+    const manager = tabManagers.get(ref);
     if (!manager) {
-      throw new ControlError("internal", `${projectRefKey(ref)} has no terminals`);
+      throw new ControlError("internal", `${projectRefKey(ref)} has no tabs`);
     }
     return manager;
   };
@@ -497,10 +497,10 @@ export function verbs(deps: ControlDeps): Handlers {
 
     notify: (args, caller) => {
       const body = args.body;
-      // From one of tet's terminals, the toast is about that tab.
+      // From one of tet's terminals, the notification is about that tab.
       const own = callerRef(caller);
       const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;
-      deps.notify(text(args, "title", "title"), typeof body === "string" ? body : "", target);
+      deps.showDesktopNotification(text(args, "title", "title"), typeof body === "string" ? body : "", target);
       return { result: { notified: true } };
     },
 
@@ -514,8 +514,8 @@ export function verbs(deps: ControlDeps): Handlers {
       // worktree only, and tab ids like `new-1` repeat across repositories and worktrees.
       const where = refFrom({}, caller).ref;
       const outcome = terminals(where).hookEvent(caller.tabId, event, payload, at, caller.side);
-      if (outcome.toast) {
-        deps.notify(outcome.toast.title, outcome.toast.body, { ref: where, tabId: caller.tabId });
+      if (outcome.notification) {
+        deps.showDesktopNotification(outcome.notification.title, outcome.notification.body, { ref: where, tabId: caller.tabId });
       }
       return { result: { stdout: outcome.stdout } };
     }

@@ -6,7 +6,7 @@ import type { OpenEditor } from "../../editor/editor-tab";
 import { BranchTree } from "./BranchTree";
 import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHandle } from "./ChangesList";
 import { useFileAct, type BranchActions } from "../../git/run-action";
-import { MIN_PANE_HEIGHT, Sash } from "../../ui/Sash";
+import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
 import {
   ArrowDownIcon,
@@ -19,7 +19,7 @@ import {
   SyncIcon
 } from "../../ui/icons";
 import { FoldAllButton } from "../../ui/FoldAllButton";
-import { usePaneToggle } from "../../ui/layout-storage";
+import { useStoredToggle } from "../../ui/layout-storage";
 import { Section } from "../../ui/Section";
 
 interface GitLaneProps {
@@ -55,8 +55,8 @@ export const GitLane = memo(function GitLane({
   const [checked, setChecked] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
   /** One view for every project, as the lanes' toggles. */
-  const [asTree, setAsTree] = usePaneToggle("changes-tree", true);
-  // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
+  const [asTree, setAsTree] = useStoredToggle("changes-tree", true);
+  // Hidden, the lane keeps the state it last showed: every push re-rendered the whole tree and list
   // for nobody. A repository or worktree switch is never held — the keyed views would get another
   // repository's.
   const held = useRef({ key: resolved.key, state: latestState });
@@ -121,8 +121,8 @@ export const GitLane = memo(function GitLane({
       <Sash
         orientation="horizontal"
         size={treeHeight}
-        min={MIN_PANE_HEIGHT}
-        minOther={MIN_PANE_HEIGHT}
+        min={MIN_AREA_HEIGHT}
+        minOther={MIN_AREA_HEIGHT}
         onResize={onTreeHeight}
       />
       {/* The checked changes, ordered by cost — stash takes all, git stashing no single paths

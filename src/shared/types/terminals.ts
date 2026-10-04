@@ -4,7 +4,7 @@ import type { ProjectRef } from "./project";
 
 /** The tab taking over a session, or why there is none. */
 export interface HandoffResult extends GitActionResult {
-  tab?: TerminalDescriptor;
+  tab?: TabDescriptor;
 }
 
 /** One terminal's output since the last flush. Batched, so the message count does not grow with
@@ -19,7 +19,7 @@ export const TERMINAL_STATUSES = ["missing", "ready", "running", "stopped", "err
 
 export type TerminalStatus = (typeof TERMINAL_STATUSES)[number];
 
-export interface TerminalDescriptor {
+export interface TabDescriptor {
   /** Unique within its repository or worktree; equals the agent's session id for a restored tab. */
   tabId: string;
   agentId: AgentId;
@@ -55,6 +55,6 @@ export interface TerminalDescriptor {
 }
 
 /** As every spinner shows it: never while waiting on a question, whatever `busy` says. */
-export function isWorking(tab: TerminalDescriptor): boolean {
+export function isWorking(tab: TabDescriptor): boolean {
   return tab.busy === true && tab.waitingAt === undefined;
 }

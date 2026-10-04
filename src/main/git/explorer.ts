@@ -37,7 +37,7 @@ export async function listExplorer(root: string): Promise<ExplorerListing> {
   };
 }
 
-/** The SEARCH pane's matches (explorer-read.ts's `searchFiles`), in the Explorer's process. A
+/** The SEARCH section's matches (explorer-read.ts's `searchFiles`), in the Explorer's process. A
  *  process that died answers as a failed search. */
 export async function searchFiles(root: string, query: FileSearchQuery, signal: AbortSignal): Promise<FileSearchResult> {
   const view = await readExplorerView(root);

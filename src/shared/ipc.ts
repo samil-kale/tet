@@ -106,9 +106,9 @@ export interface InvokeChannels {
   "terminals:restart": TETApi["terminals"]["restart"];
   "terminals:starting": TETApi["terminals"]["starting"];
   "agents:list": TETApi["agents"]["list"];
-  "files:write-drop": TETApi["files"]["writeDrop"];
-  "files:clipboard-image": TETApi["files"]["clipboardImage"];
-  "files:hand-paths": TETApi["files"]["handPaths"];
+  "drops:write-drop": TETApi["drops"]["writeDrop"];
+  "drops:clipboard-image": TETApi["drops"]["clipboardImage"];
+  "drops:hand-paths": TETApi["drops"]["handPaths"];
   "shell:open-url": TETApi["shell"]["openUrl"];
   "shell:fetch-image": TETApi["shell"]["fetchImage"];
   "shell:open-file": TETApi["shell"]["openFile"];

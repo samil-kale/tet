@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 
-/** The bit's length in pixels, the same in every pane. */
+/** The bit's length in pixels, the same everywhere. */
 const BIT_WIDTH = 40;
-/** The bit's speed in pixels per second, the same in every pane. */
+/** The bit's speed in pixels per second, the same everywhere. */
 const SPEED = 500;
 
 /**
@@ -10,7 +10,7 @@ const SPEED = 500;
  * `position: relative`. See "One progress indicator per section" in AGENTS.md. Never a second one
  * under a header: a new slow reason feeds the bar it has. No spinner stands in for it, and a
  * button disabled for being underway only dims; the one spinner is a session's working mark
- * (`SessionMark`), a status rather than progress. The one determinate bar is a download's notice
+ * (`TabMark`), a status rather than progress. The one determinate bar is a download's notice
  * (Notices.tsx's `showProgress`), which runs this one while its share is unknown.
  *
  * Length and speed are absolute, not a share of the width, so bars of different widths side by

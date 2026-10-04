@@ -13,7 +13,7 @@ import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { CONTROL_ENV, type HookEvent } from "../../src/shared/control";
-import type { TerminalDescriptor } from "../../src/shared/types/terminals";
+import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir } from "../helpers";
 import { reportApplies, SIGNAL_STALE_MS } from "../../src/main/terminals/turn-order";
 
@@ -56,14 +56,14 @@ async function withEmptyPath(
 /** Pieces of the main process needing no app and no server: the session manager's turns and
  *  reports, the control records and launchers, the agent PATH, and what the shell may open. */
 
-describe("a turn's toast", () => {
+describe("a turn's notification", () => {
   // A shell tab stands in for an agent: no version check and no sessions, so the manager starts
   // nothing.
   it("is left out for a tab in front of the user, and only while it is", async () => {
-    const root = tempDir("tet-toast-");
+    const root = tempDir("tet-notification-");
     const settings = new SettingsStore(root);
     settings.patch({ notifications: { finished: true, needsYou: true, idleReminder: true } });
-    let pushed: TerminalDescriptor[] = [];
+    let pushed: TabDescriptor[] = [];
     const manager = new TabSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), new HostSetups(root, settings, () => undefined), {
       onTabs: (_projectId, tabs) => (pushed = tabs),
       onOutput: () => undefined,
@@ -78,23 +78,23 @@ describe("a turn's toast", () => {
     try {
       manager.setInFront([tabId]);
       assert.deepEqual(hook("prompt-submit"), { stdout: "" }, "nothing for the prompt: TET's system prompt went in once per session");
-      assert.equal(hook("stop").toast, undefined, "a turn finished in front of the user");
+      assert.equal(hook("stop").notification, undefined, "a turn finished in front of the user");
       assert.notEqual(
         pushed.find((tab) => tab.tabId === tabId)?.finishedAt,
         undefined,
         "the mark is still set: whether it shows is the renderer's call"
       );
       for (const event of needsYou) {
-        assert.equal(hook(event).toast, undefined, event);
+        assert.equal(hook(event).notification, undefined, event);
       }
 
       // The renderer reports another tab in front, or none (focus lost, a dialog up).
       for (const inFront of [["new-other"], []]) {
         manager.setInFront(inFront);
         hook("prompt-submit");
-        assert.match(hook("stop").toast?.title ?? "", /Finished/, `in front: [${inFront}]`);
+        assert.match(hook("stop").notification?.title ?? "", /Finished/, `in front: [${inFront}]`);
         for (const event of needsYou) {
-          assert.notEqual(hook(event).toast, undefined, `${event}, in front: [${inFront}]`);
+          assert.notEqual(hook(event).notification, undefined, `${event}, in front: [${inFront}]`);
         }
       }
     } finally {
@@ -134,7 +134,7 @@ describe("a question reported answered", () => {
 });
 
 describe("a Claude Code turn leaving a background agent running", () => {
-  it("keeps the tab working, without a toast, until the stop naming none", async () => {
+  it("keeps the tab working, without a notification, until the stop naming none", async () => {
     await withEmptyPath({}, (manager) => {
       const { tabId } = manager.createTab("claude");
       const busy = (): boolean | undefined => manager.inspect().find((tab) => tab.tabId === tabId)?.busy;

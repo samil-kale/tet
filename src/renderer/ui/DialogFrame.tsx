@@ -89,13 +89,13 @@ interface DialogTab<T extends string> {
   label: string;
   /** Given, the tab cannot be chosen and says why on hover. */
   disabled?: string;
-  /** Given, something in the pane needs a look: an error mark beside the label, saying what. */
+  /** Given, something on the tab needs a look: an error mark beside the label, saying what. */
   mark?: string;
 }
 
 /**
  * What heads the dialog, one of two shapes: a title bar, or a tab strip in place of the title for a
- * dialog with several panes. Either carries × when `onCancel` is given.
+ * dialog with several tabs. Either carries × when `onCancel` is given.
  */
 type DialogHeader<T extends string> =
   | { title: string }

@@ -1,10 +1,10 @@
 import type { AgentDefinition } from "../agents/agent";
-import type { TerminalDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import type { HandoffFiles, TabPlace } from "./tab-place";
 
 /** A tab as its session manager holds it, and what reads or sets its marks. */
 
-export interface TabState extends TerminalDescriptor {
+export interface TabState extends TabDescriptor {
   /** The session this tab's hooks named (AgentTurns.sessionIdOf), claimed as `sessionId`
    *  once listed. */
   reportedSessionId?: string;
@@ -112,7 +112,7 @@ export function answersQuestion(data: string): boolean {
 }
 
 /** `starting` comes from the caller's `indicators`, `sandboxed` from its `placeOf`. */
-export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean): TerminalDescriptor {
+export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean): TabDescriptor {
   const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, busy, waitingAt, command } = tab;
   return {
     tabId,

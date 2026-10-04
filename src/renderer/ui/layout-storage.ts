@@ -24,14 +24,14 @@ export function layoutFlag(key: string): { get(): boolean; set(value: boolean): 
   };
 }
 
-/** How long after the last resize a pane size is written to storage. */
+/** How long after the last resize a stored size is written to storage. */
 const PERSIST_MS = 300;
 
 /**
- * Whether a pane is showing, in the same layout storage. It stays as set until toggled again —
+ * Whether an area is showing, in the same layout storage. It stays as set until toggled again —
  * a lane stays out until its toggle is pressed again, one for all projects.
  */
-export function usePaneToggle(key: string, initial: boolean): [boolean, (open: boolean) => void] {
+export function useStoredToggle(key: string, initial: boolean): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {
     const stored = localStorage.getItem(STORAGE_PREFIX + key);
     return stored === null ? initial : stored === "true";
@@ -48,10 +48,10 @@ export function usePaneToggle(key: string, initial: boolean): [boolean, (open: b
 }
 
 /**
- * Which of `choices` a pane shows, in the same layout storage, kept as `usePaneToggle` keeps
+ * Which of `choices` an area shows, in the same layout storage, kept as `useStoredToggle` keeps
  * whether it is out. Anything stored outside `choices` is `initial`.
  */
-export function usePaneChoice<T extends string>(
+export function useStoredChoice<T extends string>(
   key: string,
   choices: readonly T[],
   initial: T
@@ -60,7 +60,7 @@ export function usePaneChoice<T extends string>(
     const stored = localStorage.getItem(STORAGE_PREFIX + key);
     return choices.find((candidate) => candidate === stored) ?? initial;
   });
-  // Stable like a setState, as `usePaneToggle`'s.
+  // Stable like a setState, as `useStoredToggle`'s.
   const set = useCallback(
     (next: T) => {
       setChoice(next);
@@ -122,10 +122,10 @@ function usePersistedNumber(storageKey: string, restore: (stored: number) => num
 }
 
 /**
- * A pane size the user can drag. The floor applies to the restored size too, which would otherwise
- * disagree with the pane's own `min-*` until the sash is grabbed.
+ * A size the user can drag. The floor applies to the restored size too, which would otherwise
+ * disagree with the area's own `min-*` until the sash is grabbed.
  */
-export function usePaneSize(key: string, initial: number, min: number): [number, (size: number) => void] {
+export function useStoredSize(key: string, initial: number, min: number): [number, (size: number) => void] {
   return usePersistedNumber(STORAGE_PREFIX + key, (stored) =>
     Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial)
   );
@@ -151,13 +151,13 @@ function storedShare(storageKey: string, initial: number): ReturnType<typeof cre
 }
 
 /**
- * A pane's *share* of its container, restored on the next start — `initial` until dragged. A share,
+ * An area's *share* of its container, restored on the next start — `initial` until dragged. A share,
  * not pixels, so it holds at any container size; the owner multiplies it by a live measurement and
  * turns `Sash`'s pixels back into one. Anything outside (0, 1) is ignored both ways: read, since
- * the user can edit it, and written, since a container too small for two panes has no share.
+ * the user can edit it, and written, since a container too small for two areas has no share.
  *
  * One value for every view using the key at once (each editor tab's preview): a drag in one resizes
- * them all. The write waits for the drag to settle, as `usePaneSize`'s does; one pending when a view
+ * them all. The write waits for the drag to settle, as `useStoredSize`'s does; one pending when a view
  * unmounts is kept, and the others show it.
  */
 export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
@@ -178,7 +178,7 @@ export function usePersistedShare(storageKey: string, initial: number): [number,
   return [share, set];
 }
 
-/** `usePersistedShare` under a fixed layout key, like `usePaneSize`. */
-export function usePaneShare(key: string, initial: number): [number, (share: number) => void] {
+/** `usePersistedShare` under a fixed layout key, like `useStoredSize`. */
+export function useStoredShare(key: string, initial: number): [number, (share: number) => void] {
   return usePersistedShare(STORAGE_PREFIX + key, initial);
 }

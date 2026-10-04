@@ -16,10 +16,10 @@ import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/Conte
 import { confirmed, filled, prompt, singleField } from "../../ui/Dialog";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
 import { Section } from "../../ui/Section";
-import { SessionMark } from "../../ui/SessionMark";
+import { TabMark } from "../../ui/TabMark";
 import { IconButton } from "../../ui/IconButton";
 import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../../ui/icons";
-import type { RefMarks } from "../../tabs/use-session-marks";
+import type { RefMarks } from "../../tabs/use-tab-marks";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
@@ -72,7 +72,7 @@ interface ProjectListProps {
   /** Which projects run their agents in sbx, by project id: a worktree runs as its project does. */
   sandboxed: Record<string, boolean>;
   /** Opens a shell tab in that repository or worktree ("open in terminal"). */
-  onOpenTerminal: (ref: ProjectRef) => void;
+  onOpenShellTab: (ref: ProjectRef) => void;
   /** Opens the next working session, one per press. */
   onShowBusy: (key: string) => void;
   /** Opens the oldest finished session; pressing again moves to the next. */
@@ -135,7 +135,7 @@ export const ProjectList = memo(function ProjectList({
   heads,
   marks,
   sandboxed,
-  onOpenTerminal,
+  onOpenShellTab,
   onShowBusy,
   onShowFinished,
   onShowWaiting,
@@ -207,7 +207,7 @@ export const ProjectList = memo(function ProjectList({
   };
 
   /** Repository-wide actions. Nothing here touches the working tree; that belongs to the git
-   *  pane, where its target is on screen — but for a worktree's own row, which is that tree, and
+   *  lane, where its target is on screen — but for a worktree's own row, which is that tree, and
    *  its merge into the base, run where the base is checked out. */
   const refEntries = (resolved: ResolvedRef): ContextMenuEntry[] => {
     const { worktree } = resolved;
@@ -263,7 +263,7 @@ export const ProjectList = memo(function ProjectList({
     // A worktree takes its project's (tet-json.ts's configRoot).
     const sbx: ContextMenuEntry[] = worktree ? [] : [{ label: "SBX Settings", run: () => onSbxSettings(projectId) }, SEPARATOR];
     return [
-      { label: "Open in terminal", run: () => onOpenTerminal(resolved.ref) },
+      { label: "New shell tab", run: () => onOpenShellTab(resolved.ref) },
       { label: PLATFORM.revealLabel, run: () => void window.tet.shell.openProject(resolved.ref) },
       { label: worktree ? "Copy path" : "Copy repository path", run: () => void navigator.clipboard.writeText(resolved.path) },
       SEPARATOR,
@@ -302,12 +302,12 @@ export const ProjectList = memo(function ProjectList({
         {/* All three session states can hold at once, each a button to a session. No ranking as
             on a tab: a row has no single icon to replace. */}
         {(marks[key]?.waiting.length ?? 0) > 0 &&
-          rowButton("Open the session waiting for an answer", () => onShowWaiting(key), <SessionMark kind="waiting" />)}
+          rowButton("Open the tab waiting for an answer", () => onShowWaiting(key), <TabMark kind="waiting" />)}
         {marks[key]?.busy &&
-          rowButton("Open the session that is working", () => onShowBusy(key), <SessionMark kind="working" />)}
+          rowButton("Open the tab that is working", () => onShowBusy(key), <TabMark kind="working" />)}
         {/* Going to the session clears the mark. */}
         {(marks[key]?.finished.length ?? 0) > 0 &&
-          rowButton("Open the session that finished", () => onShowFinished(key), <SessionMark kind="finished" />)}
+          rowButton("Open the tab that finished", () => onShowFinished(key), <TabMark kind="finished" />)}
         {/* From the status every refresh loads — no extra git call. */}
         {heads[key]?.dirty && rowButton("Uncommitted changes", () => onShowChanges(key), <ChangesIcon />)}
         {/* The switch is on, not that a tab got a sandbox: when sbx is unavailable a tab stays in

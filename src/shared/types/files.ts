@@ -66,7 +66,7 @@ export const EXPLORER_SORT_ORDERS = ["default", "mixed", "filesFirst", "type", "
 
 export type ExplorerSortOrder = (typeof EXPLORER_SORT_ORDERS)[number];
 
-/** What the settings dialog's Files tab edits, read on its own. */
+/** What the settings dialog's Files tab edits of the Explorer view, read on its own. */
 export interface ExplorerSettings {
   /** `explorer.excludeGitIgnore`: hide what git ignores too. */
   excludeGitIgnore: boolean;
@@ -77,7 +77,7 @@ export interface ExplorerSettings {
 }
 
 /**
- * What the SEARCH pane's field asks for: VS Code's search box with its three toggles, over the
+ * What the SEARCH section's field asks for: VS Code's search box with its three toggles, over the
  * files' lines (`Repository.searchFiles`). The Explorer's own field filters the tree by name and
  * asks for nothing here.
  */

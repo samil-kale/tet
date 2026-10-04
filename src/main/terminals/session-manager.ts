@@ -12,7 +12,7 @@ import { hasSandbox } from "../agents/agent";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { TerminalDescriptor, TerminalStatus } from "../../shared/types/terminals";
+import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";
@@ -85,7 +85,7 @@ interface AgentRuntime {
 }
 
 export interface SessionManagerCallbacks {
-  onTabs: (ref: ProjectRef, tabs: TerminalDescriptor[]) => void;
+  onTabs: (ref: ProjectRef, tabs: TabDescriptor[]) => void;
   onOutput: (ref: ProjectRef, tabId: string, data: string) => void;
   onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus) => void;
   /** Whether anything in this repository or worktree is still starting — drives the tab strip's
@@ -110,7 +110,7 @@ function singleLine(text: string): string {
 }
 
 /** What a hook shows the user (control-verb.ts's ControlTerminals.hookEvent). */
-export interface HookToast {
+export interface HookNotification {
   title: string;
   body: string;
 }
@@ -119,11 +119,11 @@ export interface HookOutcome {
   /** What the hook prints back into its agent (AgentTurns.hookReply). */
   stdout: string;
   /** None where the notification settings say so. */
-  toast?: HookToast;
+  notification?: HookNotification;
 }
 
 /** A `tabs-list` entry: the window's descriptor plus what only the session manager knows. */
-export interface InspectedTab extends TerminalDescriptor {
+export interface InspectedTab extends TabDescriptor {
   /** The session this tab's hooks named, claimed or not. */
   reportedSessionId?: string;
   sandbox?: string;
@@ -179,11 +179,11 @@ export class TabSessionManager {
     private readonly callbacks: SessionManagerCallbacks
   ) {}
 
-  snapshot(): TerminalDescriptor[] {
+  snapshot(): TabDescriptor[] {
     return this.tabs.map((tab) => this.descriptorOf(tab));
   }
 
-  private descriptorOf(tab: TabState): TerminalDescriptor {
+  private descriptorOf(tab: TabState): TabDescriptor {
     return toDescriptor(tab, this.indicators.has(tab.tabId), this.placeOf(tab).sandbox !== undefined);
   }
 
@@ -462,7 +462,7 @@ export class TabSessionManager {
   }
 
   /** `prompt` only for an agent with a `terminal`; the caller checks. */
-  createTab(agentId: AgentId, sandboxOnly = false, prompt?: string): TerminalDescriptor {
+  createTab(agentId: AgentId, sandboxOnly = false, prompt?: string): TabDescriptor {
     return this.addTab(agentId, { ...(sandboxOnly && { sandboxOnly }), ...(prompt !== undefined && { initialPrompt: prompt }) });
   }
 
@@ -471,7 +471,7 @@ export class TabSessionManager {
    * and a prompt to read them (prompts.ts). This tab stays as it is. Answers what went wrong
    * rather than notifying it, as renameTab does: `tabs-handoff` fails with it, the window notifies.
    */
-  async handOff(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<TerminalDescriptor | string> {
+  async handOff(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<TabDescriptor | string> {
     const tab = this.tabOf(tabId);
     if (!tab) {
       return "The tab is closed";
@@ -532,7 +532,7 @@ export class TabSessionManager {
    * A tab whose process *is* a saved command, started directly without a shell (`resolveCommand`)
    * unless it asked for one.
    */
-  createCommandTab(command: ProjectCommand): TerminalDescriptor | undefined {
+  createCommandTab(command: ProjectCommand): TabDescriptor | undefined {
     const shared = {
       title: command.name ?? command.command,
       command: command.command,
@@ -561,7 +561,7 @@ export class TabSessionManager {
     return this.addTab("shell", { ...shared, executable, runArgs });
   }
 
-  private addTab(agentId: AgentId, extra: Partial<TabState>): TerminalDescriptor {
+  private addTab(agentId: AgentId, extra: Partial<TabState>): TabDescriptor {
     const runtime = this.runtimeFor(agentId);
     newTabCounter += 1;
     const tab: TabState = {
@@ -796,16 +796,16 @@ export class TabSessionManager {
     const tabId = tab.tabId;
 
     // Fresh per session, counting from zero.
-    let isSessionReady = agent.terminal?.createIsSessionReady();
-    if (isSessionReady) {
+    let isCliReady = agent.terminal?.createIsCliReady();
+    if (isCliReady) {
       this.indicators.acquire(tabId);
     }
     const hideIndicator = (): void => {
-      if (!isSessionReady) {
+      if (!isCliReady) {
         return;
       }
       // Cleared before the delay, so a second call can't queue a second release.
-      isSessionReady = undefined;
+      isCliReady = undefined;
       setTimeout(() => this.indicators.release(tabId), INDICATOR_LINGER_MS);
     };
 
@@ -815,7 +815,7 @@ export class TabSessionManager {
     const moved = this.placeOf(tab).sandbox !== place.sandbox;
     tab.place = place;
     // The status alone posts no tabs, and the window's badge follows where the tab runs
-    // (TerminalDescriptor.sandboxed).
+    // (TabDescriptor.sandboxed).
     if (moved) {
       this.postTabs();
     }
@@ -840,7 +840,7 @@ export class TabSessionManager {
       {
         onOutput: (data) => {
           this.reportOutput(tab, data);
-          if (isSessionReady?.(data)) {
+          if (isCliReady?.(data)) {
             hideIndicator();
           }
           // A CLI persists or updates its session shortly after producing output; a watched store
@@ -1093,13 +1093,13 @@ export class TabSessionManager {
   }
 
   /**
-   * A tab's hook report — how turns reach tet ("Turns and session marks" in AGENTS.md); only a turn
+   * A tab's hook report — how turns reach tet ("Turns and tab marks" in AGENTS.md); only a turn
    * the user cut short is ended otherwise (reconcile, AgentSessionInfo.turnEndedAt).
    * Addressed by tab (`TET_TAB_ID` in the hook's environment, passed into a sandbox by
    * prepareSbxRun), so no turn is reported for a session no tab has claimed.
    *
-   * Answers the agent's stdout and the toast, composed here so settings are read at the event, not
-   * baked in at setup. Showing a mark is the renderer's call; no toast for a tab in front
+   * Answers the agent's stdout and the notification, composed here so settings are read at the event, not
+   * baked in at setup. Showing a mark is the renderer's call; no notification for a tab in front
    * (`setInFront`).
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined, side: ControlSide): HookOutcome {
@@ -1114,7 +1114,7 @@ export class TabSessionManager {
     return { ...this.applyHook(tabId, tab, bound, event, payload, reportedAt), stdout };
   }
 
-  /** hookEvent's state change and toast: `tab` is marked, `bound` (it, or a detached one) named its
+  /** hookEvent's state change and notification: `tab` is marked, `bound` (it, or a detached one) named its
    *  session. */
   private applyHook(
     tabId: string,
@@ -1135,7 +1135,7 @@ export class TabSessionManager {
     if (!tab) {
       return {};
     }
-    // A stale report gets no mark and no toast, which would contradict the marks — "Finished" over
+    // A stale report gets no mark and no notification, which would contradict the marks — "Finished" over
     // a tab working again (turn-order.ts).
     const fresh = reportApplies(tab.signalAt, at);
     // A report sent before the exit can arrive after it (Codex's aborted hook, an extension's post, a
@@ -1165,8 +1165,8 @@ export class TabSessionManager {
         const asked = endLeavesQuestion(tab, agent);
         setTurn(tab, false, at, asked);
         this.postTabs();
-        // The question already toasted this moment (see setTurn).
-        return asked ? {} : { toast: this.toast(tab, "finished") };
+        // The question already notified this moment (see setTurn).
+        return asked ? {} : { notification: this.notification(tab, "finished") };
       }
       case "permission":
       case "question":
@@ -1177,7 +1177,7 @@ export class TabSessionManager {
         tab.waitingAt = at;
         tab.signalAt = at;
         this.postTabs();
-        return { toast: this.toast(tab, event) };
+        return { notification: this.notification(tab, event) };
       case "answered":
         // The dialog closed, whatever closed it; the turn, if any, runs on.
         if (!fresh || exited || tab.waitingAt === undefined) {
@@ -1190,7 +1190,7 @@ export class TabSessionManager {
       case "idle":
         // About a turn already ended — nothing to mark. Its hook exists only while the switch is on
         // (AgentPaths.idleReminder), rather than a process per idle prompt answered with nothing.
-        return fresh ? { toast: this.toast(tab, "idle") } : {};
+        return fresh ? { notification: this.notification(tab, "idle") } : {};
     }
   }
 
@@ -1217,7 +1217,7 @@ export class TabSessionManager {
   }
 
   /** Settings read now, so a switch applies to the next turn of every open project. */
-  private toast(tab: TabState, kind: "finished" | "permission" | "question" | "idle"): HookToast | undefined {
+  private notification(tab: TabState, kind: "finished" | "permission" | "question" | "idle"): HookNotification | undefined {
     // As with the marks: a tab in front was never out of sight.
     if (this.inFront.has(tab.tabId)) {
       return undefined;
@@ -1229,7 +1229,7 @@ export class TabSessionManager {
       return undefined;
     }
     const name = getAgent(tab.agentId).displayName;
-    // The tab's title too, or two tabs of one agent would toast identically.
+    // The tab's title too, or two tabs of one agent would notification identically.
     const placeName = this.at.name();
     const where = tab.title ? `${placeName} - ${tab.title}` : placeName;
     switch (kind) {
@@ -1257,7 +1257,7 @@ export class TabSessionManager {
     this.postTabs();
   }
 
-  /** Tabs on screen in a focused, uncovered window, as only the renderer knows — no toast there. */
+  /** Tabs on screen in a focused, uncovered window, as only the renderer knows — no notification there. */
   setInFront(tabIds: readonly string[]): void {
     this.inFront = new Set(tabIds);
   }

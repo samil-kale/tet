@@ -325,7 +325,7 @@ export const DEFAULT_EXPLORER_VIEW: ExplorerSettings = {
   sortOrder: "default"
 };
 
-/** "Add Folder to Workspace". No `folders` means the whole repository, so the first add also writes
+/** "Add Folder to Explorer". No `folders` means the whole repository, so the first add also writes
  *  that root. Existing entries are kept as written. */
 export function addFolder(root: string, folderPath: string): Promise<void> {
   return patch(root, (content) => {
@@ -338,7 +338,7 @@ export function addFolder(root: string, folderPath: string): Promise<void> {
   });
 }
 
-/** "Remove Folder from Workspace": the last one gone means no `folders` — the whole repository. */
+/** "Remove Folder from Explorer": the last one gone means no `folders` — the whole repository. */
 export function removeFolder(root: string, folderPath: string): Promise<void> {
   return patch(root, (content) => {
     const folders = (Array.isArray(content.folders) ? (content.folders as unknown[]) : []).filter(
@@ -356,7 +356,7 @@ function settingChange(content: ProjectFile, key: string, value: unknown): Chang
     : [["settings"], { [key]: value }];
 }
 
-/** "Exclude from Files": the path itself as a pattern, set to true. */
+/** "Exclude from Explorer": the path itself as a pattern, set to true. */
 export function addExclude(root: string, relPath: string): Promise<void> {
   return patch(root, (content) => {
     const exclude = toSettings(content.settings)[KEY_EXCLUDE];
@@ -374,7 +374,7 @@ const EXPLORER_SETTING_KEYS: Record<keyof ExplorerSettings, string> = {
   sortOrder: KEY_SORT_ORDER
 };
 
-/** The three file-only view settings, set from the settings dialog's Files tab: one key inside
+/** The Explorer view's three settings, set from the settings dialog's Files tab: one key inside
  *  `settings`, every other key kept. */
 export function setExplorerSetting<K extends keyof ExplorerSettings>(
   root: string,
