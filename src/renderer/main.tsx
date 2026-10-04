@@ -50,4 +50,10 @@ window.tet.onTheme((themeId) => {
   void switchEditorTheme(themeId);
 });
 
-createRoot(container).render(<Startup />);
+// xterm measures its cell and draws each glyph into its atlas once, so the editor font's faces must
+// be loaded before the first terminal, or a fallback's metrics and glyphs stay.
+void Promise.all([
+  document.fonts.load(`13px "Inter"`),
+  document.fonts.load(`13px "JetBrains Mono"`),
+  document.fonts.load(`italic 13px "JetBrains Mono"`)
+]).finally(() => createRoot(container).render(<Startup />));

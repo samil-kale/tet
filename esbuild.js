@@ -71,9 +71,9 @@ const rendererConfig = {
   ...browser,
   entryPoints: [path.join(__dirname, "src", "renderer", "main.tsx")],
   outfile: path.join(dist, "renderer.js"),
-  // monaco's CSS pulls in codicon.ttf, and styles.css the Explorer's seti.woff; without a loader
-  // for them the build fails outright.
-  loader: { ".ttf": "file", ".woff": "file" },
+  // monaco's CSS pulls in codicon.ttf, and styles.css the Explorer's seti.woff and the app's fonts;
+  // without a loader for them the build fails outright.
+  loader: { ".ttf": "file", ".woff": "file", ".woff2": "file" },
   // monaco reads `import.meta.url` as a worker-location fallback (unreached, see editor.ts's
   // `getWorker`); esbuild replaces `import.meta` with `{}` under `format: "iife"` and warns at
   // every such site, burying real warnings.
@@ -109,6 +109,10 @@ function copyStaticAssets() {
   fs.copyFileSync(path.join(__dirname, "src", "renderer", "index.html"), path.join(dist, "index.html"));
   for (const file of ["icon.png", "icon.ico"]) {
     fs.copyFileSync(path.join(__dirname, "src", "renderer", "assets", file), path.join(dist, file));
+  }
+  // The OFL lets the fonts ship only with their license.
+  for (const file of ["Inter-OFL.txt", "JetBrainsMono-OFL.txt"]) {
+    fs.copyFileSync(path.join(__dirname, "src", "renderer", "assets", "fonts", file), path.join(dist, file));
   }
 }
 

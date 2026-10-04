@@ -2,11 +2,40 @@
   box-sizing: border-box;
 }
 
-/* The app's fonts, not a theme's: the same under every theme in themes/. */
+/* The app's fonts, not a theme's: the same under every theme in themes/ and on every OS, so they
+   ship with it (assets/fonts/, each beside its license). Variable, so one file serves every weight. */
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Inter";
+  src: url("./assets/fonts/InterVariable-Italic.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./assets/fonts/JetBrainsMono.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./assets/fonts/JetBrainsMono-Italic.ttf") format("truetype");
+  font-weight: 100 800;
+  font-style: italic;
+}
+
 :root {
-  --vscode-font-family: "Segoe UI", system-ui, sans-serif;
+  --vscode-font-family: "Inter", sans-serif;
   --vscode-font-size: 13px;
-  --vscode-editor-font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  --vscode-editor-font-family: "JetBrains Mono", monospace;
 }
 
 html,
@@ -1065,8 +1094,6 @@ textarea:focus,
 }
 
 .tab-label {
-  position: relative;
-  top: -1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
