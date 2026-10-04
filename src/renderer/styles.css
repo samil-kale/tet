@@ -1756,7 +1756,7 @@ textarea:focus,
   display: flex;
   flex-direction: column;
   gap: 14px;
-  width: 500px;
+  width: 540px;
   max-width: calc(100vw - 32px);
   padding: 16px;
   font-size: var(--vscode-font-size);
