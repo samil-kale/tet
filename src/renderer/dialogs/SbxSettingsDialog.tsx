@@ -354,7 +354,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             <span className="sbx-governance-icon">
               <LandmarkIcon />
             </span>
-            <>Organization governance is active (<span className="sbx-name">{organization}</span>)</>
+            <span className="sbx-governance-text">
+              Organization governance is active (<span className="sbx-name">{organization}</span>)
+            </span>
           </div>
           {accountSection}
         </>
