@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.17.0 (2026-10-04)
+
+- **Bundled fonts.** TET ships Inter and JetBrains Mono, so the UI and terminals look the same on
+  every platform, at a slightly smaller, tighter size.
+- **Lanes in settings.** Pins and order of the side views are kept in settings and can be set
+  from the window or with `tet-ctl`.
+- **More settings through `tet-ctl`.** The git checkbox defaults and the Explorer's settings
+  (now in `settings.json`, with a plain `exclude` list) are settable by verb.
+- **Fixes.** Icons and marks drawn at Lucide's grid, dialog fields spaced alike, SBX governance
+  banner aligned, Windows toast notifications repaired.
+
 ## 0.16.5 (2026-10-04)
 
 - **Side views reorder by dragging.** The strip's toggles and the side columns can be dragged
