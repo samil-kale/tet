@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.17.1 (2026-10-05)
+
+- **Fixes.** Errors in async handlers and pasted drops are caught instead of lost, renaming a
+  folder into itself is refused, and a failed update report no longer breaks the check.
+
 ## 0.17.0 (2026-10-04)
 
 - **Bundled fonts.** TET ships Inter and JetBrains Mono, so the UI and terminals look the same on
