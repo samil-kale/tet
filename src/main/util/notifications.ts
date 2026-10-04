@@ -141,7 +141,7 @@ function windowsToastXml(id: string, title: string, body: string, target?: Notif
   return (
     `<toast launch="${escapeXml(launch.toString())}"><visual><binding template="ToastGeneric">` +
     `<text>${escapeXml(title)}</text><text>${escapeXml(body)}</text>` +
-    `</binding></visual></notification>`
+    `</binding></visual></toast>`
   );
 }
 
