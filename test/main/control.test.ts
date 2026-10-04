@@ -728,6 +728,19 @@ describe("tet-ctl against the control server", () => {
     assert.equal(settings.notifications.waiting, true);
   });
 
+  it("sets one Git setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
+    const before = { ...settings.git };
+    const set = await tetCtl(["settings-set-git", "pushOnCommit", before.pushOnCommit ? "off" : "on"]);
+    assert.deepEqual(set.result, { saved: true });
+    assert.deepEqual(settings.git, { ...before, pushOnCommit: !before.pushOnCommit });
+    const unknown = await tetCtl(["settings-set-git", "force", "on"]);
+    assert.equal(unknown.status, EXIT_CODES.usage);
+    assert.match(unknown.stderr, /unknown git setting: force/);
+    const badValue = await tetCtl(["settings-set-git", "checkNewChanges", "yes"]);
+    assert.equal(badValue.status, EXIT_CODES.usage);
+    assert.equal(settings.git.checkNewChanges, before.checkNewChanges);
+  });
+
   it("sets one Explorer setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
     const hide = await tetCtl(["settings-set-explorer", "excludeGitIgnore", "on"]);
     assert.deepEqual(hide.result, { saved: true });
@@ -1036,6 +1049,7 @@ describe("tet-ctl against the control server", () => {
       ["settings-set-keybindings", "jetbrains"],
       ["settings-set-notification", "finished", "off"],
       ["settings-set-explorer", "sortOrder", "type"],
+      ["settings-set-git", "pushOnCommit", "on"],
       ["settings-set-commit-suggester", "claude"],
       ["app-restart", "--confirm"],
       ["env-request", "GITLAB_TOKEN"],

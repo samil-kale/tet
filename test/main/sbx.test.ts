@@ -706,7 +706,7 @@ describe("the Docker access tokens of the SBX Settings", () => {
 
 describe("who sbx says is signed in", () => {
   it("is read off `sbx login`'s line, and nothing else", () => {
-    assert.equal(parseSignedInUser("You are signed in [username: yaskor]\n"), "yaskor");
+    assert.equal(parseSignedInUser("You are signed in [username: jdoe]\n"), "jdoe");
     assert.equal(parseSignedInUser("Not authenticated to Docker\n"), undefined);
     assert.equal(parseSignedInUser(""), undefined);
   });

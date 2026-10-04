@@ -21,7 +21,6 @@ import { confirmed, refusal } from "../ui/Dialog";
 import { RestartNote } from "../ui/RestartNote";
 import { Checkbox, DialogError, FieldColumn } from "../ui/Field";
 import { useBusy } from "../ui/use-busy";
-import { useAgents } from "../ui/use-agents";
 import { LandmarkIcon } from "../ui/icons";
 import { firstMark, patched } from "../ui/RowSection";
 
@@ -85,7 +84,6 @@ function tabBlocked(id: SbxSettingsTab, signedIn: boolean, enabled: boolean): st
  */
 export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) {
   const [enabled, setEnabled] = useState(false);
-  const agents = useAgents();
   /** No agent on this machine, so SBX cannot be disabled. Derived on every open, not
    *  stored. */
   const [locked, setLocked] = useState(false);

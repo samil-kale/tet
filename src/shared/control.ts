@@ -1,6 +1,6 @@
 import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
 import { EXPLORER_SORT_ORDERS } from "./types/files";
-import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
+import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
 
 /**
@@ -236,6 +236,14 @@ const VERBS = [
     group: "TET itself",
     usage: `settings-set-explorer <excludeGitIgnore|compactFolders> <on|off> | settings-set-explorer sortOrder <${EXPLORER_SORT_ORDERS.join("|")}>`,
     summary: "Set how the Explorer lists every project: hide what git ignores too, compact single-child folders, or the sort order. Shown at once.",
+    positionals: ["id", "value"]
+  },
+  {
+    verb: "settings-set-git",
+    group: "TET itself",
+    usage: `settings-set-git <${GIT_SETTING_IDS.join("|")}> <on|off>`,
+    summary:
+      "Set how git's checkboxes start: new changes checked for commit, \"Also push\" on commit, and deleting a branch, tag or worktree on the remote too.",
     positionals: ["id", "value"]
   },
   {

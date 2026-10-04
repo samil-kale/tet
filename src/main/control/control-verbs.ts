@@ -5,7 +5,7 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef } from "../../shared/types/project";
-import { COLOR_SCHEMES, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
+import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
@@ -205,6 +205,12 @@ export function verbs(deps: ControlDeps): Handlers {
       } else {
         settings.patch({ files: { [id]: onOff(args, "value") } });
       }
+      return { result: { saved: true } };
+    },
+
+    "settings-set-git": (args) => {
+      const id = oneOf(args, "id", "git setting", GIT_SETTING_IDS);
+      settings.patch({ git: { [id]: onOff(args, "value") } });
       return { result: { saved: true } };
     },
 
