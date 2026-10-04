@@ -3,7 +3,7 @@
 ## What this is
 
 TET is a git workspace for coding agents: Electron + React + xterm.js, several repositories open
-at once, each with its own git pane and its own agent and shell terminals. Git is for navigation
+at once, each with its own git lane and its own agent and shell terminals. Git is for navigation
 and control of the repository state; the work happens in the terminals, so anything git can't do
 in two clicks belongs in an agent or a shell, not in a new dialog.
 
@@ -66,10 +66,11 @@ project's terminals.
   2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
   3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
      editor tabs beside them.
-  4. `git/`: the side pane's git view, and running a git action from the views above it
-     (`run-action.ts`).
-  5. `files/` (the side pane's other view: the Explorer tree, the SEARCH pane, Seti's file icons),
-     `sidebar/` and `dialogs/`, apart from each other.
+  4. `git/`: running a git action from the views above it (`run-action.ts`), and the questions and
+     login every one of them asks alike.
+  5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
+     (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
+     Explorer tree, the SEARCH pane, Seti's file icons) — and imports no other lane.
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages.
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
@@ -231,7 +232,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   `git-host.ts` imports electron, everything crossing the boundary survives a structured clone.
 - Starting git is the cost, so count invocations: anything added to the refresh path must earn its
   process (the budget is commented at `git.ts`'s `readState`).
-- `Repository` is the single source of truth for the git pane and the terminals; every git command
+- `Repository` is the single source of truth for the git lane and the terminals; every git command
   that changes an open repository goes through `Repository.runAction` (renderer:
   `git/run-action.ts` — `useBranchActions` for branch commands, `useFileAct` for the changes list
   and the Explorer). Reads run beside it, and so does the periodic fetch, which actions wait on.
@@ -240,7 +241,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   user's helper; where there is none, tet keeps it sealed in `~/.tet/git-logins.json`.
 - tet never diffs: it hands monaco's diff editor two texts (`Repository.readFile`).
 - **A linked worktree is a worktree and belongs to its project; it is not a project.** It only
-  behaves like one in places (its own row, tabs and git pane) — never design from "a worktree is a
+  behaves like one in places (its own row, tabs and git lane) — never design from "a worktree is a
   project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>`; the key is
   given once and never changes, and every worktree TET made opens with its project, listed under
   its row (`Project.worktrees`) and in the branch tree's WORKTREES (`RepositoryState.worktrees`,
@@ -251,7 +252,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   and terminals stay. Its base is tet's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
   Removing a project deletes the worktrees TET made, with their branches.
 
-**Scope.** Everything the git pane does fits in a context menu, an icon button or a question. Of
+**Scope.** Everything the git lane does fits in a context menu, an icon button or a question. Of
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, branch
 and tag create/rename/delete, merge and rebase onto a branch, abort, per-file diff, discard,
 `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
@@ -268,10 +269,10 @@ or a per-line decision is for an agent.
 
 ## UI rules
 
-- **Layout**: the side views on the left, each a column of its own: the projects (each with its
-  worktrees, and the COMMANDS), git and files — none of them a tab. The strip's toggles drive the
-  one free column, a view at a time; a view pinned from its headers' menu stays out beside it, its
-  toggle gone until unpinned (`use-side-pane.ts`). The tab strip is the terminals and editor
+- **Layout**: the lanes on the left: the projects (each with its worktrees, and the COMMANDS), git
+  and files — none of them a tab. The strip's toggles drive the one free lane, one at a time; a
+  lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
+  by dragging its header (`use-lanes.ts`). The tab strip is the terminals and editor
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap

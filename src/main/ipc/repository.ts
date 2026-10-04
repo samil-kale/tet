@@ -20,7 +20,7 @@ import { git } from "../git/git-client";
 import type { Repository } from "../git/repository";
 import { MISSING_REPOSITORY, type IpcDeps } from "./deps";
 
-/** Everything the git pane and the editor ask of one repository. */
+/** Everything the git lane and the editor ask of one repository. */
 export function registerRepositoryIpc({
   settings,
   store,

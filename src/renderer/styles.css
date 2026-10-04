@@ -392,7 +392,7 @@ textarea:focus,
 
 /* Project list --------------------------------------------------------------------------- */
 
-/* A titled section of a column. One of a pair is sized by the sash and may still shrink to the
+/* A titled section of a lane. One of a pair is sized by the sash and may still shrink to the
    floor; the other (`.grows`) takes the rest. */
 .section {
   display: flex;
@@ -459,8 +459,8 @@ textarea:focus,
   flex: none;
 }
 
-/* One row shape for both sidebar lists. No gap: the icon buttons ending a row already carry
-   5.5px around a 13px drawing in a 24px box. */
+/* One row shape for both of the projects lane's lists. No gap: the icon buttons ending a row
+   already carry 5.5px around a 13px drawing in a 24px box. */
 .project-item,
 .command-item {
   display: flex;
@@ -479,11 +479,11 @@ textarea:focus,
 }
 
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees, a pinned
-   column by its headers. */
+   lane by its headers. */
 .project-group.dragging,
 .command-item.dragging,
-.side-pane.dragging,
-.side-toggle.dragging {
+.lane.dragging,
+.lane-toggle.dragging {
   opacity: 0.5;
 }
 
@@ -496,20 +496,20 @@ textarea:focus,
   box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
 }
 
-/* A group's, a column's and a toggle's line is drawn over what it holds, whose hover and
-   selection would paint over a shadow: across a group, down a column or a toggle. */
+/* A group's, a lane's and a toggle's line is drawn over what it holds, whose hover and
+   selection would paint over a shadow: across a group, down a lane or a toggle. */
 .project-group,
-.side-pane,
-.side-toggle {
+.lane,
+.lane-toggle {
   position: relative;
 }
 
 .project-group.drop-before::before,
-.side-pane.drop-before::before,
-.side-toggle.drop-before::before,
+.lane.drop-before::before,
+.lane-toggle.drop-before::before,
 .project-group.drop-after::after,
-.side-pane.drop-after::after,
-.side-toggle.drop-after::after {
+.lane.drop-after::after,
+.lane-toggle.drop-after::after {
   content: "";
   position: absolute;
   pointer-events: none;
@@ -517,9 +517,9 @@ textarea:focus,
 }
 
 .project-group.drop-before::before,
-.side-toggle.drop-before::before,
+.lane-toggle.drop-before::before,
 .project-group.drop-after::after,
-.side-toggle.drop-after::after {
+.lane-toggle.drop-after::after {
   background: var(--vscode-focusBorder);
 }
 
@@ -538,32 +538,32 @@ textarea:focus,
   bottom: 0;
 }
 
-.side-pane.drop-before::before,
-.side-toggle.drop-before::before,
-.side-pane.drop-after::after,
-.side-toggle.drop-after::after {
+.lane.drop-before::before,
+.lane-toggle.drop-before::before,
+.lane.drop-after::after,
+.lane-toggle.drop-after::after {
   top: 0;
   bottom: 0;
 }
 
-.side-toggle.drop-before::before,
-.side-toggle.drop-after::after {
+.lane-toggle.drop-before::before,
+.lane-toggle.drop-after::after {
   width: 1px;
 }
 
 /* A border as the split view's drop frames, 2px as theirs. */
-.side-pane.drop-before::before,
-.side-pane.drop-after::after {
+.lane.drop-before::before,
+.lane.drop-after::after {
   border-left: 2px solid var(--vscode-focusBorder);
 }
 
-.side-pane.drop-before::before,
-.side-toggle.drop-before::before {
+.lane.drop-before::before,
+.lane-toggle.drop-before::before {
   left: 0;
 }
 
-.side-pane.drop-after::after,
-.side-toggle.drop-after::after {
+.lane.drop-after::after,
+.lane-toggle.drop-after::after {
   right: 0;
 }
 
@@ -758,12 +758,12 @@ textarea:focus,
   gap: 0;
 }
 
-/* A file mark is a glyph of Seti's font (files/file-icons.ts), centred in the chevron's
+/* A file mark is a glyph of Seti's font (lanes/files/file-icons.ts), centred in the chevron's
    `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
    (TWISTIE_WIDTH + TWISTIE_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
-  src: url("./files/seti.woff") format("woff");
+  src: url("./lanes/files/seti.woff") format("woff");
   font-weight: normal;
   font-style: normal;
 }
@@ -778,7 +778,7 @@ textarea:focus,
   line-height: 1;
 }
 
-/* Seti's palette (FileMarkColor in files/file-icons.ts) in the terminal's ANSI colors, which every
+/* Seti's palette (FileMarkColor in lanes/files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
   color: var(--vscode-terminal-ansiBlue);
@@ -808,7 +808,7 @@ textarea:focus,
   color: var(--vscode-terminal-ansiBrightMagenta);
 }
 
-/* What the search found in the files (files/FileSearch.tsx). The rows are the tree's, so
+/* What the search found in the files (lanes/files/FileSearch.tsx). The rows are the tree's, so
    only what they carry beyond a file row is stated here. */
 
 /* A section header's title with its count beside it — SEARCH's summary long enough to be cut off
@@ -1292,11 +1292,11 @@ textarea:focus,
  * reach; `theme.ts` hides it by color, with the overview ruler.
  */
 
-/* Side pane: the side views' columns ------------------------------------------------------ */
+/* Lanes ---------------------------------------------------------------------------------- */
 
-/* A side view's column, left of the terminals; its width comes from its sash (default and limits
-   in use-side-pane.ts). */
-.side-pane {
+/* A lane, left of the terminals; its width comes from its sash (default and limits
+   in use-lanes.ts). */
+.lane {
   display: flex;
   flex: none;
   /* No floor: the slide animates this box to zero, while the content's own minimum keeps it
@@ -1307,29 +1307,29 @@ textarea:focus,
 }
 
 /* Only while sliding: left on, it would animate sash drags too. */
-.side-pane.sliding {
+.lane.sliding {
   transition: width 0.15s ease;
 }
 
 
-.side-pane-content {
+.lane-content {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-width: var(--pane-min-width);
   min-height: 0;
   /* Replays on every view switch: leaving `display: none` restarts an animation. */
-  animation: side-pane-fade-in 0.1s ease-out;
+  animation: lane-fade-in 0.1s ease-out;
 }
 
-@keyframes side-pane-fade-in {
+@keyframes lane-fade-in {
   from {
     opacity: 0;
   }
 }
 
 /* The other view, kept mounted for its state; `display` is safe, nothing in it measures itself. */
-.side-pane-content.hidden {
+.lane-content.hidden {
   display: none;
 }
 
@@ -1498,7 +1498,7 @@ textarea:focus,
   font-size: var(--vscode-font-size);
 }
 
-/* A toggle whose pane is out (the side pane's view buttons). focusBorder, as everything that
+/* A toggle whose lane is out (the strip's lane toggles). focusBorder, as everything that
    points: `--vscode-button-background` is near white in Dark Slate. A disabled one marks nothing. */
 .icon-button.active:not(:disabled) {
   opacity: 1;

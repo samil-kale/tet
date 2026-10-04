@@ -1,17 +1,17 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
-import { defaultRemote, refName, upstreamName } from "../../shared/types/git";
-import { projectRef, projectRefKey, worktreeName } from "../../shared/types/project";
-import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../shared/types/git";
-import type { ResolvedRef } from "../resolved-ref";
-import { runWithFollowUp, type GitRun } from "./run-action";
-import { TreeRow } from "../ui/tree-row";
-import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
-import { TextField } from "../ui/Field";
-import { FilterField } from "../ui/FilterField";
-import { notify } from "../ui/Notices";
-import { useCollapsedSections } from "../ui/layout-storage";
+import { defaultRemote, refName, upstreamName } from "../../../shared/types/git";
+import { projectRef, projectRefKey, worktreeName } from "../../../shared/types/project";
+import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../../shared/types/git";
+import type { ResolvedRef } from "../../resolved-ref";
+import { runWithFollowUp, type BranchActions } from "../../git/run-action";
+import { TreeRow } from "../../ui/tree-row";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
+import { TextField } from "../../ui/Field";
+import { FilterField } from "../../ui/FilterField";
+import { notify } from "../../ui/Notices";
+import { useCollapsedSections } from "../../ui/layout-storage";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -21,25 +21,15 @@ import {
   TagIcon,
   ChevronIcon,
   WorktreeIcon
-} from "../ui/icons";
-import { askDeleteWorktree, askRenameWorktree, NOT_MADE_BY_TET, worktreeEntry } from "./worktree-questions";
-
-/** One git command at a time per repository or worktree, labelled while it runs (`GitRun`). The tree asks its
- *  questions itself, knowing which remote holds a branch and where HEAD is. */
-export interface BranchActions extends GitRun {
-  /** A command runs in this repository or worktree; no second one is offered. */
-  busy: boolean;
-  /** That command was started here, so this pane's bar shows it; one started from the project
-   *  list shows in that list's bar instead. */
-  startedHere: boolean;
-}
+} from "../../ui/icons";
+import { askDeleteWorktree, askRenameWorktree, NOT_MADE_BY_TET, worktreeEntry } from "../../git/worktree-questions";
 
 interface BranchTreeProps {
   resolved: ResolvedRef;
   state: RepositoryState;
   branch: BranchActions;
-  /** Brings a repository or worktree of the project to the front, by its key — as a sidebar row
-   *  does. */
+  /** Brings a repository or worktree of the project to the front, by its key — as a projects lane
+   *  row does. */
   onSelect: (key: string) => void;
 }
 

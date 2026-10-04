@@ -32,7 +32,7 @@ interface TerminalView {
 
 /**
  * The focus reports (DECSET 1004) xterm sends. Claude Code drops a click that comes while it thinks
- * it is unfocused, so a click into a terminal that lost the focus to the sidebar or another pane
+ * it is unfocused, so a click into a terminal that lost the focus to a lane or another pane
  * would only focus it. So a terminal is told of losing the focus only once the window loses it;
  * focus moving within the window is not reported.
  */

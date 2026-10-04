@@ -1,21 +1,21 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { projectRefKey } from "../../shared/types/project";
-import type { ExplorerListing } from "../../shared/types/files";
-import type { GitActionResult } from "../../shared/types/git";
-import type { ProjectRef } from "../../shared/types/project";
-import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../editor/editor-tab";
-import type { FileAct, FileAsk } from "../git/run-action";
-import { openEntries, pathEntries } from "../editor/file-menu";
+import { projectRefKey } from "../../../shared/types/project";
+import type { ExplorerListing } from "../../../shared/types/files";
+import type { GitActionResult } from "../../../shared/types/git";
+import type { ProjectRef } from "../../../shared/types/project";
+import type { ResolvedRef } from "../../resolved-ref";
+import type { OpenEditor } from "../../editor/editor-tab";
+import type { FileAct, FileAsk } from "../../git/run-action";
+import { openEntries, pathEntries } from "../../editor/file-menu";
 import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
-import { baseName, parentOf } from "../paths";
+import { baseName, parentOf } from "../../paths";
 import { FileMarkIcon } from "./file-mark";
-import { compactTree, filterTree, foldersIn, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../ui/tree";
-import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../ui/tree-row";
-import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirmed } from "../ui/Dialog";
-import { FilterField } from "../ui/FilterField";
-import type { FoldAll } from "../ui/FoldAllButton";
+import { compactTree, filterTree, foldersIn, isOpen, visibleRows, type TreeNode, type VisibleRow } from "../../ui/tree";
+import { INDENT_BASE, INDENT_STEP, TreeRow, Twistie } from "../../ui/tree-row";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { askName, confirmed } from "../../ui/Dialog";
+import { FilterField } from "../../ui/FilterField";
+import type { FoldAll } from "../../ui/FoldAllButton";
 
 interface ExplorerRowProps extends VisibleRow {
   selected: boolean;
@@ -60,7 +60,7 @@ interface ExplorerProps {
   resolved: ResolvedRef;
   /** Undefined while the listing is read. */
   files: ExplorerListing | undefined;
-  /** False while hidden behind the git view, where a row can't be scrolled to. */
+  /** False while hidden behind the git lane, where a row can't be scrolled to. */
   shown: boolean;
   /** The active editor tab's file — revealed and highlighted. */
   selected: string | null;

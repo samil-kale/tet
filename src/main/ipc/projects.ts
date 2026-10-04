@@ -178,7 +178,7 @@ export function registerProjectsIpc({
     }
   });
 
-  // The sidebar's order, kept for the next start: not kept, only the order is lost.
+  // The projects lane's order, kept for the next start: not kept, only the order is lost.
   handle("projects:reorder", (_event, projectIds: string[]): void =>
     logFailure("keep the projects' order", () => store.reorder(projectIds))
   );

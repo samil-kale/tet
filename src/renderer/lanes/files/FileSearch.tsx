@@ -1,12 +1,12 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
-import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
-import { baseName, parentOf } from "../paths";
+import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../../shared/types/files";
+import { baseName, parentOf } from "../../paths";
 import { FileMarkIcon } from "./file-mark";
-import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../ui/tree-row";
-import { FilterField } from "../ui/FilterField";
-import type { FoldAll } from "../ui/FoldAllButton";
-import { IconButton } from "../ui/IconButton";
-import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../ui/icons";
+import { INDENT_BASE, MATCH_INDENT, TreeRow, Twistie } from "../../ui/tree-row";
+import { FilterField } from "../../ui/FilterField";
+import type { FoldAll } from "../../ui/FoldAllButton";
+import { IconButton } from "../../ui/IconButton";
+import { CaseSensitiveIcon, type IconProps, RegexIcon, WholeWordIcon } from "../../ui/icons";
 
 /** An empty search field: nothing typed, every toggle off. */
 const EMPTY_SEARCH: FileSearchQuery = { text: "", matchCase: false, wholeWord: false, regex: false };

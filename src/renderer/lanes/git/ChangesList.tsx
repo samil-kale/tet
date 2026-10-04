@@ -1,21 +1,21 @@
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { syncRemote } from "../../shared/types/git";
-import type { ChangeStatus, GitActionResult, RepositoryState } from "../../shared/types/git";
-import type { ProjectRef } from "../../shared/types/project";
-import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../editor/editor-tab";
-import { runWithFollowUp, type FileAct, type FileAsk } from "./run-action";
-import { baseName, extensionOf, parentOf } from "../paths";
-import { openEntries, pathEntries } from "../editor/file-menu";
-import { buildTree, compactTree, compareGrouped, compareNames, filesByNode, foldersIn, sortTree, visibleRows, type TreeNode } from "../ui/tree";
-import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, Twistie, type CheckState } from "../ui/tree-row";
-import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirmed, confirmedFollowUp, filled, prompt } from "../ui/Dialog";
-import { askLogin } from "./GitLogin";
-import { Checkbox, SuggestField } from "../ui/Field";
-import { FilterField } from "../ui/FilterField";
-import type { FoldAll } from "../ui/FoldAllButton";
-import { notify } from "../ui/Notices";
+import { syncRemote } from "../../../shared/types/git";
+import type { ChangeStatus, GitActionResult, RepositoryState } from "../../../shared/types/git";
+import type { ProjectRef } from "../../../shared/types/project";
+import type { ResolvedRef } from "../../resolved-ref";
+import type { OpenEditor } from "../../editor/editor-tab";
+import { runWithFollowUp, type FileAct, type FileAsk } from "../../git/run-action";
+import { baseName, extensionOf, parentOf } from "../../paths";
+import { openEntries, pathEntries } from "../../editor/file-menu";
+import { buildTree, compactTree, compareGrouped, compareNames, filesByNode, foldersIn, sortTree, visibleRows, type TreeNode } from "../../ui/tree";
+import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, Twistie, type CheckState } from "../../ui/tree-row";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
+import { askLogin } from "../../git/GitLogin";
+import { Checkbox, SuggestField } from "../../ui/Field";
+import { FilterField } from "../../ui/FilterField";
+import type { FoldAll } from "../../ui/FoldAllButton";
+import { notify } from "../../ui/Notices";
 
 interface ChangesListProps {
   resolved: ResolvedRef;
@@ -105,7 +105,7 @@ export async function askCommit(
 ): Promise<void> {
   const paths = given?.length === state.changes.length ? undefined : given;
   const { remote, canSync } = syncRemote(state);
-  // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitPane).
+  // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitLane).
   const pushLabel = canSync ? (state.upstream === undefined ? "Also publish branch" : `Also push ${remote}`) : undefined;
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
    *  question is gone — only one question is up at a time. */

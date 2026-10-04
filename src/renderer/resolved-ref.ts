@@ -41,7 +41,7 @@ function sameResolved(previous: ResolvedRef, entry: ResolvedRef): boolean {
   );
 }
 
-/** The repository and every worktree open, by key, in the sidebar's order, each kept where
+/** The repository and every worktree open, by key, in the projects lane's order, each kept where
  *  unchanged (`ref` holds what was last handed out). */
 export function resolvedByKey(ref: { current: Record<string, ResolvedRef> }, projects: Project[]): Record<string, ResolvedRef> {
   const next: Record<string, ResolvedRef> = {};

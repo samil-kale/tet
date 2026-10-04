@@ -29,7 +29,7 @@ const PERSIST_MS = 300;
 
 /**
  * Whether a pane is showing, in the same layout storage. It stays as set until toggled again —
- * the side pane stays out until its view's toggle is pressed again, one for all projects.
+ * a lane stays out until its toggle is pressed again, one for all projects.
  */
 export function usePaneToggle(key: string, initial: boolean): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {

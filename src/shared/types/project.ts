@@ -15,7 +15,7 @@ export interface Project {
   worktrees: ProjectWorktree[];
 }
 
-/** A linked worktree of a project, as the sidebar lists it. */
+/** A linked worktree of a project, as the projects lane lists it. */
 export type ProjectWorktree = Pick<WorktreeInfo, "path" | "branch" | "key">;
 
 /**

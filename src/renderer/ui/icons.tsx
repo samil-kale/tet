@@ -228,7 +228,7 @@ export function BranchIcon(props: IconProps) {
   return <Lucide {...props} icon={GitBranch} extent={20} />;
 }
 
-/** Lucide's `folder-code` — the projects, the side pane's first view. Drawn a pixel over the
+/** Lucide's `folder-code` — the projects lane. Drawn a pixel over the
  *  shared size, past the long-side cap, so the folder reads beside the strip's other toggles. */
 export function ProjectsIcon(props: IconProps) {
   return <Lucide {...props} icon={FolderCode} extent={18.66} cy={11.5} />;
@@ -370,7 +370,7 @@ export function GearIcon(props: IconProps) {
   return <Lucide {...props} icon={Settings} extent={18.12} />;
 }
 
-/** Lucide's `file-braces` — the files view. The long-axis cap: the geometric mean would clip the
+/** Lucide's `file-braces` — the files lane. The long-axis cap: the geometric mean would clip the
  *  bottom. */
 export function FilesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileBraces} extent={20.23} />;

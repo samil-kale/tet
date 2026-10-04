@@ -263,7 +263,7 @@ const VERBS = [
     verb: "repo-state",
     group: "TET itself",
     usage: "repo-state [--project <id>]",
-    summary: "What the git pane shows for a project: branch, upstream, changed files, stashes.",
+    summary: "What the git lane shows for a project: branch, upstream, changed files, stashes.",
     positionals: [],
     sandbox: "ownRef"
   },
@@ -531,7 +531,7 @@ const VERBS = [
     verb: "explorer-list",
     group: "In front of the user",
     usage: "explorer-list [--project <id>]",
-    summary: "What the files view lists for a project, with tet.json's folders and excludes applied.",
+    summary: "What the files lane lists for a project, with tet.json's folders and excludes applied.",
     positionals: [],
     sandbox: "ownRef"
   },

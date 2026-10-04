@@ -9,20 +9,20 @@ interface SectionProps {
   countError?: boolean;
   /** Draws the section's one progress bar along the header's bottom edge. */
   busy?: boolean;
-  /** Given, the sash beside it sizes the section; left out, it takes the rest of the column. */
+  /** Given, the sash beside it sizes the section; left out, it takes the rest of the lane. */
   height?: number;
   /** The section's icon buttons, at the header's right edge. */
   actions?: ReactNode;
   children: ReactNode;
 }
 
-/** What drags the column a section stands in by its header, where it can be dragged (a pinned
- *  side column's `handleProps`). */
+/** What drags the lane a section stands in by its header, where it can be dragged (a pinned
+ *  lane's `handleProps`). */
 export const SectionHandle = createContext<HTMLAttributes<HTMLElement> | undefined>(undefined);
 
 /**
- * A titled section of a column — the sidebar's, the git view's, the files view's: a header with its
- * title, count and actions, then what it holds, a filter field included where it has one.
+ * A titled section of a lane — the projects lane's, the git lane's, the files lane's: a header
+ * with its title, count and actions, then what it holds, a filter field included where it has one.
  */
 export function Section({ title, count, countError, busy, height, actions, children }: SectionProps) {
   const handle = useContext(SectionHandle);

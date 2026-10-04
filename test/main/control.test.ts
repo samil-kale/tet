@@ -1248,7 +1248,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(calls.editorsOpened.length, 4);
   });
 
-  it("lists the files view's files and the notices shown", async () => {
+  it("lists the files lane's files and the notices shown", async () => {
     assert.deepEqual(((await tetCtl(["explorer-list"])).result as { files: string[] }).files, ["p1.txt"]);
     assert.deepEqual((await tetCtl(["notices-list"])).result, [{ severity: "error", message: "Could not delete", at: 1 }]);
   });

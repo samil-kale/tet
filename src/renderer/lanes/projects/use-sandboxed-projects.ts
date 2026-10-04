@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Project } from "../../shared/types/project";
-import { forget } from "../identity";
+import type { Project } from "../../../shared/types/project";
+import { forget } from "../../identity";
 
 /** Which projects run their agent tabs sandboxed, and how a removed project's entry goes. */
 interface SandboxedProjects {

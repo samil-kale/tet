@@ -13,6 +13,12 @@ const AGENT_FOLDERS = fs
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
+/** Each lane's own folder under src/renderer/lanes, read off the disk like AGENT_FOLDERS. */
+const LANE_FOLDERS = fs
+  .readdirSync(new URL("./src/renderer/lanes", import.meta.url), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
 const IPC_MESSAGE = "Only through the typed wrappers: handle/on/once (ipc/channels.ts), invoke/send/subscribe (preload).";
 /** By its name, or off electron's namespace; an alias is refused at its import (IPC_IMPORT). */
 const IPC_BY_NAME = {
@@ -159,6 +165,16 @@ const agentFolder = (area) => ({
   message: "An agent's own folder; go through the registry (agents/index.ts) or agent.ts."
 });
 
+/**
+ * A lane imports no other lane: what two of them share lies below them (`git/run-action.ts`). The
+ * other lane lies beside the importer's own (`../files`), or is reached through lanes/
+ * (`../../lanes/files`); `../../git` is the shared git/, not a lane.
+ */
+const LANE_FOLDER = {
+  regex: `^(\\.\\./|(\\.\\./)+((src/)?renderer/)?lanes/)(${LANE_FOLDERS.join("|")})(/|$)`,
+  message: "Another lane's own folder; what two lanes share lies below them (git/, ui/)."
+};
+
 /** Up and into another process's folder; a file of that name nearby (opencode's `./cli`) is not one. */
 const processBorder = (folder) => ({
   regex: `^(\\.\\./)+(${PROCESSES.filter((other) => other !== folder).join("|")})(/|$)`,
@@ -185,7 +201,7 @@ const RENDERER_LAYERS = [
   { editor: [] },
   { tabs: [] },
   { git: [] },
-  { files: [], sidebar: [], dialogs: [] },
+  { lanes: [], dialogs: [] },
   { App: ["*"], Startup: ["*"], main: ["*"], "use-ref-feeds": ["*"] }
 ];
 
@@ -288,7 +304,7 @@ export default tseslint.config(
     files: ["src/main/agents/index.ts"],
     rules: { "no-restricted-imports": ["error", { patterns: [...layerPatterns("main", MAIN_LAYERS, "agents"), NODE_HTTPS] }] }
   },
-  ...layerConfigs("renderer", RENDERER_LAYERS, () => [NODE_BUILTIN]),
+  ...layerConfigs("renderer", RENDERER_LAYERS, (area) => [NODE_BUILTIN, ...(area === "lanes" ? [LANE_FOLDER] : [])]),
   {
     // The utility processes (git-host.ts, explorer-host.ts) and the CLI run without electron;
     // `shared/` runs in every process. None of them may import it, and the utility processes may

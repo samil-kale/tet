@@ -1,6 +1,6 @@
 import { useState, type DragEvent, type HTMLAttributes } from "react";
 
-/** Drag-reordering, shared by the sidebar lists, the side pane's columns and the strip's toggles.
+/** Drag-reordering, shared by the projects lane's lists, the lanes and the strip's toggles.
  *  Each supplies its own drag type (a row dragged over a terminal must not be pasted into it, and
  *  no other list may take the drop), its payload (an id, or the position where an entry can appear
  *  twice), and the move itself. */
@@ -17,13 +17,13 @@ interface DragReorderOptions {
   onMove: (from: number, to: number) => void;
 }
 
-/** Any element: a row, a column, a button. */
+/** Any element: a row, a lane, a button. */
 type RowElement = HTMLElement;
 
 interface DragReorder {
   /** Spread onto each row, with its index: `handleProps` and `targetProps` on one element. */
   rowProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
-  /** What starts the row's drag, where that is a part of it (a column's headers). */
+  /** What starts the row's drag, where that is a part of it (a lane's headers). */
   handleProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
   /** What takes the drop: the row's whole box. */
   targetProps: (index: number) => HTMLAttributes<RowElement>;

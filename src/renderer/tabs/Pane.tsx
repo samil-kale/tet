@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { isWorking } from "../../shared/types/terminals";
-import type { SideView } from "../ui/use-side-pane";
+import type { Lane } from "../ui/use-lanes";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TerminalDescriptor } from "../../shared/types/terminals";
@@ -43,46 +43,46 @@ function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
 
 /** The one row of icon buttons, on pane "a" alone whatever the preset. */
 export interface PaneChrome {
-  /** The strip toggles the free view alone; a pinned one is out, its toggle gone. */
-  freeView: SideView | null;
-  /** The views not pinned, in the user's order. */
-  toggleOrder: readonly SideView[];
-  onToggleSideView: (view: SideView) => void;
+  /** The strip toggles the free lane alone; a pinned one is out, its toggle gone. */
+  freeLane: Lane | null;
+  /** The lanes not pinned, in the user's order. */
+  toggleOrder: readonly Lane[];
+  onToggleLane: (lane: Lane) => void;
   /** A toggle dragged from `from` to insertion index `to` of `toggleOrder`. */
   onMoveToggle: (from: number, to: number) => void;
   onOpenSettings: () => void;
 }
 
-/** The side views' toggles, drawn in `toggleOrder`. */
-const SIDE_TOGGLES: Record<SideView, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
+/** The lanes' toggles, drawn in `toggleOrder`. */
+const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
   projects: { noun: "projects", Icon: ProjectsIcon },
   git: { noun: "repository", Icon: GitIcon },
   files: { noun: "files", Icon: FilesIcon }
 };
 
 /** A toggle's drag, its own so no tab strip or terminal takes the drop. */
-const TOGGLE_DRAG_TYPE = "application/x-tet-side-toggle";
+const TOGGLE_DRAG_TYPE = "application/x-tet-lane-toggle";
 
 /** The strip's toggles, each dragged elsewhere among them. */
-function SideToggles({ chrome }: { chrome: PaneChrome }) {
-  const { toggleOrder, freeView, onToggleSideView, onMoveToggle } = chrome;
+function LaneToggles({ chrome }: { chrome: PaneChrome }) {
+  const { toggleOrder, freeLane, onToggleLane, onMoveToggle } = chrome;
   const { rowProps, rowClasses } = useDragReorder({
     dragType: TOGGLE_DRAG_TYPE,
     count: toggleOrder.length,
     payloadOf: (index) => toggleOrder[index],
-    indexOf: (view) => toggleOrder.indexOf(view as SideView),
+    indexOf: (lane) => toggleOrder.indexOf(lane as Lane),
     onMove: onMoveToggle
   });
-  return toggleOrder.map((view, index) => {
-    const { noun, Icon } = SIDE_TOGGLES[view];
+  return toggleOrder.map((lane, index) => {
+    const { noun, Icon } = LANE_TOGGLES[lane];
     return (
       <IconButton
-        key={view}
+        key={lane}
         {...rowProps(index)}
-        className={["side-toggle", ...rowClasses(index)].join(" ")}
-        active={freeView === view}
-        onClick={() => onToggleSideView(view)}
-        title={`${freeView === view ? "Hide" : "Show"} the ${noun}`}
+        className={["lane-toggle", ...rowClasses(index)].join(" ")}
+        active={freeLane === lane}
+        onClick={() => onToggleLane(lane)}
+        title={`${freeLane === lane ? "Hide" : "Show"} the ${noun}`}
       >
         <Icon />
       </IconButton>
@@ -437,7 +437,7 @@ export const Pane = memo(function Pane({
         {/* Window chrome, on pane "a" alone. */}
         {chrome && (
           <div className="tab-strip-actions">
-            <SideToggles chrome={chrome} />
+            <LaneToggles chrome={chrome} />
             <IconButton title="Settings" onClick={chrome.onOpenSettings}>
               <GearIcon />
             </IconButton>

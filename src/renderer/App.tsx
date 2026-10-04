@@ -9,20 +9,20 @@ import type { TerminalDescriptor } from "../shared/types/terminals";
 import { resolvedByKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
-import { CommandList } from "./sidebar/CommandList";
+import { CommandList } from "./lanes/projects/CommandList";
 import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
 import { useContextMenu } from "./ui/ContextMenu";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
-import { FilesPane } from "./files/FilesPane";
-import { GitPane } from "./git/GitPane";
+import { FilesLane } from "./lanes/files/FilesLane";
+import { GitLane } from "./lanes/git/GitLane";
 import { Notices, notify, showProgress } from "./ui/Notices";
-import { ProjectList } from "./sidebar/ProjectList";
-import { useSandboxedProjects } from "./sidebar/use-sandboxed-projects";
-import { activeAfterChange, activeAtStart, rememberActive } from "./sidebar/active-project";
+import { ProjectList } from "./lanes/projects/ProjectList";
+import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
+import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-project";
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { usePaneSize } from "./ui/layout-storage";
-import { SIDE_VIEWS, useSidePane, type SideView } from "./ui/use-side-pane";
+import { LANES, useLanes, type Lane } from "./ui/use-lanes";
 import { useDragReorder } from "./ui/drag-reorder";
 import { SectionHandle } from "./ui/Section";
 import { MIN_CONTENT_WIDTH, MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "./ui/Sash";
@@ -40,7 +40,7 @@ import type { EditorTab, PaneTab } from "./editor/editor-tab";
 import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
 import { useEditorSync } from "./tabs/use-editor-sync";
-import { useRefHeads } from "./sidebar/use-ref-heads";
+import { useRefHeads } from "./lanes/projects/use-ref-heads";
 import { useWindowFocused } from "./ui/use-window-focused";
 import { useWindowShortcuts } from "./ui/use-window-shortcuts";
 import { useRefFeeds } from "./use-ref-feeds";
@@ -62,8 +62,8 @@ function requesterOf(
 
 const DEFAULT_LAYOUT = defaultLayout();
 
-/** A side pane column's drag, its own so no list or terminal takes the drop. */
-const COLUMN_DRAG_TYPE = "application/x-tet-side-column";
+/** A lane's drag, its own so no list or terminal takes the drop. */
+const LANE_DRAG_TYPE = "application/x-tet-lane";
 
 /** `worktreesSupported`: git creates them (Requirements.worktrees). */
 export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
@@ -119,10 +119,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   );
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
-  /** The branch commands' gate, and the git pane's and project list's ways in (run-action.ts). */
+  /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeKey);
-  /** Pin and Unpin, on a right-click on any of a side view's section headers. */
-  const sideMenu = useContextMenu<SideView>();
+  /** Pin and Unpin, on a right-click on any of a lane's section headers. */
+  const laneMenu = useContextMenu<Lane>();
   // Pane defaults and limits.
   const [branchTreeHeight, setBranchTreeHeight] = usePaneSize("branch-tree", 260, MIN_PANE_HEIGHT);
   const [fileSearchHeight, setFileSearchHeight] = usePaneSize("file-search", 260, MIN_PANE_HEIGHT);
@@ -132,28 +132,28 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     Math.round(window.innerHeight * 0.4),
     MIN_PANE_HEIGHT
   );
-  /** The side views out and pinned, their widths and slide (use-side-pane.ts). */
+  /** The lanes out and pinned, their widths and slide (use-lanes.ts). */
   const {
-    openViews,
-    pinnedViews,
+    openLanes,
+    pinnedLanes,
     pinnedOrder,
     toggleOrder,
-    freeView,
+    freeLane,
     widthOf,
-    slidingViews,
+    slidingLanes,
     stopSliding,
-    toggleSideView,
+    toggleLane,
     togglePin,
     movePinned,
     moveToggle,
     showChanges
-  } = useSidePane(activeKeyRef, setActiveKey);
-  /** A pinned column moves by its headers, among the pinned ones. */
-  const columnDrag = useDragReorder({
-    dragType: COLUMN_DRAG_TYPE,
+  } = useLanes(activeKeyRef, setActiveKey);
+  /** A pinned lane moves by its headers, among the pinned ones. */
+  const laneDrag = useDragReorder({
+    dragType: LANE_DRAG_TYPE,
     count: pinnedOrder.length,
     payloadOf: (index) => pinnedOrder[index],
-    indexOf: (view) => pinnedOrder.indexOf(view as SideView),
+    indexOf: (lane) => pinnedOrder.indexOf(lane as Lane),
     onMove: movePinned
   });
   const [addOpen, setAddOpen] = useState(false);
@@ -172,7 +172,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     []
   );
 
-  /** A repository's or worktree's key, as a row or the git pane selects it. */
+  /** A repository's or worktree's key, as a row or the git lane selects it. */
   const select = useCallback((key: string) => setActiveKey(key), []);
 
   /** The project row's remove, once the row asked about its worktrees; the list follows through
@@ -252,7 +252,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     disposeRefTerminals(ref);
   }, [forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks]);
 
-  // The one way the list changes, whoever asked — the dialog, a row's close, the git pane's
+  // The one way the list changes, whoever asked — the dialog, a row's close, the git lane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
   // opened where no agent is installed can only run sandboxed, so its sbx settings open at once,
   // locked (SbxSettingsDialog); not a worktree, which has none.
@@ -335,9 +335,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has to be
     // the one on top — an agent's environment dialog, drawn last, can already be up.
     settings: () => !isWindowCovered() && setSettingsOpen(true),
-    toggleProjects: () => toggleSideView("projects"),
-    toggleGit: () => toggleSideView("git"),
-    toggleFiles: () => toggleSideView("files"),
+    toggleProjects: () => toggleLane("projects"),
+    toggleGit: () => toggleLane("git"),
+    toggleFiles: () => toggleLane("files"),
     needsAttention: showNeedsAttention,
     nextTab: () => cycleTab(1),
     previousTab: () => cycleTab(-1),
@@ -346,19 +346,19 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   const activeState = (activeKey ? states[activeKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
   /** Git and files need a repository or worktree in front; without one the projects stand in. */
-  const shownViews: ReadonlySet<SideView> = activeResolved ? openViews : new Set(openViews.size > 0 ? ["projects"] : []);
-  /** The pinned columns in the user's order, then one sliding in, then the free one, then those
-   *  in, unseen at width 0. A column sliding in stays where it stood until its slide ends: moving
+  const shownLanes: ReadonlySet<Lane> = activeResolved ? openLanes : new Set(openLanes.size > 0 ? ["projects"] : []);
+  /** The pinned lanes in the user's order, then one sliding in, then the free one, then those
+   *  in, unseen at width 0. A lane sliding in stays where it stood until its slide ends: moving
    *  its node would cancel the transition and snap it shut. */
-  const slidingIn = (view: SideView) => !shownViews.has(view) && slidingViews.has(view);
-  const sideOrder = [
-    ...pinnedOrder.filter((view) => shownViews.has(view)),
-    ...SIDE_VIEWS.filter(slidingIn),
-    ...SIDE_VIEWS.filter((view) => shownViews.has(view) && !pinnedViews.has(view)),
-    ...SIDE_VIEWS.filter((view) => !shownViews.has(view) && !slidingIn(view))
+  const slidingIn = (lane: Lane) => !shownLanes.has(lane) && slidingLanes.has(lane);
+  const laneOrder = [
+    ...pinnedOrder.filter((lane) => shownLanes.has(lane)),
+    ...LANES.filter(slidingIn),
+    ...LANES.filter((lane) => shownLanes.has(lane) && !pinnedLanes.has(lane)),
+    ...LANES.filter((lane) => !shownLanes.has(lane) && !slidingIn(lane))
   ];
-  /** What the columns out take together; a sash leaves the terminals their floor beside it. */
-  const sideWidth = SIDE_VIEWS.reduce((sum, view) => (shownViews.has(view) ? sum + widthOf(view)[0] : sum), 0);
+  /** What the lanes out take together; a sash leaves the terminals their floor beside it. */
+  const lanesWidth = LANES.reduce((sum, lane) => (shownLanes.has(lane) ? sum + widthOf(lane)[0] : sum), 0);
 
   // Stable handles, so memoized views re-render only for what they show.
   const openAdd = useCallback(() => setAddOpen(true), []);
@@ -399,37 +399,37 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       </div>
 
       <div className="body">
-        {/* A column per side view, each in the DOM at width 0 while in (so a slide has a box to
+        {/* Every lane, each in the DOM at width 0 while in (so a slide has a box to
             transition) and mounted throughout, so hiding one keeps selection, filter, open folders
             and a running action's bar. Pinned ones stand first, in the user's order. Git and
             files need a repository or worktree in front; without one the projects stand in. */}
-        {sideOrder.map((view) => {
-          const [width, setWidth] = widthOf(view);
-          const shown = shownViews.has(view);
-          /** A pinned column out drags by its headers (`SectionHandle`): a row inside has a drag of its own. */
-          const pinIndex = shown ? pinnedOrder.indexOf(view) : -1;
+        {laneOrder.map((lane) => {
+          const [width, setWidth] = widthOf(lane);
+          const shown = shownLanes.has(lane);
+          /** A pinned lane out drags by its headers (`SectionHandle`): a row inside has a drag of its own. */
+          const pinIndex = shown ? pinnedOrder.indexOf(lane) : -1;
           return (
-            <Fragment key={view}>
+            <Fragment key={lane}>
               <div
-                {...(pinIndex >= 0 ? columnDrag.targetProps(pinIndex) : undefined)}
+                {...(pinIndex >= 0 ? laneDrag.targetProps(pinIndex) : undefined)}
                 className={[
-                  "side-pane",
-                  slidingViews.has(view) && "sliding",
-                  ...(pinIndex >= 0 ? columnDrag.rowClasses(pinIndex) : [])
+                  "lane",
+                  slidingLanes.has(lane) && "sliding",
+                  ...(pinIndex >= 0 ? laneDrag.rowClasses(pinIndex) : [])
                 ]
                   .filter(Boolean)
                   .join(" ")}
                 style={{ width: shown ? width : 0 }}
-                onTransitionEnd={() => stopSliding(view)}
+                onTransitionEnd={() => stopSliding(lane)}
                 onContextMenu={(event) => {
                   if ((event.target as Element).closest(".section-header")) {
-                    sideMenu.open(event, view);
+                    laneMenu.open(event, lane);
                   }
                 }}
               >
-                <SectionHandle.Provider value={pinIndex >= 0 ? columnDrag.handleProps(pinIndex) : undefined}>
-                  {view === "projects" && (
-                    <div className={`side-pane-content${shown ? "" : " hidden"}`}>
+                <SectionHandle.Provider value={pinIndex >= 0 ? laneDrag.handleProps(pinIndex) : undefined}>
+                  {lane === "projects" && (
+                    <div className={`lane-content${shown ? "" : " hidden"}`}>
                       <ProjectList
                         projects={projects}
                         resolvedRefs={resolvedRefs}
@@ -462,8 +462,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                       <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
                     </div>
                   )}
-                  {view === "files" && activeResolved && (
-                    <FilesPane
+                  {lane === "files" && activeResolved && (
+                    <FilesLane
                       resolved={activeResolved}
                       shown={shown}
                       openPath={editorTabs[activeResolved.key]?.find((tab) => tab.tabId === activeEditors[activeResolved.key])?.path ?? null}
@@ -472,8 +472,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                       onSearchHeight={setFileSearchHeight}
                     />
                   )}
-                  {view === "git" && activeResolved && (
-                    <GitPane
+                  {lane === "git" && activeResolved && (
+                    <GitLane
                       resolved={activeResolved}
                       state={activeState}
                       shown={shown}
@@ -491,15 +491,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                   orientation="vertical"
                   size={width}
                   min={MIN_PANE_WIDTH}
-                  minOther={MIN_CONTENT_WIDTH + sideWidth - width}
+                  minOther={MIN_CONTENT_WIDTH + lanesWidth - width}
                   onResize={setWidth}
                 />
               )}
             </Fragment>
           );
         })}
-        {sideMenu.render((view) => [
-          { label: pinnedViews.has(view) ? "Unpin" : "Pin", run: () => togglePin(view) }
+        {laneMenu.render((lane) => [
+          { label: pinnedLanes.has(lane) ? "Unpin" : "Pin", run: () => togglePin(lane) }
         ])}
 
         <main className="content">
@@ -511,9 +511,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               resolved={resolved}
               tabs={stripTabs[resolved.key] ?? NO_TABS}
               visible={resolved.key === activeKey}
-              freeView={freeView}
+              freeLane={freeLane}
               toggleOrder={toggleOrder}
-              onToggleSideView={toggleSideView}
+              onToggleLane={toggleLane}
               onMoveToggle={moveToggle}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.

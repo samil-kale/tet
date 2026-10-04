@@ -90,7 +90,7 @@ function isIgnoreFile(relativePath: string): boolean {
   return /(?:^|[\\/])\.gitignore$|^\.git[\\/]info[\\/]exclude$/.test(relativePath);
 }
 
-/** One repository's state, the single source of truth for the git views and the terminals.
+/** One repository's state, the single source of truth for the git lane and the terminals.
  *  Refreshed after filesystem changes, so a branch switched in a terminal shows up. */
 export class Repository {
   private state: RepositoryState = EMPTY_REPOSITORY_STATE;

@@ -1,21 +1,21 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import type { FileSearchMatch } from "../../shared/types/files";
-import type { ProjectRef } from "../../shared/types/project";
-import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../editor/editor-tab";
+import type { FileSearchMatch } from "../../../shared/types/files";
+import type { ProjectRef } from "../../../shared/types/project";
+import type { ResolvedRef } from "../../resolved-ref";
+import type { OpenEditor } from "../../editor/editor-tab";
 import { Explorer, useExplorerListing, type ExplorerHandle } from "./Explorer";
 import { FileSearch, searchSummary, type FileSearchHandle } from "./FileSearch";
-import { useFileAct } from "../git/run-action";
+import { useFileAct } from "../../git/run-action";
 import { useFileSearch } from "./use-file-search";
-import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
-import { IconButton } from "../ui/IconButton";
-import { ClearIcon, NewFileIcon, NewFolderIcon } from "../ui/icons";
-import { FoldAllButton } from "../ui/FoldAllButton";
-import { Section } from "../ui/Section";
+import { MIN_PANE_HEIGHT, Sash } from "../../ui/Sash";
+import { IconButton } from "../../ui/IconButton";
+import { ClearIcon, NewFileIcon, NewFolderIcon } from "../../ui/icons";
+import { FoldAllButton } from "../../ui/FoldAllButton";
+import { Section } from "../../ui/Section";
 
-interface FilesPaneProps {
+interface FilesLaneProps {
   resolved: ResolvedRef;
-  /** False while the git view stands in its place; hidden, not unmounted, to keep its state. */
+  /** False while the git lane stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
   /** The active editor tab's file — the tree reveals it. */
   openPath: string | null;
@@ -45,17 +45,17 @@ function useDelayed(active: boolean, delayMs: number): boolean {
 }
 
 /**
- * The side pane's files view, shown instead of the git view (VS Code's Explorer and Source Control,
- * one sidebar). The listing is read only while on screen.
+ * The files lane, sharing the free lane with the git lane (VS Code's Explorer and Source Control).
+ * The listing is read only while on screen.
  */
-export const FilesPane = memo(function FilesPane({
+export const FilesLane = memo(function FilesLane({
   resolved,
   shown,
   openPath,
   onOpenFile,
   searchHeight,
   onSearchHeight
-}: FilesPaneProps) {
+}: FilesLaneProps) {
   const { acting, act, ask } = useFileAct(resolved.key);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(resolved, shown);
   const { searchResult, searching, search } = useFileSearch(resolved);
@@ -65,7 +65,7 @@ export const FilesPane = memo(function FilesPane({
   const [filtering, setFiltering] = useState(false);
   const [explorerExpanded, setExplorerExpanded] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
-  // A file action shows at once, as the git pane's changes list does.
+  // A file action shows at once, as the git lane's changes list does.
   const showProgress = useDelayed(listing, PROGRESS_DELAY_MS) || acting;
   const showSearchProgress = useDelayed(searching, PROGRESS_DELAY_MS);
   /** A match row: the file at the match, which its editor selects. */
@@ -76,7 +76,7 @@ export const FilesPane = memo(function FilesPane({
   );
 
   return (
-    <div className={`side-pane-content${shown ? "" : " hidden"}`}>
+    <div className={`lane-content${shown ? "" : " hidden"}`}>
       {/* This section's bar — the listing and the tree's edits. */}
       <Section
         title="EXPLORER"

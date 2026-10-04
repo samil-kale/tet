@@ -3,7 +3,6 @@ import type { GitActionResult, GitLogin } from "../../shared/types/git";
 import { refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { useRunning } from "../ui/use-running";
-import type { BranchActions } from "./BranchTree";
 import { askLogin } from "./GitLogin";
 
 /**
@@ -33,6 +32,16 @@ type GitAction = (login?: GitLogin) => Promise<GitActionResult>;
 export interface GitRun {
   run: (label: string, action: GitAction) => void;
   ask: (label: string, action: GitAction) => Promise<string | undefined>;
+}
+
+/** One git command at a time per repository or worktree, labelled while it runs (`GitRun`). The tree asks its
+ *  questions itself, knowing which remote holds a branch and where HEAD is. */
+export interface BranchActions extends GitRun {
+  /** A command runs in this repository or worktree; no second one is offered. */
+  busy: boolean;
+  /** That command was started here, so the git lane's bar shows it; one started from the project
+   *  list shows in that list's bar instead. */
+  startedHere: boolean;
 }
 
 /** How a view hands a git command to App's runner, which answers with the result as it is. */
@@ -102,7 +111,7 @@ export function notifying<A extends unknown[]>(
 }
 
 /**
- * Runs a file action. The running mark is per repository or worktree, since one side pane serves all; called once
+ * Runs a file action. The running mark is per repository or worktree, since one lane serves all; called once
  * per section, each with its own bar, and raised by `act` alone. Counted, not flagged: an action
  * the main process refuses while another runs (a context menu entry during a commit) ends first,
  * and must not clear the mark of the one still running.
@@ -141,7 +150,7 @@ export function useFileAct(key: string): { acting: boolean; act: FileAct; ask: F
 
 /**
  * The same for a branch command, which App runs (`runBranchAction`: one per repository or worktree, whatever
- * started it) while the bar belongs to the view that offered it — the git pane and the project
+ * started it) while the bar belongs to the view that offered it — the git lane and the project
  * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
  * question asked for runs on the question's bar.
  */
@@ -156,7 +165,7 @@ function useStartedHere<A extends unknown[], R>(
 /**
  * App's gate for the branch commands: one per repository or worktree at a time, whoever started it — a second
  * click mid-switch would stack two `git switch`. Mirrors `Repository.runAction`; `BranchActions.run`
- * is the one way in for them, a view asking its own question first (`ask`). Hands out the git pane's actions for
+ * is the one way in for them, a view asking its own question first (`ask`). Hands out the git lane's actions for
  * the repository or worktree on screen (`activeBranch`, its bar showing what it started, `ask` excepted: the
  * question that asked for it shows that one) and the project list's way of running a command in
  * any repository or worktree it lists (`runIn`, on the list's bar, `projectListBusy`).

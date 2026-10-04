@@ -1,6 +1,6 @@
-import { projectRef, projectRefKey, projectRefsOf } from "../../shared/types/project";
-import type { Project, ProjectRef } from "../../shared/types/project";
-import { layoutKey } from "../ui/layout-storage";
+import { projectRef, projectRefKey, projectRefsOf } from "../../../shared/types/project";
+import type { Project, ProjectRef } from "../../../shared/types/project";
+import { layoutKey } from "../../ui/layout-storage";
 
 /** The repository or worktree in front (its `projectRefKey`), in layout storage: which one is in
  *  front describes the window. */

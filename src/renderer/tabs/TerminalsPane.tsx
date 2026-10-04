@@ -10,7 +10,7 @@ import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_PANE_HEIGHT, MIN_PANE_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
-import type { SideView } from "../ui/use-side-pane";
+import type { Lane } from "../ui/use-lanes";
 import { isEditorTab, type PaneTab } from "../editor/editor-tab";
 import { NO_TABS } from "./use-project-layouts";
 
@@ -60,9 +60,9 @@ interface TerminalsPaneProps {
   tabs: PaneTab[];
   visible: boolean;
   /** For the strip's toggles (`PaneChrome`). */
-  freeView: SideView | null;
-  toggleOrder: readonly SideView[];
-  onToggleSideView: (view: SideView) => void;
+  freeLane: Lane | null;
+  toggleOrder: readonly Lane[];
+  onToggleLane: (lane: Lane) => void;
   onMoveToggle: (from: number, to: number) => void;
   agents: AgentInfo[];
   /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
@@ -87,9 +87,9 @@ export const TerminalsPane = memo(function TerminalsPane({
   resolved,
   tabs,
   visible,
-  freeView,
+  freeLane,
   toggleOrder,
-  onToggleSideView,
+  onToggleLane,
   onMoveToggle,
   agents,
   externalBusy,
@@ -156,8 +156,8 @@ export const TerminalsPane = memo(function TerminalsPane({
   }, [layout.preset, resetDividerFractions]);
 
   const chrome = useMemo<PaneChrome>(
-    () => ({ freeView, toggleOrder, onToggleSideView, onMoveToggle, onOpenSettings }),
-    [freeView, toggleOrder, onToggleSideView, onMoveToggle, onOpenSettings]
+    () => ({ freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings }),
+    [freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings]
   );
   const onActivate = useCallback(
     (tabId: string, paneId: PaneId) => onActivateTab(resolved.key, tabId, paneId),

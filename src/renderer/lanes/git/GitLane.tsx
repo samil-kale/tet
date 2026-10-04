@@ -1,13 +1,13 @@
 import { memo, useRef, useState } from "react";
-import { syncRemote } from "../../shared/types/git";
-import type { RepositoryState } from "../../shared/types/git";
-import type { ResolvedRef } from "../resolved-ref";
-import type { OpenEditor } from "../editor/editor-tab";
-import { BranchTree, type BranchActions } from "./BranchTree";
+import { syncRemote } from "../../../shared/types/git";
+import type { RepositoryState } from "../../../shared/types/git";
+import type { ResolvedRef } from "../../resolved-ref";
+import type { OpenEditor } from "../../editor/editor-tab";
+import { BranchTree } from "./BranchTree";
 import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHandle } from "./ChangesList";
-import { useFileAct } from "./run-action";
-import { MIN_PANE_HEIGHT, Sash } from "../ui/Sash";
-import { IconButton } from "../ui/IconButton";
+import { useFileAct, type BranchActions } from "../../git/run-action";
+import { MIN_PANE_HEIGHT, Sash } from "../../ui/Sash";
+import { IconButton } from "../../ui/IconButton";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -17,15 +17,15 @@ import {
   ListTreeIcon,
   StashIcon,
   SyncIcon
-} from "../ui/icons";
-import { FoldAllButton } from "../ui/FoldAllButton";
-import { usePaneToggle } from "../ui/layout-storage";
-import { Section } from "../ui/Section";
+} from "../../ui/icons";
+import { FoldAllButton } from "../../ui/FoldAllButton";
+import { usePaneToggle } from "../../ui/layout-storage";
+import { Section } from "../../ui/Section";
 
-interface GitPaneProps {
+interface GitLaneProps {
   resolved: ResolvedRef;
   state: RepositoryState;
-  /** False while the files view stands in its place; hidden, not unmounted, to keep its state. */
+  /** False while the files lane stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
   branch: BranchActions;
   /** Set by the sash between tree and changes; held by the app, like the width. */
@@ -38,8 +38,8 @@ interface GitPaneProps {
   onSelect: (key: string) => void;
 }
 
-/** The side pane's git view: branches over the changed files, nothing else. */
-export const GitPane = memo(function GitPane({
+/** The git lane: branches over the changed files, nothing else. */
+export const GitLane = memo(function GitLane({
   resolved,
   state: latestState,
   shown,
@@ -48,13 +48,13 @@ export const GitPane = memo(function GitPane({
   onTreeHeight,
   onOpenDiff,
   onSelect
-}: GitPaneProps) {
+}: GitLaneProps) {
   const { acting, act, ask } = useFileAct(resolved.key);
   const changesRef = useRef<ChangesListHandle>(null);
   /** What the LOCAL CHANGES header's buttons stand for, reported by the list that holds the state. */
   const [checked, setChecked] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
-  /** One view for every project, as the side pane's toggles. */
+  /** One view for every project, as the lanes' toggles. */
   const [asTree, setAsTree] = usePaneToggle("changes-tree", true);
   // Hidden, the pane keeps the state it last showed: every push re-rendered the whole tree and list
   // for nobody. A repository or worktree switch is never held — the keyed views would get another
@@ -73,7 +73,7 @@ export const GitPane = memo(function GitPane({
   const pullFrom = state.branchUpstreams[state.head]?.remote ?? state.upstream;
 
   return (
-    <div className={`side-pane-content${shown ? "" : " hidden"}`}>
+    <div className={`lane-content${shown ? "" : " hidden"}`}>
       {/* This section's bar — everything `branch.run` covers. */}
       <Section
         title="BRANCHES"

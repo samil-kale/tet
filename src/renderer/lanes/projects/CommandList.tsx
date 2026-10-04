@@ -1,16 +1,16 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { formatEnv, isSameCommand, parseEnv } from "../../shared/command";
-import { reservedRefusal } from "../../shared/env-rules";
-import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../shared/types/project";
-import { useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { notifying } from "../git/run-action";
-import { confirmed, filled, prompt, refusal, type PromptOptions } from "../ui/Dialog";
-import { ColorField, TextField } from "../ui/Field";
-import { reorder, useDragReorder } from "../ui/drag-reorder";
-import { IconButton } from "../ui/IconButton";
-import { PlayIcon, PlusIcon } from "../ui/icons";
-import { Section } from "../ui/Section";
-import type { ResolvedRef } from "../resolved-ref";
+import { formatEnv, isSameCommand, parseEnv } from "../../../shared/command";
+import { reservedRefusal } from "../../../shared/env-rules";
+import { COMMAND_COLORS, type CommandColor, type ProjectCommand } from "../../../shared/types/project";
+import { useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { notifying } from "../../git/run-action";
+import { confirmed, filled, prompt, refusal, type PromptOptions } from "../../ui/Dialog";
+import { ColorField, TextField } from "../../ui/Field";
+import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { IconButton } from "../../ui/IconButton";
+import { PlayIcon, PlusIcon } from "../../ui/icons";
+import { Section } from "../../ui/Section";
+import type { ResolvedRef } from "../../resolved-ref";
 
 /** Our own type, so a row dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-command";

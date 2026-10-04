@@ -261,7 +261,7 @@ ${stderr.slice(uncaught)}`);
     assert.equal((await ctl("tabs-run-command", "missing", "--project", project.id)).status, 3);
   });
 
-  it("reflects a commit made in a terminal, as the git pane would", async () => {
+  it("reflects a commit made in a terminal, as the git lane would", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
     const state = async (): Promise<RepositoryState> =>
       (await ctl("repo-state", "--project", project.id)).result as RepositoryState;

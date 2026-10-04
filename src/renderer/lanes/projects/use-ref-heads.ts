@@ -1,7 +1,7 @@
 import { useMemo, useRef } from "react";
-import { refName, worktreeBase } from "../../shared/types/git";
-import type { RepositoryState } from "../../shared/types/git";
-import { stableRecord } from "../identity";
+import { refName, worktreeBase } from "../../../shared/types/git";
+import type { RepositoryState } from "../../../shared/types/git";
+import { stableRecord } from "../../identity";
 import type { RefHead } from "./ProjectList";
 
 /**

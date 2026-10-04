@@ -1,8 +1,8 @@
 import { memo, type ReactNode } from "react";
-import { projectRef, projectRefKey, worktreeName } from "../../shared/types/project";
-import type { Project, ProjectRef, ProjectWorktree } from "../../shared/types/project";
-import type { ResolvedRef } from "../resolved-ref";
-import type { GitRun } from "../git/run-action";
+import { projectRef, projectRefKey, worktreeName } from "../../../shared/types/project";
+import type { Project, ProjectRef, ProjectWorktree } from "../../../shared/types/project";
+import type { ResolvedRef } from "../../resolved-ref";
+import type { GitRun } from "../../git/run-action";
 import {
   askDeleteWorktree,
   askNewWorktree,
@@ -10,16 +10,16 @@ import {
   newWorktreeRefusal,
   NOT_MADE_BY_TET,
   worktreeEntry
-} from "../git/worktree-questions";
-import { PLATFORM } from "../platform";
-import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { confirmed, filled, prompt, singleField } from "../ui/Dialog";
-import { reorder, useDragReorder } from "../ui/drag-reorder";
-import { Section } from "../ui/Section";
-import { SessionMark } from "../ui/SessionMark";
-import { IconButton } from "../ui/IconButton";
-import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../ui/icons";
-import type { RefMarks } from "../tabs/use-session-marks";
+} from "../../git/worktree-questions";
+import { PLATFORM } from "../../platform";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { confirmed, filled, prompt, singleField } from "../../ui/Dialog";
+import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { Section } from "../../ui/Section";
+import { SessionMark } from "../../ui/SessionMark";
+import { IconButton } from "../../ui/IconButton";
+import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../../ui/icons";
+import type { RefMarks } from "../../tabs/use-session-marks";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";
@@ -79,7 +79,7 @@ interface ProjectListProps {
   onShowFinished: (key: string) => void;
   /** The same, for the longest-waiting session. */
   onShowWaiting: (key: string) => void;
-  /** Shows the repository or worktree, toggling the git pane when it is already selected. */
+  /** Shows the repository or worktree, toggling the git lane when it is already selected. */
   onShowChanges: (key: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;

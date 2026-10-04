@@ -1,6 +1,6 @@
-import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../shared/types/files";
-import { extensionOf } from "../paths";
-import { buildTree, compareGrouped, compareNames, isOpen, sortTree, type TreeNode } from "../ui/tree";
+import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../../shared/types/files";
+import { extensionOf } from "../../paths";
+import { buildTree, compareGrouped, compareNames, isOpen, sortTree, type TreeNode } from "../../ui/tree";
 
 /** `explorer.sortOrder`: `default` (and `foldersNestsFiles`) folders first, then name; `mixed` name
  *  alone; `filesFirst` files first; `type` by extension, then name; `modified` newest first. */
