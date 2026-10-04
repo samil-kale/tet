@@ -391,6 +391,8 @@ export class TabSessionManager {
       });
     }
     if (fresh.length > 0) {
+      // Every agent brings its sessions up on its own: oldest first overall, a tab not listed yet last.
+      this.tabs.sort((a, b) => (a.createdAt ?? Infinity) - (b.createdAt ?? Infinity));
       this.postTabs();
     }
     // After the listing, so its first event can't race the bootstrap.
