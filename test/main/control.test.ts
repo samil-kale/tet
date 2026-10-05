@@ -776,7 +776,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
     const model = await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]);
     assert.equal(model.status, EXIT_CODES.usage);
-    assert.match(model.stderr, /unknown Claude Code model: gpt \(known: fable, opus, sonnet, haiku\)/);
+    assert.match(model.stderr, /unknown claude model: gpt \(known: fable, opus, sonnet, haiku\)/);
     const shell = await tetCtl(["settings-set-commit-suggester", "shell"]);
     assert.equal(shell.status, EXIT_CODES.usage);
     assert.match(shell.stderr, /shell cannot suggest a commit message/);
