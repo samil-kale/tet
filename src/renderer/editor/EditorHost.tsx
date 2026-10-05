@@ -76,6 +76,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   const markdownPreviewFrame = useRef<HTMLDivElement>(null);
   const kind = editorKind(file);
   const shown = diffShown(snapshot);
+  const layoutAvailable = kind === "text" ? shown : kind === "image" && Boolean(file?.head?.image && file.image);
   const withheld = previewWithheld(snapshot);
   const markdownPreviewShown = markdownPreview && !withheld;
 
@@ -142,11 +143,12 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           >
             <CompareIcon />
           </IconButton>
-          {/* The diff's layout: disabled, not hidden, without one, so the path doesn't shift. */}
+          {/* The diff's layout: disabled, not hidden, without one, so the path doesn't shift. An image
+              has one when both versions exist: next to each other, or the current one alone. */}
           <IconButton
-            active={shown && sideBySide}
+            active={layoutAvailable && sideBySide}
             title={sideBySide ? "Show Inline" : "Show Side by Side"}
-            disabled={!shown || kind !== "text"}
+            disabled={!layoutAvailable}
             onClick={() => setDiffOption(tabId, "sideBySide", !sideBySide)}
           >
             <SideBySideIcon />
@@ -176,7 +178,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       <div className="editor-body">
         {/* Why is the notice's (editor-views.ts); the tab says only what it is, like the rest. */}
         {kind === "error" && <div className="placeholder">Could not read the file.</div>}
-        {kind === "image" && <ImageView image={{ before: file?.head?.image, after: file?.image }} />}
+        {kind === "image" && <ImageView image={{ before: file?.head?.image, after: file?.image }} sideBySide={sideBySide} />}
         {kind === "binary" && <div className="placeholder">Binary file.</div>}
         {kind === "tooLarge" && <div className="placeholder">File too large to edit.</div>}
         {/* Hidden, not unmounted, so the editor stays attached. */}

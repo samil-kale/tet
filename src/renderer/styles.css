@@ -1497,20 +1497,24 @@ textarea:focus,
   color: var(--vscode-focusBorder);
 }
 
-/* The checkerboard an image viewer puts behind transparency: the pair's images and the stack's
-   backdrop alike. */
+/* The checkerboard an image viewer puts behind transparency. */
 .image-diff {
   --checkerboard: repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
 }
 
+/* Two columns split at the middle: before hugs it from the left, after from the right, a caption
+   centered under its image; one image alone sits in the middle. */
 .image-diff-pair {
-  display: flex;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
+  align-content: start;
   flex: 1;
-  align-items: flex-start;
-  justify-content: center;
   overflow: auto;
   padding: 16px;
+  /* The box the images must fit: the pane less the padding and a caption. */
+  container-type: size;
+  --image-max-height: calc(100cqh - 28px);
 }
 
 .image-diff-pair figure {
@@ -1519,100 +1523,45 @@ textarea:focus,
   align-items: center;
   gap: 6px;
   margin: 0;
-  min-width: 0;
-}
-
-/* Natural size, not `max-width: 100%`: both images stay at one scale to line up; the box scrolls.
-   The checkerboard sits on the box, a haze through a faded image. */
-.image-diff-stack {
-  position: relative;
-  flex: 1;
-  overflow: auto;
-  padding: 16px;
-}
-
-.image-diff-stack::before {
-  content: "";
-  position: absolute;
-  inset: 16px;
-  background: var(--checkerboard);
-}
-
-.image-diff-stack img {
-  display: block;
-  position: relative;
-}
-
-.image-diff-stack img + img {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-}
-
-.image-diff-pair img {
+  width: fit-content;
   max-width: 100%;
+}
+
+.image-diff-pair figure:first-child {
+  justify-self: end;
+}
+
+.image-diff-pair figure:last-child {
+  justify-self: start;
+}
+
+.image-diff-pair figure:only-child {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+.image-diff img {
+  display: block;
+}
+
+.image-diff-pair img,
+.image-diff-missing {
+  max-width: 100%;
+  max-height: var(--image-max-height);
   background: var(--checkerboard);
   border: 1px solid var(--vscode-panel-border);
+}
+
+/* A side that would not decode, at the other side's size until that is known. */
+.image-diff-missing {
+  box-sizing: border-box;
+  width: 256px;
+  aspect-ratio: 1;
 }
 
 .image-diff figcaption {
   font-size: var(--vscode-font-size);
   color: var(--vscode-descriptionForeground);
-}
-
-/* Picks the diff layout; the active one takes an active tab's underline. */
-.image-diff-modes {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 16px;
-  border-bottom: 1px solid var(--vscode-panel-border);
-  font-size: var(--vscode-font-size);
-}
-
-.image-diff-mode {
-  padding: 4px 8px;
-  border-radius: 3px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.image-diff-mode:hover {
-  color: var(--vscode-foreground);
-  background: var(--vscode-toolbar-hoverBackground);
-}
-
-.image-diff-mode.active {
-  color: var(--vscode-foreground);
-  box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
-}
-
-/* The onion-skin fade, the only range input, so its track and thumb are styled here. */
-.image-diff-blend {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: 8px;
-  color: var(--vscode-descriptionForeground);
-}
-
-.image-diff-blend input {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 120px;
-  height: 3px;
-  padding: 0;
-  border: none;
-  border-radius: 2px;
-  background: var(--vscode-scrollbarSlider-background);
-}
-
-.image-diff-blend input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--vscode-foreground);
-  cursor: pointer;
 }
 
 /* The Markdown preview's scroller, in the page so the scrollbars above reach it; what it shows

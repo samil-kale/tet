@@ -8,59 +8,73 @@ interface ImageSides {
   after?: string;
 }
 
+type Side = "before" | "after";
+
+interface Size {
+  width: number;
+  height: number;
+}
+
 /**
- * An image, side by side with HEAD's or laid over it. A side is absent for an added or deleted file;
+ * An image next to HEAD's (`sideBySide`) or alone. A side is absent for an added or deleted file;
  * at least one is always there.
  */
-export function ImageView({ image }: { image: ImageSides }) {
-  const [overlay, setOverlay] = useState(false);
-  // 0 old, 100 new, between an onion skin.
-  const [blend, setBlend] = useState(50);
+export function ImageView({ image, sideBySide }: { image: ImageSides; sideBySide: boolean }) {
+  // What each side measured when it loaded, and the source that failed to decode: its box is drawn
+  // at the other side's size instead.
+  const [sizes, setSizes] = useState<Partial<Record<Side, Size>>>({});
+  const [failed, setFailed] = useState<Partial<Record<Side, string>>>({});
 
-  const both = Boolean(image.before && image.after);
-  const showOverlay = both && overlay;
+  const picture = (side: Side) => {
+    const src = image[side];
+    if (failed[side] === src) {
+      const other = sizes[side === "before" ? "after" : "before"];
+      return (
+        <div
+          className="image-diff-missing"
+          style={
+            other && {
+              // As wide as the other side, narrower where its height would pass the pane's.
+              width: `min(${other.width}px, calc(var(--image-max-height) * ${other.width / other.height}))`,
+              aspectRatio: `${other.width} / ${other.height}`,
+            }
+          }
+        />
+      );
+    }
+    return (
+      <img
+        src={src}
+        alt=""
+        onLoad={(event) => {
+          const { naturalWidth: width, naturalHeight: height } = event.currentTarget;
+          setSizes((held) => ({ ...held, [side]: { width, height } }));
+        }}
+        onError={() => setFailed((held) => ({ ...held, [side]: src }))}
+      />
+    );
+  };
+
+  const both = sideBySide && Boolean(image.before && image.after);
 
   return (
     <div className="image-diff">
-      {both && (
-        <div className="image-diff-modes">
-          <button className={`image-diff-mode${overlay ? "" : " active"}`} onClick={() => setOverlay(false)}>
-            Side by side
-          </button>
-          <button className={`image-diff-mode${overlay ? " active" : ""}`} onClick={() => setOverlay(true)}>
-            Overlay
-          </button>
-          {showOverlay && (
-            <label className="image-diff-blend">
-              Before
-              <input type="range" min={0} max={100} value={blend} onChange={(event) => setBlend(event.currentTarget.valueAsNumber)} />
-              After
-            </label>
-          )}
-        </div>
-      )}
-      {showOverlay ? (
-        // Top-left, so a size change shows as uncovered area.
-        <div className="image-diff-stack">
-          <img src={image.before} alt="" />
-          <img src={image.after} alt="" style={{ opacity: blend / 100 }} />
-        </div>
-      ) : (
-        <div className="image-diff-pair">
-          {image.before && (
+      <div className="image-diff-pair">
+        {both ? (
+          <>
             <figure>
-              <img src={image.before} alt="" />
+              {picture("before")}
               <figcaption>Before</figcaption>
             </figure>
-          )}
-          {image.after && (
             <figure>
-              <img src={image.after} alt="" />
+              {picture("after")}
               <figcaption>After</figcaption>
             </figure>
-          )}
-        </div>
-      )}
+          </>
+        ) : (
+          <figure>{picture(image.after ? "after" : "before")}</figure>
+        )}
+      </div>
     </div>
   );
 }
