@@ -2,8 +2,7 @@
   "exclude": [
     ".github/workflows",
     ".claude",
-    ".gitignore",
-    "node_modules"
+    ".gitignore"
   ],
   "commands": [
     {
