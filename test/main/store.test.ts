@@ -296,7 +296,7 @@ describe("the stores", () => {
     assert.ok(store.setWorktrees("a", [{ path: pathOf("wt"), branch: "feature" }]));
     assert.equal(store.setWorktrees("a", [{ path: pathOf("wt"), branch: "feature" }]), false, "unchanged");
     assert.deepEqual(
-      JSON.parse(fs.readFileSync(path.join(dir, "projects.json"), "utf8"))[1],
+      (JSON.parse(fs.readFileSync(path.join(dir, "projects.json"), "utf8")) as unknown[])[1],
       { id: "a", path: pathOf("a"), name: "a" },
       "worktrees are read off the disk, never stored"
     );

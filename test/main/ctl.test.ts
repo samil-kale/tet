@@ -485,7 +485,7 @@ describe("tet-ctl against the control server", () => {
       },
       prompts: { texts: { commitMessage: "", handover: "" }, commitSuggester: { agentId: "", model: "" } }
     };
-    for (const list of Object.values(calls)) {
+    for (const list of Object.values(calls) as unknown[][]) {
       list.length = 0;
     }
     tab2Session = undefined;
@@ -579,11 +579,11 @@ describe("tet-ctl against the control server", () => {
 
   it("refuses a request the server does not know, even with a valid token", async () => {
     const body = await post(JSON.stringify({ token: TOKEN, verb: "help", args: {}, caller: {} }));
-    assert.equal(JSON.parse(body).error.code, "unknown_verb");
+    assert.equal((JSON.parse(body) as { error: { code: string } }).error.code, "unknown_verb");
   });
 
   it("answers a JSON body that is not an object", async () => {
-    assert.equal(JSON.parse(await post("null")).error.code, "bad_args");
+    assert.equal((JSON.parse(await post("null")) as { error: { code: string } }).error.code, "bad_args");
   });
 
   it("refuses a request past the cap instead of holding it, token or not", async () => {
@@ -596,12 +596,12 @@ describe("tet-ctl against the control server", () => {
       assert.match(answer.error.message, /longer than/);
     }
     // Still answering afterwards.
-    assert.equal(JSON.parse(await post("null")).error.code, "bad_args");
+    assert.equal((JSON.parse(await post("null")) as { error: { code: string } }).error.code, "bad_args");
   });
 
   it("takes a request just under the cap", async () => {
     const pad = "x".repeat(900 * 1024);
-    const answer = JSON.parse(await post(JSON.stringify({ token: TOKEN, verb: "version", args: { pad }, caller: {} })));
+    const answer = JSON.parse(await post(JSON.stringify({ token: TOKEN, verb: "version", args: { pad }, caller: {} }))) as { ok: boolean };
     assert.equal(answer.ok, true, "a long but legitimate request is answered");
   });
 

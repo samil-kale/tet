@@ -131,7 +131,14 @@ const CALLS: Probe[] = [
   ["src/renderer/ui/x.tsx", 'export const a = <div style={{ color: "rgba(0, 0, 0, 0.4)" }} />;', "no-restricted-syntax"],
   ["src/renderer/ui/x.ts", "const n = 1;\nexport const a = `hsl(${n} 0% 0%)`;", "no-restricted-syntax"],
   ["src/renderer/ui/x.ts", 'export const a = "var(--vscode-focusBorder)";', null],
-  ["src/renderer/themes/x.ts", 'export const a = "#1e1e1e";', null]
+  ["src/renderer/themes/x.ts", 'export const a = "#1e1e1e";', null],
+  // App hands the memoized views stable props.
+  ["src/renderer/App.tsx", "export const a = <Foo onX={() => 1} />;", "no-restricted-syntax"],
+  ["src/renderer/App.tsx", "export const a = <Foo rows={[]} />;", "no-restricted-syntax"],
+  ["src/renderer/App.tsx", "export const a = <Foo style={{ width: 1 }} />;", "no-restricted-syntax"],
+  ["src/renderer/App.tsx", "export const a = <Foo onX={onX} />;", null],
+  ["src/renderer/App.tsx", "export const a = <div onClick={() => 1} />;", null],
+  ["src/renderer/ui/x.tsx", "export const a = <Foo onX={() => 1} />;", null]
 ];
 
 const RESTRICTING = [

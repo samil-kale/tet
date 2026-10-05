@@ -78,6 +78,13 @@ const COLOR_LITERAL = [`Literal[value=${COLOR}]`, `TemplateElement[value.raw=${C
   message: "Colors only from --vscode-* variables (renderer/themes/)."
 }));
 
+/** A function, object or array literal handed to a component is new on every render: the views under App are memoized. */
+const UNSTABLE_PROP = {
+  selector:
+    "JSXOpeningElement[name.name=/^[A-Z]/] > JSXAttribute > JSXExpressionContainer > :matches(ArrowFunctionExpression, FunctionExpression, ObjectExpression, ArrayExpression)",
+  message: "A prop of a memoized view must be stable: useCallback, useMemo or a constant (identity.ts)."
+};
+
 /** What every file of src/ is held to by no-restricted-syntax; the configs below leave out what a file may do. */
 const SRC_SYNTAX = [IPC_BY_NAME, ...WEB_CONTENTS_SEND, SHELL_OPTION, REDIRECT_MANUAL, ...HOST_PLATFORM, ...PLATFORM_ID, ...AGENT_ID];
 const syntaxWithout = (...allowed) => ["error", ...SRC_SYNTAX.filter((entry) => !allowed.flat().includes(entry))];
@@ -278,8 +285,8 @@ export default tseslint.config(
   { linterOptions: { reportUnusedDisableDirectives: "error" } },
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  // Rules that need types: a promise nobody awaits swallows its error. The no-unsafe-* family
-  // (every `any` crossing IPC or JSON) stays off.
+  // Rules that need types: a promise nobody awaits swallows its error, an `any` crossing JSON
+  // or IPC reaches the code unchecked.
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({ ...config, files: ["**/*.{ts,tsx}"] })),
   {
     files: ["**/*.{ts,tsx}"],
@@ -308,12 +315,7 @@ export default tseslint.config(
       eqeqeq: ["error", "always", { null: "ignore" }],
       // typeof import("./git") types the utility process's module without loading it into main.
       "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "inline-type-imports", disallowTypeAnnotations: false }],
-      "@typescript-eslint/no-import-type-side-effects": "error",
-      "@typescript-eslint/no-unsafe-argument": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-return": "off"
+      "@typescript-eslint/no-import-type-side-effects": "error"
     }
   },
   // The renderer's views are memoized and the terminals live outside React (AGENTS.md, "UI rules"),
@@ -421,6 +423,8 @@ export default tseslint.config(
   { files: ["src/shared/platform.ts"], rules: { "no-restricted-syntax": syntaxWithout(PLATFORM_ID) } },
   { files: ["src/renderer/**/*.{ts,tsx}"], rules: { "no-restricted-syntax": [...syntaxWithout(), ...COLOR_LITERAL] } },
   { files: ["src/renderer/themes/**"], rules: { "no-restricted-syntax": syntaxWithout() } },
+  // The views under App are memoized (AGENTS.md, "UI rules"): App hands them stable props alone.
+  { files: ["src/renderer/App.tsx"], rules: { "no-restricted-syntax": [...syntaxWithout(), ...COLOR_LITERAL, UNSTABLE_PROP] } },
   // What differs between the OSes is a Platform member; only the two files naming the platform ask
   // which one it is (AGENTS.md, "Cross-platform"). No native message boxes (AGENTS.md, "UI rules").
   // The fetch off a global object is main's alone to refuse, as the global itself (below).

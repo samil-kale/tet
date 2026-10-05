@@ -11,11 +11,11 @@ function isOdf(filePath: string): boolean {
 }
 
 function decode(text: string): string {
-  return text.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(\w+));/gi, (whole, dec, hex, name) => {
+  return text.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(\w+));/gi, (whole: string, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
     if (name) {
       return ENTITIES[name] ?? whole;
     }
-    return String.fromCodePoint(dec ? Number(dec) : parseInt(hex, 16));
+    return String.fromCodePoint(dec ? Number(dec) : parseInt(hex ?? "", 16));
   });
 }
 

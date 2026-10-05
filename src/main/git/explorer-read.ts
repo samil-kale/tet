@@ -170,7 +170,7 @@ export async function searchFiles(
   }
   const { files: wanted } = await walkExplorer(root, view, ignored, false);
 
-  const found: (FileSearchFile | undefined)[] = new Array(wanted.length);
+  const found: (FileSearchFile | undefined)[] = new Array<FileSearchFile | undefined>(wanted.length);
   let next = 0;
   let matches = 0;
   let truncated = false;

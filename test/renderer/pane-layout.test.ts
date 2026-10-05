@@ -542,12 +542,12 @@ describe("what is persisted", () => {
     };
     const running: TabDescriptor = { ...tab("new-1"), command: "npm test" };
     const serialized = serializeLayout(layout, [running]);
-    assert.deepEqual(JSON.parse(serialized).commandPane, {
+    assert.deepEqual((JSON.parse(serialized) as { commandPane: unknown }).commandPane, {
       "npm test": { preset: "split-right", pane: "c" },
       "npm run build": { preset: "grid2x2", pane: "d" }
     });
     storage.set("tet.layout.terminals.r.layout", serialized);
-    assert.deepEqual(loadLayout("r").commandPane, JSON.parse(serialized).commandPane);
+    assert.deepEqual(loadLayout("r").commandPane, (JSON.parse(serialized) as { commandPane: unknown }).commandPane);
     storage.set(
       "tet.layout.terminals.r.layout",
       JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, commandPane: { x: { preset: "cols2", pane: "d" }, y: 3 } })
@@ -589,7 +589,7 @@ describe("an editor tab", () => {
 
   it("is never written to disk, having no session", () => {
     const tabs = [tab("t1", 0, "s1"), editor];
-    assert.deepEqual(JSON.parse(serializeLayout(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs)).tabPane, { s1: "a" });
+    assert.deepEqual((JSON.parse(serializeLayout(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs)) as { tabPane: unknown }).tabPane, { s1: "a" });
   });
 
   it("holds its pane: closing it collapses the pane, closing a neighbour beside it does not", () => {

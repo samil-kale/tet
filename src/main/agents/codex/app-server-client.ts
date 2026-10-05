@@ -82,7 +82,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     lines.on("line", (line) => {
       let message: { id?: unknown; result?: unknown; error?: { message?: unknown } };
       try {
-        message = JSON.parse(line);
+        message = JSON.parse(line) as typeof message;
       } catch {
         return;
       }

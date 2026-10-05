@@ -174,7 +174,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     args.push("--no-sandbox");
   }
   args.push(...WINDOW_ARGS);
-  const electronPath: string = createRequire(__filename)("electron");
+  const electronPath: string = createRequire(__filename)("electron") as string;
   // Not a Claude Code session's own variables, when the tests run inside one (an agent tab): an
   // interactive `claude` started with them answers but writes no transcript.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^CLAUDE(CODE$|_CODE_|_PID$|_EFFORT$)/.test(key)));

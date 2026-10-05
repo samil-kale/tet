@@ -374,7 +374,8 @@ ${stderr.slice(uncaught)}`);
     const set = await ctl("settings-set-theme", "dark-slate");
     assert.deepEqual(set.result, { saved: true, restartRequired: false });
     assert.equal(((await ctl("settings-get")).result as AppSettings).appearance.darkTheme, "dark-slate");
-    assert.equal(JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")).appearance.darkTheme, "dark-slate");
+    const settings = JSON.parse(fs.readFileSync(path.join(userData, "settings.json"), "utf8")) as { appearance: { darkTheme: string } };
+    assert.equal(settings.appearance.darkTheme, "dark-slate");
   });
 
   it("restarts on --confirm and comes back with the same profile", async () => {
