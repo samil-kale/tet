@@ -9,7 +9,7 @@ import { writePiExtension } from "./extension";
 import { listPiModels } from "./models";
 import { piAgentDir, piSandboxSessions, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
-import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
+import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/ctl-side";
 import { logError } from "../../util/error-log";
 
 /** Appended to pi's system prompt for this run; through pi's npm shim and cmd.exe on win32 (see

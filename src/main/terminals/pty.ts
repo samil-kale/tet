@@ -1,8 +1,8 @@
 import * as path from "node:path";
 import * as pty from "node-pty";
 import type { IPty } from "node-pty";
-import { CONTROL_ENV } from "../../shared/control";
-import { tabControlToken } from "./control-token";
+import { CONTROL_ENV } from "../../shared/ctl";
+import { tabControlToken } from "./ctl-token";
 import { KEPT_ENV_NAME, machineName } from "../store/env-names";
 import { pathKey, resolveCommand } from "../util/process";
 import { HOST_TAB, type TabSide } from "./tab-side";
@@ -20,12 +20,12 @@ export interface SpawnOptions {
    *  Above the machine's, like `controlEnv`. */
   own?: Record<string, string>;
   /** Where the tab runs (TabPlace): whether TET's stored variables reach it, and part of its control
-   *  token, which is what the control server reads it back off (control-token.ts). This machine
+   *  token, which is what the control server reads it back off (ctl-token.ts). This machine
    *  where omitted. */
   side?: TabSide;
 }
 
-/** The control channel's port and token, set by prepareControl (control-channel.ts). Above `process.env`, since a TET started
+/** The control channel's port and token, set by prepareControl (ctl-channel.ts). Above `process.env`, since a TET started
  *  from its own shell tab inherits the outer one's; kept out of it so git does not carry them. */
 let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
@@ -58,7 +58,7 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), the
  *  variables kept in TET over it where its side takes them (TabSide.storedEnv), then TET's own
  *  (controlEnv, options.own) with the tab's own control token in place of the run's
- *  (control-token.ts), then options.envOverride. Testable without a pty. */
+ *  (ctl-token.ts), then options.envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">): Record<string, string> {
   const side = options.side ?? HOST_TAB;
   const stored = side.storedEnv ? storedEnv() : {};

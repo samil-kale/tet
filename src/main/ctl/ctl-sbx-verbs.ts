@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { ControlRequest, ControlVerbName } from "../../shared/control";
+import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
 import type { SbxKnowledgeSettings, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { SBX_ACCESS } from "../../shared/types/sbx";
@@ -13,9 +13,9 @@ import {
   withoutProblems
 } from "../../shared/sbx-rules";
 import { sbxBlocked, sbxNotReady } from "../sbx/sbx-policy";
-import type { ControlDeps } from "./control-verb";
+import type { ControlDeps } from "./ctl-verb";
 import type { SbxReading } from "../sbx/sbx-status";
-import { ControlError, list, onOff, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./control-verb";
+import { ControlError, list, onOff, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./ctl-verb";
 import { PLATFORM } from "../util/host-platform";
 
 /**

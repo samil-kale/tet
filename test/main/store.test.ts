@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { machineSets } from "../../src/main/store/env-names";
-import { EnvRequests } from "../../src/main/control/env-requests";
+import { EnvRequests } from "../../src/main/ctl/env-requests";
 import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
 import { ProjectStore } from "../../src/main/store/project-store";

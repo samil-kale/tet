@@ -1,7 +1,7 @@
 import * as crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
-import { CONTROL_ENV } from "../../shared/control";
+import { CONTROL_ENV } from "../../shared/ctl";
 import {
   SBX_KNOWLEDGE_KINDS,
   SBX_PROBLEM,

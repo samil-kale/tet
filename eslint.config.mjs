@@ -196,7 +196,7 @@ const MAIN_LAYERS = [
   { store: ["*"] },
   { git: [], agents: [], sbx: ["agents"], providers: [], update: [] },
   { terminals: [] },
-  { control: [] },
+  { ctl: [] },
   { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], uncaught: ["*"] }
 ];
 

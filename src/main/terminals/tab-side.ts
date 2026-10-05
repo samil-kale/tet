@@ -1,8 +1,8 @@
-import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../shared/control-side";
+import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../shared/ctl-side";
 
 /**
  * ControlSide with what a tab's start differs in between this machine and a sandbox, chosen by its
- * place (TabPlace.side). control/caller-side.ts extends it with what the tab's requests may do.
+ * place (TabPlace.side). ctl/caller-side.ts extends it with what the tab's requests may do.
  */
 export interface TabSide extends ControlSide {
   /** Whether TET's stored variables (environment.ts) reach the tab's process. */

@@ -1,18 +1,18 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ControlVerb } from "../../shared/control";
+import type { ControlVerb } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
 import { hasSandbox, type AgentDefinition } from "../agents/agent";
 import { HOST_TAB, SANDBOX_TAB, type TabSide } from "../terminals/tab-side";
 import { relativeInside } from "../util/path-inside";
 import type { InspectedTab } from "../terminals/session-manager";
-import { ControlError } from "./control-verb";
+import { ControlError } from "./ctl-verb";
 
 /**
  * ControlSide with what only the main process does differently for a caller on this machine and
  * one in a sandbox: the variables its tab is started with (TabSide), the tabs and projects it sees,
  * the agents it may open, and what an answer may hand it. Chosen once — by the tab's place for its
- * spawn (TabPlace), by the tab's token for a request (control-server's `handle`) — and nothing
+ * spawn (TabPlace), by the tab's token for a request (ctl-server's `handle`) — and nothing
  * else asks which side a caller is on.
  */
 export interface CallerSide extends TabSide {
@@ -61,7 +61,7 @@ export const SANDBOX_CALLER: CallerSide = {
     entry.sandboxFile === undefined ? Promise.resolve() : assertSandboxFile(root, result, entry.sandboxFile)
 };
 
-/** Both, for the server to try a tab's token against (control-token.ts). */
+/** Both, for the server to try a tab's token against (ctl-token.ts). */
 export const CALLER_SIDES: readonly CallerSide[] = [HOST_CALLER, SANDBOX_CALLER];
 
 /**

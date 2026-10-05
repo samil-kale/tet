@@ -27,13 +27,13 @@ const IMPORTS: Probe[] = [
   ["src/main/sbx/x.ts", 'import "../agents";', null],
   ["src/main/git/x.ts", 'import "../agents";', "no-restricted-imports"],
   ["src/main/agents/claude/x.ts", 'import "../../terminals/pty";', "no-restricted-imports"],
-  ["src/main/control/x.ts", 'import "../terminals/pty";', null],
-  ["src/main/terminals/x.ts", 'import "../control/control-verb";', "no-restricted-imports"],
-  ["src/main/control/x.ts", 'import "../window";', "no-restricted-imports"],
+  ["src/main/ctl/x.ts", 'import "../terminals/pty";', null],
+  ["src/main/terminals/x.ts", 'import "../ctl/ctl-verb";', "no-restricted-imports"],
+  ["src/main/ctl/x.ts", 'import "../window";', "no-restricted-imports"],
   ["src/main/window.ts", 'import "./projects";', null],
   // A detour through the process's own folder reaches the same area.
-  ["src/main/control/x.ts", 'import "../../main/terminals/pty";', null],
-  ["src/main/terminals/x.ts", 'import "../../main/control/control-verb";', "no-restricted-imports"],
+  ["src/main/ctl/x.ts", 'import "../../main/terminals/pty";', null],
+  ["src/main/terminals/x.ts", 'import "../../main/ctl/ctl-verb";', "no-restricted-imports"],
   ["src/main/util/x.ts", 'import "../../../src/main/store/settings";', "no-restricted-imports"],
   // An agent's own folder: from outside agents/, beside the registry, from another agent's.
   ["src/main/ipc/x.ts", 'import "../agents/agent-path";', null],
@@ -61,7 +61,7 @@ const IMPORTS: Probe[] = [
   ["src/renderer/lanes/files/x.ts", 'import "../../../renderer/git/run-action";', null],
   ["src/renderer/ui/x.ts", 'import "../../renderer/git/run-action";', "no-restricted-imports"],
   // The process borders.
-  ["src/main/ipc/x.ts", 'import "../../shared/control";', null],
+  ["src/main/ipc/x.ts", 'import "../../shared/ctl";', null],
   ["src/main/ipc/x.ts", 'import "../../renderer/App";', "no-restricted-imports"],
   ["src/renderer/App.tsx", 'import "../main/main";', "no-restricted-imports"],
   ["src/preload/x.ts", 'import "../main/main";', "no-restricted-imports"],

@@ -4,7 +4,7 @@ import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, NOTIFICATION_IDS, PROMPT_IDS } f
 import { TERMINAL_STATUSES } from "./types/terminals";
 
 /**
- * The control channel's wire contract, shared by `src/main/control/control-server.ts` and
+ * The control channel's wire contract, shared by `src/main/ctl/ctl-server.ts` and
  * `src/cli/tet-ctl.ts`. No electron or node imports: the CLI is bundled on its own.
  *
  * One HTTP POST per connection: JSON in, JSON out, connection closed. No ids, no pipelining — one
@@ -30,7 +30,7 @@ export const CONTROL_HOST = "127.0.0.1";
 export type ControlErrorCode = "unauthorized" | "unknown_verb" | "bad_args" | "not_found" | "internal" | "timeout";
 
 export interface ControlRequest {
-  /** The caller's tab's token (src/main/terminals/control-token.ts); the run's own without a caller. */
+  /** The caller's tab's token (src/main/terminals/ctl-token.ts); the run's own without a caller. */
   token: string;
   verb: string;
   args: Record<string, unknown>;

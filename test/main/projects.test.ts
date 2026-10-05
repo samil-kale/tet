@@ -6,7 +6,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
 import { resolveProjectRef } from "../../src/main/store/resolved-ref";
-import type { ControlRecords } from "../../src/main/control/control-records";
+import type { ControlRecords } from "../../src/main/ctl/ctl-records";
 import { GitLoginStore } from "../../src/main/git/git-logins";
 import { RepositoryManager } from "../../src/main/git/repository";
 import { projectDir, worktreeDir, worktreeFolders } from "../../src/main/store/project-dirs";

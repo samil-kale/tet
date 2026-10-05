@@ -1,6 +1,6 @@
 import * as path from "node:path";
-import { type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
-import type { ControlRequest, ControlVerbName } from "../../shared/control";
+import { type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/ctl";
+import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
@@ -13,8 +13,8 @@ import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
 import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
-import { sbxVerbs } from "./control-sbx-verbs";
-import { worktreeVerbs } from "./control-worktree-verbs";
+import { sbxVerbs } from "./ctl-sbx-verbs";
+import { worktreeVerbs } from "./ctl-worktree-verbs";
 import {
   callerRef,
   ControlError,
@@ -32,7 +32,7 @@ import {
   type ControlTerminals,
   type Handler,
   type RefFrom
-} from "./control-verb";
+} from "./ctl-verb";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 
 /** `tabs-wait` default timeout and poll interval. */

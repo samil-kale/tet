@@ -1,14 +1,14 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { errorMessage } from "../../shared/errors";
-import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB } from "../../shared/control";
-import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/control";
+import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB } from "../../shared/ctl";
+import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/ctl";
 import { sameProjectRef } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { CALLER_SIDES, HOST_CALLER } from "./caller-side";
-import { tabControlToken } from "../terminals/control-token";
-import { verbs } from "./control-verbs";
-import { callerRef, ControlError, resolveCallerRef, type ControlDeps, type Handler } from "./control-verb";
+import { tabControlToken } from "../terminals/ctl-token";
+import { verbs } from "./ctl-verbs";
+import { callerRef, ControlError, resolveCallerRef, type ControlDeps, type Handler } from "./ctl-verb";
 import { isRecord } from "../util/json-file";
 
 function reject(code: ControlErrorCode, message: string): ControlResponse {
@@ -25,7 +25,7 @@ const MAX_REQUEST_CHARS = 1024 * 1024;
  * The server `tet-ctl` talks to: one POST per connection on 127.0.0.1. HTTP, not raw TCP, because
  * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy. Every request must
  * carry this run's token from
- * main.ts, or its tab's token for the caller ids it names (control-token.ts), else `unauthorized`.
+ * main.ts, or its tab's token for the caller ids it names (ctl-token.ts), else `unauthorized`.
  */
 export async function startControlServer(
   deps: ControlDeps,
@@ -44,7 +44,7 @@ export async function startControlServer(
       tabId: typeof request.caller?.tabId === "string" ? request.caller.tabId : undefined
     };
     // A caller's ids count only with the token made for them; the run's own token speaks for no
-    // tab, and no terminal has it (control-token.ts).
+    // tab, and no terminal has it (ctl-token.ts).
     const given = Buffer.from(typeof request.token === "string" ? request.token : "");
     const matches = (expected: string): boolean => {
       const want = Buffer.from(expected);
@@ -52,7 +52,7 @@ export async function startControlServer(
     };
     // A caller naming no tab is the run itself, on this machine. For a tab, which side's token
     // matches says where it runs: read off the token, not looked up, so a tab closed with its
-    // repository or worktree is still answered by the rules it started under (control-token.ts).
+    // repository or worktree is still answered by the rules it started under (ctl-token.ts).
     const ofTab = caller.projectId !== undefined || caller.worktree !== undefined || caller.tabId !== undefined;
     const side = ofTab
       ? CALLER_SIDES.find((candidate) =>

@@ -1,5 +1,5 @@
-import { CONTROL_VERBS } from "./control";
-import type { ControlVerb } from "./control";
+import { CONTROL_VERBS } from "./ctl";
+import type { ControlVerb } from "./ctl";
 
 /** How far a verb reaches from a caller: any repository or worktree it names, the caller's own
  *  project's, or only the caller's own repository or worktree. */
@@ -10,10 +10,10 @@ export type ControlReach = "any" | "ownProject" | "ownRef";
  * channel grants and says differently because of it: which verbs answer, how far they reach, and
  * the words of `tet-ctl help` and of the system prompt. Shared by the server, `tet-ctl` and the
  * agents' setup; nothing else asks which side a caller is on. The main process's extension is
- * control/caller-side.ts.
+ * ctl/caller-side.ts.
  */
 export interface ControlSide {
-  /** Written into the tab's control token (control-token.ts), which is how the server tells the
+  /** Written into the tab's control token (ctl-token.ts), which is how the server tells the
    *  sides apart. */
   readonly key: "host" | "sandbox";
   /** Whether the verb answers at all; one refused is left out of `tet-ctl help` too. */

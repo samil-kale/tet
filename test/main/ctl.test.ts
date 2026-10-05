@@ -3,19 +3,19 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
 import { after, before, beforeEach, describe, it } from "node:test";
-import { HOST_SIDE, SANDBOX_SIDE } from "../../src/shared/control-side";
+import { HOST_SIDE, SANDBOX_SIDE } from "../../src/shared/ctl-side";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { codexHookReply } from "../../src/main/agents/codex/hooks";
 import { shellAgent } from "../../src/main/agents/shell";
 import { systemPrompt } from "../../src/main/agents/system-prompt";
-import { findControlPort } from "../../src/main/control/control-port";
-import { startControlServer } from "../../src/main/control/control-server";
-import type { ControlDeps, ControlTerminals } from "../../src/main/control/control-verb";
+import { findControlPort } from "../../src/main/ctl/ctl-port";
+import { startControlServer } from "../../src/main/ctl/ctl-server";
+import type { ControlDeps, ControlTerminals } from "../../src/main/ctl/ctl-verb";
 import type { NotificationTarget } from "../../src/main/util/notifications";
-import type { EnvAsk } from "../../src/main/control/env-requests";
-import { tabControlToken } from "../../src/main/terminals/control-token";
-import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/control";
+import type { EnvAsk } from "../../src/main/ctl/env-requests";
+import { tabControlToken } from "../../src/main/terminals/ctl-token";
+import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/ctl";
 import { EMPTY_REPOSITORY_STATE, type FileChange, type GitActionResult, type WorktreeInfo } from "../../src/shared/types/git";
 import { type Project, type ProjectCommand, type ProjectRef, refKeyOf } from "../../src/shared/types/project";
 import { EMPTY_SBX_SETTINGS, EMPTY_SBX_KNOWLEDGE, type SbxKnowledgeSettings, type SbxLocalSave, type SbxProblems, type SbxProjectSettings, type SbxStatus } from "../../src/shared/types/sbx";
@@ -23,7 +23,7 @@ import { type AppSettings, laneOrders, laneSettings, withSettings } from "../../
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
 import { spawn } from "node:child_process";
-import { writeLaunchers } from "../../src/main/control/control-launcher";
+import { writeLaunchers } from "../../src/main/ctl/ctl-launcher";
 
 /**
  * The control channel below the app: the real server on a loopback port, the real CLI as a child

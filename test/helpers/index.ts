@@ -9,13 +9,13 @@ import * as path from "node:path";
 import { after } from "node:test";
 import { safeStorage, utilityProcess } from "electron";
 import { PLATFORM } from "../../src/main/util/host-platform";
-import { findControlPort } from "../../src/main/control/control-port";
-import { tabControlToken } from "../../src/main/terminals/control-token";
+import { findControlPort } from "../../src/main/ctl/ctl-port";
+import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import * as gitModule from "../../src/main/git/git";
 import * as explorerReadModule from "../../src/main/git/explorer-read";
 import { serving, type UtilityMessage, type UtilityResponse } from "../../src/main/util/utility-host";
-import { CONTROL_ENV } from "../../src/shared/control";
-import { HOST_SIDE } from "../../src/shared/control-side";
+import { CONTROL_ENV } from "../../src/shared/ctl";
+import { HOST_SIDE } from "../../src/shared/ctl-side";
 import type { GitLogin } from "../../src/shared/types/git";
 
 /**
@@ -96,7 +96,7 @@ export interface Run {
 
 /**
  * Runs the built CLI with the channel in its environment, as a TET terminal would. Async because
- * in control.test.ts the server runs on this event loop, which a `spawnSync` would block.
+ * in ctl.test.ts the server runs on this event loop, which a `spawnSync` would block.
  */
 export function tetCtl(args: string[], env: Record<string, string | undefined>, input = ""): Promise<Run> {
   return new Promise((resolve) => {

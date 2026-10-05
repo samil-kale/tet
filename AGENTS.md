@@ -45,7 +45,7 @@ project's tabs.
      the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
   3. `terminals/`: pty, sessions, where a tab runs and the side it runs on (`TabSide`), its
      control token.
-  4. `control/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
+  4. `ctl/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
      (`CallerSide`) extends the tab's.
   5. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
      singletons it touches) and, flat, the startup (`main.ts`, `uncaught.ts`), the window
@@ -402,8 +402,8 @@ Lets an agent ask the app for what the filesystem and git can't give (theme, pro
 second transport onto the same singletons `ipc/` is handed (`Repository`, the session managers,
 `projects.ts`), never a second implementation of what they do; a verb may combine them where the
 window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and verbs:
-`src/shared/control.ts`; server: `src/main/control/control-server.ts`; handlers: `control-verbs.ts`
-and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all (`ControlDeps`,
+`src/shared/ctl.ts`; server: `src/main/ctl/ctl-server.ts`; handlers: `ctl-verbs.ts`
+and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`ControlDeps`,
 `ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
 
 - `app-restart` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
@@ -418,10 +418,10 @@ and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all
   dialog's Save restarts the asking one. None in a sandbox, and the verbs refused *and* unmentioned
   there — not in `help`, not in its system prompt.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
-  the token made for them (`control-token.ts`): a terminal gets its tab's token, never the run's.
-- **Where a caller runs is its side** (`ControlSide`, `src/shared/control-side.ts`; in the main
+  the token made for them (`ctl-token.ts`): a terminal gets its tab's token, never the run's.
+- **Where a caller runs is its side** (`ControlSide`, `src/shared/ctl-side.ts`; in the main
   process the tab's `TabSide`, `terminals/tab-side.ts`, and the caller's `CallerSide` extending it,
-  `control/caller-side.ts`), set by its tab's place and read back off its token: which verbs
+  `ctl/caller-side.ts`), set by its tab's place and read back off its token: which verbs
   answer and how far, what `tet-ctl help` and the system prompt mention, the variables its tab
   gets, the tabs, projects and files it reaches. Nothing else asks whether a caller is sandboxed; a
   new difference extends the side.
@@ -438,7 +438,7 @@ and the `control-*-verbs.ts` beside it, on what `control-verb.ts` gives them all
   already can and `tet-ctl` doing it changes nothing beyond that, the verb answers there.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
   new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
-  `control.test.ts` case) — the user decides what an agent may change.
+  `ctl.test.ts` case) — the user decides what an agent may change.
 
 ## sbx: agent tabs in a Docker sandbox
 

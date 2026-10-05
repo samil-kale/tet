@@ -8,7 +8,7 @@ import { projectRef, projectRefsOf, worktreeOf } from "../shared/types/project";
 import type { NoticeSeverity } from "../shared/types/app";
 import type { GitActionResult, RepositoryState } from "../shared/types/git";
 import type { AddRepositoryResult, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
-import type { ControlRecords } from "./control/control-records";
+import type { ControlRecords } from "./ctl/ctl-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readRepositoryPath } from "./util/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";

@@ -1,13 +1,13 @@
 import * as http from "node:http";
 import { errorMessage } from "../shared/errors";
-import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_HOST, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/control";
-import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/control";
-import { admitsVerb, HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../shared/control-side";
+import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_HOST, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/ctl";
+import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/ctl";
+import { admitsVerb, HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../shared/ctl-side";
 
 /**
  * `tet-ctl`: how an agent in a TET terminal asks the app. No electron; bundled on its own
  * (esbuild.js), started by the launcher in ~/.tet/bin; the environment says where TET listens and
- * who the caller is (src/shared/control.ts). Output is for an agent: JSON on stdout, one line on
+ * who the caller is (src/shared/ctl.ts). Output is for an agent: JSON on stdout, one line on
  * stderr on failure, and an exit code to branch on.
  */
 
@@ -117,7 +117,7 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown>; e
   return { verb, args, entry };
 }
 
-/** HTTP, one request per connection — why is at `startControlServer` (control-server.ts).
+/** HTTP, one request per connection — why is at `startControlServer` (ctl-server.ts).
  *  `idleMs` gives up on a silent connection. */
 function send(host: string, port: number, request: ControlRequest, idleMs?: number): Promise<ControlResponse> {
   return new Promise((resolve, reject) => {

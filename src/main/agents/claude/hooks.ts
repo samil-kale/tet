@@ -4,7 +4,7 @@ import { hookCommand } from "../hook-command";
 import { HOST_TARGET, type HookTarget } from "../hook-target";
 import { writeIfChanged } from "../../util/generated-file";
 import type { AgentPaths } from "../agent";
-import type { HookEvent } from "../../../shared/control";
+import type { HookEvent } from "../../../shared/ctl";
 
 /**
  * Writes the settings file registering Claude Code's hooks into `paths.agentDir` (the host tabs'
@@ -12,7 +12,7 @@ import type { HookEvent } from "../../../shared/control";
  * `~/.claude/settings.json` is never touched.
  *
  * Every hook is a bare `tet-ctl hook <event>`, independent of Claude Code's shell (on win32 a bash,
- * where only the extensionless launcher resolves; control-launcher.ts).
+ * where only the extensionless launcher resolves; ctl-launcher.ts).
  * One `UserPromptSubmit` command marks the session working; its answer is empty, since TET's system
  * prompt goes in once at spawn (index.ts).
  */

@@ -1,6 +1,6 @@
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { ControlRecords } from "../control/control-records";
-import type { EnvRequests } from "../control/env-requests";
+import type { ControlRecords } from "../ctl/ctl-records";
+import type { EnvRequests } from "../ctl/env-requests";
 import type { EnvStore } from "../store/environment";
 import type { GitLoginStore } from "../git/git-logins";
 import type { RepositoryManager } from "../git/repository";

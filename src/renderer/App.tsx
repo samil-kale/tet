@@ -191,7 +191,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     [placeTab]
   );
 
-  // A control-channel tab, shown like a saved command's: drawing it starts its process.
+  // A ctl-channel tab, shown like a saved command's: drawing it starts its process.
   useEffect(
     () => window.tet.tabs.onShow(({ ref, tabId }) => showTab(refKeyOf(ref), tabId)),
     [showTab]

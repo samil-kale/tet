@@ -37,7 +37,7 @@ export function parseGovernance(json: string): string | undefined {
 }
 
 /** The first of sbx's setup steps still missing, as the user is told it (a tab's notice, tet-ctl's
- *  answer: control-sbx-verbs.ts may not import sbx.ts), each caller adding its own suffix; undefined
+ *  answer: ctl-sbx-verbs.ts may not import sbx.ts), each caller adding its own suffix; undefined
  *  once sbx is installed, signed in and has a network policy. */
 export function sbxNotReady(status: SbxStatus): string | undefined {
   if (!status.installed) {

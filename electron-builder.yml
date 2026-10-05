@@ -26,7 +26,7 @@ asarUnpack:
   # platform's dynamic linker only opens real files.
   - "**/node_modules/node-pty/**"
   # The tet-ctl CLI is run by a separate process (electron as node, from a terminal) that
-  # cannot read inside the archive — see src/main/control/control-launcher.ts. The update is
+  # cannot read inside the archive — see src/main/ctl/ctl-launcher.ts. The update is
   # run the same way, by the new version's binary (src/cli/tet-update.ts).
   - dist/tet-ctl.js
   - dist/tet-update.js

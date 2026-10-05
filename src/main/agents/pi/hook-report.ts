@@ -1,8 +1,8 @@
-import { CONTROL_ENV, CONTROL_HOST } from "../../../shared/control";
+import { CONTROL_ENV, CONTROL_HOST } from "../../../shared/ctl";
 
 /**
  * Source of `report(event, sessionId)` for an agent reporting turns from inside its own process
- * (pi's extension) instead of a `tet-ctl` hook; tet-ctl's wire contract (src/shared/control.ts).
+ * (pi's extension) instead of a `tet-ctl` hook; tet-ctl's wire contract (src/shared/ctl.ts).
  * The host file must import `node:http` as `http`.
  *
  * node:http, not fetch: one assumption fewer about pi's runtime. Never awaited: pi waits for

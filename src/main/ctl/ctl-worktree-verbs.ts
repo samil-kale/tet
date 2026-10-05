@@ -1,4 +1,4 @@
-import type { ControlRequest, ControlVerbName } from "../../shared/control";
+import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import { projectRef, sameProjectRef, worktreeOf } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
@@ -12,7 +12,7 @@ import {
   type ControlDeps,
   type Handler,
   type RefFrom
-} from "./control-verb";
+} from "./ctl-verb";
 
 /**
  * The worktree verbs: add, delete, and the merge an agent runs. `refFrom` is the server's lookup of

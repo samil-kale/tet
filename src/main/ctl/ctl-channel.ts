@@ -1,16 +1,16 @@
 import * as crypto from "node:crypto";
 import * as path from "node:path";
-import { CONTROL_ENV } from "../../shared/control";
+import { CONTROL_ENV } from "../../shared/ctl";
 import { configureSandboxes } from "../sbx/sbx-status";
 import { setControlEnv } from "../terminals/pty";
 import { logError } from "../util/error-log";
-import { writeLaunchers } from "./control-launcher";
-import { findControlPort } from "./control-port";
+import { writeLaunchers } from "./ctl-launcher";
+import { findControlPort } from "./ctl-port";
 
 /**
  * Readies the control channel before the first spawn: its token, its port, the `tet-ctl` launcher
  * on every tab's PATH, and what a sandbox needs to reach it. Each terminal gets only a token made
- * from this one for its own tab (control-token.ts); this one lives in this process only — never on
+ * from this one for its own tab (ctl-token.ts); this one lives in this process only — never on
  * disk or a command line. `reuseToken` is the one a TET started from a tab of another hands on.
  */
 export async function prepareControl(

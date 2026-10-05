@@ -5,9 +5,9 @@ import { AGENTS, agentInstalled, getAgent } from "../agents";
 import type { AgentDefinition, AgentSessionInfo } from "../agents/agent";
 import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
-import { CONTROL_ENV, CONTROL_START_SIZE } from "../../shared/control";
-import type { ControlEvent, HookEvent } from "../../shared/control";
-import type { ControlSide } from "../../shared/control-side";
+import { CONTROL_ENV, CONTROL_START_SIZE } from "../../shared/ctl";
+import type { ControlEvent, HookEvent } from "../../shared/ctl";
+import type { ControlSide } from "../../shared/ctl-side";
 import { hasSandbox } from "../agents/agent";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
@@ -109,7 +109,7 @@ function singleLine(text: string): string {
     .join(" ");
 }
 
-/** What a hook shows the user (control-verb.ts's ControlTerminals.hookEvent). */
+/** What a hook shows the user (ctl-verb.ts's ControlTerminals.hookEvent). */
 export interface HookNotification {
   title: string;
   body: string;
@@ -831,7 +831,7 @@ export class TabSessionManager {
         // A saved command's variables, or those `sbx run -e NAME` passes on — never both, as a saved
         // command never runs in a sandbox. Over the machine's, so the sandbox gets the row's value.
         envOverride: launch.envOverride,
-        // What `tet-ctl` in this tab reports as its caller — see src/shared/control.ts.
+        // What `tet-ctl` in this tab reports as its caller — see src/shared/ctl.ts.
         own: {
           [CONTROL_ENV.projectId]: this.at.ref.projectId,
           ...(this.at.ref.worktree !== undefined && { [CONTROL_ENV.worktree]: this.at.ref.worktree }),

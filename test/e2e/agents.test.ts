@@ -15,7 +15,7 @@ import { parseFilesystemRules } from "../../src/main/sbx/sbx-policy";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { resolveCommand } from "../../src/main/util/process";
 import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
-import type { ControlEvent } from "../../src/shared/control";
+import type { ControlEvent } from "../../src/shared/ctl";
 import type { AgentId } from "../../src/shared/types/agents";
 import type { Project } from "../../src/shared/types/project";
 import type { TabDescriptor } from "../../src/shared/types/terminals";

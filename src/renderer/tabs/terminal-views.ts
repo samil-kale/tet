@@ -4,7 +4,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
 import { Terminal } from "@xterm/xterm";
-import { CONTROL_START_SIZE } from "../../shared/control";
+import { CONTROL_START_SIZE } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";

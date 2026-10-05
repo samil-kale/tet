@@ -1,4 +1,4 @@
-import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/control";
+import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
 import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
@@ -19,7 +19,7 @@ import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import type { SettingsAccess } from "../store/settings";
 
 
-/** What a verb is made of, shared by control-server.ts and the verb files beside it: the handler,
+/** What a verb is made of, shared by ctl-server.ts and the verb files beside it: the handler,
  *  its dependencies (ControlDeps) and the lookups every verb file uses. */
 
 export class ControlError extends Error {
@@ -101,7 +101,7 @@ export function list(args: Record<string, unknown>, name: string): string[] {
 }
 
 /**
- * Handed over by main.ts, not imported: no electron or node-pty here, so test/main/control.test.ts
+ * Handed over by main.ts, not imported: no electron or node-pty here, so test/main/ctl.test.ts
  * runs the server under plain node with these faked. The same singletons ipc/ holds: a second
  * transport onto that logic, never a second implementation (projects.ts's
  * addProject/removeProject).

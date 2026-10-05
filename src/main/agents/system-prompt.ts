@@ -1,4 +1,4 @@
-import { admitsVerb, type ControlSide } from "../../shared/control-side";
+import { admitsVerb, type ControlSide } from "../../shared/ctl-side";
 
 /**
  * What every agent tab is told about TET, once per session: never replacing the user's own

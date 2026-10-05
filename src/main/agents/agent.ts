@@ -1,6 +1,6 @@
 import type { ThemeDefinition } from "../../shared/themes";
-import type { HookEvent } from "../../shared/control";
-import type { ControlSide } from "../../shared/control-side";
+import type { HookEvent } from "../../shared/ctl";
+import type { ControlSide } from "../../shared/ctl-side";
 import type { AgentIcon, AgentId, AskModel } from "../../shared/types/agents";
 import type { SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types/sbx";
 

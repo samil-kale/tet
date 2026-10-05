@@ -7,7 +7,7 @@ import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
 import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
-import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/control-side";
+import { HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../../../shared/ctl-side";
 import type { AskModel } from "../../../shared/types/agents";
 import { logError } from "../../util/error-log";
 

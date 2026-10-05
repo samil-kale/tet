@@ -12,7 +12,7 @@ import { PLATFORM } from "../util/host-platform";
 import { jsonOf, readSbxVersion, runSbx, SBX_PROBE_TIMEOUT_MS, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
 /** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
- *  by prepareControl (control-channel.ts). Unset without a control channel, and then nothing of it reaches a sandbox. */
+ *  by prepareControl (ctl-channel.ts). Unset without a control channel, and then nothing of it reaches a sandbox. */
 let control: { cliPath: string; port: number } | undefined;
 /** TET's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
 let dataRoot: string | undefined;

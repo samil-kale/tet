@@ -1,5 +1,5 @@
 import * as crypto from "node:crypto";
-import type { ControlSide } from "../../shared/control-side";
+import type { ControlSide } from "../../shared/ctl-side";
 import type { ProjectRef } from "../../shared/types/project";
 
 /**
@@ -12,7 +12,7 @@ import type { ProjectRef } from "../../shared/types/project";
  *
  * The side is in the token rather than looked up when a request arrives: the token stays valid
  * for the run, so a tab closed with its repository or worktree must still be answered by the rules
- * it started under, and the server reads the side back by trying each (control-server's `handle`).
+ * it started under, and the server reads the side back by trying each (ctl-server's `handle`).
  */
 export function tabControlToken(runToken: string, ref: ProjectRef, tabId: string, side: ControlSide): string {
   return crypto

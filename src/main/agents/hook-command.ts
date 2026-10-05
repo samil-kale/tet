@@ -1,4 +1,4 @@
-import type { HookEvent } from "../../shared/control";
+import type { HookEvent } from "../../shared/ctl";
 
 /**
  * The hook command Claude Code and Codex run to report one event: `tet-ctl` off the terminal's
@@ -6,7 +6,7 @@ import type { HookEvent } from "../../shared/control";
  *
  * A bare name plus arguments, nothing else, because the agent picks the shell (bash, PowerShell or
  * cmd.exe on win32). All three resolve a bare name off PATH; anything richer differs between them.
- * The launchers making the name resolve are control-launcher.ts's.
+ * The launchers making the name resolve are ctl-launcher.ts's.
  *
  * The event is TET's vocabulary; each agent's setup maps its own events onto it.
  */
