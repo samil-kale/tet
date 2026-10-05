@@ -22,7 +22,7 @@ import {
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "./editor-tab";
 import { IconButton } from "../ui/IconButton";
-import { CollapseAllIcon, CompareIcon, ExpandAllIcon, SaveIcon, ScanEyeIcon, SideBySideIcon } from "../ui/icons";
+import { CollapseAllIcon, CompareIcon, ExpandAllIcon, SaveIcon, SideBySideIcon, ViewIcon } from "../ui/icons";
 import { useStoredShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_AREA_WIDTH, Sash } from "../ui/Sash";
@@ -168,7 +168,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
               disabled={withheld}
               onClick={() => showMarkdownPreview(tabId, !markdownPreviewShown)}
             >
-              <ScanEyeIcon />
+              <ViewIcon />
             </IconButton>
           )}
         </div>

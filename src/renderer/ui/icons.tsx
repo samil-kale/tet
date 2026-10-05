@@ -35,12 +35,12 @@ import {
   RefreshCw,
   Regex,
   Save,
-  ScanEye,
   Search,
   Settings,
   Shield,
   Tag,
   Undo2,
+  View,
   Wand,
   WholeWord,
   X,
@@ -416,9 +416,9 @@ export function SaveIcon(props: IconProps) {
   return <Lucide {...props} icon={Save} />;
 }
 
-/** Lucide's `scan-eye` — a Markdown preview. */
-export function ScanEyeIcon(props: IconProps) {
-  return <Lucide {...props} icon={ScanEye} />;
+/** Lucide's `view` — a Markdown preview. */
+export function ViewIcon(props: IconProps) {
+  return <Lucide {...props} icon={View} />;
 }
 
 /** Lucide's `git-compare` — the editor tab's diff toggle. */
