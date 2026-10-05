@@ -1191,7 +1191,7 @@ textarea:focus,
 .context-menu-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   height: 2em;
   padding: 0 24px 0 20px;
   white-space: nowrap;
