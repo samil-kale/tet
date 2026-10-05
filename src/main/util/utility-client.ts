@@ -11,8 +11,8 @@ export interface UtilityClient<Module> {
   /** Forwards every property as a call to the process, so a new function of the module needs no line here. */
   api: UtilityApi<Module>;
   /** Starts the process up front, so the first call doesn't wait for it to boot. */
-  start(): void;
-  stop(): void;
+  start: () => void;
+  stop: () => void;
 }
 
 interface Pending {

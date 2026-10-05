@@ -72,7 +72,7 @@ async function open(
   return repository;
 }
 
-after(() => opened.forEach((repository) => repository.dispose()));
+after(() => Promise.all(opened.map((repository) => repository.dispose())));
 
 describe("a discard, through the trash as in GitHub Desktop", () => {
   let dir: string;
@@ -291,7 +291,7 @@ describe("worktrees, each with a branch of its own", () => {
     const current = linked.getState().worktrees.filter((worktree) => worktree.current);
     assert.deepEqual(current.map((worktree) => worktree.branch), ["second"]);
     assert.equal(linked.getState().worktrees[0]?.path, real(dir), "main still first");
-    linked.dispose();
+    await linked.dispose();
   });
 
   it("removes a worktree with changes only when forced", async () => {

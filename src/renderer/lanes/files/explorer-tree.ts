@@ -20,7 +20,8 @@ function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>)
       };
     case "modified":
       return (a, b) => (mtimes[b.path] ?? 0) - (mtimes[a.path] ?? 0) || compareNames(a, b);
-    default:
+    case "default":
+    case "foldersNestsFiles":
       return (a, b) => compareGrouped(a, b, true);
   }
 }

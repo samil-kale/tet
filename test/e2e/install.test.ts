@@ -54,7 +54,7 @@ function installedRoot(): string {
       return path.join(home, "Programs", "TET");
     case "darwin":
       return path.join(home, "Applications", "TET.app");
-    default:
+    case "linux":
       return path.join(home, ".local", "share", "tet");
   }
 }

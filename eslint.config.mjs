@@ -19,6 +19,11 @@ const LANE_FOLDERS = fs
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
+/** Every file of src/, for the rules that hold all of it. */
+const SRC_FILES = ["src/**/*.{ts,tsx}"];
+/** The two files where IPC's channels are wired: main's wrappers and the preload. */
+const IPC_SITES = ["src/main/ipc/channels.ts", "src/preload/preload.ts"];
+
 const IPC_MESSAGE = "Only through the typed wrappers: handle/on/once (ipc/channels.ts), invoke/send/subscribe (preload).";
 /** By its name, or off electron's namespace; an alias is refused at its import (IPC_IMPORT). */
 const IPC_BY_NAME = {
@@ -269,8 +274,37 @@ export default tseslint.config(
   {
     ignores: ["**/dist/**", "**/dist-test/**", "**/node_modules/**"]
   },
+  // A disable comment that no longer silences anything is a lint error, not a warning.
+  { linterOptions: { reportUnusedDisableDirectives: "error" } },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // Rules that need types: a promise nobody awaits swallows its error. The no-unsafe-* family
+  // (every `any` crossing IPC or JSON) stays off.
+  ...tseslint.configs.recommendedTypeChecked.map((config) => ({ ...config, files: ["**/*.{ts,tsx}"] })),
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    rules: {
+      // node:test's test(), describe() and the like return a promise the runner itself awaits.
+      "@typescript-eslint/no-floating-promises": [
+        "error",
+        { allowForKnownSafeCalls: [{ from: "package", package: "node:test", name: ["test", "describe", "it", "suite"] }] }
+      ],
+      "@typescript-eslint/switch-exhaustiveness-check": "error",
+      "@typescript-eslint/no-deprecated": "error",
+      curly: "error",
+      // `== null` is the one deliberate loose comparison: null and undefined alike.
+      eqeqeq: ["error", "always", { null: "ignore" }],
+      // typeof import("./git") types the utility process's module without loading it into main.
+      "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "inline-type-imports", disallowTypeAnnotations: false }],
+      "@typescript-eslint/no-import-type-side-effects": "error",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off"
+    }
+  },
   // The renderer's views are memoized and the terminals live outside React (AGENTS.md, "UI rules"),
   // so a stale closure or a dependency too many is a wrong screen, not a slow one — and every
   // "read it from a ref instead" here is deliberate. The rules keep those decisions honest.
@@ -355,7 +389,7 @@ export default tseslint.config(
   // process are listed, and none runs a shell. typescript-eslint's rule, not the layers' own, so an
   // allowed spawn site keeps its layer's imports and a type import passes.
   {
-    files: ["src/**/*.{ts,tsx}"],
+    files: SRC_FILES,
     rules: { "@typescript-eslint/no-restricted-imports": importsWithout() }
   },
   { files: SPAWN_SITES, rules: { "@typescript-eslint/no-restricted-imports": importsWithout(SPAWNS) } },
@@ -365,11 +399,11 @@ export default tseslint.config(
   // "Cross-platform", "Where things live"), and the renderer's colors come from the themes alone
   // (AGENTS.md, "Look").
   {
-    files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"],
+    files: IPC_SITES,
     rules: { "@typescript-eslint/no-restricted-imports": importsWithout(IPC_IMPORT) }
   },
-  { files: ["src/**/*.{ts,tsx}"], rules: { "no-restricted-syntax": syntaxWithout() } },
-  { files: ["src/main/ipc/channels.ts", "src/preload/preload.ts"], rules: { "no-restricted-syntax": syntaxWithout(IPC_BY_NAME) } },
+  { files: SRC_FILES, rules: { "no-restricted-syntax": syntaxWithout() } },
+  { files: IPC_SITES, rules: { "no-restricted-syntax": syntaxWithout(IPC_BY_NAME) } },
   { files: ["src/main/window.ts"], rules: { "no-restricted-syntax": syntaxWithout(WEB_CONTENTS_SEND) } },
   { files: ["src/main/util/host-platform.ts"], rules: { "no-restricted-syntax": syntaxWithout(HOST_PLATFORM) } },
   { files: ["src/main/agents/**"], rules: { "no-restricted-syntax": syntaxWithout(AGENT_ID) } },
@@ -379,7 +413,7 @@ export default tseslint.config(
   // What differs between the OSes is a Platform member; only the two files naming the platform ask
   // which one it is (AGENTS.md, "Cross-platform"). No native message boxes (AGENTS.md, "UI rules").
   // The fetch off a global object is main's alone to refuse, as the global itself (below).
-  { files: ["src/**/*.{ts,tsx}"], rules: { "no-restricted-properties": propertiesWithout(GLOBAL_FETCH) } },
+  { files: SRC_FILES, rules: { "no-restricted-properties": propertiesWithout(GLOBAL_FETCH) } },
   { files: ["src/main/**/*.{ts,tsx}"], rules: { "no-restricted-properties": propertiesWithout() } },
   { files: ["src/main/util/host-platform.ts"], rules: { "no-restricted-properties": propertiesWithout(PROCESS_PLATFORM) } },
   { files: ["src/renderer/platform.ts"], rules: { "no-restricted-properties": propertiesWithout(NAVIGATOR_PLATFORM, GLOBAL_FETCH) } },
@@ -401,6 +435,8 @@ export default tseslint.config(
       "no-restricted-globals": ["error", { name: "fetch", message: "Use electron's net.fetch (or net.request to read a redirect)." }]
     }
   },
+  // A test's stub is async to fit the interface it stands in for.
+  { files: ["test/**/*.ts"], rules: { "@typescript-eslint/require-await": "off" } },
   {
     files: ["src/renderer/**"],
     rules: {

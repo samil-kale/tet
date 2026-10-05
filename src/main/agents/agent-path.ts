@@ -132,7 +132,7 @@ function loginShellPath(): Promise<string[]> {
     const env = { ...process.env, TET_RESOLVING_ENVIRONMENT: "1" };
     execFile(shell, shellInvocation(shell), { timeout: 5000, killSignal: "SIGKILL", encoding: "utf8", env }, (error, stdout) => {
       if (error) {
-        reject(error);
+        reject(new Error(error.message, { cause: error }));
         return;
       }
       const value = parseShellPath(stdout);

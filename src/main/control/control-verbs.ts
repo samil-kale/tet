@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
+import { type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/control";
 import type { ControlRequest, ControlVerbName } from "../../shared/control";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
@@ -413,7 +413,7 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: reached.slice(-count(args, "tail", EVENTS_TAIL)) };
     },
 
-    "editor-open": async (args, caller) => {
+    "editor-open": (args, caller) => {
       const { ref } = refFrom(args, caller);
       const root = deps.projectRefPath(ref);
       if (root === undefined) {

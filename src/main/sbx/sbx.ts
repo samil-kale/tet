@@ -592,7 +592,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   }
   if (check.ports) {
     const free = await Promise.all(
-      settings.ports.map((port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host)))
+      settings.ports.map(async (port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host)))
     );
     settings.ports.forEach((port, index) => free[index] || add("ports", sbxPortKey(port), SBX_PROBLEM.portInUse));
   }

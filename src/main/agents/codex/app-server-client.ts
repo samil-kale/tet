@@ -95,7 +95,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
       }
       pending.delete(message.id);
       if (message.error) {
-        finish(() => reject(new Error(String(message.error?.message ?? "codex app-server request failed"))));
+        finish(() => reject(new Error(typeof message.error?.message === "string" ? message.error.message : "codex app-server request failed")));
         return;
       }
       if (method === "initialize") {

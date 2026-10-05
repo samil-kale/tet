@@ -77,7 +77,7 @@ function sameEntry(a: string, b: string): boolean {
 /** A repository-relative path for a new entry, resolved, or an error if outside or taken.
  *  `renaming` is the source: on a case-insensitive filesystem `Readme.md` → `README.md` finds the
  *  source at the target, which is no conflict. */
-async function resolveNew(root: string, filePath: string, renaming?: string): Promise<{ absolute: string } | { error: string }> {
+function resolveNew(root: string, filePath: string, renaming?: string): { absolute: string } | { error: string } {
   const absolute = resolveInside(root, filePath);
   if (!absolute) {
     return { error: OUTSIDE_REPOSITORY.error };
@@ -90,7 +90,7 @@ async function resolveNew(root: string, filePath: string, renaming?: string): Pr
 
 /** The Explorer's "New File...", creating parent directories. */
 export async function createFile(root: string, filePath: string): Promise<GitActionResult> {
-  const target = await resolveNew(root, filePath);
+  const target = resolveNew(root, filePath);
   if ("error" in target) {
     return { ok: false, error: target.error };
   }
@@ -102,7 +102,7 @@ export async function createFile(root: string, filePath: string): Promise<GitAct
 
 /** The Explorer's "New Folder...". */
 export async function createDirectory(root: string, dirPath: string): Promise<GitActionResult> {
-  const target = await resolveNew(root, dirPath);
+  const target = resolveNew(root, dirPath);
   if ("error" in target) {
     return { ok: false, error: target.error };
   }
@@ -124,7 +124,7 @@ export async function renamePath(root: string, fromPath: string, toPath: string)
   if (!from) {
     return OUTSIDE_REPOSITORY;
   }
-  const to = await resolveNew(root, toPath, from);
+  const to = resolveNew(root, toPath, from);
   if ("error" in to) {
     return { ok: false, error: to.error };
   }

@@ -14,7 +14,7 @@ import type { NoticeSeverity } from "../../shared/types/app";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
-import { HostSetups } from "./host-setup";
+import type { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";

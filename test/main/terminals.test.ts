@@ -92,9 +92,9 @@ describe("a turn's notification", () => {
       for (const onScreen of [["new-other"], []]) {
         manager.setOnScreen(onScreen);
         hook("prompt-submit");
-        assert.match(hook("stop").notification?.title ?? "", /Finished/, `on screen: [${onScreen}]`);
+        assert.match(hook("stop").notification?.title ?? "", /Finished/, `on screen: [${onScreen.join(",")}]`);
         for (const event of waitingEvents) {
-          assert.notEqual(hook(event).notification, undefined, `${event}, on screen: [${onScreen}]`);
+          assert.notEqual(hook(event).notification, undefined, `${event}, on screen: [${onScreen.join(",")}]`);
         }
       }
     } finally {

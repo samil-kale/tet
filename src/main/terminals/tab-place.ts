@@ -49,7 +49,7 @@ export interface LaunchInput {
   agentArgs(files: string[] | undefined): string[];
   handover?: HandoverFiles;
   /** Setup output, forwarded live to the tab. */
-  onData(data: string): void;
+  onData: (data: string) => void;
 }
 
 /** What a tab's process is started with (TerminalSession). */
@@ -103,7 +103,7 @@ export interface PlaceContext<A extends AgentDefinition = AgentDefinition> {
   agent: A;
   /** The agent's host executable (AgentDefinition.executable), for its session operations too. */
   executable: string;
-  onNotice(severity: NoticeSeverity, message: string): void;
+  onNotice: (severity: NoticeSeverity, message: string) => void;
 }
 
 /** This machine: paths as they are, the host setup's spawn (HostSetups). */

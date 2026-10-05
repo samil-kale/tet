@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { inspect } from "node:util";
 
 /** Past this size errors.log is rotated. */
 const MAX_LOG_BYTES = 512 * 1024;
@@ -22,7 +23,7 @@ export function openErrorLog(file: string): void {
 /** Logs a failure that would go unseen — a caught exception with its stack, or none (e.g. a refused
  *  notification); never throws. The console gets it too, for tests driving the app. */
 export function logError(line: string, error?: unknown): void {
-  const detail = error === undefined ? "" : `\n${error instanceof Error ? (error.stack ?? String(error)) : String(error)}`;
+  const detail = error === undefined ? "" : `\n${error instanceof Error ? (error.stack ?? String(error)) : typeof error === "string" ? error : inspect(error)}`;
   appendLog(`[TET] ${line} ${new Date().toISOString()}${detail}\n`);
 }
 

@@ -147,7 +147,14 @@ function lint(probes: Probe[]): string[][] {
   const script = `
     const { ESLint } = require(${JSON.stringify(path.join(ROOT, "node_modules", "eslint"))});
     const probes = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
-    const eslint = new ESLint({ cwd: ${JSON.stringify(ROOT)} });
+    // The probes lie in no tsconfig, so none is parsed with types.
+    const { configs } = require("node:module").createRequire(${JSON.stringify(path.join(ROOT, "package.json"))})("typescript-eslint");
+    const untyped = {
+      ...configs.disableTypeChecked,
+      files: ["**/*.{ts,tsx}"],
+      languageOptions: { parserOptions: { projectService: false, project: false } }
+    };
+    const eslint = new ESLint({ cwd: ${JSON.stringify(ROOT)}, overrideConfig: [untyped] });
     (async () => {
       const out = [];
       for (const [file, code] of probes) {

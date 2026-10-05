@@ -983,7 +983,7 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
     // Elsewhere Ctrl+Shift+V pastes as plain text: VS Code binds its preview for Markdown alone.
     const when = commandId === "tet.markdownPreview" ? `${scope} && editorLangId == 'markdown'` : scope;
     if (parsed !== undefined) {
-      editor.addCommand(parsed, () => editor.getAction(commandId)?.run(), when);
+      editor.addCommand(parsed, () => void editor.getAction(commandId)?.run(), when);
     }
   }
 }

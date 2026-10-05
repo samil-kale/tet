@@ -400,7 +400,7 @@ if (!app.requestSingleInstanceLock()) {
   // A second start brings the running window to the front.
   app.on("second-instance", appWindow.reveal);
 
-  app.whenReady().then(async () => {
+  void app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
     // only after the window: on macOS/Linux it asks the login shell, which with nvm takes most of a

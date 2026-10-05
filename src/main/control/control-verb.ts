@@ -11,7 +11,7 @@ import type { AgentDefinition } from "../agents/agent";
 import type { NotificationTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
-import { type CallerSide } from "./caller-side";
+import type { CallerSide } from "./caller-side";
 import type { EnvStore } from "../store/environment";
 import type { EnvRequests } from "./env-requests";
 import type { ProjectLookup } from "../store/project-store";

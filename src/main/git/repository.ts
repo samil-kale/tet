@@ -382,7 +382,7 @@ export class Repository {
 
   /** The periodic fetch underway in this project, its own or the repository's. */
   private fetchUnderway(): Promise<void> | undefined {
-    return this.autoFetching ?? this.siblings().find((sibling) => sibling.autoFetching)?.autoFetching;
+    return this.autoFetching ?? this.siblings().find((sibling) => sibling.autoFetching !== undefined)?.autoFetching;
   }
 
   /**
@@ -1024,7 +1024,7 @@ export class RepositoryManager {
 
   disposeAll(): void {
     for (const repository of this.repositories.values()) {
-      repository.dispose();
+      void repository.dispose();
     }
     this.repositories.clear();
   }

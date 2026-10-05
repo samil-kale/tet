@@ -22,7 +22,7 @@ type FetchLike = (url: string, init: { signal: AbortSignal; redirect: "manual" }
  * as soon as a hop is not https, names no location, or the chain runs long — a README's image must
  * not become a request to another scheme or to a host behind the machine.
  */
-export async function fetchHttpsImage(url: string, fetchFn: FetchLike = net.fetch): Promise<Response | undefined> {
+export async function fetchHttpsImage(url: string, fetchFn: FetchLike = (target, init) => net.fetch(target, init)): Promise<Response | undefined> {
   const signal = AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS);
   // A relative location resolves against the hop that sent it; undefined where it is no URL at all.
   const resolve = (value: string, base?: string): string | undefined => {

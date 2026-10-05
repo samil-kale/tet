@@ -60,7 +60,7 @@ interface ProjectListProps {
   activeRefKey: string | null;
   onActivateRef: (refKey: string) => void;
   /** Removes the project, once this list asked about its worktrees. */
-  onRemove: (projectId: string) => void;
+  onRemove: (projectId: string) => Promise<void>;
   /** The full list in the new order. */
   onReorder: (projects: Project[]) => void;
   onAdd: () => void;
@@ -190,7 +190,7 @@ export const ProjectList = memo(function ProjectList({
         return;
       }
     }
-    onRemove(project.id);
+    void onRemove(project.id);
   };
 
   /** A row's close: a repository is removed, a worktree deleted — asked first (askDeleteWorktree). */

@@ -83,6 +83,6 @@ async function assertSandboxFile(root: string | undefined, result: unknown, key:
           () => undefined
         );
   if (!resolved || relativeInside(resolved[0], resolved[1]) === undefined) {
-    throw new ControlError("unauthorized", `${String(named)} is missing or leads outside the repository`);
+    throw new ControlError("unauthorized", `${relative ?? JSON.stringify(named)} is missing or leads outside the repository`);
   }
 }

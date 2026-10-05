@@ -220,7 +220,7 @@ describe("a project added", () => {
     const added = await addProject(deps, repo.at("picked"));
     assert.equal(added.project?.path, repo.main);
     assert.equal(added.worktree, undefined, "one made elsewhere is never opened");
-    const id = added.project!.id;
+    const id = added.project.id;
     syncWorktrees(deps, id, await repositories.get({ projectId: id })!.refresh());
     assert.deepEqual(store.get(id)?.worktrees, [{ path: repo.at("picked"), branch: "picked", key: undefined }]);
   });

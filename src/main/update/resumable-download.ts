@@ -20,7 +20,7 @@ export async function resumableDownload(
   file: string,
   signal: AbortSignal,
   onProgress: (fraction: number) => void,
-  fetchFn: FetchLike = net.fetch
+  fetchFn: FetchLike = (target, init) => net.fetch(target, init)
 ): Promise<void> {
   const have = await fs.promises.stat(file).then(
     (stat) => stat.size,
