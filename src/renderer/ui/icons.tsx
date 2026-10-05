@@ -10,7 +10,7 @@ import {
   CircleAlert,
   CircleX,
   Columns2,
-  FileBraces,
+  FileCode,
   FilePlus,
   FolderCode,
   FolderGit2,
@@ -370,9 +370,9 @@ export function GearIcon(props: IconProps) {
   return <Lucide {...props} icon={Settings} />;
 }
 
-/** Lucide's `file-braces` — the files lane. */
+/** Lucide's `file-code` — the files lane. */
 export function FilesIcon(props: IconProps) {
-  return <Lucide {...props} icon={FileBraces} />;
+  return <Lucide {...props} icon={FileCode} />;
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus`. */
