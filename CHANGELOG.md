@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.17.3 (2026-10-05)
+
+- **Image diff layouts.** An image diff shows before and after side by side or alone through the
+  layout toggle, replacing overlay mode.
+- **Fixes.** The Explorer's exclude list no longer hides `node_modules`, Codex no longer gets a
+  console-color launcher, and the Files lane has a new icon.
+
 ## 0.17.2 (2026-10-05)
 
 - **Tabs in session order.** Tabs are ordered by when their session was created, across all agents;
