@@ -600,6 +600,8 @@ describe("tet-ctl against the control server", () => {
           res.on("end", () => resolve(data));
         },
       );
+      // A server answering past the cap closes the socket while the body is still being sent.
+      req.on("error", () => undefined);
       req.end(body);
     });
   }
