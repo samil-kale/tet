@@ -46,7 +46,7 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
 
   return (
     <DialogFrame
-      header={{ title: rows.length === 1 ? "Environment variable needed" : "Environment variables needed" }}
+      header={{ title: "Environment variables needed" }}
       busy={busy}
       error={refused}
       onCancel={cancel}
@@ -70,7 +70,8 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
         )}
       />
       <p className="dialog-detail">
-        Stored on this machine and set in every tab TET starts, a sandboxed one excepted.
+        Stored in <span className="dialog-emphasis">~/.tet/environment.json</span> and set in every tab TET starts,
+        except in a sandboxed one.
       </p>
     </DialogFrame>
   );

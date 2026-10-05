@@ -1976,11 +1976,6 @@ textarea:focus,
   height: var(--icon-size);
 }
 
-/* The organization and the signed-in user, set off from the words around them. */
-.sbx-name {
-  color: var(--vscode-terminal-ansiGreen);
-}
-
 /* The Docker account (SbxAccounts.tsx), below the project's switch or a blocked wall: set off by a
    divider with twice the body's gap on both sides. */
 .sbx-account {
@@ -2052,6 +2047,11 @@ textarea:focus,
 .dialog-detail {
   margin: 0;
   color: var(--vscode-descriptionForeground);
+}
+
+/* A word or path inside a sentence, set off from the words around it by weight alone. */
+.dialog-emphasis {
+  font-weight: 800;
 }
 
 /* A field's label over its control, and every column of fields in a dialog (`FieldColumn`), spaced
