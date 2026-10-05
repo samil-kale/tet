@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.17.2 (2026-10-05)
+
+- **Tabs in session order.** Tabs are ordered by when their session was created, across all agents;
+  tabs not yet listed come last.
+- **Fixes.** Agent names are lowercase like the CLIs write them, the tab strip's actions are set off
+  by a border, and dialogs are wider.
+
 ## 0.17.1 (2026-10-05)
 
 - **Fixes.** Errors in async handlers and pasted drops are caught instead of lost, renaming a
