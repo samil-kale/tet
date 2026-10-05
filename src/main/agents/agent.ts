@@ -275,7 +275,8 @@ interface AgentBase {
   /** Its registry key, which names its folders under `~/.tet` (`config/<agent>`, a sandbox's
    *  `<agent>`) and its tabs' `agentId`: never changed once released. */
   id: AgentId;
-  /** Its name wherever the user reads it: menus, notices, dialogs. */
+  /** Its name wherever the user reads it: menus, notices, dialogs. Always lowercase, as the CLIs
+   *  write themselves: "claude", "codex", "pi", "shell". */
   displayName: string;
   /** Drawn by the window beside its tabs and menu entries (AgentInfo.icon). */
   icon: AgentIcon;

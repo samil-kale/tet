@@ -48,7 +48,7 @@ const BASE_ARGS = ["--no-daemon", ...FULLSCREEN_ARGS];
 
 export const codexAgent: SandboxedAgent = {
   id: "codex",
-  displayName: "Codex",
+  displayName: "codex",
   icon: codexIcon,
   // Its input field is no shell: only a space needs quoting, in double quotes.
   quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
