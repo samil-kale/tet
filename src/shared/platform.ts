@@ -34,8 +34,6 @@ export interface Platform {
   readonly cmdLauncher: boolean;
   /** A generated hook command runs in a POSIX shell (hook-target.ts): not on win32. */
   readonly posixShell: boolean;
-  /** Terminals run on ConPTY, which reflects OSC 4 into the console's palette (Codex's colors). */
-  readonly conpty: boolean;
   /** The shell tab's program: PowerShell on win32, else the user's `$SHELL`. */
   shellExecutable(env: Record<string, string | undefined>): string;
   /** The shell's arguments running one command line (a saved command with `"shell": true`). */
@@ -109,7 +107,6 @@ export const WINDOWS: Platform = {
   agentDirsKnown: true,
   cmdLauncher: true,
   posixShell: false,
-  conpty: true,
   shellExecutable: () => "powershell.exe",
   // `-NoProfile`: independent of the user's profile.
   shellCommandArgs: (command) => ["-NoProfile", "-Command", command],
@@ -153,7 +150,6 @@ export const MAC: Platform = {
   agentDirsKnown: false,
   cmdLauncher: false,
   posixShell: true,
-  conpty: false,
   appBundle: true,
   executableInRoot: ["Contents", "MacOS", "TET"],
   assetPrefix: "TET-mac",
@@ -186,7 +182,6 @@ export const LINUX: Platform = {
   agentDirsKnown: false,
   cmdLauncher: false,
   posixShell: true,
-  conpty: false,
   appBundle: false,
   executableInRoot: ["tet"],
   assetPrefix: "TET-linux",

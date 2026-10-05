@@ -325,12 +325,6 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
     allowProposedApi: true
   });
 
-  // OSC 4 *sets* are dropped (returning true skips xterm's handler), queries (`n;?`) answered.
-  // ConPTY forwards the OSC 4 Codex's win32 launcher writes for the *console*
-  // (src/main/agents/codex/index.ts); honoured, it would recolor ANSI black and white into the
-  // terminal's background and foreground.
-  term.parser.registerOscHandler(4, (data) => !data.split(";").includes("?"));
-
   const fit = new FitAddon();
   term.loadAddon(fit);
   // "Select to copy" CLIs send OSC 52, ignored without this addon.

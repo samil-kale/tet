@@ -118,11 +118,6 @@ export interface AgentPaths {
 export interface SpawnPreparation {
   args: string[];
   env?: Record<string, string>;
-  /**
-   * Started instead of the agent's executable when something must run in the pty first (Codex's
-   * console-color launcher on win32). Listing, renaming and the version check still use the agent.
-   */
-  executable?: string;
 }
 
 /** What an agent hands a sandboxed tab — see AgentSandbox.prepare. */

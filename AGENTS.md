@@ -179,8 +179,8 @@ marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of 
 Claude Code, Codex and pi are three products in the same kind of tab, alike in nothing:
 readiness, how Ctrl+C quits, the right mouse button, colors, turn reports, resize redraw, how a
 pasted path is quoted (`quotePath`). So anything about how a CLI is driven is an `AgentDefinition`
-field with a value per agent (or what its `host.prepare` returns, e.g. the fullscreen args that
-make a resize redraw in place), found through this same pty for that agent, never taken from
+field with a value per agent (or what its `host.prepare` returns, e.g. the fullscreen env that
+makes a resize redraw in place), found through this same pty for that agent, never taken from
 another. The one exception is the right mouse button, decided per click by the terminal's mouse
 mode (`terminal-views.ts`), not per agent.
 

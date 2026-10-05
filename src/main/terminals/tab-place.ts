@@ -164,7 +164,7 @@ export class HostPlace implements StartingPlace {
   launch(input: LaunchInput): Promise<Launch> {
     const preparation = this.preparation();
     return Promise.resolve({
-      executable: preparation?.executable ?? this.context.executable,
+      executable: this.context.executable,
       args: [...(preparation?.args ?? []), ...input.agentArgs(input.handover?.files)],
       env: preparation?.env
     });
