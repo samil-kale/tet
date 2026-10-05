@@ -704,7 +704,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
     write("e.txt", "e\n");
     assert.deepEqual(await commitAll(cwd, "e"), { ok: true });
     run("switch", "-q", "main");
-    const before = run("rev-parse", "main");
+    const mainBefore = run("rev-parse", "main");
     git(other, "pull", "-q");
     pushFromOther("f.txt");
     assert.deepEqual(await fetch(cwd), { ok: true });
@@ -712,7 +712,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
     await fastForwardBranches(cwd);
     assert.equal(run("rev-parse", "behind"), run("rev-parse", "origin/main"));
     assert.equal(run("rev-parse", "diverged"), divergedBefore, "a diverged branch is not moved");
-    assert.equal(run("rev-parse", "main"), before, "the checked-out branch is not moved");
+    assert.equal(run("rev-parse", "main"), mainBefore, "the checked-out branch is not moved");
     run("branch", "-q", "-D", "behind", "diverged");
   });
 
@@ -822,10 +822,10 @@ describe("a login for an http remote", () => {
   }
 
   function repositoryWithRemote(url: string): string {
-    const cwd = tempDir("tet-login-test-");
-    git(cwd, "init", "-q");
-    git(cwd, "remote", "add", "origin", url);
-    return cwd;
+    const repo = tempDir("tet-login-test-");
+    git(repo, "init", "-q");
+    git(repo, "remote", "add", "origin", url);
+    return repo;
   }
 
   const askpassDir = (): string => path.join(tempDir("tet-askpass-test-"), "askpass");
@@ -833,9 +833,9 @@ describe("a login for an http remote", () => {
   it("hands git the login through askpass, and says a refused one wanted a login", async () => {
     const remote = await refusingRemote();
     try {
-      const cwd = repositoryWithRemote(remote.url);
+      const repo = repositoryWithRemote(remote.url);
       const login = { username: "user", password: "token", askpassDir: askpassDir(), origin: new URL(remote.url).origin };
-      const fetched = await fetch(cwd, "origin", login);
+      const fetched = await fetch(repo, "origin", login);
       assert.equal(fetched.ok, false);
       assert.equal(fetched.authRequired, true);
       assert.deepEqual(remote.offered, ["user:token"]);
@@ -847,10 +847,10 @@ describe("a login for an http remote", () => {
   it("asks the user's credential helper first, with no helper removed", async () => {
     const remote = await refusingRemote();
     try {
-      const cwd = repositoryWithRemote(remote.url);
-      git(cwd, "config", "credential.helper", "!f() { echo username=helper; echo password=kept; }; f");
+      const repo = repositoryWithRemote(remote.url);
+      git(repo, "config", "credential.helper", "!f() { echo username=helper; echo password=kept; }; f");
       const login = { username: "user", password: "token", askpassDir: askpassDir(), origin: new URL(remote.url).origin };
-      await fetch(cwd, "origin", login);
+      await fetch(repo, "origin", login);
       assert.deepEqual(remote.offered, ["helper:kept"], "the helper answered, so askpass was never asked");
     } finally {
       remote.close();
@@ -858,12 +858,12 @@ describe("a login for an http remote", () => {
   });
 
   it("tells whether git has a credential helper for a url", async () => {
-    const cwd = repositoryWithRemote("https://example.invalid/repo.git");
-    assert.equal(await hasCredentialHelper(cwd, "https://example.invalid/repo.git"), false);
-    git(cwd, "config", "credential.https://other.invalid.helper", "store");
-    assert.equal(await hasCredentialHelper(cwd, "https://example.invalid/repo.git"), false, "another host's");
-    assert.equal(await hasCredentialHelper(cwd, "https://other.invalid/repo.git"), true);
-    git(cwd, "config", "credential.helper", "store");
-    assert.equal(await hasCredentialHelper(cwd, "https://example.invalid/repo.git"), true);
+    const repo = repositoryWithRemote("https://example.invalid/repo.git");
+    assert.equal(await hasCredentialHelper(repo, "https://example.invalid/repo.git"), false);
+    git(repo, "config", "credential.https://other.invalid.helper", "store");
+    assert.equal(await hasCredentialHelper(repo, "https://example.invalid/repo.git"), false, "another host's");
+    assert.equal(await hasCredentialHelper(repo, "https://other.invalid/repo.git"), true);
+    git(repo, "config", "credential.helper", "store");
+    assert.equal(await hasCredentialHelper(repo, "https://example.invalid/repo.git"), true);
   });
 });

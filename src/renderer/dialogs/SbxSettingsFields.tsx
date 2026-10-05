@@ -161,10 +161,10 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
 
 /** One list's rows as Save stores them on this machine; a row left without a name holds nothing. */
 function toLocalEdits(rows: { env: string; value: string; from?: string }[]): SbxLocalEdits {
-  const named = rows.filter((row) => row.env.trim() !== "");
+  const kept = rows.filter((row) => row.env.trim() !== "");
   return {
-    values: Object.fromEntries(named.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value])),
-    from: Object.fromEntries(named.flatMap((row) => (row.from === undefined ? [] : [[row.env.trim(), row.from]])))
+    values: Object.fromEntries(kept.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value])),
+    from: Object.fromEntries(kept.flatMap((row) => (row.from === undefined ? [] : [[row.env.trim(), row.from]])))
   };
 }
 

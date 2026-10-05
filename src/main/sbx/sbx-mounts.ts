@@ -300,7 +300,7 @@ export function mountAll(name: string, specs: MountSpec[], onData?: OnData, star
     const [live = [], running] = await Promise.all([readRuntimeMounts(name), started]);
     const wanted = new Set(specs.map((spec) => spec.mount));
     // One by one: rare (a change since the last start).
-    for (const mount of live.filter((mount) => !wanted.has(mount.mount))) {
+    for (const mount of live.filter((entry) => !wanted.has(entry.mount))) {
       await runSbx(["umount", name, mount.unmount], { onData });
     }
     if (!running) {
@@ -325,7 +325,7 @@ export function mountAll(name: string, specs: MountSpec[], onData?: OnData, star
  */
 export async function revokeMounts(name: string, grants: Grant[], refused: SbxProblems): Promise<void> {
   const live = (await readRuntimeMounts(name))?.map((mount) => mount.mount);
-  for (const grant of grants.filter((grant) => live?.includes(grant.mount) ?? true)) {
+  for (const grant of grants.filter((entry) => live?.includes(entry.mount) ?? true)) {
     const result = await runSbx(["umount", name, grant.unmount]);
     if (!result.ok) {
       addProblems(refused, grant.option, { [grant.row]: sbxRefusal(result) });

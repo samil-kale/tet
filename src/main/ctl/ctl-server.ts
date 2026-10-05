@@ -68,7 +68,7 @@ export async function startControlServer(
     // Widened to look up by the request's name: every listed verb has its handler (Handlers).
     const handler = entry && (handlers as Record<string, Handler | undefined>)[entry.verb];
     if (!entry || !handler) {
-      return { response: reject("unknown_verb", `unknown verb: ${String(request.verb)} (see tet-ctl help)`) };
+      return { response: reject("unknown_verb", `unknown verb: ${request.verb} (see tet-ctl help)`) };
     }
     if (!side.admits(entry)) {
       return { response: reject("unauthorized", `${request.verb} ${side.refusal}`) };
@@ -186,10 +186,10 @@ export async function startControlServer(
 }
 
 function bind(server: http.Server, port: number): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.once("error", reject);
+  return new Promise((resolve, fail) => {
+    server.once("error", fail);
     server.listen(port, CONTROL_HOST, () => {
-      server.off("error", reject);
+      server.off("error", fail);
       resolve();
     });
   });

@@ -571,8 +571,8 @@ function foldIn(view: EditorView, result: FileContent): void {
     view.reloading = true;
     try {
       if (bom === modelBom) {
-        const text = bom ? result.content.slice(1) : result.content;
-        model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+        const content = bom ? result.content.slice(1) : result.content;
+        model.pushEditOperations([], [{ range: model.getFullModelRange(), text: content }], () => null);
       } else {
         model.setValue(result.content);
       }

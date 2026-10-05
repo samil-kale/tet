@@ -406,7 +406,7 @@ async function readRefs(
   const defaultBranch =
     findDefaultBranch(defaultBranches, localBranches, trackers, remotes) ??
     (fallbackDefault !== undefined && localBranches.includes(fallbackDefault) ? { name: fallbackDefault } : undefined);
-  const merged = defaultBranch ? await readDefaultMerged(cwd, result.stdout, defaultBranch) : undefined;
+  const merged = defaultBranch ? await readDefaultMerged(result.stdout, defaultBranch) : undefined;
   const isMerged = (refname: string): boolean => merged?.has(refname) ?? false;
 
   return {
@@ -426,7 +426,7 @@ async function readRefs(
 
   /** The default branch is never merged into itself, nor are the remote branches standing for it:
    *  its upstream and each remote's HEAD branch. */
-  function readDefaultMerged(cwd: string, refs: string, target: CheckoutTarget): Promise<Set<string> | undefined> {
+  function readDefaultMerged(refs: string, target: CheckoutTarget): Promise<Set<string> | undefined> {
     const targetRef = target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
     const upstream = target.remote ? undefined : branchUpstreams[target.name];
     const excluded = new Set([
@@ -474,7 +474,7 @@ function toChangeStatus(code: string): ChangeStatus {
     return "conflicted";
   }
   // Index status, then worktree status; the first non-space one describes the change.
-  const letter = code[0] !== " " ? code[0] : code[1];
+  const letter = !code.startsWith(" ") ? code[0] : code[1];
   switch (letter) {
     case "A":
       return "added";
@@ -619,13 +619,13 @@ async function readOperation(gitDir: string): Promise<GitOperation | undefined> 
 async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
-  const worktree = async (worktreePath: string, adminDir: string, isRepository: boolean): Promise<WorktreeInfo> => {
+  const worktree = async (worktreePath: string, adminDir: string, repository: boolean): Promise<WorktreeInfo> => {
     const head = await fs.readFile(path.join(adminDir, "HEAD"), "utf8").catch(() => "");
     return {
       // On-disk spelling, which a project's path has (git's --show-toplevel); as named while it is gone.
       path: await fs.realpath(worktreePath).catch(() => worktreePath),
       branch: headBranch(head),
-      isRepository,
+      isRepository: repository,
       current: adminDir === gitDir
     };
   };
@@ -1404,8 +1404,8 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
 
   const file = path.join(cwd, ".gitignore");
   try {
-    const existing = await fs.readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") {
+    const existing = await fs.readFile(file, "utf8").catch((error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return "";
       }
       throw error;
@@ -1456,7 +1456,7 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
     return { content: "", binary: true, missing: false };
   }
   // Any failure, git not started included, is a path HEAD lacks.
-  if (read === undefined || read.code !== 0) {
+  if (read?.code !== 0) {
     return { content: "", binary: false, missing: true };
   }
   const blob = read.stdout;

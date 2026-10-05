@@ -363,7 +363,7 @@ function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
     return mapLimited(files, READ_CONCURRENCY, async (filePath): Promise<AgentSessionInfo | undefined> => {
       const meta = await readSessionMeta(filePath);
       // Only `source: "cli"` is interactive, as in Codex's `/resume` picker.
-      if (!meta || meta.source !== "cli" || !samePath(meta.cwd, cwd)) {
+      if (meta?.source !== "cli" || !samePath(meta.cwd, cwd)) {
         return undefined;
       }
       const { tail, size, mtimeMs } = await scanTail(filePath);

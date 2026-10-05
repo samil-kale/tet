@@ -410,10 +410,9 @@ export function useExplorerListing(
 function keepRoots(previous: ExplorerListing | undefined, next: ExplorerListing): ExplorerListing {
   const before = previous?.roots;
   const after = next.roots;
-  const same =
-    before !== undefined &&
-    after !== undefined &&
-    before.length === after.length &&
-    before.every((root, index) => root.name === after[index].name && root.path === after[index].path);
+  if (before === undefined || after === undefined) {
+    return next;
+  }
+  const same = before.length === after.length && before.every((root, index) => root.name === after[index].name && root.path === after[index].path);
   return same ? { ...next, roots: before } : next;
 }

@@ -93,9 +93,9 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     if (!element) {
       return;
     }
-    const { width, height } = element.getBoundingClientRect();
-    const left = flipX !== undefined && x + width > window.innerWidth ? flipX - width : x;
-    element.style.left = `${Math.max(0, Math.min(left, window.innerWidth - width))}px`;
+    const { width: menuWidth, height } = element.getBoundingClientRect();
+    const left = flipX !== undefined && x + menuWidth > window.innerWidth ? flipX - menuWidth : x;
+    element.style.left = `${Math.max(0, Math.min(left, window.innerWidth - menuWidth))}px`;
     element.style.top = `${Math.max(0, Math.min(y, window.innerHeight - height))}px`;
   }, [x, y, flipX]);
 
@@ -105,21 +105,21 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   const close = useLatest(onClose);
 
   useEffect(() => {
-    const onClose = (): void => close.current();
+    const closeMenu = (): void => close.current();
     const onMouseDown = (event: MouseEvent): void => {
       const target = event.target as Node;
       if (!menu.current?.contains(target) && !anchor?.contains(target)) {
-        onClose();
+        closeMenu();
       }
     };
     document.addEventListener("mousedown", onMouseDown, true);
-    window.addEventListener("blur", onClose);
+    window.addEventListener("blur", closeMenu);
     // Anchored to pointer coordinates, so after a resize it points at nothing.
-    window.addEventListener("resize", onClose);
+    window.addEventListener("resize", closeMenu);
     return () => {
       document.removeEventListener("mousedown", onMouseDown, true);
-      window.removeEventListener("blur", onClose);
-      window.removeEventListener("resize", onClose);
+      window.removeEventListener("blur", closeMenu);
+      window.removeEventListener("resize", closeMenu);
     };
   }, [close, anchor]);
 

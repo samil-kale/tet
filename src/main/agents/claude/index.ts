@@ -32,7 +32,7 @@ export const claudeAgent: SandboxedAgent = {
   displayName: "claude",
   icon: claudeIcon,
   // Its input field is no shell: only a space needs quoting, in double quotes.
-  quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
+  quotePath: (filePath) => (/\s/.test(filePath) ? `"${filePath}"` : filePath),
   executable: () => "claude",
   install: { versionArgs: ["--version"], verifiedVersion: "2.1.286" },
   terminal: {

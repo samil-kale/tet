@@ -63,7 +63,7 @@ export function addProject(deps: ProjectDeps, directory: string): Promise<AddRep
 
 async function addNow(deps: ProjectDeps, directory: string): Promise<AddRepositoryResult> {
   const { store, dataRoot } = deps;
-  const stat = await fs.promises.stat(directory).catch((error: NodeJS.ErrnoException) => error.code);
+  const stat = await fs.promises.stat(directory).catch((error: unknown) => (error as NodeJS.ErrnoException).code);
   // A missing folder is offered for initializing as well: `git init` creates it.
   if (stat === "ENOENT") {
     return { error: `${directory} does not exist`, notRepository: true };

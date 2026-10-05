@@ -501,7 +501,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
               onMoveToggle={moveToggle}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
-              externalBusy={starting[resolved.refKey] === true && (marks[resolved.refKey]?.starting ?? NO_IDS).length === 0}
+              externalBusy={(starting[resolved.refKey] ?? false) && (marks[resolved.refKey]?.starting ?? NO_IDS).length === 0}
               onCloseEditors={closeEditors}
               layout={layouts[resolved.refKey] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}

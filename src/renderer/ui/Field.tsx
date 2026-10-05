@@ -198,8 +198,8 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           });
         }
         setRefused(result.error);
-      } catch (error) {
-        setRefused(`Could not suggest a value: ${errorMessage(error)}`);
+      } catch (failure) {
+        setRefused(`Could not suggest a value: ${errorMessage(failure)}`);
       }
     });
   };

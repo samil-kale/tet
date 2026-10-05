@@ -189,7 +189,7 @@ describe("a tab of a missing agent", () => {
       fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
       await manager.sbxSettingsChanged(true);
       await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
-      assert.ok(notices.some((notice) => /only runs in repo's SBX sandbox/.test(notice)), notices.join("\n"));
+      assert.ok(notices.some((notice) => notice.includes("only runs in repo's SBX sandbox")), notices.join("\n"));
     });
   });
 });

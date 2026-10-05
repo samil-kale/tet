@@ -209,7 +209,7 @@ ${stderr.slice(uncaught)}`);
     );
     const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TabDescriptor;
     const lines = (): Promise<string> => started().output(project.id, probe.tabId);
-    await eventually("the command's line", async () => /tet-context-probe/.test(await lines()), STARTUP_MS);
+    await eventually("the command's line", async () => (await lines()).includes("tet-context-probe"), STARTUP_MS);
   });
 
   it("answers tet-ctl run inside a tab, which holds only its own tab's token", async () => {
@@ -378,7 +378,7 @@ ${stderr.slice(uncaught)}`);
   });
 
   it("restarts on --confirm and comes back with the same profile", async () => {
-    const before = pid;
+    const previousPid = pid;
     const [project] = (await ctl("projects-list")).result as Project[];
     assert.deepEqual((await ctl("app-restart", "--confirm")).result, { restarting: true });
     await new Promise<void>((resolve) => app?.child.once("exit", () => resolve()));
@@ -386,7 +386,7 @@ ${stderr.slice(uncaught)}`);
       "the new instance",
       async () => {
         pid = await app?.alive();
-        return pid !== undefined && pid !== before;
+        return pid !== undefined && pid !== previousPid;
       },
       STARTUP_MS
     );

@@ -150,7 +150,8 @@ export function stoppable(): Stoppable {
       let own: ChildProcess | undefined;
       try {
         return await start((child) => {
-          own = current = child;
+          current = child;
+          own = child;
         });
       } finally {
         if (own && current === own) {

@@ -21,7 +21,7 @@ export const codexAgent: SandboxedAgent = {
   displayName: "codex",
   icon: codexIcon,
   // Its input field is no shell: only a space needs quoting, in double quotes.
-  quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
+  quotePath: (filePath) => (/\s/.test(filePath) ? `"${filePath}"` : filePath),
   executable: () => "codex",
   install: { versionArgs: ["--version"], verifiedVersion: "0.159.2" },
   terminal: {

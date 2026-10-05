@@ -9,7 +9,7 @@ export function sameList<T>(previous: T[] | undefined, next: T[], empty: T[]): T
   if (next.length === 0) {
     return empty;
   }
-  return previous && previous.length === next.length && previous.every((item, i) => item === next[i]) ? previous : next;
+  return previous?.length === next.length && previous.every((item, i) => item === next[i]) ? previous : next;
 }
 
 /**

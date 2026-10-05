@@ -11,7 +11,7 @@ import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, RepositoryS
 import type { ProjectRef } from "../../shared/types/project";
 import { PROJECT_FILE } from "../store/tet-json";
 import type { ResolvedRef } from "../store/resolved-ref";
-import { worktreeKeyOf } from "../store/project-dirs";
+import { worktreeKeyOf as projectWorktreeKey } from "../store/project-dirs";
 import {
   createDirectory,
   createFile,
@@ -843,7 +843,7 @@ export class Repository {
     const dir = linked.commonDir ?? linked.gitDir;
     const ownWorktree = linked.commonDir === undefined ? undefined : path.basename(linked.gitDir);
     this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) =>
-      this.onGitEvent(filename === null ? undefined : `.git/${filename.toString().replace(/\\/g, "/")}`, undefined, ownWorktree)
+      this.onGitEvent(filename === null ? undefined : `.git/${filename.replace(/\\/g, "/")}`, undefined, ownWorktree)
     );
     this.gitDirWatcher.on("error", (error) => this.onWatchError(dir, error));
   }
@@ -984,7 +984,7 @@ export class RepositoryManager {
     }
     const repository: Repository = new Repository(
       resolved,
-      (worktreePath) => worktreeKeyOf(this.dataRoot, ref.projectId, worktreePath),
+      (worktreePath) => projectWorktreeKey(this.dataRoot, ref.projectId, worktreePath),
       (state) => this.onState(ref, state),
       this.onNotice,
       // A worktree's own copy of tet.json counts for nothing.

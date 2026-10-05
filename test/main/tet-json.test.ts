@@ -300,12 +300,12 @@ describe("readSbxSettings", () => {
     };
     await writeSbxSettings(root, config);
     assert.deepEqual(await readSbxSettings(root), config, "the rows that apply here come back, the other OS's does not");
-    const file = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown; hosts: unknown } };
-    assert.equal(file.sbx.knowledge, undefined, "knowledge, kept on this machine, is dropped from tet.json");
-    assert.deepEqual(file.commands, ["keep"], "the saved command survives");
-    assert.deepEqual(file.sbx.hosts, ["gitlab.example.com", "*.s3.example.net:443"], "hosts are written as typed, with no os");
+    const written = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown; hosts: unknown } };
+    assert.equal(written.sbx.knowledge, undefined, "knowledge, kept on this machine, is dropped from tet.json");
+    assert.deepEqual(written.commands, ["keep"], "the saved command survives");
+    assert.deepEqual(written.sbx.hosts, ["gitlab.example.com", "*.s3.example.net:443"], "hosts are written as typed, with no os");
     assert.deepEqual(
-      file.sbx.paths,
+      written.sbx.paths,
       [
         theirs,
         { path: "~/data", access: "rw" },

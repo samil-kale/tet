@@ -71,20 +71,20 @@ export function sandboxDir(dataRoot: string, ref: ProjectRef, agentId: AgentId):
 
 /** The host side of an agent's session mounts (AgentSandbox.sessions): inside its sandbox folder
  *  (sandboxDir), which sbx-mounts.ts mounts whole. */
-export function sandboxSessionDir(sandboxDir: string): string {
-  return path.join(sandboxDir, "sessions");
+export function sandboxSessionDir(agentDir: string): string {
+  return path.join(agentDir, "sessions");
 }
 
 /** Where a sandboxed tab finds another agent's session it takes over, copied into the same
  *  mounted folder: that agent's own store is out of the sandbox's sight. */
-export function sandboxHandoverDir(sandboxDir: string, from: string, sessionId: string): string {
-  return path.join(sandboxDir, "handovers", `${from}-${sessionId}`);
+export function sandboxHandoverDir(agentDir: string, from: string, sessionId: string): string {
+  return path.join(agentDir, "handovers", `${from}-${sessionId}`);
 }
 
 /** Where a sandboxed tab's pasted or dropped content without a path is written, in the same mounted
  *  folder; a host tab's goes to dropsDir. */
-export function sandboxDropsDir(sandboxDir: string): string {
-  return path.join(sandboxDir, "drops");
+export function sandboxDropsDir(agentDir: string): string {
+  return path.join(agentDir, "drops");
 }
 
 /** Every agent folder (sandboxDir) the project's sandboxes have, the repository's and its

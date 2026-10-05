@@ -28,7 +28,7 @@ import { eventually, killApp, processAlive, ROOT, tempDir, tetCtl } from "../hel
 const ENABLED = process.env.TET_INSTALL_TEST === "1";
 const STARTUP_MS = 120_000;
 const TOKEN = "install-test-token";
-const ASSET = assetName(PLATFORM, process.arch) as string;
+const ASSET = assetName(PLATFORM, process.arch)!;
 
 let work: string;
 let home: string;
@@ -177,7 +177,7 @@ describe("TET installed by its script, and updated", { skip: !ENABLED, timeout: 
     userData = path.join(work, "user-data");
     fs.mkdirSync(home);
     current = (JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { version: string }).version;
-    next = semver.inc(current, "patch") as string;
+    next = semver.inc(current, "patch")!;
     archives.set(current, built);
     archives.set(next, packageNext());
     served = current;
@@ -189,7 +189,7 @@ describe("TET installed by its script, and updated", { skip: !ENABLED, timeout: 
         return;
       }
       const download = /^\/download\/v([^/]+)\/([^/]+)$/.exec(url);
-      const file = download && download[2] === ASSET ? archives.get(download[1]) : undefined;
+      const file = download?.[2] === ASSET ? archives.get(download[1]) : undefined;
       if (!file) {
         response.writeHead(404).end();
         return;

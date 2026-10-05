@@ -155,15 +155,15 @@ export interface VisibleRow {
 
 export function visibleRows(
   nodes: TreeNode[],
-  isExpanded: (node: TreeNode) => boolean,
+  isOpen: (node: TreeNode) => boolean,
   depth = 0,
   out: VisibleRow[] = []
 ): VisibleRow[] {
   for (const node of nodes) {
-    const expanded = isExpanded(node);
+    const expanded = isOpen(node);
     out.push({ node, depth, expanded });
     if (node.children && expanded) {
-      visibleRows(node.children, isExpanded, depth + 1, out);
+      visibleRows(node.children, isOpen, depth + 1, out);
     }
   }
   return out;

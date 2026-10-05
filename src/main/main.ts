@@ -194,7 +194,7 @@ const repositories = new RepositoryManager(
     });
   },
   (ref) => send("repository:files-changed", { ref }),
-  (ref, path) => send("repository:file-changed", { ref, path }),
+  (ref, filePath) => send("repository:file-changed", { ref, path: filePath }),
   logins
 );
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {

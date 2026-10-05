@@ -211,7 +211,7 @@ export class TabSessionManager {
    *  for a tab not waiting for its first start. */
   start(tabId: string): boolean {
     const tab = this.tabOf(tabId);
-    if (!tab || tab.status !== "ready" || this.sessions.has(tabId)) {
+    if (tab?.status !== "ready" || this.sessions.has(tabId)) {
       return false;
     }
     const size = this.lastSizes.get(tabId) ?? CONTROL_START_SIZE;
@@ -1252,7 +1252,7 @@ export class TabSessionManager {
    */
   markSeen(tabId: string): void {
     const tab = this.tabOf(tabId);
-    if (!tab || tab.finishedAt === undefined) {
+    if (tab?.finishedAt === undefined) {
       return;
     }
     tab.finishedAt = undefined;

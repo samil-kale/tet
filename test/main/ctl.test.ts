@@ -562,9 +562,9 @@ describe("tet-ctl against the control server", () => {
 
   /** A raw HTTP request, bypassing the CLI, which would not send such a request. */
   async function post(body: string): Promise<string> {
-    const http = await import("node:http");
+    const nodeHttp = await import("node:http");
     return new Promise<string>((resolve) => {
-      const req = http.request(
+      const req = nodeHttp.request(
         { host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } },
         (res) => {
           let data = "";
@@ -733,16 +733,16 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("sets one Git setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
-    const before = { ...settings.git };
-    const set = await tetCtl(["settings-set-git", "pushOnCommit", before.pushOnCommit ? "off" : "on"]);
+    const previous = { ...settings.git };
+    const set = await tetCtl(["settings-set-git", "pushOnCommit", previous.pushOnCommit ? "off" : "on"]);
     assert.deepEqual(set.result, { saved: true });
-    assert.deepEqual(settings.git, { ...before, pushOnCommit: !before.pushOnCommit });
+    assert.deepEqual(settings.git, { ...previous, pushOnCommit: !previous.pushOnCommit });
     const unknown = await tetCtl(["settings-set-git", "force", "on"]);
     assert.equal(unknown.status, EXIT_CODES.usage);
     assert.match(unknown.stderr, /unknown git setting: force/);
     const badValue = await tetCtl(["settings-set-git", "checkNewChanges", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
-    assert.equal(settings.git.checkNewChanges, before.checkNewChanges);
+    assert.equal(settings.git.checkNewChanges, previous.checkNewChanges);
   });
 
   it("sets one Explorer setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
@@ -1529,7 +1529,7 @@ describe("tet-ctl against the control server", () => {
   // A prompt-submit hook's stdout is appended to the prompt: TET adds nothing there.
   it("hands a hook's payload over and adds nothing to the prompt", async () => {
     const payload = '{"session_id":"abc","background_tasks":[]}';
-    const before = Date.now();
+    const startedAt = Date.now();
     const run = await tetCtl(["hook", "prompt-submit"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);
     assert.equal(run.stdout, "", "TET's system prompt went in once per session");
@@ -1538,7 +1538,7 @@ describe("tet-ctl against the control server", () => {
     // When the hook fired, not when handled: racing reports of one turn are ordered by it, so a
     // finished turn does not go back to working.
     const [at] = calls.hookTimes;
-    assert.ok(typeof at === "number" && at >= before && at <= Date.now(), `own time carried through, got ${String(at)}`);
+    assert.ok(typeof at === "number" && at >= startedAt && at <= Date.now(), `own time carried through, got ${String(at)}`);
   });
 
   it("answers a session start with TET's system prompt as added context", async () => {
@@ -1696,7 +1696,7 @@ describe("the tet-ctl launcher", () => {
   it("leaves nothing set in the cmd.exe that ran it", { skip: !PLATFORM.cmdLauncher }, async () => {
     const dir = tempDir("tet-launcher-");
     const bin = writeLaunchers(dir, CLI);
-    const after = await new Promise<string>((resolve) => {
+    const variables = await new Promise<string>((resolve) => {
       // One cmd.exe session: the launcher, then a look at the variable.
       const child = spawn(`call tet-ctl help >nul & set ELECTRON_RUN_AS_NODE`, [], {
         env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined, ELECTRON_RUN_AS_NODE: undefined },
@@ -1706,6 +1706,6 @@ describe("the tet-ctl launcher", () => {
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
       child.on("close", () => resolve(stdout));
     });
-    assert.doesNotMatch(after, /ELECTRON_RUN_AS_NODE=1/);
+    assert.doesNotMatch(variables, /ELECTRON_RUN_AS_NODE=1/);
   });
 });

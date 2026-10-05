@@ -282,7 +282,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
     const [currentContent, currentOffset] = readLine(terminal, lineIndex);
 
     // Expand top, stop on whitespace, MAX_WINDOW_CHARS or MAX_WINDOW_ROWS.
-    if (isContinuation(terminal, lineIndex) && currentContent[0] !== " ") {
+    if (isContinuation(terminal, lineIndex) && !currentContent.startsWith(" ")) {
       length = 0;
       rows = 0;
       // Caps checked before the step: `topIdx` never names an unread row.
@@ -293,7 +293,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
         length += content.length;
         lines.push(content);
         offsets.push(offset);
-        if (!isContinuation(terminal, topIdx) || content.indexOf(" ") !== -1) {
+        if (!isContinuation(terminal, topIdx) || content.includes(" ")) {
           break;
         }
       }
@@ -317,7 +317,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
       length += content.length;
       lines.push(content);
       offsets.push(offset);
-      if (content.indexOf(" ") !== -1) {
+      if (content.includes(" ")) {
         break;
       }
     }
@@ -355,7 +355,7 @@ function mapStrIdx(
         // --> if all these conditions are met, correct stringIndex by +1
         if (i === line.length - 1 && chars === "") {
           const nextLine = buf.getLine(lineIndex + 1);
-          if (nextLine && nextLine.isWrapped) {
+          if (nextLine?.isWrapped) {
             nextLine.getCell(0, cell);
             if (cell.getWidth() === 2) {
               stringIndex += 1;

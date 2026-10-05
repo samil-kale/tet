@@ -121,7 +121,7 @@ export function SbxAccounts({
                 readOnly={row.account !== undefined}
                 title={row.account !== undefined ? "The Docker account this token belongs to" : undefined}
                 value={row.user}
-                onChange={(user) => setRow(row, { user })}
+                onChange={(value) => setRow(row, { user: value })}
               />
               <SecretInput
                 stored={row.account !== undefined}

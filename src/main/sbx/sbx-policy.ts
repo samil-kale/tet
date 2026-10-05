@@ -161,7 +161,7 @@ function patternRegExp(pattern: string, flavor: PathFlavor): RegExp {
     } else if (rest.startsWith("**")) {
       regex += ".*";
       index += 1;
-    } else if (rest[0] === "*") {
+    } else if (rest.startsWith("*")) {
       regex += "[^/]*";
     } else {
       regex += rest[0].replace(/[.+?^${}()|[\]\\]/g, "\\$&");

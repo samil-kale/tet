@@ -33,7 +33,7 @@ export const piAgent: SandboxedAgent = {
   displayName: "pi",
   icon: piIcon,
   // Its input field is no shell: only a space needs quoting, in double quotes.
-  quotePath: (path) => (/\s/.test(path) ? `"${path}"` : path),
+  quotePath: (filePath) => (/\s/.test(filePath) ? `"${filePath}"` : filePath),
   executable: () => "pi",
   // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
   install: { versionArgs: ["--version"], verifiedVersion: "0.86.1" },
