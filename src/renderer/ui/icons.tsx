@@ -19,7 +19,6 @@ import {
   GitCommitHorizontal,
   GitCompare,
   Globe,
-  Inbox,
   Info,
   Landmark,
   List,
@@ -30,6 +29,7 @@ import {
   MessageCircleCheck,
   MessageCircleQuestionMark,
   MessageCircleX,
+  Package,
   Play,
   Plus,
   RefreshCw,
@@ -307,9 +307,9 @@ export function CommitIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCommitHorizontal} />;
 }
 
-/** Lucide's `inbox` — a stash. */
+/** Lucide's `package` — a stash. */
 export function StashIcon(props: IconProps) {
-  return <Lucide {...props} icon={Inbox} />;
+  return <Lucide {...props} icon={Package} />;
 }
 
 /** Lucide's `undo-2` — discard, as IntelliJ's rollback. */
