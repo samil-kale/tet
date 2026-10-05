@@ -33,7 +33,7 @@ export function TreeRow({
   onClick,
   onDoubleClick,
   onContextMenu,
-  ref
+  ref,
 }: {
   icon?: ReactNode;
   label: ReactNode;
@@ -98,7 +98,7 @@ export function ChevronBox({ expanded }: { expanded?: boolean }) {
         alignSelf: "stretch",
         alignItems: "center",
         justifyContent: "center",
-        marginRight: CHEVRON_GAP
+        marginRight: CHEVRON_GAP,
       }}
     >
       {expanded !== undefined && <ChevronIcon expanded={expanded} className="tree-icon" />}

@@ -128,7 +128,7 @@ export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolea
     sandboxed,
     sessionId,
     savedCommand: isSavedCommandTab(tab),
-    command
+    command,
   };
 }
 

@@ -4,10 +4,7 @@ import type { EventChannels, InvokeChannels, SendChannels } from "../shared/ipc"
 import { DEFAULT_THEME_IDS } from "../shared/themes";
 
 // The window's side of `src/shared/ipc.ts`; main's is `src/main/ipc/channels.ts`.
-function invoke<C extends keyof InvokeChannels>(
-  channel: C,
-  ...args: Parameters<InvokeChannels[C]>
-): ReturnType<InvokeChannels[C]> {
+function invoke<C extends keyof InvokeChannels>(channel: C, ...args: Parameters<InvokeChannels[C]>): ReturnType<InvokeChannels[C]> {
   return ipcRenderer.invoke(channel, ...args) as ReturnType<InvokeChannels[C]>;
 }
 
@@ -15,10 +12,7 @@ function send<C extends keyof SendChannels>(channel: C, ...args: Parameters<Send
   ipcRenderer.send(channel, ...args);
 }
 
-function subscribe<C extends keyof EventChannels>(
-  channel: C,
-  listener: (payload: EventChannels[C]) => void
-): Unsubscribe {
+function subscribe<C extends keyof EventChannels>(channel: C, listener: (payload: EventChannels[C]) => void): Unsubscribe {
   const handler = (_event: Electron.IpcRendererEvent, payload: EventChannels[C]): void => listener(payload);
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.off(channel, handler);
@@ -32,12 +26,12 @@ const api: TETApi = {
   startup: {
     check: () => invoke("startup:check"),
     anyAgentInstalled: () => invoke("startup:any-agent-installed"),
-    quit: () => send("startup:quit")
+    quit: () => send("startup:quit"),
   },
   app: {
     info: () => invoke("app:info"),
     reportNotice: (report) => send("app:notice-shown", report),
-    restart: () => send("app:restart")
+    restart: () => send("app:restart"),
   },
   sbx: {
     status: (projectId: string) => invoke("sbx:status", projectId),
@@ -53,12 +47,11 @@ const api: TETApi = {
     stored: (projectId) => invoke("sbx:stored", projectId),
     knowledgeSources: () => invoke("sbx:knowledge-sources"),
     saveSettings: (projectId, request, local) => invoke("sbx:save-settings", projectId, request, local),
-    problems: (projectId, settings, knowledge, values, status) =>
-      invoke("sbx:problems", projectId, settings, knowledge, values, status)
+    problems: (projectId, settings, knowledge, values, status) => invoke("sbx:problems", projectId, settings, knowledge, values, status),
   },
   settings: {
     get: () => invoke("settings:get"),
-    patch: (edits) => invoke("settings:patch", edits)
+    patch: (edits) => invoke("settings:patch", edits),
   },
   projects: {
     list: () => invoke("projects:list"),
@@ -66,28 +59,27 @@ const api: TETApi = {
     pickFile: (title) => invoke("projects:pick-file", title),
     directoryToRemember: (directory) => invoke("projects:directory-to-remember", directory),
     open: (directory) => invoke("projects:open", directory),
-    clone: (url, directory, name, accountId, login) =>
-      invoke("projects:clone", url, directory, name, accountId, login),
+    clone: (url, directory, name, accountId, login) => invoke("projects:clone", url, directory, name, accountId, login),
     initialize: (directory) => invoke("projects:initialize", directory),
     remove: (projectId) => invoke("projects:remove", projectId),
     addWorktree: (projectId, branch) => invoke("projects:add-worktree", projectId, branch),
     deleteWorktree: (worktree, options) => invoke("projects:delete-worktree", worktree, options),
     reorder: (projectIds) => invoke("projects:reorder", projectIds),
-    onChanged: (listener) => subscribe("projects:changed", listener)
+    onChanged: (listener) => subscribe("projects:changed", listener),
   },
   providers: {
     accounts: () => invoke("providers:accounts"),
     addAccount: (provider, host, token) => invoke("providers:add-account", provider, host, token),
     removeAccount: (accountId) => invoke("providers:remove-account", accountId),
     setNamespace: (accountId, namespace) => invoke("providers:set-namespace", accountId, namespace),
-    repos: (accountId) => invoke("providers:repos", accountId)
+    repos: (accountId) => invoke("providers:repos", accountId),
   },
   env: {
     list: () => invoke("env:list"),
     save: (rows) => invoke("env:save", rows),
     answer: (id, answer) => invoke("env:answer", id, answer),
     onRequest: (listener) => subscribe("env:request", listener),
-    onWithdrawn: (listener) => subscribe("env:withdrawn", listener)
+    onWithdrawn: (listener) => subscribe("env:withdrawn", listener),
   },
   repository: {
     state: (ref) => invoke("repository:state", ref),
@@ -97,18 +89,14 @@ const api: TETApi = {
     pull: (ref, login) => invoke("repository:pull", ref, login),
     push: (ref, login) => invoke("repository:push", ref, login),
     setRemoteUrl: (ref, remote, url) => invoke("repository:set-remote-url", ref, remote, url),
-    createBranch: (ref, name, startPoint) =>
-      invoke("repository:create-branch", ref, name, startPoint),
+    createBranch: (ref, name, startPoint) => invoke("repository:create-branch", ref, name, startPoint),
     renameBranch: (ref, from, to) => invoke("repository:rename-branch", ref, from, to),
-    deleteBranch: (ref, name, onRemote) =>
-      invoke("repository:delete-branch", ref, name, onRemote),
-    deleteRemoteBranch: (ref, remote, name, login) =>
-      invoke("repository:delete-remote-branch", ref, remote, name, login),
+    deleteBranch: (ref, name, onRemote) => invoke("repository:delete-branch", ref, name, onRemote),
+    deleteRemoteBranch: (ref, remote, name, login) => invoke("repository:delete-remote-branch", ref, remote, name, login),
     merge: (ref, gitRef) => invoke("repository:merge", ref, gitRef),
     rebase: (ref, gitRef, confirmed) => invoke("repository:rebase", ref, gitRef, confirmed),
     abort: (ref) => invoke("repository:abort", ref),
-    createTag: (ref, name, target, message) =>
-      invoke("repository:create-tag", ref, name, target, message),
+    createTag: (ref, name, target, message) => invoke("repository:create-tag", ref, name, target, message),
     pushTag: (ref, name, login) => invoke("repository:push-tag", ref, name, login),
     deleteTag: (ref, name, onRemote) => invoke("repository:delete-tag", ref, name, onRemote),
     deleteRemoteTag: (ref, name, login) => invoke("repository:delete-remote-tag", ref, name, login),
@@ -131,25 +119,21 @@ const api: TETApi = {
     listExplorer: (ref) => invoke("repository:list-explorer", ref),
     searchFiles: (ref, query) => invoke("repository:search-files", ref, query),
     readFile: (ref, filePath) => invoke("repository:read-file", ref, filePath),
-    writeFile: (ref, filePath, content, expectedMtimeMs) =>
-      invoke("repository:write-file", ref, filePath, content, expectedMtimeMs),
+    writeFile: (ref, filePath, content, expectedMtimeMs) => invoke("repository:write-file", ref, filePath, content, expectedMtimeMs),
     onState: (listener) => subscribe("repository:state-changed", listener),
     onFilesChanged: (listener) => subscribe("repository:files-changed", listener),
     watchFiles: (ref, paths) => invoke("repository:watch-files", ref, paths),
     onFileChanged: (listener) => subscribe("repository:file-changed", listener),
     reportEditor: (ref, tabId, report) => send("editor:report", ref, tabId, report),
     reportActiveEditor: (ref, tabId) => send("editor:active", ref, tabId),
-    onEditorContentRequest: (listener) =>
-      subscribe("editor:content-request", ({ ref, reply }) =>
-        send(reply, listener(ref))
-      ),
-    onOpenEditor: (listener) => subscribe("editor:open", listener)
+    onEditorContentRequest: (listener) => subscribe("editor:content-request", ({ ref, reply }) => send(reply, listener(ref))),
+    onOpenEditor: (listener) => subscribe("editor:open", listener),
   },
   commands: {
     list: (projectId) => invoke("commands:list", projectId),
     save: (projectId, commands) => invoke("commands:save", projectId, commands),
     run: (ref, command) => invoke("commands:run", ref, command),
-    onChanged: (listener) => subscribe("commands:changed", listener)
+    onChanged: (listener) => subscribe("commands:changed", listener),
   },
   tabs: {
     list: (ref) => invoke("tabs:list", ref),
@@ -171,28 +155,27 @@ const api: TETApi = {
       subscribe("tabs:text-request", ({ ref, tabId, reply }) => {
         void listener(ref, tabId).then((text) => send(reply, text));
       }),
-    starting: (ref) => invoke("tabs:starting", ref)
+    starting: (ref) => invoke("tabs:starting", ref),
   },
   agents: {
     list: () => invoke("agents:list"),
     askable: () => invoke("agents:askable"),
-    askModels: (agentId) => invoke("agents:ask-models", agentId)
+    askModels: (agentId) => invoke("agents:ask-models", agentId),
   },
   drops: {
     // The file's path, which the renderer cannot read; preload-only under contextIsolation.
     pathOf: (file) => webUtils.getPathForFile(file),
     writeDrop: (ref, tabId, name, dataBase64) => invoke("drops:write-drop", ref, tabId, name, dataBase64),
     clipboardImage: (ref, tabId) => invoke("drops:clipboard-image", ref, tabId),
-    handPaths: (ref, tabId, paths) => invoke("drops:hand-paths", ref, tabId, paths)
+    handPaths: (ref, tabId, paths) => invoke("drops:hand-paths", ref, tabId, paths),
   },
   shell: {
     openUrl: (url) => invoke("shell:open-url", url),
     fetchImage: (url) => invoke("shell:fetch-image", url),
     openFile: (ref, filePath) => invoke("shell:open-file", ref, filePath),
     revealFile: (ref, filePath) => invoke("shell:reveal-file", ref, filePath),
-    openFileExternally: (ref, filePath) =>
-      invoke("shell:open-file-externally", ref, filePath),
-    openProject: (ref) => invoke("shell:open-project", ref)
+    openFileExternally: (ref, filePath) => invoke("shell:open-file-externally", ref, filePath),
+    openProject: (ref) => invoke("shell:open-project", ref),
   },
   // Lets main release the notices it held back (`send` in window.ts).
   onNotice: (listener) => {
@@ -204,7 +187,7 @@ const api: TETApi = {
   initialTheme,
   onTheme: (listener) => subscribe("app:theme", listener),
   onLanes: (listener) => subscribe("app:lanes", listener),
-  waylandSession
+  waylandSession,
 };
 
 contextBridge.exposeInMainWorld("tet", api);

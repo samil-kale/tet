@@ -34,27 +34,39 @@ describe("sbx sandbox naming and mounts", () => {
     assert.notEqual(name, sandboxName({ ...project, worktree: "k1" }, "claude"), "one per worktree: its workspace is its own");
   });
 
-  it("mounts a Windows path the way sbx does inside the sandbox", {
-    skip: !PLATFORM.driveLetters && "win32 only"
-  }, () => {
-    assert.equal(toContainerPath("C:\\Users\\saka\\Documents\\Workspace\\Private\\tet"), "/c/Users/saka/Documents/Workspace/Private/tet");
-  });
+  it(
+    "mounts a Windows path the way sbx does inside the sandbox",
+    {
+      skip: !PLATFORM.driveLetters && "win32 only",
+    },
+    () => {
+      assert.equal(toContainerPath("C:\\Users\\saka\\Documents\\Workspace\\Private\\tet"), "/c/Users/saka/Documents/Workspace/Private/tet");
+    },
+  );
 
-  it("spells a Windows path the way it is on disk, since sbx mounts it that way", {
-    skip: !PLATFORM.driveLetters && "win32 only"
-  }, () => {
-    const root = tempDir("tet-case-");
-    fs.mkdirSync(path.join(root, "tet"));
-    const onDisk = toContainerPath(path.join(root, "tet", "not-yet-written.json"));
-    assert.equal(toContainerPath(path.join(root, "TET", "not-yet-written.json")), onDisk);
-    assert.match(onDisk, /\/tet\/not-yet-written\.json$/);
-  });
+  it(
+    "spells a Windows path the way it is on disk, since sbx mounts it that way",
+    {
+      skip: !PLATFORM.driveLetters && "win32 only",
+    },
+    () => {
+      const root = tempDir("tet-case-");
+      fs.mkdirSync(path.join(root, "tet"));
+      const onDisk = toContainerPath(path.join(root, "tet", "not-yet-written.json"));
+      assert.equal(toContainerPath(path.join(root, "TET", "not-yet-written.json")), onDisk);
+      assert.match(onDisk, /\/tet\/not-yet-written\.json$/);
+    },
+  );
 
-  it("leaves a macOS/Linux path untouched — already the same path inside and out", {
-    skip: PLATFORM.driveLetters && "not win32"
-  }, () => {
-    assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
-  });
+  it(
+    "leaves a macOS/Linux path untouched — already the same path inside and out",
+    {
+      skip: PLATFORM.driveLetters && "not win32",
+    },
+    () => {
+      assert.equal(toContainerPath("/Users/saka/project"), "/Users/saka/project");
+    },
+  );
 
   it("mounts at the container path, :ro for read-only, and unmounts without the access", () => {
     const repo = path.join(os.tmpdir(), "repo");
@@ -83,7 +95,10 @@ describe("sbx sandbox naming and mounts", () => {
 
   it("normalizes a typed host path (trimmed, ~ expanded) before building its mount spec", () => {
     const data = path.join(os.tmpdir(), "data");
-    assert.equal(pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "rw" }).unmount, `${data}:${toContainerPath(data)}`);
+    assert.equal(
+      pathMountSpecs({ path: ` ${os.tmpdir()}${path.sep}data${path.sep} `, access: "rw" }).unmount,
+      `${data}:${toContainerPath(data)}`,
+    );
     const home = path.join(os.homedir(), "data");
     assert.equal(pathMountSpecs({ path: "~/data/", access: "rw" }).unmount, `${home}:${toContainerPath(home)}`);
   });
@@ -92,7 +107,7 @@ describe("sbx sandbox naming and mounts", () => {
     const agentDir = sandboxDir(os.tmpdir(), { projectId: "p" }, "claude");
     assert.deepEqual(
       fixedMountSpecs({ agentDir }).map((spec) => spec.mount),
-      [`${agentDir}:${toContainerPath(agentDir)}`]
+      [`${agentDir}:${toContainerPath(agentDir)}`],
     );
   });
 });
@@ -101,13 +116,13 @@ describe("a sandbox's published ports", () => {
   // `sbx ports <name> --json` after publishing 38111:8080 and 38112:9090.
   const published = JSON.stringify([
     { host_ip: "127.0.0.1", host_port: 38111, sandbox_port: 8080, protocol: "tcp4" },
-    { host_ip: "127.0.0.1", host_port: 38112, sandbox_port: 9090, protocol: "tcp4" }
+    { host_ip: "127.0.0.1", host_port: 38112, sandbox_port: 9090, protocol: "tcp4" },
   ]);
 
   it("reads the ports as the dialog spells them", () => {
     assert.deepEqual(parsePublishedPorts(published), [
       { host: "38111", container: "8080" },
-      { host: "38112", container: "9090" }
+      { host: "38112", container: "9090" },
     ]);
   });
 
@@ -164,10 +179,7 @@ describe("saving SBX settings", () => {
     const repoFolder = path.join(dir, "repo");
     fs.mkdirSync(repoFolder);
     const answerFile = path.join(dir, "answers.json");
-    fs.writeFileSync(
-      answerFile,
-      JSON.stringify({ ...answers, refusal, name, workspaces: [repoFolder], log: path.join(dir, "calls.log") })
-    );
+    fs.writeFileSync(answerFile, JSON.stringify({ ...answers, refusal, name, workspaces: [repoFolder], log: path.join(dir, "calls.log") }));
     const script = path.join(dir, "sbx.js");
     fs.writeFileSync(
       script,
@@ -210,7 +222,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   answers.published = args[2] === "--publish" ? [...others, { host_port: host, sandbox_port: sandbox }] : others;
   fs.writeFileSync(${JSON.stringify(answerFile)}, JSON.stringify(answers));
 }
-`
+`,
     );
     if (PLATFORM.executableByExtension) {
       fs.writeFileSync(path.join(dir, "sbx.cmd"), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
@@ -247,7 +259,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { dir, repoFolder } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxSettings(repoFolder, settings(setup.before.map(port)));
     const saved = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], settings(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], settings(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined),
     );
     return { ...saved, repoFolder };
   }
@@ -260,9 +272,16 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       "policy ls --type network --include-inactive --json",
       `exec -i ${name} true`,
       `ports ${name} --json`,
-      `ports ${name} --publish 3000:3000`
+      `ports ${name} --publish 3000:3000`,
     ]);
-    assert.deepEqual(result, { removed: [], orphans: [], refused: {}, failures: [], settings: settings([port(3000)]), knowledge: EMPTY_SBX_KNOWLEDGE });
+    assert.deepEqual(result, {
+      removed: [],
+      orphans: [],
+      refused: {},
+      failures: [],
+      settings: settings([port(3000)]),
+      knowledge: EMPTY_SBX_KNOWLEDGE,
+    });
   });
 
   it("brings a worktree's sandbox in line along with the project's, all but the ports", async () => {
@@ -277,14 +296,14 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
         NO_KNOWLEDGE,
         new Map(),
         new Set(),
-        undefined
-      )
+        undefined,
+      ),
     );
     assert.deepEqual(result.removed, []);
     assert.deepEqual(
       calls.filter((call) => call.startsWith("ports ")),
       [`ports ${name} --json`, `ports ${name} --publish 3000:3000`],
-      "the project's sandbox alone forwards the port"
+      "the project's sandbox alone forwards the port",
     );
     for (const sandbox of [name, worktreeName]) {
       assert.ok(calls.includes(`policy allow network --sandbox ${sandbox} example.com`), `the hosts of ${sandbox}`);
@@ -296,11 +315,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, repoFolder } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [worktree], EMPTY_SBX_SETTINGS, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [worktree], EMPTY_SBX_SETTINGS, NO_KNOWLEDGE, new Map(), new Set(), undefined),
     );
     assert.deepEqual(result.removed, [
       { ref: main, agentId: "claude" },
-      { ref: worktree.ref, agentId: "claude" }
+      { ref: worktree.ref, agentId: "claude" },
     ]);
     assert.ok(calls.includes(`rm ${worktreeName} --force`));
   });
@@ -309,14 +328,14 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { calls } = await save({ has: [4000, 5000], before: [4000, 5000], now: [5000, 3000] });
     assert.deepEqual(
       calls.filter((call) => call.includes("publish")),
-      [`ports ${name} --unpublish 4000:4000`, `ports ${name} --publish 3000:3000`]
+      [`ports ${name} --unpublish 4000:4000`, `ports ${name} --publish 3000:3000`],
     );
   });
 
   it("leaves a port sbx refuses out of tet.json, with sbx's reason, and saves the rest", async () => {
     const { result, repoFolder } = await save({ has: [], before: [], now: [3000, 5000], refuse: "3000:3000" });
     assert.deepEqual(result.refused, {
-      ports: { "3000:3000": "publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published" }
+      ports: { "3000:3000": "publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published" },
     });
     assert.deepEqual(result.failures, [], "nothing to take back");
     assert.deepEqual((await readSbxSettings(repoFolder)).ports, [port(5000)]);
@@ -331,10 +350,13 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     // Two folders that exist: only what exists is a grant.
     const held: SbxPath = { path: os.tmpdir(), access: "rw" };
     const unheld: SbxPath = { path: os.homedir(), access: "ro" };
-    const { dir, repoFolder } = fakeSbx({ published: [], mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }] });
+    const { dir, repoFolder } = fakeSbx({
+      published: [],
+      mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }],
+    });
     await writeSbxSettings(repoFolder, { ...settings([]), paths: [held, unheld] });
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined),
     );
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
     assert.deepEqual([result.refused, result.settings.paths], [{}, []]);
@@ -354,14 +376,19 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     });
     assert.deepEqual(
       calls.filter((call) => call.startsWith("umount")),
-      [`umount tet-release-a ${rw(inside).unmount}`, `umount tet-release-b ${rw(going).unmount}`]
+      [`umount tet-release-a ${rw(inside).unmount}`, `umount tet-release-b ${rw(going).unmount}`],
     );
     assert.deepEqual(droppedMountSpecs("tet-release-a"), [rw(kept)], "the other path stays, for the next start's mountAll");
     assert.deepEqual(droppedMountSpecs("tet-release-b"), []);
   });
 
   it("brings the sandbox's secrets in line, values through stdin, leaving one set by hand alone", async () => {
-    const live = (env: string, hosts: string[]) => ({ scope: name, targets: hosts, env: "", placeholder: secretPlaceholder(projectId, env) });
+    const live = (env: string, hosts: string[]) => ({
+      scope: name,
+      targets: hosts,
+      env: "",
+      placeholder: secretPlaceholder(projectId, env),
+    });
     const { dir, repoFolder } = fakeSbx({
       published: [],
       secrets: [
@@ -369,30 +396,38 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
         live("CHANGED", ["changed.example.com"]),
         live("REHOSTED", ["old.example.com"]),
         live("DROPPED", ["dropped.example.com"]),
-        { scope: name, targets: ["hand.example.com"], env: "HAND", placeholder: "sbx-cs-byhand" }
-      ]
+        { scope: name, targets: ["hand.example.com"], env: "HAND", placeholder: "sbx-cs-byhand" },
+      ],
     });
     const before = [
       { env: "KEPT", hosts: ["kept.example.com"] },
       { env: "CHANGED", hosts: ["changed.example.com"] },
       { env: "REHOSTED", hosts: ["old.example.com"] },
-      { env: "DROPPED", hosts: ["dropped.example.com"] }
+      { env: "DROPPED", hosts: ["dropped.example.com"] },
     ];
     await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: before });
     const now = [
       { env: "KEPT", hosts: ["kept.example.com"] },
       { env: "CHANGED", hosts: ["changed.example.com"] },
       { env: "REHOSTED", hosts: ["new.example.com"] },
-      { env: "ADDED", hosts: ["a.example.com", "*.b.example.com"] }
+      { env: "ADDED", hosts: ["a.example.com", "*.b.example.com"] },
     ];
     const values = new Map([
       ["KEPT", "v-kept"],
       ["CHANGED", "v-changed"],
       ["REHOSTED", "v-rehosted"],
-      ["ADDED", "v-added"]
+      ["ADDED", "v-added"],
     ]);
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: now }, NO_KNOWLEDGE, values, new Set(["CHANGED"]), undefined)
+      saveListed(
+        { ref: main, path: repoFolder },
+        [],
+        { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: now },
+        NO_KNOWLEDGE,
+        values,
+        new Set(["CHANGED"]),
+        undefined,
+      ),
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -406,7 +441,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       `secret set-custom --sandbox ${name} --placeholder ${placeholder("REHOSTED")} --host new.example.com`,
       "stdin v-rehosted",
       `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
-      "stdin v-added"
+      "stdin v-added",
     ]);
     assert.deepEqual([result.refused, result.failures], [{}, []]);
     assert.deepEqual((await readSbxSettings(repoFolder)).secrets, now, "tet.json holds names and hosts");
@@ -416,7 +451,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   it("asks the policy about a secret host, but not about a wildcard it cannot answer", async () => {
     const { dir } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
     const { result, calls } = await withSbx(dir, () =>
-      Promise.all(["open.example.com", "closed.example.com", "*.example.com"].map(readHostAllowed))
+      Promise.all(["open.example.com", "closed.example.com", "*.example.com"].map(readHostAllowed)),
     );
     assert.deepEqual(result, [true, false, true]);
     assert.deepEqual(calls.sort(), ["policy check network --json closed.example.com", "policy check network --json open.example.com"]);
@@ -428,16 +463,16 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       others: [
         { name: "tet-codex-aaaaaaaaaaaa" },
         { name: "tet-codex-bbbbbbbbbbbb", workspaces: ["/elsewhere"] },
-        { name: "my-own-sandbox" }
-      ]
+        { name: "my-own-sandbox" },
+      ],
     });
     const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined)
+      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined),
     );
     assert.deepEqual(result.orphans, [{ ref: main, agentId: "codex" }]);
     assert.deepEqual(
       calls.filter((call) => call.startsWith("rm ")),
-      ["rm tet-codex-aaaaaaaaaaaa --force"]
+      ["rm tet-codex-aaaaaaaaaaaa --force"],
     );
   });
 
@@ -447,9 +482,17 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const before = await readSbxSettings(repoFolder);
     await assert.rejects(
       withSbx(dir, () =>
-        saveListed({ ref: main, path: repoFolder }, [], { ...EMPTY_SBX_SETTINGS, enabled: true, secrets }, NO_KNOWLEDGE, new Map([["TOKEN", "v"]]), new Set(["TOKEN"]), undefined)
+        saveListed(
+          { ref: main, path: repoFolder },
+          [],
+          { ...EMPTY_SBX_SETTINGS, enabled: true, secrets },
+          NO_KNOWLEDGE,
+          new Map([["TOKEN", "v"]]),
+          new Set(["TOKEN"]),
+          undefined,
+        ),
       ),
-      /could not list the sandboxes' secrets/
+      /could not list the sandboxes' secrets/,
     );
     const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
     assert.ok(!/secret rm|secret set-custom|^rm /m.test(calls), calls);
@@ -457,7 +500,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   for (const [what, fail, message] of [
-    ["the sandboxes' allowed hosts", "policy ls --type network", /could not list the sandboxes' allowed hosts/]
+    ["the sandboxes' allowed hosts", "policy ls --type network", /could not list the sandboxes' allowed hosts/],
   ] as const) {
     it(`stops a Save where sbx does not list ${what}, changing nothing`, async () => {
       const { dir, repoFolder } = fakeSbx({ published: [], fail: [fail] });
@@ -465,9 +508,17 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const before = await readSbxSettings(repoFolder);
       await assert.rejects(
         withSbx(dir, () =>
-          saveListed({ ref: main, path: repoFolder }, [], { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["new.example.com"] }, NO_KNOWLEDGE, new Map(), new Set(), undefined)
+          saveListed(
+            { ref: main, path: repoFolder },
+            [],
+            { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["new.example.com"] },
+            NO_KNOWLEDGE,
+            new Map(),
+            new Set(),
+            undefined,
+          ),
         ),
-        message
+        message,
       );
       const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
       assert.ok(!/policy rm|policy allow|^rm /m.test(calls), calls);
@@ -478,7 +529,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   for (const [what, fail, rows] of [
     ["the governed policy", "policy check", { hosts: ["closed.example.com"] }],
     ["the filesystem rules", "policy ls --type filesystem", { paths: [{ path: os.tmpdir(), access: "ro" }] }],
-    ["the published ports", "ports", { ports: [port(3000)] }]
+    ["the published ports", "ports", { ports: [port(3000)] }],
   ] satisfies [string, string, Partial<SbxProjectSettings>][]) {
     it(`rejects where sbx does not answer for ${what}, rather than finding a problem`, async () => {
       const { dir } = fakeSbx({ published: [], fail: [fail] });
@@ -491,10 +542,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             values: { secrets: new Set(), variables: new Set() },
             agents: [claudeAgent],
             organization: "acme",
-            ports: true
-          })
+            ports: true,
+          }),
         ),
-        /SBX could not/
+        /SBX could not/,
       );
     });
   }
@@ -512,23 +563,23 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
           // `policy ls` answers no filesystem rules, so nothing may be mounted.
           paths: [
             { path: missing, access: "ro" },
-            { path: repoFolder, access: "rw" }
+            { path: repoFolder, access: "rw" },
           ],
           secrets: [{ env: "TOKEN", hosts: ["open.example.com"] }],
-          variables: [{ env: "SET" }, { env: "UNSET" }]
+          variables: [{ env: "SET" }, { env: "UNSET" }],
         },
         knowledge: EMPTY_SBX_KNOWLEDGE,
         values: { secrets: new Set(), variables: new Set(["SET"]) },
         agents: [claudeAgent],
         organization: "acme",
-        ports: false
-      })
+        ports: false,
+      }),
     );
     assert.deepEqual(problems.result, {
       hosts: { "closed.example.com": "Forbidden by governance" },
       paths: { [missing]: "Does not exist on this machine", [repoFolder]: "Forbidden by governance" },
       secrets: { TOKEN: "No value on this machine" },
-      variables: { UNSET: "No value on this machine" }
+      variables: { UNSET: "No value on this machine" },
     });
   });
 
@@ -550,14 +601,14 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             paths: { agentDir: sandboxDir(dir, main, "claude") },
             agentArgs: [],
             secretValues: new Map(),
-            variableValues: new Map()
+            variableValues: new Map(),
           }),
-          /SBX could not/
-        )
+          /SBX could not/,
+        ),
       );
       assert.deepEqual(
         calls.filter((call) => /^(rm|create) /.test(call)),
-        created ? [`rm ${name} --force`, `create claude ${at} --name ${name} --skills=off`, `rm ${name} --force`] : []
+        created ? [`rm ${name} --force`, `create claude ${at} --name ${name} --skills=off`, `rm ${name} --force`] : [],
       );
     });
   }
@@ -567,7 +618,7 @@ describe("what of the SBX Settings could not be applied", () => {
   const problems = {
     hosts: { "a.example.com": "Forbidden by governance", "b.example.com": "Forbidden by governance" },
     paths: { "/data/one": "Does not exist on this machine", "/data/two": "Forbidden by governance" },
-    knowledge: { plugins: "Forbidden by governance" }
+    knowledge: { plugins: "Forbidden by governance" },
   };
 
   it("is told once per option and reason, its rows listed, in the dialog's tab order", () => {
@@ -575,7 +626,7 @@ describe("what of the SBX Settings could not be applied", () => {
       "Could not set knowledge:\n - plugins\nForbidden by governance",
       "Could not set paths:\n - /data/one\nDoes not exist on this machine",
       "Could not set paths:\n - /data/two\nForbidden by governance",
-      "Could not set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance"
+      "Could not set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance",
     ]);
   });
 
@@ -586,13 +637,13 @@ describe("what of the SBX Settings could not be applied", () => {
       hosts: ["a.example.com", "c.example.com"],
       paths: [
         { path: "/data/one", access: "ro" as const },
-        { path: "/data/three", access: "rw" as const }
-      ]
+        { path: "/data/three", access: "rw" as const },
+      ],
     };
     const knowledge = { skills: "ro" as const, plugins: "rw" as const, instructions: false as const };
     assert.deepEqual(withoutProblems(settings, knowledge, problems), {
       settings: { ...settings, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
-      knowledge: { skills: "ro", plugins: false, instructions: false }
+      knowledge: { skills: "ro", plugins: false, instructions: false },
     });
   });
 });
@@ -614,10 +665,10 @@ describe("a sandboxed tab's variables", () => {
       enabled: true,
       secrets: [
         { env: "GITLAB_TOKEN", hosts: ["gitlab.example.com"] },
-        { env: "NO_VALUE_HERE", hosts: ["api.example.com"] }
+        { env: "NO_VALUE_HERE", hosts: ["api.example.com"] },
       ],
       // A hand-edited tet.json: one the agent sets, one a secret holds, one without a value here.
-      variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "NO_VALUE_HERE" }, { env: "MISSING" }]
+      variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "NO_VALUE_HERE" }, { env: "MISSING" }],
     };
     const result = sandboxEnv({
       ref: { projectId: "p" },
@@ -627,8 +678,8 @@ describe("a sandboxed tab's variables", () => {
       variableValues: new Map([
         ["NPM_TOKEN", "npm-real"],
         ["AGENT_SET", "variable"],
-        ["NO_VALUE_HERE", "real"]
-      ])
+        ["NO_VALUE_HERE", "real"],
+      ]),
     });
     assert.deepEqual(result.env, ["AGENT_SET=agent", `GITLAB_TOKEN=${secretPlaceholder("p", "GITLAB_TOKEN")}`]);
     assert.deepEqual(result.passed, { NPM_TOKEN: "npm-real" }, "a secret without a value never falls back to a real one");
@@ -643,7 +694,7 @@ describe("what sbx keeps on this machine", () => {
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
       secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
-      variables: { NPM_TOKEN: base64("sealed:npm") }
+      variables: { NPM_TOKEN: base64("sealed:npm") },
     });
     assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"], knowledge: EMPTY_SBX_KNOWLEDGE });
     assert.deepEqual([...store.values("p", "secrets")], [["READABLE", "value"]]);
@@ -686,20 +737,29 @@ describe("the Docker access tokens of the SBX Settings", () => {
       { id: first.id, user: "skale", token: "" },
       { user: "other", token: "typed" },
       { user: "empty", token: "" },
-      { user: "other", token: "later" }
+      { user: "other", token: "later" },
     ]);
     const reread = new SbxAccountStore(root);
-    assert.deepEqual(reread.list().map((account) => account.user), ["skale", "other"]);
+    assert.deepEqual(
+      reread.list().map((account) => account.user),
+      ["skale", "other"],
+    );
     assert.equal(reread.token(first.id), "new");
     assert.equal(reread.token(reread.list()[1].id), "later");
     // Signed in from the row "other" under the name sbx gives: that row is renamed, never doubled.
     const other = reread.list()[1];
     assert.equal(reread.add("Other", "renamed", other.id).id, other.id);
-    assert.deepEqual(reread.list().map((account) => account.user), ["skale", "Other"]);
+    assert.deepEqual(
+      reread.list().map((account) => account.user),
+      ["skale", "Other"],
+    );
     // A row of another spelling beside a kept one of sbx's name: merged into the kept one.
     const typed = reread.add("SKALE", "typed");
     assert.equal(reread.add("skale", "merged", typed.id).id, first.id);
-    assert.deepEqual(reread.list().map((account) => account.user), ["skale", "Other"]);
+    assert.deepEqual(
+      reread.list().map((account) => account.user),
+      ["skale", "Other"],
+    );
     assert.equal(reread.token(first.id), "merged");
   });
 });
@@ -737,15 +797,15 @@ describe("sbx's filesystem policy", () => {
       { resource_type: "filesystem:read", decision: "allow", resources: ["**"], status: "inactive" },
       { resource_type: "filesystem:write", decision: "allow", resources: ["**"], status: "inactive" },
       { resource_type: "filesystem:write", decision: "allow", resources: ["C:\\**"], status: "active" },
-      { resource_type: "filesystem:write", decision: "allow", resources: ["/**"], status: "active" }
+      { resource_type: "filesystem:write", decision: "allow", resources: ["/**"], status: "active" },
     ],
-    organization: "prehcmservice"
+    organization: "prehcmservice",
   });
   const local = JSON.stringify({
     rules: [
       { resource_type: "filesystem:read", decision: "allow", resources: ["**"], status: "active" },
-      { resource_type: "filesystem:write", decision: "allow", resources: ["**"], status: "active" }
-    ]
+      { resource_type: "filesystem:write", decision: "allow", resources: ["**"], status: "active" },
+    ],
   });
   const win32 = { platform: WINDOWS, home: "C:\\Users\\saka" };
   const posix = { platform: LINUX, home: "/home/saka" };
@@ -787,7 +847,9 @@ describe("sbx's filesystem policy", () => {
   });
 
   it("expands ~ and *: for any drive, and ignores case on win32 alone", () => {
-    assert.ok(isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\projects\\**")]), "C:\\Users\\saka\\.tet\\projects\\p", "rw", win32));
+    assert.ok(
+      isMountAllowed(rules([allow("filesystem:write", "~\\.tet\\projects\\**")]), "C:\\Users\\saka\\.tet\\projects\\p", "rw", win32),
+    );
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "~/**")]), "/home/saka/tet", "rw", posix));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "*:\\data\\**")]), "E:\\data\\x", "rw", win32));
     assert.ok(isMountAllowed(rules([allow("filesystem:write", "c:\\USERS\\**")]), "C:\\Users\\saka", "rw", win32));
@@ -798,7 +860,10 @@ describe("sbx's filesystem policy", () => {
     const readOnly = rules([allow("filesystem:read", "/data/**")]);
     assert.ok(isMountAllowed(readOnly, "/data/x", "ro", posix));
     assert.ok(!isMountAllowed(readOnly, "/data/x", "rw", posix));
-    const denied = rules([allow("filesystem", "/**"), { resource_type: "filesystem:read", decision: "deny", resources: ["/data/secret/**"] }]);
+    const denied = rules([
+      allow("filesystem", "/**"),
+      { resource_type: "filesystem:read", decision: "deny", resources: ["/data/secret/**"] },
+    ]);
     assert.ok(isMountAllowed(denied, "/data/open", "rw", posix));
     assert.ok(!isMountAllowed(denied, "/data/secret/x", "ro", posix));
     assert.ok(!isMountAllowed(denied, "/data/secret/x", "rw", posix), "a read deny stops a writable mount too");
@@ -808,7 +873,12 @@ describe("sbx's filesystem policy", () => {
 describe("sbx's governance", () => {
   it("names the organization of a governed account, nothing for an ungoverned one", () => {
     // `sbx policy ls --json` on an organization-governed account.
-    const governed = JSON.stringify({ rules: [], organization: "prehcmservice", last_synced_status: "ok", last_synced_message: "[OK] last synced 08:18:18" });
+    const governed = JSON.stringify({
+      rules: [],
+      organization: "prehcmservice",
+      last_synced_status: "ok",
+      last_synced_message: "[OK] last synced 08:18:18",
+    });
     assert.equal(parseGovernance(governed), "prehcmservice");
     assert.equal(parseGovernance(JSON.stringify({ rules: [], organization_unavailable: true })), "unknown organization (lookup failed)");
     assert.equal(parseGovernance(JSON.stringify({ rules: [] })), undefined);
@@ -822,7 +892,7 @@ describe("sbx's version", () => {
       ["0.42.1", false],
       ["0.45.0", true],
       ["0.46.0", true],
-      ["1.0.0", true]
+      ["1.0.0", true],
     ] as const) {
       assert.equal(sbxVersionSupported(printed), supported, printed);
     }

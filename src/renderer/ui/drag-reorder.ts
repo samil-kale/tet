@@ -77,9 +77,9 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
           event.dataTransfer.effectAllowed = "move";
           setDragged(index);
         },
-        onDragEnd: end
+        onDragEnd: end,
       })),
-    [count, dragType, payloadRef, end]
+    [count, dragType, payloadRef, end],
   );
   const handleProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => handles[index];
 
@@ -103,12 +103,12 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       event.preventDefault();
       // Not the dragover state: it only draws the line, and a drop must not wait on it.
       move(event.dataTransfer.getData(dragType), insertionIndex(index));
-    }
+    },
   });
 
   const rowProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
     ...targetProps(index),
-    ...handleProps(index)
+    ...handleProps(index),
   });
 
   /** The empty space below the last row. Row drags bubble here too, and are left to the row. */
@@ -129,7 +129,7 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       }
       event.preventDefault();
       move(event.dataTransfer.getData(dragType), count);
-    }
+    },
   };
 
   const rowClasses = (index: number): string[] => {

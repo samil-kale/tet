@@ -33,7 +33,7 @@ export async function listExplorer(root: string, settings: ExplorerSettings): Pr
     roots: view.folders.length > 0 ? view.folders : undefined,
     compactFolders: settings.compactFolders,
     sortOrder: settings.sortOrder,
-    mtimes: walked.mtimes
+    mtimes: walked.mtimes,
   };
 }
 

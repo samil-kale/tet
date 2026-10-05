@@ -21,7 +21,7 @@ export const CONTROL_ENV = {
   tabId: "TET_TAB_ID",
   /** Only sbx sessions set it ("host.docker.internal" — the sandbox has its own loopback); unset
    *  means CONTROL_HOST. Also needs the policy allow in sbx-status.ts's isControlChannelAllowed. */
-  host: "TET_CONTROL_HOST"
+  host: "TET_CONTROL_HOST",
 } as const;
 
 /** Where the server listens, and where a caller outside a sandbox reaches it. */
@@ -44,9 +44,7 @@ export interface ControlRequest {
   at?: number;
 }
 
-export type ControlResponse =
-  | { ok: true; result: unknown }
-  | { ok: false; error: { code: ControlErrorCode; message: string } };
+export type ControlResponse = { ok: true; result: unknown } | { ok: false; error: { code: ControlErrorCode; message: string } };
 
 /** The questions `tet-ctl help` groups its verbs under, in the order it prints them. */
 export const CONTROL_GROUPS = ["TET itself", "The other tabs", "In front of the user"] as const;
@@ -122,7 +120,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   kb: "value",
   timeout: "value",
   keep: "switch",
-  force: "switch"
+  force: "switch",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
@@ -138,7 +136,7 @@ export const TAB_KEYS: Readonly<Record<string, string>> = {
   up: "\x1b[A",
   down: "\x1b[B",
   right: "\x1b[C",
-  left: "\x1b[D"
+  left: "\x1b[D",
 };
 
 /** An `events-tail` entry: what the session manager heard, in arrival order. */
@@ -161,14 +159,21 @@ const VERBS = [
   { verb: "help", usage: "help", summary: "Print this list.", positionals: [], sandbox: "any", unlisted: true },
   { verb: "version", group: "TET itself", usage: "version", summary: "TET's version.", positionals: [], sandbox: "any" },
   { verb: "settings-get", group: "TET itself", usage: "settings-get", summary: "All of TET's settings.", positionals: [], sandbox: "any" },
-  { verb: "themes-list", group: "TET itself", usage: "themes-list", summary: "The color themes (id, label and kind).", positionals: [], sandbox: "any" },
+  {
+    verb: "themes-list",
+    group: "TET itself",
+    usage: "themes-list",
+    summary: "The color themes (id, label and kind).",
+    positionals: [],
+    sandbox: "any",
+  },
   {
     verb: "keybinding-presets-list",
     group: "TET itself",
     usage: "keybinding-presets-list",
     summary: "The file editor's keybinding presets (id and label).",
     positionals: [],
-    sandbox: "any"
+    sandbox: "any",
   },
   {
     verb: "agents-list",
@@ -176,21 +181,21 @@ const VERBS = [
     usage: "agents-list",
     summary: "The supported agents and whether each is installed.",
     positionals: [],
-    sandbox: "any"
+    sandbox: "any",
   },
   {
     verb: "settings-set-theme",
     group: "TET itself",
     usage: "settings-set-theme <theme-id>",
     summary: "Set the theme for its kind (light or dark, see themes-list). Shown at once while TET is drawn in that kind.",
-    positionals: ["theme"]
+    positionals: ["theme"],
   },
   {
     verb: "settings-set-color-scheme",
     group: "TET itself",
     usage: `settings-set-color-scheme <${COLOR_SCHEMES.join("|")}>`,
     summary: "Set light or dark, system following the OS.",
-    positionals: ["scheme"]
+    positionals: ["scheme"],
   },
   {
     verb: "settings-set-lane-pin",
@@ -198,7 +203,7 @@ const VERBS = [
     usage: `settings-set-lane-pin <${LANES.join("|")}> <on|off>`,
     summary:
       "Pin a lane, which then stays out beside the tab area after the other pinned ones, or unpin it back behind its toggle. Shown at once.",
-    positionals: ["lane", "value"]
+    positionals: ["lane", "value"],
   },
   {
     verb: "settings-set-lane-order",
@@ -206,7 +211,7 @@ const VERBS = [
     usage: `settings-set-lane-order <${LANES.join("|")}>...`,
     summary: "Set the lanes' order, left to right; one left out goes to the end. The pinned ones stand first, in it. Shown at once.",
     positionals: ["lanes"],
-    variadic: true
+    variadic: true,
   },
   {
     verb: "settings-set-prompt",
@@ -214,14 +219,14 @@ const VERBS = [
     usage: `settings-set-prompt <${PROMPT_IDS.join("|")}> [text]`,
     summary:
       "Set the text of what TET asks of an agent: a background question, or a handover's first prompt. No text puts TET's own back. Applies from the next use.",
-    positionals: ["id", "text"]
+    positionals: ["id", "text"],
   },
   {
     verb: "settings-set-keybindings",
     group: "TET itself",
     usage: "settings-set-keybindings <preset-id>",
     summary: "Set the file editor's keybindings to a preset (see keybinding-presets-list). Applies to editor tabs opened afterwards.",
-    positionals: ["preset"]
+    positionals: ["preset"],
   },
   {
     verb: "settings-set-notification",
@@ -229,22 +234,23 @@ const VERBS = [
     usage: `settings-set-notification <${NOTIFICATION_IDS.join("|")}> <on|off>`,
     summary:
       "Switch a desktop notification on or off: a finished turn, an agent waiting for an answer, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
-    positionals: ["id", "value"]
+    positionals: ["id", "value"],
   },
   {
     verb: "settings-set-explorer",
     group: "TET itself",
     usage: `settings-set-explorer <excludeGitIgnore|compactFolders> <on|off> | settings-set-explorer sortOrder <${EXPLORER_SORT_ORDERS.join("|")}>`,
-    summary: "Set how the Explorer lists every project: hide what git ignores too, compact single-child folders, or the sort order. Shown at once.",
-    positionals: ["id", "value"]
+    summary:
+      "Set how the Explorer lists every project: hide what git ignores too, compact single-child folders, or the sort order. Shown at once.",
+    positionals: ["id", "value"],
   },
   {
     verb: "settings-set-git",
     group: "TET itself",
     usage: `settings-set-git <${GIT_SETTING_IDS.join("|")}> <on|off>`,
     summary:
-      "Set how git's checkboxes start: new changes checked for commit, \"Also push\" on commit, and deleting a branch, tag or worktree on the remote too.",
-    positionals: ["id", "value"]
+      'Set how git\'s checkboxes start: new changes checked for commit, "Also push" on commit, and deleting a branch, tag or worktree on the remote too.',
+    positionals: ["id", "value"],
   },
   {
     verb: "settings-set-commit-suggester",
@@ -252,17 +258,31 @@ const VERBS = [
     usage: "settings-set-commit-suggester <agent-id> [model]",
     summary:
       "Set who suggests a commit message: an agent (see agents-list) and one of its models. No model leaves it to the agent's own configuration.",
-    positionals: ["agent", "model"]
+    positionals: ["agent", "model"],
   },
-  { verb: "projects-list", group: "TET itself", usage: "projects-list", summary: "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was made elsewhere and cannot be opened.", positionals: [], sandbox: "ownProject" },
-  { verb: "projects-add", group: "TET itself", usage: "projects-add <path>", summary: "Open a folder as a project.", positionals: ["path"] },
+  {
+    verb: "projects-list",
+    group: "TET itself",
+    usage: "projects-list",
+    summary:
+      "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was made elsewhere and cannot be opened.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "projects-add",
+    group: "TET itself",
+    usage: "projects-add <path>",
+    summary: "Open a folder as a project.",
+    positionals: ["path"],
+  },
   {
     verb: "projects-remove",
     group: "TET itself",
     usage: "projects-remove <project-id> [--confirm]",
     summary:
       "Remove a project: deletes the worktrees TET made with their branches and TET's data of it; the repository's folder stays. With worktrees, needs --confirm. Refused while one of its editor tabs has unsaved changes.",
-    positionals: ["projectId"]
+    positionals: ["projectId"],
   },
   {
     verb: "worktree-add",
@@ -271,7 +291,7 @@ const VERBS = [
     summary:
       "Add a git worktree of the project under ~/.tet/projects with a new branch <branch> at the default branch, and open it with the project.",
     positionals: ["branch"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "worktree-delete",
@@ -280,7 +300,7 @@ const VERBS = [
     summary:
       "Close the project's worktree of branch <branch> (or key) and delete it with the branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
     positionals: ["branch"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "worktree-agent-merge",
@@ -289,7 +309,7 @@ const VERBS = [
     summary:
       "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, and run it again. Only from the repository, since deleting a worktree closes its tabs.",
     positionals: ["branch"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "repository-state",
@@ -297,7 +317,7 @@ const VERBS = [
     usage: "repository-state [--project <id>] [--worktree <key or branch>]",
     summary: "What the git lane shows for the repository or a worktree: branch, upstream, changed files, stashes.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownRef",
   },
   {
     verb: "sbx-get",
@@ -306,15 +326,14 @@ const VERBS = [
     summary:
       "A project's SBX Settings: sbx's status, the configuration, which secrets and variables hold a value here (never the values), and the problems: what cannot be applied here, per option.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownRef",
   },
   {
     verb: "sbx-accounts",
     group: "TET itself",
     usage: "sbx-accounts",
-    summary:
-      "Whether sbx is signed in to Docker and as whom, and the users whose access tokens TET keeps (never a token).",
-    positionals: []
+    summary: "Whether sbx is signed in to Docker and as whom, and the users whose access tokens TET keeps (never a token).",
+    positionals: [],
   },
   {
     verb: "sbx-sign-in",
@@ -322,7 +341,7 @@ const VERBS = [
     usage: "sbx-sign-in <user>",
     summary:
       "Sign sbx in to Docker with the access token TET keeps for that user; running sandboxes keep running, and the account's policy applies at once; notKept says why the token could not be kept afterwards. The user adds tokens in TET's SBX Settings, never you.",
-    positionals: ["user"]
+    positionals: ["user"],
   },
   {
     verb: "sbx-set-enabled",
@@ -330,7 +349,7 @@ const VERBS = [
     usage: "sbx-set-enabled <on|off> [--project <id>]",
     summary:
       "Run the project's agent tabs in sbx sandboxes, or not. Off removes its sandboxes. Every sbx-set-* saves only what can be applied here; notApplied says what was left out and why.",
-    positionals: ["value"]
+    positionals: ["value"],
   },
   {
     verb: "sbx-set-ports",
@@ -338,7 +357,7 @@ const VERBS = [
     usage: "sbx-set-ports [<host>:<container>...] [--project <id>]",
     summary: "Replace the ports forwarded from this machine into the sandboxes; none clears them.",
     positionals: ["ports"],
-    variadic: true
+    variadic: true,
   },
   {
     verb: "sbx-set-paths",
@@ -346,7 +365,7 @@ const VERBS = [
     usage: "sbx-set-paths [<absolute-path>:<ro|rw>...] [--project <id>]",
     summary: "Replace the folders and files of this machine mounted into the sandboxes; none clears them.",
     positionals: ["paths"],
-    variadic: true
+    variadic: true,
   },
   {
     verb: "sbx-set-hosts",
@@ -354,7 +373,7 @@ const VERBS = [
     usage: "sbx-set-hosts [<host>...] [--project <id>]",
     summary: "Replace the hosts the sandboxes may reach beyond sbx's policy (host, *.domain, optional :port); none clears them.",
     positionals: ["hosts"],
-    variadic: true
+    variadic: true,
   },
   {
     verb: "sbx-set-secrets",
@@ -363,7 +382,7 @@ const VERBS = [
     summary:
       "Replace the secrets: a variable the sandbox sees as a placeholder, sent as its value only to those hosts. The user types the values in TET's SBX Settings, never you.",
     positionals: ["secrets"],
-    variadic: true
+    variadic: true,
   },
   {
     verb: "sbx-set-variables",
@@ -373,28 +392,28 @@ const VERBS = [
       "Replace the variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the one stored. A token or password is a secret instead, whose value the user types in TET's SBX Settings, never you.",
     positionals: ["variables"],
     variadic: true,
-    sandbox: "ownRef"
+    sandbox: "ownRef",
   },
   {
     verb: "sbx-set-knowledge",
     group: "TET itself",
     usage: `sbx-set-knowledge <${SBX_KNOWLEDGE_KINDS.join("|")}> <off|ro|rw> [--project <id>]`,
     summary: "Mount the agents' own skills, plugins or instructions file (CLAUDE.md, AGENTS.md) into the sandboxes, or not.",
-    positionals: ["kind", "access"]
+    positionals: ["kind", "access"],
   },
   {
     verb: "sbx-set-skills-folder",
     group: "TET itself",
     usage: "sbx-set-skills-folder [absolute-path] [--project <id>]",
     summary: "Mount one folder as every agent's skills instead of each one's own; no path goes back to their own.",
-    positionals: ["path"]
+    positionals: ["path"],
   },
   {
     verb: "app-restart",
     group: "TET itself",
     usage: "app-restart --confirm",
     summary: "Restart TET. Ends every tab in every project, this one included — only when the user asked for it.",
-    positionals: []
+    positionals: [],
   },
   {
     verb: "env-request",
@@ -403,21 +422,22 @@ const VERBS = [
     summary:
       "Open TET's dialog for the user to type environment variables into, never into the chat; waits for the answer. Every missing one in one request. TET keeps them and sets them in every tab it starts; its Save restarts this tab, its session resumed, to see them.",
     positionals: ["names"],
-    variadic: true
+    variadic: true,
   },
   {
     verb: "env-list",
     group: "TET itself",
     usage: "env-list",
-    summary: "The environment variables TET sets, never their values; overridesMachine: the machine sets it too, and TET's value replaces it.",
-    positionals: []
+    summary:
+      "The environment variables TET sets, never their values; overridesMachine: the machine sets it too, and TET's value replaces it.",
+    positionals: [],
   },
   {
     verb: "env-remove",
     group: "TET itself",
     usage: "env-remove <NAME>",
     summary: "Delete an environment variable TET keeps.",
-    positionals: ["name"]
+    positionals: ["name"],
   },
   {
     verb: "tabs-list",
@@ -425,7 +445,7 @@ const VERBS = [
     usage: "tabs-list [--project <id>] [--worktree <key or branch>]",
     summary: "The tabs of the repository or a worktree and their state, with the session each tab's hooks named and its sandbox.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-output",
@@ -435,7 +455,7 @@ const VERBS = [
       "The last n KB (16) of what a tab's terminal shows, as text: its scrollback and screen, or a fullscreen TUI's screen. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
     ownProjectOnly: true,
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "events-tail",
@@ -443,7 +463,7 @@ const VERBS = [
     usage: "events-tail [--tail <count>] [--project <id>] [--worktree <key or branch>]",
     summary: "The latest hook reports, session claims and closed tabs, with when each arrived.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownRef",
   },
   {
     verb: "tabs-wait",
@@ -452,7 +472,7 @@ const VERBS = [
     summary:
       "Wait until every condition given holds: a session (--session), working a turn (--working), not working one (--stopped; waiting on a question counts as that, as the spinner shows it), a status. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-keys",
@@ -463,7 +483,7 @@ const VERBS = [
     positionals: ["tabId", "keys"],
     variadic: true,
     ownProjectOnly: true,
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-text",
@@ -473,7 +493,7 @@ const VERBS = [
       "Type text into a tab, as one paste and without Enter: an agent's TUI takes a newline in it as a new line. Submit it with tabs-keys <tab-id> enter.",
     positionals: ["tabId", "text"],
     ownProjectOnly: true,
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-create",
@@ -482,7 +502,7 @@ const VERBS = [
     summary:
       "Open a new terminal tab for that agent (an id from agents-list). With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
     positionals: [],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-hand-over",
@@ -491,14 +511,14 @@ const VERBS = [
     summary:
       "Open a tab of another agent (an id from agents-list) that takes over the tab's session: it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-run-command",
     group: "The other tabs",
     usage: "tabs-run-command <name> [--project <id>] [--worktree <key or branch>]",
     summary: "Run one of the project's saved commands (tet.json) in a new tab of the repository or a worktree.",
-    positionals: ["name"]
+    positionals: ["name"],
   },
   {
     verb: "tabs-start",
@@ -506,7 +526,7 @@ const VERBS = [
     usage: "tabs-start <tab-id> [--project <id>] [--worktree <key or branch>]",
     summary: "Start a tab's process without bringing it to the front.",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-restart",
@@ -514,7 +534,7 @@ const VERBS = [
     usage: "tabs-restart <tab-id> [--project <id>] [--worktree <key or branch>]",
     summary: "Restart a tab that stopped or could not start, as its menu's Restart does.",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-rename",
@@ -522,7 +542,7 @@ const VERBS = [
     usage: "tabs-rename <tab-id> <title> [--project <id>] [--worktree <key or branch>]",
     summary: "Rename a tab. From a sandbox, only a tab running there.",
     positionals: ["tabId", "title"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "tabs-close",
@@ -530,7 +550,7 @@ const VERBS = [
     usage: "tabs-close <tab-id> [--project <id>] [--worktree <key or branch>]",
     summary: "Close a tab and delete its session. From a sandbox, only a tab running there.",
     positionals: ["tabId"],
-    sandbox: "ownProject"
+    sandbox: "ownProject",
   },
   {
     verb: "editor-open",
@@ -540,16 +560,17 @@ const VERBS = [
       "Open a repository-relative file in the repository's or worktree's preview tab and bring it to the front; the next file replaces it, --keep gives it a tab of its own.",
     positionals: ["path"],
     sandbox: "ownRef",
-    sandboxFile: "opened"
+    sandboxFile: "opened",
   },
   {
     verb: "editor-state",
     group: "In front of the user",
     usage: "editor-state [--project <id>] [--worktree <key or branch>]",
-    summary: "What the active editor tab of the repository or a worktree shows: the file, its text, whether it is edited, read-only or a preview.",
+    summary:
+      "What the active editor tab of the repository or a worktree shows: the file, its text, whether it is edited, read-only or a preview.",
     positionals: [],
     sandbox: "ownRef",
-    sandboxFile: "path"
+    sandboxFile: "path",
   },
   {
     verb: "editor-list",
@@ -557,7 +578,7 @@ const VERBS = [
     usage: "editor-list [--project <id>] [--worktree <key or branch>]",
     summary: "The open editor tabs of the repository or a worktree: file, preview, edited, read-only, and which one is active.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownRef",
   },
   {
     verb: "explorer-list",
@@ -565,7 +586,7 @@ const VERBS = [
     usage: "explorer-list [--project <id>] [--worktree <key or branch>]",
     summary: "What the Explorer lists for the repository or a worktree, with tet.json's folders and excludes applied.",
     positionals: [],
-    sandbox: "ownRef"
+    sandbox: "ownRef",
   },
   // Every notice, from a sandbox too: a notice names no repository or worktree to narrow it to, and
   // among them are those a sandboxed tab's own start raised (the tet.json rows it could not apply,
@@ -576,7 +597,7 @@ const VERBS = [
     usage: "notices-list",
     summary: "The latest notices the window showed, oldest first.",
     positionals: [],
-    sandbox: "any"
+    sandbox: "any",
   },
   {
     verb: "notify",
@@ -584,7 +605,7 @@ const VERBS = [
     usage: "notify <title> [body]",
     summary: "Show a desktop notification from TET's own process — the one with a desktop session.",
     positionals: ["title", "body"],
-    sandbox: "any"
+    sandbox: "any",
   },
   {
     verb: "hook",
@@ -594,8 +615,8 @@ const VERBS = [
     unlisted: true,
     stdin: true,
     stdout: true,
-    sandbox: "any"
-  }
+    sandbox: "any",
+  },
 ] as const satisfies readonly ControlVerb[];
 
 /** Every verb with its `tet-ctl help` line. The CLI answers `help` itself; the server refuses
@@ -615,7 +636,7 @@ export const EXIT_CODES = {
   unauthorized: 2,
   usage: 3,
   /** `tabs-wait` gave up. */
-  timeout: 4
+  timeout: 4,
 } as const;
 
 /** The exit code of each refusal; everything the caller could correct is `usage`. */
@@ -625,5 +646,5 @@ export const ERROR_EXIT_CODES: Record<ControlErrorCode, number> = {
   timeout: EXIT_CODES.timeout,
   unknown_verb: EXIT_CODES.usage,
   bad_args: EXIT_CODES.usage,
-  not_found: EXIT_CODES.usage
+  not_found: EXIT_CODES.usage,
 };

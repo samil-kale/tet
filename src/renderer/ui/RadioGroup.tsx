@@ -19,9 +19,7 @@ export function RadioGroup<T extends string>({ value, options, onChange }: Radio
     <div className="radio-group" role="radiogroup">
       {options.map((option, index) => {
         const active = index === activeIndex;
-        const className = ["radio-option", active && "active", index === activeIndex + 1 && "previous-active"]
-          .filter(Boolean)
-          .join(" ");
+        const className = ["radio-option", active && "active", index === activeIndex + 1 && "previous-active"].filter(Boolean).join(" ");
         return (
           <button
             key={option.value}

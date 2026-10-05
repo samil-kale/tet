@@ -15,7 +15,7 @@ export interface CollapseExpandAll {
 export function CollapseExpandAllButton({
   expanded,
   disabled,
-  tree
+  tree,
 }: {
   expanded: boolean;
   disabled: boolean;

@@ -17,22 +17,29 @@ interface EnvDialogProps {
  */
 export function EnvDialog({ request, onClose }: EnvDialogProps) {
   // Keyed by name: the agent's names are unique (the verb dedupes them).
-  const [rows, setRows] = useState(() =>
-    request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" }))
-  );
+  const [rows, setRows] = useState(() => request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" })));
 
   const complete = rows.every((row) => row.value !== "");
   const tab = request.ref && request.tabId ? { ref: request.ref, tabId: request.tabId } : undefined;
 
   // The asking tab restarts once saved, so it takes up the values (pty.ts).
-  const { busy, refused, submit: save, changing } = useSubmit(
-    () => window.tet.env.answer(request.id, rows.map((row) => ({ name: row.name, value: row.value }))),
+  const {
+    busy,
+    refused,
+    submit: save,
+    changing,
+  } = useSubmit(
+    () =>
+      window.tet.env.answer(
+        request.id,
+        rows.map((row) => ({ name: row.name, value: row.value })),
+      ),
     () => {
       if (tab) {
         void window.tet.tabs.restart(tab.ref, tab.tabId);
       }
       onClose();
-    }
+    },
   );
 
   const cancel = (): void => {
@@ -41,7 +48,7 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
   };
 
   const edit = changing((name: string, value: string): void =>
-    setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row)))
+    setRows((current) => current.map((row) => (row.name === name ? { ...row, value } : row))),
   );
 
   return (
@@ -61,17 +68,13 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
           <EditRow key={row.id}>
             <RowInput value={row.name} readOnly />
             {row.overridesMachine && <OverridesMachine name={row.name} />}
-            <SecretInput
-              stored={row.stored}
-              value={row.value}
-              onChange={(value) => edit(row.name, value)}
-            />
+            <SecretInput stored={row.stored} value={row.value} onChange={(value) => edit(row.name, value)} />
           </EditRow>
         )}
       />
       <p className="dialog-detail">
-        Stored in <span className="dialog-emphasis">~/.tet/environment.json</span> and set in every tab TET starts,
-        except in a sandboxed one.
+        Stored in <span className="dialog-emphasis">~/.tet/environment.json</span> and set in every tab TET starts, except in a sandboxed
+        one.
       </p>
     </DialogFrame>
   );

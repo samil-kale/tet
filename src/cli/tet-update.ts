@@ -97,7 +97,7 @@ function install(pid: number, version: string, staged: string, root: string, res
     writeResult(resultFile, {
       version,
       ok: false,
-      output: `could not move ${root} aside within ${RETRY_WINDOW_MS / 1000}s: ${errorMessage(error)}`
+      output: `could not move ${root} aside within ${RETRY_WINDOW_MS / 1000}s: ${errorMessage(error)}`,
     });
     return;
   }

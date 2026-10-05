@@ -10,7 +10,20 @@ import { isImage, toDataUrl } from "./image-type";
 import { odfText } from "./odf-text";
 import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
 import type { HeadBlob } from "../../shared/types/files";
-import type { BranchUpstream, ChangeStatus, CheckoutTarget, FileChange, GitActionResult, GitLogin, GitOperation, RemoteInfo, RepositoryState, StashCommand, StashEntry, WorktreeInfo } from "../../shared/types/git";
+import type {
+  BranchUpstream,
+  ChangeStatus,
+  CheckoutTarget,
+  FileChange,
+  GitActionResult,
+  GitLogin,
+  GitOperation,
+  RemoteInfo,
+  RepositoryState,
+  StashCommand,
+  StashEntry,
+  WorktreeInfo,
+} from "../../shared/types/git";
 
 const MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -83,7 +96,7 @@ function git(cwd: string, args: string[], options: GitOptions & { encoding?: "bu
 function spawnGit(
   cwd: string,
   args: string[],
-  { env, timeoutMs, input, maxBuffer = MAX_BUFFER, encoding }: GitOptions & { encoding?: "buffer" }
+  { env, timeoutMs, input, maxBuffer = MAX_BUFFER, encoding }: GitOptions & { encoding?: "buffer" },
 ): Promise<GitResult<string | Buffer>> {
   const empty = encoding === "buffer" ? Buffer.alloc(0) : "";
   return new Promise((resolve, reject) => {
@@ -104,7 +117,7 @@ function spawnGit(
           return;
         }
         resolve({ stdout, stderr: stderr.toString(), code: error ? Number(error.code) : 0 });
-      }
+      },
     );
     if (input !== undefined) {
       // A git that fails before reading closes the pipe: its exit code says why, not EPIPE.
@@ -218,7 +231,7 @@ function readHead(headers: Map<string, string>): HeadState {
     detached: false,
     upstream: drift !== undefined ? headers.get("branch.upstream") : undefined,
     ahead: Number(counts?.[1] ?? 0),
-    behind: Number(counts?.[2] ?? 0)
+    behind: Number(counts?.[2] ?? 0),
   };
 }
 
@@ -228,11 +241,7 @@ function readHead(headers: Map<string, string>): HeadState {
  */
 const trackCounts = new Map<string, { ahead: number; behind: number }>();
 
-async function readTrackCount(
-  cwd: string,
-  head: string,
-  upstreamHead: string
-): Promise<{ ahead: number; behind: number } | undefined> {
+async function readTrackCount(cwd: string, head: string, upstreamHead: string): Promise<{ ahead: number; behind: number } | undefined> {
   const key = `${cwd}\0${head}...${upstreamHead}`;
   const cached = trackCounts.get(key);
   if (cached) {
@@ -256,12 +265,7 @@ const mergedBranches = new Map<string, { refs: string; merged: Set<string> }>();
 
 /** The full names of the branch refs whose commit `target` contains, but `excluded`; undefined
  *  where git fails. */
-async function readMerged(
-  cwd: string,
-  refs: string,
-  target: string,
-  excluded: Set<string>
-): Promise<Set<string> | undefined> {
+async function readMerged(cwd: string, refs: string, target: string, excluded: Set<string>): Promise<Set<string> | undefined> {
   const cached = mergedBranches.get(cwd);
   if (cached?.refs === refs) {
     return cached.merged;
@@ -274,7 +278,7 @@ async function readMerged(
     result.stdout
       .split("\n")
       .map((line) => line.trim())
-      .filter((refname) => refname && !refname.endsWith("/HEAD") && !excluded.has(refname))
+      .filter((refname) => refname && !refname.endsWith("/HEAD") && !excluded.has(refname)),
   );
   mergedBranches.set(cwd, { refs, merged });
   return merged;
@@ -290,7 +294,7 @@ async function readMerged(
 async function readRefs(
   cwd: string,
   remoteNames: string[],
-  fallbackDefault: string | undefined
+  fallbackDefault: string | undefined,
 ): Promise<{
   localBranches: string[];
   remotes: RemoteInfo[];
@@ -310,7 +314,7 @@ async function readRefs(
     "--format=%(refname)%00%(symref)%00%(objectname)%00%(HEAD)%00%(upstream)%00%(upstream:trackshort)%00%(upstream:remotename)%00%(upstream:remoteref)",
     "refs/heads",
     "refs/remotes",
-    "refs/tags"
+    "refs/tags",
   ]);
 
   const localBranches: string[] = [];
@@ -329,16 +333,9 @@ async function readRefs(
   let headCommit: string | undefined;
 
   for (const line of result.stdout.split("\n")) {
-    const [
-      refname,
-      symref = "",
-      objectname = "",
-      isHead = "",
-      upstream = "",
-      trackshort = "",
-      upstreamRemote = "",
-      upstreamRef = ""
-    ] = line.trim().split("\0");
+    const [refname, symref = "", objectname = "", isHead = "", upstream = "", trackshort = "", upstreamRemote = "", upstreamRef = ""] = line
+      .trim()
+      .split("\0");
     if (!refname) {
       continue;
     }
@@ -400,7 +397,7 @@ async function readRefs(
         if (track) {
           branchTrack[entry.name] = track;
         }
-      })
+      }),
   );
 
   const defaultBranch =
@@ -420,8 +417,8 @@ async function readRefs(
     remotes: [...remotes].map(([name, branches]) => ({
       name,
       branches,
-      mergedBranches: branches.filter((branch) => isMerged(`refs/remotes/${name}/${branch}`))
-    }))
+      mergedBranches: branches.filter((branch) => isMerged(`refs/remotes/${name}/${branch}`)),
+    })),
   };
 
   /** The default branch is never merged into itself, nor are the remote branches standing for it:
@@ -432,7 +429,7 @@ async function readRefs(
     const excluded = new Set([
       targetRef,
       ...(upstream ? [`refs/remotes/${upstream.remote}/${upstream.branch}`] : []),
-      ...[...defaultBranches].map(([remote, branch]) => `refs/remotes/${remote}/${branch}`)
+      ...[...defaultBranches].map(([remote, branch]) => `refs/remotes/${remote}/${branch}`),
     ]);
     const commit = target.remote ? remoteHeads.get(targetRef) : localHeads.get(target.name);
     return commit ? readMerged(cwd, `${targetRef}\0${refs}`, commit, excluded) : Promise.resolve(undefined);
@@ -449,7 +446,7 @@ function findDefaultBranch(
   defaultBranches: Map<string, string>,
   localBranches: string[],
   trackers: Map<string, string[]>,
-  remotes: Map<string, string[]>
+  remotes: Map<string, string[]>,
 ): CheckoutTarget | undefined {
   const remote = defaultBranches.has("origin") ? "origin" : defaultBranches.keys().next().value;
   if (remote === undefined) {
@@ -501,7 +498,7 @@ async function readStatus(cwd: string): Promise<HeadState & { changes: FileChang
     "--porcelain=v2",
     "-z",
     "--untracked-files=all",
-    "--branch"
+    "--branch",
   ]);
 
   // Thrown: an empty status would look like a clean repository.
@@ -528,7 +525,7 @@ const PATH_FIELDS = new Map([
   ["1", 8],
   ["2", 9],
   ["u", 10],
-  ["?", 1]
+  ["?", 1],
 ]);
 
 /** A v2 status record's path: what follows its first `fields` space-separated fields — the path
@@ -602,7 +599,7 @@ async function readOperation(gitDir: string): Promise<GitOperation | undefined> 
   const exists = (name: string): Promise<boolean> =>
     fs.stat(path.join(gitDir, name)).then(
       () => true,
-      () => false
+      () => false,
     );
   // A rebase stopped at a conflict has both; the rebase is what must be aborted.
   if ((await exists("rebase-merge")) || (await exists("rebase-apply"))) {
@@ -626,7 +623,7 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
       path: await fs.realpath(worktreePath).catch(() => worktreePath),
       branch: headBranch(head),
       isRepository: repository,
-      current: adminDir === gitDir
+      current: adminDir === gitDir,
     };
   };
   const linked = await Promise.all(
@@ -634,7 +631,7 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
       const adminDir = path.join(linkedRoot, id);
       const pointer = await fs.readFile(path.join(adminDir, "gitdir"), "utf8").catch(() => undefined);
       return pointer === undefined ? undefined : worktree(path.dirname(path.resolve(adminDir, pointer.trim())), adminDir, false);
-    })
+    }),
   );
   // The repository holds the common directory — unless `cwd` is not a linked worktree: a
   // submodule's or a `--separate-git-dir` repository's lives elsewhere (`<super>/.git/modules/…`),
@@ -645,7 +642,7 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
     ...linked
       .filter((entry): entry is WorktreeInfo => entry !== undefined)
       // By branch: every worktree TET made is a folder named by its key (project-dirs.ts).
-      .sort((a, b) => (a.branch ?? "").localeCompare(b.branch ?? "") || a.path.localeCompare(b.path))
+      .sort((a, b) => (a.branch ?? "").localeCompare(b.branch ?? "") || a.path.localeCompare(b.path)),
   ];
 }
 
@@ -655,16 +652,12 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resol
  * git, not parsed out of the config file: git owns that format. Off the refresh path — Repository
  * reads this on open, after a `.git/config` change, and after the actions that write a base.
  */
-export async function readBranchConfig(
-  cwd: string
-): Promise<{ defaultBranchName: string; worktreeBases: Record<string, string> }> {
+export async function readBranchConfig(cwd: string): Promise<{ defaultBranchName: string; worktreeBases: Record<string, string> }> {
   const worktreeBases: Record<string, string> = {};
   let defaultBranchName = "";
   // Exit 1 where nothing matches, which `run` would turn into an error; the empty stdout is right,
   // as it is for a broken config. Keys come lowercased but for the branch name.
-  const result = await git(cwd, ["config", "--get-regexp", "^(init\\.defaultbranch|branch\\..*\\.base)$"]).catch(
-    () => undefined
-  );
+  const result = await git(cwd, ["config", "--get-regexp", "^(init\\.defaultbranch|branch\\..*\\.base)$"]).catch(() => undefined);
   for (const line of result?.stdout.split("\n") ?? []) {
     // The last one wins, as `--get` has it; a key without a value is an empty one.
     const initial = /^init\.defaultbranch(?: (.*))?$/.exec(line.trim());
@@ -690,11 +683,7 @@ export async function hasChanges(cwd: string): Promise<boolean> {
 
 /** `remoteNames`: the remotes as last read, which `for-each-ref` can't tell apart from the branch
  *  part of a remote-tracking ref (`readRefs`). */
-export async function readState(
-  cwd: string,
-  remoteNames: string[] = [],
-  fallbackDefault?: string
-): Promise<RepositoryState> {
+export async function readState(cwd: string, remoteNames: string[] = [], fallbackDefault?: string): Promise<RepositoryState> {
   try {
     // No `isRepository` check: Repository asks once on open, and the check costs a quarter of every
     // refresh where starting git is slow. The stash list is the third process, earned by being a
@@ -711,7 +700,7 @@ export async function readState(
       refsOf,
       stashesOf,
       readOperation(gitDirs.gitDir),
-      readWorktrees(cwd, gitDirs)
+      readWorktrees(cwd, gitDirs),
     ]);
     return { ...status, ...refs, stashes, operation, worktrees };
   } catch (error) {
@@ -761,7 +750,7 @@ const NETWORK_ENV: NodeJS.ProcessEnv = {
   GIT_HTTP_LOW_SPEED_TIME: "60",
   // AUTH_FAILURES matches git's messages as text into `authRequired`, on which TET asks for a login,
   // and git translates them (LANG=de_DE: "Authentifizierung fehlgeschlagen").
-  LC_ALL: "C"
+  LC_ALL: "C",
 };
 
 /**
@@ -800,7 +789,7 @@ async function networkEnv(cwd: string, sshCommand?: string): Promise<NodeJS.Proc
     sshCommand ??
     (await git(cwd, ["config", "--get", "core.sshCommand"]).then(
       (result) => (result.code === 0 ? result.stdout.trim() : ""),
-      () => ""
+      () => "",
     ));
   return configured
     ? NETWORK_ENV
@@ -834,7 +823,7 @@ async function loginEnv(cwd: string, login?: NetworkLogin, sshCommand?: string):
     GIT_ASKPASS: await ensureAskpass(login.askpassDir),
     TET_ASKPASS_ORIGIN: login.origin,
     TET_ASKPASS_USER: login.username,
-    TET_ASKPASS_TOKEN: login.password
+    TET_ASKPASS_TOKEN: login.password,
   };
   return { ...(await networkEnv(cwd, sshCommand)), ...askpass };
 }
@@ -891,7 +880,7 @@ export async function fastForwardBranches(cwd: string): Promise<void> {
   const refs = await git(cwd, [
     "for-each-ref",
     "--format=%(refname)%00%(upstream)%00%(upstream:trackshort)%00%(worktreepath)",
-    "refs/heads"
+    "refs/heads",
   ]);
   const refspecs = refs.stdout
     .split("\n")
@@ -910,14 +899,12 @@ export function push(
   remote: string,
   branch: string,
   upstreamBranch: string | undefined,
-  login?: NetworkLogin
+  login?: NetworkLogin,
 ): Promise<GitActionResult> {
   return runNetwork(
     cwd,
-    upstreamBranch === undefined
-      ? ["push", "--set-upstream", "--", remote, branch]
-      : ["push", "--", remote, `${branch}:${upstreamBranch}`],
-    { login }
+    upstreamBranch === undefined ? ["push", "--set-upstream", "--", remote, branch] : ["push", "--", remote, `${branch}:${upstreamBranch}`],
+    { login },
   );
 }
 
@@ -950,20 +937,20 @@ export function init(directory: string): Promise<GitActionResult> {
  */
 const ASKPASS_SCRIPT = [
   "#!/bin/sh",
-  "url=${1#*\"'\"}",
-  "url=${url%\"'\"*}",
+  'url=${1#*"\'"}',
+  'url=${url%"\'"*}',
   "host=${url#*://}",
   "host=${host%%/*}",
   "host=${host#*@}",
   "origin=$(printf '%s' \"${url%%://*}://$host\" | tr '[:upper:]' '[:lower:]')",
-  "case \"$origin\" in https://*:443) origin=${origin%:443} ;; http://*:80) origin=${origin%:80} ;; esac",
-  "[ \"$origin\" = \"$TET_ASKPASS_ORIGIN\" ] || exit 1",
-  "case \"$1\" in",
+  'case "$origin" in https://*:443) origin=${origin%:443} ;; http://*:80) origin=${origin%:80} ;; esac',
+  '[ "$origin" = "$TET_ASKPASS_ORIGIN" ] || exit 1',
+  'case "$1" in',
   "Username*) printf '%s\\n' \"$TET_ASKPASS_USER\" ;;",
   "Password*) printf '%s\\n' \"$TET_ASKPASS_TOKEN\" ;;",
   "*) exit 1 ;;",
   "esac",
-  ""
+  "",
 ].join("\n");
 
 /** The script in `dir` (TET's data folder), written when missing or from another TET — not on
@@ -984,15 +971,9 @@ export async function ensureAskpass(dir: string): Promise<string> {
 /** A clone with a provider account's token, handed to git as a login. `credential.helper=`
  *  empties the helper list for this command: a stale login on the machine would otherwise answer
  *  first and 403, and the token is the account's to keep, not the helper's. */
-export function cloneWithToken(
-  url: string,
-  directory: string,
-  user: string,
-  token: string,
-  askpassDir: string
-): Promise<GitActionResult> {
+export function cloneWithToken(url: string, directory: string, user: string, token: string, askpassDir: string): Promise<GitActionResult> {
   return runNetwork(os.homedir(), ["-c", "credential.helper=", "clone", "--", url, directory], {
-    login: { username: user, password: token, askpassDir, origin: urlOrigin(url) }
+    login: { username: user, password: token, askpassDir, origin: urlOrigin(url) },
   });
 }
 
@@ -1045,12 +1026,7 @@ export function deleteBranch(cwd: string, name: string): Promise<GitActionResult
 /** A branch already gone from the remote only loses its remote-tracking ref, as in GitHub Desktop.
  *  Gone is `ls-remote --exit-code`'s 2 ("no matching refs"), asked only after the delete failed:
  *  the push's exit code is 1 for any refusal. */
-export async function deleteRemoteBranch(
-  cwd: string,
-  remote: string,
-  name: string,
-  login?: NetworkLogin
-): Promise<GitActionResult> {
+export async function deleteRemoteBranch(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
   const env = await loginEnv(cwd, login);
   const deleted = await runNetwork(cwd, ["push", remote, "--delete", name], { env });
   if (deleted.ok || deleted.authRequired) {
@@ -1124,12 +1100,7 @@ export function deleteTag(cwd: string, name: string): Promise<GitActionResult> {
   return run(cwd, ["tag", "--delete", name]);
 }
 
-export function deleteRemoteTag(
-  cwd: string,
-  remote: string,
-  name: string,
-  login?: NetworkLogin
-): Promise<GitActionResult> {
+export function deleteRemoteTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
   return runNetwork(cwd, ["push", remote, "--delete", `refs/tags/${name}`], { login });
 }
 
@@ -1146,12 +1117,7 @@ export async function commitAll(cwd: string, message: string): Promise<GitAction
 /** The same for these files: `commit -- <paths>` takes their working-tree state regardless of what
  *  is staged, but only for paths git knows, so untracked ones are added first. Not `add --all --
  *  <paths>`: a rename's old path is in neither index nor tree, and `add` refuses it. */
-export async function commitPaths(
-  cwd: string,
-  message: string,
-  paths: string[],
-  untracked: string[]
-): Promise<GitActionResult> {
+export async function commitPaths(cwd: string, message: string, paths: string[], untracked: string[]): Promise<GitActionResult> {
   if (untracked.length > 0) {
     const added = await runOnPaths(cwd, ["add"], untracked);
     if (!added.ok) {
@@ -1172,7 +1138,7 @@ const LITERAL_PATHSPECS = "--literal-pathspecs";
  *  every command that reads them there. */
 function runOnPaths(cwd: string, args: string[], paths: string[]): Promise<GitActionResult> {
   return run(cwd, [LITERAL_PATHSPECS, ...args, "--pathspec-from-file=-", "--pathspec-file-nul"], {
-    input: paths.join("\0")
+    input: paths.join("\0"),
   });
 }
 
@@ -1235,7 +1201,7 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
   const [subjects, againstHead, untracked] = await Promise.all([
     git(cwd, ["log", `-${RECENT_SUBJECTS}`, "--format=%s"]),
     gitOnPaths(cwd, ["diff", "HEAD"], selection),
-    gitOnPaths(cwd, ["ls-files", "--others", "--exclude-standard", "-z"], selection)
+    gitOnPaths(cwd, ["ls-files", "--others", "--exclude-standard", "-z"], selection),
   ]);
   const diff = againstHead.code === 0 ? againstHead : await gitOnPaths(cwd, ["diff", "--cached"], selection);
   const sections: string[] = [];
@@ -1449,7 +1415,7 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
     // `--filters` runs the repository's smudge filter, and an LFS one fetches: never ask for
     // credentials without a terminal, nor hold a queue slot while it does.
     env: NETWORK_ENV,
-    unqueued: true
+    unqueued: true,
   }).catch(() => undefined);
   // Too large, an image, or a NUL byte: no text side, and the editor tab says so.
   if (read?.overflowed) {

@@ -14,7 +14,7 @@ import {
   scanTranscriptTail,
   timestampOf,
   truncateTitle,
-  watchTranscriptDir
+  watchTranscriptDir,
 } from "../transcript";
 import { SANDBOX_HOME } from "../hook-target";
 import { openInside, removeInside } from "../../util/path-inside";
@@ -59,9 +59,9 @@ export const piSessionProvider: SessionProvider = {
       sessionsRoot,
       () => findSessionDir(sessionsRoot(), cwd),
       (filename) => filename.endsWith(".jsonl"),
-      onChange
+      onChange,
     );
-  }
+  },
 };
 
 /** The sandbox's default `~/.pi/agent/sessions` (`PI_CODING_AGENT_DIR` is never set); `auth.json`
@@ -74,9 +74,9 @@ export const piSandboxSessions: SandboxSessions = {
       list: () => listIn(sessions, cwd, path.posix),
       remove: (sessionId) => removeIn(sessions, cwd, sessionId, path.posix, within),
       rename: (sessionId, title) => renameIn(sessions, cwd, sessionId, title, path.posix, within),
-      files: (sessionId) => filesIn(sessions, cwd, sessionId, path.posix)
+      files: (sessionId) => filesIn(sessions, cwd, sessionId, path.posix),
     };
-  }
+  },
 };
 
 async function filesIn(root: string, cwd: string, sessionId: string, paths = path): Promise<string[]> {
@@ -103,10 +103,10 @@ function listIn(root: string, cwd: string, paths = path): Promise<AgentSessionIn
         // mtime: only compared for change, and a rename bumps it.
         updatedAt: mtimeMs,
         createdAt: head.createdAt ?? mtimeMs,
-        turnEndedAt: tail.turnEndedAt
+        turnEndedAt: tail.turnEndedAt,
         // No provisionalTitle: pi never names a session, so reconcile would poll in vain.
       };
-    }
+    },
   );
 }
 
@@ -183,7 +183,10 @@ export function piAgentDir(): string {
  * pi's platform: a sandboxed pi resolves `/c/Users/x/repo` the POSIX way, not as `C:\c\Users…`.
  */
 export function encodeCwd(cwd: string, paths: path.PlatformPath = path): string {
-  return `--${paths.resolve(cwd).replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
+  return `--${paths
+    .resolve(cwd)
+    .replace(/^[/\\]/, "")
+    .replace(/[/\\:]/g, "-")}--`;
 }
 
 /**
@@ -253,7 +256,7 @@ function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead> {
       const prompt = messageText(message.content);
       head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
       return true;
-    }
+    },
   });
 }
 
@@ -266,7 +269,9 @@ function messageText(content: unknown): string | undefined {
     return undefined;
   }
   const texts = content
-    .map((block) => (block && typeof block === "object" && (block as { type?: unknown }).type === "text" ? (block as { text?: unknown }).text : undefined))
+    .map((block) =>
+      block && typeof block === "object" && (block as { type?: unknown }).type === "text" ? (block as { text?: unknown }).text : undefined,
+    )
     .filter((text): text is string => typeof text === "string" && text.trim() !== "");
   return texts.length > 0 ? texts.join(" ") : undefined;
 }
@@ -301,7 +306,7 @@ function scanTail(filePath: string): Promise<ScannedTail<TranscriptTail>> {
     merge: (tail, previous) => {
       tail.name ??= previous.name;
       tail.turnEndedAt ??= previous.turnEndedAt;
-    }
+    },
   });
 }
 

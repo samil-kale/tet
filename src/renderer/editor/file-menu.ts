@@ -15,7 +15,7 @@ export function openEntries(
   path: string,
   enabled: boolean,
   diff: boolean,
-  open: (how: OpenEditor) => void
+  open: (how: OpenEditor) => void,
 ): ContextMenuEntry[] {
   const previewEnabled = enabled && !previewWithheldAt(ref, path, diff);
   return [
@@ -24,8 +24,8 @@ export function openEntries(
       : []),
     {
       label: "Open in external editor",
-      run: enabled ? () => void window.tet.shell.openFileExternally(ref, path) : undefined
-    }
+      run: enabled ? () => void window.tet.shell.openFileExternally(ref, path) : undefined,
+    },
   ];
 }
 
@@ -37,19 +37,19 @@ export function pathEntries(resolved: ResolvedRef, paths: string[], noun: string
     SEPARATOR,
     {
       label: PLATFORM.revealLabel,
-      run: paths.length === 1 ? () => void window.tet.shell.revealFile(resolved.ref, paths[0]) : undefined
+      run: paths.length === 1 ? () => void window.tet.shell.revealFile(resolved.ref, paths[0]) : undefined,
     },
     {
       label: `Copy ${noun}${plural}`,
-      run: () => void navigator.clipboard.writeText(paths.map((entry) => absolutePath(resolved.path, entry)).join("\n"))
+      run: () => void navigator.clipboard.writeText(paths.map((entry) => absolutePath(resolved.path, entry)).join("\n")),
     },
     ...(paths.includes("")
       ? []
       : [
           {
             label: `Copy relative ${noun}${plural}`,
-            run: () => void navigator.clipboard.writeText(paths.join("\n"))
-          }
-        ])
+            run: () => void navigator.clipboard.writeText(paths.join("\n")),
+          },
+        ]),
   ];
 }

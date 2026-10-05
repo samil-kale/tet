@@ -31,7 +31,7 @@ const OWN_LIMITS = [
   "Without flags, a verb acts on where the tab it is run from runs: its project's repository or",
   "one of its worktrees. --project <id> alone means that project's repository,",
   "--worktree <key or branch> one of its worktrees. A worktree listed without a key (projects-list) was",
-  "made outside TET, with plain git: TET shows it greyed and cannot open it."
+  "made outside TET, with plain git: TET shows it greyed and cannot open it.",
 ];
 
 /** A tab on this machine: every verb, across its project where a verb says so
@@ -45,8 +45,8 @@ export const HOST_SIDE: ControlSide = {
     ...OWN_LIMITS,
     "restartRequired in an answer means the change waits for a restart — tell the user, never",
     "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
-    "(tabs-output, tabs-keys, tabs-text)."
-  ]
+    "(tabs-output, tabs-keys, tabs-text).",
+  ],
 };
 
 /** A tab in an sbx sandbox: only the verbs that say how far it may reach (ControlVerb.sandbox) —
@@ -62,8 +62,8 @@ export const SANDBOX_SIDE: ControlSide = {
     "restarting TET, a saved command, any tab running on the host — is refused there and is not listed",
     "above. The tab verbs reach every tab running in a sandbox of this project, its repository's and",
     "every worktree's; a tab they open runs in a sandbox too. The rest answers for this repository or",
-    "worktree only (exit 2, the reason on stderr)."
-  ]
+    "worktree only (exit 2, the reason on stderr).",
+  ],
 };
 
 /** Whether the side admits the verb named; what the help and the system prompt mention follows it. */

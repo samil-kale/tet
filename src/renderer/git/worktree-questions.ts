@@ -39,7 +39,7 @@ export async function askNewWorktree(projectId: string, run: GitRun, base: strin
       run.ask(`Adding worktree ${name}...`, async () => {
         const added = await window.tet.projects.addWorktree(projectId, name);
         return added.project ? { ok: true } : { ok: false, error: added.error };
-      })
+      }),
   });
 }
 
@@ -51,7 +51,7 @@ export async function askRenameWorktree(projectId: string, branch: string, run: 
     detail: "Renames its branch. Its tabs keep running.",
     current: branch,
     confirmLabel: "Rename",
-    submit: (name) => run.ask(`Renaming ${branch}...`, () => window.tet.repository.renameBranch({ projectId }, branch, name))
+    submit: (name) => run.ask(`Renaming ${branch}...`, () => window.tet.repository.renameBranch({ projectId }, branch, name)),
   });
 }
 
@@ -60,19 +60,14 @@ export async function askRenameWorktree(projectId: string, branch: string, run: 
  * before closing anything — whether to delete them too. The branch goes along; its upstream is a
  * checkbox, as on a branch's own delete. Its unsaved editor edits get a say, as on a close.
  */
-export async function askDeleteWorktree(
-  worktree: ProjectRef,
-  branch: string,
-  upstream: string | undefined,
-  run: GitRun
-): Promise<void> {
+export async function askDeleteWorktree(worktree: ProjectRef, branch: string, upstream: string | undefined, run: GitRun): Promise<void> {
   const answer = await confirm({
     title: "Delete worktree",
     message: `Are you sure you want to delete ${branch}?`,
     detail: "The worktree and its folder are deleted, and its terminals closed. Commits that exist only in this worktree are lost.",
     confirmLabel: "Delete worktree",
     checkboxLabel: upstream ? `Also delete ${upstream} on the remote` : undefined,
-    checkboxChecked: (await window.tet.settings.get()).git.deleteWorktreeOnRemote
+    checkboxChecked: (await window.tet.settings.get()).git.deleteWorktreeOnRemote,
   });
   if (!answer.confirmed || !(await canDiscardRefEdits(worktree))) {
     return;
@@ -95,10 +90,10 @@ export async function askDeleteWorktree(
           title: "Delete worktree",
           message: `${branch} has uncommitted changes. Delete them too?`,
           detail: "Its changed and untracked files are lost.",
-          confirmLabel: "Delete worktree"
+          confirmLabel: "Delete worktree",
         },
-        `${branch} has uncommitted changes`
+        `${branch} has uncommitted changes`,
       ),
-    () => deleted(true)
+    () => deleted(true),
   );
 }

@@ -7,7 +7,17 @@ import type { OpenEditor } from "../../editor/editor-tab";
 import { runWithFollowUp, type FileAct, type FileAsk } from "../../git/run-action";
 import { baseName, extensionOf, parentOf } from "../../paths";
 import { openEntries, pathEntries } from "../../editor/file-menu";
-import { buildTree, compactTree, compareGrouped, compareNames, filesByNode, foldersIn, sortTree, visibleRows, type TreeNode } from "../../ui/tree";
+import {
+  buildTree,
+  compactTree,
+  compareGrouped,
+  compareNames,
+  filesByNode,
+  foldersIn,
+  sortTree,
+  visibleRows,
+  type TreeNode,
+} from "../../ui/tree";
 import { CHECK_INDENT_STEP, INDENT_BASE, TreeCheckbox, TreeRow, ChevronBox, type CheckState } from "../../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
@@ -45,7 +55,7 @@ const STATUS_LETTER: Record<ChangeStatus, string> = {
   deleted: "D",
   renamed: "R",
   untracked: "?",
-  conflicted: "C"
+  conflicted: "C",
 };
 
 /** The top row, standing for every change the filter shows. Its id is no path's. */
@@ -72,7 +82,7 @@ export async function confirmDiscard(ref: ProjectRef, paths: string[], act: File
       title: "Discard changes",
       message: `Are you sure you want to discard all changes to ${what}?`,
       detail: "The changed files go to the trash and can be restored from there.",
-      confirmLabel: "Discard changes"
+      confirmLabel: "Discard changes",
     })
   ) {
     runWithFollowUp(
@@ -86,23 +96,18 @@ export async function confirmDiscard(ref: ProjectRef, paths: string[], act: File
             title: "Discard changes permanently",
             message: "The files could not be moved to the trash. Discard the changes permanently?",
             detail: error,
-            confirmLabel: "Discard permanently"
+            confirmLabel: "Discard permanently",
           },
-          error ?? "The files could not be moved to the trash"
+          error ?? "The files could not be moved to the trash",
         ),
-      () => window.tet.repository.discard(ref, paths, true)
+      () => window.tet.repository.discard(ref, paths, true),
     );
   }
 }
 
 /** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. No
  *  staging area: the checked files are what one commit takes. Every change given is all of them. */
-export async function askCommit(
-  ref: ProjectRef,
-  state: RepositoryState,
-  given: string[] | undefined,
-  ask: FileAsk
-): Promise<void> {
+export async function askCommit(ref: ProjectRef, state: RepositoryState, given: string[] | undefined, ask: FileAsk): Promise<void> {
   const paths = given?.length === state.changes.length ? undefined : given;
   const { remote, canSync } = syncRemote(state);
   // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitLane).
@@ -134,16 +139,14 @@ export async function askCommit(
           onChange={(message) => onChange((current) => ({ ...current, message }))}
           suggestion={{
             title: "Suggest a commit message",
-            run: () => window.tet.repository.suggestCommitMessage(ref, paths)
+            run: () => window.tet.repository.suggestCommitMessage(ref, paths),
           }}
           disabled={busy}
           ref={field}
           error={error}
           onSuggesting={hold}
         />
-        {pushLabel && (
-          <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />
-        )}
+        {pushLabel && <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />}
       </>
     ),
     abort: window.tet.repository.cancelCommitSuggestion,
@@ -152,13 +155,11 @@ export async function askCommit(
     submit: ({ message, push }) => {
       running.submitted = commitAndPush(message.trim(), push);
       return ask(async () => (await running.submitted!).committed);
-    }
+    },
   });
   const pushed = (await running.submitted)?.pushed;
   if (pushed?.loginUrl !== undefined) {
-    await askLogin(pushed.loginUrl, pushed.error ?? "Push failed", (login) =>
-      ask(() => window.tet.repository.push(ref, login))
-    );
+    await askLogin(pushed.loginUrl, pushed.error ?? "Push failed", (login) => ask(() => window.tet.repository.push(ref, login)));
   } else if (pushed && !pushed.ok) {
     notify("error", pushed.error ?? "Push failed");
   }
@@ -178,7 +179,7 @@ export const ChangesList = memo(function ChangesList({
   asTree,
   onChecked,
   onExpanded,
-  ref
+  ref,
 }: ChangesListProps) {
   const { changes } = state;
   const [filter, setFilter] = useState("");
@@ -237,10 +238,7 @@ export const ChangesList = memo(function ChangesList({
     return asTree ? compactTree([top])[0] : top;
   }, [changes, query, asTree]);
 
-  const rows = useMemo(
-    () => visibleRows([root], (node) => filtering || (expanded[node.id] ?? true)),
-    [root, expanded, filtering]
-  );
+  const rows = useMemo(() => visibleRows([root], (node) => filtering || (expanded[node.id] ?? true)), [root, expanded, filtering]);
   /** What each row's checkbox stands for, read once per tree rather than per row and render. */
   const filesOf = useMemo(() => filesByNode([root]), [root]);
   const shownFiles = filesOf.get(ROOT_ID)!;
@@ -254,7 +252,7 @@ export const ChangesList = memo(function ChangesList({
     // Folders start expanded, so nothing collapsed is everything expanded.
     expandAll: () => setExpanded({}),
     // The root stays expanded: what is collapsed is every folder under it.
-    collapseAll: () => setExpanded(Object.fromEntries(foldersIn(root.children!).map((id) => [id, false])))
+    collapseAll: () => setExpanded(Object.fromEntries(foldersIn(root.children!).map((id) => [id, false]))),
   }));
 
   const checkState = (node: TreeNode): CheckState => {
@@ -287,12 +285,11 @@ export const ChangesList = memo(function ChangesList({
       return pathEntries(resolved, [node.path], "path").slice(1);
     }
     const extension = extensionOf(baseName(change.path));
-    const ignore = (scope: "file" | "extension") => () =>
-      act(() => window.tet.repository.ignore(resolved.ref, change.path, scope));
+    const ignore = (scope: "file" | "extension") => () => act(() => window.tet.repository.ignore(resolved.ref, change.path, scope));
     const entries: ContextMenuEntry[] = [
       { label: "Open Changes", run: () => onOpenDiff(change.path) },
       ...openEntries(resolved.ref, change.path, true, true, (how) => onOpenDiff(change.path, how)),
-      ...pathEntries(resolved, [change.path], "file path")
+      ...pathEntries(resolved, [change.path], "file path"),
     ];
     if (change.status === "untracked") {
       entries.push(SEPARATOR, { label: "Ignore file (add to .gitignore)", run: ignore("file") });
@@ -315,18 +312,8 @@ export const ChangesList = memo(function ChangesList({
               <TreeRow
                 key={node.id}
                 indent={INDENT_BASE + depth * CHECK_INDENT_STEP}
-                title={
-                  change
-                    ? change.origPath
-                      ? `${change.origPath} → ${change.path}`
-                      : change.path
-                    : node.path || undefined
-                }
-                onClick={
-                  change
-                    ? () => onOpenDiff(change.path)
-                    : () => setExpanded((current) => ({ ...current, [node.id]: !isExpanded }))
-                }
+                title={change ? (change.origPath ? `${change.origPath} → ${change.path}` : change.path) : node.path || undefined}
+                onClick={change ? () => onOpenDiff(change.path) : () => setExpanded((current) => ({ ...current, [node.id]: !isExpanded }))}
                 // As the Explorer: a single click previews, a double click keeps.
                 onDoubleClick={change ? () => onOpenDiff(change.path, { keep: true }) : undefined}
                 onContextMenu={(event) => menu.open(event, node)}

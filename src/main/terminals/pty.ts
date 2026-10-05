@@ -72,7 +72,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     ...inherited,
     ...stored,
     ...controlEnv,
-    ...options.own
+    ...options.own,
   };
   // Never an outer TET's: this tab got exactly `stored`.
   delete env[KEPT_ENV_NAME];
@@ -85,7 +85,7 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
       runToken,
       { projectId: env[CONTROL_ENV.projectId] ?? "", worktree: env[CONTROL_ENV.worktree] },
       env[CONTROL_ENV.tabId] ?? "",
-      side
+      side,
     );
   }
   if (launcherDir) {
@@ -123,7 +123,7 @@ export function spawnAgentProcess(executable: string, args: string[], options: S
     cwd: options.cwd,
     env,
     // Windows only: node-pty's bundled conpty.dll is maintained better than the inbox conhost.exe.
-    useConptyDll: true
+    useConptyDll: true,
   });
   guardPtyInput(spawned);
   return spawned;

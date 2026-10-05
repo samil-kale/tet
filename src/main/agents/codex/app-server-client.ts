@@ -35,7 +35,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     cwd,
     windowsHide: true,
     windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-    stdio: ["pipe", "pipe", "pipe"]
+    stdio: ["pipe", "pipe", "pipe"],
   });
 
   return new Promise((resolve, reject) => {
@@ -95,7 +95,9 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
       }
       pending.delete(message.id);
       if (message.error) {
-        finish(() => reject(new Error(typeof message.error?.message === "string" ? message.error.message : "codex app-server request failed")));
+        finish(() =>
+          reject(new Error(typeof message.error?.message === "string" ? message.error.message : "codex app-server request failed")),
+        );
         return;
       }
       if (method === "initialize") {
@@ -106,7 +108,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
     });
 
     const initId = send("initialize", {
-      clientInfo: { name: "tet", title: "tet", version: "0" }
+      clientInfo: { name: "tet", title: "tet", version: "0" },
     });
     pending.set(initId, "initialize");
   });

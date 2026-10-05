@@ -13,7 +13,7 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
   {
     id: "vscode",
     label: "VS Code (default)",
-    bindings: {}
+    bindings: {},
   },
   {
     id: "jetbrains",
@@ -26,8 +26,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+-": "editor.fold",
       "ctrl+=": "editor.unfold",
       "ctrl+shift+-": "editor.foldAll",
-      "ctrl+shift+=": "editor.unfoldAll"
-    }
+      "ctrl+shift+=": "editor.unfoldAll",
+    },
   },
   {
     id: "sublime",
@@ -40,8 +40,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+shift+]": "editor.unfold",
       "ctrl+shift+d": "editor.action.copyLinesDownAction",
       "alt+shift+up": "editor.action.insertCursorAbove",
-      "alt+shift+down": "editor.action.insertCursorBelow"
-    }
+      "alt+shift+down": "editor.action.insertCursorBelow",
+    },
   },
   {
     id: "netbeans",
@@ -58,8 +58,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+numpad_subtract": "editor.fold",
       "ctrl+numpad_add": "editor.unfold",
       "ctrl+shift+numpad_subtract": "editor.foldAll",
-      "ctrl+shift+numpad_add": "editor.unfoldAll"
-    }
+      "ctrl+shift+numpad_add": "editor.unfoldAll",
+    },
   },
   {
     // Its comment/move-line keys are chords or absent.
@@ -67,8 +67,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
     label: "Visual Studio",
     bindings: {
       "ctrl+shift+l": "editor.action.deleteLines",
-      "ctrl+d": "editor.action.copyLinesDownAction"
-    }
+      "ctrl+d": "editor.action.copyLinesDownAction",
+    },
   },
   {
     id: "eclipse",
@@ -77,8 +77,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+shift+c": "editor.action.commentLine",
       "ctrl+alt+down": "editor.action.copyLinesDownAction",
       "ctrl+alt+up": "editor.action.copyLinesUpAction",
-      "ctrl+d": "editor.action.deleteLines"
-    }
+      "ctrl+d": "editor.action.deleteLines",
+    },
   },
   {
     // "cmd" written "ctrl": KeyMod.CtrlCmd resolves per platform (parseKeyCombo).
@@ -90,8 +90,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "alt+ctrl+[": "editor.action.moveLinesUpAction",
       "alt+ctrl+]": "editor.action.moveLinesDownAction",
       "ctrl+shift+up": "editor.action.insertCursorAbove",
-      "ctrl+shift+down": "editor.action.insertCursorBelow"
-    }
+      "ctrl+shift+down": "editor.action.insertCursorBelow",
+    },
   },
   {
     id: "notepad++",
@@ -102,8 +102,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+q": "editor.action.commentLine",
       "ctrl+shift+down": "editor.action.moveLinesDownAction",
       "ctrl+shift+up": "editor.action.moveLinesUpAction",
-      "ctrl+l": "editor.action.deleteLines"
-    }
+      "ctrl+l": "editor.action.deleteLines",
+    },
   },
   {
     id: "atom",
@@ -115,8 +115,8 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "alt+ctrl+[": "editor.fold",
       "alt+ctrl+]": "editor.unfold",
       "alt+ctrl+shift+[": "editor.foldAll",
-      "alt+ctrl+shift+]": "editor.unfoldAll"
-    }
+      "alt+ctrl+shift+]": "editor.unfoldAll",
+    },
   },
   {
     id: "brackets",
@@ -126,7 +126,7 @@ export const KEYBINDING_PRESETS: KeybindingPreset[] = [
       "ctrl+shift+d": "editor.action.deleteLines",
       "ctrl+shift+up": "editor.action.moveLinesUpAction",
       "ctrl+shift+down": "editor.action.moveLinesDownAction",
-      "ctrl+shift+/": "editor.action.blockComment"
-    }
-  }
+      "ctrl+shift+/": "editor.action.blockComment",
+    },
+  },
 ];

@@ -100,7 +100,7 @@ function startTet(): void {
   const child: ChildProcess = spawn(rootExecutable(installedRoot(), PLATFORM), args, {
     env: { ...env, ELECTRON_RUN_AS_NODE: undefined },
     detached: true,
-    stdio: ["ignore", log, log]
+    stdio: ["ignore", log, log],
   });
   child.unref();
   fs.closeSync(log);
@@ -113,7 +113,7 @@ async function ask(args: string[]): Promise<unknown> {
     [CONTROL_ENV.port]: String(port),
     [CONTROL_ENV.token]: TOKEN,
     [CONTROL_ENV.projectId]: undefined,
-    [CONTROL_ENV.tabId]: undefined
+    [CONTROL_ENV.tabId]: undefined,
   });
   return answer.status === 0 ? answer.result : undefined;
 }
@@ -160,9 +160,9 @@ function packageNext(): string {
       platformFlag,
       `${target}:${process.arch}`,
       `-c.extraMetadata.version=${next}`,
-      `-c.directories.output=${output}`
+      `-c.directories.output=${output}`,
     ],
-    { cwd: ROOT, encoding: "utf8" }
+    { cwd: ROOT, encoding: "utf8" },
   );
   assert.equal(result.status, 0, `electron-builder\n${result.stdout}${result.stderr}`);
   return path.join(output, ASSET);
@@ -207,7 +207,7 @@ describe("TET installed by its script, and updated", { skip: !ENABLED, timeout: 
       ...process.env,
       TET_RELEASES_URL: releasesUrl,
       [CONTROL_ENV.token]: TOKEN,
-      ...(PLATFORM.id === "win32" ? { LOCALAPPDATA: home } : { HOME: home })
+      ...(PLATFORM.id === "win32" ? { LOCALAPPDATA: home } : { HOME: home }),
     };
     port = await findControlPort(userData);
   });
@@ -230,7 +230,7 @@ describe("TET installed by its script, and updated", { skip: !ENABLED, timeout: 
           return false;
         }
       },
-      60_000
+      60_000,
     );
   });
 
@@ -241,12 +241,20 @@ describe("TET installed by its script, and updated", { skip: !ENABLED, timeout: 
       const startMenu = path.join(process.env.APPDATA ?? "", "Microsoft", "Windows", "Start Menu", "Programs", "TET.lnk");
       const link = spawnSync(
         "powershell.exe",
-        ["-NoProfile", "-Command", `$l = (New-Object -ComObject WScript.Shell).CreateShortcut('${startMenu}'); $l.TargetPath + '|' + $l.Arguments`],
-        { encoding: "utf8" }
+        [
+          "-NoProfile",
+          "-Command",
+          `$l = (New-Object -ComObject WScript.Shell).CreateShortcut('${startMenu}'); $l.TargetPath + '|' + $l.Arguments`,
+        ],
+        { encoding: "utf8" },
       );
       const [target, args] = link.stdout.trim().split("|");
       // Real paths on both sides: a runner's temp directory can be an 8.3 short name.
-      assert.equal(fs.realpathSync.native(target), fs.realpathSync.native(rootExecutable(installedRoot(), PLATFORM)), "the Start menu entry, on TET.exe");
+      assert.equal(
+        fs.realpathSync.native(target),
+        fs.realpathSync.native(rootExecutable(installedRoot(), PLATFORM)),
+        "the Start menu entry, on TET.exe",
+      );
       assert.equal(args, "", "the Start menu entry, without arguments");
       assert.ok(fs.existsSync(path.join(installedRoot(), "bin", "tet.cmd")), "the tet command");
     } else {

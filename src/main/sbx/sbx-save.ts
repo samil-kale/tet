@@ -33,7 +33,12 @@ function orphanAgent(name: string, workspaces: string[], target: SbxSaveTarget):
  */
 async function readSandboxHosts(): Promise<Map<string, string[]> | undefined> {
   const parsed = await sbxJson<{ rules?: { scope?: string; decision?: string; editable?: boolean; resources?: string[] }[] }>([
-    "policy", "ls", "--type", "network", "--include-inactive", "--json"
+    "policy",
+    "ls",
+    "--type",
+    "network",
+    "--include-inactive",
+    "--json",
   ]);
   if (!parsed) {
     return undefined;
@@ -70,7 +75,9 @@ async function revokeStaleHosts(name: string, previous: string[], current: strin
  */
 async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]> | undefined> {
   const parsed = await sbxJson<{ custom_secrets?: { scope?: string; targets?: string[]; placeholder?: string }[] }>([
-    "secret", "ls", "--json"
+    "secret",
+    "ls",
+    "--json",
   ]);
   if (!parsed) {
     return undefined;
@@ -104,7 +111,10 @@ async function applyProjectPorts(names: string[], ports: SbxPort[], read?: Map<s
   const wanted = new Set(ports.map(sbxPortKey));
   const refused: Record<string, string> = {};
   for (const [index, name] of running.entries()) {
-    Object.assign(refused, await applyPortChanges(name, { removed: published[index].filter((port) => !wanted.has(sbxPortKey(port))), added: [] }));
+    Object.assign(
+      refused,
+      await applyPortChanges(name, { removed: published[index].filter((port) => !wanted.has(sbxPortKey(port))), added: [] }),
+    );
   }
   const forwarded = new Set(published.flat().map(sbxPortKey));
   // The first sandbox that takes it; sbx's last refusal otherwise.
@@ -155,7 +165,7 @@ async function assertReadable(
   kept: readonly { agent: SandboxedAgent; name: string; ports: boolean }[],
   secrets: boolean,
   ports: boolean,
-  hosts: boolean
+  hosts: boolean,
 ): Promise<SaveReads> {
   const unsaved = "Nothing was saved; try again.";
   const reads: SaveReads = {};
@@ -226,7 +236,7 @@ export async function saveSbxSettings(
   changedSecrets: ReadonlySet<string>,
   organization: string | undefined,
   /** listSandboxes', which the caller took for its check. */
-  sandboxes: SandboxList
+  sandboxes: SandboxList,
 ): Promise<{
   removed: SbxRemoved[];
   orphans: SbxRemoved[];
@@ -269,7 +279,7 @@ export async function saveSbxSettings(
     kept,
     settings.secrets.length > 0 || previous.secrets.length > 0,
     settings.ports.length > 0 || previous.ports.length > 0,
-    !organization
+    !organization,
   );
   for (const { name, ref, agentId } of orphaned) {
     if (!(await removeSandbox(name))) {
@@ -293,13 +303,21 @@ export async function saveSbxSettings(
     const secrets = target.secrets.length > 0 || previous.secrets.length > 0;
     const [liveHosts, liveSecrets] = await Promise.all([
       organization ? new Map<string, string[]>() : (first?.hosts ?? readSandboxHosts()),
-      secrets ? (first?.secrets ?? readSandboxSecrets()) : new Map<string, LiveSecret[]>()
+      secrets ? (first?.secrets ?? readSandboxSecrets()) : new Map<string, LiveSecret[]>(),
     ]);
     // Whenever any are configured or were, since what a sandbox published is only readable while it
     // runs: the rows may match tet.json and still be unpublished (ports written before the sandbox
     // existed).
     if (target.ports.length > 0 || previous.ports.length > 0) {
-      addProblems(refused, "ports", await applyProjectPorts(kept.filter(({ ports }) => ports).map(({ name }) => name), target.ports, first?.ports));
+      addProblems(
+        refused,
+        "ports",
+        await applyProjectPorts(
+          kept.filter(({ ports }) => ports).map(({ name }) => name),
+          target.ports,
+          first?.ports,
+        ),
+      );
     }
     for (const { name, projectId } of kept) {
       if (!organization && liveHosts) {
@@ -310,8 +328,8 @@ export async function saveSbxSettings(
           "hosts",
           await allowHosts(
             name,
-            target.hosts.filter((host) => !live.includes(host))
-          )
+            target.hosts.filter((host) => !live.includes(host)),
+          ),
         );
       } else if (!organization) {
         // Unread only by the second pass: the first has them (assertReadable).
@@ -323,7 +341,7 @@ export async function saveSbxSettings(
           "secrets",
           liveSecrets
             ? await applySecrets(name, projectId, target.secrets, secretValues, liveSecrets.get(name) ?? [], changedSecrets)
-            : Object.fromEntries(target.secrets.map((secret) => [secret.env, SBX_PROBLEM.secretsUnlisted]))
+            : Object.fromEntries(target.secrets.map((secret) => [secret.env, SBX_PROBLEM.secretsUnlisted])),
         );
       }
     }
@@ -335,10 +353,10 @@ export async function saveSbxSettings(
     ...settings,
     ports: [
       ...settings.ports.filter((port) => !refusedPort(port)),
-      ...previous.ports.filter((port) => refusedPort(port) && !settings.ports.some((next) => sbxPortKey(next) === sbxPortKey(port)))
+      ...previous.ports.filter((port) => refusedPort(port) && !settings.ports.some((next) => sbxPortKey(next) === sbxPortKey(port))),
     ],
     hosts: settings.hosts.filter((host) => refused.hosts?.[host] === undefined),
-    secrets: settings.secrets.filter((secret) => refused.secrets?.[secret.env] === undefined)
+    secrets: settings.secrets.filter((secret) => refused.secrets?.[secret.env] === undefined),
   };
   const failures =
     Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];
@@ -354,7 +372,9 @@ export async function saveSbxSettings(
   const stays = new Set(Object.keys(unrevoked.paths ?? {}).map(normalizeHostPath));
   applied.paths = [
     ...applied.paths.filter((entry) => !stays.has(normalizeHostPath(entry.path))),
-    ...previous.paths.filter((entry) => stays.has(normalizeHostPath(entry.path))).map((entry) => ({ ...entry, path: contractHome(entry.path) }))
+    ...previous.paths
+      .filter((entry) => stays.has(normalizeHostPath(entry.path)))
+      .map((entry) => ({ ...entry, path: contractHome(entry.path) })),
   ];
   const appliedKnowledge = { ...knowledge.current };
   for (const kind of SBX_KNOWLEDGE_KINDS.filter((candidate) => unrevoked.knowledge?.[candidate] !== undefined)) {

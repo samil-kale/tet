@@ -126,10 +126,7 @@ function ask<T>(build: (answer: (value: T) => void) => Question, cancelled: T): 
 }
 
 export function confirm(options: ConfirmOptions): Promise<ConfirmAnswer> {
-  return ask<ConfirmAnswer>(
-    (answer) => ({ kind: "confirm", ...options, answer }),
-    { confirmed: false, checked: false }
-  );
+  return ask<ConfirmAnswer>((answer) => ({ kind: "confirm", ...options, answer }), { confirmed: false, checked: false });
 }
 
 /** Whether the user went through, for a question without a checkbox. */
@@ -164,15 +161,7 @@ export function refusal(result: GitActionResult, fallback: string): string | und
 /** `render` for a question asking one line of text, e.g. a name. */
 export function singleField(label: string, maxLength?: number): PromptOptions<string>["render"] {
   return ({ value, onChange, error, busy, field }) => (
-    <TextField
-      label={label}
-      value={value}
-      onChange={onChange}
-      maxLength={maxLength}
-      disabled={busy}
-      ref={field}
-      error={error}
-    />
+    <TextField label={label} value={value} onChange={onChange} maxLength={maxLength} disabled={busy} ref={field} error={error} />
   );
 }
 
@@ -200,7 +189,7 @@ export async function askName({ title, detail, confirmLabel, current, maxLength,
     submit: (typed) => {
       const name = typed.trim();
       return name === current ? Promise.resolve(undefined) : submit(name);
-    }
+    },
   });
 }
 
@@ -211,7 +200,7 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
       await dialog.submit?.(checked);
       return undefined;
     },
-    () => dialog.answer({ confirmed: true, checked })
+    () => dialog.answer({ confirmed: true, checked }),
   );
 
   return (
@@ -237,7 +226,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   /** What `submit` refused is handed to the fields (`error`). */
   const { busy, refused, submit, changing } = useSubmit(
     async () => (dialog.submit ? dialog.submit(value) : undefined),
-    () => dialog.answer(value)
+    () => dialog.answer(value),
   );
   // Back to the field refused, once the run no longer disables it.
   useEffect(() => {

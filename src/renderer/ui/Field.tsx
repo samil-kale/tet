@@ -129,17 +129,7 @@ interface TextFieldProps {
 }
 
 /** A `Field` holding the one-line input the dialogs' fields are built from. */
-export function TextField({
-  label,
-  value,
-  onChange,
-  type = "text",
-  placeholder,
-  maxLength,
-  disabled,
-  ref,
-  error
-}: TextFieldProps) {
+export function TextField({ label, value, onChange, type = "text", placeholder, maxLength, disabled, ref, error }: TextFieldProps) {
   return (
     <Field label={label} error={error}>
       <input
@@ -277,12 +267,7 @@ interface CheckboxProps {
 export function Checkbox({ label, checked, onChange, disabled }: CheckboxProps) {
   return (
     <label className="dialog-checkbox">
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-      />
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
   );

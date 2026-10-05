@@ -50,7 +50,7 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize }: Sa
       size,
       // Negative margins take the sash out of the layout, so the container's size is what the two
       // areas share. Measured once per drag: it cannot change during one.
-      total: vertical ? container.clientWidth : container.clientHeight
+      total: vertical ? container.clientWidth : container.clientHeight,
     };
     setDragging(true);
   };

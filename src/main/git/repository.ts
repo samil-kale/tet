@@ -6,7 +6,15 @@ import { errorMessage, failure } from "../../shared/errors";
 import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote } from "../../shared/types/git";
 import { refKeyOf } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { ExplorerListing, ExplorerSettings, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult, HeadBlob } from "../../shared/types/files";
+import type {
+  ExplorerListing,
+  ExplorerSettings,
+  FileContent,
+  FileSearchQuery,
+  FileSearchResult,
+  FileWriteResult,
+  HeadBlob,
+} from "../../shared/types/files";
 import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { PROJECT_FILE } from "../store/tet-json";
@@ -20,7 +28,7 @@ import {
   OUTSIDE_REPOSITORY,
   renamePath,
   resolveInside,
-  searchFiles
+  searchFiles,
 } from "./explorer";
 import { MAX_EDIT_BYTES } from "./explorer-read";
 import { git } from "./git-client";
@@ -40,11 +48,7 @@ const REFRESH_MIN_INTERVAL_MS = 2000;
 
 /** Replaces `timer` with one running `run` once events settle, and at least REFRESH_MIN_INTERVAL_MS
  *  after `lastAt`, when it last ran. */
-function settle(
-  timer: ReturnType<typeof setTimeout> | undefined,
-  lastAt: number,
-  run: () => void
-): ReturnType<typeof setTimeout> {
+function settle(timer: ReturnType<typeof setTimeout> | undefined, lastAt: number, run: () => void): ReturnType<typeof setTimeout> {
   clearTimeout(timer);
   return setTimeout(run, Math.max(REFRESH_DEBOUNCE_MS, lastAt + REFRESH_MIN_INTERVAL_MS - Date.now()));
 }
@@ -162,7 +166,7 @@ export class Repository {
     private readonly logins: GitLoginStore,
     /** The project's other open repository and worktrees: one git directory, so the periodic fetch
      *  skips a turn while a command runs in any of them, and a command in any waits for it. */
-    private readonly siblings: () => Repository[] = () => []
+    private readonly siblings: () => Repository[] = () => [],
   ) {}
 
   /** The files the project's editor tabs show. A pending report for a file just closed is
@@ -213,7 +217,7 @@ export class Repository {
     this.configStale = false;
     const [urls, branchConfig] = await Promise.all([
       git.readRemoteUrls(this.at.path).catch(() => ({})),
-      git.readBranchConfig(this.at.path).catch(() => ({ defaultBranchName: "main", worktreeBases: {} }))
+      git.readBranchConfig(this.at.path).catch(() => ({ defaultBranchName: "main", worktreeBases: {} })),
     ]);
     this.remoteUrls = urls;
     this.defaultBranchName = branchConfig.defaultBranchName;
@@ -230,15 +234,13 @@ export class Repository {
     }
     // With a kept login, never a typed one: nothing is asked in the background.
     const remote = headRemote(this.state);
-    this.autoFetching = this.network(remote, undefined, (login) =>
-      git.fetch(this.at.path, remote, login, AUTO_FETCH_TIMEOUT_MS)
-    )
+    this.autoFetching = this.network(remote, undefined, (login) => git.fetch(this.at.path, remote, login, AUTO_FETCH_TIMEOUT_MS))
       .then(() => git.fastForwardBranches(this.at.path))
       .catch(() => undefined)
       .then(() => this.refresh())
       .then(
         () => undefined,
-        () => undefined
+        () => undefined,
       )
       .finally(() => {
         this.autoFetching = undefined;
@@ -250,7 +252,7 @@ export class Repository {
     // readState reports errors in its result; a rejection is the git process gone.
     return git.readState(this.at.path, Object.keys(this.remoteUrls), this.defaultBranchName).catch((error: unknown) => ({
       ...EMPTY_REPOSITORY_STATE,
-      error: errorMessage(error)
+      error: errorMessage(error),
     }));
   }
 
@@ -315,14 +317,14 @@ export class Repository {
           name,
           branches: known?.branches ?? [],
           mergedBranches: known?.mergedBranches ?? [],
-          url: this.remoteUrls[name]
+          url: this.remoteUrls[name],
         };
       });
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
       // Only a linked worktree carries a base and a key; the repository has neither.
       base: worktree.isRepository || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch],
-      key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path)
+      key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path),
     }));
     const next: RepositoryState = { ...read, remotes, worktrees };
     this.reportError(next);
@@ -438,9 +440,7 @@ export class Repository {
       if (this.state.detached) {
         return Promise.resolve({ ok: false, error: "HEAD is detached — check out a branch to push it" });
       }
-      return this.network(remote, login, (networkLogin) =>
-        git.push(this.at.path, remote, this.state.head, upstream?.branch, networkLogin)
-      );
+      return this.network(remote, login, (networkLogin) => git.push(this.at.path, remote, this.state.head, upstream?.branch, networkLogin));
     });
   }
 
@@ -449,7 +449,7 @@ export class Repository {
   private network(
     remote: string | undefined,
     login: GitLogin | undefined,
-    command: (login?: NetworkLogin) => Promise<GitActionResult>
+    command: (login?: NetworkLogin) => Promise<GitActionResult>,
   ): Promise<GitActionResult> {
     const url = remote === undefined ? undefined : this.remoteUrls[remote];
     return url === undefined ? command() : this.logins.run(this.at.path, url, login, command);
@@ -516,9 +516,7 @@ export class Repository {
         return local;
       }
       return upstream
-        ? this.network(upstream.remote, undefined, (login) =>
-            git.deleteRemoteBranch(this.at.path, upstream.remote, upstream.branch, login)
-          )
+        ? this.network(upstream.remote, undefined, (login) => git.deleteRemoteBranch(this.at.path, upstream.remote, upstream.branch, login))
         : { ok: false, error: `${name} has no upstream to delete on a remote` };
     });
   }
@@ -527,7 +525,7 @@ export class Repository {
    *  whose remote half wanted a login. */
   deleteRemoteBranch(remote: string, name: string, login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() =>
-      this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.at.path, remote, name, networkLogin))
+      this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.at.path, remote, name, networkLogin)),
     );
   }
 
@@ -555,9 +553,7 @@ export class Repository {
   abort(): Promise<GitActionResult> {
     return this.runAction(() => {
       const operation = this.state.operation;
-      return operation
-        ? git.abortOperation(this.at.path, operation)
-        : Promise.resolve({ ok: false, error: "Nothing is in progress here" });
+      return operation ? git.abortOperation(this.at.path, operation) : Promise.resolve({ ok: false, error: "Nothing is in progress here" });
     });
   }
 
@@ -660,13 +656,17 @@ export class Repository {
       const changes = paths.flatMap((filePath) => byPath.get(filePath) ?? []);
       const unsure = changes.filter((change) => change.status === "untracked" || change.status === "conflicted");
       const inHead = new Set(
-        unsure.length > 0 ? await git.readHeadPaths(this.at.path, unsure.map((change) => change.path)) : []
+        unsure.length > 0
+          ? await git.readHeadPaths(
+              this.at.path,
+              unsure.map((change) => change.path),
+            )
+          : [],
       );
       for (const change of changes) {
         const filePath = change.path;
         // An untracked file HEAD has was untracked by `git rm --cached`: HEAD's version comes back.
-        const notInHead =
-          ["untracked", "added", "renamed", "conflicted"].includes(change.status) && !inHead.has(filePath);
+        const notInHead = ["untracked", "added", "renamed", "conflicted"].includes(change.status) && !inHead.has(filePath);
         // Staged, then deleted on disk, still reads "added": nothing to trash. A tracked directory is
         // a submodule, which git restores and the trash must not take; an untracked one (a
         // repository inside this one) goes whole.
@@ -771,7 +771,7 @@ export class Repository {
         extracted: extracted !== undefined || undefined,
         content: extracted ?? (binary ? "" : buffer.toString("utf8")),
         // A non-image binary has nothing to compare; don't spend a git process on it.
-        head: binary && !image ? undefined : await this.headBlob(filePath, change)
+        head: binary && !image ? undefined : await this.headBlob(filePath, change),
       };
     } catch (error) {
       return { ...base, error: errorMessage(error) };
@@ -787,9 +787,7 @@ export class Repository {
     if (change.status === "untracked") {
       return Promise.resolve({ content: "", binary: false, missing: true });
     }
-    return git
-      .readHeadBlob(this.at.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES })
-      .catch(() => undefined);
+    return git.readHeadBlob(this.at.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES }).catch(() => undefined);
   }
 
   /** Refuses when the mtime changed since the read, so a save never silently overwrites another
@@ -815,9 +813,7 @@ export class Repository {
 
   private startWatching(): void {
     try {
-      this.watcher = fs.watch(this.at.path, { recursive: true }, (event, filename) =>
-        this.onGitEvent(filename?.toString(), event)
-      );
+      this.watcher = fs.watch(this.at.path, { recursive: true }, (event, filename) => this.onGitEvent(filename?.toString(), event));
       this.watcher.on("error", (error) => this.onWatchError(this.at.path, error));
       this.watchLinkedGitDir();
     } catch (error) {
@@ -843,7 +839,7 @@ export class Repository {
     const dir = linked.commonDir ?? linked.gitDir;
     const ownWorktree = linked.commonDir === undefined ? undefined : path.basename(linked.gitDir);
     this.gitDirWatcher = fs.watch(dir, { recursive: true }, (_event, filename) =>
-      this.onGitEvent(filename === null ? undefined : `.git/${filename.replace(/\\/g, "/")}`, undefined, ownWorktree)
+      this.onGitEvent(filename === null ? undefined : `.git/${filename.replace(/\\/g, "/")}`, undefined, ownWorktree),
     );
     this.gitDirWatcher.on("error", (error) => this.onWatchError(dir, error));
   }
@@ -891,7 +887,7 @@ export class Repository {
         setTimeout(() => {
           this.watchedFileTimers.delete(watchedFile);
           this.onFileChanged(watchedFile);
-        }, REFRESH_DEBOUNCE_MS)
+        }, REFRESH_DEBOUNCE_MS),
       );
     }
     this.scheduleRefresh();
@@ -973,7 +969,7 @@ export class RepositoryManager {
     private readonly onCommandsChanged: (projectId: string) => void,
     private readonly onFilesChanged: (ref: ProjectRef) => void,
     private readonly onFileChanged: (ref: ProjectRef, filePath: string) => void,
-    private readonly logins: GitLoginStore
+    private readonly logins: GitLoginStore,
   ) {}
 
   open(resolved: ResolvedRef): Repository {
@@ -996,7 +992,7 @@ export class RepositoryManager {
       () => this.onFilesChanged(ref),
       (filePath) => this.onFileChanged(ref, filePath),
       this.logins,
-      () => [...this.repositories.values()].filter((other) => other !== repository && other.at.ref.projectId === ref.projectId)
+      () => [...this.repositories.values()].filter((other) => other !== repository && other.at.ref.projectId === ref.projectId),
     );
     this.repositories.set(refKeyOf(ref), repository);
     void repository.start();

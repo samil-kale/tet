@@ -49,7 +49,7 @@ function run(command: string, args: string[], input?: string): { status: number 
     encoding: "utf8",
     input,
     windowsHide: true,
-    windowsVerbatimArguments: resolved.windowsVerbatimArguments
+    windowsVerbatimArguments: resolved.windowsVerbatimArguments,
   });
   return { status: result.status, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
 }
@@ -77,7 +77,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
    */
   const TRUST_QUESTIONS: Partial<Record<AgentId, { asked: RegExp; keys: string[] }>> = {
     claude: { asked: /Yes,\s*I\s*trust\s*this\s*folder/, keys: ["down", "enter"] },
-    codex: { asked: /Trust\s*this\s*folder\?/, keys: ["enter"] }
+    codex: { asked: /Trust\s*this\s*folder\?/, keys: ["enter"] },
   };
   /** How long a CLI's first frame is watched for that question. */
   const TRUST_WAIT_MS = 15_000;
@@ -186,48 +186,56 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
         const installed = versionIn(result.stdout);
         assert.ok(installed, `${agent.displayName} installed and printing its version: ${result.stdout}${result.stderr}`);
         if (installed !== agent.install.verifiedVersion) {
-          t.diagnostic(`${agent.displayName} ${installed} is installed, ${agent.install.verifiedVersion} was verified: record it once this run passes`);
+          t.diagnostic(
+            `${agent.displayName} ${installed} is installed, ${agent.install.verifiedVersion} was verified: record it once this run passes`,
+          );
         }
       });
 
-      it("starts on a prompt, draws its first frame and is trusted with the repository", { timeout: STARTUP_MS + TRUST_WAIT_MS + 30_000 }, async (t) => {
-        state.since = Date.now();
-        // The prompt as the CLI's own argument, submitted once it is up, past the trust question.
-        const created = await ctl("tabs-create", "--agent", agentId, "--prompt", PROMPT, "--project", currentProject().id);
-        assert.equal(created.status, 0, created.stderr);
-        const tabId = (created.result as TabDescriptor).tabId;
-        state.tabId = tabId;
-        let last: ListedTab | undefined;
-        await eventually(
-          () => `${agent.displayName}'s first frame, last seen as ${JSON.stringify(last)}`,
-          async () => {
-            last = await tabOf(tabId);
-            if (last?.status === "error" || last?.status === "stopped") {
-              const notices = (await ctl("notices-list")).result;
-              assert.fail(`${agent.displayName} ended: ${JSON.stringify(last)}\nnotices: ${JSON.stringify(notices)}\n${await outputOf(tabId)}`);
-            }
-            return last?.status === "running" && last.starting !== true;
-          },
-          STARTUP_MS
-        );
+      it(
+        "starts on a prompt, draws its first frame and is trusted with the repository",
+        { timeout: STARTUP_MS + TRUST_WAIT_MS + 30_000 },
+        async (t) => {
+          state.since = Date.now();
+          // The prompt as the CLI's own argument, submitted once it is up, past the trust question.
+          const created = await ctl("tabs-create", "--agent", agentId, "--prompt", PROMPT, "--project", currentProject().id);
+          assert.equal(created.status, 0, created.stderr);
+          const tabId = (created.result as TabDescriptor).tabId;
+          state.tabId = tabId;
+          let last: ListedTab | undefined;
+          await eventually(
+            () => `${agent.displayName}'s first frame, last seen as ${JSON.stringify(last)}`,
+            async () => {
+              last = await tabOf(tabId);
+              if (last?.status === "error" || last?.status === "stopped") {
+                const notices = (await ctl("notices-list")).result;
+                assert.fail(
+                  `${agent.displayName} ended: ${JSON.stringify(last)}\nnotices: ${JSON.stringify(notices)}\n${await outputOf(tabId)}`,
+                );
+              }
+              return last?.status === "running" && last.starting !== true;
+            },
+            STARTUP_MS,
+          );
 
-        const trust = TRUST_QUESTIONS[agentId];
-        if (trust) {
-          const deadline = Date.now() + TRUST_WAIT_MS;
-          while (Date.now() < deadline && !trust.asked.test(await outputOf(tabId))) {
-            await sleep(500);
-          }
-          if (trust.asked.test(await outputOf(tabId))) {
-            for (const key of trust.keys) {
-              await press(tabId, key);
-              await sleep(300);
+          const trust = TRUST_QUESTIONS[agentId];
+          if (trust) {
+            const deadline = Date.now() + TRUST_WAIT_MS;
+            while (Date.now() < deadline && !trust.asked.test(await outputOf(tabId))) {
+              await sleep(500);
             }
-            t.diagnostic(`answered ${agent.displayName}'s trust question`);
-            // The CLI draws its real frame after the answer.
-            await sleep(3000);
+            if (trust.asked.test(await outputOf(tabId))) {
+              for (const key of trust.keys) {
+                await press(tabId, key);
+                await sleep(300);
+              }
+              t.diagnostic(`answered ${agent.displayName}'s trust question`);
+              // The CLI draws its real frame after the answer.
+              await sleep(3000);
+            }
           }
-        }
-      });
+        },
+      );
 
       it("reports both ends of a turn, names its session and knows TET's system prompt", { timeout: TURN_MS + 30_000 }, async () => {
         const tabId = startedTab();
@@ -246,12 +254,18 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
             }
             return events.some((event) => event.event === "stop") && last?.inTurn === false;
           },
-          TURN_MS
+          TURN_MS,
         );
-        assert.ok(events.some((event) => event.event === "prompt-submit"), `a prompt-submit among ${JSON.stringify(events)}`);
+        assert.ok(
+          events.some((event) => event.event === "prompt-submit"),
+          `a prompt-submit among ${JSON.stringify(events)}`,
+        );
         if (agentId === "codex") {
           // Codex fires SessionStart with the first prompt: TET's system prompt rides on its answer.
-          assert.ok(events.some((event) => event.event === "session-start"), `a session-start among ${JSON.stringify(events)}`);
+          assert.ok(
+            events.some((event) => event.event === "session-start"),
+            `a session-start among ${JSON.stringify(events)}`,
+          );
         }
         const sessionId = last?.reportedSessionId;
         assert.ok(sessionId, "a hook named the session");
@@ -259,7 +273,11 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
           assert.equal(event.sessionId, sessionId, `${event.event} names the same session`);
         }
         state.sessionId = sessionId;
-        await eventually(() => `an answer naming tet-ctl in:\n${output}`, async () => answered((output = await outputOf(tabId))), 10_000);
+        await eventually(
+          () => `an answer naming tet-ctl in:\n${output}`,
+          async () => answered((output = await outputOf(tabId))),
+          10_000,
+        );
       });
 
       it("lists its session with a title", { timeout: 90_000 }, async () => {
@@ -271,7 +289,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
             last = await tabOf(tabId);
             return last?.sessionId !== undefined && last.sessionId === state.sessionId && last.title.trim() !== "";
           },
-          60_000
+          60_000,
         );
       });
 
@@ -288,7 +306,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
             notices = (await ctl("notices-list")).result;
             return sessions.some((session) => session.id === state.sessionId && session.title === RENAMED);
           },
-          30_000
+          30_000,
         );
         assert.doesNotMatch(JSON.stringify(notices), /Could not rename/);
       });
@@ -305,7 +323,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
             sessions = await listSessions(agent);
             return !sessions.some((session) => session.id === state.sessionId);
           },
-          60_000
+          60_000,
         );
       });
 
@@ -401,7 +419,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     const written = run(
       "sbx",
       ["exec", "-i", NAME, "sh", "-c", "mkdir -p ~/.local/bin && cat > ~/.local/bin/tet-ctl && chmod +x ~/.local/bin/tet-ctl"],
-      '#!/usr/bin/env node\nconsole.log("launcher ran");\n'
+      '#!/usr/bin/env node\nconsole.log("launcher ran");\n',
     );
     assert.equal(written.status, 0, written.stderr);
     const ran = sbx("exec", "-i", NAME, "tet-ctl");
@@ -454,7 +472,11 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     assert.match(blocked.stderr, /cannot restore mount/);
     const unmounted = sbx("umount", NAME, gone.unmount);
     assert.equal(unmounted.status, 0, `unmounted while stopped: ${unmounted.stderr}`);
-    assert.equal(inSandbox(`cat ${toContainerPath(path.join(MOUNTS, "ro", "file.txt"))}`).stdout, "from the host", "bound again at the start");
+    assert.equal(
+      inSandbox(`cat ${toContainerPath(path.join(MOUNTS, "ro", "file.txt"))}`).stdout,
+      "from the host",
+      "bound again at the start",
+    );
     assert.equal(sbx("umount", NAME, file.unmount).status, 0);
   });
 
@@ -477,10 +499,18 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
           rules: { scope?: string; decision?: string; editable?: boolean; resources?: string[] }[];
         }
       ).rules.filter((rule) => rule.scope === `sandbox:${NAME}` && rule.editable === true && rule.decision === "allow");
-    assert.deepEqual(ownRules().flatMap((rule) => rule.resources ?? []).sort(), ["example.com", "example.org"]);
+    assert.deepEqual(
+      ownRules()
+        .flatMap((rule) => rule.resources ?? [])
+        .sort(),
+      ["example.com", "example.org"],
+    );
     // As revokeStaleHosts removes one.
     assert.equal(sbx("policy", "rm", "network", "--sandbox", NAME, "--resource", "example.com", "--force").status, 0);
-    assert.deepEqual(ownRules().flatMap((rule) => rule.resources ?? []), ["example.org"]);
+    assert.deepEqual(
+      ownRules().flatMap((rule) => rule.resources ?? []),
+      ["example.org"],
+    );
     const again = sbx("policy", "rm", "network", "--sandbox", NAME, "--resource", "example.com", "--force");
     assert.notEqual(again.status, 0);
     assert.match(again.stderr, /rule not found/);
@@ -508,7 +538,10 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
         `const r = require("http").request({ host: "host.docker.internal", port: ${port}, method: "POST", path: "/", headers: { Connection: "close" } },` +
         ` (s) => { console.log(s.statusCode); s.resume(); }); r.on("error", (e) => console.log(e.message)); r.end("hook report");`;
       const resolved = resolveCommand("sbx", ["exec", "-i", NAME, "node", "-e", script]);
-      const child = spawn(resolved.command, resolved.args, { windowsHide: true, windowsVerbatimArguments: resolved.windowsVerbatimArguments });
+      const child = spawn(resolved.command, resolved.args, {
+        windowsHide: true,
+        windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+      });
       let stdout = "";
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
       await new Promise((resolve) => child.on("close", resolve));

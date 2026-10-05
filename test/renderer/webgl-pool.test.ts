@@ -5,7 +5,7 @@ import {
   WEBGL_LOSS_LIMIT,
   WEBGL_LOSS_WINDOW_MS,
   WebglPool,
-  isSoftwareRenderer
+  isSoftwareRenderer,
 } from "../../src/renderer/tabs/webgl-pool";
 
 /** Which terminals keep a WebGL context — the bookkeeping half of terminal-views.ts's renderer. */
@@ -96,7 +96,10 @@ describe("WebglPool", () => {
 describe("isSoftwareRenderer", () => {
   it("names the software rasterizers and not a GPU", () => {
     assert.equal(isSoftwareRenderer("Mesa llvmpipe (LLVM 15.0.7, 256 bits)"), true);
-    assert.equal(isSoftwareRenderer("Google Inc. (Google) ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)"), true);
+    assert.equal(
+      isSoftwareRenderer("Google Inc. (Google) ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)"),
+      true,
+    );
     assert.equal(isSoftwareRenderer("Google Inc. (NVIDIA) ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Direct3D11 vs_5_0 ps_5_0, D3D11)"), false);
   });
 });

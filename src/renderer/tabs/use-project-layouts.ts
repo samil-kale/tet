@@ -11,7 +11,7 @@ import {
   PRESET_PANES,
   saveLayout,
   serializeLayout,
-  snapTab as snapTabLayout
+  snapTab as snapTabLayout,
 } from "./pane-layout";
 import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-layout";
 import type { PaneTab } from "../editor/editor-tab";
@@ -44,10 +44,7 @@ interface ProjectLayouts {
  * marks/seen need what is on screen across panes (AGENTS.md, "Split view"). Reconciled against
  * `tabs`, persisted once `starting` first reports a repository or worktree not starting.
  */
-export function useProjectLayouts(
-  tabs: Record<string, LayoutTab[]>,
-  starting: Record<string, boolean>
-): ProjectLayouts {
+export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: Record<string, boolean>): ProjectLayouts {
   const [layouts, setLayouts] = useState<Record<string, ProjectLayout>>({});
   /** The tab list `layouts` was last normalized against, per repository or worktree — see
    *  `normalizeLayout`. */
@@ -147,24 +144,30 @@ export function useProjectLayouts(
    * other collapse trigger is a close, in the reconcile effect. A `paneId` the preset no longer has
    * (collapsed while a new tab was being created) resolves the same way, or the tab is drawn nowhere.
    */
-  const activateTab = useCallback((refKey: string, tabId: string, paneId?: PaneId) => {
-    setLayouts((current) => {
-      const layout = layoutOf(current, refKey);
-      const target = paneId && PRESET_PANES[layout.preset].includes(paneId) ? paneId : paneOf(layout, tabId);
-      return {
-        ...current,
-        [refKey]: activateTabLayout(layout, tabId, target, tabsRef.current[refKey] ?? [])
-      };
-    });
-  }, [tabsRef]);
+  const activateTab = useCallback(
+    (refKey: string, tabId: string, paneId?: PaneId) => {
+      setLayouts((current) => {
+        const layout = layoutOf(current, refKey);
+        const target = paneId && PRESET_PANES[layout.preset].includes(paneId) ? paneId : paneOf(layout, tabId);
+        return {
+          ...current,
+          [refKey]: activateTabLayout(layout, tabId, target, tabsRef.current[refKey] ?? []),
+        };
+      });
+    },
+    [tabsRef],
+  );
 
   /** A tab dropped on a snap zone — see `snapTab`. */
-  const snapTab = useCallback((refKey: string, tabId: string, transition: SnapTransition) => {
-    setLayouts((current) => ({
-      ...current,
-      [refKey]: snapTabLayout(layoutOf(current, refKey), tabId, transition, tabsRef.current[refKey] ?? [])
-    }));
-  }, [tabsRef]);
+  const snapTab = useCallback(
+    (refKey: string, tabId: string, transition: SnapTransition) => {
+      setLayouts((current) => ({
+        ...current,
+        [refKey]: snapTabLayout(layoutOf(current, refKey), tabId, transition, tabsRef.current[refKey] ?? []),
+      }));
+    },
+    [tabsRef],
+  );
 
   /** A pane taking focus without its active tab changing — a click on its terminal. */
   const focusPane = useCallback((refKey: string, paneId: PaneId) => {
@@ -188,10 +191,10 @@ export function useProjectLayouts(
       }
       setLayouts((current) => ({
         ...current,
-        [refKey]: placeCommandTab(layoutOf(current, refKey), tabId, line, tabsRef.current[refKey] ?? [])
+        [refKey]: placeCommandTab(layoutOf(current, refKey), tabId, line, tabsRef.current[refKey] ?? []),
       }));
     },
-    [activateTab, tabsRef]
+    [activateTab, tabsRef],
   );
 
   /** Lets go of a removed repository's or worktree's state, what is stored of it too. */

@@ -31,7 +31,7 @@ export function forget<T>(record: Record<string, T>, key: string): Record<string
 export function stableRecord<V extends object>(
   ref: { current: Record<string, V> },
   next: Record<string, V>,
-  same: (previous: V, entry: V) => boolean = sameFields
+  same: (previous: V, entry: V) => boolean = sameFields,
 ): Record<string, V> {
   const held = ref.current;
   const kept: Record<string, V> = {};

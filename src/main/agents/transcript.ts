@@ -48,10 +48,7 @@ export async function findEncodedDir(root: string, encoded: string): Promise<str
  * A listing's shared frame: the sessions `list` resolves, oldest first, or [] on any failure
  * (SessionProvider.list), logged under `label`. Undefined entries are files that are no session.
  */
-export async function collectSessions(
-  label: string,
-  list: () => Promise<(AgentSessionInfo | undefined)[]>
-): Promise<AgentSessionInfo[]> {
+export async function collectSessions(label: string, list: () => Promise<(AgentSessionInfo | undefined)[]>): Promise<AgentSessionInfo[]> {
   try {
     const sessions = (await list()).filter((entry): entry is AgentSessionInfo => entry !== undefined);
     sessions.sort((a, b) => a.createdAt - b.createdAt);
@@ -71,7 +68,7 @@ export function listTranscriptDir(
   findDir: () => Promise<string | undefined>,
   caches: Map<string, unknown>[],
   label: string,
-  readOne: (filePath: string, file: string) => Promise<AgentSessionInfo | undefined>
+  readOne: (filePath: string, file: string) => Promise<AgentSessionInfo | undefined>,
 ): Promise<AgentSessionInfo[]> {
   return collectSessions(label, async () => {
     const dir = await findDir();
@@ -82,7 +79,7 @@ export function listTranscriptDir(
     forgetMissing(
       dir,
       files.map((file) => path.join(dir, file)),
-      caches
+      caches,
     );
     return Promise.all(files.map((file) => readOne(path.join(dir, file), file)));
   });
@@ -146,11 +143,7 @@ export function requireTitle(title: string): string {
  * Answers whether the read itself held up: false means it failed (logged under `label`) and
  * `onLine` saw only part of the window, so a caller caching by size must not keep that answer.
  */
-export async function readHeadLines(
-  filePath: string,
-  label: string,
-  onLine: (line: string) => boolean
-): Promise<boolean> {
+export async function readHeadLines(filePath: string, label: string, onLine: (line: string) => boolean): Promise<boolean> {
   const stream = fs.createReadStream(filePath, { encoding: "utf8", end: TRANSCRIPT_SCAN_BYTES });
   const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   try {
@@ -187,7 +180,7 @@ export async function scanTranscriptHead<T>(
   filePath: string,
   fileSize: number,
   cache: Map<string, { size: number; head: T }>,
-  scan: HeadScan<T>
+  scan: HeadScan<T>,
 ): Promise<T> {
   const size = Math.min(fileSize, TRANSCRIPT_SCAN_BYTES);
   const cached = cache.get(filePath);
@@ -221,7 +214,7 @@ async function readLinesBackwards(
   size: number,
   floor: number,
   chunkBytes: number,
-  onLines: (lines: string[]) => boolean
+  onLines: (lines: string[]) => boolean,
 ): Promise<void> {
   let end = size;
   let carry = Buffer.alloc(0);
@@ -273,7 +266,7 @@ export interface ScannedTail<T> {
 export async function scanTranscriptTail<T>(
   filePath: string,
   cache: Map<string, { size: number; tail: T }>,
-  scan: TailScan<T>
+  scan: TailScan<T>,
 ): Promise<ScannedTail<T>> {
   const handle = await fs.promises.open(filePath, "r");
   try {
@@ -312,7 +305,7 @@ export function watchTranscriptDir(
   root: () => string,
   find: () => Promise<string | undefined>,
   wanted: (filename: string) => boolean,
-  onChange: () => void
+  onChange: () => void,
 ): SessionWatch {
   let dirWatcher: fs.FSWatcher | undefined;
   let rootWatcher: fs.FSWatcher | undefined;
@@ -365,11 +358,13 @@ export function watchTranscriptDir(
     }
     try {
       // The same for the root: watched again where it still is, else output schedules the listing.
-      rootWatcher = fs.watch(root(), () => void armDirWatcher()).on("error", () => {
-        rootWatcher?.close();
-        rootWatcher = undefined;
-        armRootWatcher();
-      });
+      rootWatcher = fs
+        .watch(root(), () => void armDirWatcher())
+        .on("error", () => {
+          rootWatcher?.close();
+          rootWatcher = undefined;
+          armRootWatcher();
+        });
     } catch {
       // The agent never ran on this machine: output schedules the listing instead.
     }
@@ -383,6 +378,6 @@ export function watchTranscriptDir(
       dirWatcher?.close();
       rootWatcher?.close();
     },
-    watching: () => !stopped && (dirWatcher !== undefined || rootWatcher !== undefined)
+    watching: () => !stopped && (dirWatcher !== undefined || rootWatcher !== undefined),
   };
 }

@@ -5,7 +5,17 @@
  */
 
 import { envNameKey, isEnvName, isReservedName } from "./env-rules";
-import type { SbxKnowledgeSettings, SbxKnowledgeKind, SbxLocalEdits, SbxOption, SbxPort, SbxProblems, SbxProjectSettings, SbxSecret, SbxVariable } from "./types/sbx";
+import type {
+  SbxKnowledgeSettings,
+  SbxKnowledgeKind,
+  SbxLocalEdits,
+  SbxOption,
+  SbxPort,
+  SbxProblems,
+  SbxProjectSettings,
+  SbxSecret,
+  SbxVariable,
+} from "./types/sbx";
 
 /** Every kind of knowledge, in the Knowledge tab's order. */
 export const SBX_KNOWLEDGE_KINDS: SbxKnowledgeKind[] = ["skills", "plugins", "instructions"];
@@ -30,11 +40,7 @@ export function sbxPortRefusal({ host, container }: SbxPort): string | undefined
 /** Why a secret row cannot be saved beside the `others`, or undefined: it needs a variable name of
  *  its own, not one of TET's (isReservedName), and hosts, none with a scheme or port (isBadHost). */
 export function sbxSecretRefusal({ env, hosts }: SbxSecret, others: SbxSecret[]): string | undefined {
-  return !isEnvName(env) ||
-    isReservedName(env) ||
-    others.some((other) => other.env === env) ||
-    hosts.length === 0 ||
-    hosts.some(isBadHost)
+  return !isEnvName(env) || isReservedName(env) || others.some((other) => other.env === env) || hosts.length === 0 || hosts.some(isBadHost)
     ? "Needs a variable name of its own, not PATH or TET_*, and hosts without scheme or port"
     : undefined;
 }
@@ -50,7 +56,7 @@ export function sbxVariableRefusal(
   { env }: SbxVariable,
   others: SbxVariable[],
   secrets: SbxSecret[],
-  ignoreCase: boolean
+  ignoreCase: boolean,
 ): string | undefined {
   const same = (name: string): string => envNameKey(name, ignoreCase);
   return !isEnvName(env) ||
@@ -71,7 +77,7 @@ export function sbxNeedsRestart(
   loaded: SbxProjectSettings,
   loadedKnowledge: SbxKnowledgeSettings,
   settings: Omit<SbxProjectSettings, "enabled">,
-  knowledge: SbxKnowledgeSettings
+  knowledge: SbxKnowledgeSettings,
 ): boolean {
   const names = (variables: SbxProjectSettings["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
   return (
@@ -92,7 +98,7 @@ export const SBX_PROBLEM = {
   refused: "Refused by sbx",
   notStarted: "Its sandbox could not be started",
   secretsUnlisted: "sbx did not list the sandbox's secrets",
-  hostsUnlisted: "sbx did not list the sandbox's allowed hosts"
+  hostsUnlisted: "sbx did not list the sandbox's allowed hosts",
 } as const;
 
 /** The policy's no: under governance the organization's, else sbx's own. */
@@ -116,7 +122,7 @@ export function sbxProblemNotices(problems: SbxProblems): string[] {
     const rows = Object.entries(problems[option] ?? {});
     const reasons = [...new Set(rows.map(([, reason]) => reason))];
     return reasons.map((reason) =>
-      [`Could not set ${option}:`, ...rows.filter(([, why]) => why === reason).map(([row]) => ` - ${row}`), reason].join("\n")
+      [`Could not set ${option}:`, ...rows.filter(([, why]) => why === reason).map(([row]) => ` - ${row}`), reason].join("\n"),
     );
   });
 }
@@ -144,7 +150,7 @@ export function sbxPortKey(port: SbxPort): string {
 export function withoutProblems(
   settings: SbxProjectSettings,
   knowledge: SbxKnowledgeSettings,
-  problems: SbxProblems
+  problems: SbxProblems,
 ): { settings: SbxProjectSettings; knowledge: SbxKnowledgeSettings } {
   const fine = (option: SbxOption, row: string): boolean => problems[option]?.[row] === undefined;
   const next = { ...knowledge };
@@ -158,8 +164,8 @@ export function withoutProblems(
       paths: settings.paths.filter((entry) => fine("paths", entry.path)),
       hosts: settings.hosts.filter((host) => fine("hosts", host)),
       secrets: settings.secrets.filter((secret) => fine("secrets", secret.env)),
-      variables: settings.variables.filter((variable) => fine("variables", variable.env))
+      variables: settings.variables.filter((variable) => fine("variables", variable.env)),
     },
-    knowledge: next
+    knowledge: next,
   };
 }

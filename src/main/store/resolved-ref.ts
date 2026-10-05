@@ -39,6 +39,6 @@ export function resolveProjectRef(dataRoot: string, projects: ProjectLookup, ref
       const current = projects.get(ref.projectId);
       name = current ? projectRefName(current, ref) : name;
       return name;
-    }
+    },
   };
 }

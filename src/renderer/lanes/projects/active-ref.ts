@@ -33,7 +33,7 @@ export function activeAfterChange(
   current: string | null,
   after: readonly Project[],
   removed: readonly ProjectRef[] | undefined,
-  show: ProjectRef | undefined
+  show: ProjectRef | undefined,
 ): string | null {
   if (show !== undefined) {
     return refKeyOf(show);

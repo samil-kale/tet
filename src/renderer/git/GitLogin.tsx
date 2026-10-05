@@ -67,11 +67,7 @@ export function GitLoginFields({ url, value, onChange, error, busy, field }: Git
  * refusal is notified as it would have been — a delete whose remote half wanted the login has
  * gone only here. Resolves once it is done.
  */
-export async function askLogin(
-  url: string,
-  refused: string,
-  retry: (login: GitLogin) => Promise<string | undefined>
-): Promise<void> {
+export async function askLogin(url: string, refused: string, retry: (login: GitLogin) => Promise<string | undefined>): Promise<void> {
   if (followUpHeldBack(refused)) {
     return;
   }
@@ -87,7 +83,7 @@ export async function askLogin(
     submit: (login) => {
       tried = true;
       return retry({ username: login.username.trim(), password: login.password });
-    }
+    },
   });
   if (answered === null && !tried) {
     notify("error", refused);

@@ -35,7 +35,7 @@ export const HOST_CALLER: CallerSide = {
   holdsTabs: false,
   reachesTab: () => true,
   projects: (list) => list,
-  checkAnswer: () => Promise.resolve()
+  checkAnswer: () => Promise.resolve(),
 };
 
 /**
@@ -55,10 +55,10 @@ export const SANDBOX_CALLER: CallerSide = {
       .filter((entry) => entry.id === own.projectId)
       .map((entry) => ({
         ...entry,
-        worktrees: entry.worktrees.filter((worktree) => worktree.key !== undefined)
+        worktrees: entry.worktrees.filter((worktree) => worktree.key !== undefined),
       })),
   checkAnswer: (entry, result, root) =>
-    entry.sandboxFile === undefined ? Promise.resolve() : assertSandboxFile(root, result, entry.sandboxFile)
+    entry.sandboxFile === undefined ? Promise.resolve() : assertSandboxFile(root, result, entry.sandboxFile),
 };
 
 /** Both, for the server to try a tab's token against (ctl-token.ts). */
@@ -80,7 +80,7 @@ async function assertSandboxFile(root: string | undefined, result: unknown, key:
     root === undefined || relative === undefined
       ? undefined
       : await Promise.all([root, path.join(root, relative)].map((entry) => fs.promises.realpath(path.resolve(entry)))).catch(
-          () => undefined
+          () => undefined,
         );
   if (!resolved || relativeInside(resolved[0], resolved[1]) === undefined) {
     throw new ControlError("unauthorized", `${relative ?? JSON.stringify(named)} is missing or leads outside the repository`);

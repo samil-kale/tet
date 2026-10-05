@@ -48,14 +48,7 @@ function useDelayed(active: boolean, delayMs: number): boolean {
  * The files lane, sharing the free lane with the git lane (VS Code's Explorer and Source Control).
  * The listing is read only while on screen.
  */
-export const FilesLane = memo(function FilesLane({
-  resolved,
-  shown,
-  openPath,
-  onOpenFile,
-  searchHeight,
-  onSearchHeight
-}: FilesLaneProps) {
+export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, onOpenFile, searchHeight, onSearchHeight }: FilesLaneProps) {
   const { acting, act, ask } = useFileAct(resolved.refKey);
   const { explorerListing, listing, refreshExplorer } = useExplorerListing(resolved, shown);
   const { searchResult, searching, search } = useFileSearch(resolved);
@@ -72,7 +65,7 @@ export const FilesLane = memo(function FilesLane({
   const onOpenMatch = useCallback(
     (path: string, match: FileSearchMatch) =>
       onOpenFile(resolved.ref, path, { reveal: { line: match.line, column: match.column, length: match.length } }),
-    [onOpenFile, resolved.ref]
+    [onOpenFile, resolved.ref],
   );
 
   return (
@@ -84,25 +77,13 @@ export const FilesLane = memo(function FilesLane({
         busy={explorerBusy}
         actions={
           <>
-            <IconButton
-              title="New File..."
-              disabled={acting || !explorerListing}
-              onClick={() => explorerRef.current?.newFile()}
-            >
+            <IconButton title="New File..." disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFile()}>
               <NewFileIcon />
             </IconButton>
-            <IconButton
-              title="New Folder..."
-              disabled={acting || !explorerListing}
-              onClick={() => explorerRef.current?.newFolder()}
-            >
+            <IconButton title="New Folder..." disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFolder()}>
               <NewFolderIcon />
             </IconButton>
-            <IconButton
-              title="Clear Filter"
-              disabled={!filtering}
-              onClick={() => explorerRef.current?.clearFilter()}
-            >
+            <IconButton title="Clear Filter" disabled={!filtering} onClick={() => explorerRef.current?.clearFilter()}>
               <ClearIcon />
             </IconButton>
             <CollapseExpandAllButton expanded={explorerExpanded} disabled={!explorerListing} tree={explorerRef} />
@@ -143,11 +124,7 @@ export const FilesLane = memo(function FilesLane({
         height={searchHeight}
         actions={
           <>
-            <IconButton
-              title="Clear Search Results"
-              disabled={searchResult === undefined}
-              onClick={() => searchRef.current?.clear()}
-            >
+            <IconButton title="Clear Search Results" disabled={searchResult === undefined} onClick={() => searchRef.current?.clear()}>
               <ClearIcon />
             </IconButton>
             <CollapseExpandAllButton

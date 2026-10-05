@@ -32,7 +32,7 @@ export class HostSetups {
   constructor(
     private readonly dataRoot: string,
     private readonly settings: SettingsStore,
-    private readonly onNotice: (severity: NoticeSeverity, message: string) => void
+    private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
   ) {}
 
   /** The agent's setup, run once unless `again`; false when it failed with none to fall back to.

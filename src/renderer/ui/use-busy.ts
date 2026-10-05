@@ -9,7 +9,7 @@ import { useCallback, useRef, useState } from "react";
 export function useBusy(initial = false): { busy: boolean; run: <T>(work: () => Promise<T>) => Promise<T> } {
   const [count, setCount] = useState(initial ? 1 : 0);
   const initialHeld = useRef(initial);
-  const run = useCallback(async <T,>(work: () => Promise<T>): Promise<T> => {
+  const run = useCallback(async <T>(work: () => Promise<T>): Promise<T> => {
     if (initialHeld.current) {
       initialHeld.current = false;
     } else {

@@ -86,18 +86,22 @@ const IMPORTS: Probe[] = [
   ["src/main/sbx/x.ts", 'import type { ChildProcess } from "node:child_process";', null],
   ["src/main/ipc/x.ts", 'import * as pty from "node-pty";', "@typescript-eslint/no-restricted-imports"],
   ["src/main/terminals/pty.ts", 'import * as pty from "node-pty";', null],
-  ["src/main/terminals/x.ts", 'import type { IPty } from "node-pty";', null]
+  ["src/main/terminals/x.ts", 'import type { IPty } from "node-pty";', null],
 ];
 
 const CALLS: Probe[] = [
   // IPC only through the typed wrappers.
   ["src/main/ipc/x.ts", 'import { ipcMain } from "electron";\nipcMain.handle("a", () => 1);', "no-restricted-syntax"],
   ["src/main/ipc/channels.ts", 'import { ipcMain } from "electron";\nipcMain.handle("a", () => 1);', null],
-  ["src/main/projects.ts", 'import type { BrowserWindow } from "electron";\ndeclare const w: BrowserWindow;\nw.webContents.send("x");', "no-restricted-syntax"],
+  [
+    "src/main/projects.ts",
+    'import type { BrowserWindow } from "electron";\ndeclare const w: BrowserWindow;\nw.webContents.send("x");',
+    "no-restricted-syntax",
+  ],
   ["src/main/window.ts", 'import type { BrowserWindow } from "electron";\ndeclare const w: BrowserWindow;\nw.webContents.send("x");', null],
   // Every spawn through resolveCommand.
   ["src/main/x/x.ts", 'import { spawn } from "node:child_process";\nspawn("a", [], { shell: true });', "no-restricted-syntax"],
-  ["src/preload/x.ts", 'export const api = { shell: { open: () => 1 } };', null],
+  ["src/preload/x.ts", "export const api = { shell: { open: () => 1 } };", null],
   // The platform asked in two places only.
   ["src/main/util/x.ts", "export const p = process.platform;", "no-restricted-properties"],
   ["src/main/util/host-platform.ts", "export const p = process.platform;", null],
@@ -105,14 +109,22 @@ const CALLS: Probe[] = [
   ["test/main/x.test.ts", "export const p = process.platform;", "no-restricted-properties"],
   // The platform's id is data, compared only where the Platform is picked and by the installer's test.
   ["src/main/util/x.ts", 'export const a = (id: string) => id === "win32";', "no-restricted-syntax"],
-  ["src/main/util/x.ts", 'export const a = (id: string) => { switch (id) { case "darwin": return 1; } return 0; };', "no-restricted-syntax"],
+  [
+    "src/main/util/x.ts",
+    'export const a = (id: string) => { switch (id) { case "darwin": return 1; } return 0; };',
+    "no-restricted-syntax",
+  ],
   ["src/shared/platform.ts", 'export const a = (id: string) => id === "win32";', null],
   ["src/renderer/platform.ts", 'export const a = "win32";', null],
   ["test/main/x.test.ts", 'export const a = (id: string) => "linux" !== id;', "no-restricted-syntax"],
   ["test/e2e/install.test.ts", 'export const a = (id: string) => id === "linux";', null],
   // No code outside agents/ names an agent but the shell; user-facing text may.
   ["src/main/ipc/x.ts", 'export const a = (id: string) => id === "claude";', "no-restricted-syntax"],
-  ["src/renderer/ui/x.ts", 'export const a = (id: string) => { switch (id) { case "codex": return 1; } return 0; };', "no-restricted-syntax"],
+  [
+    "src/renderer/ui/x.ts",
+    'export const a = (id: string) => { switch (id) { case "codex": return 1; } return 0; };',
+    "no-restricted-syntax",
+  ],
   ["src/main/ipc/x.ts", 'export const a = (id: string) => id === "shell";', null],
   ["src/main/ipc/x.ts", 'export const a = "Ask Claude Code or Codex";', null],
   ["src/main/agents/x.ts", 'export const a = (id: string) => id === "pi";', null],
@@ -124,7 +136,11 @@ const CALLS: Probe[] = [
   // HTTP through Chromium's stack.
   ["src/main/update/x.ts", 'void fetch("https://example.com");', "no-restricted-globals"],
   ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com");', null],
-  ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com", { redirect: "manual" });', "no-restricted-syntax"],
+  [
+    "src/main/update/x.ts",
+    'import { net } from "electron";\nvoid net.fetch("https://example.com", { redirect: "manual" });',
+    "no-restricted-syntax",
+  ],
   ["src/main/update/x.ts", 'import { net } from "electron";\nvoid net.fetch("https://example.com", { redirect: "follow" });', null],
   // Colors only from the themes.
   ["src/renderer/ui/x.ts", 'export const a = "#1e1e1e";', "no-restricted-syntax"],
@@ -138,7 +154,7 @@ const CALLS: Probe[] = [
   ["src/renderer/App.tsx", "export const a = <Foo style={{ width: 1 }} />;", "no-restricted-syntax"],
   ["src/renderer/App.tsx", "export const a = <Foo onX={onX} />;", null],
   ["src/renderer/App.tsx", "export const a = <div onClick={() => 1} />;", null],
-  ["src/renderer/ui/x.tsx", "export const a = <Foo onX={() => 1} />;", null]
+  ["src/renderer/ui/x.tsx", "export const a = <Foo onX={() => 1} />;", null],
 ];
 
 const RESTRICTING = [
@@ -146,7 +162,7 @@ const RESTRICTING = [
   "@typescript-eslint/no-restricted-imports",
   "no-restricted-syntax",
   "no-restricted-properties",
-  "no-restricted-globals"
+  "no-restricted-globals",
 ];
 
 /** Every probe's restricting rules, in one ESLint run: the config loads once. */
@@ -179,7 +195,7 @@ function lint(probes: Probe[]): string[][] {
 describe("the lint rules", () => {
   for (const [name, probes] of [
     ["hold the layers and the process borders", IMPORTS],
-    ["hold the calls AGENTS.md rules out", CALLS]
+    ["hold the calls AGENTS.md rules out", CALLS],
   ] as const) {
     it(name, () => {
       const found = lint([...probes]);

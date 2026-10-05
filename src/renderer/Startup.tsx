@@ -15,10 +15,7 @@ export function Startup() {
   const [lanes, setLanes] = useState<LaneSettings | null>(null);
   const { busy, run } = useBusy(true);
 
-  const check = useCallback(
-    () => run(async () => setRequirements(await window.tet.startup.check())),
-    [run]
-  );
+  const check = useCallback(() => run(async () => setRequirements(await window.tet.startup.check())), [run]);
 
   useEffect(() => {
     void check();

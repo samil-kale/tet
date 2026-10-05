@@ -60,13 +60,13 @@ function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
         const loginUrl = result.loginUrl;
         if (loginUrl !== undefined) {
           await askLogin(loginUrl, result.error ?? `${label} failed`, async (login) =>
-            refusal(await offBar(() => action(login)), `${label} failed`)
+            refusal(await offBar(() => action(login)), `${label} failed`),
           );
         } else if (!result.ok) {
           notify("error", result.error ?? `${label} failed`);
         }
       }),
-    ask: async (label, action) => refusal(await offBar(() => action()), `${label} failed`)
+    ask: async (label, action) => refusal(await offBar(() => action()), `${label} failed`),
   };
 }
 
@@ -81,7 +81,7 @@ export function runWithFollowUp(
   first: () => Promise<GitActionResult>,
   needs: NonNullable<GitActionResult["needsConfirmation"]>,
   ask: (result: GitActionResult) => Promise<boolean>,
-  confirmed: () => Promise<GitActionResult>
+  confirmed: () => Promise<GitActionResult>,
 ): void {
   start(async () => {
     const result = await first();
@@ -99,9 +99,7 @@ export function runWithFollowUp(
 
 /** A runner with its failure notified rather than handed back: what `FileAct` and `GitRun.run`
  *  are, and what a change with no question up (a reorder, a remove) calls. */
-export function notifying<A extends unknown[]>(
-  ask: (...args: A) => Promise<string | undefined>
-): (...args: A) => void {
+export function notifying<A extends unknown[]>(ask: (...args: A) => Promise<string | undefined>): (...args: A) => void {
   return (...args) =>
     void ask(...args).then((refused) => {
       if (refused !== undefined) {
@@ -130,7 +128,7 @@ export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask
         }
         return next;
       }),
-    [refKey]
+    [refKey],
   );
   const ask: FileAsk = useCallback(async (action) => refusal(await action(), "Git command failed"), []);
   const act: FileAct = useMemo(
@@ -143,7 +141,7 @@ export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask
           count(-1);
         }
       }),
-    [count, ask]
+    [count, ask],
   );
   return { acting: actingIn.has(refKey), act, ask };
 }
@@ -154,9 +152,7 @@ export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask
  * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
  * question asked for runs on the question's bar.
  */
-function useBusyStart<A extends unknown[], R>(
-  run: (...args: A) => Promise<R>
-): { busy: boolean; start: (...args: A) => Promise<R> } {
+function useBusyStart<A extends unknown[], R>(run: (...args: A) => Promise<R>): { busy: boolean; start: (...args: A) => Promise<R> } {
   const { busy, run: hold } = useBusy();
   const start = useCallback((...args: A) => hold(() => run(...args)), [hold, run]);
   return { busy, start };
@@ -179,44 +175,41 @@ export function useBranchActions(activeRefKey: string | null): {
   const [branchActions, setBranchActions] = useState<ReadonlySet<string>>(() => new Set());
   /** Read synchronously: a second double-click can land before a re-render. */
   const branchActionsRef = useRef(new Set<string>());
-  const runBranchAction = useCallback(
-    async (refKey: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
-      if (branchActionsRef.current.has(refKey)) {
-        return { ok: false, error: "Another command is running in this repository" };
-      }
-      branchActionsRef.current.add(refKey);
+  const runBranchAction = useCallback(async (refKey: string, action: () => Promise<GitActionResult>): Promise<GitActionResult> => {
+    if (branchActionsRef.current.has(refKey)) {
+      return { ok: false, error: "Another command is running in this repository" };
+    }
+    branchActionsRef.current.add(refKey);
+    setBranchActions(new Set(branchActionsRef.current));
+    try {
+      return await action();
+    } finally {
+      branchActionsRef.current.delete(refKey);
       setBranchActions(new Set(branchActionsRef.current));
-      try {
-        return await action();
-      } finally {
-        branchActionsRef.current.delete(refKey);
-        setBranchActions(new Set(branchActionsRef.current));
-      }
-    },
-    []
-  );
+    }
+  }, []);
   const runActiveBranchAction = useCallback(
     (action: () => Promise<GitActionResult>): Promise<GitActionResult> =>
       activeRefKey ? runBranchAction(activeRefKey, action) : Promise.resolve({ ok: true }),
-    [activeRefKey, runBranchAction]
+    [activeRefKey, runBranchAction],
   );
   const { busy: gitLaneBusy, start: runActiveHere } = useBusyStart(runActiveBranchAction);
   const activeBranch = useMemo<BranchActions>(
     () => ({
       locked: activeRefKey !== null && branchActions.has(activeRefKey),
       busy: gitLaneBusy,
-      ...gitRun(runActiveHere, runActiveBranchAction)
+      ...gitRun(runActiveHere, runActiveBranchAction),
     }),
-    [branchActions, activeRefKey, gitLaneBusy, runActiveHere, runActiveBranchAction]
+    [branchActions, activeRefKey, gitLaneBusy, runActiveHere, runActiveBranchAction],
   );
   const { busy: projectListBusy, start: runProjectListHere } = useBusyStart(runBranchAction);
   const runIn = useCallback(
     (refKey: string): GitRun =>
       gitRun(
         (action) => runProjectListHere(refKey, action),
-        (action) => runBranchAction(refKey, action)
+        (action) => runBranchAction(refKey, action),
       ),
-    [runProjectListHere, runBranchAction]
+    [runProjectListHere, runBranchAction],
   );
   return { activeBranch, projectListBusy, runIn };
 }

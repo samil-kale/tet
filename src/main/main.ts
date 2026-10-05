@@ -31,7 +31,7 @@ import {
   removeProject,
   resolveStoredIds,
   syncWorktrees,
-  type ProjectDeps
+  type ProjectDeps,
 } from "./projects";
 import { ProjectStore } from "./store/project-store";
 import { readSbxUser } from "./sbx/sbx-cli";
@@ -112,7 +112,7 @@ const appWindow: AppWindow = new AppWindow({
   hidden: HIDE_WINDOW,
   hasTab: (ref, tabId): boolean => tabManagers.get(ref)?.hasTab(tabId) === true,
   // The environment dialog went with the page.
-  onPageLoad: (): void => envRequests.drop()
+  onPageLoad: (): void => envRequests.drop(),
 });
 const { send, notice } = appWindow;
 
@@ -130,7 +130,10 @@ const environment = new EnvStore(dataRoot);
 // Read at every spawn, so a restarted tab sees what was saved meanwhile.
 setStoredEnv(() => environment.values());
 // Held until the window listens (send), like any notice this early.
-const overriding = environment.list().filter((variable) => variable.overridesMachine).map((variable) => variable.name);
+const overriding = environment
+  .list()
+  .filter((variable) => variable.overridesMachine)
+  .map((variable) => variable.name);
 if (overriding.length > 0) {
   notice("info", overridesMachineNote(overriding));
 }
@@ -150,12 +153,12 @@ const envRequests = new EnvRequests(
       showDesktopNotification(
         `${agent}: Environment variables needed`,
         `Asks for ${request.variables.map((variable) => variable.name).join(", ")} — answer it in TET`,
-        tab && request.ref && { ref: request.ref, tabId: tab.tabId }
+        tab && request.ref && { ref: request.ref, tabId: tab.tabId },
       );
     }
     return true;
   },
-  (id) => send("env:withdrawn", id)
+  (id) => send("env:withdrawn", id),
 );
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
@@ -187,15 +190,13 @@ const repositories = new RepositoryManager(
       // tet.json also holds whether SBX is enabled, which sbx-only agents must hear (sbxSettingsChanged) — in
       // every repository and worktree of the project.
       for (const manager of tabManagers.forProject(projectId)) {
-        void manager
-          .sbxSettingsChanged(sbx.enabled)
-          .catch((error: unknown) => logError("could not apply the SBX settings change", error));
+        void manager.sbxSettingsChanged(sbx.enabled).catch((error: unknown) => logError("could not apply the SBX settings change", error));
       }
     });
   },
   (ref) => send("repository:files-changed", { ref }),
   (ref, filePath) => send("repository:file-changed", { ref, path: filePath }),
-  logins
+  logins,
 );
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (ref, tabs) => {
@@ -212,7 +213,7 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
     send("tabs:status", { ref, tabId, status });
   },
   onStartupProgress: (ref, show) => send("tabs:startup-progress", { ref, show }),
-  onNotice: notice
+  onNotice: notice,
 });
 
 function openProjectRef(ref: ProjectRef): void {
@@ -231,7 +232,7 @@ const projectDeps: ProjectDeps = {
   openProjectRef,
   dataRoot,
   projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
-  notice
+  notice,
 };
 
 let workspaceOpened: Promise<void> | undefined;
@@ -258,7 +259,10 @@ let controlChannel: { token: string; port: number } | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
 function findTab(ref: ProjectRef, tabId: string): TabDescriptor | undefined {
-  return tabManagers.get(ref)?.snapshot().find((tab) => tab.tabId === tabId);
+  return tabManagers
+    .get(ref)
+    ?.snapshot()
+    .find((tab) => tab.tabId === tabId);
 }
 
 /**
@@ -266,9 +270,7 @@ function findTab(ref: ProjectRef, tabId: string): TabDescriptor | undefined {
  * tab (TabDescriptor). Returns whether it was found.
  */
 function showNotificationTarget(target: { ref: ProjectRef; tabId: string; sessionId?: string }): boolean {
-  const tab =
-    findTab(target.ref, target.tabId) ??
-    (target.sessionId !== undefined ? findTab(target.ref, target.sessionId) : undefined);
+  const tab = findTab(target.ref, target.tabId) ?? (target.sessionId !== undefined ? findTab(target.ref, target.sessionId) : undefined);
   if (tab) {
     send("tabs:show", { ref: target.ref, tabId: tab.tabId });
   }
@@ -280,7 +282,7 @@ startNotifications({
   revealWindow: appWindow.reveal,
   attractAttention: appWindow.attractAttention,
   showTab: showNotificationTarget,
-  sessionIdOf: (target) => findTab(target.ref, target.tabId)?.sessionId
+  sessionIdOf: (target) => findTab(target.ref, target.tabId)?.sessionId,
 });
 
 /**
@@ -332,11 +334,11 @@ async function startControl(): Promise<void> {
           accounts: () => sbxAccounts.list(),
           signedIn: readSbxSignedIn,
           signedInUser: () => readSbxUser(false),
-          signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id)
-        }
+          signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id),
+        },
       },
       controlChannel.token,
-      controlChannel.port
+      controlChannel.port,
     );
   } catch (error) {
     // tet-ctl then reports nothing to reach.
@@ -361,7 +363,7 @@ const settingsAccess: SettingsAccess = {
       repositories.announceFilesChanged();
     }
     return restartRequired;
-  }
+  },
 };
 
 /**
@@ -428,7 +430,7 @@ if (!app.requestSingleInstanceLock()) {
       projectDeps,
       notice,
       openWorkspace,
-      shutdown
+      shutdown,
     });
     createWindow();
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
@@ -475,27 +477,24 @@ function shutdown(relaunch: boolean): void {
     return;
   }
   quitting = true;
-  void Promise.race([
-    tabManagers.disposeAll(),
-    new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))
-  ]).catch(
-    (error: unknown) => logError("quit: ending tabs failed", error)
-  ).finally(async () => {
-    repositories.disposeAll();
-    stopGitProcess();
-    stopExplorerProcess();
-    await controlServer?.close();
-    if (relaunch) {
-      app.relaunch();
-    } else {
-      installPendingUpdate();
-    }
-    app.quit();
-    setTimeout(() => {
-      logError(`quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
-      app.exit(0);
-    }, QUIT_EXIT_TIMEOUT_MS).unref();
-  });
+  void Promise.race([tabManagers.disposeAll(), new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))])
+    .catch((error: unknown) => logError("quit: ending tabs failed", error))
+    .finally(async () => {
+      repositories.disposeAll();
+      stopGitProcess();
+      stopExplorerProcess();
+      await controlServer?.close();
+      if (relaunch) {
+        app.relaunch();
+      } else {
+        installPendingUpdate();
+      }
+      app.quit();
+      setTimeout(() => {
+        logError(`quit: still here after ${QUIT_EXIT_TIMEOUT_MS / 1000}s, exiting`);
+        app.exit(0);
+      }, QUIT_EXIT_TIMEOUT_MS).unref();
+    });
 }
 
 app.on("before-quit", (event) => {

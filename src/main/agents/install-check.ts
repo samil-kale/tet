@@ -25,7 +25,7 @@ export function checkAgentInstalled(executable: string, versionArgs: string[], c
   const check = isSimulatedMissing(executable)
     ? Promise.resolve(false)
     : runProcess(executable, versionArgs, { cwd, timeoutMs: VERSION_CHECK_TIMEOUT_MS, ignoreOutput: true }).then(
-        (result) => result.code === 0
+        (result) => result.code === 0,
       );
   installedChecks.set(checkKey(executable, versionArgs), check);
   return check;

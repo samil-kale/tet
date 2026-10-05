@@ -12,16 +12,7 @@ import { TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { notify } from "../../ui/Notices";
 import { useCollapsedGroups } from "../../ui/layout-storage";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  BranchIcon,
-  RemoteIcon,
-  StashIcon,
-  TagIcon,
-  ChevronIcon,
-  WorktreeIcon
-} from "../../ui/icons";
+import { ArrowDownIcon, ArrowUpIcon, BranchIcon, RemoteIcon, StashIcon, TagIcon, ChevronIcon, WorktreeIcon } from "../../ui/icons";
 import { askDeleteWorktree, askRenameWorktree, MADE_ELSEWHERE, worktreeEntry } from "../../git/worktree-questions";
 
 interface BranchTreeProps {
@@ -57,7 +48,7 @@ function TreeGroup({
   count,
   collapsed,
   onToggle,
-  rows
+  rows,
 }: {
   label: string;
   count: number;
@@ -77,12 +68,7 @@ function TreeGroup({
   );
 }
 
-export const BranchTree = memo(function BranchTree({
-  resolved,
-  state,
-  branch,
-  onActivateRef
-}: BranchTreeProps) {
+export const BranchTree = memo(function BranchTree({ resolved, state, branch, onActivateRef }: BranchTreeProps) {
   const at = resolved.ref;
   const projectId = resolved.ref.projectId;
   const [filter, setFilter] = useState("");
@@ -168,7 +154,7 @@ export const BranchTree = memo(function BranchTree({
       detail: `The new branch starts at ${startPoint} and is checked out.`,
       confirmLabel: "Create branch",
       // git's own words for a name it will not take, at the field (`prompt`'s `submit`).
-      submit: (name) => branch.ask(`Creating ${name}...`, () => repository.createBranch(at, name, startPoint))
+      submit: (name) => branch.ask(`Creating ${name}...`, () => repository.createBranch(at, name, startPoint)),
     });
   };
 
@@ -177,7 +163,7 @@ export const BranchTree = memo(function BranchTree({
       title: "Rename branch",
       current: name,
       confirmLabel: "Rename",
-      submit: (typed) => branch.ask(`Renaming ${name}...`, () => repository.renameBranch(at, name, typed))
+      submit: (typed) => branch.ask(`Renaming ${name}...`, () => repository.renameBranch(at, name, typed)),
     });
   };
 
@@ -191,14 +177,14 @@ export const BranchTree = memo(function BranchTree({
       detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${COMMITS_LOST}` : COMMITS_LOST,
       confirmLabel: "Delete branch",
       checkboxLabel: upstream ? `Also delete ${upstreamName(upstream)} on the remote` : undefined,
-      checkboxChecked: (await window.tet.settings.get()).git.deleteBranchOnRemote
+      checkboxChecked: (await window.tet.settings.get()).git.deleteBranchOnRemote,
     });
     if (answer.confirmed) {
       // With a login, the local branch is gone already: only its upstream is tried again.
       branch.run(`Deleting ${name}...`, (login) =>
         login && upstream
           ? repository.deleteRemoteBranch(at, upstream.remote, upstream.branch, login)
-          : repository.deleteBranch(at, name, answer.checked)
+          : repository.deleteBranch(at, name, answer.checked),
       );
     }
   };
@@ -209,7 +195,7 @@ export const BranchTree = memo(function BranchTree({
         title: "Delete remote branch",
         message: `Are you sure you want to delete ${name} on ${from}?`,
         detail: COMMITS_LOST,
-        confirmLabel: "Delete branch"
+        confirmLabel: "Delete branch",
       })
     ) {
       branch.run(`Deleting ${from}/${name}...`, (login) => repository.deleteRemoteBranch(at, from, name, login));
@@ -230,11 +216,11 @@ export const BranchTree = memo(function BranchTree({
             title: "Rebase",
             message,
             detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
-            confirmLabel: "Rebase"
+            confirmLabel: "Rebase",
           },
-          message
+          message,
         ),
-      () => repository.rebase(at, ref, true)
+      () => repository.rebase(at, ref, true),
     );
   };
 
@@ -265,9 +251,7 @@ export const BranchTree = memo(function BranchTree({
         </>
       ),
       submit: ({ name, message }) =>
-        branch.ask(`Creating tag ${name.trim()}...`, () =>
-          repository.createTag(at, name.trim(), target, message.trim())
-        )
+        branch.ask(`Creating tag ${name.trim()}...`, () => repository.createTag(at, name.trim(), target, message.trim())),
     });
   };
 
@@ -277,12 +261,12 @@ export const BranchTree = memo(function BranchTree({
       message: `Are you sure you want to delete the tag ${name}?`,
       confirmLabel: "Delete tag",
       checkboxLabel: remote ? `Also delete it on ${remote}` : undefined,
-      checkboxChecked: (await window.tet.settings.get()).git.deleteTagOnRemote
+      checkboxChecked: (await window.tet.settings.get()).git.deleteTagOnRemote,
     });
     if (answer.confirmed) {
       // With a login, the local tag is gone already: only the remote one is tried again.
       branch.run(`Deleting tag ${name}...`, (login) =>
-        login ? repository.deleteRemoteTag(at, name, login) : repository.deleteTag(at, name, answer.checked)
+        login ? repository.deleteRemoteTag(at, name, login) : repository.deleteTag(at, name, answer.checked),
       );
     }
   };
@@ -293,7 +277,7 @@ export const BranchTree = memo(function BranchTree({
         title: "Drop stash",
         message: `Are you sure you want to drop ${stash.ref}?`,
         detail: stash.message,
-        confirmLabel: "Drop stash"
+        confirmLabel: "Drop stash",
       })
     ) {
       branch.run(`Dropping ${stash.ref}...`, () => repository.stash(at, "drop", stash.sha));
@@ -316,7 +300,7 @@ export const BranchTree = memo(function BranchTree({
     run:
       defaultRef && !state.detached && state.head !== defaultRef
         ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(at, defaultRef))
-        : undefined
+        : undefined,
   });
 
   const branchEntries = (target: Extract<MenuTarget, { kind: "branch" }>): ContextMenuEntry[] => {
@@ -337,7 +321,7 @@ export const BranchTree = memo(function BranchTree({
         ? [{ label: "Delete...", run: () => void askDeleteRemoteBranch(from, name) }]
         : [
             { label: "Rename...", run: () => void askRenameBranch(name) },
-            { label: "Delete...", run: deletable ? () => void askDeleteBranch(name) : undefined }
+            { label: "Delete...", run: deletable ? () => void askDeleteBranch(name) : undefined },
           ]),
       SEPARATOR,
       // On HEAD's row: bring the default branch in instead.
@@ -346,16 +330,16 @@ export const BranchTree = memo(function BranchTree({
         : [
             {
               label: `Merge ${ref} into ${state.head}`,
-              run: () => branch.run(`Merging ${ref}...`, () => repository.merge(at, ref))
+              run: () => branch.run(`Merging ${ref}...`, () => repository.merge(at, ref)),
             },
             {
               label: `Rebase ${state.head} onto ${ref}`,
-              run: () => rebaseOnto(ref)
-            }
+              run: () => rebaseOnto(ref),
+            },
           ]),
       SEPARATOR,
       { label: "Create tag...", run: () => void askCreateTag(ref) },
-      { label: "Copy branch name", run: () => void navigator.clipboard.writeText(ref) }
+      { label: "Copy branch name", run: () => void navigator.clipboard.writeText(ref) },
     ];
   };
 
@@ -364,13 +348,11 @@ export const BranchTree = memo(function BranchTree({
     { label: "Check out", run: inWorktree ? undefined : () => checkoutTag(name) },
     {
       label: remote ? `Push to ${remote}` : "Push",
-      run: remote
-        ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(at, name, login))
-        : undefined
+      run: remote ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(at, name, login)) : undefined,
     },
     { label: "Delete...", run: () => void askDeleteTag(name) },
     SEPARATOR,
-    { label: "Copy tag name", run: () => void navigator.clipboard.writeText(name) }
+    { label: "Copy tag name", run: () => void navigator.clipboard.writeText(name) },
   ];
 
   /** Each acts on the stash's commit, not its ref, which a drop renumbers. */
@@ -378,13 +360,13 @@ export const BranchTree = memo(function BranchTree({
     ...abortEntries(),
     {
       label: "Apply",
-      run: () => branch.run(`Applying ${stash.ref}...`, () => repository.stash(at, "apply", stash.sha))
+      run: () => branch.run(`Applying ${stash.ref}...`, () => repository.stash(at, "apply", stash.sha)),
     },
     {
       label: "Pop",
-      run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(at, "pop", stash.sha))
+      run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(at, "pop", stash.sha)),
     },
-    { label: "Drop...", run: () => void askDropStash(stash) }
+    { label: "Drop...", run: () => void askDropStash(stash) },
   ];
 
   /**
@@ -407,24 +389,21 @@ export const BranchTree = memo(function BranchTree({
         ? updateFromDefault()
         : {
             label: merged ? `Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
-            run:
-              merged && !state.detached
-                ? () => branch.run(`Merging ${merged}...`, () => repository.merge(at, merged))
-                : undefined
+            run: merged && !state.detached ? () => branch.run(`Merging ${merged}...`, () => repository.merge(at, merged)) : undefined,
           },
       SEPARATOR,
       worktreeEntry(
         "Rename worktree",
         own ? undefined : MADE_ELSEWHERE,
-        own && merged ? () => void askRenameWorktree(projectId, merged, branch) : undefined
+        own && merged ? () => void askRenameWorktree(projectId, merged, branch) : undefined,
       ),
       worktreeEntry(
         "Delete worktree",
         own ? undefined : MADE_ELSEWHERE,
-        own ? () => void askDeleteWorktree(own, name, mergedUpstream, branch) : undefined
+        own ? () => void askDeleteWorktree(own, name, mergedUpstream, branch) : undefined,
       ),
       SEPARATOR,
-      { label: "Copy path", run: () => void navigator.clipboard.writeText(worktree.path) }
+      { label: "Copy path", run: () => void navigator.clipboard.writeText(worktree.path) },
     ];
   };
 
@@ -482,7 +461,8 @@ export const BranchTree = memo(function BranchTree({
                   )}
                 </TreeRow>
               );
-            })}
+            })
+          }
         />
 
         <TreeGroup
@@ -505,7 +485,8 @@ export const BranchTree = memo(function BranchTree({
                   <span className="tree-extra">{worktree.branch === undefined ? "detached" : worktree.base}</span>
                 )}
               </TreeRow>
-            ))}
+            ))
+          }
         />
 
         <TreeGroup
@@ -536,15 +517,14 @@ export const BranchTree = memo(function BranchTree({
                       className="nested"
                       title="Double-click to check out"
                       onDoubleClick={() => checkout({ name: remoteBranch, remote: entry.name })}
-                      onContextMenu={(event) =>
-                        menu.open(event, { kind: "branch", name: remoteBranch, remote: entry.name })
-                      }
+                      onContextMenu={(event) => menu.open(event, { kind: "branch", name: remoteBranch, remote: entry.name })}
                       icon={<BranchIcon className={branchIconClass(entry.mergedBranches.includes(remoteBranch))} />}
                       label={remoteBranch}
                     />
                   ))}
               </div>
-            ))}
+            ))
+          }
         />
 
         <TreeGroup
@@ -562,7 +542,8 @@ export const BranchTree = memo(function BranchTree({
                 icon={<TagIcon className="tree-icon" />}
                 label={tag}
               />
-            ))}
+            ))
+          }
         />
 
         <TreeGroup
@@ -580,7 +561,8 @@ export const BranchTree = memo(function BranchTree({
                 icon={<StashIcon className="tree-icon" />}
                 label={stash.message}
               />
-            ))}
+            ))
+          }
         />
       </div>
 

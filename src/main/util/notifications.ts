@@ -162,7 +162,7 @@ export function showDesktopNotification(title: string, body: string, target?: No
   }
   const id = crypto.randomUUID();
   const notification = new Notification(
-    PLATFORM.windowsNotifications ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body }
+    PLATFORM.windowsNotifications ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body },
   );
   if (!PLATFORM.windowsNotifications) {
     holdNotification(notification);

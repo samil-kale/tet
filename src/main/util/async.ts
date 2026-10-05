@@ -21,7 +21,7 @@ export async function mapLimited<T, R>(items: T[], limit: number, fn: (item: T) 
         const index = next++;
         results[index] = await fn(items[index]);
       }
-    })
+    }),
   );
   return results;
 }

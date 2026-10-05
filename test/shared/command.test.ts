@@ -9,11 +9,7 @@ describe("splitCommand", () => {
     assert.deepEqual(splitCommand("npm run build"), ["npm", "run", "build"]);
     assert.deepEqual(splitCommand('  mvn   -q  "spring-boot:run"  '), ["mvn", "-q", "spring-boot:run"]);
     assert.deepEqual(splitCommand(`echo "a b" 'c d'`), ["echo", "a b", "c d"]);
-    assert.deepEqual(splitCommand('C:\\tools\\run.exe --path "C:\\my dir"'), [
-      "C:\\tools\\run.exe",
-      "--path",
-      "C:\\my dir"
-    ]);
+    assert.deepEqual(splitCommand('C:\\tools\\run.exe --path "C:\\my dir"'), ["C:\\tools\\run.exe", "--path", "C:\\my dir"]);
     // A quote inside a word joins, the way a shell reads it; the other kind is literal inside.
     assert.deepEqual(splitCommand(`say"it's"`), ["sayit's"]);
   });

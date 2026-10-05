@@ -33,7 +33,7 @@ describe("the active repository or worktree at startup", () => {
   const storage = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {
     getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => void storage.set(key, value)
+    setItem: (key: string, value: string) => void storage.set(key, value),
   };
 
   it("is the one active when TET last closed, while it is still open", () => {

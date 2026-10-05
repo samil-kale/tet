@@ -38,4 +38,3 @@ export interface IpcDeps {
   /** main.ts's one way out, shared with the control channel's `app-restart`. */
   shutdown: (relaunch: boolean) => void;
 }
-

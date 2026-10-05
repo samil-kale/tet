@@ -41,7 +41,7 @@ export function buildTree(
   files: string[],
   emptyDirs: string[] = [],
   under = "",
-  idOf: (path: string) => string = (path) => path
+  idOf: (path: string) => string = (path) => path,
 ): TreeNode[] {
   const top: TreeNode[] = [];
   const folders = new Map<string, TreeNode>();
@@ -153,12 +153,7 @@ export interface VisibleRow {
   expanded: boolean;
 }
 
-export function visibleRows(
-  nodes: TreeNode[],
-  isOpen: (node: TreeNode) => boolean,
-  depth = 0,
-  out: VisibleRow[] = []
-): VisibleRow[] {
+export function visibleRows(nodes: TreeNode[], isOpen: (node: TreeNode) => boolean, depth = 0, out: VisibleRow[] = []): VisibleRow[] {
   for (const node of nodes) {
     const expanded = isOpen(node);
     out.push({ node, depth, expanded });

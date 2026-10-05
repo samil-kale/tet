@@ -1,6 +1,15 @@
 import * as http from "node:http";
 import { errorMessage } from "../shared/errors";
-import { CONTROL_ENV, CONTROL_FLAGS, CONTROL_HOST, CONTROL_GROUPS, CONTROL_VERBS, ERROR_EXIT_CODES, EXIT_CODES, HELP_VERB } from "../shared/ctl";
+import {
+  CONTROL_ENV,
+  CONTROL_FLAGS,
+  CONTROL_HOST,
+  CONTROL_GROUPS,
+  CONTROL_VERBS,
+  ERROR_EXIT_CODES,
+  EXIT_CODES,
+  HELP_VERB,
+} from "../shared/ctl";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/ctl";
 import { admitsVerb, HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../shared/ctl-side";
 
@@ -33,9 +42,9 @@ function whenToUse(side: ControlSide): string[] {
           "When a service refuses one (401, 403), it is wrong or expired: say so, and ask the same way",
           "how to replace it — env-request's dialog writes over a value TET keeps.",
           "env-request waits for the user: run it with your longest command timeout (10 minutes), or",
-          "its dialog closes when your shell gives up on it."
+          "its dialog closes when your shell gives up on it.",
         ]
-      : [])
+      : []),
   ];
 }
 
@@ -56,8 +65,8 @@ function usage(): string {
     heading,
     lines: CONTROL_VERBS.filter((entry) => entry.group === heading && listed(entry)).flatMap((entry) => [
       `  ${entry.usage}`,
-      `      ${entry.summary}`
-    ])
+      `      ${entry.summary}`,
+    ]),
   })).filter((group) => group.lines.length > 0);
   return [
     "tet-ctl — control the TET app this terminal runs in",
@@ -65,7 +74,7 @@ function usage(): string {
     ...whenToUse(side),
     ...groups.flatMap((group) => ["", group.heading, ...group.lines]),
     "",
-    ...side.limits
+    ...side.limits,
   ].join("\n");
 }
 
@@ -128,7 +137,7 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
         port,
         method: "POST",
         path: "/",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), Connection: "close" }
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), Connection: "close" },
       },
       (res) => {
         res.setEncoding("utf8");
@@ -150,7 +159,7 @@ function send(host: string, port: number, request: ControlRequest, idleMs?: numb
             reject(new Error(`not an answer: ${answer}`));
           }
         });
-      }
+      },
     );
     req.on("error", reject);
     if (idleMs !== undefined) {
@@ -225,19 +234,14 @@ async function main(): Promise<void> {
     caller: {
       projectId: process.env[CONTROL_ENV.projectId],
       worktree: process.env[CONTROL_ENV.worktree] || undefined,
-      tabId: process.env[CONTROL_ENV.tabId]
+      tabId: process.env[CONTROL_ENV.tabId],
     },
     // Started when the hook fired, which orders turn reports.
-    at: Date.now()
+    at: Date.now(),
   };
   let response: ControlResponse;
   try {
-    response = await sendWhenUp(
-      process.env[CONTROL_ENV.host] || CONTROL_HOST,
-      Number(portVar),
-      request,
-      quiet ? HOOK_IDLE_MS : undefined
-    );
+    response = await sendWhenUp(process.env[CONTROL_ENV.host] || CONTROL_HOST, Number(portVar), request, quiet ? HOOK_IDLE_MS : undefined);
   } catch (error) {
     if (quiet) {
       return;

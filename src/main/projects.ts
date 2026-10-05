@@ -127,7 +127,7 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
 async function resolveProjectId(
   deps: Pick<ProjectDeps, "store" | "notice">,
   repositoryPath: string,
-  stored: string | undefined
+  stored: string | undefined,
 ): Promise<string> {
   if (stored !== undefined && !deps.store.all().some((project) => project.id === stored && project.path !== repositoryPath)) {
     return stored;
@@ -137,7 +137,7 @@ async function resolveProjectId(
   if (!written.ok) {
     deps.notice(
       "warning",
-      `TET could not write its project id into ${repositoryPath}'s git config, so what it keeps of the project is gone after a restart: ${written.error}`
+      `TET could not write its project id into ${repositoryPath}'s git config, so what it keeps of the project is gone after a restart: ${written.error}`,
     );
   }
   return id;
@@ -154,9 +154,9 @@ export async function resolveStoredIds(deps: Pick<ProjectDeps, "store" | "notice
     projects.map((project) =>
       git.readProjectId(project.path).then(
         (id) => ({ id }),
-        () => undefined
-      )
-    )
+        () => undefined,
+      ),
+    ),
   );
   for (const [index, project] of projects.entries()) {
     const answer = read[index];
@@ -316,7 +316,7 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
 export async function deleteWorktree(
   deps: ProjectDeps,
   ref: ProjectRef,
-  { force, onRemote }: { force: boolean; onRemote: boolean }
+  { force, onRemote }: { force: boolean; onRemote: boolean },
 ): Promise<GitActionResult> {
   const project = deps.store.get(ref.projectId);
   const worktree = project && worktreeOf(project, ref);
@@ -384,7 +384,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     .filter((worktree) => !worktree.isRepository)
     .map(({ path: worktreePath, branch, key }) => ({ path: worktreePath, branch, key }));
   const unlisted = project.worktrees.filter(
-    (worktree) => worktree.key !== undefined && !listed.some((entry) => entry.key === worktree.key)
+    (worktree) => worktree.key !== undefined && !listed.some((entry) => entry.key === worktree.key),
   );
   const stillThere = unlisted.filter((worktree) => fs.existsSync(path.join(worktree.path, ".git")));
   const gone = unlisted.filter((worktree) => !stillThere.includes(worktree));

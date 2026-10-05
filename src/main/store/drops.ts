@@ -28,10 +28,7 @@ export async function writeDropFile(dir: string, name: string, data: Buffer): Pr
 /** Every drops folder: each project's (dropsDir) and each of its sandboxes' (sandboxDropsDir). */
 async function dropsDirs(dataRoot: string): Promise<string[]> {
   const projectIds = await fs.promises.readdir(projectsDir(dataRoot)).catch((): string[] => []);
-  return projectIds.flatMap((projectId) => [
-    dropsDir(dataRoot, projectId),
-    ...sandboxDirsOf(dataRoot, projectId).map(sandboxDropsDir)
-  ]);
+  return projectIds.flatMap((projectId) => [dropsDir(dataRoot, projectId), ...sandboxDirsOf(dataRoot, projectId).map(sandboxDropsDir)]);
 }
 
 /**
@@ -50,7 +47,7 @@ export function sweepDropFiles(dataRoot: string): void {
             return;
           }
           await fs.promises.unlink(path.join(dir, name)).catch(() => undefined);
-        })
+        }),
       );
     }
   })();

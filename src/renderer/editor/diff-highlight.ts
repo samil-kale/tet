@@ -1,9 +1,4 @@
-import {
-  createHighlighterCore,
-  type HighlighterCore,
-  type LanguageRegistration,
-  type ThemeRegistration
-} from "shiki/core";
+import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemeRegistration } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
 import { baseName } from "../paths";
@@ -32,7 +27,7 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "light-intellij": () => import("../themes/light-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,
   "light-gameboy": () => import("../themes/light-gameboy.json") as unknown as Promise<{ default: ThemeRegistration }>,
   "dark-claude": () => import("../themes/dark-claude.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "light-claude": () => import("../themes/light-claude.json") as unknown as Promise<{ default: ThemeRegistration }>
+  "light-claude": () => import("../themes/light-claude.json") as unknown as Promise<{ default: ThemeRegistration }>,
 };
 
 /** Shiki theme `name` with its editor surface patched from TET's --vscode-* values, for shiki and
@@ -118,7 +113,7 @@ const GRAMMARS: Record<string, () => Promise<{ default: LanguageRegistration[] }
   typescript: () => import("@shikijs/langs/typescript"),
   vue: () => import("@shikijs/langs/vue"),
   xml: () => import("@shikijs/langs/xml"),
-  yaml: () => import("@shikijs/langs/yaml")
+  yaml: () => import("@shikijs/langs/yaml"),
 };
 
 /** Lowercased extension to grammar. */
@@ -191,7 +186,7 @@ const EXTENSIONS: Record<string, string> = {
   xml: "xml",
   yaml: "yaml",
   yml: "yaml",
-  zsh: "shellscript"
+  zsh: "shellscript",
 };
 
 let core: Promise<HighlighterCore> | undefined;
@@ -205,7 +200,7 @@ export function highlighter(): Promise<HighlighterCore> {
     langs: [],
     // Not oniguruma: its wasm would ride base64 in the single-file bundle. "forgiving" skips
     // patterns the JS engine cannot express.
-    engine: createJavaScriptRegexEngine({ forgiving: true })
+    engine: createJavaScriptRegexEngine({ forgiving: true }),
   });
   return core;
 }

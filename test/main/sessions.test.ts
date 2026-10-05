@@ -40,7 +40,7 @@ describe("Claude Code's transcripts", () => {
     type: "user",
     timestamp,
     origin: { kind: "human" },
-    message: { content: text }
+    message: { content: text },
   });
   const toolResult = { type: "user", message: { content: "tool output, not a prompt" } };
 
@@ -59,21 +59,21 @@ describe("Claude Code's transcripts", () => {
         prompt("p"),
         { type: "summary", summary: "Sum" },
         { type: "ai-title", aiTitle: "Title" },
-        { type: "agent-name", agentName: "Agent" }
+        { type: "agent-name", agentName: "Agent" },
       ],
       titled: [
         prompt("p"),
         { type: "summary", summary: "Sum" },
         { type: "ai-title", aiTitle: "First" },
-        { type: "ai-title", aiTitle: "Second" }
+        { type: "ai-title", aiTitle: "Second" },
       ],
       summarized: [prompt("p"), { type: "summary", summary: "Sum" }],
       renamed: [
         { type: "custom-title", customTitle: "Mine", sessionId: "renamed" },
         prompt("p"),
-        { type: "agent-name", agentName: "Agent" }
+        { type: "agent-name", agentName: "Agent" },
       ],
-      other: [{ type: "custom-title", customTitle: "Not mine", sessionId: "someone-else" }, prompt("p")]
+      other: [{ type: "custom-title", customTitle: "Not mine", sessionId: "someone-else" }, prompt("p")],
     });
     const titles = Object.fromEntries((await claudeSessionProvider.list(cwd)).map((s) => [s.id, s]));
     assert.equal(titles.named.title, "Agent");
@@ -120,28 +120,23 @@ describe("Claude Code's transcripts", () => {
       timestamp: LATER,
       parentUuid,
       uuid: "t",
-      ...extra
+      ...extra,
     });
     const interrupt = (text: string, timestamp = LATER, extra: Record<string, unknown> = {}): unknown => ({
       type: "user",
       timestamp,
       message: { role: "user", content: [{ type: "text", text }] },
-      ...extra
+      ...extra,
     });
     transcripts({
       hooked: [prompt("p"), { type: "system", subtype: "stop_hook_summary", uuid: "h1" }, turn("h1")],
       cut: [prompt("p"), turn("nothing-below")],
-      cutAfterEarlier: [
-        prompt("p"),
-        { type: "system", subtype: "stop_hook_summary", uuid: "h0" },
-        turn("h0"),
-        turn("h9")
-      ],
+      cutAfterEarlier: [prompt("p"), { type: "system", subtype: "stop_hook_summary", uuid: "h0" }, turn("h0"), turn("h9")],
       renamedBetween: [
         prompt("p"),
         { type: "system", subtype: "stop_hook_summary", uuid: "h1" },
         { type: "custom-title", customTitle: "x", sessionId: "renamedBetween" },
-        turn("h1")
+        turn("h1"),
       ],
       sidechain: [prompt("p"), turn("none", { isSidechain: true })],
       escaped: [
@@ -149,20 +144,18 @@ describe("Claude Code's transcripts", () => {
         { type: "system", subtype: "stop_hook_summary", uuid: "h0" },
         turn("h0", { timestamp: AT }),
         prompt("q"),
-        interrupt("[Request interrupted by user]")
+        interrupt("[Request interrupted by user]"),
       ],
       escapedInTool: [
         prompt("p"),
         { type: "system", subtype: "stop_hook_summary", uuid: "h0" },
         turn("h0", { timestamp: AT }),
         interrupt("[Request interrupted by user for tool use]", AT),
-        turn("i1")
+        turn("i1"),
       ],
-      escapedInSidechain: [prompt("p"), interrupt("[Request interrupted by user]", LATER, { isSidechain: true })]
+      escapedInSidechain: [prompt("p"), interrupt("[Request interrupted by user]", LATER, { isSidechain: true })],
     });
-    const ends = Object.fromEntries(
-      (await claudeSessionProvider.list(cwd)).map((s) => [s.id, s.turnEndedAt])
-    );
+    const ends = Object.fromEntries((await claudeSessionProvider.list(cwd)).map((s) => [s.id, s.turnEndedAt]));
     assert.equal(ends.hooked, undefined, "the hooks ran — the marker is authoritative");
     assert.equal(ends.cut, ms(LATER), "no summary beneath it: interrupted");
     assert.equal(ends.cutAfterEarlier, ms(LATER), "an earlier turn's own summary is not this one's");
@@ -177,7 +170,7 @@ describe("Claude Code's transcripts", () => {
     transcripts({
       newer: [prompt("second", LATER)],
       older: [prompt("first", AT)],
-      broken: ["{ not json", prompt("still listed", AT)]
+      broken: ["{ not json", prompt("still listed", AT)],
     });
     const sessions = await claudeSessionProvider.list(cwd);
     assert.equal(sessions.at(-1)?.id, "newer");
@@ -209,11 +202,11 @@ describe("Codex's rollouts", () => {
   const meta = (session_id: string, source = "cli", at = AT, dir = cwd): unknown => ({
     type: "session_meta",
     timestamp: at,
-    payload: { session_id, cwd: dir, source }
+    payload: { session_id, cwd: dir, source },
   });
   const injected = {
     type: "response_item",
-    payload: { role: "user", content: [{ type: "input_text", text: "<environment_context>…" }] }
+    payload: { role: "user", content: [{ type: "input_text", text: "<environment_context>…" }] },
   };
   const typed = (text: string): unknown => ({ type: "event_msg", payload: { type: "user_message", message: text } });
   const end = (type: string, at = LATER): unknown => ({ type: "event_msg", timestamp: at, payload: { type } });
@@ -225,21 +218,25 @@ describe("Codex's rollouts", () => {
         two: [
           meta("s2", "cli", LATER),
           injected,
-          { type: "response_item", payload: { role: "user", content: [{ type: "input_text", text: "Typed the other way" }] } }
+          { type: "response_item", payload: { role: "user", content: [{ type: "input_text", text: "Typed the other way" }] } },
         ],
         exec: [meta("s3", "exec"), typed("not interactive")],
         elsewhere: [meta("s4", "cli", AT, "/somewhere/else"), typed("other repo")],
-        empty: []
+        empty: [],
       },
-      [{ id: "s1", thread_name: "Named" }, { id: "s2", thread_name: "Cleared" }, { id: "s2", thread_name: "" }]
+      [
+        { id: "s1", thread_name: "Named" },
+        { id: "s2", thread_name: "Cleared" },
+        { id: "s2", thread_name: "" },
+      ],
     );
     const sessions = await codexSessionProvider.list(cwd);
     assert.deepEqual(
       sessions.map((s) => [s.id, s.title, s.turnEndedAt, s.createdAt]),
       [
         ["s1", "Named", ms(LATER), ms(AT)],
-        ["s2", "Typed the other way", undefined, ms(LATER)]
-      ]
+        ["s2", "Typed the other way", undefined, ms(LATER)],
+      ],
     );
   });
 
@@ -284,23 +281,38 @@ describe("pi's transcripts", () => {
     id,
     parentId: "m1",
     timestamp: at,
-    message: { role: "user", content, timestamp: ms(at) }
+    message: { role: "user", content, timestamp: ms(at) },
   });
   const assistant = (stopReason: string, at = AT, id = "a1"): unknown => ({
     type: "message",
     id,
     parentId: "u1",
     timestamp: at,
-    message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason, timestamp: ms(at) }
+    message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason, timestamp: ms(at) },
   });
-  const toolResult = { type: "message", id: "t1", parentId: "a1", timestamp: AT, message: { role: "toolResult", content: [{ type: "text", text: "user output" }] } };
+  const toolResult = {
+    type: "message",
+    id: "t1",
+    parentId: "a1",
+    timestamp: AT,
+    message: { role: "toolResult", content: [{ type: "text", text: "user output" }] },
+  };
   const info = (name: string, id: string): unknown => ({ type: "session_info", id, parentId: "a1", timestamp: LATER, name });
 
   it("titles a session by the last session_info in file order, else by the first prompt", async () => {
     transcripts({
       s1: [header("s1"), modelChange, user("Fix the build"), assistant("stop"), info("First", "n1"), info("Second", "n2")],
-      s2: [header("s2", LATER), modelChange, toolResult, user([{ type: "image", data: "…" }, { type: "text", text: "From blocks" }]), assistant("stop")],
-      s3: [header("s3", LATER), modelChange, user("Fix the tests"), assistant("stop"), info("Mine", "n1"), info("  ", "n2")]
+      s2: [
+        header("s2", LATER),
+        modelChange,
+        toolResult,
+        user([
+          { type: "image", data: "…" },
+          { type: "text", text: "From blocks" },
+        ]),
+        assistant("stop"),
+      ],
+      s3: [header("s3", LATER), modelChange, user("Fix the tests"), assistant("stop"), info("Mine", "n1"), info("  ", "n2")],
     });
     const sessions = await piSessionProvider.list(cwd);
     assert.deepEqual(
@@ -308,34 +320,46 @@ describe("pi's transcripts", () => {
       [
         ["s1", "Second", ms(AT), undefined],
         ["s2", "From blocks", ms(LATER), undefined],
-        ["s3", "Fix the tests", ms(LATER), undefined]
+        ["s3", "Fix the tests", ms(LATER), undefined],
       ],
-      "the header's timestamp is the created time, a blank last session_info is pi's own clear"
+      "the header's timestamp is the created time, a blank last session_info is pi's own clear",
     );
   });
 
   it("takes the last assistant message as the turn's end, an aborted one included", async () => {
     transcripts({
       s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("aborted", LATER, "a2")],
-      s2: [header("s2", LATER), modelChange, user("p")]
+      s2: [header("s2", LATER), modelChange, user("p")],
     });
     const sessions = await piSessionProvider.list(cwd);
-    assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(LATER)], ["s2", undefined]]);
+    assert.deepEqual(
+      sessions.map((s) => [s.id, s.turnEndedAt]),
+      [
+        ["s1", ms(LATER)],
+        ["s2", undefined],
+      ],
+    );
   });
 
   it("does not take an assistant message calling a tool as the turn's end", async () => {
     transcripts({
-      s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("toolUse", LATER, "a2"), toolResult]
+      s1: [header("s1"), modelChange, user("p"), assistant("stop", AT), user("q", "u2"), assistant("toolUse", LATER, "a2"), toolResult],
     });
     const sessions = await piSessionProvider.list(cwd);
-    assert.deepEqual(sessions.map((s) => [s.id, s.turnEndedAt]), [["s1", ms(AT)]]);
+    assert.deepEqual(
+      sessions.map((s) => [s.id, s.turnEndedAt]),
+      [["s1", ms(AT)]],
+    );
   });
 
   it("renames by appending a session_info parented to the last entry, and removes by deleting the file", async () => {
     const dir = transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] });
     await piSessionProvider.rename("pi", cwd, "s1", "  Renamed  ");
     assert.equal((await piSessionProvider.list(cwd))[0].title, "Renamed");
-    const lines = fs.readFileSync(path.join(dir, fileName("s1")), "utf8").trim().split("\n");
+    const lines = fs
+      .readFileSync(path.join(dir, fileName("s1")), "utf8")
+      .trim()
+      .split("\n");
     const appended = JSON.parse(lines[lines.length - 1]) as Record<string, unknown>;
     assert.equal(appended.type, "session_info");
     assert.equal(appended.name, "Renamed");
@@ -359,16 +383,23 @@ describe("pi's transcripts", () => {
   it("skips a .jsonl that is no pi transcript, and reads past a broken line", async () => {
     transcripts({
       other: [{ type: "message", id: "x" }],
-      s1: [header("s1"), "{ not json", user("Still listed"), assistant("stop")]
+      s1: [header("s1"), "{ not json", user("Still listed"), assistant("stop")],
     });
     const sessions = await piSessionProvider.list(cwd);
-    assert.deepEqual(sessions.map((s) => [s.id, s.title]), [["s1", "Still listed"]]);
+    assert.deepEqual(
+      sessions.map((s) => [s.id, s.title]),
+      [["s1", "Still listed"]],
+    );
   });
 
-  it("finds the directory whatever case pi was spawned with", { skip: !PLATFORM.pathsIgnoreCase && "where paths ignore case" }, async () => {
-    transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] }, encodeCwd(cwd).toLowerCase());
-    assert.equal((await piSessionProvider.list(cwd))[0]?.id, "s1");
-  });
+  it(
+    "finds the directory whatever case pi was spawned with",
+    { skip: !PLATFORM.pathsIgnoreCase && "where paths ignore case" },
+    async () => {
+      transcripts({ s1: [header("s1"), modelChange, user("p"), assistant("stop")] }, encodeCwd(cwd).toLowerCase());
+      assert.equal((await piSessionProvider.list(cwd))[0]?.id, "s1");
+    },
+  );
 
   it("lists nothing where pi has never run", async () => {
     process.env.PI_CODING_AGENT_DIR = path.join(os.tmpdir(), "tet-pi-never");
@@ -390,7 +421,7 @@ describe("sessions written inside a sandbox", () => {
     fs.mkdirSync(projectDir, { recursive: true });
     fs.writeFileSync(
       path.join(projectDir, "s1.jsonl"),
-      [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "In the sandbox" } }].map(line).join("")
+      [{ type: "user", timestamp: AT, origin: { kind: "human" }, message: { content: "In the sandbox" } }].map(line).join(""),
     );
     const sandbox = claudeSandboxSessions.at(dir, cwd, dir);
     const [session] = await sandbox.list();
@@ -407,25 +438,38 @@ describe("sessions written inside a sandbox", () => {
     const dir = tempDir("tet-sbx-codex-");
     const day = path.join(dir, "sessions", "2026", "03", "04");
     fs.mkdirSync(day, { recursive: true });
-    for (const [id, at] of [["s1", AT], ["s2", LATER]]) {
+    for (const [id, at] of [
+      ["s1", AT],
+      ["s2", LATER],
+    ]) {
       fs.writeFileSync(
         path.join(day, `rollout-${id}.jsonl`),
         [
           { type: "session_meta", timestamp: at, payload: { session_id: id, cwd, source: "cli" } },
-          { type: "event_msg", payload: { type: "user_message", message: "In the sandbox" } }
+          { type: "event_msg", payload: { type: "user_message", message: "In the sandbox" } },
         ]
           .map(line)
-          .join("")
+          .join(""),
       );
     }
     const index = path.join(dir, "session_index.jsonl");
     fs.writeFileSync(index, line({ id: "s1", thread_name: "Named" }));
     const sandbox = codexSandboxSessions.at(dir, cwd, dir);
     const titles = async (): Promise<string[][]> => (await sandbox.list()).map((s) => [s.id, s.title]);
-    assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "In the sandbox"]], "the name index beside the rollouts is mounted too");
+    assert.deepEqual(
+      await titles(),
+      [
+        ["s1", "Named"],
+        ["s2", "In the sandbox"],
+      ],
+      "the name index beside the rollouts is mounted too",
+    );
 
     await sandbox.rename("s2", "  Renamed  ");
-    assert.deepEqual(await titles(), [["s1", "Named"], ["s2", "Renamed"]]);
+    assert.deepEqual(await titles(), [
+      ["s1", "Named"],
+      ["s2", "Renamed"],
+    ]);
     const appended = JSON.parse(fs.readFileSync(index, "utf8").trim().split("\n").at(-1) ?? "") as Record<string, unknown>;
     assert.deepEqual(Object.keys(appended), ["id", "thread_name", "updated_at"]);
     assert.match(String(appended.updated_at), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{7}Z$/, "Codex's seven fractional digits");
@@ -452,20 +496,22 @@ describe("sessions written inside a sandbox", () => {
       [
         { type: "session", version: 3, id: "s1", timestamp: AT, cwd },
         { type: "model_change", id: "m1", parentId: null, timestamp: AT, provider: "x", modelId: "y" },
-        { type: "message", id: "u1", parentId: "m1", timestamp: AT, message: { role: "user", content: "In the sandbox", timestamp: ms(AT) } }
+        {
+          type: "message",
+          id: "u1",
+          parentId: "m1",
+          timestamp: AT,
+          message: { role: "user", content: "In the sandbox", timestamp: ms(AT) },
+        },
       ]
         .map(line)
-        .join("")
+        .join(""),
     );
     const sandbox = piSandboxSessions.at(dir, cwd, dir);
     const [session] = await sandbox.list();
     assert.equal(session.id, "s1");
     assert.equal(session.title, "In the sandbox");
-    assert.deepEqual(
-      await sandbox.files("s1"),
-      [path.join(sessionDir, `${AT.replace(/[:.]/g, "-")}_s1.jsonl`)],
-      "on the host side"
-    );
+    assert.deepEqual(await sandbox.files("s1"), [path.join(sessionDir, `${AT.replace(/[:.]/g, "-")}_s1.jsonl`)], "on the host side");
     await sandbox.rename("s1", "Renamed");
     assert.equal((await sandbox.list())[0].title, "Renamed");
     await sandbox.remove("s1");
@@ -506,7 +552,7 @@ describe("the watch on an agent's transcripts", () => {
       () => root,
       async () => (fs.existsSync(dir) ? dir : undefined),
       () => false,
-      () => changes++
+      () => changes++,
     );
     try {
       await eventually("the root watched", () => watch.watching());
@@ -525,7 +571,7 @@ describe("the watch on an agent's transcripts", () => {
       () => path.join(root, "absent"),
       async () => undefined,
       () => true,
-      () => undefined
+      () => undefined,
     );
     // The lookup and the root's watch are tried a tick after the call.
     await new Promise((resolve) => setImmediate(resolve));
@@ -536,7 +582,7 @@ describe("the watch on an agent's transcripts", () => {
       () => root,
       async () => undefined,
       () => true,
-      () => undefined
+      () => undefined,
     );
     await eventually("the root watched", () => present.watching());
     present.stop();

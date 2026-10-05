@@ -33,7 +33,7 @@ export function fakeSafeStorage(available = true): void {
         throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
       }
       return text.slice("sealed:".length);
-    }
+    },
   });
 }
 
@@ -123,11 +123,7 @@ export function tetCtl(args: string[], env: Record<string, string | undefined>, 
  * Polls until `check` holds, or fails with `what` after `ms`. A thunk `what` is evaluated at
  * failure time, so it can include state gathered while polling (e.g. stderr).
  */
-export async function eventually(
-  what: string | (() => string),
-  check: () => boolean | Promise<boolean>,
-  ms = 1000
-): Promise<void> {
+export async function eventually(what: string | (() => string), check: () => boolean | Promise<boolean>, ms = 1000): Promise<void> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
     if (await check()) {
@@ -167,7 +163,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     [CONTROL_ENV.token]: token,
     [CONTROL_ENV.projectId]: undefined,
     [CONTROL_ENV.worktree]: undefined,
-    [CONTROL_ENV.tabId]: undefined
+    [CONTROL_ENV.tabId]: undefined,
   };
   const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
   if (PLATFORM.startsWithoutChromeSandbox) {
@@ -180,7 +176,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^CLAUDE(CODE$|_CODE_|_PID$|_EFFORT$)/.test(key)));
   const child = spawn(electronPath, args, {
     env: { ...inherited, [CONTROL_ENV.token]: token, ELECTRON_RUN_AS_NODE: undefined },
-    stdio: ["ignore", "ignore", "pipe"]
+    stdio: ["ignore", "ignore", "pipe"],
   });
   let stderr = "";
   child.stderr?.setEncoding("utf8").on("data", (chunk: string) => (stderr += chunk));
@@ -189,7 +185,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     ...env,
     [CONTROL_ENV.token]: tabControlToken(token, { projectId }, tabId, HOST_SIDE),
     [CONTROL_ENV.projectId]: projectId,
-    [CONTROL_ENV.tabId]: tabId
+    [CONTROL_ENV.tabId]: tabId,
   });
   const app: TestApp = {
     child,
@@ -203,10 +199,14 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     alive: async () => {
       const run = await ctl("version");
       return run.status === 0 ? (run.result as { pid: number }).pid : undefined;
-    }
+    },
   };
   try {
-    await eventually(() => `tet answering on port ${env[CONTROL_ENV.port]}\n${stderr}`, async () => (await app.alive()) !== undefined, startupMs);
+    await eventually(
+      () => `tet answering on port ${env[CONTROL_ENV.port]}\n${stderr}`,
+      async () => (await app.alive()) !== undefined,
+      startupMs,
+    );
   } catch (error) {
     // Nothing left holding the profile directory.
     if (child.pid !== undefined) {
@@ -242,7 +242,7 @@ export function isolateGitConfig(name: string): void {
     GIT_COMMITTER_NAME: "tet test",
     GIT_COMMITTER_EMAIL: "test@tet.invalid",
     GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: path.join(os.tmpdir(), name)
+    GIT_CONFIG_GLOBAL: path.join(os.tmpdir(), name),
   };
   Object.assign(process.env, identity);
   fs.writeFileSync(identity.GIT_CONFIG_GLOBAL, "");
@@ -307,8 +307,8 @@ export async function serveOverHttp(bare: string, login: GitLogin): Promise<Http
         CONTENT_TYPE: request.headers["content-type"] ?? "",
         ...(request.headers["content-length"] ? { CONTENT_LENGTH: request.headers["content-length"] } : {}),
         HTTP_CONTENT_ENCODING: request.headers["content-encoding"] ?? "",
-        GIT_PROTOCOL: String(request.headers["git-protocol"] ?? "")
-      }
+        GIT_PROTOCOL: String(request.headers["git-protocol"] ?? ""),
+      },
     });
     request.pipe(backend.stdin);
     const chunks: Buffer[] = [];
@@ -339,7 +339,7 @@ export async function serveOverHttp(bare: string, login: GitLogin): Promise<Http
   return {
     url: `http://127.0.0.1:${port}/${path.basename(bare)}`,
     login: remote.login,
-    close: () => server.close()
+    close: () => server.close(),
   };
 }
 
@@ -359,8 +359,8 @@ export function forkUtilitiesInProcess(): void {
           }
         },
         postMessage: (message: UtilityMessage) => handle(structuredClone(message)),
-        kill: () => undefined
+        kill: () => undefined,
       };
-    }
+    },
   });
 }

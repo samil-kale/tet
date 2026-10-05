@@ -25,7 +25,10 @@ describe("an update's download, continued after it was cut short", () => {
         response.end();
       } else if (asked !== undefined) {
         const start = mode.wrongStart ? 0 : Number(asked);
-        response.writeHead(206, { "Content-Range": `bytes ${start}-${BODY.length - 1}/${BODY.length}`, "Content-Length": BODY.length - start });
+        response.writeHead(206, {
+          "Content-Range": `bytes ${start}-${BODY.length - 1}/${BODY.length}`,
+          "Content-Length": BODY.length - start,
+        });
         response.end(BODY.subarray(start));
       } else if (mode.cutAt !== undefined) {
         response.writeHead(200, { "Content-Length": BODY.length });

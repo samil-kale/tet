@@ -43,7 +43,7 @@ export function ProgressBar() {
             width: BIT_WIDTH,
             left: -BIT_WIDTH,
             "--travel": `${travel}px`,
-            animationDuration: `${travel / SPEED}s`
+            animationDuration: `${travel / SPEED}s`,
           } as React.CSSProperties
         }
       />

@@ -24,15 +24,9 @@ export function hasStrings(entry: unknown, ...keys: string[]): entry is Record<s
 
 /** A store's file of rows (`readJson`): those holding a string under each of `strings` that
  *  `accepts` takes, the rest dropped; no array is no rows. */
-export function readRows<T>(
-  file: string,
-  strings: string[],
-  accepts: (entry: Record<string, unknown>) => boolean = () => true
-): T[] {
+export function readRows<T>(file: string, strings: string[], accepts: (entry: Record<string, unknown>) => boolean = () => true): T[] {
   const parsed = readJson(file);
-  return Array.isArray(parsed)
-    ? parsed.filter((entry): entry is T => hasStrings(entry, ...strings) && accepts(entry))
-    : [];
+  return Array.isArray(parsed) ? parsed.filter((entry): entry is T => hasStrings(entry, ...strings) && accepts(entry)) : [];
 }
 
 /** Writes one of TET's own files as indented JSON, renamed into place; throws when it cannot. For a

@@ -5,7 +5,15 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef } from "../../shared/types/project";
-import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, laneOrders, NOTIFICATION_IDS, PROMPT_IDS, withLanePinned } from "../../shared/types/settings";
+import {
+  COLOR_SCHEMES,
+  GIT_SETTING_IDS,
+  LANES,
+  laneOrders,
+  NOTIFICATION_IDS,
+  PROMPT_IDS,
+  withLanePinned,
+} from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { Project, ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
@@ -31,7 +39,7 @@ import {
   type ControlDeps,
   type ControlTerminals,
   type Handler,
-  type RefFrom
+  type RefFrom,
 } from "./ctl-verb";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 
@@ -74,7 +82,7 @@ export function verbs(deps: ControlDeps): Handlers {
   /** A tab id checked to exist, with its repository or worktree and terminals. */
   const knownTab = (
     args: Record<string, unknown>,
-    caller: ControlRequest["caller"]
+    caller: ControlRequest["caller"],
   ): { tabs: ControlTerminals; tabId: string; ref: ProjectRef } => {
     const { ref } = refFrom(args, caller);
     const tabId = text(args, "tabId", "tab id");
@@ -259,7 +267,7 @@ export function verbs(deps: ControlDeps): Handlers {
       if (worktrees > 0 && args.confirm !== true) {
         throw new ControlError(
           "bad_args",
-          `removing ${found.name} deletes its ${worktrees} worktree${worktrees === 1 ? "" : "s"} with their branches. Ask the user, then pass --confirm.`
+          `removing ${found.name} deletes its ${worktrees} worktree${worktrees === 1 ? "" : "s"} with their branches. Ask the user, then pass --confirm.`,
         );
       }
       // The caller's own project takes the caller's tab with it — answer first.
@@ -288,10 +296,7 @@ export function verbs(deps: ControlDeps): Handlers {
       }
       // Once per variable as the machine counts them: on win32 `a` and `A` are one.
       const unique = names.filter((name, index) => names.findIndex((other) => machineName(other) === machineName(name)) === index);
-      const saved = await deps.envRequests.ask(
-        { ref: callerRef(caller), tabId: caller.tabId, names: unique },
-        gone
-      );
+      const saved = await deps.envRequests.ask({ ref: callerRef(caller), tabId: caller.tabId, names: unique }, gone);
       return { result: saved === undefined ? { cancelled: true } : { saved, restartRequired: true } };
     },
 
@@ -309,13 +314,20 @@ export function verbs(deps: ControlDeps): Handlers {
     "tabs-list": (args, caller) => {
       const { ref } = refFrom(args, caller);
       const own = sameProjectRef(ref, callerRef(caller));
-      return { result: terminals(ref).inspect().filter((tab) => caller.side.reachesTab(tab, own && tab.tabId === caller.tabId)) };
+      return {
+        result: terminals(ref)
+          .inspect()
+          .filter((tab) => caller.side.reachesTab(tab, own && tab.tabId === caller.tabId)),
+      };
     },
 
     "tabs-start": (args, caller) => {
       const { tabs, tabId } = ownedTab(args, caller);
       if (!tabs.start(tabId)) {
-        throw new ControlError("bad_args", `tab ${tabId} is not waiting for its first start (see tabs-list; tabs-restart for one that stopped)`);
+        throw new ControlError(
+          "bad_args",
+          `tab ${tabId} is not waiting for its first start (see tabs-list; tabs-restart for one that stopped)`,
+        );
       }
       return { result: { started: tabId } };
     },
@@ -407,9 +419,12 @@ export function verbs(deps: ControlDeps): Handlers {
       const own = sameProjectRef(ref, callerRef(caller));
       const tabs = terminals(ref);
       const inspected = tabs.inspect();
-      const reached = tabs
-        .events()
-        .filter((event) => caller.side.reachesTab(inspected.find((tab) => tab.tabId === event.tabId), own && event.tabId === caller.tabId));
+      const reached = tabs.events().filter((event) =>
+        caller.side.reachesTab(
+          inspected.find((tab) => tab.tabId === event.tabId),
+          own && event.tabId === caller.tabId,
+        ),
+      );
       return { result: reached.slice(-count(args, "tail", EVENTS_TAIL)) };
     },
 
@@ -509,7 +524,7 @@ export function verbs(deps: ControlDeps): Handlers {
       if (args.confirm !== true) {
         throw new ControlError(
           "bad_args",
-          "app-restart ends every terminal in every open project, this one included. Ask the user, then pass --confirm."
+          "app-restart ends every terminal in every open project, this one included. Ask the user, then pass --confirm.",
         );
       }
       return { result: { restarting: true }, after: () => deps.shutdown(true) };
@@ -538,7 +553,6 @@ export function verbs(deps: ControlDeps): Handlers {
         deps.showDesktopNotification(outcome.notification.title, outcome.notification.body, { ref: where, tabId: caller.tabId });
       }
       return { result: { stdout: outcome.stdout } };
-    }
+    },
   };
 }
-

@@ -9,7 +9,7 @@ import {
   askRenameWorktree,
   MADE_ELSEWHERE,
   newWorktreeRefusal,
-  worktreeEntry
+  worktreeEntry,
 } from "../../git/worktree-questions";
 import { PLATFORM } from "../../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
@@ -143,7 +143,7 @@ export const ProjectList = memo(function ProjectList({
   onSbxSettings,
   runIn,
   busy,
-  worktreesSupported
+  worktreesSupported,
 }: ProjectListProps) {
   const menu = useContextMenu<RowTarget>();
 
@@ -154,7 +154,7 @@ export const ProjectList = memo(function ProjectList({
     // The id, not the position: it survives a list change mid-drag.
     payloadOf: (index) => projects[index].id,
     indexOf: (id) => projects.findIndex((project) => project.id === id),
-    onMove: (from, to) => onReorder(reorder(projects, from, to))
+    onMove: (from, to) => onReorder(reorder(projects, from, to)),
   });
 
   const askRemoteUrl = async (resolved: ResolvedRef, remote: string, current: string | undefined): Promise<void> => {
@@ -168,8 +168,8 @@ export const ProjectList = memo(function ProjectList({
         url.trim() === current
           ? undefined
           : runIn(resolved.refKey).ask(`Changing the URL of ${remote}...`, () =>
-              window.tet.repository.setRemoteUrl(resolved.ref, remote, url.trim())
-            )
+              window.tet.repository.setRemoteUrl(resolved.ref, remote, url.trim()),
+            ),
     });
   };
 
@@ -184,7 +184,7 @@ export const ProjectList = memo(function ProjectList({
           count === 1
             ? "Its worktree is deleted with its branch: uncommitted changes and commits only there are lost. The repository's folder stays."
             : `Its ${count} worktrees are deleted with their branches: uncommitted changes and commits only there are lost. The repository's folder stays.`,
-        confirmLabel: "Remove project"
+        confirmLabel: "Remove project",
       });
       if (!answer) {
         return;
@@ -228,17 +228,17 @@ export const ProjectList = memo(function ProjectList({
               base && baseResolved && branch && !detached
                 ? () =>
                     runIn(baseResolved.refKey).run(`Merging ${branch} into ${base}...`, () =>
-                      window.tet.repository.merge(baseResolved.ref, branch)
+                      window.tet.repository.merge(baseResolved.ref, branch),
                     )
-                : undefined
+                : undefined,
           },
           SEPARATOR,
           // Run in the repository, whose state lists the worktrees.
           worktreeEntry(
             "Rename worktree",
             undefined,
-            branch ? () => void askRenameWorktree(projectId, branch, runIn(refKeyOf(projectRef(projectId)))) : undefined
-          )
+            branch ? () => void askRenameWorktree(projectId, branch, runIn(refKeyOf(projectRef(projectId)))) : undefined,
+          ),
         ]
       : [];
     // The repository's, offered on its own row only.
@@ -247,18 +247,18 @@ export const ProjectList = memo(function ProjectList({
       : [
           {
             label: web ? `View on ${hostName(web)}` : "View in browser",
-            run: web ? () => void window.tet.shell.openUrl(web) : undefined
+            run: web ? () => void window.tet.shell.openUrl(web) : undefined,
           },
           {
             label: "Change remote URL...",
-            run: remoteName ? () => void askRemoteUrl(resolved, remoteName, remoteUrl) : undefined
+            run: remoteName ? () => void askRemoteUrl(resolved, remoteName, remoteUrl) : undefined,
           },
           SEPARATOR,
           worktreeEntry(
             "Add worktree",
             newWorktreeRefusal(worktreesSupported),
-            defaultBranch ? () => void askNewWorktree(projectId, runIn(resolved.refKey), defaultBranch) : undefined
-          )
+            defaultBranch ? () => void askNewWorktree(projectId, runIn(resolved.refKey), defaultBranch) : undefined,
+          ),
         ];
     // A worktree takes its project's (tet-json.ts's configRoot).
     const sbx: ContextMenuEntry[] = worktree ? [] : [{ label: "SBX Settings", run: () => onSbxSettings(projectId) }, SEPARATOR];
@@ -271,7 +271,7 @@ export const ProjectList = memo(function ProjectList({
       ...own,
       SEPARATOR,
       ...sbx,
-      { label: worktree ? "Delete worktree..." : "Remove project", run: () => close(resolved) }
+      { label: worktree ? "Delete worktree..." : "Remove project", run: () => close(resolved) },
     ];
   };
 
@@ -303,8 +303,7 @@ export const ProjectList = memo(function ProjectList({
             on a tab: a row has no single icon to replace. */}
         {(marks[refKey]?.waiting.length ?? 0) > 0 &&
           rowButton("Open the tab waiting for an answer", () => onShowWaiting(refKey), <TabMark kind="waiting" />)}
-        {marks[refKey]?.working &&
-          rowButton("Open the tab that is working", () => onShowWorking(refKey), <TabMark kind="working" />)}
+        {marks[refKey]?.working && rowButton("Open the tab that is working", () => onShowWorking(refKey), <TabMark kind="working" />)}
         {/* Going to the session clears the mark. */}
         {(marks[refKey]?.finished.length ?? 0) > 0 &&
           rowButton("Open the tab that finished", () => onShowFinished(refKey), <TabMark kind="finished" />)}
@@ -358,8 +357,7 @@ export const ProjectList = memo(function ProjectList({
             <div key={project.id} className={["project-group", ...rowClasses(index)].join(" ")} {...rowProps(index)}>
               {main && refRow(main)}
               {project.worktrees.map((worktree) => {
-                const own =
-                  worktree.key === undefined ? undefined : resolvedRefs[refKeyOf(projectRef(project.id, worktree.key))];
+                const own = worktree.key === undefined ? undefined : resolvedRefs[refKeyOf(projectRef(project.id, worktree.key))];
                 return own ? refRow(own) : madeElsewhereRow(worktree);
               })}
             </div>

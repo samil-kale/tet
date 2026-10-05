@@ -47,7 +47,7 @@ const markdownPreviewByDefault = layoutFlag("markdown-preview.shown");
  *  the last answer, for every tab and the next start. */
 const diffDefaults = {
   sideBySide: layoutFlag("diff.side-by-side"),
-  unchangedCollapsed: layoutFlag("diff.unchanged-collapsed")
+  unchangedCollapsed: layoutFlag("diff.unchanged-collapsed"),
 };
 
 /** How a diff is laid out (`setDiffOption`). */
@@ -171,7 +171,7 @@ const CLOSED: EditorSnapshot = {
   diff: true,
   markdownPreview: false,
   sideBySide: false,
-  unchangedCollapsed: false
+  unchangedCollapsed: false,
 };
 
 // Shiki's colors are fixed at render.
@@ -249,7 +249,7 @@ function applyReveal(view: EditorView): void {
     startLineNumber: reveal.line,
     startColumn: reveal.column,
     endLineNumber: reveal.line,
-    endColumn: reveal.column + reveal.length
+    endColumn: reveal.column + reveal.length,
   });
   editor.revealLineInCenterIfOutsideViewport(reveal.line);
 }
@@ -387,7 +387,7 @@ function report(view: EditorView): void {
     dirty,
     readOnly: isReadOnly(file),
     error: file?.error,
-    preview
+    preview,
   });
 }
 
@@ -441,7 +441,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
       version: undefined,
       pendingVersion: undefined,
       pendingReveal: undefined,
-      snapshot: CLOSED
+      snapshot: CLOSED,
     };
     views.set(tabId, view);
   }
@@ -468,7 +468,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     diff: how.diff === true,
     markdownPreview: markdownPreviewByDefault.get() && isMarkdown(path),
     sideBySide: diffDefaults.sideBySide.get(),
-    unchangedCollapsed: diffDefaults.unchangedCollapsed.get()
+    unchangedCollapsed: diffDefaults.unchangedCollapsed.get(),
   });
   applyMode(view);
   // The diff editor is the tab's for every file it opens.
@@ -616,9 +616,9 @@ export async function saveEditorFile(tabId: string): Promise<void> {
       {
         title: "File changed on disk",
         message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
-        confirmLabel: "Overwrite"
+        confirmLabel: "Overwrite",
       },
-      result.error ?? "Could not save the file"
+      result.error ?? "Could not save the file",
     );
     if (views.get(tabId) !== view || view.readSeq !== seq) {
       return;
@@ -645,11 +645,12 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   // original is HEAD's, so the diff stays on screen meanwhile.
   const original = view.models?.original.getValue();
   const head =
-    held?.head ?? (original !== undefined && original !== model.getValue() ? { content: original, binary: false, missing: false } : undefined);
+    held?.head ??
+    (original !== undefined && original !== model.getValue() ? { content: original, binary: false, missing: false } : undefined);
   publish(view, {
     file: held ? { ...held, content, mtimeMs: result.mtimeMs ?? held.mtimeMs, head } : held,
     dirty: model.getAlternativeVersionId() !== versionId,
-    saving: false
+    saving: false,
   });
 }
 
@@ -658,14 +659,17 @@ export async function saveEditorFile(tabId: string): Promise<void> {
  * all of them: `Dialog.tsx` answers a second question as cancelled while one is up.
  */
 export async function canDiscardEdits(tabIds: string[]): Promise<boolean> {
-  const paths = tabIds.map(getEditorSnapshot).filter((snapshot) => snapshot.dirty).map((snapshot) => snapshot.path);
+  const paths = tabIds
+    .map(getEditorSnapshot)
+    .filter((snapshot) => snapshot.dirty)
+    .map((snapshot) => snapshot.path);
   if (paths.length === 0) {
     return true;
   }
   return confirmed({
     title: "Unsaved changes",
     message: `Discard unsaved changes to ${paths.join(", ")}?`,
-    confirmLabel: "Discard changes"
+    confirmLabel: "Discard changes",
   });
 }
 
@@ -761,7 +765,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
     monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${file.path}` });
   const models = {
     original: monaco.editor.createModel(file.head?.content ?? file.content, language ?? "plaintext", uri("tet-head")),
-    modified: monaco.editor.createModel(file.content, language ?? "plaintext", uri("tet"))
+    modified: monaco.editor.createModel(file.content, language ?? "plaintext", uri("tet")),
   };
   view.savedVersionId = models.modified.getAlternativeVersionId();
   models.modified.onDidChangeContent(() => {
@@ -868,7 +872,7 @@ function renderMarkdownPreview(view: EditorView, delay: number): void {
         }
       },
       // The last render stays: a file that fails once fails on every keystroke, no notice for each.
-      (error: unknown) => console.warn("[TET] Markdown preview failed to render:", error)
+      (error: unknown) => console.warn("[TET] Markdown preview failed to render:", error),
     );
   }, delay);
 }
@@ -952,7 +956,7 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
   editor.addAction({
     id: "tet.markdownPreview",
     label: "Show/Hide Markdown Preview",
-    run: () => showMarkdownPreview(view.tabId, !view.snapshot.markdownPreview)
+    run: () => showMarkdownPreview(view.tabId, !view.snapshot.markdownPreview),
   });
   editor.onDidScrollChange((event) => {
     if (event.scrollTopChanged) {
@@ -966,7 +970,7 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
     label: "Find",
     contextMenuGroupId: "1_find",
     contextMenuOrder: 1,
-    run: (instance) => void instance.getAction("actions.find")?.run()
+    run: (instance) => void instance.getAction("actions.find")?.run(),
   });
   // Unknown combos are skipped at parse, unknown command ids silently at run. A command's keybinding
   // is page-wide and the last registered wins, so each is scoped to this editor the way `addAction`

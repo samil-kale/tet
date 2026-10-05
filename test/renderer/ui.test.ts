@@ -1,7 +1,16 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { holdEscape } from "../../src/renderer/ui/use-escape";
-import { buildTree, compactTree, compareGrouped, filesByNode, filterTree, foldersIn, sortTree, type TreeNode } from "../../src/renderer/ui/tree";
+import {
+  buildTree,
+  compactTree,
+  compareGrouped,
+  filesByNode,
+  filterTree,
+  foldersIn,
+  sortTree,
+  type TreeNode,
+} from "../../src/renderer/ui/tree";
 
 /** ui/: what the views share. */
 
@@ -48,7 +57,7 @@ describe("a tree of repository paths", () => {
       "      repository.ts",
       "  renderer",
       "    App.tsx",
-      "README.md"
+      "README.md",
     ]);
   });
 
@@ -61,7 +70,13 @@ describe("a tree of repository paths", () => {
 
   it("keeps a matching file's folders, and a matching folder whole", () => {
     assert.deepEqual(outline(filterTree(buildTree(paths), "app")), ["src", "  renderer", "    App.tsx"]);
-    assert.deepEqual(outline(filterTree(buildTree(paths), "src/main/git")), ["src", "  main", "    git", "      git.ts", "      repository.ts"]);
+    assert.deepEqual(outline(filterTree(buildTree(paths), "src/main/git")), [
+      "src",
+      "  main",
+      "    git",
+      "      git.ts",
+      "      repository.ts",
+    ]);
   });
 
   it("lists the files under every node, and every folder", () => {

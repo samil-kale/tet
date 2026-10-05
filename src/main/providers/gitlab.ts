@@ -30,12 +30,10 @@ export const gitlab: GitProvider = {
     // the size, for none of the fields below.
     const url = `${apiBase(host)}/projects?membership=true&per_page=100&order_by=last_activity_at&simple=true`;
     const entries = (await getPaged(url, headers(token))) as GitLabProject[];
-    return entries.map(
-      (entry): RemoteRepository => ({
-        fullName: entry.path_with_namespace,
-        name: entry.path,
-        cloneUrl: entry.http_url_to_repo
-      })
-    );
-  }
+    return entries.map((entry): RemoteRepository => ({
+      fullName: entry.path_with_namespace,
+      name: entry.path,
+      cloneUrl: entry.http_url_to_repo,
+    }));
+  },
 };

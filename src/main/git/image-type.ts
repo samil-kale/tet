@@ -9,7 +9,7 @@ const IMAGE_TYPES: Record<string, string> = {
   jpeg: "image/jpeg",
   jpg: "image/jpeg",
   png: "image/png",
-  webp: "image/webp"
+  webp: "image/webp",
 };
 
 function imageType(filePath: string): string | undefined {

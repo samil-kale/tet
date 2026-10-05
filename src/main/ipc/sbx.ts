@@ -1,7 +1,20 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { EMPTY_SBX_SETTINGS } from "../../shared/types/sbx";
-import type { SbxAccount, SbxAccountEdit, SbxKnowledgeSettings, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
+import type {
+  SbxAccount,
+  SbxAccountEdit,
+  SbxKnowledgeSettings,
+  SbxKnowledgeSource,
+  SbxLocalSave,
+  SbxProblems,
+  SbxProjectSettings,
+  SbxSaveResult,
+  SbxSignInResult,
+  SbxStatus,
+  SbxStoredLocal,
+  SbxValueKind,
+} from "../../shared/types/sbx";
 import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxSignIn, runSbxSignOut } from "../sbx/sbx-cli";
 import { readKnowledgeSources } from "../sbx/sbx-mounts";
 import { readSbxStatus } from "../sbx/sbx-status";
@@ -16,7 +29,7 @@ export function registerSbxIpc({
   store,
   sbxLocal,
   sbxAccounts,
-  notice
+  notice,
 }: Pick<IpcDeps, "store" | "sbxLocal" | "sbxAccounts" | "notice">): void {
   // Per project: the policy has to allow the repository's folder.
   handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
@@ -30,10 +43,8 @@ export function registerSbxIpc({
   // project.
   handle("sbx:sign-in-browser", () => runSbxSignIn());
   handle("sbx:signed-in-user", () => readSbxUser(true));
-  handle(
-    "sbx:sign-in",
-    (_event, user: string, token: string, accountId?: string): Promise<SbxSignInResult> =>
-      signInToSbx(sbxAccounts, user, token, accountId)
+  handle("sbx:sign-in", (_event, user: string, token: string, accountId?: string): Promise<SbxSignInResult> =>
+    signInToSbx(sbxAccounts, user, token, accountId),
   );
   handle("sbx:sign-out", () => runSbxSignOut());
   handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());
@@ -57,11 +68,11 @@ export function registerSbxIpc({
       settings: SbxProjectSettings,
       knowledge: SbxKnowledgeSettings,
       values: Record<SbxValueKind, string[]>,
-      status: Pick<SbxStatus, "organization">
+      status: Pick<SbxStatus, "organization">,
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
       return project ? readProjectSbxProblems(project, settings, knowledge, values, status && { status }) : {};
-    }
+    },
   );
 
   // Read fresh: tet.json may be edited outside TET.
@@ -79,6 +90,6 @@ export function registerSbxIpc({
     async (_event, projectId: string, request: SbxProjectSettings, local: SbxLocalSave): Promise<SbxSaveResult> => {
       const project = store.get(projectId);
       return project ? saveProjectSbx({ sbxLocal, notice }, project, request, local) : { ok: false, error: PROJECT_NOT_FOUND };
-    }
+    },
   );
 }

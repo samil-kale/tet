@@ -26,4 +26,3 @@ export async function findControlPort(dataRoot: string): Promise<number> {
   }
   throw new Error("no free loopback port in the dynamic range");
 }
-

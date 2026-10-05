@@ -9,13 +9,13 @@ import { augmentAgentPath } from "./agents/agent-path";
 
 const GIT: Omit<Requirement, "installed"> = {
   name: "Git",
-  command: "git"
+  command: "git",
 };
 
 /** Only the binary: sign-in and policy are SbxSettingsDialog's; checking them would call Docker. */
 const SBX: Omit<Requirement, "installed"> = {
   name: "Docker Sandboxes",
-  command: "sbx"
+  command: "sbx",
 };
 
 /** For test/e2e/app.test.ts: a CI runner with git and no agent still opens, shell only. */
@@ -40,8 +40,8 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
       (async (): Promise<Requirement> => ({
         name: agent.displayName,
         command: agent.executable(),
-        installed: await agentInstalled(agent, cwd, true)
-      }))()
+        installed: await agentInstalled(agent, cwd, true),
+      }))(),
     );
     await yieldToLoop();
   }
@@ -74,7 +74,7 @@ export async function checkRequirements(): Promise<Requirements> {
     git: { ...GIT, installed },
     agents,
     sbx: { ...SBX, installed: sbx },
-    worktrees: worktreesSupported(version)
+    worktrees: worktreesSupported(version),
   };
 }
 

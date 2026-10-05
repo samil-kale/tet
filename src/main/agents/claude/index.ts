@@ -24,7 +24,7 @@ const MODEL_ALIASES: AskModel[] = [
   { id: "fable", label: "Fable" },
   { id: "opus", label: "Opus" },
   { id: "sonnet", label: "Sonnet" },
-  { id: "haiku", label: "Haiku" }
+  { id: "haiku", label: "Haiku" },
 ];
 
 export const claudeAgent: SandboxedAgent = {
@@ -43,14 +43,14 @@ export const claudeAgent: SandboxedAgent = {
     // The first only offers to exit, the second takes it up.
     quitPresses: 2,
     // ESC+CR, which its input reads as a newline rather than a submit.
-    shiftEnter: "\x1b\r"
+    shiftEnter: "\x1b\r",
   },
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   ask: {
     args: ["-p", "--no-session-persistence"],
     // Its aliases, each the latest model of its line: the CLI lists none without a session.
     models: () => Promise.resolve(MODEL_ALIASES),
-    modelArgs: (model) => ["--model", model]
+    modelArgs: (model) => ["--model", model],
   },
   sessions: claudeSessionProvider,
   turns: { sessionIdOf: hookSessionId, workOutlivesStop: claudeWorkOutlivesStop, hookReply: claudeHookReply },
@@ -64,7 +64,7 @@ export const claudeAgent: SandboxedAgent = {
         logError("could not write Claude hook settings", error);
       }
       return Promise.resolve({ args: [...args, ...systemPromptArgs(HOST_SIDE)], env: FULLSCREEN_ENV });
-    }
+    },
   },
   sandbox: {
     prepare: (paths) => {
@@ -83,10 +83,10 @@ export const claudeAgent: SandboxedAgent = {
     knowledge: () => ({
       skills: [{ host: path.join(claudeConfigDir(), "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
       plugins: [{ host: path.join(claudeConfigDir(), "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
-      instructions: [{ host: path.join(claudeConfigDir(), "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }]
+      instructions: [{ host: path.join(claudeConfigDir(), "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }],
     }),
     // No `sharedSkillsTarget`: Claude Code reads only its own skills folder, and putting
     // `~/.agents/skills` there would stand in for it.
-    sessions: claudeSandboxSessions
-  }
+    sessions: claudeSandboxSessions,
+  },
 };

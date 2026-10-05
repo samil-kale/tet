@@ -18,7 +18,7 @@ import {
   removeProject,
   resolveStoredIds,
   syncWorktrees,
-  type ProjectDeps
+  type ProjectDeps,
 } from "../../src/main/projects";
 import { ProjectStore } from "../../src/main/store/project-store";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
@@ -80,7 +80,7 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
     (projectId) => told.push(projectId),
     () => undefined,
     () => undefined,
-    new GitLoginStore(dataRoot)
+    new GitLoginStore(dataRoot),
   );
   managers.push(repositories);
   const changes: ProjectsChange[] = [];
@@ -89,14 +89,14 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
     repositories,
     tabManagers: {
       close: async (ref: ProjectRef) => onClose(ref),
-      open: () => undefined
+      open: () => undefined,
     } as unknown as SessionManagerRegistry,
     records: { forget: () => undefined } as unknown as ControlRecords,
     sbxLocal: new SbxLocalStore(dataRoot),
     openProjectRef: (ref) => void repositories.open(resolveProjectRef(dataRoot, store, ref)),
     dataRoot,
     projectsChanged: (change) => changes.push(change),
-    notice: () => undefined
+    notice: () => undefined,
   };
   /** Adds the repository and waits for its repository's first read. */
   const add = async (folder: string): Promise<string> => {
@@ -172,7 +172,7 @@ describe("a project added", () => {
     await resolveStoredIds({ store, notice: () => undefined });
     assert.deepEqual(
       store.list().map((project) => project.id),
-      [held, kept]
+      [held, kept],
     );
   });
 
@@ -196,13 +196,13 @@ describe("a project added", () => {
     assert.deepEqual(
       new ProjectStore(dataRoot).all().map((project) => project.id),
       [id],
-      "still stored"
+      "still stored",
     );
     fs.writeFileSync(tetJson, "{}");
     assert.equal((await addProject(later, repo.main)).project?.id, id, "added again, it is the same project");
     assert.deepEqual(
       later.store.list().map((project) => project.id),
-      [id]
+      [id],
     );
   });
 
@@ -274,7 +274,12 @@ describe("a worktree TET makes", () => {
     assert.deepEqual(store.get(id)?.worktrees, []);
     assert.deepEqual(changes.at(-1), { removed: [ref] });
     // Refreshed by the repository's own action slot, not left for the watcher.
-    assert.ok(!repositories.get({ projectId: id })!.getState().worktrees.some((worktree) => worktree.branch === "target"));
+    assert.ok(
+      !repositories
+        .get({ projectId: id })!
+        .getState()
+        .worktrees.some((worktree) => worktree.branch === "target"),
+    );
   });
 
   it("is refused up front while another command runs in its repository, and runs once it is done", async () => {
@@ -373,7 +378,7 @@ describe("a worktree's tet.json", () => {
     const ports = [{ host: "3000", container: "3000" }];
     fs.writeFileSync(
       path.join(repo.main, "tet.json"),
-      JSON.stringify({ commands: ["npm test"], sbx: { enabled: true, hosts: ["example.com"], ports } })
+      JSON.stringify({ commands: ["npm test"], sbx: { enabled: true, hosts: ["example.com"], ports } }),
     );
     fs.writeFileSync(path.join(worktree, "tet.json"), JSON.stringify({ commands: ["its own copy"] }));
     assert.deepEqual(await readCommands(worktree), [{ command: "npm test" }]);

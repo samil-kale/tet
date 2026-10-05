@@ -15,7 +15,7 @@ import {
   removeFolder,
   tetJsonProblem,
   writeCommands,
-  writeSbxSettings
+  writeSbxSettings,
 } from "../../src/main/store/tet-json";
 import { tempDir } from "../helpers";
 
@@ -49,13 +49,13 @@ describe("readCommands", () => {
           { command: "", name: "empty" },
           { name: "no command" },
           42,
-          null
-        ]
-      })
+          null,
+        ],
+      }),
     );
     assert.deepEqual(await readCommands(root), [
       { command: "npm run build" },
-      { command: "npm test", name: " unit ", cwd: "web", env: { A: "1" }, shell: true }
+      { command: "npm test", name: " unit ", cwd: "web", env: { A: "1" }, shell: true },
     ]);
   });
 
@@ -66,16 +66,11 @@ describe("readCommands", () => {
           { command: "a", color: "magenta" },
           { command: "b", color: "#ff0000" },
           { command: "c", color: "white" },
-          { command: "d", color: true }
-        ]
-      })
+          { command: "d", color: true },
+        ],
+      }),
     );
-    assert.deepEqual(await readCommands(root), [
-      { command: "a", color: "magenta" },
-      { command: "b" },
-      { command: "c" },
-      { command: "d" }
-    ]);
+    assert.deepEqual(await readCommands(root), [{ command: "a", color: "magenta" }, { command: "b" }, { command: "c" }, { command: "d" }]);
   });
 
   it("reads a file broken since as its last readable version, and refuses to write over it", async () => {
@@ -125,12 +120,12 @@ describe("writeCommands", () => {
       { command: "a" },
       { command: "b", cwd: "web" },
       { command: "c", name: "see" },
-      { command: "d", color: "cyan" }
+      { command: "d", color: "cyan" },
     ]);
     assert.deepEqual(stored(), {
       folders: [{ path: "src" }],
       other: true,
-      commands: ["a", { command: "b", cwd: "web" }, { command: "c", name: "see" }, { command: "d", color: "cyan" }]
+      commands: ["a", { command: "b", cwd: "web" }, { command: "c", name: "see" }, { command: "d", color: "cyan" }],
     });
   });
 });
@@ -154,15 +149,15 @@ describe("readExplorerView", () => {
           { path: "C:/abs" },
           { path: "../out" },
           { path: 3 },
-          "x/../y"
-        ]
-      })
+          "x/../y",
+        ],
+      }),
     );
     assert.deepEqual((await readExplorerView(root)).folders, [
       { path: "", name: path.basename(root) },
       { path: "src/main", name: "main" },
       { path: "web", name: "web" },
-      { path: "y", name: "y" }
+      { path: "y", name: "y" },
     ]);
   });
 
@@ -198,16 +193,11 @@ describe("the tree's own edits", () => {
   });
 
   it("keeps every change of edits made at once, each reading what the last one wrote", async () => {
-    await Promise.all([
-      writeCommands(root, [{ command: "a" }]),
-      addFolder(root, "src"),
-      addExclude(root, "dist"),
-      addExclude(root, "out")
-    ]);
+    await Promise.all([writeCommands(root, [{ command: "a" }]), addFolder(root, "src"), addExclude(root, "dist"), addExclude(root, "out")]);
     assert.deepEqual(stored(), {
       commands: ["a"],
       folders: [{ path: "." }, { path: "src" }],
-      exclude: ["dist", "out"]
+      exclude: ["dist", "out"],
     });
   });
 });
@@ -221,7 +211,7 @@ describe("a hand-written tet.json", () => {
     '\t\t"dist", // build output',
     "\t],",
     "}",
-    ""
+    "",
   ].join("\r\n");
 
   it("reads comments and trailing commas the way a .code-workspace allows them", async () => {
@@ -244,7 +234,10 @@ describe("a hand-written tet.json", () => {
     assert.deepEqual(await readCommands(root), [{ command: "npm run lint" }]);
     const view = await readExplorerView(root);
     assert.deepEqual(view.exclude, ["dist", "out"]);
-    assert.deepEqual(view.folders.map((folder) => folder.path), ["", "src"]);
+    assert.deepEqual(
+      view.folders.map((folder) => folder.path),
+      ["", "src"],
+    );
     await removeFolder(root, "src");
     await removeFolder(root, "");
     assert.equal(fs.readFileSync(file(), "utf8").includes('"folders"'), false, "the key goes with the last folder");
@@ -281,7 +274,7 @@ describe("readSbxSettings", () => {
     const theirs = { path: "/their/data", access: "ro", os: otherOs };
     const stale = [
       { path: "~/stale", access: "ro" },
-      { path: "/stale/absolute", access: "ro", os: PLATFORM.id }
+      { path: "/stale/absolute", access: "ro", os: PLATFORM.id },
     ];
     put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, knowledge: { skills: "rw" }, ports: [], paths: [theirs, ...stale] } }));
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
@@ -292,11 +285,11 @@ describe("readSbxSettings", () => {
         { path: "~/data", access: "rw" as const },
         { path: elsewhere, access: "ro" as const },
         // A single file is a row like any other: sbx mounts files and folders alike.
-        { path: "~/.npmrc", access: "ro" as const }
+        { path: "~/.npmrc", access: "ro" as const },
       ],
       hosts: ["gitlab.example.com", "*.s3.example.net:443"],
       secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }],
-      variables: [{ env: "NPM_TOKEN" }]
+      variables: [{ env: "NPM_TOKEN" }],
     };
     await writeSbxSettings(root, config);
     assert.deepEqual(await readSbxSettings(root), config, "the rows that apply here come back, the other OS's does not");
@@ -306,13 +299,8 @@ describe("readSbxSettings", () => {
     assert.deepEqual(written.sbx.hosts, ["gitlab.example.com", "*.s3.example.net:443"], "hosts are written as typed, with no os");
     assert.deepEqual(
       written.sbx.paths,
-      [
-        theirs,
-        { path: "~/data", access: "rw" },
-        { path: elsewhere, access: "ro", os: PLATFORM.id },
-        { path: "~/.npmrc", access: "ro" }
-      ],
-      "the other OS's row survives; a ~ row is everyone's, an absolute one this platform's; the stale ones are replaced"
+      [theirs, { path: "~/data", access: "rw" }, { path: elsewhere, access: "ro", os: PLATFORM.id }, { path: "~/.npmrc", access: "ro" }],
+      "the other OS's row survives; a ~ row is everyone's, an absolute one this platform's; the stale ones are replaced",
     );
   });
 
@@ -326,14 +314,14 @@ describe("readSbxSettings", () => {
           paths: [
             { path: "", os: PLATFORM.id },
             { path: "~/data", access: "not-a-real-access", os: PLATFORM.id },
-            { path: "/elsewhere", access: "ro", os: "aix" }
+            { path: "/elsewhere", access: "ro", os: "aix" },
           ],
           hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
           secrets: [
             { env: " API_KEY ", hosts: [" api.example.com "], value: "should-not-be-read" },
             { env: "API_KEY", hosts: ["twice.example.com"] },
             { env: "NO_HOST", hosts: [] },
-            { hosts: ["no-env.example.com"] }
+            { hosts: ["no-env.example.com"] },
           ],
           variables: [
             { env: " NPM_TOKEN ", value: "should-not-be-read" },
@@ -343,11 +331,11 @@ describe("readSbxSettings", () => {
             { env: "TET_TAB_ID" },
             { env: "not a name" },
             "BARE_STRING",
-            {}
+            {},
           ],
-          tokens: { claude: "sk-ant-should-not-be-read" }
-        }
-      })
+          tokens: { claude: "sk-ant-should-not-be-read" },
+        },
+      }),
     );
     assert.deepEqual(await readSbxSettings(root), {
       enabled: true,
@@ -355,7 +343,7 @@ describe("readSbxSettings", () => {
       paths: [{ path: "~/data", access: "rw" }],
       hosts: ["ok.example.com", "spaced.example.com"],
       secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
-      variables: [{ env: "NPM_TOKEN" }]
+      variables: [{ env: "NPM_TOKEN" }],
     });
   });
 });

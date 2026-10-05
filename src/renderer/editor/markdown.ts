@@ -62,7 +62,7 @@ export async function renderMarkdown(
   text: string,
   path: string,
   loadImage: (source: string) => Promise<string | undefined>,
-  previous: ColoredBlocks
+  previous: ColoredBlocks,
 ): Promise<{ doc: Document; colored: ColoredBlocks }> {
   const html = DOMPurify.sanitize(markdown.render(text), SANITIZE);
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -77,7 +77,7 @@ export async function renderMarkdown(
   const colored: ColoredBlocks = new Map();
   await Promise.all([
     ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code, previous, colored)),
-    ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage))
+    ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage)),
   ]);
   return { doc, colored };
 }
@@ -94,7 +94,7 @@ function blocks(scroller: HTMLElement, body: HTMLElement): Mark[] {
   const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
   return [...body.querySelectorAll(`[${LINE_ATTRIBUTE}]`)].map((block) => ({
     line: Number(block.getAttribute(LINE_ATTRIBUTE)),
-    top: block.getBoundingClientRect().top - origin
+    top: block.getBoundingClientRect().top - origin,
   }));
 }
 
@@ -170,7 +170,7 @@ async function colorBlock(text: string, language: string, theme: string): Promis
 async function resolveImage(
   img: HTMLImageElement,
   path: string,
-  loadImage: (source: string) => Promise<string | undefined>
+  loadImage: (source: string) => Promise<string | undefined>,
 ): Promise<void> {
   const src = img.getAttribute("src") ?? "";
   if (/^data:image\//i.test(src)) {

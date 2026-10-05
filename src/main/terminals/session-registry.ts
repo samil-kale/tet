@@ -19,7 +19,7 @@ export class SessionManagerRegistry {
     private readonly dataRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
-    private readonly callbacks: SessionManagerCallbacks
+    private readonly callbacks: SessionManagerCallbacks,
   ) {
     this.hostSetups = new HostSetups(dataRoot, settings, callbacks.onNotice);
   }

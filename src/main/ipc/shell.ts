@@ -22,7 +22,10 @@ type FetchLike = (url: string, init: { signal: AbortSignal; redirect: "manual" }
  * as soon as a hop is not https, names no location, or the chain runs long — a README's image must
  * not become a request to another scheme or to a host behind the machine.
  */
-export async function fetchHttpsImage(url: string, fetchFn: FetchLike = (target, init) => net.fetch(target, init)): Promise<Response | undefined> {
+export async function fetchHttpsImage(
+  url: string,
+  fetchFn: FetchLike = (target, init) => net.fetch(target, init),
+): Promise<Response | undefined> {
   const signal = AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS);
   // A relative location resolves against the hop that sent it; undefined where it is no URL at all.
   const resolve = (value: string, base?: string): string | undefined => {
@@ -49,10 +52,7 @@ export async function fetchHttpsImage(url: string, fetchFn: FetchLike = (target,
 }
 
 /** What TET hands to the OS: links, files and folders. */
-export function registerShellIpc({
-  repositories,
-  notice
-}: Pick<IpcDeps, "repositories" | "notice">): void {
+export function registerShellIpc({ repositories, notice }: Pick<IpcDeps, "repositories" | "notice">): void {
   /** Opens `target` with the OS's default app; a refusal is a notice naming it as `shown`. */
   const openWithNotice = async (target: string, kind: "file" | "folder", shown: string): Promise<void> => {
     const error = await shell.openPath(target);

@@ -43,7 +43,7 @@ export class GitLoginStore {
     cwd: string,
     url: string,
     typed: GitLogin | undefined,
-    command: (login?: NetworkLogin) => Promise<GitActionResult>
+    command: (login?: NetworkLogin) => Promise<GitActionResult>,
   ): Promise<GitActionResult> {
     const origin = urlOrigin(url);
     if (!origin) {
@@ -71,9 +71,7 @@ export class GitLoginStore {
   get(url: string): GitLogin | undefined {
     const origin = urlOrigin(url);
     const username = urlUsername(url);
-    const entry = this.logins
-      .filter((login) => login.origin === origin && (username === "" || login.username === username))
-      .at(-1);
+    const entry = this.logins.filter((login) => login.origin === origin && (username === "" || login.username === username)).at(-1);
     const password = entry && unseal(entry.password);
     return entry && password !== undefined ? { username: entry.username, password } : undefined;
   }
@@ -94,7 +92,7 @@ export class GitLoginStore {
     }
     this.logins = [
       ...this.logins.filter((entry) => entry.origin !== origin || entry.username !== login.username),
-      { origin, username: login.username, password }
+      { origin, username: login.username, password },
     ];
     this.save();
   }

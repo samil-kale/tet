@@ -47,7 +47,6 @@ const FOCUS_OUT = "\x1b[O";
  */
 const views = new Map<string, TerminalView>();
 
-
 function viewKey(ref: ProjectRef, tabId: string): string {
   return `${refKeyOf(ref)} ${tabId}`;
 }
@@ -59,7 +58,6 @@ function viewKey(ref: ProjectRef, tabId: string): string {
  */
 const earlyOutput = new Map<string, string>();
 const MAX_EARLY_OUTPUT = 64 * 1024;
-
 
 // Output arrives batched: one message, and one flush, for every terminal.
 window.tet.tabs.onOutput((batch) => {
@@ -319,10 +317,10 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
     linkHandler: {
       activate(_event, text) {
         openUrl(text);
-      }
+      },
     },
     // `term.unicode` is a proposed API (the Unicode 11 widths below).
-    allowProposedApi: true
+    allowProposedApi: true,
   });
 
   const fit = new FitAddon();
@@ -443,7 +441,7 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
     event.preventDefault();
     frame(false);
     pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? [])).catch((error: unknown) =>
-      notify("error", `Could not paste the dropped files: ${errorMessage(error)}`)
+      notify("error", `Could not paste the dropped files: ${errorMessage(error)}`),
     );
   });
   container.addEventListener("contextmenu", (event) => {

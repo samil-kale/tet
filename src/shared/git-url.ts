@@ -7,9 +7,7 @@
 export function urlOrigin(url: string): string {
   try {
     const parsed = new URL(url);
-    return (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.password === ""
-      ? parsed.origin
-      : "";
+    return (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.password === "" ? parsed.origin : "";
   } catch {
     return "";
   }

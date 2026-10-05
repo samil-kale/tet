@@ -26,9 +26,7 @@ export const PROJECT_FILE = "tet.json";
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
  *  shell. `"shell": true` hands the line to `AgentDefinition.run`, so it only works where it was
  *  written. */
-type StoredCommand =
-  | string
-  | { command?: unknown; name?: unknown; color?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
+type StoredCommand = string | { command?: unknown; name?: unknown; color?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
 
 interface ProjectFile {
   commands?: StoredCommand[];
@@ -109,15 +107,13 @@ async function problemAt(filePath: string): Promise<string | undefined> {
  * none where it never was readable.
  */
 export async function readChanged(
-  root: string
+  root: string,
 ): Promise<{ problem: string | undefined; commands?: ProjectCommand[]; sbx?: SbxProjectSettings }> {
   const own = configRoot(root);
   const filePath = path.join(own, PROJECT_FILE);
   const problem = await problemAt(filePath);
   const content = lastReadable.get(filePath);
-  return content === undefined
-    ? { problem }
-    : { problem, commands: toCommands(content), sbx: toSbxSettings(content, own !== root) };
+  return content === undefined ? { problem } : { problem, commands: toCommands(content), sbx: toSbxSettings(content, own !== root) };
 }
 
 /** The file's contents, or **null** when there is none. A broken file counts as its last readable
@@ -152,12 +148,7 @@ function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<
 
 /** Throws for a worktree (`own`, its config root, is another folder): everything that changes its
  *  settings changes its repository's, there. */
-async function patchNow(
-  root: string,
-  own: string,
-  filePath: string,
-  edit: (content: ProjectFile) => Change[]
-): Promise<void> {
+async function patchNow(root: string, own: string, filePath: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
   if (own !== root) {
     throw new Error(`A worktree takes its settings from ${path.basename(own)}: change them there`);
   }
@@ -185,9 +176,7 @@ function toEnv(value: unknown): Record<string, string> | undefined {
     return undefined;
   }
   const env = Object.fromEntries(
-    Object.entries(value).filter(
-      (pair): pair is [string, string] => typeof pair[1] === "string" && !isReservedName(pair[0])
-    )
+    Object.entries(value).filter((pair): pair is [string, string] => typeof pair[1] === "string" && !isReservedName(pair[0])),
   );
   return Object.keys(env).length > 0 ? env : undefined;
 }
@@ -238,10 +227,8 @@ export function writeCommands(root: string, commands: ProjectCommand[]): Promise
   return patch(root, () => [
     [
       ["commands"],
-      commands.map((command) =>
-        command.name || command.color || command.cwd || command.env || command.shell ? command : command.command
-      )
-    ]
+      commands.map((command) => (command.name || command.color || command.cwd || command.env || command.shell ? command : command.command)),
+    ],
   ]);
 }
 
@@ -316,7 +303,7 @@ export function addFolder(root: string, folderPath: string): Promise<void> {
 export function removeFolder(root: string, folderPath: string): Promise<void> {
   return patch(root, (content) => {
     const folders = (Array.isArray(content.folders) ? (content.folders as unknown[]) : []).filter(
-      (entry) => storedPath(entry) !== folderPath
+      (entry) => storedPath(entry) !== folderPath,
     );
     return [[["folders"], folders.length > 0 ? folders : undefined]];
   });
@@ -357,9 +344,7 @@ function objectRows<T>(value: unknown, row: (entry: Record<string, unknown>) => 
 
 function toSbxPorts(value: unknown): SbxPort[] {
   return objectRows(value, ({ host, container }) =>
-    typeof host === "string" && typeof container === "string" && host.trim() && container.trim()
-      ? { host, container }
-      : undefined
+    typeof host === "string" && typeof container === "string" && host.trim() && container.trim() ? { host, container } : undefined,
   );
 }
 
@@ -369,7 +354,10 @@ function toSbxHosts(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.filter((entry): entry is string => typeof entry === "string").map((entry) => entry.trim()).filter(Boolean);
+  return value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 /** A row needs an env name and a host; hosts trimmed as toSbxHosts, a repeated env name dropped —
@@ -446,7 +434,7 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
     paths,
     hosts: toSbxHosts(sbx.hosts),
     secrets,
-    variables: toSbxVariables(sbx.variables, secrets)
+    variables: toSbxVariables(sbx.variables, secrets),
   };
 }
 
@@ -464,9 +452,9 @@ export function writeSbxSettings(root: string, config: SbxProjectSettings): Prom
           paths: [...others, ...mine],
           hosts: config.hosts,
           secrets: config.secrets,
-          variables: config.variables
-        }
-      ]
+          variables: config.variables,
+        },
+      ],
     ];
   });
 }

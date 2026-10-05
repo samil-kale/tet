@@ -30,16 +30,12 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
 
   useEffect(() => {
     const unsubscribers = [
-      window.tet.repository.onState(({ ref, state }) =>
-        setStates((current) => ({ ...current, [refKeyOf(ref)]: state }))
-      ),
-      window.tet.tabs.onTabs(({ ref, tabs: list }) =>
-        setTabs((current) => ({ ...current, [refKeyOf(ref)]: list }))
-      ),
+      window.tet.repository.onState(({ ref, state }) => setStates((current) => ({ ...current, [refKeyOf(ref)]: state }))),
+      window.tet.tabs.onTabs(({ ref, tabs: list }) => setTabs((current) => ({ ...current, [refKeyOf(ref)]: list }))),
       window.tet.tabs.onStatus(({ ref, tabId, status }) => {
         const refKey = refKeyOf(ref);
-      // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
-      // it off screen (main flushes the old output before the status, the new one's has not come).
+        // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
+        // it off screen (main flushes the old output before the status, the new one's has not come).
         if (status === "running" && tabsRef.current[refKey]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
           clearTerminal(ref, tabId);
         } else if (status === "running") {
@@ -47,15 +43,13 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         }
         setTabs((current) => {
           const list = current[refKey];
-          return list
-            ? { ...current, [refKey]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) }
-            : current;
+          return list ? { ...current, [refKey]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) } : current;
         });
       }),
       window.tet.tabs.onStartupProgress(({ ref, show }) => {
         const refKey = refKeyOf(ref);
         setStarting((current) => (current[refKey] === show ? current : { ...current, [refKey]: show }));
-      })
+      }),
     ];
 
     void (async () => {
@@ -66,10 +60,10 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
           const [state, list, isStarting] = await Promise.all([
             window.tet.repository.state(ref),
             window.tet.tabs.list(ref),
-            window.tet.tabs.starting(ref)
+            window.tet.tabs.starting(ref),
           ]);
           return [refKeyOf(ref), state, list, isStarting] as const;
-        })
+        }),
       );
       // A repository or worktree closed meanwhile was forgotten already: merging its entries would
       // revive it.
@@ -78,12 +72,12 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
       // Pushes that landed meanwhile are newer than what was fetched.
       setStates((current) => ({
         ...Object.fromEntries(loaded.map(([id, state]) => [id, state])),
-        ...current
+        ...current,
       }));
       setTabs((current) => ({ ...Object.fromEntries(loaded.map(([id, , list]) => [id, list])), ...current }));
       setStarting((current) => ({
         ...Object.fromEntries(loaded.map(([id, , , isStarting]) => [id, isStarting])),
-        ...current
+        ...current,
       }));
     })();
 

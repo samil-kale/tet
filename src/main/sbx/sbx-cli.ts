@@ -51,7 +51,12 @@ const MAX_ERROR_LENGTH = 300;
  *  ("Starting sandboxd daemon...") precede it — cut to its end past MAX_ERROR_LENGTH. Empty when
  *  it said nothing. */
 export function sbxError(result: RunResult): string {
-  const line = result.stderr.trim().split(/\r?\n/).pop()?.replace(/^ERROR:\s*/, "") ?? "";
+  const line =
+    result.stderr
+      .trim()
+      .split(/\r?\n/)
+      .pop()
+      ?.replace(/^ERROR:\s*/, "") ?? "";
   return line.length > MAX_ERROR_LENGTH ? `…${line.slice(-MAX_ERROR_LENGTH).trimStart()}` : line;
 }
 
@@ -64,7 +69,7 @@ const MAX_LOGGED_OUTPUT = 2000;
  */
 export function sbxFailure(result: RunResult, command: string): string {
   logError(
-    `${command} failed (exit ${result.code ?? "none"})\nstdout: ${result.stdout.trim().slice(-MAX_LOGGED_OUTPUT)}\nstderr: ${result.stderr.trim().slice(-MAX_LOGGED_OUTPUT)}`
+    `${command} failed (exit ${result.code ?? "none"})\nstdout: ${result.stdout.trim().slice(-MAX_LOGGED_OUTPUT)}\nstderr: ${result.stderr.trim().slice(-MAX_LOGGED_OUTPUT)}`,
   );
   return sbxError(result) || `${command} failed`;
 }
@@ -83,7 +88,7 @@ export async function runSbx(args: string[], options: RunOptions = {}): Promise<
       stdin: options.stdin,
       timeoutMs: options.timeoutMs,
       onData: options.onData && ((chunk) => options.onData?.(chunk.replace(/\n/g, "\r\n"))),
-      onSpawn
+      onSpawn,
     });
   const result = options.cancellable ? await setup.run(run) : await run();
   return { ok: result.code === 0, code: result.code, stdout: result.stdout, stderr: result.stderr };

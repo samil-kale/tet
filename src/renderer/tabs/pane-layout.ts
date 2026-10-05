@@ -33,7 +33,7 @@ export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
   single: ["a"],
   cols2: ["a", "b"],
   "split-right": ["a", "b", "c"],
-  grid2x2: ["a", "b", "c", "d"]
+  grid2x2: ["a", "b", "c", "d"],
 };
 
 /** A position-based name for a pane, for "move to" entries and tooltips. */
@@ -41,7 +41,7 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
   single: {},
   cols2: { a: "Left", b: "Right" },
   "split-right": { a: "Left", b: "Top Right", c: "Bottom Right" },
-  grid2x2: { a: "Top Left", b: "Top Right", c: "Bottom Left", d: "Bottom Right" }
+  grid2x2: { a: "Top Left", b: "Top Right", c: "Bottom Left", d: "Bottom Right" },
 };
 
 /**
@@ -105,11 +105,7 @@ export function activeEditorTab(layout: ProjectLayout, editorTabIds: string[], p
 }
 
 /** The tab a pane keeps active once `wanted` (its previous active tab) is gone from `list`. */
-function pickActive(
-  list: LayoutTab[],
-  previousList: LayoutTab[],
-  wanted: string | null | undefined
-): string | null {
+function pickActive(list: LayoutTab[], previousList: LayoutTab[], wanted: string | null | undefined): string | null {
   if (wanted && list.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
@@ -142,11 +138,7 @@ function pickActive(
  *
  * Returns `layout` itself when nothing changed: a new object re-renders every memoized view.
  */
-export function normalizeLayout(
-  layout: ProjectLayout,
-  tabs: LayoutTab[],
-  previousTabs: LayoutTab[]
-): ProjectLayout {
+export function normalizeLayout(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[]): ProjectLayout {
   const panes = PRESET_PANES[layout.preset];
   const previousIds = new Set(previousTabs.map((tab) => tab.tabId));
   const currentIds = new Set(tabs.map((tab) => tab.tabId));
@@ -168,11 +160,7 @@ export function normalizeLayout(
     source.filter((tab) => (assignment[tab.tabId] ?? layout.focusedPane) === paneId);
   const activeTab: Partial<Record<PaneId, string | null>> = {};
   for (const paneId of panes) {
-    activeTab[paneId] = pickActive(
-      listOf(tabs, tabPane, paneId),
-      listOf(previousTabs, layout.tabPane, paneId),
-      layout.activeTab[paneId]
-    );
+    activeTab[paneId] = pickActive(listOf(tabs, tabPane, paneId), listOf(previousTabs, layout.tabPane, paneId), layout.activeTab[paneId]);
   }
   // A closing saved command's tab records its pane under its command line.
   let commandPane = layout.commandPane;
@@ -224,7 +212,7 @@ function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, 
   return normalizeLayout(
     { preset, focusedPane: paneFor(layout.focusedPane), tabPane, activeTab, commandPane: layout.commandPane },
     tabs,
-    tabs
+    tabs,
   );
 }
 
@@ -246,7 +234,7 @@ export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, ta
     ...layout,
     focusedPane: target,
     tabPane: layout.tabPane[tabId] === target ? layout.tabPane : { ...layout.tabPane, [tabId]: target },
-    activeTab: { ...activeTab, [target]: tabId }
+    activeTab: { ...activeTab, [target]: tabId },
   };
 }
 
@@ -268,12 +256,12 @@ const COLLAPSE_TRANSITIONS: Record<SplitPreset, Partial<Record<PaneId, { preset:
   "split-right": {
     a: { preset: "cols2", remap: { b: "a", c: "b" } },
     b: { preset: "cols2", remap: { c: "b" } },
-    c: { preset: "cols2", remap: {} }
+    c: { preset: "cols2", remap: {} },
   },
   grid2x2: {
     a: { preset: "split-right", remap: { c: "a", d: "c" } },
-    c: { preset: "split-right", remap: { d: "c" } }
-  }
+    c: { preset: "split-right", remap: { d: "c" } },
+  },
 };
 
 /**
@@ -316,14 +304,10 @@ export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId
  * `normalizeLayout` for a tab list push, plus the collapse of every pane that held a tab of
  * `previousTabs` and holds none of `tabs`.
  */
-export function collapseClosed(
-  layout: ProjectLayout,
-  tabs: LayoutTab[],
-  previousTabs: LayoutTab[]
-): ProjectLayout {
+export function collapseClosed(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[]): ProjectLayout {
   const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
   const emptied = PRESET_PANES[layout.preset].filter(
-    (paneId) => !held.has(paneId) && previousTabs.some((tab) => paneOf(layout, tab.tabId) === paneId)
+    (paneId) => !held.has(paneId) && previousTabs.some((tab) => paneOf(layout, tab.tabId) === paneId),
   );
   return collapsePanes(normalizeLayout(layout, tabs, previousTabs), emptied, tabs);
 }
@@ -337,14 +321,14 @@ export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): Project
   const open = new Set(tabs.map((tab) => tab.tabId));
   const activeTab = sameRecord(
     layout.activeTab,
-    Object.fromEntries(Object.entries(layout.activeTab).filter(([, tabId]) => tabId == null || open.has(tabId)))
+    Object.fromEntries(Object.entries(layout.activeTab).filter(([, tabId]) => tabId == null || open.has(tabId))),
   );
   const settled = activeTab === layout.activeTab ? layout : normalizeLayout({ ...layout, activeTab }, tabs, tabs);
   const occupied = occupiedPanes(settled, tabs);
   return collapsePanes(
     settled,
     PRESET_PANES[settled.preset].filter((paneId) => !occupied.includes(paneId)),
-    tabs
+    tabs,
   );
 }
 
@@ -387,7 +371,7 @@ const SNAP_ZONES: Record<SnapZone, FractionBox> = {
   "top-right": { left: 3 / 4, top: 0, width: 1 / 4, height: 1 / 3 },
   right: { left: 3 / 4, top: 1 / 3, width: 1 / 4, height: 1 / 3 },
   "bottom-right": { left: 3 / 4, top: 2 / 3, width: 1 / 4, height: 1 / 3 },
-  "bottom-left": { left: 0, top: 1 / 2, width: 1 / 4, height: 1 / 2 }
+  "bottom-left": { left: 0, top: 1 / 2, width: 1 / 4, height: 1 / 2 },
 };
 
 /**
@@ -407,24 +391,24 @@ export const SNAP_TRANSITIONS: Record<SplitPreset, Partial<Record<SnapZone, Snap
     right: { preset: "cols2", target: "b", remap: {} },
     "top-right": { preset: "split-right", target: "b", remap: {} },
     "bottom-right": { preset: "split-right", target: "c", remap: {} },
-    "bottom-left": { preset: "grid2x2", target: "c", remap: {} }
+    "bottom-left": { preset: "grid2x2", target: "c", remap: {} },
   },
   cols2: {
     right: { preset: "cols2", target: "b", remap: {} },
     "top-right": { preset: "split-right", target: "b", remap: { b: "c" } },
     "bottom-right": { preset: "split-right", target: "c", remap: {} },
-    "bottom-left": { preset: "grid2x2", target: "c", remap: {} }
+    "bottom-left": { preset: "grid2x2", target: "c", remap: {} },
   },
   "split-right": {
     "top-right": { preset: "split-right", target: "b", remap: {} },
     "bottom-right": { preset: "split-right", target: "c", remap: {} },
-    "bottom-left": { preset: "grid2x2", target: "c", remap: { c: "d" } }
+    "bottom-left": { preset: "grid2x2", target: "c", remap: { c: "d" } },
   },
   grid2x2: {
     "top-right": { preset: "grid2x2", target: "b", remap: {} },
     "bottom-right": { preset: "grid2x2", target: "d", remap: {} },
-    "bottom-left": { preset: "grid2x2", target: "c", remap: {} }
-  }
+    "bottom-left": { preset: "grid2x2", target: "c", remap: {} },
+  },
 };
 
 /**
@@ -442,19 +426,19 @@ const PANE_BOXES: Record<SplitPreset, Partial<Record<PaneId, (shares: SashShares
   single: { a: () => ({ left: 0, top: 0, width: 1, height: 1 }) },
   cols2: {
     a: ({ col }) => ({ left: 0, top: 0, width: col, height: 1 }),
-    b: ({ col }) => ({ left: col, top: 0, width: 1 - col, height: 1 })
+    b: ({ col }) => ({ left: col, top: 0, width: 1 - col, height: 1 }),
   },
   "split-right": {
     a: ({ col }) => ({ left: 0, top: 0, width: col, height: 1 }),
     b: ({ col, rowRight }) => ({ left: col, top: 0, width: 1 - col, height: rowRight }),
-    c: ({ col, rowRight }) => ({ left: col, top: rowRight, width: 1 - col, height: 1 - rowRight })
+    c: ({ col, rowRight }) => ({ left: col, top: rowRight, width: 1 - col, height: 1 - rowRight }),
   },
   grid2x2: {
     a: ({ col, rowLeft }) => ({ left: 0, top: 0, width: col, height: rowLeft }),
     b: ({ col, rowRight }) => ({ left: col, top: 0, width: 1 - col, height: rowRight }),
     c: ({ col, rowLeft }) => ({ left: 0, top: rowLeft, width: col, height: 1 - rowLeft }),
-    d: ({ col, rowRight }) => ({ left: col, top: rowRight, width: 1 - col, height: 1 - rowRight })
-  }
+    d: ({ col, rowRight }) => ({ left: col, top: rowRight, width: 1 - col, height: 1 - rowRight }),
+  },
 };
 
 export function paneBox(preset: SplitPreset, paneId: PaneId, shares: SashShares): FractionBox | null {
@@ -465,12 +449,7 @@ export function paneBox(preset: SplitPreset, paneId: PaneId, shares: SashShares)
  * A tab dropped on a snap zone: preset switch and move in one state write, so the tab never renders
  * in the focused pane between. No collapse, unlike `activateTab`: the user asked for this layout.
  */
-export function snapTab(
-  layout: ProjectLayout,
-  tabId: string,
-  transition: SnapTransition,
-  tabs: LayoutTab[]
-): ProjectLayout {
+export function snapTab(layout: ProjectLayout, tabId: string, transition: SnapTransition, tabs: LayoutTab[]): ProjectLayout {
   return moveTab(retarget(layout, transition.preset, transition.remap, tabs), tabId, transition.target, tabs);
 }
 
@@ -483,7 +462,7 @@ const PANE_POSITIONS: Record<SplitPreset, Partial<Record<PaneId, PanePosition>>>
   single: { a: "top-left" },
   cols2: { a: "top-left", b: "top-right" },
   "split-right": { a: "top-left", b: "top-right", c: "bottom-right" },
-  grid2x2: { a: "top-left", b: "top-right", c: "bottom-left", d: "bottom-right" }
+  grid2x2: { a: "top-left", b: "top-right", c: "bottom-left", d: "bottom-right" },
 };
 
 function paneAt(preset: SplitPreset, position: PanePosition | undefined): PaneId | undefined {
@@ -495,12 +474,7 @@ function paneAt(preset: SplitPreset, position: PanePosition | undefined): PaneId
  * place — the same position in the current preset, or the recorded preset restored like a snap.
  * Placed, so nothing collapses. A command never run goes to the focused pane.
  */
-export function placeCommandTab(
-  layout: ProjectLayout,
-  tabId: string,
-  command: string,
-  tabs: LayoutTab[]
-): ProjectLayout {
+export function placeCommandTab(layout: ProjectLayout, tabId: string, command: string, tabs: LayoutTab[]): ProjectLayout {
   const open = tabs.find((tab) => tab.command === command && tab.tabId !== tabId);
   const place = open ? { preset: layout.preset, pane: paneOf(layout, open.tabId) } : layout.commandPane[command];
   if (!place) {
@@ -533,7 +507,7 @@ const SNAP_STICKY = 0.03;
 export function snapZoneAt(
   preset: SplitPreset,
   point: { x: number; y: number },
-  active: SnapZone | null
+  active: SnapZone | null,
 ): { zone: SnapZone; transition: SnapTransition } | null {
   const inside = (box: FractionBox, margin: number): boolean =>
     point.x >= box.left - margin &&
@@ -630,7 +604,7 @@ export function loadLayout(refKey: string): ProjectLayout {
       focusedPane: PRESET_PANES[preset].includes(focusedPane) ? focusedPane : PRESET_PANES[preset][0],
       tabPane: restored,
       activeTab: active,
-      commandPane: places
+      commandPane: places,
     };
   } catch {
     return fallback;
@@ -663,7 +637,7 @@ export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): strin
     focusedPane: layout.focusedPane,
     tabPane,
     activeTab,
-    commandPane
+    commandPane,
   };
   return JSON.stringify(persisted);
 }

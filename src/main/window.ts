@@ -222,9 +222,7 @@ export class AppWindow {
       titleBarStyle: PLATFORM.titleBarOverlay ? "hidden" : "hiddenInset",
       titleBarOverlay:
         // Height must match the renderer's .titlebar rule, or controls and drag region disagree.
-        PLATFORM.titleBarOverlay
-          ? { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 }
-          : undefined,
+        PLATFORM.titleBarOverlay ? { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 } : undefined,
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,
@@ -232,8 +230,8 @@ export class AppWindow {
         spellcheck: false,
         // The preload reads the theme off process.argv synchronously, so the first frame is right;
         // an IPC round trip would paint it in the defaults.
-        additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])]
-      }
+        additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])],
+      },
     });
     this.window = window;
 
@@ -276,15 +274,17 @@ export class AppWindow {
       this.rendererRebuiltAt = now;
       // Only once the new renderer has loaded; earlier sends reach the dead process.
       window.webContents.once("did-finish-load", () =>
-        this.notice("warning", "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.")
+        this.notice(
+          "warning",
+          "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.",
+        ),
       );
       window.webContents.reload();
     });
 
     // No application menu (the title bar is our own), so wire the devtools shortcuts by hand.
     window.webContents.on("before-input-event", (_event, input) => {
-      const toggle =
-        input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i");
+      const toggle = input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i");
       if (input.type === "keyDown" && toggle) {
         window.webContents.toggleDevTools();
       }

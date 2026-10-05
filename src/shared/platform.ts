@@ -91,7 +91,7 @@ const POSIX = {
   /** No `$`, backtick, quote, space or backslash (an escape). */
   shellQuotePath: (path: string) => (/^[\w./:-]+$/.test(path) ? path : `'${path.replace(/'/g, "'\\''")}'`),
   tarExecutable: () => "tar",
-  sbxFirstRunMarker: () => undefined
+  sbxFirstRunMarker: () => undefined,
 };
 
 export const WINDOWS: Platform = {
@@ -131,7 +131,7 @@ export const WINDOWS: Platform = {
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in Explorer",
-  replaceKey: "ctrl+h"
+  replaceKey: "ctrl+h",
 };
 
 const POSIX_INSTALL = "curl -fsSL https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.sh | sh";
@@ -165,7 +165,7 @@ export const MAC: Platform = {
   modifierKey: "Meta",
   modifierLabel: "⌘",
   revealLabel: "Reveal in Finder",
-  replaceKey: "alt+ctrl+f"
+  replaceKey: "alt+ctrl+f",
 };
 
 export const LINUX: Platform = {
@@ -197,7 +197,7 @@ export const LINUX: Platform = {
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in your file manager",
-  replaceKey: "ctrl+h"
+  replaceKey: "ctrl+h",
 };
 
 /** The platform an id names (`process.platform`); any other Unix is taken as Linux. */

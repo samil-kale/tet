@@ -101,7 +101,7 @@ export const TabArea = memo(function TabArea({
   onOpenSettings,
   finishedTabIds,
   waitingTabIds,
-  startingTabIds
+  startingTabIds,
 }: TabAreaProps) {
   /**
    * Mirrored in a ref for the drop handler, which reads it synchronously without becoming a new
@@ -157,11 +157,11 @@ export const TabArea = memo(function TabArea({
 
   const chrome = useMemo<PaneChrome>(
     () => ({ freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings }),
-    [freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings]
+    [freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings],
   );
   const onActivate = useCallback(
     (tabId: string, paneId: PaneId) => onActivateTab(resolved.refKey, tabId, paneId),
-    [onActivateTab, resolved.refKey]
+    [onActivateTab, resolved.refKey],
   );
   const onFocus = useCallback((paneId: PaneId) => onFocusPane(resolved.refKey, paneId), [onFocusPane, resolved.refKey]);
 
@@ -200,7 +200,7 @@ export const TabArea = memo(function TabArea({
           : snapZoneAt(
               presetRef.current,
               { x: (position.x - grid.left) / grid.width, y: (position.y - grid.top) / grid.height },
-              current?.paneId === paneId ? current.zone : null
+              current?.paneId === paneId ? current.zone : null,
             );
       const zone = hit?.zone ?? null;
       if (current?.paneId === paneId && current.zone === zone) {
@@ -208,7 +208,7 @@ export const TabArea = memo(function TabArea({
       }
       setDragTarget({ paneId, zone, transition: hit?.transition ?? null });
     },
-    [presetRef, setDragTarget]
+    [presetRef, setDragTarget],
   );
 
   // `dragover` never sees the tab id, so the drop joins it with the zone.
@@ -223,7 +223,7 @@ export const TabArea = memo(function TabArea({
         onActivate(tabId, paneId);
       }
     },
-    [setDragTarget, onSnapTab, resolved.refKey, onActivate]
+    [setDragTarget, onSnapTab, resolved.refKey, onActivate],
   );
 
   // Unconditional, unlike "left": nothing stale follows a drag's end, and a snap preview would survive
@@ -243,7 +243,7 @@ export const TabArea = memo(function TabArea({
       next[paneId] = sameList(
         paneTabsRef.current[paneId],
         tabs.filter((tab) => (tabPane[tab.tabId] ?? focusedPane) === paneId),
-        NO_TABS
+        NO_TABS,
       );
     }
     paneTabsRef.current = next;
@@ -307,7 +307,7 @@ export const TabArea = memo(function TabArea({
     min: number,
     minOther: number,
     containerSize: number | null,
-    commit: (fraction: number) => void
+    commit: (fraction: number) => void,
   ) => (
     <Sash
       orientation={orientation}
@@ -340,7 +340,7 @@ export const TabArea = memo(function TabArea({
       ? paneBox(dragTarget.transition.preset, dragTarget.transition.target, {
           col: colPixels / gridSize.width,
           rowLeft: leftRowPixels / gridSize.height,
-          rowRight: rightRowPixels / gridSize.height
+          rowRight: rightRowPixels / gridSize.height,
         })
       : null;
 

@@ -16,7 +16,7 @@ import {
   snapTab,
   snapZoneAt,
   tabsOnScreen,
-  visibleTabIds
+  visibleTabIds,
 } from "../../src/renderer/tabs/pane-layout";
 import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
@@ -36,7 +36,7 @@ describe("tabsOnScreen", () => {
       ...defaultLayout(),
       preset: "cols2",
       tabPane: { t1: "a", t2: "b", t3: "b" },
-      activeTab: { a: "t1", b: "t2" }
+      activeTab: { a: "t1", b: "t2" },
     };
     assert.deepEqual(tabsOnScreen(layout, true, false), ["t1", "t2"]);
     assert.deepEqual(tabsOnScreen(layout, false, false), [], "another window in front, or minimized");
@@ -76,7 +76,7 @@ describe("normalizeLayout", () => {
       ...defaultLayout(),
       preset: "cols2",
       tabPane: { t1: "a", t2: "b", t3: "b" },
-      activeTab: { a: "t1", b: "t2" }
+      activeTab: { a: "t1", b: "t2" },
     };
     assert.deepEqual(normalizeLayout(layout, [tab("t1"), tab("t3")], tabs).activeTab, { a: "t1", b: "t3" });
   });
@@ -110,7 +110,7 @@ describe("moveTab", () => {
   const cols2 = normalizeLayout(
     { preset: "cols2", focusedPane: "a", tabPane: { t1: "a", t2: "a", t3: "a", t4: "b" }, activeTab: { a: "t2" }, commandPane: {} },
     tabs,
-    NONE
+    NONE,
   );
 
   it("moves the tab, focuses the target, and leaves the source on the tab before", () => {
@@ -132,20 +132,12 @@ describe("moveTab", () => {
 describe("placeCommandTab", () => {
   const command = (tabId: string, line: string): TabDescriptor => ({ ...tab(tabId), command: line });
   const split = (commandPane: ProjectLayout["commandPane"], tabs: TabDescriptor[]): ProjectLayout =>
-    normalizeLayout(
-      { preset: "split-right", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {}, commandPane },
-      tabs,
-      NONE
-    );
+    normalizeLayout({ preset: "split-right", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {}, commandPane }, tabs, NONE);
   const tabs = [tab("t1"), tab("t2")];
 
   it("records the pane a command's tab closed in, and puts the next run back there", () => {
     const withCommand = [...tabs, command("c1", "npm test")];
-    const running = normalizeLayout(
-      { ...split({}, withCommand), tabPane: { t1: "a", t2: "b", c1: "c" } },
-      withCommand,
-      NONE
-    );
+    const running = normalizeLayout({ ...split({}, withCommand), tabPane: { t1: "a", t2: "b", c1: "c" } }, withCommand, NONE);
     const closed = normalizeLayout(running, tabs, withCommand);
     assert.deepEqual(closed.commandPane, { "npm test": { preset: "split-right", pane: "c" } });
     const again = [...tabs, command("c2", "npm test")];
@@ -160,7 +152,7 @@ describe("placeCommandTab", () => {
     const running = normalizeLayout(
       { ...split({ "npm test": { preset: "split-right", pane: "c" } }, withCommand), tabPane: { t1: "a", t2: "b", c1: "b" } },
       withCommand,
-      NONE
+      NONE,
     );
     const placed = placeCommandTab(running, "c2", "npm test", [...withCommand, command("c2", "npm test")]);
     assert.equal(placed.tabPane.c2, "b", "the open one wins over the record");
@@ -174,9 +166,15 @@ describe("placeCommandTab", () => {
     // Recorded bottom left in the grid, which split-right lacks: the grid comes back, and
     // split-right's bottom right pane keeps its place as d.
     const layout = normalizeLayout(
-      { preset: "split-right", focusedPane: "a", tabPane: { t1: "a", t2: "c" }, activeTab: {}, commandPane: { "npm test": { preset: "grid2x2", pane: "c" } } },
+      {
+        preset: "split-right",
+        focusedPane: "a",
+        tabPane: { t1: "a", t2: "c" },
+        activeTab: {},
+        commandPane: { "npm test": { preset: "grid2x2", pane: "c" } },
+      },
       tabs,
-      NONE
+      NONE,
     );
     const restored = placeCommandTab(layout, "c1", "npm test", tabs);
     assert.equal(restored.preset, "grid2x2");
@@ -195,7 +193,7 @@ describe("collapseEmptied", () => {
   const grid = normalizeLayout(
     { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "b", t2: "c", t3: "d" }, activeTab: {}, commandPane: {} },
     tabs,
-    NONE
+    NONE,
   );
 
   it("hands a grid's remaining panes to split-right, each keeping its place", () => {
@@ -213,7 +211,7 @@ describe("collapseEmptied", () => {
     const moved = normalizeLayout(
       { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "a", t2: "d" }, activeTab: {}, commandPane: {} },
       tabs.slice(0, 2),
-      NONE
+      NONE,
     );
     const next = collapseEmptied(moved, "c", tabs.slice(0, 2));
     assert.equal(next.preset, "split-right");
@@ -226,7 +224,7 @@ describe("collapseEmptied", () => {
     const moved = normalizeLayout(
       { preset: "grid2x2", focusedPane: "b", tabPane: { t1: "a", t2: "b", t3: "b" }, activeTab: {}, commandPane: {} },
       tabs,
-      NONE
+      NONE,
     );
     const next = collapseEmptied(moved, "c", tabs);
     assert.equal(next.preset, "cols2", "the empty RU under the occupied RO went too");
@@ -235,7 +233,7 @@ describe("collapseEmptied", () => {
     const up = normalizeLayout(
       { preset: "grid2x2", focusedPane: "a", tabPane: { t1: "a", t2: "a", t3: "a" }, activeTab: {}, commandPane: {} },
       tabs,
-      NONE
+      NONE,
     );
     const single = collapseEmptied(up, "c", tabs);
     assert.equal(single.preset, "single");
@@ -244,7 +242,7 @@ describe("collapseEmptied", () => {
     const down = normalizeLayout(
       { preset: "grid2x2", focusedPane: "d", tabPane: { t1: "a", t2: "d", t3: "d" }, activeTab: {}, commandPane: {} },
       tabs,
-      NONE
+      NONE,
     );
     const kept = collapseEmptied(down, "c", tabs);
     assert.equal(kept.preset, "split-right");
@@ -260,7 +258,7 @@ describe("collapseEmptied", () => {
     const split = normalizeLayout(
       { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {}, commandPane: {} },
       tabs,
-      NONE
+      NONE,
     );
     assert.deepEqual(collapseEmptied(split, "a", tabs).tabPane, { t1: "a", t2: "a", t3: "b" });
     assert.equal(collapseEmptied(split, "b", tabs).preset, "cols2");
@@ -269,7 +267,7 @@ describe("collapseEmptied", () => {
     const cols2 = normalizeLayout(
       { preset: "cols2", focusedPane: "b", tabPane: { t1: "b", t2: "b", t3: "b" }, activeTab: { b: "t2" }, commandPane: {} },
       tabs,
-      NONE
+      NONE,
     );
     const single = collapseEmptied(cols2, "a", tabs);
     assert.equal(single.preset, "single");
@@ -284,7 +282,7 @@ describe("activateTab", () => {
   const split = normalizeLayout(
     { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {}, commandPane: {} },
     tabs,
-    NONE
+    NONE,
   );
 
   it("collapses the pane the move emptied, and only then", () => {
@@ -317,7 +315,7 @@ describe("collapseEmpty", () => {
     const split = normalizeLayout(
       { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "c" }, activeTab: {}, commandPane: {} },
       tabs,
-      NONE
+      NONE,
     );
     const tidy = collapseEmpty(split, tabs);
     assert.equal(tidy.preset, "cols2");
@@ -325,7 +323,11 @@ describe("collapseEmpty", () => {
   });
 
   it("is the same layout when nothing is empty", () => {
-    const full = normalizeLayout({ preset: "cols2", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {}, commandPane: {} }, tabs, NONE);
+    const full = normalizeLayout(
+      { preset: "cols2", focusedPane: "a", tabPane: { t1: "a", t2: "b" }, activeTab: {}, commandPane: {} },
+      tabs,
+      NONE,
+    );
     assert.equal(collapseEmpty(full, tabs), full);
   });
 });
@@ -335,7 +337,7 @@ describe("collapseClosed", () => {
   const split = normalizeLayout(
     { preset: "split-right", focusedPane: "c", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {}, commandPane: {} },
     tabs,
-    NONE
+    NONE,
   );
 
   it("collapses the pane whose last tab closed", () => {
@@ -371,7 +373,7 @@ describe("snapTab", () => {
   const cols2 = normalizeLayout(
     { preset: "cols2", focusedPane: "a", tabPane: { t1: "a", t2: "a", t3: "b", t4: "b" }, activeTab: {}, commandPane: {} },
     tabs,
-    NONE
+    NONE,
   );
 
   it("splits a single pane to the right, taking only the dragged tab along", () => {
@@ -398,7 +400,7 @@ describe("snapTab", () => {
     const split = normalizeLayout(
       { preset: "split-right", focusedPane: "b", tabPane: { t1: "a", t2: "b", t3: "c" }, activeTab: {}, commandPane: {} },
       tabs.slice(0, 3),
-      NONE
+      NONE,
     );
     const next = snapTab(split, "t2", SNAP_TRANSITIONS["split-right"]["bottom-right"]!, tabs.slice(0, 3));
     assert.equal(next.preset, "split-right");
@@ -445,10 +447,11 @@ describe("snapTab", () => {
         preset: "split-right",
         focusedPane: "c",
         tabPane: { t1: "a", t2: "a", t3: "b", t4: "c" },
-        activeTab: { a: "t1" }, commandPane: {}
+        activeTab: { a: "t1" },
+        commandPane: {},
       },
       tabs,
-      NONE
+      NONE,
     );
     const grid = snapTab(split, "t2", SNAP_TRANSITIONS["split-right"]["bottom-left"]!, tabs);
     assert.equal(grid.preset, "grid2x2");
@@ -482,7 +485,7 @@ describe("what is persisted", () => {
   const storage = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {
     getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => void storage.set(key, value)
+    setItem: (key: string, value: string) => void storage.set(key, value),
   };
 
   it("is keyed by session id, without tabs that have no session", () => {
@@ -490,7 +493,8 @@ describe("what is persisted", () => {
       preset: "cols2",
       focusedPane: "b",
       tabPane: { "new-1": "a", "new-2": "b", "new-3": "b" },
-      activeTab: { a: "new-1", b: "new-3" }, commandPane: {}
+      activeTab: { a: "new-1", b: "new-3" },
+      commandPane: {},
     };
     const serialized = serializeLayout(layout, [tab("new-1", 0, "s1"), tab("new-2", 0, "s2"), tab("new-3")]);
     assert.deepEqual(JSON.parse(serialized), {
@@ -498,7 +502,7 @@ describe("what is persisted", () => {
       focusedPane: "b",
       tabPane: { s1: "a", s2: "b" },
       activeTab: { a: "s1" },
-      commandPane: {}
+      commandPane: {},
     });
     storage.set("tet.layout.terminals.p.layout", serialized);
     assert.deepEqual(loadLayout("p"), {
@@ -506,14 +510,14 @@ describe("what is persisted", () => {
       focusedPane: "b",
       tabPane: { s1: "a", s2: "b" },
       activeTab: { a: "s1" },
-      commandPane: {}
+      commandPane: {},
     });
   });
 
   it("keeps a pane on its restored active tab while the sessions are listed, and lets a stale one go", () => {
     storage.set(
       "tet.layout.terminals.a.layout",
-      JSON.stringify({ preset: "single", focusedPane: "a", tabPane: {}, activeTab: { a: "s1" }, commandPane: {} })
+      JSON.stringify({ preset: "single", focusedPane: "a", tabPane: {}, activeTab: { a: "s1" }, commandPane: {} }),
     );
     const restored = loadLayout("a");
     const first = [tab("s2", 20, "s2")];
@@ -527,7 +531,7 @@ describe("what is persisted", () => {
   it("drops a restored active tab of a pane the preset does not have, or not a session id", () => {
     storage.set(
       "tet.layout.terminals.b.layout",
-      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, activeTab: { a: 3, b: "s1", c: "s2", z: "s3" } })
+      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, activeTab: { a: 3, b: "s1", c: "s2", z: "s3" } }),
     );
     assert.deepEqual(loadLayout("b").activeTab, { b: "s1" });
   });
@@ -538,19 +542,19 @@ describe("what is persisted", () => {
       focusedPane: "c",
       tabPane: { "new-1": "c" },
       activeTab: {},
-      commandPane: { "npm test": { preset: "cols2", pane: "b" }, "npm run build": { preset: "grid2x2", pane: "d" } }
+      commandPane: { "npm test": { preset: "cols2", pane: "b" }, "npm run build": { preset: "grid2x2", pane: "d" } },
     };
     const running: TabDescriptor = { ...tab("new-1"), command: "npm test" };
     const serialized = serializeLayout(layout, [running]);
     assert.deepEqual((JSON.parse(serialized) as { commandPane: unknown }).commandPane, {
       "npm test": { preset: "split-right", pane: "c" },
-      "npm run build": { preset: "grid2x2", pane: "d" }
+      "npm run build": { preset: "grid2x2", pane: "d" },
     });
     storage.set("tet.layout.terminals.r.layout", serialized);
     assert.deepEqual(loadLayout("r").commandPane, (JSON.parse(serialized) as { commandPane: unknown }).commandPane);
     storage.set(
       "tet.layout.terminals.r.layout",
-      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, commandPane: { x: { preset: "cols2", pane: "d" }, y: 3 } })
+      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, commandPane: { x: { preset: "cols2", pane: "d" }, y: 3 } }),
     );
     assert.deepEqual(loadLayout("r").commandPane, {}, "a pane the preset does not have, or no place at all, is dropped");
   });
@@ -561,10 +565,7 @@ describe("what is persisted", () => {
     assert.deepEqual(loadLayout("q"), defaultLayout());
     storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "cols9", focusedPane: "a", tabPane: {} }));
     assert.deepEqual(loadLayout("q"), defaultLayout());
-    storage.set(
-      "tet.layout.terminals.q.layout",
-      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s: "z", t: "b" } })
-    );
+    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s: "z", t: "b" } }));
     assert.deepEqual(loadLayout("q").tabPane, { t: "b" }, "an unknown pane is dropped, the rest kept");
     storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "single", focusedPane: "c", tabPane: {} }));
     assert.equal(loadLayout("q").focusedPane, "a", "a focused pane the preset does not have");
@@ -581,7 +582,7 @@ describe("an editor tab", () => {
     const layout = normalizeLayout(
       { preset: "cols2", focusedPane: "b", tabPane: { t1: "a" }, activeTab: {}, commandPane: {} },
       [tab("t1"), editor],
-      NONE
+      NONE,
     );
     assert.equal(layout.tabPane[EDITOR_TAB_ID], "b");
     assert.equal(layout.activeTab.b, EDITOR_TAB_ID);
@@ -589,7 +590,9 @@ describe("an editor tab", () => {
 
   it("is never written to disk, having no session", () => {
     const tabs = [tab("t1", 0, "s1"), editor];
-    assert.deepEqual((JSON.parse(serializeLayout(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs)) as { tabPane: unknown }).tabPane, { s1: "a" });
+    assert.deepEqual((JSON.parse(serializeLayout(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs)) as { tabPane: unknown }).tabPane, {
+      s1: "a",
+    });
   });
 
   it("holds its pane: closing it collapses the pane, closing a neighbour beside it does not", () => {

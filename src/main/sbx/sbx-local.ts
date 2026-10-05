@@ -29,7 +29,7 @@ function toKnowledge(value: unknown): SbxKnowledgeSettings | undefined {
   const knowledge: SbxKnowledgeSettings = {
     skills: toAccess(value.skills),
     plugins: toAccess(value.plugins),
-    instructions: toAccess(value.instructions)
+    instructions: toAccess(value.instructions),
   };
   if (typeof value.skillsFolder === "string" && value.skillsFolder !== "") {
     knowledge.skillsFolder = value.skillsFolder;
@@ -73,7 +73,7 @@ export class SbxLocalStore {
     return {
       secrets: [...this.values(projectId, "secrets").keys()],
       variables: [...this.values(projectId, "variables").keys()],
-      knowledge: this.knowledge(projectId)
+      knowledge: this.knowledge(projectId),
     };
   }
 
@@ -162,5 +162,4 @@ export class SbxLocalStore {
       }
     }
   }
-
 }

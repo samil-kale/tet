@@ -5,7 +5,17 @@ import type { EditorListing, EditorReport, NoticeReport } from "../../shared/typ
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { SbxAccount, SbxKnowledgeSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxSignInResult, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
+import type {
+  SbxAccount,
+  SbxKnowledgeSettings,
+  SbxLocalSave,
+  SbxProblems,
+  SbxProjectSettings,
+  SbxSaveResult,
+  SbxSignInResult,
+  SbxStoredLocal,
+  SbxValueKind,
+} from "../../shared/types/sbx";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { NotificationTarget } from "../util/notifications";
@@ -18,14 +28,13 @@ import type { ProjectLookup } from "../store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import type { SettingsAccess } from "../store/settings";
 
-
 /** What a verb is made of, shared by ctl-server.ts and the verb files beside it: the handler,
  *  its dependencies (ControlDeps) and the lookups every verb file uses. */
 
 export class ControlError extends Error {
   constructor(
     readonly code: ControlErrorCode,
-    message: string
+    message: string,
   ) {
     super(message);
   }
@@ -47,7 +56,7 @@ export type Handler = (
   /** See ControlRequest.at. */
   at: number | undefined,
   /** Aborted once the CLI is gone (Ctrl+C) before its answer: nothing waits for it any more. */
-  gone: AbortSignal
+  gone: AbortSignal,
 ) => Promise<Answer> | Answer;
 
 export function text(args: Record<string, unknown>, name: string, what: string): string {
@@ -181,7 +190,7 @@ export interface ControlDeps {
       settings: SbxProjectSettings,
       knowledge: SbxKnowledgeSettings,
       values: Record<SbxValueKind, string[]>,
-      reading?: SbxReading
+      reading?: SbxReading,
     ): Promise<SbxProblems>;
     /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */
     save(project: Project, request: SbxProjectSettings, local: SbxLocalSave, known?: Pick<SbxReading, "status">): Promise<SbxSaveResult>;
@@ -250,7 +259,7 @@ export function tetWorktree(project: Project, name: string): { worktree: Project
 export function resolveCallerRef(
   store: ProjectLookup,
   args: Record<string, unknown>,
-  caller: ControlRequest["caller"]
+  caller: ControlRequest["caller"],
 ): { project: Project; ref: ProjectRef } {
   const askedProject = optionalText(args, "project");
   const projectId = askedProject ?? caller.projectId;
@@ -269,7 +278,10 @@ export function resolveCallerRef(
 }
 
 /** The repository's or worktree's git state; one closed meanwhile is an internal error. */
-export function repositoryOf(deps: Pick<ControlDeps, "repositories" | "store">, ref: ProjectRef): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> {
+export function repositoryOf(
+  deps: Pick<ControlDeps, "repositories" | "store">,
+  ref: ProjectRef,
+): NonNullable<ReturnType<ControlDeps["repositories"]["get"]>> {
   const repo = deps.repositories.get(ref);
   if (!repo) {
     throw new ControlError("internal", notOpenMessage(deps.store, ref));
@@ -281,6 +293,9 @@ export function repositoryOf(deps: Pick<ControlDeps, "repositories" | "store">, 
 export function refuseUnsaved(deps: Pick<ControlDeps, "records">, refs: ProjectRef[], outcome: string): void {
   const unsaved = refs.flatMap((ref) => deps.records.editors(ref)).filter((editor) => editor.dirty);
   if (unsaved.length > 0) {
-    throw new ControlError("bad_args", `unsaved changes in ${unsaved.map((editor) => editor.path).join(", ")}, ${outcome}: ask the user to save or close them in TET`);
+    throw new ControlError(
+      "bad_args",
+      `unsaved changes in ${unsaved.map((editor) => editor.path).join(", ")}, ${outcome}: ask the user to save or close them in TET`,
+    );
   }
 }

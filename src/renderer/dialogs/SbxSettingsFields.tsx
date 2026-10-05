@@ -1,16 +1,42 @@
 import { Fragment, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import type { SbxAccess, SbxKnowledgeSettings, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxLocalEdits, SbxLocalSave, SbxPath, SbxPort, SbxProblems, SbxProjectSettings, SbxStoredLocal } from "../../shared/types/sbx";
+import type {
+  SbxAccess,
+  SbxKnowledgeSettings,
+  SbxKnowledgeEntry,
+  SbxKnowledgeKind,
+  SbxKnowledgeSource,
+  SbxLocalEdits,
+  SbxLocalSave,
+  SbxPath,
+  SbxPort,
+  SbxProblems,
+  SbxProjectSettings,
+  SbxStoredLocal,
+} from "../../shared/types/sbx";
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
-import { atLeastOne, EditRow, firstMark, patched, RowInput, RowMark, RowSection, SecretInput, typedRows, withId, without, type Row } from "../ui/RowSection";
+import {
+  atLeastOne,
+  EditRow,
+  firstMark,
+  patched,
+  RowInput,
+  RowMark,
+  RowSection,
+  SecretInput,
+  typedRows,
+  withId,
+  without,
+  type Row,
+} from "../ui/RowSection";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, FieldGroup, FieldRow, PathInput } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
 
 const ACCESS_OPTIONS: { value: SbxAccess; label: string }[] = [
   { value: "ro", label: "Read" },
-  { value: "rw", label: "Read+Write" }
+  { value: "rw", label: "Read+Write" },
 ];
 
 /** Where the skills come from: `SbxKnowledgeSettings.skillsFolder` absent, or set. */
@@ -18,7 +44,7 @@ type SkillsSource = "agents" | "folder";
 
 const SKILLS_SOURCE_OPTIONS: { value: SkillsSource; label: string }[] = [
   { value: "agents", label: "Each agent's own" },
-  { value: "folder", label: "A folder" }
+  { value: "folder", label: "A folder" },
 ];
 
 /** One row per `SbxKnowledgeKind`, in display order. Labels only; the per-agent host paths are
@@ -26,7 +52,7 @@ const SKILLS_SOURCE_OPTIONS: { value: SkillsSource; label: string }[] = [
 const KNOWLEDGE_LABELS: { kind: SbxKnowledgeKind; label: string }[] = [
   { kind: "skills", label: "Skills" },
   { kind: "plugins", label: "Plugins" },
-  { kind: "instructions", label: "CLAUDE.md / AGENTS.md" }
+  { kind: "instructions", label: "CLAUDE.md / AGENTS.md" },
 ];
 
 /** How long typing pauses before the rows are checked again (useSbxProblems). */
@@ -63,18 +89,16 @@ export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLoca
     paths: settings.paths.map(withId),
     hosts: atLeastOne(
       settings.hosts.map((host) => withId({ host })),
-      BLANK_HOST
+      BLANK_HOST,
     ),
     secrets: atLeastOne(
-      settings.secrets.map((secret) =>
-        withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })
-      ),
-      BLANK_SECRET
+      settings.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })),
+      BLANK_SECRET,
     ),
     variables: atLeastOne(
       settings.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
-      BLANK_VARIABLE
-    )
+      BLANK_VARIABLE,
+    ),
   };
 }
 
@@ -122,7 +146,7 @@ function variableRefusal(row: VariableRow, state: FieldsState): string | undefin
         named(row),
         state.variables.filter((other) => other.id !== row.id).map(named),
         state.secrets.map(named),
-        PLATFORM.envNamesIgnoreCase
+        PLATFORM.envNamesIgnoreCase,
       );
 }
 
@@ -152,10 +176,8 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
       .filter((port) => port.host && port.container),
     paths: state.paths.map(({ path, access }) => ({ path, access })),
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
-    secrets: state.secrets
-      .filter((row) => !isEmptySecretRow(row))
-      .map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
-    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() }))
+    secrets: state.secrets.filter((row) => !isEmptySecretRow(row)).map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
+    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() })),
   };
 }
 
@@ -164,7 +186,7 @@ function toLocalEdits(rows: { env: string; value: string; from?: string }[]): Sb
   const kept = rows.filter((row) => row.env.trim() !== "");
   return {
     values: Object.fromEntries(kept.filter((row) => row.value !== "").map((row) => [row.env.trim(), row.value])),
-    from: Object.fromEntries(kept.flatMap((row) => (row.from === undefined ? [] : [[row.env.trim(), row.from]])))
+    from: Object.fromEntries(kept.flatMap((row) => (row.from === undefined ? [] : [[row.env.trim(), row.from]]))),
   };
 }
 
@@ -181,7 +203,7 @@ export function toLocalSave(state: FieldsState): SbxLocalSave {
   return {
     secrets: toLocalEdits(state.secrets),
     variables: toLocalEdits(state.variables),
-    knowledge: toKnowledge(state.knowledge)
+    knowledge: toKnowledge(state.knowledge),
   };
 }
 
@@ -226,7 +248,7 @@ export function useSbxProblems(
   state: FieldsState,
   stored: SbxStoredLocal,
   ready: boolean,
-  organization: string | undefined
+  organization: string | undefined,
 ): SbxProblems {
   const [problems, setProblems] = useState<SbxProblems>({});
   const settings = { enabled: true, ...toSettings(state) };
@@ -250,7 +272,7 @@ export function useSbxProblems(
             setProblems(answer);
           }
         },
-        () => undefined
+        () => undefined,
       );
     }, delay);
     return () => {
@@ -291,7 +313,7 @@ export function tabMarks(state: FieldsState, problems: SbxProblems): Partial<Rec
     paths: firstMark(state.paths.map((row) => problems.paths?.[row.path])),
     hosts: firstMark(state.hosts.map((row) => problems.hosts?.[row.host.trim()])),
     secrets: firstMark(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
-    variables: firstMark(state.variables.map((row) => variableMark(row, state, problems)))
+    variables: firstMark(state.variables.map((row) => variableMark(row, state, problems))),
   };
 }
 
@@ -347,11 +369,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
               <Fragment key={kind}>
                 {/* Only skills have a source; the other labels take its column too. */}
                 <div className={skills ? "sbx-knowledge-cell" : "sbx-knowledge-cell sbx-knowledge-wide"}>
-                  <Checkbox
-                    label={label}
-                    checked={access !== false}
-                    onChange={(next) => setKnowledge(kind, next ? "ro" : false)}
-                  />
+                  <Checkbox label={label} checked={access !== false} onChange={(next) => setKnowledge(kind, next ? "ro" : false)} />
                   <RowMark title={problems.knowledge?.[kind]} />
                 </div>
                 {skills && (
@@ -366,24 +384,23 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
                   </div>
                 )}
                 <div className="sbx-knowledge-cell sbx-knowledge-agents">
-                  {access !== false && sources.map((source) => {
-                    const entries = knowledgeEntries(source, kind, state.knowledge);
-                    const what = entries.map((entry) => `${entry.host} → ${entry.target}`).join(", ");
-                    return (
-                      <span
-                        key={source.agentId}
-                        className={entries.length > 0 ? "sbx-knowledge-agent" : "sbx-knowledge-agent dimmed"}
-                        title={`${source.displayName}: ${what || "nothing on this machine"}`}
-                      >
-                        <AgentIcon agentId={source.agentId} />
-                      </span>
-                    );
-                  })}
+                  {access !== false &&
+                    sources.map((source) => {
+                      const entries = knowledgeEntries(source, kind, state.knowledge);
+                      const what = entries.map((entry) => `${entry.host} → ${entry.target}`).join(", ");
+                      return (
+                        <span
+                          key={source.agentId}
+                          className={entries.length > 0 ? "sbx-knowledge-agent" : "sbx-knowledge-agent dimmed"}
+                          title={`${source.displayName}: ${what || "nothing on this machine"}`}
+                        >
+                          <AgentIcon agentId={source.agentId} />
+                        </span>
+                      );
+                    })}
                 </div>
                 <div className="sbx-knowledge-cell">
-                  {access !== false && (
-                    <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />
-                  )}
+                  {access !== false && <Dropdown value={access} options={ACCESS_OPTIONS} onChange={(value) => setKnowledge(kind, value)} />}
                 </div>
                 {access !== false && folder !== undefined && (
                   // No remove: "Each agent's own" drops the folder.
@@ -412,8 +429,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         label="Port forwarding"
         rows={state.ports}
         renderRow={(port) => {
-          const setPort = (change: Partial<typeof port>): void =>
-            update("ports", (rows) => patched(rows, port.id, change));
+          const setPort = (change: Partial<typeof port>): void => update("ports", (rows) => patched(rows, port.id, change));
           return (
             <EditRow key={port.id} mark={portMark(port, problems)} {...ports.remove(port.id)}>
               <RowInput width="port" placeholder="3000" value={port.host} onChange={(host) => setPort({ host })} />
@@ -458,9 +474,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
             <ActionLink onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox"))}>
               + Add folder
             </ActionLink>
-            <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>
-              + Add file
-            </ActionLink>
+            <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>+ Add file</ActionLink>
           </FieldRow>
         }
       />
@@ -474,8 +488,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         label="Secrets"
         rows={state.secrets}
         renderRow={(row) => {
-          const setSecret = (change: Partial<typeof row>): void =>
-            update("secrets", (rows) => patched(rows, row.id, change));
+          const setSecret = (change: Partial<typeof row>): void => update("secrets", (rows) => patched(rows, row.id, change));
           const valueStored = holdsValue(row, stored.secrets);
           return (
             <EditRow key={row.id} mark={secretMark(row, state.secrets, problems)} {...secrets.remove(row.id)}>
@@ -514,8 +527,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         label="Variables"
         rows={state.variables}
         renderRow={(row) => {
-          const setVariable = (change: Partial<typeof row>): void =>
-            update("variables", (rows) => patched(rows, row.id, change));
+          const setVariable = (change: Partial<typeof row>): void => update("variables", (rows) => patched(rows, row.id, change));
           const valueStored = holdsValue(row, stored.variables);
           return (
             <EditRow key={row.id} mark={variableMark(row, state, problems)} {...variables.remove(row.id)}>

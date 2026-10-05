@@ -58,7 +58,7 @@ function excludeMatcher(pattern: string): Minimatch {
     windowsPathsNoEscape: true,
     nonegate: true,
     nocomment: true,
-    optimizationLevel: 2
+    optimizationLevel: 2,
   });
 }
 
@@ -72,7 +72,7 @@ export async function walkExplorer(
   root: string,
   view: WalkView,
   ignored: string[],
-  wantMtimes: boolean
+  wantMtimes: boolean,
 ): Promise<{ files: string[]; emptyDirs: string[]; mtimes: Record<string, number> | undefined }> {
   const ignoredFiles = new Set(ignored.filter((entry) => !entry.endsWith("/")));
   const ignoredDirs = new Set(ignored.filter((entry) => entry.endsWith("/")).map((entry) => entry.slice(0, -1)));
@@ -133,7 +133,7 @@ export async function walkExplorer(
   };
   const roots = view.folders;
   const outermost = roots.filter(
-    (entry) => !roots.some((other) => other !== entry && (other.path === "" || entry.path.startsWith(`${other.path}/`)))
+    (entry) => !roots.some((other) => other !== entry && (other.path === "" || entry.path.startsWith(`${other.path}/`))),
   );
   if (outermost.length === 0) {
     await walk(root, "");
@@ -160,7 +160,7 @@ export async function searchFiles(
   view: WalkView,
   ignored: string[],
   query: FileSearchQuery,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<FileSearchResult> {
   let matcher: RegExp;
   try {

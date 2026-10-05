@@ -489,7 +489,7 @@ is a wall and **installs nothing**. `process.env.PATH` is rewritten before that 
 
 ## npm scripts
 
-- `npm run compile`, `npm run typecheck`, `npm run lint`
+- `npm run compile`, `npm run typecheck`, `npm run lint`, `npm run format` (Prettier; `format:check` in CI)
 - `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: one
   file per area or per seam within one, a new test going beside what it tests; `e2e/` runs the
   real thing, `helpers/` serves them all, and `lint.test.ts` holds `eslint.config.mjs`'s rules to

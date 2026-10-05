@@ -81,7 +81,10 @@ ${stderr.slice(uncaught)}`);
     // resolveRoot, not realpathSync: addProject stores git's root, which also expands Windows' 8.3
     // short %TEMP% and macOS's /var -> /private/var symlink.
     assert.equal(project.path, await resolveRoot(repo));
-    assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
+    assert.deepEqual(
+      ((await ctl("projects-list")).result as Project[]).map((entry) => entry.id),
+      [project.id],
+    );
   });
 
   it("opens a shell tab that actually runs, renames and closes it", async () => {
@@ -89,14 +92,13 @@ ${stderr.slice(uncaught)}`);
     const created = await ctl("tabs-create", "--agent", "shell", "--project", project.id);
     assert.equal(created.status, 0, created.stderr);
     const tab = created.result as TabDescriptor;
-    const tabs = async (): Promise<TabDescriptor[]> =>
-      (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
+    const tabs = async (): Promise<TabDescriptor[]> => (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
     // "running" is the whole chain: tabs:show reached the window, which drew the tab, whose
     // first resize spawned the process.
     await eventually(
       "the shell tab running",
       async () => (await tabs()).some((entry) => entry.tabId === tab.tabId && entry.status === "running"),
-      STARTUP_MS
+      STARTUP_MS,
     );
     // Only a stopped one: a running session is never ended by an agent's tabs-restart.
     assert.match((await ctl("tabs-restart", tab.tabId, "--project", project.id)).stderr, /has nothing to restart/);
@@ -146,13 +148,14 @@ ${stderr.slice(uncaught)}`);
         "  if (size !== last) { last = size; console.log('tet-size ' + size); }\n" +
         "};\n" +
         "report();\n" +
-        "setInterval(report, 50);\n"
+        "setInterval(report, 50);\n",
     );
     fs.writeFileSync(path.join(repo, "tet.json"), JSON.stringify({ commands: [{ command: `node "${probe}"`, name: "size" }] }));
-    const run = async (): Promise<string> => ((await ctl("tabs-run-command", "size", "--project", project.id)).result as TabDescriptor).tabId;
+    const run = async (): Promise<string> =>
+      ((await ctl("tabs-run-command", "size", "--project", project.id)).result as TabDescriptor).tabId;
     // Every size the tab's program saw, in order; a repaint repeating a line is not a new size.
     const sizes = async (tabId: string): Promise<string[]> => [
-      ...new Set([...(await started().output(project.id, tabId)).matchAll(/tet-size (\d+x\d+)/g)].map((match) => match[1]))
+      ...new Set([...(await started().output(project.id, tabId)).matchAll(/tet-size (\d+x\d+)/g)].map((match) => match[1])),
     ];
     const reported = async (tabId: string): Promise<string[]> => {
       await eventually(`tab ${tabId}'s size`, async () => (await sizes(tabId)).length > 0, STARTUP_MS);
@@ -205,7 +208,7 @@ ${stderr.slice(uncaught)}`);
     // startup depends on the machine.
     fs.writeFileSync(
       path.join(repo, "tet.json"),
-      JSON.stringify({ commands: [{ command: "node -e \"console.log('tet-context-probe')\"", name: "probe" }] })
+      JSON.stringify({ commands: [{ command: "node -e \"console.log('tet-context-probe')\"", name: "probe" }] }),
     );
     const probe = (await ctl("tabs-run-command", "probe", "--project", project.id)).result as TabDescriptor;
     const lines = (): Promise<string> => started().output(project.id, probe.tabId);
@@ -240,14 +243,12 @@ ${stderr.slice(uncaught)}`);
           { command: "node -e process.exit(3)", name: "fails" },
           { command: "node -e 0", name: "passes" },
           { command: "node -e 0 && node -e 0", name: "chained" },
-          { command: relative, name: "relative" }
-        ]
-      })
+          { command: relative, name: "relative" },
+        ],
+      }),
     );
-    const tabs = async (): Promise<TabDescriptor[]> =>
-      (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
-    const statusOf = async (tabId: string): Promise<string | undefined> =>
-      (await tabs()).find((entry) => entry.tabId === tabId)?.status;
+    const tabs = async (): Promise<TabDescriptor[]> => (await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[];
+    const statusOf = async (tabId: string): Promise<string | undefined> => (await tabs()).find((entry) => entry.tabId === tabId)?.status;
     const failing = (await ctl("tabs-run-command", "fails", "--project", project.id)).result as TabDescriptor;
     assert.equal(failing.savedCommand, true);
     await eventually("the failing command's tab in error", async () => (await statusOf(failing.tabId)) === "error", STARTUP_MS);
@@ -263,38 +264,35 @@ ${stderr.slice(uncaught)}`);
 
   it("reflects a commit made in a terminal, as the git lane would", async () => {
     const [project] = (await ctl("projects-list")).result as Project[];
-    const state = async (): Promise<RepositoryState> =>
-      (await ctl("repository-state", "--project", project.id)).result as RepositoryState;
+    const state = async (): Promise<RepositoryState> => (await ctl("repository-state", "--project", project.id)).result as RepositoryState;
     await eventually("the first read", async () => (await state()).error === undefined && (await state()).head !== "", STARTUP_MS);
     fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
     await eventually(
       "the new file seen",
       async () => (await state()).changes.some((change) => change.path === "README.md" && change.status === "untracked"),
-      10_000
+      10_000,
     );
     const git = (...args: string[]): void => {
       const result = spawnSync("git", args, {
         cwd: repo,
-        env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t.invalid" }
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: "t",
+          GIT_AUTHOR_EMAIL: "t@t.invalid",
+          GIT_COMMITTER_NAME: "t",
+          GIT_COMMITTER_EMAIL: "t@t.invalid",
+        },
       });
       assert.equal(result.status, 0, `git ${args.join(" ")}`);
     };
     git("add", "README.md");
     git("commit", "-q", "-m", "first");
     // tet.json from the test before is still untracked; the committed file is what is gone.
-    await eventually(
-      "the commit seen",
-      async () => !(await state()).changes.some((change) => change.path === "README.md"),
-      10_000
-    );
+    await eventually("the commit seen", async () => !(await state()).changes.some((change) => change.path === "README.md"), 10_000);
     assert.equal((await state()).localBranches.length, 1);
     // Named like git's own locks, which the watcher skips.
     fs.writeFileSync(path.join(repo, "yarn.lock"), "# lockfile\n");
-    await eventually(
-      "a lockfile seen",
-      async () => (await state()).changes.some((change) => change.path === "yarn.lock"),
-      10_000
-    );
+    await eventually("a lockfile seen", async () => (await state()).changes.some((change) => change.path === "yarn.lock"), 10_000);
   });
 
   it("reflects a branch switched in a worktree TET made, whose git directory lies outside it", async () => {
@@ -315,7 +313,7 @@ ${stderr.slice(uncaught)}`);
           ((await ctl("projects-list")).result as Project[])
             .find((project) => project.id === main.id)
             ?.worktrees.some((entry) => entry.key === worktree && entry.branch === "switched") === true,
-        10_000
+        10_000,
       );
     } finally {
       const deleted = await ctl("worktree-delete", worktree, "--project", main.id, "--force");
@@ -335,7 +333,7 @@ ${stderr.slice(uncaught)}`);
           ((await ctl("projects-list")).result as Project[])
             .find((project) => project.id === main.id)
             ?.worktrees.some((entry) => entry.branch === "elsewhere" && entry.key === undefined) === true,
-        STARTUP_MS
+        STARTUP_MS,
       );
       const refused = await ctl("repository-state", "--project", main.id, "--worktree", "elsewhere");
       assert.notEqual(refused.status, 0);
@@ -358,7 +356,7 @@ ${stderr.slice(uncaught)}`);
       "the new branch read",
       async () =>
         ((await ctl("repository-state", "--project", main.id, "--worktree", "from/ctl")).result as RepositoryState).head === "from/ctl",
-      STARTUP_MS
+      STARTUP_MS,
     );
     const deleted = await ctl("worktree-delete", "from/ctl", "--project", main.id);
     assert.equal(deleted.status, 0, deleted.stderr);
@@ -389,9 +387,12 @@ ${stderr.slice(uncaught)}`);
         pid = await app?.alive();
         return pid !== undefined && pid !== previousPid;
       },
-      STARTUP_MS
+      STARTUP_MS,
     );
-    assert.deepEqual(((await ctl("projects-list")).result as Project[]).map((entry) => entry.id), [project.id]);
+    assert.deepEqual(
+      ((await ctl("projects-list")).result as Project[]).map((entry) => entry.id),
+      [project.id],
+    );
     assert.equal(((await ctl("settings-get")).result as AppSettings).appearance.darkTheme, "dark-slate");
   });
 
@@ -405,9 +406,9 @@ ${stderr.slice(uncaught)}`);
       "the tab running",
       async () =>
         ((await ctl("tabs-list", "--project", project.id)).result as TabDescriptor[]).some(
-          (entry) => entry.tabId === tab.tabId && entry.status === "running"
+          (entry) => entry.tabId === tab.tabId && entry.status === "running",
         ),
-      STARTUP_MS
+      STARTUP_MS,
     );
     assert.deepEqual((await ctl("projects-remove", project.id)).result, { removed: project.id });
     assert.deepEqual((await ctl("projects-list")).result, []);

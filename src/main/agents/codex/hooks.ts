@@ -98,7 +98,7 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
       entry.commands.map((command, handlerIndex) => {
         const hash = hookTrustedHash(entry.label, command, entry.matcher);
         return `${tomlValue(trustKey(entry.label, handlerIndex, target))}={trusted_hash=${tomlValue(hash)}}`;
-      })
+      }),
     )
     .join(",");
   return `hooks={${hookGroups},state={${stateEntries}}}`;
@@ -125,7 +125,7 @@ export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
     { event: "Stop", label: "stop", commands: [hookCommand("stop")] },
     // Waiting: an approval about to be asked, or the question tool about to run.
     { event: "PermissionRequest", label: "permission_request", commands: [hookCommand("permission")] },
-    { event: "PreToolUse", label: "pre_tool_use", commands: [hookCommand("question")], matcher: "request_user_input" }
+    { event: "PreToolUse", label: "pre_tool_use", commands: [hookCommand("question")], matcher: "request_user_input" },
   ];
 
   return ["-c", buildHooksArg(entries, target)];

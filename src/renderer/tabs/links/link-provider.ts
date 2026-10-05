@@ -30,7 +30,7 @@ export function createModifierGatedLinkProvider(
    * space-free run (a wrapped base64 blob), on every render; a linear `includes` rules it out first.
    */
   anchor: string,
-  onActivate: (text: string) => void
+  onActivate: (text: string) => void,
 ): ILinkProvider {
   // Built once: provideLinks runs on every render while the pointer is over the terminal — nothing
   // expensive, and no logging, in that path.
@@ -38,17 +38,11 @@ export function createModifierGatedLinkProvider(
   return {
     provideLinks(bufferLineNumber, callback) {
       callback(computeLinks(bufferLineNumber, terminal, rex, anchor, onActivate));
-    }
+    },
   };
 }
 
-function computeLinks(
-  y: number,
-  terminal: Terminal,
-  rex: RegExp,
-  anchor: string,
-  onActivate: (text: string) => void
-): ILink[] {
+function computeLinks(y: number, terminal: Terminal, rex: RegExp, anchor: string, onActivate: (text: string) => void): ILink[] {
   const [lines, startLineIndex, offsets] = getWindowedLineStrings(y - 1, terminal);
   const line = lines.join("");
   if (!line.includes(anchor)) {
@@ -90,7 +84,7 @@ function computeLinks(
     // range expects values 1-based, right side including, thus +1 except for ex.
     const range = {
       start: { x: first.sx + 1, y: first.row + 1 },
-      end: { x: end.ex, y: end.row + 1 }
+      end: { x: end.ex, y: end.row + 1 },
     };
 
     result.push(buildLink(terminal, range, segments, text, onActivate));
@@ -116,7 +110,7 @@ function buildLink(
   range: ILink["range"],
   segments: LinkSegment[],
   text: string,
-  onActivate: (text: string) => void
+  onActivate: (text: string) => void,
 ): ILink {
   let onKeyDown: ((event: KeyboardEvent) => void) | undefined;
   let onKeyUp: ((event: KeyboardEvent) => void) | undefined;
@@ -221,7 +215,7 @@ function buildLink(
       window.addEventListener("keyup", onKeyUp);
       hovered.set(terminal, leave);
     },
-    leave
+    leave,
   };
   return link;
 }
@@ -331,7 +325,7 @@ function mapStrIdx(
   rowIndex: number,
   stringIndex: number,
   startLineIndex: number,
-  offsets: number[]
+  offsets: number[],
 ): [number, number] {
   const buf = terminal.buffer.active;
   const cell = buf.getNullCell();

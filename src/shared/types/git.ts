@@ -110,7 +110,7 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   remotes: [],
   tags: [],
   stashes: [],
-  changes: []
+  changes: [],
 };
 
 export interface GitActionResult {

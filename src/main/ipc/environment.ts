@@ -15,7 +15,5 @@ export function registerEnvironmentIpc({ environment, envRequests }: Pick<IpcDep
       return errorMessage(error);
     }
   });
-  handle("env:answer", (_event, id: number, answer: EnvAnswer[] | null): string | undefined =>
-    envRequests.answer(id, answer)
-  );
+  handle("env:answer", (_event, id: number, answer: EnvAnswer[] | null): string | undefined => envRequests.answer(id, answer));
 }

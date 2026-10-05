@@ -55,5 +55,5 @@ window.tet.onTheme((themeId) => {
 void Promise.all([
   document.fonts.load(`13px "Inter"`),
   document.fonts.load(`13px "JetBrains Mono"`),
-  document.fonts.load(`italic 13px "JetBrains Mono"`)
+  document.fonts.load(`italic 13px "JetBrains Mono"`),
 ]).finally(() => createRoot(container).render(<Startup />));

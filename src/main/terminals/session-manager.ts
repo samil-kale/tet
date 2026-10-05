@@ -34,7 +34,7 @@ import {
   setTurn,
   titleUnsettled,
   toDescriptor,
-  type TabState
+  type TabState,
 } from "./tab-state";
 import { ReconcileScheduler } from "./reconcile-scheduler";
 import { StartIndicators } from "./start-indicators";
@@ -163,7 +163,7 @@ export class TabSessionManager {
   private sbxPreexistingSaid = false;
   private readonly indicators = new StartIndicators(
     (show) => this.callbacks.onStartupProgress(this.at.ref, show),
-    () => this.postTabs()
+    () => this.postTabs(),
   );
   /** The tabs on screen, as last reported (`setOnScreen`). */
   private onScreen: ReadonlySet<string> = new Set();
@@ -176,7 +176,7 @@ export class TabSessionManager {
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
-    private readonly callbacks: SessionManagerCallbacks
+    private readonly callbacks: SessionManagerCallbacks,
   ) {}
 
   snapshot(): TabDescriptor[] {
@@ -193,7 +193,7 @@ export class TabSessionManager {
       ...this.descriptorOf(tab),
       reportedSessionId: tab.reportedSessionId,
       sandbox: tab.sandbox,
-      sandboxOnly: tab.sandboxOnly
+      sandboxOnly: tab.sandboxOnly,
     }));
   }
 
@@ -282,14 +282,14 @@ export class TabSessionManager {
       sbxOnly: false,
       host: new HostPlace(context, () => this.hostSetups.preparation(agentId)),
       ...(hasSandbox(agent) && { sandbox: new SandboxPlace({ ...context, agent }) }),
-      ready: Promise.resolve()
+      ready: Promise.resolve(),
     };
     if (agent.sessions) {
       runtime.reconciler = new ReconcileScheduler({
         reconcile: () => this.reconcile(runtime),
         titlesUnsettled: () => this.titlesUnsettled(runtime),
         working: () => this.tabs.some((tab) => tab.agentId === agentId && tab.inTurn),
-        disposed: () => this.disposed
+        disposed: () => this.disposed,
       });
     }
     this.runtimes.set(agentId, runtime);
@@ -314,7 +314,7 @@ export class TabSessionManager {
       dataRoot: this.dataRoot,
       agent,
       executable,
-      onNotice: (severity, message) => this.callbacks.onNotice(severity, message)
+      onNotice: (severity, message) => this.callbacks.onNotice(severity, message),
     };
   }
 
@@ -372,10 +372,7 @@ export class TabSessionManager {
     // Runs again for an agent startable later (sbxSettingsChanged): skip sessions already on screen,
     // reported but unclaimed, or still being deleted (as in reconcile). A tab's id too: a restored
     // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
-    const known = new Set([
-      ...this.tabs.flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
-      ...this.deletingSessionIds
-    ]);
+    const known = new Set([...this.tabs.flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]), ...this.deletingSessionIds]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
     for (const info of fresh) {
       this.tabs.push({
@@ -387,7 +384,7 @@ export class TabSessionManager {
         createdAt: info.createdAt,
         provisionalTitle: info.provisionalTitle,
         sandbox: info.sandbox,
-        status: "ready"
+        status: "ready",
       });
     }
     if (fresh.length > 0) {
@@ -540,7 +537,7 @@ export class TabSessionManager {
       command: command.command,
       // `resolve`, not `join`, so an absolute folder is left alone.
       cwd: command.cwd ? path.resolve(this.at.path, command.cwd) : undefined,
-      env: command.env
+      env: command.env,
     };
     if (command.shell) {
       const runArgs = getAgent("shell").run?.args(command.command);
@@ -556,7 +553,7 @@ export class TabSessionManager {
       this.callbacks.onNotice(
         "error",
         `"${command.command}" cannot run: ${operator} is shell syntax, and a saved command is ` +
-          `started without one. Split it into two commands, or add "shell": true to it in tet.json.`
+          `started without one. Split it into two commands, or add "shell": true to it in tet.json.`,
       );
       return undefined;
     }
@@ -571,7 +568,7 @@ export class TabSessionManager {
       agentId,
       title: "",
       status: this.canStart(runtime) ? "ready" : "missing",
-      ...extra
+      ...extra,
     };
     this.tabs.push(tab);
 
@@ -680,7 +677,7 @@ export class TabSessionManager {
       return new CommandPlace(this.placeContext(runtime.agent, runtime.executable), {
         executable: tab.executable ?? runtime.executable,
         args: tab.runArgs ?? [],
-        env: tab.env
+        env: tab.env,
       });
     }
     const onHost = runtime.host;
@@ -702,7 +699,7 @@ export class TabSessionManager {
       if (!this.sbxStranded(tab, ready.notReady)) {
         this.callbacks.onNotice(
           "warning",
-          `SBX is not available for ${this.at.name()}: ${ready.notReady}. The tab does not start on this machine instead; the tab menu's Restart tries again once that has changed.`
+          `SBX is not available for ${this.at.name()}: ${ready.notReady}. The tab does not start on this machine instead; the tab menu's Restart tries again once that has changed.`,
         );
       }
       return "stranded";
@@ -717,7 +714,7 @@ export class TabSessionManager {
       if (runtime.sbxOnly) {
         this.callbacks.onNotice(
           "warning",
-          `${agent.displayName} is not installed on this machine any more, and a session made here cannot be resumed in ${this.at.name()}'s SBX sandbox. A new tab runs in the sandbox; this one cannot.`
+          `${agent.displayName} is not installed on this machine any more, and a session made here cannot be resumed in ${this.at.name()}'s SBX sandbox. A new tab runs in the sandbox; this one cannot.`,
         );
         return "stranded";
       }
@@ -725,7 +722,7 @@ export class TabSessionManager {
         this.sbxPreexistingSaid = true;
         this.callbacks.onNotice(
           "info",
-          `${agent.displayName} tabs started while SBX was disabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`
+          `${agent.displayName} tabs started while SBX was disabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`,
         );
       }
       return onHost;
@@ -739,7 +736,7 @@ export class TabSessionManager {
       theme: currentTheme(this.settings),
       knowledge: this.sbxLocal.knowledge(projectId),
       secretValues: this.sbxLocal.values(projectId, "secrets"),
-      variableValues: this.sbxLocal.values(projectId, "variables")
+      variableValues: this.sbxLocal.values(projectId, "variables"),
     });
   }
 
@@ -749,15 +746,13 @@ export class TabSessionManager {
     return {
       agentArgs: (files) => [...resumeArgsOf(tab, agent), ...this.promptArgs(tab, agent, files)],
       handover: tab.handover,
-      onData: (data) => this.reportOutput(tab, data)
+      onData: (data) => this.reportOutput(tab, data),
     };
   }
 
   /** Not awaited: nothing reads the copy once its tab is gone. */
   private removeHandoverCopy(dir: string): void {
-    fs.promises
-      .rm(dir, { recursive: true, force: true })
-      .catch((error: unknown) => logError("could not delete a handover's copy", error));
+    fs.promises.rm(dir, { recursive: true, force: true }).catch((error: unknown) => logError("could not delete a handover's copy", error));
   }
 
   /**
@@ -775,10 +770,7 @@ export class TabSessionManager {
       : tab.sandboxOnly
         ? `This ${agent.displayName} tab was opened from ${this.at.name()}'s SBX sandbox and cannot run on this machine`
         : `${agent.displayName} is not installed on this machine and only runs in ${this.at.name()}'s SBX sandbox`;
-    this.callbacks.onNotice(
-      "warning",
-      `${what}: ${reason}. The tab menu's Restart tries again once that has changed.`
-    );
+    this.callbacks.onNotice("warning", `${what}: ${reason}. The tab menu's Restart tries again once that has changed.`);
     return true;
   }
 
@@ -835,9 +827,9 @@ export class TabSessionManager {
         own: {
           [CONTROL_ENV.projectId]: this.at.ref.projectId,
           ...(this.at.ref.worktree !== undefined && { [CONTROL_ENV.worktree]: this.at.ref.worktree }),
-          [CONTROL_ENV.tabId]: tabId
+          [CONTROL_ENV.tabId]: tabId,
         },
-        side: place.side
+        side: place.side,
       },
       {
         onOutput: (data) => {
@@ -869,10 +861,10 @@ export class TabSessionManager {
             // The CLI may exit before looking ready, and `markInstalled`'s "missing" spawns nothing.
             hideIndicator();
           }
-        }
+        },
       },
       agent.terminal?.quitPresses ?? 0,
-      launch.args
+      launch.args,
     );
 
     this.sessions.set(tabId, session);
@@ -924,7 +916,7 @@ export class TabSessionManager {
       tabs.map((tab) => {
         const session = this.sessions.get(tab.tabId);
         return [tab.tabId, this.reportBeforeQuit(tab).then(() => session?.stop())] as const;
-      })
+      }),
     );
     for (const tab of tabs) {
       await this.destroyTab(tab, indices.get(tab.tabId) ?? this.tabs.length, stops.get(tab.tabId));
@@ -1124,7 +1116,7 @@ export class TabSessionManager {
     bound: TabState | undefined,
     event: HookEvent,
     payload: string,
-    reportedAt: number | undefined
+    reportedAt: number | undefined,
   ): Omit<HookOutcome, "stdout"> {
     const sessionId = bound ? getAgent(bound.agentId).turns?.sessionIdOf(payload) : undefined;
     this.record({ tabId, kind: "hook", event, reportedAt, sessionId });
@@ -1225,8 +1217,7 @@ export class TabSessionManager {
       return undefined;
     }
     const { notifications } = this.settings.get();
-    const wanted =
-      kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.waiting;
+    const wanted = kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.waiting;
     if (!wanted) {
       return undefined;
     }
@@ -1287,10 +1278,7 @@ export class TabSessionManager {
     }
     const infos = await this.listSessions(runtime);
     const ownTabs = this.tabsOf(runtime);
-    const claimed = new Set([
-      ...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined),
-      ...this.deletingSessionIds
-    ]);
+    const claimed = new Set([...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined), ...this.deletingSessionIds]);
     let changed = false;
 
     // Each tab takes the session its hooks named (bindReportedSession), once listed, and only from

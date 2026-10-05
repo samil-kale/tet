@@ -27,21 +27,14 @@ const MAX_REQUEST_CHARS = 1024 * 1024;
  * carry this run's token from
  * main.ts, or its tab's token for the caller ids it names (ctl-token.ts), else `unauthorized`.
  */
-export async function startControlServer(
-  deps: ControlDeps,
-  token: string,
-  port: number
-): Promise<{ close: () => Promise<void> }> {
+export async function startControlServer(deps: ControlDeps, token: string, port: number): Promise<{ close: () => Promise<void> }> {
   const handlers = verbs(deps);
 
-  const handle = async (
-    request: ControlRequest,
-    gone: AbortSignal
-  ): Promise<{ response: ControlResponse; after?: () => void }> => {
+  const handle = async (request: ControlRequest, gone: AbortSignal): Promise<{ response: ControlResponse; after?: () => void }> => {
     const caller: ControlRequest["caller"] = {
       projectId: typeof request.caller?.projectId === "string" ? request.caller.projectId : undefined,
       worktree: typeof request.caller?.worktree === "string" && request.caller.worktree ? request.caller.worktree : undefined,
-      tabId: typeof request.caller?.tabId === "string" ? request.caller.tabId : undefined
+      tabId: typeof request.caller?.tabId === "string" ? request.caller.tabId : undefined,
     };
     // A caller's ids count only with the token made for them; the run's own token speaks for no
     // tab, and no terminal has it (ctl-token.ts).
@@ -56,7 +49,7 @@ export async function startControlServer(
     const ofTab = caller.projectId !== undefined || caller.worktree !== undefined || caller.tabId !== undefined;
     const side = ofTab
       ? CALLER_SIDES.find((candidate) =>
-          matches(tabControlToken(token, { projectId: caller.projectId ?? "", worktree: caller.worktree }, caller.tabId ?? "", candidate))
+          matches(tabControlToken(token, { projectId: caller.projectId ?? "", worktree: caller.worktree }, caller.tabId ?? "", candidate)),
         )
       : matches(token)
         ? HOST_CALLER
@@ -85,7 +78,8 @@ export async function startControlServer(
       } catch (error) {
         return { response: error instanceof ControlError ? reject(error.code, error.message) : reject("internal", errorMessage(error)) };
       }
-      const allowed = own !== undefined && target !== undefined && (ownOnly ? sameProjectRef(target, own) : target.projectId === own.projectId);
+      const allowed =
+        own !== undefined && target !== undefined && (ownOnly ? sameProjectRef(target, own) : target.projectId === own.projectId);
       if (!allowed) {
         const whose = ownOnly ? "the caller's own repository or worktree" : "the caller's own project";
         return { response: reject("unauthorized", `${request.verb} only answers for ${whose}`) };
@@ -163,7 +157,7 @@ export async function startControlServer(
       });
       void handle(request, gone.signal).then(
         ({ response, after }) => respond(res, response, after),
-        (error: unknown) => respond(res, reject("internal", errorMessage(error)))
+        (error: unknown) => respond(res, reject("internal", errorMessage(error))),
       );
     });
     req.on("error", () => undefined);
@@ -181,7 +175,7 @@ export async function startControlServer(
       new Promise((resolve) => {
         server.close(() => resolve());
         server.closeAllConnections();
-      })
+      }),
   };
 }
 

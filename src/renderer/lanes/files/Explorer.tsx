@@ -37,7 +37,7 @@ const ExplorerRow = memo(function ExplorerRow({ node, depth, expanded, selected,
         rows.delete(node.id);
       }
     },
-    [rows, node.id]
+    [rows, node.id],
   );
   return (
     <TreeRow
@@ -107,17 +107,14 @@ export const Explorer = memo(function Explorer({
   onExplorerChanged,
   onFiltering,
   onExpanded,
-  ref
+  ref,
 }: ExplorerProps) {
   const [filter, setFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const menu = useContextMenu<TreeNode | null>();
   const rows = useRef(new Map<string, HTMLButtonElement>());
   /** The repository or worktree is this view's; the rows say only which file and how. */
-  const onOpen = useCallback(
-    (path: string, how?: OpenEditor) => onOpenFile(resolved.ref, path, how),
-    [onOpenFile, resolved.ref]
-  );
+  const onOpen = useCallback((path: string, how?: OpenEditor) => onOpenFile(resolved.ref, path, how), [onOpenFile, resolved.ref]);
 
   const tree = useMemo(() => (files ? buildForest(files) : []), [files]);
   // Deferred: a short query keeps most of the tree, all of it expanded — too much to render on
@@ -179,12 +176,9 @@ export const Explorer = memo(function Explorer({
 
   const toggle = useCallback(
     (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isExpanded(node, current) })),
-    []
+    [],
   );
-  const flat = useMemo(
-    () => visibleRows(shown, (node) => filtering || isExpanded(node, expanded)),
-    [shown, expanded, filtering]
-  );
+  const flat = useMemo(() => visibleRows(shown, (node) => filtering || isExpanded(node, expanded)), [shown, expanded, filtering]);
   const anyExpanded = tree.some((node) => node.children !== undefined && isExpanded(node, expanded));
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
@@ -194,10 +188,7 @@ export const Explorer = memo(function Explorer({
   /** "Collapse Folders in Explorer" in two stages: what is expanded below the roots, then everything
    *  (at once without roots). */
   const collapseAll = (): void =>
-    setAll(
-      roots && hasExpandedRootChild(tree, expanded) ? tree.flatMap((root) => foldersIn(root.children!)) : foldersIn(tree),
-      false
-    );
+    setAll(roots && hasExpandedRootChild(tree, expanded) ? tree.flatMap((root) => foldersIn(root.children!)) : foldersIn(tree), false);
 
   /** The action, then a listing re-read on success. */
   const reread = (action: () => Promise<GitActionResult>) => () =>
@@ -220,7 +211,7 @@ export const Explorer = memo(function Explorer({
       title: kind === "file" ? "New File" : "New Folder",
       detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
       confirmLabel: "Create",
-      submit: (name) => runAsked(() => create(resolved.ref, under(dir, name)))
+      submit: (name) => runAsked(() => create(resolved.ref, under(dir, name))),
     });
   };
 
@@ -231,8 +222,7 @@ export const Explorer = memo(function Explorer({
       title: "Rename",
       current: baseName(node.path),
       confirmLabel: "Rename",
-      submit: (name) =>
-        runAsked(() => window.tet.repository.renamePath(resolved.ref, node.path, under(parentOf(node.path), name)))
+      submit: (name) => runAsked(() => window.tet.repository.renamePath(resolved.ref, node.path, under(parentOf(node.path), name))),
     });
   };
 
@@ -244,7 +234,7 @@ export const Explorer = memo(function Explorer({
       title: isFolder ? "Delete folder" : "Delete file",
       message: `Are you sure you want to delete ${node.path}?`,
       detail: "Goes to the trash and can be restored from there.",
-      confirmLabel: "Delete"
+      confirmLabel: "Delete",
     });
     if (answer) {
       run(() => window.tet.repository.deletePath(resolved.ref, node.path));
@@ -257,7 +247,7 @@ export const Explorer = memo(function Explorer({
     newFolder: () => void askNew("folder", ""),
     expandAll: () => setAll(foldersIn(tree), true),
     collapseAll,
-    clearFilter: () => setFilter("")
+    clearFilter: () => setFilter(""),
   }));
 
   /** `ChangesList`'s menu minus the change-only entries, plus new/rename/delete and the Explorer view's
@@ -271,16 +261,12 @@ export const Explorer = memo(function Explorer({
       ? [
           { label: "Open", run: () => onOpen(node.path) },
           ...openEntries(resolved.ref, node.path, true, false, (how) => onOpen(node.path, how)),
-          SEPARATOR
+          SEPARATOR,
         ]
       : [];
     const editEntries: ContextMenuEntry[] =
       node && !isRoot
-        ? [
-            SEPARATOR,
-            { label: "Rename...", run: () => void askRename(node) },
-            { label: "Delete...", run: () => void askDelete(node) }
-          ]
+        ? [SEPARATOR, { label: "Rename...", run: () => void askRename(node) }, { label: "Delete...", run: () => void askDelete(node) }]
         : [];
     const viewEntries: ContextMenuEntry[] = [];
     // A worktree shows its project's Explorer view and never changes it (tet-json.ts's configRoot).
@@ -289,18 +275,18 @@ export const Explorer = memo(function Explorer({
       if (isRoot) {
         viewEntries.push({
           label: "Remove Folder from Explorer",
-          run: () => run(() => window.tet.repository.removeFolder(resolved.ref.projectId, node.path))
+          run: () => run(() => window.tet.repository.removeFolder(resolved.ref.projectId, node.path)),
         });
       } else {
         if (!isFile) {
           viewEntries.push({
             label: "Add Folder to Explorer",
-            run: () => run(() => window.tet.repository.addFolder(resolved.ref.projectId, node.path))
+            run: () => run(() => window.tet.repository.addFolder(resolved.ref.projectId, node.path)),
           });
         }
         viewEntries.push({
           label: "Exclude from Explorer",
-          run: () => run(() => window.tet.repository.excludePath(resolved.ref.projectId, node.path))
+          run: () => run(() => window.tet.repository.excludePath(resolved.ref.projectId, node.path)),
         });
       }
     }
@@ -311,7 +297,7 @@ export const Explorer = memo(function Explorer({
       { label: "New Folder...", run: () => void askNew("folder", dir) },
       ...editEntries,
       ...viewEntries,
-      ...(node ? pathEntries(resolved, [node.path], isFile ? "file path" : "path") : [])
+      ...(node ? pathEntries(resolved, [node.path], isFile ? "file path" : "path") : []),
     ];
   };
 
@@ -355,7 +341,7 @@ export const Explorer = memo(function Explorer({
  */
 export function useExplorerListing(
   resolved: ResolvedRef,
-  shown: boolean
+  shown: boolean,
 ): { explorerListing: ExplorerListing | undefined; listing: boolean; refreshExplorer: () => void } {
   const [held, setHeld] = useState<{ refKey: string; listing: ExplorerListing } | undefined>(undefined);
   const [listing, setListing] = useState(false);
@@ -393,7 +379,7 @@ export function useExplorerListing(
       if (!cancelled) {
         setHeld((previous) => ({
           refKey: resolved.refKey,
-          listing: keepRoots(previous?.refKey === resolved.refKey ? previous.listing : undefined, result)
+          listing: keepRoots(previous?.refKey === resolved.refKey ? previous.listing : undefined, result),
         }));
         setListing(false);
       }
@@ -413,6 +399,7 @@ function keepRoots(previous: ExplorerListing | undefined, next: ExplorerListing)
   if (before === undefined || after === undefined) {
     return next;
   }
-  const same = before.length === after.length && before.every((root, index) => root.name === after[index].name && root.path === after[index].path);
+  const same =
+    before.length === after.length && before.every((root, index) => root.name === after[index].name && root.path === after[index].path);
   return same ? { ...next, roots: before } : next;
 }

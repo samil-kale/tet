@@ -13,7 +13,7 @@ import {
   scanTranscriptTail,
   timestampOf,
   truncateTitle,
-  type ScannedTail
+  type ScannedTail,
 } from "../transcript";
 import { renameThread } from "./app-server-client";
 import { runCodex } from "./cli";
@@ -138,7 +138,7 @@ function scanHead(filePath: string, fileSize: number): Promise<HeadInfo> {
       }
       head.firstPrompt = truncateTitle(prompt);
       return true;
-    }
+    },
   });
 }
 
@@ -150,9 +150,7 @@ function extractUserPrompt(entry: Record<string, unknown>): string | undefined {
   }
   if (entry.type === "response_item" && payload?.role === "user") {
     const content = payload.content as { type?: unknown; text?: unknown }[] | undefined;
-    const text = content?.find((part) => part.type === "input_text" && typeof part.text === "string")?.text as
-      | string
-      | undefined;
+    const text = content?.find((part) => part.type === "input_text" && typeof part.text === "string")?.text as string | undefined;
     if (text && !text.startsWith("<")) {
       return text;
     }
@@ -170,7 +168,7 @@ function scanTail(filePath: string): Promise<ScannedTail<TailInfo>> {
     },
     merge: (tail, previous) => {
       tail.turnEndedAt ??= previous.turnEndedAt;
-    }
+    },
   });
 }
 
@@ -332,9 +330,9 @@ export const codexSessionProvider: SessionProvider = {
         closeAll();
       },
       // Never: rollouts are watched in today's day folder alone, and a resumed session writes to its own.
-      watching: () => false
+      watching: () => false,
     };
-  }
+  },
 };
 
 /**
@@ -345,14 +343,14 @@ export const codexSessionProvider: SessionProvider = {
 export const codexSandboxSessions: SandboxSessions = {
   mounts: [
     { sub: "sessions", target: `${SANDBOX_HOME}/.codex/sessions` },
-    { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true }
+    { sub: "session_index.jsonl", target: `${SANDBOX_HOME}/.codex/session_index.jsonl`, file: true },
   ],
   at: (root, cwd, within) => ({
     list: () => listIn(root, cwd),
     remove: (sessionId) => removeInHome(root, sessionId, within),
     rename: (sessionId, title) => renameInHome(root, sessionId, title, within),
-    files: (sessionId) => rolloutFilesOf(root, sessionId)
-  })
+    files: (sessionId) => rolloutFilesOf(root, sessionId),
+  }),
 };
 
 function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
@@ -373,7 +371,7 @@ function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
         title,
         updatedAt: mtimeMs,
         createdAt: meta.createdAt ?? mtimeMs,
-        turnEndedAt: tail.turnEndedAt
+        turnEndedAt: tail.turnEndedAt,
       };
     });
   });

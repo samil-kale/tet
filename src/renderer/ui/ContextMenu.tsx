@@ -155,7 +155,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
         left: x,
         top: y,
         ...(width !== undefined ? { width } : {}),
-        ...(maxHeight !== undefined ? { maxHeight } : {})
+        ...(maxHeight !== undefined ? { maxHeight } : {}),
       }}
     >
       {entries.map((entry, index) =>
@@ -180,7 +180,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
             {entry.label}
             {entry.entries?.length ? <ChevronIcon expanded={false} className="context-menu-chevron" /> : null}
           </div>
-        )
+        ),
       )}
       {submenu && opened !== SEPARATOR && opened?.entries && (
         // Inside this menu's node, so a click in it is no click outside; the pointer reaching it
@@ -200,8 +200,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
                     run: () => {
                       onClose();
                       child.run?.();
-                    }
-                  }
+                    },
+                  },
             )}
           />
         </div>

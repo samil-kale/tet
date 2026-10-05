@@ -44,8 +44,7 @@ export class SbxAccountStore {
    *  Throws before changing anything when the OS offers no encryption (`seal`). */
   add(user: string, token: string, replacing?: string): SbxAccount {
     const encrypted = seal(token);
-    const existing =
-      this.accounts.find((account) => account.user === user) ?? this.accounts.find((account) => account.id === replacing);
+    const existing = this.accounts.find((account) => account.user === user) ?? this.accounts.find((account) => account.id === replacing);
     const others = this.accounts.filter((account) => account === existing || account.id !== replacing);
     const stored: StoredSbxAccount = existing ? { ...existing, user, token: encrypted } : { id: randomUUID(), user, token: encrypted };
     this.save(existing ? others.map((account) => (account === existing ? stored : account)) : [...others, stored]);
@@ -97,7 +96,7 @@ export async function signInToSbx(
   store: SbxAccountStore,
   typedUser: string,
   typed: string,
-  accountId: string | undefined
+  accountId: string | undefined,
 ): Promise<SbxSignInResult> {
   const user = typedUser.trim();
   const token = typed !== "" ? typed : accountId !== undefined ? store.token(accountId) : undefined;

@@ -38,11 +38,11 @@ export function atLeastOne<T>(rows: Row<T>[], blank: T): Row<T>[] {
 export function typedRows<T>(
   noun: string,
   blank: T,
-  change: (update: (rows: Row<T>[]) => Row<T>[]) => void
+  change: (update: (rows: Row<T>[]) => Row<T>[]) => void,
 ): { add: ReactNode; remove: (id: string) => { remove: string; onRemove: () => void } } {
   return {
     add: <ActionLink onClick={() => change((rows) => [...rows, withId(blank)])}>+ Add {noun}</ActionLink>,
-    remove: (id) => ({ remove: `Remove ${noun}`, onRemove: () => change((rows) => atLeastOne(without(rows, id), blank)) })
+    remove: (id) => ({ remove: `Remove ${noun}`, onRemove: () => change((rows) => atLeastOne(without(rows, id), blank)) }),
   };
 }
 
@@ -55,7 +55,7 @@ export function EditRow({
   mark,
   remove,
   onRemove,
-  children
+  children,
 }: {
   mark?: string;
   children: ReactNode;
@@ -81,7 +81,7 @@ export function RowInput({
   title,
   readOnly,
   value,
-  onChange
+  onChange,
 }: {
   width?: "fill" | "fixed" | "port";
   placeholder?: string;
@@ -116,7 +116,7 @@ export function SecretInput({
   emptyTitle = "Stored on this machine.",
   placeholder = "Value",
   value,
-  onChange
+  onChange,
 }: {
   stored: boolean;
   storedTitle?: string;
@@ -173,7 +173,7 @@ export function RowSection<T extends { id: string }>({
   empty,
   rows,
   renderRow,
-  add
+  add,
 }: {
   label: string;
   /** Said where there are no rows, for a section a picker adds them to (the SBX paths); left out

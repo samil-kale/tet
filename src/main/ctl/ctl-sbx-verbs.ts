@@ -10,7 +10,7 @@ import {
   sbxPortRefusal,
   sbxSecretRefusal,
   sbxVariableRefusal,
-  withoutProblems
+  withoutProblems,
 } from "../../shared/sbx-rules";
 import { sbxBlocked, sbxNotReady } from "../sbx/sbx-policy";
 import type { ControlDeps } from "./ctl-verb";
@@ -23,10 +23,7 @@ import { PLATFORM } from "../util/host-platform";
  * (ControlDeps.sbx). `refFrom` is the server's lookup of the repository or worktree a verb acts on
  * (resolveCallerRef).
  */
-export function sbxVerbs(
-  deps: ControlDeps,
-  refFrom: RefFrom
-): Record<Extract<ControlVerbName, `sbx-${string}`>, Handler> {
+export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `sbx-${string}`>, Handler> {
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. Returns what it read, for the Save to take the
@@ -60,13 +57,13 @@ export function sbxVerbs(
       knowledge?: SbxKnowledgeSettings;
       variableValues?: Record<string, string>;
     },
-    switching = false
+    switching = false,
   ): Promise<Answer> => {
     const { project: found, ref } = refFrom(args, caller);
     if (ref.worktree !== undefined) {
       throw new ControlError(
         "bad_args",
-        `a worktree takes its SBX Settings from its project ${found.name}: change them there (--project ${found.id})`
+        `a worktree takes its SBX Settings from its project ${found.name}: change them there (--project ${found.id})`,
       );
     }
     const reading = await readySbx(found);
@@ -84,9 +81,9 @@ export function sbxVerbs(
       {
         secrets: keptValues(request.secrets),
         variables: { ...keptValues(request.variables), values: next.variableValues ?? {} },
-        knowledge: nextKnowledge
+        knowledge: nextKnowledge,
       },
-      reading
+      reading,
     );
     if (!saved.ok) {
       throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
@@ -125,8 +122,8 @@ export function sbxVerbs(
         result: {
           signedIn,
           ...(account !== undefined ? { account } : {}),
-          accounts: deps.sbx.accounts().map((kept) => kept.user)
-        }
+          accounts: deps.sbx.accounts().map((kept) => kept.user),
+        },
       };
     },
 
@@ -144,8 +141,8 @@ export function sbxVerbs(
         result: {
           signedIn: true,
           account: result.account?.user ?? user,
-          ...(result.account ? {} : { notKept: result.error ?? "the access token could not be kept" })
-        }
+          ...(result.account ? {} : { notKept: result.error ?? "the access token could not be kept" }),
+        },
       };
     },
 
@@ -247,7 +244,7 @@ export function sbxVerbs(
       const kind = oneOf(args, "kind", "kind", SBX_KNOWLEDGE_KINDS);
       const access = oneOf(args, "access", "access", ["off", ...SBX_ACCESS]);
       return editSbx(args, caller, ({ knowledge }) => ({
-        knowledge: { ...knowledge, [kind]: access === "off" ? false : access }
+        knowledge: { ...knowledge, [kind]: access === "off" ? false : access },
       }));
     },
 
@@ -261,6 +258,6 @@ export function sbxVerbs(
         }
         return { knowledge: next };
       });
-    }
+    },
   };
 }

@@ -24,7 +24,7 @@ describe("resolveCommand", () => {
       encoding: "utf8",
       windowsHide: true,
       windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-      cwd
+      cwd,
     });
   };
 
@@ -33,7 +33,7 @@ describe("resolveCommand", () => {
     assert.deepEqual(resolveCommand("C:\\tools\\run.cmd", ["-v"]), {
       command: "cmd.exe",
       args: ["/d", "/s", "/c", '"C:\\tools\\run.cmd ^"-v^""'],
-      windowsVerbatimArguments: true
+      windowsVerbatimArguments: true,
     });
   });
 
@@ -48,15 +48,35 @@ describe("resolveCommand", () => {
       shim,
       "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n" +
         `SET "_prog=${process.execPath}"\r\n` +
-        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\argv.js" %*\r\n'
+        'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\argv.js" %*\r\n',
     );
     const args = [
       // A quote cmd.exe sees as closing, then an operator: the shim's `%*` parses the line again.
       // First, since an argument with an odd count of quotes (`a\"b`) would hide what follows.
-      'a"&echo INJECTED&"b', 'a">out.txt"', '{"k": 1}', "%VAR%",
-      "plain", "", "a b", "a&b", "a>b", "a|b", "%PATH%", "a^b", 'say "hi"', "(x)", "!x!", "C:\\dir\\", "a\\\"b", "x;y,z", "ä€",
+      'a"&echo INJECTED&"b',
+      'a">out.txt"',
+      '{"k": 1}',
+      "%VAR%",
+      "plain",
+      "",
+      "a b",
+      "a&b",
+      "a>b",
+      "a|b",
+      "%PATH%",
+      "a^b",
+      'say "hi"',
+      "(x)",
+      "!x!",
+      "C:\\dir\\",
+      'a\\"b',
+      "x;y,z",
+      "ä€",
       // Runs of backslashes before a quote and at the end, each one halved by the C runtime.
-      "C:\\out\\\\", "a\\\\\"b", "x\\\\\\", "a\\\\\\\"b"
+      "C:\\out\\\\",
+      'a\\\\"b',
+      "x\\\\\\",
+      'a\\\\\\"b',
     ];
     const originalPath = process.env.PATH;
     process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
@@ -81,10 +101,12 @@ describe("resolveCommand", () => {
     const batch = path.join(dir, "mvn.cmd");
     fs.writeFileSync(
       batch,
-      '@ECHO off\r\nIF "%~1" == "-f" (SET "kind=file") ELSE (SET "kind=other")\r\n' +
-        `"${process.execPath}" "${script}" %kind% %*\r\n`
+      '@ECHO off\r\nIF "%~1" == "-f" (SET "kind=file") ELSE (SET "kind=other")\r\n' + `"${process.execPath}" "${script}" %kind% %*\r\n`,
     );
-    for (const [args, kind] of [[["process-classes", "exec:java", "a b"], "other"], [["-f", "pom.xml"], "file"]] as const) {
+    for (const [args, kind] of [
+      [["process-classes", "exec:java", "a b"], "other"],
+      [["-f", "pom.xml"], "file"],
+    ] as const) {
       const run = runResolved(batch, [...args], dir);
       assert.equal(run.status, 0, `${run.stdout} ${run.stderr}`);
       assert.deepEqual(JSON.parse(run.stdout), [kind, ...args]);
@@ -105,7 +127,11 @@ describe("resolveCommand", () => {
     const shim = path.join(dir, "wait.cmd");
     fs.writeFileSync(shim, `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
     const resolved = resolveCommand(shim, []);
-    const child = spawn(resolved.command, resolved.args, { windowsHide: true, windowsVerbatimArguments: resolved.windowsVerbatimArguments, stdio: "ignore" });
+    const child = spawn(resolved.command, resolved.args, {
+      windowsHide: true,
+      windowsVerbatimArguments: resolved.windowsVerbatimArguments,
+      stdio: "ignore",
+    });
     await eventually("the program started", () => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8") !== "", 10_000);
     const pid = Number(fs.readFileSync(pidFile, "utf8"));
     killProcessTree(child);
@@ -190,7 +216,10 @@ describe("a file opened or removed only inside a root", () => {
 
   it("refuses a file reached through a link out of the root, before writing to it", async () => {
     const { root, outside } = linkedRoot();
-    await assert.rejects(openInside(root, path.join(root, "leak", "secret.txt"), fs.constants.O_WRONLY | fs.constants.O_APPEND), /leads outside/);
+    await assert.rejects(
+      openInside(root, path.join(root, "leak", "secret.txt"), fs.constants.O_WRONLY | fs.constants.O_APPEND),
+      /leads outside/,
+    );
     await assert.rejects(openInside(root, path.join(root, "leak"), "r"), /leads outside/, "a folder is no file");
     assert.equal(fs.readFileSync(path.join(outside, "secret.txt"), "utf8"), "host");
   });
@@ -268,7 +297,7 @@ describe("a module served to another process", () => {
     const handle = serving(module, (response) => waiting.get(response.id)?.(response));
     return {
       handle,
-      answer: (id: number) => new Promise<UtilityResponse>((resolve) => waiting.set(id, resolve))
+      answer: (id: number) => new Promise<UtilityResponse>((resolve) => waiting.set(id, resolve)),
     };
   };
 
@@ -286,7 +315,7 @@ describe("a module served to another process", () => {
   it("hands the function a signal where the caller's stood, fired by an abort, and still answers", async () => {
     const { handle, answer } = serve({
       wait: (label: string, signal: AbortSignal) =>
-        new Promise((resolve) => signal.addEventListener("abort", () => resolve(`${label} aborted`)))
+        new Promise((resolve) => signal.addEventListener("abort", () => resolve(`${label} aborted`))),
     });
     const answered = answer(7);
     handle({ id: 7, method: "wait", args: ["search", undefined], signalAt: 1 });

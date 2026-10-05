@@ -74,14 +74,14 @@ export async function removeAllSessions(cwd: string): Promise<void> {
           .remove(agent.executable(), cwd, id)
           .catch((error: unknown) => logError(`could not delete ${agent.displayName} session ${id}`, error));
       }
-    })
+    }),
   );
 }
 
 /** `tet-ctl agents-list`' answer: every agent with whether it is installed (agentInstalled). */
 export function listInstalledAgents(): Promise<{ id: AgentId; name: string; installed: boolean }[]> {
   return Promise.all(
-    AGENTS.map(async (agent) => ({ id: agent.id, name: agent.displayName, installed: await agentInstalled(agent, os.tmpdir()) }))
+    AGENTS.map(async (agent) => ({ id: agent.id, name: agent.displayName, installed: await agentInstalled(agent, os.tmpdir()) })),
   );
 }
 
@@ -94,6 +94,6 @@ export function listAgents(): AgentInfo[] {
     takesPrompt: agent.terminal !== undefined,
     shiftEnter: agent.terminal?.shiftEnter,
     clearable: agent.clearable === true,
-    sandboxed: hasSandbox(agent)
+    sandboxed: hasSandbox(agent),
   }));
 }

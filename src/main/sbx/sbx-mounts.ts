@@ -3,7 +3,14 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { SBX_KNOWLEDGE_KINDS, addProblems, forbiddenBy } from "../../shared/sbx-rules";
-import type { SbxKnowledgeSettings, SbxKnowledgeEntry, SbxKnowledgeKind, SbxKnowledgeSource, SbxPath, SbxProblems } from "../../shared/types/sbx";
+import type {
+  SbxKnowledgeSettings,
+  SbxKnowledgeEntry,
+  SbxKnowledgeKind,
+  SbxKnowledgeSource,
+  SbxPath,
+  SbxProblems,
+} from "../../shared/types/sbx";
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";
@@ -107,10 +114,10 @@ export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
             agentId: agent.id,
             displayName: agent.displayName,
             own: await sandboxKnowledgeFor(agent),
-            skillsTargets: skillsTargets(agent)
+            skillsTargets: skillsTargets(agent),
           }
-        : undefined
-    )
+        : undefined,
+    ),
   );
   return sources.filter((source) => source !== undefined);
 }
@@ -137,13 +144,13 @@ export async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeSet
         ? entries[kind].map((entry) => ({
             ...mountSpec(entry.host, entry.target, access === "ro"),
             option: "knowledge" as const,
-            row: kind
+            row: kind,
           }))
         : [];
     }),
     ...paths
       .filter((entry) => existsSync(normalizeHostPath(entry.path)))
-      .map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path }))
+      .map((entry) => ({ ...pathMountSpecs(entry), option: "paths" as const, row: entry.path })),
   ];
 }
 
@@ -176,10 +183,12 @@ interface RuntimeBind {
  */
 async function readRuntimeBinds(name: string): Promise<RuntimeBind[] | undefined> {
   const parsed = await sbxJson<{ runtime_mounts?: { host_path?: string; container_target?: string; read_only?: boolean }[] }>([
-    "inspect", name, "--json"
+    "inspect",
+    name,
+    "--json",
   ]);
   return parsed?.runtime_mounts?.flatMap(({ host_path, container_target, read_only }) =>
-    host_path && container_target ? [{ host: host_path, target: container_target, readOnly: read_only === true }] : []
+    host_path && container_target ? [{ host: host_path, target: container_target, readOnly: read_only === true }] : [],
   );
 }
 
@@ -218,7 +227,10 @@ export async function releaseDropped(folder: string): Promise<void> {
     if (released.length === 0) {
       continue;
     }
-    droppedMounts.set(name, hosts.filter((host) => !inside(host)));
+    droppedMounts.set(
+      name,
+      hosts.filter((host) => !inside(host)),
+    );
     await inTurn(mountSetups, name, async () => {
       for (const host of released) {
         await runSbx(["umount", name, pathMountSpecs({ path: host, access: "rw" }).unmount]);

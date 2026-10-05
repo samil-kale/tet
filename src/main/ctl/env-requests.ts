@@ -28,7 +28,7 @@ export class EnvRequests {
   constructor(
     private readonly store: EnvStore,
     private readonly show: (request: EnvRequest) => boolean,
-    private readonly withdraw: (id: number) => void
+    private readonly withdraw: (id: number) => void,
   ) {}
 
   /** Resolves the names saved, or undefined on Cancel or once `gone` aborts. */
@@ -82,7 +82,7 @@ export class EnvRequests {
         const stored = this.store.info(name);
         // The spelling stored stands: Save replaces it (EnvStore.set).
         return { name, overridesMachine: machineSets(name), stored: stored !== undefined };
-      })
+      }),
     };
     if (!this.show(request)) {
       throw new Error("TET's window is not ready to ask; try again once it shows the workspace");

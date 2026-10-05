@@ -12,6 +12,6 @@ export const codexIcon: AgentIcon = {
   shapes: [
     { element: "circle", attributes: { cx: 8, cy: 8, r: 6 } },
     { element: "path", attributes: { d: "M5.8 5.7L8.3 8l-2.5 2.3" } },
-    { element: "path", attributes: { d: "M9 10.5h2.3" } }
-  ]
+    { element: "path", attributes: { d: "M9 10.5h2.3" } },
+  ],
 };

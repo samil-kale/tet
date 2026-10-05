@@ -43,7 +43,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#181818",
     titleBarSymbolColor: "#cccccc",
     terminalBackground: "#1f1f1f",
-    terminalForeground: "#cccccc"
+    terminalForeground: "#cccccc",
   },
   {
     id: "dark-slate",
@@ -53,7 +53,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#14171c",
     titleBarSymbolColor: "#dde2e9",
     terminalBackground: "#1b1f27",
-    terminalForeground: "#dde2e9"
+    terminalForeground: "#dde2e9",
   },
   {
     id: "dark-github",
@@ -63,7 +63,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#0d1117",
     titleBarSymbolColor: "#7d8590",
     terminalBackground: "#0d1117",
-    terminalForeground: "#e6edf3"
+    terminalForeground: "#e6edf3",
   },
   {
     id: "dark-intellij",
@@ -73,7 +73,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#2b2d30",
     titleBarSymbolColor: "#cccccc",
     terminalBackground: "#1e1f22",
-    terminalForeground: "#bcbec3"
+    terminalForeground: "#bcbec3",
   },
   {
     id: "dark-dracula",
@@ -83,7 +83,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#21222c",
     titleBarSymbolColor: "#f8f8f2",
     terminalBackground: "#282a36",
-    terminalForeground: "#f8f8f2"
+    terminalForeground: "#f8f8f2",
   },
   {
     id: "dark-claude",
@@ -93,7 +93,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#111111",
     titleBarSymbolColor: "#c3c1ba",
     terminalBackground: "#151515",
-    terminalForeground: "#c3c1ba"
+    terminalForeground: "#c3c1ba",
   },
   {
     id: "light-modern",
@@ -103,7 +103,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#f8f8f8",
     titleBarSymbolColor: "#1e1e1e",
     terminalBackground: "#ffffff",
-    terminalForeground: "#3b3b3b"
+    terminalForeground: "#3b3b3b",
   },
   {
     id: "light-github",
@@ -113,7 +113,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#ffffff",
     titleBarSymbolColor: "#656d76",
     terminalBackground: "#ffffff",
-    terminalForeground: "#1f2328"
+    terminalForeground: "#1f2328",
   },
   {
     id: "light-intellij",
@@ -123,7 +123,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#27282e",
     titleBarSymbolColor: "#e7ebed",
     terminalBackground: "#ffffff",
-    terminalForeground: "#000000"
+    terminalForeground: "#000000",
   },
   {
     id: "light-gameboy",
@@ -133,7 +133,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#c4bebb",
     titleBarSymbolColor: "#494786",
     terminalBackground: "#c0d297",
-    terminalForeground: "#0f380f"
+    terminalForeground: "#0f380f",
   },
   {
     id: "light-claude",
@@ -143,8 +143,8 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#fbfbf9",
     titleBarSymbolColor: "#2a2a28",
     terminalBackground: "#fcfcfb",
-    terminalForeground: "#2a2a28"
-  }
+    terminalForeground: "#2a2a28",
+  },
 ];
 
 export type ThemeKind = ThemeDefinition["kind"];

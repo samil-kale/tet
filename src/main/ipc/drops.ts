@@ -13,10 +13,8 @@ export function registerDropsIpc({ tabManagers }: Pick<IpcDeps, "tabManagers">):
     return manager ? writeDropFile(manager.dropsDir(tabId), name, data) : null;
   };
 
-  handle(
-    "drops:write-drop",
-    (_event, ref: ProjectRef, tabId: string, name: string, dataBase64: string): Promise<string | null> =>
-      writeDrop(ref, tabId, name, Buffer.from(dataBase64, "base64"))
+  handle("drops:write-drop", (_event, ref: ProjectRef, tabId: string, name: string, dataBase64: string): Promise<string | null> =>
+    writeDrop(ref, tabId, name, Buffer.from(dataBase64, "base64")),
   );
 
   /** The clipboard image as a file, so its path can be typed into a CLI. */

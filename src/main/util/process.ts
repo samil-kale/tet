@@ -29,7 +29,12 @@ function resolveWin32Executable(executable: string): { path: string; batch: bool
     }
     // A bare `npm.cmd` is found along PATH too, or isCmdShim would read it in this process's folder
     // and miss the shim. Unfound, it stays the name, for CreateProcessW or cmd.exe to look up.
-    const found = path.basename(executable) === executable ? pathDirs().map((dir) => path.join(dir, executable)).find((candidate) => fs.existsSync(candidate)) : undefined;
+    const found =
+      path.basename(executable) === executable
+        ? pathDirs()
+            .map((dir) => path.join(dir, executable))
+            .find((candidate) => fs.existsSync(candidate))
+        : undefined;
     return { path: found ?? executable, batch: WIN32_BATCH_EXTENSIONS.includes(ext) };
   }
 
@@ -164,7 +169,7 @@ export function stoppable(): Stoppable {
         killProcessTree(current);
         current = undefined;
       }
-    }
+    },
   };
 }
 
@@ -183,7 +188,7 @@ export function runProcess(executable: string, args: string[], options: RunProce
       cwd: options.cwd,
       windowsHide: true,
       windowsVerbatimArguments: resolved.windowsVerbatimArguments,
-      stdio: [options.stdin === undefined ? "ignore" : "pipe", output, output]
+      stdio: [options.stdin === undefined ? "ignore" : "pipe", output, output],
     });
     options.onSpawn?.(child);
     let stdout = "";

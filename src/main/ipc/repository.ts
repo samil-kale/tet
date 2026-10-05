@@ -16,11 +16,7 @@ import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import type { IpcDeps } from "./deps";
 
 /** Everything the git lane and the editor ask of one repository. */
-export function registerRepositoryIpc({
-  settings,
-  store,
-  repositories
-}: Pick<IpcDeps, "settings" | "store" | "repositories">): void {
+export function registerRepositoryIpc({ settings, store, repositories }: Pick<IpcDeps, "settings" | "store" | "repositories">): void {
   handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
     return repositories.get(ref)?.getState() ?? { ...EMPTY_REPOSITORY_STATE, error: notOpenMessage(store, ref) };
   });
@@ -44,82 +40,147 @@ export function registerRepositoryIpc({
     <A extends unknown[]>(write: (root: string, ...args: A) => Promise<void>) =>
     async (_event: IpcMainInvokeEvent, projectId: string, ...args: A): Promise<GitActionResult> => {
       const project = store.get(projectId);
-      return project
-        ? write(project.path, ...args).then(() => ({ ok: true }), failure)
-        : { ok: false, error: PROJECT_NOT_FOUND };
+      return project ? write(project.path, ...args).then(() => ({ ok: true }), failure) : { ok: false, error: PROJECT_NOT_FOUND };
     };
 
-  handle("repository:checkout", inRepository((repository, target: CheckoutTarget) => repository.checkout(target)));
-  handle("repository:fetch", inRepository((repository, login?: GitLogin) => repository.fetch(login)));
-  handle("repository:pull", inRepository((repository, login?: GitLogin) => repository.pull(login)));
-  handle("repository:push", inRepository((repository, login?: GitLogin) => repository.push(login)));
-  handle("repository:set-remote-url", inRepository((repository, remote: string, url: string) =>
-    repository.setRemoteUrl(remote, url))
-  );
-  handle("repository:create-branch", inRepository((repository, name: string, startPoint: string) =>
-    repository.createBranch(name, startPoint))
-  );
-  handle("repository:rename-branch", inRepository((repository, from: string, to: string) => repository.renameBranch(from, to)));
-  handle("repository:delete-branch", inRepository((repository, name: string, onRemote: boolean) =>
-    repository.deleteBranch(name, onRemote))
-  );
-  handle("repository:delete-remote-branch", inRepository((repository, remote: string, name: string, login?: GitLogin) =>
-    repository.deleteRemoteBranch(remote, name, login))
-  );
-  handle("repository:merge", inRepository((repository, ref: string) => repository.merge(ref)));
-  handle("repository:rebase", inRepository((repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed)));
-  handle("repository:abort", inRepository((repository) => repository.abort()));
-  handle("repository:create-tag", inRepository((repository, name: string, target: string, message: string) =>
-    repository.createTag(name, target, message))
-  );
-  handle("repository:push-tag", inRepository((repository, name: string, login?: GitLogin) => repository.pushTag(name, login)));
-  handle("repository:delete-tag", inRepository((repository, name: string, onRemote: boolean) =>
-    repository.deleteTag(name, onRemote))
-  );
-  handle("repository:delete-remote-tag", inRepository((repository, name: string, login?: GitLogin) =>
-    repository.deleteRemoteTag(name, login))
-  );
-  handle("repository:checkout-tag", inRepository((repository, name: string) => repository.checkoutTag(name)));
-  handle("repository:commit-all", inRepository((repository, message: string) => repository.commitAll(message)));
-  handle("repository:commit-paths", inRepository((repository, message: string, paths: string[]) =>
-    repository.commitPaths(message, paths))
+  handle(
+    "repository:checkout",
+    inRepository((repository, target: CheckoutTarget) => repository.checkout(target)),
   );
   handle(
-    "repository:suggest-commit-message",
-    async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
-      const repository = repositories.get(ref);
-      if (!repository) {
-        return {};
-      }
-      const cwd = repository.at.path;
-      // A pick not installed here gives way to the first agent that is, with its default model, as
-      // the settings' picker shows it.
-      const picked = settings.get().prompts.commitSuggester;
-      const askable = await listAskableAgents(cwd);
-      const suggester = askable.includes(picked.agentId) ? picked : { agentId: askable[0] ?? "", model: "" };
-      const prompt = effectivePrompt(settings.get().prompts.texts, "commitMessage");
-      // The commit's own paths, a rename's old one included.
-      return suggestCommitMessage(suggester, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
+    "repository:fetch",
+    inRepository((repository, login?: GitLogin) => repository.fetch(login)),
+  );
+  handle(
+    "repository:pull",
+    inRepository((repository, login?: GitLogin) => repository.pull(login)),
+  );
+  handle(
+    "repository:push",
+    inRepository((repository, login?: GitLogin) => repository.push(login)),
+  );
+  handle(
+    "repository:set-remote-url",
+    inRepository((repository, remote: string, url: string) => repository.setRemoteUrl(remote, url)),
+  );
+  handle(
+    "repository:create-branch",
+    inRepository((repository, name: string, startPoint: string) => repository.createBranch(name, startPoint)),
+  );
+  handle(
+    "repository:rename-branch",
+    inRepository((repository, from: string, to: string) => repository.renameBranch(from, to)),
+  );
+  handle(
+    "repository:delete-branch",
+    inRepository((repository, name: string, onRemote: boolean) => repository.deleteBranch(name, onRemote)),
+  );
+  handle(
+    "repository:delete-remote-branch",
+    inRepository((repository, remote: string, name: string, login?: GitLogin) => repository.deleteRemoteBranch(remote, name, login)),
+  );
+  handle(
+    "repository:merge",
+    inRepository((repository, ref: string) => repository.merge(ref)),
+  );
+  handle(
+    "repository:rebase",
+    inRepository((repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed)),
+  );
+  handle(
+    "repository:abort",
+    inRepository((repository) => repository.abort()),
+  );
+  handle(
+    "repository:create-tag",
+    inRepository((repository, name: string, target: string, message: string) => repository.createTag(name, target, message)),
+  );
+  handle(
+    "repository:push-tag",
+    inRepository((repository, name: string, login?: GitLogin) => repository.pushTag(name, login)),
+  );
+  handle(
+    "repository:delete-tag",
+    inRepository((repository, name: string, onRemote: boolean) => repository.deleteTag(name, onRemote)),
+  );
+  handle(
+    "repository:delete-remote-tag",
+    inRepository((repository, name: string, login?: GitLogin) => repository.deleteRemoteTag(name, login)),
+  );
+  handle(
+    "repository:checkout-tag",
+    inRepository((repository, name: string) => repository.checkoutTag(name)),
+  );
+  handle(
+    "repository:commit-all",
+    inRepository((repository, message: string) => repository.commitAll(message)),
+  );
+  handle(
+    "repository:commit-paths",
+    inRepository((repository, message: string, paths: string[]) => repository.commitPaths(message, paths)),
+  );
+  handle("repository:suggest-commit-message", async (_event, ref: ProjectRef, paths?: string[]): Promise<SuggestionResult> => {
+    const repository = repositories.get(ref);
+    if (!repository) {
+      return {};
     }
-  );
+    const cwd = repository.at.path;
+    // A pick not installed here gives way to the first agent that is, with its default model, as
+    // the settings' picker shows it.
+    const picked = settings.get().prompts.commitSuggester;
+    const askable = await listAskableAgents(cwd);
+    const suggester = askable.includes(picked.agentId) ? picked : { agentId: askable[0] ?? "", model: "" };
+    const prompt = effectivePrompt(settings.get().prompts.texts, "commitMessage");
+    // The commit's own paths, a rename's old one included.
+    return suggestCommitMessage(suggester, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
+  });
   on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
-  handle("repository:stash-push", inRepository((repository, message: string) => repository.stashPush(message)));
-  handle("repository:stash", inRepository((repository, command: StashCommand, sha: string) => repository.stash(command, sha)));
-  handle("repository:discard", inRepository(async (repository, paths: string[], permanently: boolean) =>
-    paths.length > 0 ? repository.discard(paths, permanently) : { ok: true })
+  handle(
+    "repository:stash-push",
+    inRepository((repository, message: string) => repository.stashPush(message)),
   );
-  handle("repository:ignore", inRepository((repository, filePath: string, scope: "file" | "extension") =>
-    repository.ignore(filePath, scope))
+  handle(
+    "repository:stash",
+    inRepository((repository, command: StashCommand, sha: string) => repository.stash(command, sha)),
   );
-  handle("repository:create-file", inRepository((repository, filePath: string) => repository.createFile(filePath)));
-  handle("repository:create-directory", inRepository((repository, dirPath: string) => repository.createDirectory(dirPath)));
-  handle("repository:delete-path", inRepository((repository, filePath: string) => repository.deletePath(filePath)));
-  handle("repository:rename-path", inRepository((repository, fromPath: string, toPath: string) =>
-    repository.renamePath(fromPath, toPath))
+  handle(
+    "repository:discard",
+    inRepository(async (repository, paths: string[], permanently: boolean) =>
+      paths.length > 0 ? repository.discard(paths, permanently) : { ok: true },
+    ),
   );
-  handle("repository:add-folder", inProjectFile((root, folderPath: string) => addFolder(root, folderPath)));
-  handle("repository:remove-folder", inProjectFile((root, folderPath: string) => removeFolder(root, folderPath)));
-  handle("repository:exclude-path", inProjectFile((root, relPath: string) => addExclude(root, relPath)));
+  handle(
+    "repository:ignore",
+    inRepository((repository, filePath: string, scope: "file" | "extension") => repository.ignore(filePath, scope)),
+  );
+  handle(
+    "repository:create-file",
+    inRepository((repository, filePath: string) => repository.createFile(filePath)),
+  );
+  handle(
+    "repository:create-directory",
+    inRepository((repository, dirPath: string) => repository.createDirectory(dirPath)),
+  );
+  handle(
+    "repository:delete-path",
+    inRepository((repository, filePath: string) => repository.deletePath(filePath)),
+  );
+  handle(
+    "repository:rename-path",
+    inRepository((repository, fromPath: string, toPath: string) => repository.renamePath(fromPath, toPath)),
+  );
+  handle(
+    "repository:add-folder",
+    inProjectFile((root, folderPath: string) => addFolder(root, folderPath)),
+  );
+  handle(
+    "repository:remove-folder",
+    inProjectFile((root, folderPath: string) => removeFolder(root, folderPath)),
+  );
+  handle(
+    "repository:exclude-path",
+    inProjectFile((root, relPath: string) => addExclude(root, relPath)),
+  );
 
   handle("repository:list-explorer", async (_event, ref: ProjectRef): Promise<ExplorerListing> => {
     const { compactFolders, sortOrder } = settings.get().files;
@@ -150,6 +211,6 @@ export function registerRepositoryIpc({
         return { ok: false, error: notOpenMessage(store, ref) };
       }
       return repository.writeFile(filePath, content, expectedMtimeMs);
-    }
+    },
   );
 }

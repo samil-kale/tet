@@ -11,7 +11,7 @@ function headers(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
     Accept: "application/vnd.github+json",
-    "User-Agent": "tet"
+    "User-Agent": "tet",
   };
 }
 
@@ -34,12 +34,10 @@ export const github: GitProvider = {
     // The default affiliation covers owned, collaborated and organization repositories.
     const url = `${apiBase(host)}/user/repos?per_page=100&sort=pushed`;
     const entries = (await getPaged(url, headers(token))) as GitHubRepository[];
-    return entries.map(
-      (entry): RemoteRepository => ({
-        fullName: entry.full_name,
-        name: entry.name,
-        cloneUrl: entry.clone_url
-      })
-    );
-  }
+    return entries.map((entry): RemoteRepository => ({
+      fullName: entry.full_name,
+      name: entry.name,
+      cloneUrl: entry.clone_url,
+    }));
+  },
 };

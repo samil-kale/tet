@@ -46,7 +46,7 @@ export function refKeyOf(ref: ProjectRef): string {
 export function projectRefsOf(project: Project): ProjectRef[] {
   return [
     projectRef(project.id),
-    ...project.worktrees.flatMap((worktree) => (worktree.key === undefined ? [] : [projectRef(project.id, worktree.key)]))
+    ...project.worktrees.flatMap((worktree) => (worktree.key === undefined ? [] : [projectRef(project.id, worktree.key)])),
   ];
 }
 

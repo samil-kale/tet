@@ -11,17 +11,14 @@ import {
   text,
   type ControlDeps,
   type Handler,
-  type RefFrom
+  type RefFrom,
 } from "./ctl-verb";
 
 /**
  * The worktree verbs: add, delete, and the merge an agent runs. `refFrom` is the server's lookup of
  * the repository or worktree a verb acts on (resolveCallerRef).
  */
-export function worktreeVerbs(
-  deps: ControlDeps,
-  refFrom: RefFrom
-): Record<Extract<ControlVerbName, `worktree-${string}`>, Handler> {
+export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `worktree-${string}`>, Handler> {
   const { tabManagers } = deps;
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   const repository = (ref: ProjectRef) => repositoryOf(deps, ref);
@@ -67,13 +64,16 @@ export function worktreeVerbs(
       if (caller.worktree !== undefined) {
         throw new ControlError(
           "bad_args",
-          `worktree-agent-merge runs only from the project's repository: it deletes the worktree when done, which would close this tab. Run "tet-ctl worktree-agent-merge ${name}" from a tab of the repository, or ask the user to.`
+          `worktree-agent-merge runs only from the project's repository: it deletes the worktree when done, which would close this tab. Run "tet-ctl worktree-agent-merge ${name}" from a tab of the repository, or ask the user to.`,
         );
       }
       const { worktree, ref } = tetWorktree(found, name);
       const branch = worktree.branch;
       if (branch === undefined) {
-        throw new ControlError("bad_args", `the worktree ${name} has no branch checked out, so there is nothing to merge: check one out there or delete the worktree`);
+        throw new ControlError(
+          "bad_args",
+          `the worktree ${name} has no branch checked out, so there is nothing to merge: check one out there or delete the worktree`,
+        );
       }
       const main = repository(projectRef(found.id));
       const listed = main.getState().worktrees;
@@ -85,7 +85,7 @@ export function worktreeVerbs(
       if (checkedOut !== base) {
         throw new ControlError(
           "bad_args",
-          `the repository has ${checkedOut ?? "a detached HEAD"} checked out, not ${branch}'s base ${base}: run "git switch ${base}" there, or ask the user, then run this again`
+          `the repository has ${checkedOut ?? "a detached HEAD"} checked out, not ${branch}'s base ${base}: run "git switch ${base}" there, or ask the user, then run this again`,
         );
       }
       const own = repository(ref);
@@ -93,18 +93,21 @@ export function worktreeVerbs(
       if (state.operation !== undefined) {
         throw new ControlError(
           "bad_args",
-          `a ${state.operation} is in progress in ${worktree.path}: resolve and commit it (or abort it with git), then run this again`
+          `a ${state.operation} is in progress in ${worktree.path}: resolve and commit it (or abort it with git), then run this again`,
         );
       }
       if (state.changes.length > 0) {
         throw new ControlError(
           "bad_args",
-          `${branch} has uncommitted changes, nothing was merged: have them committed or stashed there (by its agent or the user), then run this again`
+          `${branch} has uncommitted changes, nothing was merged: have them committed or stashed there (by its agent or the user), then run this again`,
         );
       }
       const working = tabManagers.get(ref)?.inspect().find(isWorking);
       if (working) {
-        throw new ControlError("bad_args", `an agent in ${branch} is mid-turn (tab ${working.tabId}), nothing was merged: wait until it is done, then run this again`);
+        throw new ControlError(
+          "bad_args",
+          `an agent in ${branch} is mid-turn (tab ${working.tabId}), nothing was merged: wait until it is done, then run this again`,
+        );
       }
       refuseUnsaved(deps, [ref], "nothing was merged");
 
@@ -116,29 +119,32 @@ export function worktreeVerbs(
         }
         // Where the caller sees the worktree: mounted into its sandbox if it would not.
         const callers = callerRef(caller);
-        const [handed] = callers === undefined || caller.tabId === undefined ? [] : ((await tabManagers.get(callers)?.seenPaths(caller.tabId, [worktree.path])) ?? []);
+        const [handed] =
+          callers === undefined || caller.tabId === undefined
+            ? []
+            : ((await tabManagers.get(callers)?.seenPaths(caller.tabId, [worktree.path])) ?? []);
         const at = handed ?? worktree.path;
         return {
           result: {
             status: "conflicts",
             path: at,
             files: conflicts.changes.filter((change) => change.status === "conflicted").map((change) => change.path),
-            next: `resolve the conflicts in ${at}, git add and git commit them there (or git merge --abort), then run "tet-ctl worktree-agent-merge ${branch}" again`
-          }
+            next: `resolve the conflicts in ${at}, git add and git commit them there (or git merge --abort), then run "tet-ctl worktree-agent-merge ${branch}" again`,
+          },
         };
       }
       const markers = await own.conflictMarkers(base);
       if (markers.length > 0) {
         throw new ControlError(
           "bad_args",
-          `conflict markers are left in ${markers.join(", ")} of ${branch}, ${base} is unchanged: remove them, commit, then run this again`
+          `conflict markers are left in ${markers.join(", ")} of ${branch}, ${base} is unchanged: remove them, commit, then run this again`,
         );
       }
       const forwarded = await main.merge(branch, base);
       if (!forwarded.ok) {
         throw new ControlError(
           "bad_args",
-          `${forwarded.error ?? "the fast-forward failed"} — the merge is committed in ${branch}, ${base} is unchanged: commit or stash what is in the way in the repository if anything is, then run this again`
+          `${forwarded.error ?? "the fast-forward failed"} — the merge is committed in ${branch}, ${base} is unchanged: commit or stash what is in the way in the repository if anything is, then run this again`,
         );
       }
       const deleted = await deps.deleteWorktree(ref, false);
@@ -150,6 +156,6 @@ export function worktreeVerbs(
         throw new ControlError("bad_args", `${branch} is merged into ${base}, but its worktree could not be deleted — ${why}`);
       }
       return { result: { status: "merged", base, branch } };
-    }
+    },
   };
 }

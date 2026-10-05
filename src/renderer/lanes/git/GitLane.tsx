@@ -8,16 +8,7 @@ import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHand
 import { useFileAct, type BranchActions } from "../../git/run-action";
 import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CommitIcon,
-  DiscardIcon,
-  ListIcon,
-  ListTreeIcon,
-  StashIcon,
-  SyncIcon
-} from "../../ui/icons";
+import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, ListIcon, ListTreeIcon, StashIcon, SyncIcon } from "../../ui/icons";
 import { CollapseExpandAllButton } from "../../ui/CollapseExpandAllButton";
 import { useStoredToggle } from "../../ui/layout-storage";
 import { Section } from "../../ui/Section";
@@ -47,7 +38,7 @@ export const GitLane = memo(function GitLane({
   treeHeight,
   onTreeHeight,
   onOpenDiff,
-  onActivateRef
+  onActivateRef,
 }: GitLaneProps) {
   const { acting, act, ask } = useFileAct(resolved.refKey);
   const changesRef = useRef<ChangesListHandle>(null);
@@ -100,7 +91,7 @@ export const GitLane = memo(function GitLane({
               disabled={locked || !canSync}
               onClick={() =>
                 branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", (login) =>
-                  window.tet.repository.push(resolved.ref, login)
+                  window.tet.repository.push(resolved.ref, login),
                 )
               }
             >
@@ -110,21 +101,9 @@ export const GitLane = memo(function GitLane({
         }
       >
         {/* Keyed: a menu left open across a switch of repository or worktree would act on the next one. */}
-        <BranchTree
-          key={resolved.refKey}
-          resolved={resolved}
-          state={state}
-          branch={branch}
-          onActivateRef={onActivateRef}
-        />
+        <BranchTree key={resolved.refKey} resolved={resolved} state={state} branch={branch} onActivateRef={onActivateRef} />
       </Section>
-      <Sash
-        orientation="horizontal"
-        size={treeHeight}
-        min={MIN_AREA_HEIGHT}
-        minOther={MIN_AREA_HEIGHT}
-        onResize={onTreeHeight}
-      />
+      <Sash orientation="horizontal" size={treeHeight} min={MIN_AREA_HEIGHT} minOther={MIN_AREA_HEIGHT} onResize={onTreeHeight} />
       {/* The checked changes, ordered by cost — stash takes all, git stashing no single paths
           safely. A row's own actions are in the context menu, then the view.
           This section's bar — everything `act` covers. */}

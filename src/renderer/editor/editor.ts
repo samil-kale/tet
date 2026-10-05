@@ -16,7 +16,7 @@ export function loadMonaco(): Promise<Monaco> {
   if (!monacoPromise) {
     // `getWorker`, not `getWorkerUrl`: the latter makes a module worker, which fails from `file://`.
     (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
-      getWorker: () => new Worker("./editor.worker.js")
+      getWorker: () => new Worker("./editor.worker.js"),
     };
     monacoPromise = import("./monaco-core");
   }
@@ -66,7 +66,7 @@ const LANGUAGE_CONFIGURATIONS: Record<string, () => Promise<{ conf: languages.La
   tsx: () => import("monaco-editor/languages/definitions/typescript/typescript.js"),
   typescript: () => import("monaco-editor/languages/definitions/typescript/typescript.js"),
   xml: () => import("monaco-editor/languages/definitions/xml/xml.js"),
-  yaml: () => import("monaco-editor/languages/definitions/yaml/yaml.js")
+  yaml: () => import("monaco-editor/languages/definitions/yaml/yaml.js"),
 };
 
 const registered = new Set<string>();
@@ -148,7 +148,7 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
     scrollBeyondLastLine: false,
     scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
     quickSuggestions: false,
-    wordBasedSuggestions: "off"
+    wordBasedSuggestions: "off",
   };
 }
 
@@ -170,6 +170,6 @@ export function diffEditorOptions(): Record<string, unknown> {
     ignoreTrimWhitespace: true,
     diffAlgorithm: "advanced",
     renderOverviewRuler: true,
-    originalEditable: false
+    originalEditable: false,
   };
 }

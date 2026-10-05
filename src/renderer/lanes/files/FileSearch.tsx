@@ -15,7 +15,7 @@ const EMPTY_SEARCH: FileSearchQuery = { text: "", matchCase: false, wholeWord: f
 const SEARCH_TOGGLES: { key: "matchCase" | "wholeWord" | "regex"; title: string; Icon: (props: IconProps) => React.ReactNode }[] = [
   { key: "matchCase", title: "Match Case", Icon: CaseSensitiveIcon },
   { key: "wholeWord", title: "Match Whole Word", Icon: WholeWordIcon },
-  { key: "regex", title: "Use Regular Expression", Icon: RegexIcon }
+  { key: "regex", title: "Use Regular Expression", Icon: RegexIcon },
 ];
 
 /** VS Code's line above its results, the section's header here, and what stands in for it when there
@@ -77,7 +77,7 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
     // The text alone: the toggles are the field's own, as VS Code keeps them.
     clear: () => setSearch((current) => ({ ...current, text: "" })),
     expandAll: () => setExpandedFiles(Object.fromEntries(files.map((file) => [file.path, true]))),
-    collapseAll: () => setExpandedFiles({})
+    collapseAll: () => setExpandedFiles({}),
   }));
 
   return (

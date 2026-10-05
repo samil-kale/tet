@@ -182,5 +182,5 @@ export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {
   paths: [],
   hosts: [],
   secrets: [],
-  variables: []
+  variables: [],
 };

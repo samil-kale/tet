@@ -40,7 +40,7 @@ export function useTabMarks(
   activeRefKey: string | null,
   activeRef: ProjectRef | null,
   onScreenTabIds: string[],
-  showTab: (refKey: string, tabId: string) => void
+  showTab: (refKey: string, tabId: string) => void,
 ): TabMarks {
   const tabsRef = useLatest(tabs);
 
@@ -57,7 +57,7 @@ export function useTabMarks(
         .filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId))
         .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
     },
-    [tabs, onScreenTabIds, activeRefKey]
+    [tabs, onScreenTabIds, activeRefKey],
   );
 
   /**
@@ -66,7 +66,7 @@ export function useTabMarks(
    */
   const startingTabs = useCallback(
     (refKey: string): TabDescriptor[] => (tabs[refKey] ?? []).filter((tab) => tab.starting === true),
-    [tabs]
+    [tabs],
   );
 
   /**
@@ -81,10 +81,22 @@ export function useTabMarks(
     for (const refKey of Object.keys(tabs)) {
       const previous = marksRef.current[refKey];
       next[refKey] = {
-        finished: sameList(previous?.finished, markedTabs(refKey, "finishedAt").map((tab) => tab.tabId), NO_IDS),
-        waiting: sameList(previous?.waiting, markedTabs(refKey, "waitingAt").map((tab) => tab.tabId), NO_IDS),
-        starting: sameList(previous?.starting, startingTabs(refKey).map((tab) => tab.tabId), NO_IDS),
-        working: (tabs[refKey] ?? []).some(isWorking)
+        finished: sameList(
+          previous?.finished,
+          markedTabs(refKey, "finishedAt").map((tab) => tab.tabId),
+          NO_IDS,
+        ),
+        waiting: sameList(
+          previous?.waiting,
+          markedTabs(refKey, "waitingAt").map((tab) => tab.tabId),
+          NO_IDS,
+        ),
+        starting: sameList(
+          previous?.starting,
+          startingTabs(refKey).map((tab) => tab.tabId),
+          NO_IDS,
+        ),
+        working: (tabs[refKey] ?? []).some(isWorking),
       };
     }
     return stableRecord(marksRef, next);
@@ -110,7 +122,7 @@ export function useTabMarks(
       workingCursor.current[refKey] = next.tabId;
       showTab(refKey, next.tabId);
     },
-    [showTab, tabsRef]
+    [showTab, tabsRef],
   );
 
   /** The project row's marks: the oldest finished session first, and the longest-waiting question. */

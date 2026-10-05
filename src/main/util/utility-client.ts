@@ -106,18 +106,15 @@ export function utilityClient<Module>(name: string): UtilityClient<Module> {
 
   return {
     api: new Proxy({} as UtilityApi<Module>, {
-      get:
-        (_target, method: string) =>
-          // Not a method: `await api` would otherwise call "then" in the host.
-          method === "then"
-            ? undefined
-            : (...args: unknown[]) => call(method, args)
+      get: (_target, method: string) =>
+        // Not a method: `await api` would otherwise call "then" in the host.
+        method === "then" ? undefined : (...args: unknown[]) => call(method, args),
     }),
     start: () => void host(),
     stop: () => {
       child?.kill();
       child = undefined;
       fail(`The ${name} process was shut down`);
-    }
+    },
   };
 }

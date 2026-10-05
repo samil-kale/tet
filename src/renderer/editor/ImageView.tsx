@@ -33,13 +33,7 @@ export function ImageView({ image }: { image: ImageSides }) {
           {showOverlay && (
             <label className="image-diff-blend">
               Before
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={blend}
-                onChange={(event) => setBlend(event.currentTarget.valueAsNumber)}
-              />
+              <input type="range" min={0} max={100} value={blend} onChange={(event) => setBlend(event.currentTarget.valueAsNumber)} />
               After
             </label>
           )}

@@ -56,9 +56,7 @@ export async function getPaged(first: string, headers: Record<string, string>): 
   for (let page = 2; page <= Math.min(lastPage, PAGE_CAP); page++) {
     urls.push(withPage(last, page));
   }
-  const bodies = await Promise.all(
-    urls.map(async (url) => arrayBody(await getJson(url, headers)))
-  );
+  const bodies = await Promise.all(urls.map(async (url) => arrayBody(await getJson(url, headers))));
   for (const body of bodies) {
     items.push(...body);
   }

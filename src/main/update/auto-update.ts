@@ -5,7 +5,16 @@ import { app, net } from "electron";
 import * as originalFs from "original-fs";
 import * as semver from "semver";
 import writeFileAtomic from "write-file-atomic";
-import { assetName, installRoot, preparedRoot, resourcesDir, rootExecutable, rootIn, runningUpdater, updateLockPath } from "../../shared/release";
+import {
+  assetName,
+  installRoot,
+  preparedRoot,
+  resourcesDir,
+  rootExecutable,
+  rootIn,
+  runningUpdater,
+  updateLockPath,
+} from "../../shared/release";
 import { PLATFORM } from "../util/host-platform";
 import type { UpdateResult } from "../../shared/release";
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
@@ -95,7 +104,7 @@ async function sweepUpdateDir(asset: string, root: string): Promise<void> {
   await Promise.all(
     entries
       .filter((entry) => entry !== path.basename(resultPath()) && !entry.endsWith(`-${asset}`))
-      .map((entry) => originalFs.promises.rm(path.join(updateDir(), entry), { recursive: true, force: true }).catch(() => undefined))
+      .map((entry) => originalFs.promises.rm(path.join(updateDir(), entry), { recursive: true, force: true }).catch(() => undefined)),
   );
 }
 
@@ -171,7 +180,7 @@ async function stage(
   version: string,
   installed: string,
   onProgress: (fraction: number) => void,
-  onPreparing: () => void
+  onPreparing: () => void,
 ): Promise<{ root: string; prepared: string }> {
   const dir = path.join(updateDir(), version);
   await originalFs.promises.rm(dir, { recursive: true, force: true });
@@ -221,7 +230,7 @@ export function startAutoUpdate(
   releasesUrl: string,
   tetDataRoot: string,
   notice: Notice,
-  showProgress: ShowProgress
+  showProgress: ShowProgress,
 ): void {
   dataRoot = tetDataRoot;
   const asset = assetName(PLATFORM, process.arch);
@@ -268,7 +277,7 @@ export function startAutoUpdate(
               showProgress({ key: "update", message, fraction });
             }
           },
-          () => showProgress({ key: "update", message: `Preparing update ${latest}`, fraction: null })
+          () => showProgress({ key: "update", message: `Preparing update ${latest}`, fraction: null }),
         );
       } catch (error) {
         // Tried again at the next check.
@@ -317,14 +326,14 @@ export function installPendingUpdate(): void {
       pending.root,
       installRoot(process.execPath, PLATFORM),
       resultPath(),
-      pending.prepared
+      pending.prepared,
     ];
     const child = spawn(rootExecutable(pending.root, PLATFORM), args, {
       cwd: updateDir(),
       detached: true,
       stdio: "ignore",
       windowsHide: true,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
     });
     child.on("error", (error) => logError("could not start the update", error));
     child.unref();

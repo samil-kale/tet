@@ -33,7 +33,7 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
     y: rect.bottom,
     width: rect.width,
     // Capped to the room below, or `ContextMenu` would clamp it upward over the trigger.
-    maxHeight: Math.min(MAX_LIST_HEIGHT, window.innerHeight - rect.bottom - WINDOW_MARGIN)
+    maxHeight: Math.min(MAX_LIST_HEIGHT, window.innerHeight - rect.bottom - WINDOW_MARGIN),
   }));
   const selected = options.find((option) => option.value === value);
 

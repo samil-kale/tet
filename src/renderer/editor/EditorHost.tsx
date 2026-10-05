@@ -18,7 +18,7 @@ import {
   showMarkdownPreview,
   subscribeEditor,
   subscribeRefEditors,
-  type EditorSnapshot
+  type EditorSnapshot,
 } from "./editor-views";
 import { isEditorTab, type PaneTab } from "./editor-tab";
 import { IconButton } from "../ui/IconButton";
@@ -109,7 +109,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
         setMarkdownPreviewShare(width / splitWidth);
       }
     },
-    [setMarkdownPreviewShare, splitWidth]
+    [setMarkdownPreviewShare, splitWidth],
   );
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {

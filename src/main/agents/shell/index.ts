@@ -10,5 +10,5 @@ export const shellAgent: AgentDefinition = {
   quotePath: (path) => PLATFORM.shellQuotePath(path),
   executable: () => PLATFORM.shellExecutable(process.env),
   clearable: true,
-  run: { args: (command) => PLATFORM.shellCommandArgs(command) }
+  run: { args: (command) => PLATFORM.shellCommandArgs(command) },
 };

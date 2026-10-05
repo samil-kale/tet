@@ -17,7 +17,7 @@ export async function prepareControl(
   dataRoot: string,
   appDir: string,
   installed: boolean,
-  reuseToken: string | undefined
+  reuseToken: string | undefined,
 ): Promise<{ token: string; port: number }> {
   const token = reuseToken || crypto.randomBytes(24).toString("base64url");
   const port = await findControlPort(dataRoot);

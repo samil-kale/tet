@@ -13,7 +13,7 @@ import {
   toSettings,
   toLocalSave,
   useSbxProblems,
-  type FieldsState
+  type FieldsState,
 } from "./SbxSettingsFields";
 import { SbxAccounts, accountMarks, fromAccounts, toAccountEdits, type AccountRow } from "./SbxAccounts";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
@@ -51,7 +51,7 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "paths", label: "Paths" },
   { id: "hosts", label: "Hosts" },
   { id: "secrets", label: "Secrets" },
-  { id: "variables", label: "Variables" }
+  { id: "variables", label: "Variables" },
 ];
 
 /**
@@ -119,10 +119,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     try {
       // In parallel with the status: both re-read PATH, and joining a running call is free
       // (augmentAgentPath). This run reads the local value; the state lands next render.
-      const [initialStatus, anyAgent] = await Promise.all([
-        window.tet.sbx.status(project.id),
-        window.tet.startup.anyAgentInstalled()
-      ]);
+      const [initialStatus, anyAgent] = await Promise.all([window.tet.sbx.status(project.id), window.tet.startup.anyAgentInstalled()]);
       const isLocked = !anyAgent;
       setLocked(isLocked);
       let status = initialStatus;
@@ -140,7 +137,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
           window.tet.sbx.getSettings(project.id),
           window.tet.sbx.stored(project.id),
           window.tet.sbx.knowledgeSources(),
-          window.tet.sbx.accounts()
+          window.tet.sbx.accounts(),
         ]);
         setEnabled(isLocked || settings.enabled);
         setState(fromSettings(settings, local));
@@ -187,7 +184,12 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
    *  the marked ones left out (sbx-settings.ts's saveProjectSbx); may remove the sandbox. What sbx
    *  refuses only then goes in the button row: the rows it is about may be on another tab, and
    *  their own marks say which (`tabMarks`). Not signed in, or blocked, only the tokens are saved. */
-  const { busy: saving, refused, submit: save, changing } = useSubmit(async () => {
+  const {
+    busy: saving,
+    refused,
+    submit: save,
+    changing,
+  } = useSubmit(async () => {
     const tokensRefused = await window.tet.sbx.saveAccounts(toAccountEdits(accounts));
     if (tokensRefused !== undefined) {
       return tokensRefused;
@@ -228,9 +230,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             patched(
               rows.filter((other) => other.id === row.id || other.account !== kept.id),
               row.id,
-              { account: kept.id, user: kept.user, token: "", mark: undefined }
+              { account: kept.id, user: kept.user, token: "", mark: undefined },
             )
-          : patched(rows, row.id, { mark: result.error })
+          : patched(rows, row.id, { mark: result.error }),
       );
     });
   const browserSignIn = (): void =>
@@ -244,7 +246,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       title: "Sign out of Docker",
       message: "Sign out of Docker?",
       detail: "Every running sandbox stops, in every project.",
-      confirmLabel: "Sign out"
+      confirmLabel: "Sign out",
     });
     if (!answer) {
       return;
@@ -278,7 +280,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
         const mark = disabled || entry.id === "general" ? undefined : marks[entry.id];
         return { ...entry, disabled, mark };
       }),
-    [signedIn, enabled, marks]
+    [signedIn, enabled, marks],
   );
 
   const accountSection = (
@@ -332,9 +334,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               </div>
             ))}
           </div>
-          {phase.organization && (
-            <p className="dialog-detail">Only your organization can add these rules. Check again once it has.</p>
-          )}
+          {phase.organization && <p className="dialog-detail">Only your organization can add these rules. Check again once it has.</p>}
           {accountSection}
         </>
       )}
@@ -344,9 +344,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             checked={enabled}
             disabled={locked || !signedIn}
             onChange={editEnabled}
-            label={
-                <>Enable SBX sandboxing for this project</>
-            }
+            label={<>Enable SBX sandboxing for this project</>}
           />
           <div className={`sbx-governance${organization ? "" : " hidden"}`}>
             <span className="sbx-governance-icon">
@@ -361,14 +359,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <FieldColumn fill className="sbx-settings-tab">
-          <SbxSettingsFields
-            section={tab}
-            state={state}
-            setState={editState}
-            stored={stored}
-            sources={sources}
-            problems={problems}
-          />
+          <SbxSettingsFields section={tab} state={state} setState={editState} stored={stored} sources={sources} problems={problems} />
         </FieldColumn>
       )}
     </DialogFrame>

@@ -20,7 +20,7 @@ export function layoutFlag(key: string): { get(): boolean; set(value: boolean): 
     set: (next) => {
       value = next;
       localStorage.setItem(STORAGE_PREFIX + key, String(next));
-    }
+    },
   };
 }
 
@@ -42,7 +42,7 @@ export function useStoredToggle(key: string, initial: boolean): [boolean, (open:
       setOpen(next);
       localStorage.setItem(STORAGE_PREFIX + key, String(next));
     },
-    [key]
+    [key],
   );
   return [open, set];
 }
@@ -51,11 +51,7 @@ export function useStoredToggle(key: string, initial: boolean): [boolean, (open:
  * Which of `choices` an area shows, in the same layout storage, kept as `useStoredToggle` keeps
  * whether it is out. Anything stored outside `choices` is `initial`.
  */
-export function useStoredChoice<T extends string>(
-  key: string,
-  choices: readonly T[],
-  initial: T
-): [T, (choice: T) => void] {
+export function useStoredChoice<T extends string>(key: string, choices: readonly T[], initial: T): [T, (choice: T) => void] {
   const [choice, setChoice] = useState<T>(() => {
     const stored = localStorage.getItem(STORAGE_PREFIX + key);
     return choices.find((candidate) => candidate === stored) ?? initial;
@@ -66,7 +62,7 @@ export function useStoredChoice<T extends string>(
       setChoice(next);
       localStorage.setItem(STORAGE_PREFIX + key, next);
     },
-    [key]
+    [key],
   );
   return [choice, set];
 }
@@ -95,7 +91,7 @@ export function useCollapsedGroups(key: string, initial: string[]): [(group: str
       setCollapsed(next);
       localStorage.setItem(storageKey, JSON.stringify(next));
     },
-    [collapsed, storageKey]
+    [collapsed, storageKey],
   );
   return [isCollapsed, toggle];
 }
@@ -115,7 +111,7 @@ function usePersistedNumber(storageKey: string, restore: (stored: number) => num
       clearTimeout(persist.current);
       persist.current = setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS);
     },
-    [storageKey]
+    [storageKey],
   );
   useEffect(() => () => clearTimeout(persist.current), []);
   return [value, set];
@@ -126,9 +122,7 @@ function usePersistedNumber(storageKey: string, restore: (stored: number) => num
  * disagree with the area's own `min-*` until the sash is grabbed.
  */
 export function useStoredSize(key: string, initial: number, min: number): [number, (size: number) => void] {
-  return usePersistedNumber(STORAGE_PREFIX + key, (stored) =>
-    Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial)
-  );
+  return usePersistedNumber(STORAGE_PREFIX + key, (stored) => Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial));
 }
 
 /** What storage holds as a share, `initial` when outside (0, 1) — see `usePersistedShare`. */
@@ -169,11 +163,11 @@ export function usePersistedShare(storageKey: string, initial: number): [number,
         clearTimeout(sharePersists.get(storageKey));
         sharePersists.set(
           storageKey,
-          setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS)
+          setTimeout(() => localStorage.setItem(storageKey, String(next)), PERSIST_MS),
         );
       }
     },
-    [storageKey, initial]
+    [storageKey, initial],
   );
   return [share, set];
 }

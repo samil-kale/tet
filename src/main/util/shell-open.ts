@@ -14,8 +14,29 @@ const OPENABLE_URL_PROTOCOLS = ["http:", "https:", "mailto:"];
 
 /** Run, not shown, by Windows' file associations. */
 const WINDOWS_EXECUTABLE_EXTENSIONS = [
-  ".exe", ".com", ".bat", ".cmd", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh",
-  ".msi", ".msp", ".lnk", ".scr", ".pif", ".cpl", ".hta", ".reg", ".jar", ".appref-ms", ".url"
+  ".exe",
+  ".com",
+  ".bat",
+  ".cmd",
+  ".ps1",
+  ".psm1",
+  ".vbs",
+  ".vbe",
+  ".js",
+  ".jse",
+  ".wsf",
+  ".wsh",
+  ".msi",
+  ".msp",
+  ".lnk",
+  ".scr",
+  ".pif",
+  ".cpl",
+  ".hta",
+  ".reg",
+  ".jar",
+  ".appref-ms",
+  ".url",
 ];
 
 /** Run by Finder or a Linux desktop, beside anything with an executable bit. */

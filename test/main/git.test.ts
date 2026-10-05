@@ -36,7 +36,7 @@ import {
   stash,
   stashPush,
   updateRemoteHead,
-  version
+  version,
 } from "../../src/main/git/git";
 import { worktreesSupported } from "../../src/shared/types/git";
 import { git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
@@ -57,8 +57,7 @@ const write = (name: string, content: string): void => fs.writeFileSync(path.joi
 /** The editor tab's read cap; `readHeadBlob` takes it per call. */
 const MAX_BYTES = 4 * 1024 * 1024;
 const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
-const changed = async (): Promise<string[]> =>
-  (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
+const changed = async (): Promise<string[]> => (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
 
 describe("git's version", () => {
   it("reads as its number, and the worktrees TET makes need 2.48", async () => {
@@ -68,7 +67,7 @@ describe("git's version", () => {
       ["2.48.0", true],
       ["2.55.0.windows.3", true],
       ["3.0.0", true],
-      ["1.99.0", false]
+      ["1.99.0", false],
     ] as const) {
       assert.equal(worktreesSupported(printed), supported, printed);
     }
@@ -127,7 +126,7 @@ describe("a repository, from init on", () => {
     assert.deepEqual(await head("a.txt"), {
       content: "one\ntwo\nthree\n",
       binary: false,
-      missing: false
+      missing: false,
     });
     assert.deepEqual(await discard(cwd, { restore: ["a.txt"], drop: [] }), { ok: true });
     assert.deepEqual((await readState(cwd)).changes, []);
@@ -139,14 +138,14 @@ describe("a repository, from init on", () => {
     assert.deepEqual(await readHeadBlob(cwd, "a.txt", { maxBytes: 4 }), {
       content: "",
       binary: true,
-      missing: false
+      missing: false,
     });
   });
 
   it("reads an ODF document as the text of its paragraphs", async () => {
     const xml =
-      '<office:document-content><office:body><office:text><text:h>Title</text:h>' +
-      '<text:p>a &amp; b<text:tab/>c</text:p></office:text></office:body></office:document-content>';
+      "<office:document-content><office:body><office:text><text:h>Title</text:h>" +
+      "<text:p>a &amp; b<text:tab/>c</text:p></office:text></office:body></office:document-content>";
     fs.writeFileSync(path.join(cwd, "doc.odt"), zipSync({ "content.xml": strToU8(xml) }));
     assert.deepEqual(await commitAll(cwd, "a document"), { ok: true });
     assert.deepEqual(await head("doc.odt"), { content: "Title\na & b\tc\n", binary: false, missing: false });
@@ -381,12 +380,7 @@ describe("a selection of the changes, as the list's menu hands it over", () => {
     run("rm", "-q", "--cached", "renamed.txt");
     write("renamed.txt", "edited\n");
     // git reports both, a staged deletion and an untracked file; GitHub Desktop shows the second.
-    assert.deepEqual(await changed(), [
-      "modified b.txt",
-      "modified i/page.txt",
-      "untracked other.txt",
-      "untracked renamed.txt"
-    ]);
+    assert.deepEqual(await changed(), ["modified b.txt", "modified i/page.txt", "untracked other.txt", "untracked renamed.txt"]);
   });
 
   it("discards that file back to HEAD's version, once the edited one is trashed", async () => {
@@ -626,7 +620,7 @@ describe("a submodule opened as a project", () => {
     const { worktrees } = await readState(sub);
     assert.deepEqual(
       worktrees.map((worktree) => [worktree.path, worktree.isRepository, worktree.current]),
-      [[sub, true, true]]
+      [[sub, true, true]],
     );
   });
 });
@@ -758,8 +752,8 @@ describe("the askpass script handing git a login", () => {
         LC_ALL: "C",
         TET_ASKPASS_ORIGIN: origin,
         TET_ASKPASS_USER: "user",
-        TET_ASKPASS_TOKEN: "token"
-      }
+        TET_ASKPASS_TOKEN: "token",
+      },
     });
   }
 
@@ -790,7 +784,7 @@ describe("the askpass script handing git a login", () => {
   it("answers a question naming the path too, as credential.useHttpPath makes git ask", async () => {
     const answer = await fill("protocol=https\nhost=example.invalid\npath=team/app.git\n\n", "https://example.invalid", [
       "-c",
-      "credential.useHttpPath=true"
+      "credential.useHttpPath=true",
     ]);
     assert.equal(answer.status, 0, String(answer.stderr));
     assert.match(String(answer.stdout), /^username=user$/m);

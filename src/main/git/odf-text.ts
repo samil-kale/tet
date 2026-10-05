@@ -11,12 +11,15 @@ function isOdf(filePath: string): boolean {
 }
 
 function decode(text: string): string {
-  return text.replace(/&(?:#(\d+)|#x([0-9a-f]+)|(\w+));/gi, (whole: string, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
-    if (name) {
-      return ENTITIES[name] ?? whole;
-    }
-    return String.fromCodePoint(dec ? Number(dec) : parseInt(hex ?? "", 16));
-  });
+  return text.replace(
+    /&(?:#(\d+)|#x([0-9a-f]+)|(\w+));/gi,
+    (whole: string, dec: string | undefined, hex: string | undefined, name: string | undefined) => {
+      if (name) {
+        return ENTITIES[name] ?? whole;
+      }
+      return String.fromCodePoint(dec ? Number(dec) : parseInt(hex ?? "", 16));
+    },
+  );
 }
 
 /** One line per paragraph, heading and list item, tabs between a table's cells; formatting and
@@ -31,7 +34,7 @@ function contentToText(xml: string): string {
       .replace(/<\/table:table-cell>/g, "\t")
       .replace(/<\/text:(?:p|h)>|<\/table:table-row>/g, "\n")
       .replace(/<text:list-item[^>]*>/g, "- ")
-      .replace(/<[^>]*>/g, "")
+      .replace(/<[^>]*>/g, ""),
   )
     .replace(/\t+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n");

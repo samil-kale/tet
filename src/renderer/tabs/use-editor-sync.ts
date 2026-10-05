@@ -28,7 +28,7 @@ function diffVersion(state: RepositoryState | undefined, filePath: string, write
 export function useEditorSync(
   editorTabs: Record<string, EditorTab[]>,
   layouts: Record<string, ProjectLayout>,
-  states: Record<string, RepositoryState>
+  states: Record<string, RepositoryState>,
 ): { activeEditors: Record<string, string>; forgetProjectRef: (refKey: string) => void } {
   /** Per repository or worktree, per watched path: writes on disk — see diffVersion. */
   const [fileWrites, setFileWrites] = useState<Record<string, Record<string, number>>>({});
@@ -46,7 +46,7 @@ export function useEditorSync(
       const tabId = activeEditorTab(
         layouts[refKey] ?? DEFAULT_LAYOUT,
         editors.map((tab) => tab.tabId),
-        activeEditorsRef.current[refKey]
+        activeEditorsRef.current[refKey],
       );
       if (tabId !== undefined) {
         next[refKey] = tabId;
@@ -61,7 +61,7 @@ export function useEditorSync(
         const tabId = activeEditorsRef.current[refKeyOf(ref)];
         return tabId === undefined ? undefined : editorContent(tabId);
       }),
-    []
+    [],
   );
   // Reported to main as App's `onScreenTabIds` is: only the renderer knows. A repository or worktree whose
   // last editor tab closed reports nothing; main finds no report under the old id.
@@ -108,10 +108,10 @@ export function useEditorSync(
         const refKey = refKeyOf(ref);
         setFileWrites((current) => ({
           ...current,
-          [refKey]: { ...current[refKey], [path]: (current[refKey]?.[path] ?? 0) + 1 }
+          [refKey]: { ...current[refKey], [path]: (current[refKey]?.[path] ?? 0) + 1 },
         }));
       }),
-    []
+    [],
   );
   // Reloads an open file only when its diffVersion changes, not on every push: a reload re-reads
   // and recolours the whole diff.

@@ -16,7 +16,7 @@ const BLANK_ACCOUNT = { user: "", token: "" };
 export function fromAccounts(accounts: SbxAccount[]): AccountRow[] {
   return atLeastOne(
     accounts.map((account) => withId({ account: account.id, user: account.user, token: "" })),
-    BLANK_ACCOUNT
+    BLANK_ACCOUNT,
   );
 }
 
@@ -78,7 +78,7 @@ export function SbxAccounts({
   busy,
   onSignIn,
   onBrowserSignIn,
-  onSignOut
+  onSignOut,
 }: SbxAccountsProps) {
   const setRow = (row: AccountRow, change: Partial<AccountRow>): void =>
     setRows((current) => patched(current, row.id, { ...change, mark: undefined }));

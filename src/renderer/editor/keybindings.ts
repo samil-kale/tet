@@ -8,7 +8,7 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
  */
 const DEFAULT_KEYBINDINGS: Record<string, string> = {
   "ctrl+s": "tet.save",
-  "ctrl+shift+v": "tet.markdownPreview"
+  "ctrl+shift+v": "tet.markdownPreview",
 };
 
 /**

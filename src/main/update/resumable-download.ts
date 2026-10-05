@@ -20,11 +20,11 @@ export async function resumableDownload(
   file: string,
   signal: AbortSignal,
   onProgress: (fraction: number) => void,
-  fetchFn: FetchLike = (target, init) => net.fetch(target, init)
+  fetchFn: FetchLike = (target, init) => net.fetch(target, init),
 ): Promise<void> {
   const have = await fs.promises.stat(file).then(
     (stat) => stat.size,
-    () => 0
+    () => 0,
   );
   const response = await fetchFn(url, { headers: have > 0 ? { Range: `bytes=${have}-` } : {}, signal });
   // Asked for what follows a complete file.
@@ -55,6 +55,6 @@ export async function resumableDownload(
         yield chunk;
       }
     },
-    fs.createWriteStream(file, { flags: resumed ? "a" : "w" })
+    fs.createWriteStream(file, { flags: resumed ? "a" : "w" }),
   );
 }

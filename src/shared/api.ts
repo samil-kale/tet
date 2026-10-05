@@ -5,7 +5,20 @@ import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, F
 import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
-import type { SbxAccount, SbxAccountEdit, SbxKnowledgeSettings, SbxKnowledgeSource, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxSignInResult, SbxStatus, SbxStoredLocal, SbxValueKind } from "./types/sbx";
+import type {
+  SbxAccount,
+  SbxAccountEdit,
+  SbxKnowledgeSettings,
+  SbxKnowledgeSource,
+  SbxLocalSave,
+  SbxProblems,
+  SbxProjectSettings,
+  SbxSaveResult,
+  SbxSignInResult,
+  SbxStatus,
+  SbxStoredLocal,
+  SbxValueKind,
+} from "./types/sbx";
 import type { AppSettings, LaneSettings, SettingsEdits } from "./types/settings";
 import type { HandoverResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
 
@@ -70,7 +83,7 @@ export interface TETApi {
       settings: SbxProjectSettings,
       knowledge: SbxKnowledgeSettings,
       values: Record<SbxValueKind, string[]>,
-      status: Pick<SbxStatus, "organization">
+      status: Pick<SbxStatus, "organization">,
     ) => Promise<SbxProblems>;
   };
   /** One set for the whole app. */
@@ -94,13 +107,7 @@ export interface TETApi {
     open: (directory: string) => Promise<AddRepositoryResult>;
     /** `git clone` into `directory`/`name`; an account's token authenticates it, else `login`
      *  where the first try answered `loginUrl`. */
-    clone: (
-      url: string,
-      directory: string,
-      name: string,
-      accountId?: string,
-      login?: GitLogin
-    ) => Promise<AddRepositoryResult>;
+    clone: (url: string, directory: string, name: string, accountId?: string, login?: GitLogin) => Promise<AddRepositoryResult>;
     /** `git init` of `directory`, a folder `open` answered `notRepository` for (missing ones
      *  created), opened as a project. */
     initialize: (directory: string) => Promise<AddRepositoryResult>;
@@ -242,9 +249,7 @@ export interface TETApi {
     /** A tab whose process is the command; null when nothing can run it. */
     run: (ref: ProjectRef, command: ProjectCommand) => Promise<TabDescriptor | null>;
     /** tet.json changed on disk, whoever wrote it: its commands and whether SBX is enabled as they now read. */
-    onChanged: (
-      listener: (payload: { projectId: string; commands: ProjectCommand[]; sbxEnabled: boolean }) => void
-    ) => Unsubscribe;
+    onChanged: (listener: (payload: { projectId: string; commands: ProjectCommand[]; sbxEnabled: boolean }) => void) => Unsubscribe;
   };
   tabs: {
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
@@ -270,9 +275,7 @@ export interface TETApi {
     onTabs: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
     /** One message per flush for all terminals. */
     onOutput: (listener: (batch: TerminalOutput[]) => void) => Unsubscribe;
-    onStatus: (
-      listener: (payload: { ref: ProjectRef; tabId: string; status: TerminalStatus }) => void
-    ) => Unsubscribe;
+    onStatus: (listener: (payload: { ref: ProjectRef; tabId: string; status: TerminalStatus }) => void) => Unsubscribe;
     /** Anything in the project still starting (a CLI booting, sessions listing). */
     onStartupProgress: (listener: (payload: { ref: ProjectRef; show: boolean }) => void) => Unsubscribe;
     /** A tab the control channel opened, to bring to front. */

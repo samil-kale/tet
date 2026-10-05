@@ -25,19 +25,23 @@ type Mode = "remote" | "clone" | "add";
 const MODES: { id: Mode; label: string }[] = [
   { id: "remote", label: "Remote" },
   { id: "clone", label: "Clone" },
-  { id: "add", label: "Add" }
+  { id: "add", label: "Add" },
 ];
 
 const PROVIDER_LABEL: Record<ProviderId, string> = { github: "GitHub", gitlab: "GitLab" };
 const DEFAULT_HOST: Record<ProviderId, string> = { github: "github.com", gitlab: "gitlab.com" };
 const PROVIDER_OPTIONS = (Object.keys(PROVIDER_LABEL) as ProviderId[]).map((value) => ({
   value,
-  label: PROVIDER_LABEL[value]
+  label: PROVIDER_LABEL[value],
 }));
 
 /** The folder a url clones into, by git's rule: the last path segment without ".git". */
 function cloneFolder(url: string): string {
-  const segment = url.replace(/[/\\]+$/, "").split(/[/\\:]/).pop() ?? "";
+  const segment =
+    url
+      .replace(/[/\\]+$/, "")
+      .split(/[/\\:]/)
+      .pop() ?? "";
   return segment.replace(/\.git$/, "");
 }
 
@@ -82,9 +86,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   const pick = (next: ProviderId): void => {
     setProvider(next);
     setHost((current) =>
-      current === "" || current === DEFAULT_HOST.github || current === DEFAULT_HOST.gitlab
-        ? DEFAULT_HOST[next]
-        : current
+      current === "" || current === DEFAULT_HOST.github || current === DEFAULT_HOST.gitlab ? DEFAULT_HOST[next] : current,
     );
   };
 
@@ -119,7 +121,9 @@ interface Namespace {
 function namespacesOf(repos: RemoteRepository[]): Namespace[] {
   const counts = new Map<string, number>();
   for (const repo of repos) {
-    const segments = parentOf(repo.fullName).split("/").filter((segment) => segment !== "");
+    const segments = parentOf(repo.fullName)
+      .split("/")
+      .filter((segment) => segment !== "");
     for (let end = 1; end <= segments.length; end++) {
       const path = segments.slice(0, end).join("/");
       counts.set(path, (counts.get(path) ?? 0) + 1);
@@ -219,10 +223,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
 
   const accountAdded = (account: ProviderAccount): void => {
     // Replace, not append: a fresh token answers with the same account id.
-    setAccounts((current) => [
-      ...(current ?? []).filter((entry) => entry.id !== account.id),
-      account
-    ]);
+    setAccounts((current) => [...(current ?? []).filter((entry) => entry.id !== account.id), account]);
     // A re-entered token may reach further, so the cached list is stale.
     setRepos((current) => forget(current, account.id));
     setSelectedId(account.id);
@@ -234,7 +235,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
       title: "Remove account",
       message: `Remove ${account.user} on ${account.host}?`,
       detail: "The stored token is deleted with it.",
-      confirmLabel: "Remove"
+      confirmLabel: "Remove",
     });
     if (!answer) {
       return;
@@ -253,9 +254,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
   const pickNamespace = (next: string): void => {
     if (selectedId !== null) {
       setPicked({ accountId: selectedId, namespace: next });
-      setAccounts((current) =>
-        (current ?? []).map((entry) => (entry.id === selectedId ? { ...entry, namespace: next } : entry))
-      );
+      setAccounts((current) => (current ?? []).map((entry) => (entry.id === selectedId ? { ...entry, namespace: next } : entry)));
       void window.tet.providers.setNamespace(selectedId, next);
     }
   };
@@ -269,7 +268,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
   const wanted = namespace ?? stored ?? (list?.[0] ? parentOf(list[0].fullName) : "");
   const active = wanted === "" || groups.some((group) => group.path === wanted) ? wanted : "";
   const filtered = (list ?? []).filter(
-    (repo) => repo.fullName.toLowerCase().includes(query) && (active === "" || inNamespace(repo.fullName, active))
+    (repo) => repo.fullName.toLowerCase().includes(query) && (active === "" || inNamespace(repo.fullName, active)),
   );
 
   return (
@@ -320,8 +319,8 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
                   ...groups.map((group) => ({
                     value: group.path,
                     // Non-breaking: leading plain spaces collapse.
-                    label: `${"\u00a0\u00a0".repeat(group.depth)}${group.path} (${group.count})`
-                  }))
+                    label: `${"\u00a0\u00a0".repeat(group.depth)}${group.path} (${group.count})`,
+                  })),
                 ]}
               />
             )}
@@ -329,19 +328,13 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
               {filtered.map((repo) => (
                 <div className="repository-row" key={repo.fullName}>
                   <span className="repository-name">{repo.fullName}</span>
-                  <button
-                    type="button"
-                    className="button secondary repository-clone"
-                    onClick={() => onClone(repo, selectedId)}
-                  >
+                  <button type="button" className="button secondary repository-clone" onClick={() => onClone(repo, selectedId)}>
                     Clone
                   </button>
                 </div>
               ))}
               <DialogError message={listError} />
-              {listError === undefined && list && filtered.length === 0 && (
-                <div className="placeholder">No repositories.</div>
-              )}
+              {listError === undefined && list && filtered.length === 0 && <div className="placeholder">No repositories.</div>}
             </div>
           </>
         )}
@@ -392,10 +385,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const initializing = mode === "add" && uninitialized !== null && uninitialized === addDirectory.trim();
   const ready =
     mode === "clone"
-      ? url.trim() !== "" &&
-        cloneDirectory.trim() !== "" &&
-        folderName.trim() !== "" &&
-        (loginUrl === null || loginReady(login))
+      ? url.trim() !== "" && cloneDirectory.trim() !== "" && folderName.trim() !== "" && (loginUrl === null || loginReady(login))
       : mode === "add"
         ? addDirectory.trim() !== ""
         : false;
@@ -406,12 +396,17 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       cloneDirectory.trim(),
       folderName.trim(),
       accountId ?? undefined,
-      loginUrl === null ? undefined : { username: login.username.trim(), password: login.password }
+      loginUrl === null ? undefined : { username: login.username.trim(), password: login.password },
     );
 
   /** What refused the add goes beside the buttons: which field is to blame depends on the tab — a
    *  url, a path, a folder name — so none of them carries it. */
-  const { busy: adding, refused, submit, changing } = useSubmit(async () => {
+  const {
+    busy: adding,
+    refused,
+    submit,
+    changing,
+  } = useSubmit(async () => {
     const result =
       mode === "add"
         ? initializing
@@ -446,7 +441,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       ? {
           label: initializing ? "Initialize" : (MODES.find((entry) => entry.id === mode)?.label ?? ""),
           disabled: !ready || busy,
-          run: () => void submit()
+          run: () => void submit(),
         }
       : undefined;
 
@@ -470,7 +465,9 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       onCancel={onClose}
       primary={primary}
     >
-      {mode === "remote" && <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} runHeld={runRemoval} locked={locked} />}
+      {mode === "remote" && (
+        <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} runHeld={runRemoval} locked={locked} />
+      )}
       {mode === "clone" && (
         <>
           <TextField
@@ -495,12 +492,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       )}
       {mode === "add" && (
         <>
-          <PathField
-            label="Repository path"
-            value={addDirectory}
-            pickTitle="Add repository"
-            onChange={changing(setAddDirectory)}
-          />
+          <PathField label="Repository path" value={addDirectory} pickTitle="Add repository" onChange={changing(setAddDirectory)} />
           {initializing && (
             <p className="dialog-detail">Initialize creates a git repository in this folder, and the folder where it is missing.</p>
           )}

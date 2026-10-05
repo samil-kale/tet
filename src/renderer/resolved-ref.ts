@@ -26,7 +26,7 @@ function resolveEntry(project: Project, ref: ProjectRef): ResolvedRef {
     ref,
     worktree,
     path: worktree?.path ?? project.path,
-    name: projectRefName(project, ref)
+    name: projectRefName(project, ref),
   };
 }
 

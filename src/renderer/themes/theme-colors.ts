@@ -16,7 +16,7 @@ const ANSI_CSS_VARS: Record<string, string> = {
   brightBlue: "--vscode-terminal-ansiBrightBlue",
   brightMagenta: "--vscode-terminal-ansiBrightMagenta",
   brightCyan: "--vscode-terminal-ansiBrightCyan",
-  brightWhite: "--vscode-terminal-ansiBrightWhite"
+  brightWhite: "--vscode-terminal-ansiBrightWhite",
 };
 
 /** The theme's editor font, resolved for xterm and monaco alike, which take no var(). */
@@ -50,7 +50,7 @@ export function buildXtermTheme(): ITheme {
     // The ruler outlines itself every frame (`_renderRulerOutline`); xterm's default draws a
     // white line down the right of every terminal.
     overviewRulerBorder: "#00000000",
-    ...readCssVars(ANSI_CSS_VARS)
+    ...readCssVars(ANSI_CSS_VARS),
   };
 
   return theme;
@@ -92,7 +92,7 @@ const EDITOR_CSS_VARS: Record<string, string> = {
   // shiki theme's own foreground, which is the one color in the widget not from TET's stylesheet.
   "editorWidget.foreground": "--vscode-foreground",
   "editorWidget.border": "--vscode-editorWidget-border",
-  "widget.shadow": "--vscode-widget-shadow"
+  "widget.shadow": "--vscode-widget-shadow",
 };
 
 /** The editor surface's colors, read for shiki's theme — see `EDITOR_CSS_VARS`. */
@@ -138,7 +138,7 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "diffEditorGutter.insertedLineBackground": "--vscode-diffEditor-insertedLineBackground",
   "diffEditorGutter.removedLineBackground": "--vscode-diffEditor-removedLineBackground",
   "diffEditorOverview.insertedForeground": "--vscode-diffEditorOverview-insertedForeground",
-  "diffEditorOverview.removedForeground": "--vscode-diffEditorOverview-removedForeground"
+  "diffEditorOverview.removedForeground": "--vscode-diffEditorOverview-removedForeground",
 };
 
 /** `MONACO_CSS_VARS` plus a few fixed values, laid over shiki's theme. */

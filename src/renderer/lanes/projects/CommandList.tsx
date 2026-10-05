@@ -30,7 +30,7 @@ function colorVariable(color: CommandColor): string {
 const COLOR_CHOICES = COMMAND_COLORS.map((color) => ({
   value: color,
   color: colorVariable(color),
-  title: capitalized(color)
+  title: capitalized(color),
 }));
 
 /** What the add and edit dialogs hold, as typed; the color "" for none. */
@@ -84,12 +84,7 @@ const renderCommandFields: PromptOptions<CommandAnswer>["render"] = ({ value, on
       onChange={(env) => onChange({ ...value, env })}
       error={envRefusal(value.env)}
     />
-    <ColorField
-      label="Color (optional)"
-      choices={COLOR_CHOICES}
-      value={value.color}
-      onChange={(color) => onChange({ ...value, color })}
-    />
+    <ColorField label="Color (optional)" choices={COLOR_CHOICES} value={value.color} onChange={(color) => onChange({ ...value, color })} />
   </>
 );
 
@@ -170,7 +165,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
     // no state.
     payloadOf: String,
     indexOf: Number,
-    onMove: (from, to) => save(reorder(commands, from, to))
+    onMove: (from, to) => save(reorder(commands, from, to)),
   });
 
   useEffect(() => {
@@ -205,8 +200,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
   };
 
   /** The latest list if it is the active project's, else none. */
-  const latestCommands = (): ProjectCommand[] =>
-    latest.current?.projectId === activeProjectId.current ? latest.current.commands : [];
+  const latestCommands = (): ProjectCommand[] => (latest.current?.projectId === activeProjectId.current ? latest.current.commands : []);
 
   /** Writes the list whole, handing back what refused it — for the questions that stay up to show
    *  it at their field (`prompt`'s `submit`). */
@@ -240,7 +234,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
         const current = latestCommands();
         // Already saved word for word: nothing to add, and nothing to say about it.
         return current.some((entry) => isSameCommand(entry, command)) ? undefined : saveAsked([...current, command]);
-      }
+      },
     });
   };
 
@@ -262,7 +256,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
         name: command.name ?? "",
         cwd: command.cwd ?? "",
         env: formatEnv(command.env),
-        color: command.color ?? ""
+        color: command.color ?? "",
       },
       confirmLabel: "Save",
       ready: commandReady,
@@ -274,7 +268,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
         return index === -1
           ? undefined
           : saveAsked(current.map((entry, position) => (position === index ? toCommand(answer, command) : entry)));
-      }
+      },
     });
   };
 
@@ -283,7 +277,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
       title: "Delete command",
       message: `Delete "${command.command}"?`,
       detail: "It is removed from the project's tet.json.",
-      confirmLabel: "Delete"
+      confirmLabel: "Delete",
     });
     if (answer) {
       const index = indexOf(command);
@@ -311,9 +305,9 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
     ...(editable
       ? [
           { label: "Edit...", run: () => void askEdit(command) },
-          { label: "Delete...", run: () => void askRemove(command) }
+          { label: "Delete...", run: () => void askRemove(command) },
         ]
-      : [])
+      : []),
   ];
 
   return (
@@ -341,16 +335,11 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
           >
             {/* Its name if any; the line is in the tooltip. */}
             <span className="command-main">
-              <span
-                className="command-label"
-                style={command.color ? { color: colorVariable(command.color) } : undefined}
-              >
+              <span className="command-label" style={command.color ? { color: colorVariable(command.color) } : undefined}>
                 {command.name ?? command.command}
               </span>
               {/* `env` on unnamed rows only: it changes what the command does, the folder does not. */}
-              {!command.name && formatEnv(command.env) && (
-                <span className="command-extra">({formatEnv(command.env)})</span>
-              )}
+              {!command.name && formatEnv(command.env) && <span className="command-extra">({formatEnv(command.env)})</span>}
             </span>
             <IconButton title={`Run ${command.command} in a new tab`} onClick={() => run(command)}>
               <PlayIcon />

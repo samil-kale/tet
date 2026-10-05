@@ -23,7 +23,7 @@ export type LaneSettings = LaneEntry[];
 export function laneOrders(lanes: LaneSettings): { pinned: Lane[]; toggles: Lane[] } {
   return {
     pinned: lanes.filter((entry) => entry.pinned).map((entry) => entry.lane),
-    toggles: lanes.filter((entry) => !entry.pinned).map((entry) => entry.lane)
+    toggles: lanes.filter((entry) => !entry.pinned).map((entry) => entry.lane),
   };
 }
 
@@ -91,7 +91,7 @@ export const GIT_SETTING_IDS = [
   "pushOnCommit",
   "deleteBranchOnRemote",
   "deleteTagOnRemote",
-  "deleteWorktreeOnRemote"
+  "deleteWorktreeOnRemote",
 ] as const satisfies readonly (keyof GitSettings)[];
 
 /** What TET asks of an agent (prompts.ts), in the Prompts tab's picker. */
@@ -144,9 +144,9 @@ export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEd
       prompts: {
         ...base.prompts,
         ...edits.prompts,
-        ...(edits.prompts.texts && { texts: { ...base.prompts?.texts, ...edits.prompts.texts } })
-      }
-    })
+        ...(edits.prompts.texts && { texts: { ...base.prompts?.texts, ...edits.prompts.texts } }),
+      },
+    }),
   };
 }
 

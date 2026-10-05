@@ -13,7 +13,7 @@ import {
   scanTranscriptTail,
   timestampOf,
   truncateTitle,
-  watchTranscriptDir
+  watchTranscriptDir,
 } from "../transcript";
 import { SANDBOX_HOME } from "../hook-target";
 import { openInside, removeInside } from "../../util/path-inside";
@@ -50,9 +50,9 @@ export const claudeSessionProvider: SessionProvider = {
       projectsRoot,
       () => findProjectDir(projectsRoot(), cwd),
       (filename) => filename.endsWith(".jsonl"),
-      onChange
+      onChange,
     );
-  }
+  },
 };
 
 /** Mounted over the sandbox's `~/.claude/projects`, stacking on sbx's own volume there. */
@@ -64,9 +64,9 @@ export const claudeSandboxSessions: SandboxSessions = {
       list: () => listIn(projects, cwd),
       remove: (sessionId) => removeIn(projects, cwd, sessionId, within),
       rename: (sessionId, title) => renameIn(projects, cwd, sessionId, title, within),
-      files: (sessionId) => filesIn(projects, cwd, sessionId)
+      files: (sessionId) => filesIn(projects, cwd, sessionId),
     };
-  }
+  },
 };
 
 /** The transcript alone: the subagent transcripts and tool results beside it are not the
@@ -105,9 +105,9 @@ function listIn(root: string, cwd: string): Promise<AgentSessionInfo[]> {
         updatedAt: mtimeMs,
         provisionalTitle: provisional,
         createdAt: head.createdAt ?? mtimeMs,
-        turnEndedAt: tail.turnEndedAt
+        turnEndedAt: tail.turnEndedAt,
       };
-    }
+    },
   );
 }
 
@@ -256,7 +256,7 @@ function scanHead(filePath: string, fileSize: number): Promise<TranscriptHead> {
         head.firstPrompt = prompt === undefined ? undefined : truncateTitle(prompt);
       }
       return false;
-    }
+    },
   });
 }
 
@@ -289,12 +289,7 @@ interface TranscriptTail {
 
 /** Whether every entry the scan looks for has been found. */
 function scanComplete(tail: TranscriptTail): boolean {
-  return (
-    tail.customTitle !== undefined &&
-    tail.agentName !== undefined &&
-    tail.aiTitle !== undefined &&
-    tail.turnEndResolved === true
-  );
+  return tail.customTitle !== undefined && tail.agentName !== undefined && tail.aiTitle !== undefined && tail.turnEndResolved === true;
 }
 
 /** Only lines naming one of these are parsed. */
@@ -304,7 +299,7 @@ const TAIL_ENTRY_TYPES = [
   '"ai-title"',
   '"turn_duration"',
   '"stop_hook_summary"',
-  '"[Request interrupted by user'
+  '"[Request interrupted by user',
 ];
 
 /** The user entry Claude appends when Escape cuts a turn short. During a tool ("… for tool use]")
@@ -318,7 +313,7 @@ function isInterruptEntry(entry: Record<string, unknown>): boolean {
     Array.isArray(content) &&
     content.some(
       (part: { type?: unknown; text?: unknown }) =>
-        part.type === "text" && typeof part.text === "string" && part.text.startsWith("[Request interrupted by user")
+        part.type === "text" && typeof part.text === "string" && part.text.startsWith("[Request interrupted by user"),
     )
   );
 }
@@ -417,6 +412,6 @@ function scanTail(filePath: string, sessionId: string): Promise<ScannedTail<Tran
         tail.turnEndedAt = previous.turnEndedAt;
         tail.turnEndResolved = previous.turnEndResolved;
       }
-    }
+    },
   });
 }

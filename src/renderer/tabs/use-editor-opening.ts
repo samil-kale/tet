@@ -11,7 +11,7 @@ import {
   previewEditorTab,
   revealEditorMatch,
   showDiff,
-  showMarkdownPreview
+  showMarkdownPreview,
 } from "../editor/editor-views";
 import type { PaneId } from "./pane-layout";
 
@@ -25,7 +25,7 @@ export function useEditorOpening(
   setEditorTabs: Dispatch<SetStateAction<Record<string, EditorTab[]>>>,
   activateTab: (refKey: string, tabId: string, paneId?: PaneId) => void,
   activateRef: (refKey: string) => void,
-  activeRef: ProjectRef | null
+  activeRef: ProjectRef | null,
 ) {
   /**
    * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
@@ -67,7 +67,7 @@ export function useEditorOpening(
         openEditorFile(ref, tabId, path, true, how);
         setEditorTabs((current) => ({
           ...current,
-          [refKey]: (current[refKey] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab))
+          [refKey]: (current[refKey] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab)),
         }));
       } else {
         tabId = nextEditorTabId();
@@ -76,7 +76,7 @@ export function useEditorOpening(
       }
       activateTab(refKey, tabId);
     },
-    [activateTab, editorTabsRef, setEditorTabs]
+    [activateTab, editorTabsRef, setEditorTabs],
   );
 
   // A file the control channel asked for, brought to front.
@@ -86,7 +86,7 @@ export function useEditorOpening(
         activateRef(refKeyOf(ref));
         openEditor(ref, path, { keep });
       }),
-    [openEditor, activateRef]
+    [openEditor, activateRef],
   );
   // A path ctrl-clicked in a terminal, or linked from a Markdown preview.
   useEffect(() => setRevealHandler(openEditor), [openEditor]);
@@ -98,7 +98,7 @@ export function useEditorOpening(
         openEditor(activeRef, path, { ...how, diff: true });
       }
     },
-    [activeRef, openEditor]
+    [activeRef, openEditor],
   );
 
   /** Disposes the editors; the layout collapses a pane left empty. By `refKey`. */
@@ -117,7 +117,7 @@ export function useEditorOpening(
         }
       });
     },
-    [setEditorTabs]
+    [setEditorTabs],
   );
 
   return { openEditor, openActiveDiff, closeEditors };

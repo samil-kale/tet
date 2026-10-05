@@ -54,7 +54,7 @@ export class TerminalSession {
     private readonly callbacks: SessionCallbacks,
     /** How many Ctrl+C bytes this agent wants before it is killed; 0 asks for none. */
     private readonly quitPresses: number,
-    private readonly args: string[] = []
+    private readonly args: string[] = [],
   ) {}
 
   private setStatus(status: TerminalStatus): void {

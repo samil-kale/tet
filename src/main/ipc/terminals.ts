@@ -9,11 +9,7 @@ import type { IpcDeps } from "./deps";
 
 /** The tab strip: the terminals themselves, plus what only the renderer knows about its editor
  *  tabs and shown notices. */
-export function registerTerminalsIpc({
-  store,
-  tabManagers,
-  records
-}: Pick<IpcDeps, "store" | "tabManagers" | "records">): void {
+export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDeps, "store" | "tabManagers" | "records">): void {
   handle("tabs:list", (_event, ref: ProjectRef): TabDescriptor[] => {
     return tabManagers.get(ref)?.snapshot() ?? [];
   });
@@ -30,21 +26,15 @@ export function registerTerminalsIpc({
     await tabManagers.get(ref)?.closeTabs(tabIds);
   });
 
-  handle(
-    "tabs:rename",
-    async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
-      const refused = await tabManagers.get(ref)?.renameTab(tabId, title);
-      return refused === undefined ? { ok: true } : { ok: false, error: refused };
-    }
-  );
+  handle("tabs:rename", async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
+    const refused = await tabManagers.get(ref)?.renameTab(tabId, title);
+    return refused === undefined ? { ok: true } : { ok: false, error: refused };
+  });
 
-  handle(
-    "tabs:handover",
-    async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> => {
-      const handed = (await tabManagers.get(ref)?.handOver(tabId, agentId)) ?? notOpenMessage(store, ref);
-      return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
-    }
-  );
+  handle("tabs:handover", async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> => {
+    const handed = (await tabManagers.get(ref)?.handOver(tabId, agentId)) ?? notOpenMessage(store, ref);
+    return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
+  });
 
   // The window's restart (the tab menu, the environment dialog): a running tab quits first.
   handle("tabs:restart", (_event, ref: ProjectRef, tabId: string): void => {
@@ -84,5 +74,4 @@ export function registerTerminalsIpc({
   handle("tabs:starting", (_event, ref: ProjectRef): boolean => {
     return tabManagers.get(ref)?.isStarting() ?? false;
   });
-
 }

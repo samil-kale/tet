@@ -17,7 +17,14 @@ import { HOST_TARGET, SANDBOX_TARGET } from "../../src/main/agents/hook-target";
 import { checkAgentInstalled } from "../../src/main/agents/install-check";
 import { CONTROL_ENV, type ControlRequest } from "../../src/shared/ctl";
 import { eventually, tempDir } from "../helpers";
-import { augmentAgentPath, mergePath, npmGlobalPrefix, parseShellPath, shellInvocation, win32AgentDirs } from "../../src/main/agents/agent-path";
+import {
+  augmentAgentPath,
+  mergePath,
+  npmGlobalPrefix,
+  parseShellPath,
+  shellInvocation,
+  win32AgentDirs,
+} from "../../src/main/agents/agent-path";
 import { listAskModels } from "../../src/main/agents";
 import type { AgentDefinition } from "../../src/main/agents/agent";
 import { askAgent } from "../../src/main/agents/ask";
@@ -50,7 +57,7 @@ async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () 
   process.env[CONTROL_ENV.tabId] = "tab-1";
   return {
     reports,
-    close: () => new Promise<void>((resolve) => server.close(() => resolve()))
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
 
@@ -63,13 +70,10 @@ function reported(reports: ControlRequest[]): string[] {
 describe("Codex's hook trust", () => {
   // Codex's own hash (codex/hooks.ts): a change here brings back the "Hooks need review" screen.
   it("hashes the normalized hook the way Codex does", () => {
-    assert.equal(
-      hookTrustedHash("stop", "sh /tet/stop.sh"),
-      "sha256:a6f28d9f053daa55c22c826e6aa4ad6ef89ae292a27d171ce959231dd740be62"
-    );
+    assert.equal(hookTrustedHash("stop", "sh /tet/stop.sh"), "sha256:a6f28d9f053daa55c22c826e6aa4ad6ef89ae292a27d171ce959231dd740be62");
     assert.equal(
       hookTrustedHash("pre_tool_use", "sh /tet/q.sh", "request_user_input"),
-      "sha256:dea00f0554ef543a061c8aa314c4ffa0ab80a87ea327479fb17378136dcebb24"
+      "sha256:dea00f0554ef543a061c8aa314c4ffa0ab80a87ea327479fb17378136dcebb24",
     );
     assert.notEqual(hookTrustedHash("stop", "sh /tet/stop.sh"), hookTrustedHash("stop", "sh /tet/stop.sh", "x"));
   });
@@ -174,7 +178,7 @@ describe("pi's extension", () => {
       (createRequire(__filename)(compiled) as { default: (pi: unknown) => void }).default({
         on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
           handlers[event] = handler;
-        }
+        },
       });
 
       assert.equal(handlers.before_agent_start, undefined, "the system prompt comes from pi's own flag");
@@ -193,7 +197,7 @@ describe("pi's extension", () => {
       // Reports are not awaited and race; TET orders them by the time each carries.
       assert.ok(
         channel.reports.every((report) => typeof report.at === "number" && report.at > 0),
-        "every report says when it was made"
+        "every report says when it was made",
       );
       // A worktree's tab: its token is made with the key, so a report without it is refused.
       process.env[CONTROL_ENV.worktree] = "k1";
@@ -252,8 +256,15 @@ describe("the agent PATH", () => {
     const j = (...p: string[]): string => p.join(path.sep);
     // Every manager's variable, plus npm's reported (moved) prefix.
     const full = win32AgentDirs(
-      { APPDATA: j("C:", "u", "AppData", "Roaming"), LOCALAPPDATA: j("C:", "u", "AppData", "Local"), USERPROFILE: j("C:", "u"), NVM_SYMLINK: j("C:", "nvm", "node"), VOLTA_HOME: j("C:", "volta"), SCOOP: j("C:", "scoop") },
-      j("D:", "npm-global")
+      {
+        APPDATA: j("C:", "u", "AppData", "Roaming"),
+        LOCALAPPDATA: j("C:", "u", "AppData", "Local"),
+        USERPROFILE: j("C:", "u"),
+        NVM_SYMLINK: j("C:", "nvm", "node"),
+        VOLTA_HOME: j("C:", "volta"),
+        SCOOP: j("C:", "scoop"),
+      },
+      j("D:", "npm-global"),
     );
     assert.deepEqual(full, [
       j("D:", "npm-global"),
@@ -262,7 +273,7 @@ describe("the agent PATH", () => {
       j("C:", "volta", "bin"),
       j("C:", "scoop", "shims"),
       j("C:", "u", "AppData", "Local", "Microsoft", "WinGet", "Links"),
-      j("C:", "u", "AppData", "Local", "DockerSandboxes", "bin")
+      j("C:", "u", "AppData", "Local", "DockerSandboxes", "bin"),
     ]);
     // Nothing exported, no npm answer: the managers' default roots.
     const defaults = win32AgentDirs({ APPDATA: j("C:", "Roaming"), LOCALAPPDATA: j("C:", "Local"), USERPROFILE: j("C:", "u") }, undefined);
@@ -271,7 +282,7 @@ describe("the agent PATH", () => {
       j("C:", "Local", "Volta", "bin"),
       j("C:", "u", "scoop", "shims"),
       j("C:", "Local", "Microsoft", "WinGet", "Links"),
-      j("C:", "Local", "DockerSandboxes", "bin")
+      j("C:", "Local", "DockerSandboxes", "bin"),
     ]);
     // No empty entries.
     assert.deepEqual(win32AgentDirs({}, undefined), []);
@@ -279,28 +290,32 @@ describe("the agent PATH", () => {
 
   // The login shell is asked to be interactive, and an interactive shell ignores SIGTERM: the
   // timeout must not rely on it, or the requirements check waits forever and the app never opens.
-  it("gives up on a login shell that ignores being asked to stop", { skip: PLATFORM.agentDirsKnown && "posix only", timeout: 30_000 }, async () => {
-    const dir = tempDir("tet-shell-");
-    const shell = path.join(dir, "hanging-shell");
-    // Ignores SIGTERM and blocks in the shell itself, with no child to kill in its place.
-    fs.writeFileSync(shell, ["#!/bin/sh", 'trap "" TERM', "read ignored", ""].join("\n"), { mode: 0o755 });
-    const shellBefore = process.env.SHELL;
-    const pathBefore = process.env.PATH;
-    process.env.SHELL = shell;
-    const started = Date.now();
-    try {
-      await augmentAgentPath();
-    } finally {
-      if (shellBefore === undefined) {
-        delete process.env.SHELL;
-      } else {
-        process.env.SHELL = shellBefore;
+  it(
+    "gives up on a login shell that ignores being asked to stop",
+    { skip: PLATFORM.agentDirsKnown && "posix only", timeout: 30_000 },
+    async () => {
+      const dir = tempDir("tet-shell-");
+      const shell = path.join(dir, "hanging-shell");
+      // Ignores SIGTERM and blocks in the shell itself, with no child to kill in its place.
+      fs.writeFileSync(shell, ["#!/bin/sh", 'trap "" TERM', "read ignored", ""].join("\n"), { mode: 0o755 });
+      const shellBefore = process.env.SHELL;
+      const pathBefore = process.env.PATH;
+      process.env.SHELL = shell;
+      const started = Date.now();
+      try {
+        await augmentAgentPath();
+      } finally {
+        if (shellBefore === undefined) {
+          delete process.env.SHELL;
+        } else {
+          process.env.SHELL = shellBefore;
+        }
       }
-    }
-    const took = Date.now() - started;
-    assert.ok(took < 20_000, `it waited ${took}ms on a shell it had given up on`);
-    assert.equal(process.env.PATH, pathBefore, "a shell that answered nothing changes nothing");
-  });
+      const took = Date.now() - started;
+      assert.ok(took < 20_000, `it waited ${took}ms on a shell it had given up on`);
+      assert.equal(process.env.PATH, pathBefore, "a shell that answered nothing changes nothing");
+    },
+  );
 });
 
 describe("a background agent question", () => {
@@ -309,7 +324,7 @@ describe("a background agent question", () => {
       "let input = '';",
       "process.stdin.setEncoding('utf8');",
       "process.stdin.on('data', chunk => input += chunk);",
-      "process.stdin.on('end', () => process.stdout.write('  ' + input.toUpperCase() + '  '));"
+      "process.stdin.on('end', () => process.stdout.write('  ' + input.toUpperCase() + '  '));",
     ].join(" ");
     assert.equal(await askAgent(os.tmpdir(), process.execPath, ["-e", script], "first\nsecond"), "FIRST\nSECOND");
   });
@@ -321,11 +336,11 @@ describe("pi's model listing", () => {
       "provider    model                            context  max-out  thinking  images",
       "openrouter  ~anthropic/claude-sonnet-latest  1M       128K     yes       yes   ",
       "anthropic   claude-haiku                     200K     64K      yes       yes   ",
-      ""
+      "",
     ].join("\n");
     assert.deepEqual(piModelsFrom(output), [
       { id: "openrouter/~anthropic/claude-sonnet-latest", label: "openrouter/~anthropic/claude-sonnet-latest" },
-      { id: "anthropic/claude-haiku", label: "anthropic/claude-haiku" }
+      { id: "anthropic/claude-haiku", label: "anthropic/claude-haiku" },
     ]);
   });
 
@@ -356,23 +371,35 @@ describe("the models the commit prompt offers", () => {
       displayName: "Fake",
       executable: () => executable,
       install: { versionArgs: ["--version"] },
-      ask: models && { args: [], modelArgs: () => [], models }
+      ask: models && { args: [], modelArgs: () => [], models },
     }) as unknown as AgentDefinition;
 
   it("are the agent's own where it is installed", async () => {
     const models = [{ id: "m1", label: "M1" }];
-    assert.deepEqual(await listAskModels(asking(process.execPath, async () => models), os.tmpdir()), { models });
+    assert.deepEqual(
+      await listAskModels(
+        asking(process.execPath, async () => models),
+        os.tmpdir(),
+      ),
+      { models },
+    );
   });
 
   it("are none, with why, from an agent not installed", async () => {
     const missing = path.join(tempDir("tet-ask-models-"), "no-such-agent");
-    const result = await listAskModels(asking(missing, async () => [{ id: "m1", label: "M1" }]), os.tmpdir());
+    const result = await listAskModels(
+      asking(missing, async () => [{ id: "m1", label: "M1" }]),
+      os.tmpdir(),
+    );
     assert.deepEqual(result.models, []);
     assert.match(result.error ?? "", /Fake is not installed/);
   });
 
   it("are none, with the listing's own words, where it fails", async () => {
-    const result = await listAskModels(asking(process.execPath, () => Promise.reject(new Error("catalog down"))), os.tmpdir());
+    const result = await listAskModels(
+      asking(process.execPath, () => Promise.reject(new Error("catalog down"))),
+      os.tmpdir(),
+    );
     assert.deepEqual(result.models, []);
     assert.match(result.error ?? "", /Could not list Fake's models: catalog down/);
   });

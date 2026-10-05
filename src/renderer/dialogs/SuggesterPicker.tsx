@@ -90,23 +90,14 @@ export function SuggesterPicker({ value, onChange, onReplace, hold }: SuggesterP
       ? models.models.map((model) => ({ value: model.id, label: model.label }))
       : value.model !== ""
         ? [{ value: value.model, label: value.model }]
-        : [])
+        : []),
   ];
 
   return (
     <>
       <FieldRow>
-        <Dropdown
-          fit
-          value={value.agentId}
-          options={agentOptions}
-          onChange={(agentId) => onChange({ agentId, model: "" })}
-        />
-        <Dropdown
-          value={value.model}
-          options={modelOptions}
-          onChange={(model) => onChange({ ...value, model })}
-        />
+        <Dropdown fit value={value.agentId} options={agentOptions} onChange={(agentId) => onChange({ agentId, model: "" })} />
+        <Dropdown value={value.model} options={modelOptions} onChange={(model) => onChange({ ...value, model })} />
       </FieldRow>
       <DialogError message={models?.error} />
     </>

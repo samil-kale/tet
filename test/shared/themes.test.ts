@@ -14,7 +14,10 @@ describe("the color themes", () => {
   const valueOf = (css: string, name: string): string | undefined => css.match(new RegExp(`${name}:([^;]+);`))?.[1].trim();
 
   it("has one stylesheet per entry in THEMES, and none besides", () => {
-    const files = fs.readdirSync(dir).filter((name) => name.endsWith(".css")).sort();
+    const files = fs
+      .readdirSync(dir)
+      .filter((name) => name.endsWith(".css"))
+      .sort();
     assert.deepEqual(files, THEMES.map((theme) => `${theme.id}.css`).sort());
     for (const [id, css] of sheets) {
       assert.ok(css.includes(`:root[data-theme="${id}"]`), `${id}.css declares its own block`);

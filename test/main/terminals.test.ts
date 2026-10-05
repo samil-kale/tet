@@ -24,7 +24,7 @@ const NO_CALLBACKS: SessionManagerCallbacks = {
   onOutput: () => undefined,
   onStatus: () => undefined,
   onStartupProgress: () => undefined,
-  onNotice: () => undefined
+  onNotice: () => undefined,
 };
 
 /**
@@ -33,7 +33,7 @@ const NO_CALLBACKS: SessionManagerCallbacks = {
  */
 async function withEmptyPath(
   callbacks: Partial<SessionManagerCallbacks>,
-  use: (manager: TabSessionManager, project: string) => Promise<void> | void
+  use: (manager: TabSessionManager, project: string) => Promise<void> | void,
 ): Promise<void> {
   const root = tempDir("tet-empty-path-");
   const project = path.join(root, "repo");
@@ -41,10 +41,17 @@ async function withEmptyPath(
   const originalPath = process.env.PATH;
   process.env.PATH = path.join(root, "empty");
   const settings = new SettingsStore(root);
-  const manager = new TabSessionManager({ ref: { projectId: "p" }, path: project, name: () => "repo" }, root, settings, new SbxLocalStore(root), new HostSetups(root, settings, () => undefined), {
-    ...NO_CALLBACKS,
-    ...callbacks
-  });
+  const manager = new TabSessionManager(
+    { ref: { projectId: "p" }, path: project, name: () => "repo" },
+    root,
+    settings,
+    new SbxLocalStore(root),
+    new HostSetups(root, settings, () => undefined),
+    {
+      ...NO_CALLBACKS,
+      ...callbacks,
+    },
+  );
   try {
     await use(manager, project);
   } finally {
@@ -64,13 +71,20 @@ describe("a turn's notification", () => {
     const settings = new SettingsStore(root);
     settings.patch({ notifications: { finished: true, waiting: true, idleReminder: true } });
     let pushed: TabDescriptor[] = [];
-    const manager = new TabSessionManager({ ref: { projectId: "p" }, path: root, name: () => "repo" }, root, settings, new SbxLocalStore(root), new HostSetups(root, settings, () => undefined), {
-      onTabs: (_projectId, tabs) => (pushed = tabs),
-      onOutput: () => undefined,
-      onStatus: () => undefined,
-      onStartupProgress: () => undefined,
-      onNotice: () => undefined
-    });
+    const manager = new TabSessionManager(
+      { ref: { projectId: "p" }, path: root, name: () => "repo" },
+      root,
+      settings,
+      new SbxLocalStore(root),
+      new HostSetups(root, settings, () => undefined),
+      {
+        onTabs: (_projectId, tabs) => (pushed = tabs),
+        onOutput: () => undefined,
+        onStatus: () => undefined,
+        onStartupProgress: () => undefined,
+        onNotice: () => undefined,
+      },
+    );
     const { tabId } = manager.createTab("shell");
     let at = Date.now();
     const hook = (event: HookEvent) => manager.hookEvent(tabId, event, "{}", (at += 1000), HOST_CALLER);
@@ -82,7 +96,7 @@ describe("a turn's notification", () => {
       assert.notEqual(
         pushed.find((tab) => tab.tabId === tabId)?.finishedAt,
         undefined,
-        "the mark is still set: whether it shows is the renderer's call"
+        "the mark is still set: whether it shows is the renderer's call",
       );
       for (const event of waitingEvents) {
         assert.equal(hook(event).notification, undefined, event);
@@ -162,7 +176,11 @@ describe("a turn reported after its tab's process exited", () => {
       fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
       const { tabId } = manager.createTab("pi");
       manager.handleResize(tabId, 80, 24);
-      await eventually(() => `an error after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
+      await eventually(
+        () => `an error after [${statuses.join(", ")}]`,
+        () => statuses.at(-1) === "error",
+        10_000,
+      );
       const at = Date.now();
       manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
       assert.deepEqual(manager.hookEvent(tabId, "permission", "{}", at + 1000, HOST_CALLER), { stdout: "" });
@@ -179,7 +197,7 @@ describe("a tab of a missing agent", () => {
     const notices: string[] = [];
     const callbacks: Partial<SessionManagerCallbacks> = {
       onStatus: (_projectId, _tabId, status) => statuses.push(status),
-      onNotice: (_severity, message) => notices.push(message)
+      onNotice: (_severity, message) => notices.push(message),
     };
     // The start ends in sbx's notice, sbx being missing too.
     await withEmptyPath(callbacks, async (manager, project) => {
@@ -188,8 +206,15 @@ describe("a tab of a missing agent", () => {
       await eventually("the tab shows missing", () => statuses.at(-1) === "missing", 10_000);
       fs.writeFileSync(path.join(project, "tet.json"), JSON.stringify({ sbx: { enabled: true } }));
       await manager.sbxSettingsChanged(true);
-      await eventually(() => `a start after [${statuses.join(", ")}]`, () => statuses.at(-1) === "error", 10_000);
-      assert.ok(notices.some((notice) => notice.includes("only runs in repo's SBX sandbox")), notices.join("\n"));
+      await eventually(
+        () => `a start after [${statuses.join(", ")}]`,
+        () => statuses.at(-1) === "error",
+        10_000,
+      );
+      assert.ok(
+        notices.some((notice) => notice.includes("only runs in repo's SBX sandbox")),
+        notices.join("\n"),
+      );
     });
   });
 });
@@ -213,7 +238,7 @@ describe("a terminal's environment", () => {
     const env = buildEnv({
       env: { TET_TEST_MACHINE: "default", TET_TEST_AGENT: "agent" },
       own: { TET_TEST_OWN: "own", TET_TEST_CONTROL: "own" },
-      envOverride: { TET_TEST_OWN: "command" }
+      envOverride: { TET_TEST_OWN: "command" },
     });
     assert.equal(env.TET_TEST_MACHINE, "machine", "the machine's beats the agent's default");
     assert.equal(env.TET_TEST_AGENT, "agent", "the agent's default stands where the machine has none");
@@ -252,7 +277,11 @@ describe("a terminal's environment", () => {
     try {
       const env = buildEnv({});
       const names = Object.keys(env).filter((name) => name.toUpperCase() === "TET_TEST_CASE");
-      assert.deepEqual(names.map((name) => env[name]), ["stored"], "one variable, TET's");
+      assert.deepEqual(
+        names.map((name) => env[name]),
+        ["stored"],
+        "one variable, TET's",
+      );
     } finally {
       setStoredEnv(() => ({}));
     }
@@ -265,9 +294,13 @@ describe("a terminal's environment", () => {
     assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-2", HOST_SIDE), "another tab's differs");
     const inSandbox = buildEnv({
       own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" },
-      side: SANDBOX_CALLER
+      side: SANDBOX_CALLER,
     });
-    assert.equal(inSandbox[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", SANDBOX_SIDE), "the sandbox is in it");
+    assert.equal(
+      inSandbox[CONTROL_ENV.token],
+      tabControlToken("run-token", { projectId: "p1" }, "tab-1", SANDBOX_SIDE),
+      "the sandbox is in it",
+    );
     setControlEnv({}, "");
   });
 
@@ -281,13 +314,16 @@ describe("a terminal's environment", () => {
       const main = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
       assert.equal(main[CONTROL_ENV.worktree], undefined, "the repository's tab names no worktree");
       const env = buildEnv({
-        own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.worktree]: "k3f9a2c1", [CONTROL_ENV.tabId]: "tab-1" }
+        own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.worktree]: "k3f9a2c1", [CONTROL_ENV.tabId]: "tab-1" },
       });
       assert.equal(env[CONTROL_ENV.worktree], "k3f9a2c1");
       assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1", worktree: "k3f9a2c1" }, "tab-1", HOST_SIDE));
       assert.notEqual(env[CONTROL_ENV.token], main[CONTROL_ENV.token], "the repository's tab of that id has another");
     } finally {
-      for (const [name, value] of [[CONTROL_ENV.worktree, inherited.worktree], [CONTROL_ENV.tabId, inherited.tab]] as const) {
+      for (const [name, value] of [
+        [CONTROL_ENV.worktree, inherited.worktree],
+        [CONTROL_ENV.tabId, inherited.tab],
+      ] as const) {
         if (value === undefined) {
           delete process.env[name];
         } else {
@@ -312,7 +348,10 @@ describe("a terminal's environment", () => {
     // A TET started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
     const env = buildEnv({ own: { Path: "inherited" }, envOverride: { PATH: "command" } });
     const names = Object.keys(env).filter((name) => name.toUpperCase() === "PATH");
-    assert.deepEqual(names.map((name) => env[name]), ["command"]);
+    assert.deepEqual(
+      names.map((name) => env[name]),
+      ["command"],
+    );
   });
 });
 
@@ -320,7 +359,7 @@ describe("when an agent's sessions are listed again", () => {
   /** A scheduler whose listings are counted, on the test's mocked clock. */
   const scheduler = (
     unsettled = false,
-    working = false
+    working = false,
   ): { schedule: (delayMs?: number) => void; watched: () => void; runs: () => number } => {
     let runs = 0;
     const reconciler = new ReconcileScheduler({
@@ -329,7 +368,7 @@ describe("when an agent's sessions are listed again", () => {
       },
       titlesUnsettled: () => unsettled,
       working: () => working,
-      disposed: () => false
+      disposed: () => false,
     });
     return { schedule: (delayMs) => reconciler.schedule(delayMs), watched: () => reconciler.watched(), runs: () => runs };
   };

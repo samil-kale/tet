@@ -10,14 +10,7 @@ import { isModifierHeld, PLATFORM } from "./platform";
  * None of these close a tab.
  */
 export type ShortcutId =
-  | "settings"
-  | "toggleProjects"
-  | "toggleGit"
-  | "toggleFiles"
-  | "jumpToWaiting"
-  | "nextTab"
-  | "previousTab"
-  | "newShellTab";
+  "settings" | "toggleProjects" | "toggleGit" | "toggleFiles" | "jumpToWaiting" | "nextTab" | "previousTab" | "newShellTab";
 
 interface ShortcutDef {
   id: ShortcutId;
@@ -41,11 +34,11 @@ const DEFS: ShortcutDef[] = [
     description: "Jump to the waiting tab",
     shift: true,
     key: "u",
-    label: "U"
+    label: "U",
   },
   { id: "nextTab", description: "Next tab", shift: true, key: ".", code: "Period", label: "." },
   { id: "previousTab", description: "Previous tab", shift: true, key: ",", code: "Comma", label: "," },
-  { id: "newShellTab", description: "New shell tab", shift: true, key: "t", label: "T" }
+  { id: "newShellTab", description: "New shell tab", shift: true, key: "t", label: "T" },
 ];
 
 /**
@@ -77,5 +70,5 @@ export function shortcutLabel(id: ShortcutId): string {
 /** The settings dialog's Info tab lists these, in DEFS order. */
 export const SHORTCUTS: { id: ShortcutId; description: string }[] = DEFS.map(({ id, description }) => ({
   id,
-  description
+  description,
 }));

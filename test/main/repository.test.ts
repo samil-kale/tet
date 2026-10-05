@@ -11,7 +11,17 @@ import { Repository } from "../../src/main/git/repository";
 import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
 import type { FileSearchQuery, FileSearchResult } from "../../src/shared/types/files";
-import { fakeSafeStorage, forkUtilitiesInProcess, git, type HttpRemote, initBare, initRepository, isolateGitConfig, serveOverHttp, tempDir } from "../helpers";
+import {
+  fakeSafeStorage,
+  forkUtilitiesInProcess,
+  git,
+  type HttpRemote,
+  initBare,
+  initRepository,
+  isolateGitConfig,
+  serveOverHttp,
+  tempDir,
+} from "../helpers";
 
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
@@ -37,7 +47,7 @@ Object.assign(shell, {
       throw new Error("The trash is not available");
     }
     fs.renameSync(absolute, path.join(trash, `${++trashed}-${path.basename(absolute)}`));
-  }
+  },
 });
 
 /** What the trash holds, oldest first. */
@@ -55,7 +65,7 @@ async function open(
   dir: string,
   // The remotes are mostly folders, which take no login.
   logins = new GitLoginStore(tempDir("tet-logins-")),
-  worktreeKeyOf: (worktreePath: string) => string | undefined = () => undefined
+  worktreeKeyOf: (worktreePath: string) => string | undefined = () => undefined,
 ): Promise<Repository> {
   const repository = new Repository(
     { ref: { projectId: path.basename(dir) }, path: dir, name: () => path.basename(dir) },
@@ -65,7 +75,7 @@ async function open(
     () => undefined,
     () => undefined,
     () => undefined,
-    logins
+    logins,
   );
   opened.push(repository);
   await repository.start();
@@ -278,7 +288,7 @@ describe("worktrees, each with a branch of its own", () => {
     assert.deepEqual(listed.slice(1), [
       { path: real(at("fresh")), branch: "fresh", base: "base", key: undefined, isRepository: false, current: false },
       { path: real(at("second")), branch: "second", base: "main", key: "k2", isRepository: false, current: false },
-      { path: real(at("third")), branch: "third", base: undefined, key: undefined, isRepository: false, current: false }
+      { path: real(at("third")), branch: "third", base: undefined, key: undefined, isRepository: false, current: false },
     ]);
     git(dir, "worktree", "remove", at("third"));
     git(at("fresh"), "switch", "-q", "--detach");
@@ -289,7 +299,10 @@ describe("worktrees, each with a branch of its own", () => {
   it("is the current one when read in a linked worktree", async () => {
     const linked = await open(at("second"));
     const current = linked.getState().worktrees.filter((worktree) => worktree.current);
-    assert.deepEqual(current.map((worktree) => worktree.branch), ["second"]);
+    assert.deepEqual(
+      current.map((worktree) => worktree.branch),
+      ["second"],
+    );
     assert.equal(linked.getState().worktrees[0]?.path, real(dir), "main still first");
     await linked.dispose();
   });
@@ -314,7 +327,10 @@ describe("worktrees, each with a branch of its own", () => {
   it("forgets a worktree whose folder is gone", async () => {
     fs.rmSync(at("fresh"), { recursive: true, force: true });
     assert.deepEqual(await repository.pruneWorktrees(), { ok: true });
-    assert.deepEqual(repository.getState().worktrees.map((worktree) => worktree.branch), ["main"]);
+    assert.deepEqual(
+      repository.getState().worktrees.map((worktree) => worktree.branch),
+      ["main"],
+    );
   });
 });
 
@@ -341,7 +357,7 @@ describe("the Explorer's search, VS Code's search in files", () => {
       matchCase: false,
       wholeWord: false,
       regex: false,
-      ...query
+      ...query,
     });
   /** Files and their matches as `path:line:column`, which is what the row opens. */
   const found = (result: FileSearchResult): string[] =>
@@ -373,23 +389,21 @@ describe("the Explorer's search, VS Code's search in files", () => {
   });
 
   it("reads neither what git ignores nor a binary file, both of which the tree lists", async () => {
-    assert.deepEqual(found(await search({ text: "needle" })).filter((match) => match.startsWith("out/")), []);
-    assert.deepEqual(found(await search({ text: "n" })).filter((match) => match.startsWith("src/bin")), []);
+    assert.deepEqual(
+      found(await search({ text: "needle" })).filter((match) => match.startsWith("out/")),
+      [],
+    );
+    assert.deepEqual(
+      found(await search({ text: "n" })).filter((match) => match.startsWith("src/bin")),
+      [],
+    );
     const listing = await repository.listExplorer({ excludeGitIgnore: false, compactFolders: true, sortOrder: "default" });
     assert.deepEqual(listing.files.includes("out/built.js") && listing.files.includes("src/bin.dat"), true);
   });
 
   it("takes the case, whole-word and regex toggles, and reports a regex that will not parse", async () => {
-    assert.deepEqual(found(await search({ text: "needle", matchCase: true })), [
-      "src/a.ts:1:7",
-      "src/a.ts:2:3",
-      "src/b.txt:2:1"
-    ]);
-    assert.deepEqual(found(await search({ text: "needle", wholeWord: true })), [
-      "src/a.ts:1:7",
-      "src/a.ts:2:3",
-      "src/b.txt:1:1"
-    ]);
+    assert.deepEqual(found(await search({ text: "needle", matchCase: true })), ["src/a.ts:1:7", "src/a.ts:2:3", "src/b.txt:2:1"]);
+    assert.deepEqual(found(await search({ text: "needle", wholeWord: true })), ["src/a.ts:1:7", "src/a.ts:2:3", "src/b.txt:1:1"]);
     assert.deepEqual(found(await search({ text: "n..dle\\(", regex: true })), ["src/a.ts:2:3"]);
     const broken = await search({ text: "(", regex: true });
     assert.deepEqual(broken.files, []);
@@ -404,18 +418,23 @@ describe("the Explorer's search, VS Code's search in files", () => {
     for (const name of ["a.txt", "b.txt", "c.txt"]) {
       fs.writeFileSync(path.join(capped, name), "needle\n".repeat(1500));
     }
-    const result = await (await open(capped)).searchFiles({
+    const result = await (
+      await open(capped)
+    ).searchFiles({
       text: "needle",
       matchCase: false,
       wholeWord: false,
-      regex: false
+      regex: false,
     });
     assert.equal(result.truncated, true);
     assert.equal(
       result.files.reduce((count, file) => count + file.matches.length, 0),
-      2000
+      2000,
     );
-    assert.deepEqual(result.files.filter((file) => file.matches.length === 0), []);
+    assert.deepEqual(
+      result.files.filter((file) => file.matches.length === 0),
+      [],
+    );
   });
 });
 
@@ -608,7 +627,7 @@ describe("the git logins kept in TET", () => {
     const store = new GitLoginStore(tempRoot());
     const result = await store.run("/nowhere", "git@git.example.com:app.git", undefined, async (login) => ({
       ok: login === undefined,
-      authRequired: true
+      authRequired: true,
     }));
     assert.deepEqual(result, { ok: true, authRequired: true }, "no login offered, and none asked for");
   });

@@ -11,11 +11,7 @@ import type { IpcDeps } from "./deps";
 import { PLATFORM } from "../util/host-platform";
 
 /** The startup gate, the app's own facts, the settings, and what the agents are. */
-export function registerAppIpc({
-  settings,
-  openWorkspace,
-  shutdown
-}: Pick<IpcDeps, "settings" | "openWorkspace" | "shutdown">): void {
+export function registerAppIpc({ settings, openWorkspace, shutdown }: Pick<IpcDeps, "settings" | "openWorkspace" | "shutdown">): void {
   /** The startup gate, asked on every re-check; passing opens the workspace. */
   handle("startup:check", async (): Promise<Requirements> => {
     // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
@@ -36,16 +32,13 @@ export function registerAppIpc({
   on("app:restart", () => shutdown(true));
 
   // The settings Info tab, fixed for the process's life.
-  handle(
-    "app:info",
-    (): AppInfo => ({
-      version: app.getVersion(),
-      electron: process.versions.electron,
-      chromium: process.versions.chrome,
-      node: process.versions.node,
-      os: `${PLATFORM.id} ${process.arch}`
-    })
-  );
+  handle("app:info", (): AppInfo => ({
+    version: app.getVersion(),
+    electron: process.versions.electron,
+    chromium: process.versions.chrome,
+    node: process.versions.node,
+    os: `${PLATFORM.id} ${process.arch}`,
+  }));
 
   handle("settings:get", (): AppSettings => settings.get());
 

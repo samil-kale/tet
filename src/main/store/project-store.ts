@@ -84,9 +84,7 @@ export class ProjectStore implements ProjectLookup {
   /** Unknown ids are dropped, missing ones kept at the end: the renderer's list may lag behind. */
   reorder(projectIds: string[]): void {
     const known = new Map(this.projects.map((project) => [project.id, project]));
-    const ordered = projectIds
-      .map((projectId) => known.get(projectId))
-      .filter((project): project is Project => project !== undefined);
+    const ordered = projectIds.map((projectId) => known.get(projectId)).filter((project): project is Project => project !== undefined);
     const seen = new Set(ordered.map((project) => project.id));
     this.save([...ordered, ...this.projects.filter((project) => !seen.has(project.id))]);
   }
@@ -102,7 +100,7 @@ export class ProjectStore implements ProjectLookup {
 
   private load(): void {
     this.projects = readRows<{ id: string; path: string; name: string }>(this.file, ["id", "path", "name"]).map(
-      ({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name, worktrees: this.ownWorktrees(id) })
+      ({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name, worktrees: this.ownWorktrees(id) }),
     );
   }
 
@@ -111,7 +109,7 @@ export class ProjectStore implements ProjectLookup {
     // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
     writeJson(
       this.file,
-      projects.map(({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name }))
+      projects.map(({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name })),
     );
     this.projects = projects;
   }

@@ -17,7 +17,7 @@ function toAccount(entry: StoredAccount): ProviderAccount {
     provider: entry.provider,
     host: entry.host,
     user: entry.user,
-    namespace: entry.namespace
+    namespace: entry.namespace,
   };
 }
 
@@ -44,10 +44,10 @@ export class AccountStore {
   /** Adds the account, or replaces the token of the same user on the same host — never two rows. */
   add(provider: ProviderId, host: string, user: string, token: string): ProviderAccount {
     const encrypted = seal(token);
-    const existing = this.accounts.find(
-      (account) => account.provider === provider && account.host === host && account.user === user
-    );
-    const stored: StoredAccount = existing ? { ...existing, token: encrypted } : { id: randomUUID(), provider, host, user, token: encrypted };
+    const existing = this.accounts.find((account) => account.provider === provider && account.host === host && account.user === user);
+    const stored: StoredAccount = existing
+      ? { ...existing, token: encrypted }
+      : { id: randomUUID(), provider, host, user, token: encrypted };
     this.save(existing ? this.accounts.map((account) => (account === existing ? stored : account)) : [...this.accounts, stored]);
     return toAccount(stored);
   }
@@ -79,8 +79,7 @@ export class AccountStore {
       this.file,
       ["id", "provider", "host", "user", "token"],
       (entry) =>
-        Object.hasOwn(PROVIDERS, entry.provider as string) &&
-        (entry.namespace === undefined || typeof entry.namespace === "string")
+        Object.hasOwn(PROVIDERS, entry.provider as string) && (entry.namespace === undefined || typeof entry.namespace === "string"),
     );
   }
 

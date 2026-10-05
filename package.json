@@ -18,6 +18,8 @@
     "start": "npm run typecheck && npm run compile && electron .",
     "typecheck": "tsc --noEmit -p .",
     "lint": "eslint .",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"test/**/*.ts\"",
     "test": "npm run compile && node --test \"dist-test/**/*.test.js\"",
     "dist": "npm run compile -- --production && electron-builder --publish never"
   },
@@ -52,6 +54,7 @@
     "minimatch": "^10.2.6",
     "monaco-editor": "^0.56.0",
     "monaco-editor-core": "^0.56.0",
+    "prettier": "^3.9.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "semver": "^7.8.5",

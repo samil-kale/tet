@@ -2,19 +2,19 @@ import * as crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import { CONTROL_ENV } from "../../shared/ctl";
-import {
-  SBX_KNOWLEDGE_KINDS,
-  SBX_PROBLEM,
-  addProblems,
-  forbiddenBy,
-  isPort,
-  sbxPortKey,
-  withoutProblems
-} from "../../shared/sbx-rules";
+import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, forbiddenBy, isPort, sbxPortKey, withoutProblems } from "../../shared/sbx-rules";
 import { refKeyOf } from "../../shared/types/project";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { SbxAccess, SbxKnowledgeSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings, SbxSecret } from "../../shared/types/sbx";
+import type {
+  SbxAccess,
+  SbxKnowledgeSettings,
+  SbxOption,
+  SbxPort,
+  SbxProblems,
+  SbxProjectSettings,
+  SbxSecret,
+} from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/async";
@@ -34,7 +34,7 @@ import {
   sessionMountSpecs,
   worktreeMountSpecs,
   type SandboxPaths,
-  type SbxSessionMount
+  type SbxSessionMount,
 } from "./sbx-mounts";
 
 /**
@@ -104,7 +104,7 @@ function ensureSandboxExists(
   folder: string,
   name: string,
   sandboxes: SandboxList,
-  onData?: OnData
+  onData?: OnData,
 ): Promise<boolean> {
   const listed = sandboxes.get(name);
   if (listed !== undefined && sameSet(listed, [folder])) {
@@ -151,10 +151,14 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
   }
   const written = await runSbx(
     [
-      "exec", "-i", name, "sh", "-c",
-      "mkdir -p ~/.local/bin && t=~/.local/bin/.tet-ctl.$$ && cat > \"$t\" && chmod +x \"$t\" && mv -f \"$t\" ~/.local/bin/tet-ctl"
+      "exec",
+      "-i",
+      name,
+      "sh",
+      "-c",
+      'mkdir -p ~/.local/bin && t=~/.local/bin/.tet-ctl.$$ && cat > "$t" && chmod +x "$t" && mv -f "$t" ~/.local/bin/tet-ctl',
     ],
-    { stdin: `#!/usr/bin/env node\n${bundle}`, onData }
+    { stdin: `#!/usr/bin/env node\n${bundle}`, onData },
   );
   if (written.ok) {
     launcherWritten.add(name);
@@ -233,11 +237,11 @@ export function parsePublishedPorts(stdout: string): SbxPort[] {
 export async function applyPortChanges(
   name: string,
   delta: { removed: SbxPort[]; added: SbxPort[] },
-  onData?: OnData
+  onData?: OnData,
 ): Promise<Record<string, string>> {
   const changes = [
     ...delta.removed.map((port) => ["--unpublish", sbxPortKey(port)]),
-    ...delta.added.map((port) => ["--publish", sbxPortKey(port)])
+    ...delta.added.map((port) => ["--publish", sbxPortKey(port)]),
   ];
   const refused: Record<string, string> = {};
   for (const [flag, key] of changes) {
@@ -290,14 +294,14 @@ export async function applySecrets(
   values: ReadonlyMap<string, string>,
   live: LiveSecret[],
   changed: ReadonlySet<string>,
-  onData?: OnData
+  onData?: OnData,
 ): Promise<Record<string, string>> {
   const wanted = secrets.filter((secret) => values.has(secret.env));
   const ours = live.filter((secret) => secret.placeholder.startsWith(secretPrefix(projectId)));
   const kept = wanted.filter(
     (secret) =>
       !changed.has(secret.env) &&
-      ours.some((old) => old.placeholder === secretPlaceholder(projectId, secret.env) && sameSet(old.hosts, secret.hosts))
+      ours.some((old) => old.placeholder === secretPlaceholder(projectId, secret.env) && sameSet(old.hosts, secret.hosts)),
   );
   const keptPlaceholders = kept.map((secret) => secretPlaceholder(projectId, secret.env));
   for (const old of ours.filter((secret) => !keptPlaceholders.includes(secret.placeholder))) {
@@ -309,7 +313,7 @@ export async function applySecrets(
     const hosts = secret.hosts.flatMap((host) => ["--host", host]);
     const result = await runSbx(["secret", "set-custom", "--sandbox", name, "--placeholder", placeholder, ...hosts], {
       stdin: values.get(secret.env),
-      onData
+      onData,
     });
     if (!result.ok) {
       refused[secret.env] = sbxRefusal(result);
@@ -368,7 +372,7 @@ export function sandboxEnv({
   settings,
   env: agentEnv = [],
   secretValues,
-  variableValues
+  variableValues,
 }: Pick<SbxRunRequest, "ref" | "settings" | "env" | "secretValues" | "variableValues">): {
   env: string[];
   passed: Record<string, string>;
@@ -377,7 +381,7 @@ export function sandboxEnv({
   const taken = new Set([
     ...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))),
     ...Object.values(CONTROL_ENV),
-    ...settings.secrets.map((secret) => secret.env)
+    ...settings.secrets.map((secret) => secret.env),
   ]);
   const passed: Record<string, string> = {};
   for (const { env: name } of settings.variables.filter((variable) => !taken.has(variable.env))) {
@@ -388,7 +392,7 @@ export function sandboxEnv({
   }
   return {
     env: [...agentEnv, ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(ref.projectId, secret.env)}`)],
-    passed
+    passed,
   };
 }
 
@@ -403,7 +407,7 @@ export function sandboxEnv({
  * fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's own cannot be mounted.
  */
 export async function prepareSbxRun(
-  request: SbxRunRequest
+  request: SbxRunRequest,
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
   const { agent, name, onData } = request;
   const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
@@ -422,7 +426,7 @@ export async function prepareSbxRun(
 /** prepareSbxRun past ensureSandboxExists, `created` telling whether this start made the sandbox. */
 async function readySandboxRun(
   request: SbxRunRequest,
-  created: boolean
+  created: boolean,
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
   const { agent, onData, secretValues, variableValues } = request;
   const { projectId } = request.ref;
@@ -440,7 +444,7 @@ async function readySandboxRun(
     organization: request.organization,
     rules: request.rules,
     ports: created,
-    published: forwarded
+    published: forwarded,
   });
   const { settings, knowledge } = withoutProblems(request.settings, request.knowledge, problems);
   const { env, passed } = sandboxEnv({ ...request, settings });
@@ -450,14 +454,16 @@ async function readySandboxRun(
   const own = [
     ...fixedMountSpecs(request.paths),
     ...worktreeMountSpecs(request.projectRefPath),
-    ...(await sessionMountSpecs(request.sessionMounts ?? []))
+    ...(await sessionMountSpecs(request.sessionMounts ?? [])),
   ];
   const grants = await grantsOf(agent, knowledge, settings.paths);
   // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
   const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
   const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
   if (ownFailed.length > 0) {
-    throw new Error(`sbx did not mount TET's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`);
+    throw new Error(
+      `sbx did not mount TET's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`,
+    );
   }
   for (const grant of grants) {
     const reason = refused.get(grant.mount);
@@ -487,7 +493,7 @@ async function readySandboxRun(
     "--name",
     name,
     ...env.flatMap((entry) => ["-e", entry]),
-    ...Object.keys(passed).flatMap((variable) => ["-e", variable])
+    ...Object.keys(passed).flatMap((variable) => ["-e", variable]),
   ];
   if (sandboxControl()) {
     // The tab id too: a hook reports for the tab it runs in (TabSessionManager.hookEvent).
@@ -568,14 +574,13 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     asked.set(host, pending);
     return pending;
   };
-  const reachable = async (host: string): Promise<boolean> =>
-    (!organization && settings.hosts.includes(host)) || (await allowed(host));
+  const reachable = async (host: string): Promise<boolean> => (!organization && settings.hosts.includes(host)) || (await allowed(host));
   const [rules, hostsAllowed, secretHostsAllowed, published, own] = await Promise.all([
     settings.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readPolicy().then((policy) => policy?.rules)) : Promise.resolve([]),
     organization ? Promise.all(settings.hosts.map(allowed)) : Promise.resolve(settings.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
     check.published ?? (check.ports && settings.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),
-    Promise.all(check.agents.map((agent) => sandboxKnowledgeFor(agent, knowledge.skillsFolder)))
+    Promise.all(check.agents.map((agent) => sandboxKnowledgeFor(agent, knowledge.skillsFolder))),
   ]);
   if (rules === undefined) {
     throw new Error("SBX could not list its filesystem rules.");
@@ -592,7 +597,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   }
   if (check.ports) {
     const free = await Promise.all(
-      settings.ports.map(async (port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host)))
+      settings.ports.map(async (port) => !isPort(port.host) || published.has(sbxPortKey(port)) || canBind(Number(port.host))),
     );
     settings.ports.forEach((port, index) => free[index] || add("ports", sbxPortKey(port), SBX_PROBLEM.portInUse));
   }

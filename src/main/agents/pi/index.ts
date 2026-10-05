@@ -47,7 +47,7 @@ export const piAgent: SandboxedAgent = {
     // meets.
     quitPresses: 2,
     // ESC+CR, which its input reads as a newline rather than a submit.
-    shiftEnter: "\x1b\r"
+    shiftEnter: "\x1b\r",
   },
   // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript
   // behind.
@@ -70,7 +70,7 @@ export const piAgent: SandboxedAgent = {
       // settings.json untouched.
       args.push("--use-theme", paths.theme.kind, ...systemPromptArgs(HOST_SIDE));
       return Promise.resolve({ args });
-    }
+    },
   },
   sandbox: {
     prepare: (paths) => {
@@ -92,11 +92,13 @@ export const piAgent: SandboxedAgent = {
     // the agent dir the sessions are read from.
     knowledge: () => {
       const agentDir = piAgentDir();
-      const instructionsHost = [path.join(agentDir, "AGENTS.override.md"), path.join(agentDir, "AGENTS.md")].find((file) => fs.existsSync(file));
+      const instructionsHost = [path.join(agentDir, "AGENTS.override.md"), path.join(agentDir, "AGENTS.md")].find((file) =>
+        fs.existsSync(file),
+      );
       return {
         skills: [{ host: path.join(agentDir, "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` }],
         plugins: [{ host: path.join(agentDir, "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
-        instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : []
+        instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : [],
       };
     },
     sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
@@ -105,6 +107,6 @@ export const piAgent: SandboxedAgent = {
     // means a mixin); `sbx run` reattaches by `--name` with plain `pi`. Auth is not TET's: the kit
     // takes an Anthropic credential from sbx's store, without which every model call fails.
     kit: "docker.io/sbx/pi-kit:latest",
-    sessions: piSandboxSessions
-  }
+    sessions: piSandboxSessions,
+  },
 };

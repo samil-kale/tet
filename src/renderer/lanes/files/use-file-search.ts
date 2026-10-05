@@ -45,7 +45,7 @@ export function useFileSearch(resolved: ResolvedRef): {
         });
       }, SEARCH_DELAY_MS);
     },
-    [resolved]
+    [resolved],
   );
 
   return { searchResult: held?.refKey === resolved.refKey ? held.result : undefined, searching, search };

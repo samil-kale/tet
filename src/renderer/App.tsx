@@ -98,10 +98,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
    * through `onActivateTab`. See "Split view" in AGENTS.md.
    */
-  const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(
-    stripTabs,
-    starting
-  );
+  const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(stripTabs, starting);
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
@@ -112,11 +109,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const [branchTreeHeight, setBranchTreeHeight] = useStoredSize("branch-tree", 260, MIN_AREA_HEIGHT);
   const [fileSearchHeight, setFileSearchHeight] = useStoredSize("file-search", 260, MIN_AREA_HEIGHT);
   // 40% of the window it first opens in.
-  const [commandsHeight, setCommandsHeight] = useStoredSize(
-    "commands",
-    Math.round(window.innerHeight * 0.4),
-    MIN_AREA_HEIGHT
-  );
+  const [commandsHeight, setCommandsHeight] = useStoredSize("commands", Math.round(window.innerHeight * 0.4), MIN_AREA_HEIGHT);
   /** The lanes out and pinned, their widths and slide (use-lanes.ts). */
   const {
     openLanes,
@@ -131,7 +124,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     togglePin,
     movePinned,
     moveToggle,
-    showChanges
+    showChanges,
   } = useLanes(lanes, activeRefKeyRef, setActiveRefKey);
   /** A pinned lane moves by its headers, among the pinned ones. */
   const laneDrag = useDragReorder({
@@ -139,7 +132,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     count: pinnedOrder.length,
     payloadOf: (index) => pinnedOrder[index],
     indexOf: (lane) => pinnedOrder.indexOf(lane as Lane),
-    onMove: movePinned
+    onMove: movePinned,
   });
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
@@ -152,26 +145,26 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
 
   // Before onNotice, whose subscription tells main the window listens.
   useEffect(() => window.tet.onNoticeProgress(showProgress), []);
-  useEffect(
-    () => window.tet.onNotice(({ severity, message }) => notify(severity, message)),
-    []
-  );
+  useEffect(() => window.tet.onNotice(({ severity, message }) => notify(severity, message)), []);
 
   /** Makes a repository or worktree active, by its `refKey`, as a row or the git lane picks it. */
   const activateRef = useCallback((refKey: string) => setActiveRefKey(refKey), []);
 
   /** The project row's remove, once the row asked about its worktrees; the list follows through
    *  `projects:changed`. */
-  const removeProject = useCallback(async (projectId: string) => {
-    const project = projectsRef.current.find((entry) => entry.id === projectId);
-    if (!project || !(await canDiscardRefEdits(...projectRefsOf(project)))) {
-      return;
-    }
-    const result = await window.tet.projects.remove(projectId);
-    if (!result.ok) {
-      notify("error", result.error ?? `Could not remove ${project.name}`);
-    }
-  }, [projectsRef]);
+  const removeProject = useCallback(
+    async (projectId: string) => {
+      const project = projectsRef.current.find((entry) => entry.id === projectId);
+      if (!project || !(await canDiscardRefEdits(...projectRefsOf(project)))) {
+        return;
+      }
+      const result = await window.tet.projects.remove(projectId);
+      if (!result.ok) {
+        notify("error", result.error ?? `Could not remove ${project.name}`);
+      }
+    },
+    [projectsRef],
+  );
 
   const reorderProjects = useCallback((ordered: Project[]) => {
     setProjects(ordered);
@@ -188,14 +181,11 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
       setActiveRefKey(refKey);
       placeTab(refKey, tabId, command);
     },
-    [placeTab]
+    [placeTab],
   );
 
   // A ctl-channel tab, shown like a saved command's: drawing it starts its process.
-  useEffect(
-    () => window.tet.tabs.onShow(({ ref, tabId }) => showTab(refKeyOf(ref), tabId)),
-    [showTab]
-  );
+  useEffect(() => window.tet.tabs.onShow(({ ref, tabId }) => showTab(refKeyOf(ref), tabId)), [showTab]);
 
   const focused = useWindowFocused();
   const covered = useWindowCovered();
@@ -221,21 +211,30 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   }, [activeRef, onScreenTabIds]);
 
   /** Finished, waiting, starting and working tabs, and the ways to them (use-tab-marks.ts). */
-  const { marks, showWorking, showFinished, showWaiting, jumpToWaiting, forgetProjectRef: forgetMarks } =
-    useTabMarks(tabs, activeRefKey, activeRef, onScreenTabIds, showTab);
+  const {
+    marks,
+    showWorking,
+    showFinished,
+    showWaiting,
+    jumpToWaiting,
+    forgetProjectRef: forgetMarks,
+  } = useTabMarks(tabs, activeRefKey, activeRef, onScreenTabIds, showTab);
 
   /** Drops everything held for a repository or worktree; the project list is the caller's. */
-  const forgetProjectRef = useCallback((ref: ProjectRef) => {
-    const refKey = refKeyOf(ref);
-    forgetFeeds(refKey);
-    setEditorTabs((current) => forget(current, refKey));
-    forgetEditorSync(refKey);
-    disposeRefEditors(ref);
-    forgetLayout(refKey);
-    forgetMarks(refKey);
-    // The xterms live outside React; this is where a repository or worktree ends for good.
-    disposeRefTerminals(ref);
-  }, [forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks]);
+  const forgetProjectRef = useCallback(
+    (ref: ProjectRef) => {
+      const refKey = refKeyOf(ref);
+      forgetFeeds(refKey);
+      setEditorTabs((current) => forget(current, refKey));
+      forgetEditorSync(refKey);
+      disposeRefEditors(ref);
+      forgetLayout(refKey);
+      forgetMarks(refKey);
+      // The xterms live outside React; this is where a repository or worktree ends for good.
+      disposeRefTerminals(ref);
+    },
+    [forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks],
+  );
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git lane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
@@ -262,7 +261,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
           });
         }
       }),
-    [forgetProjectRef, forgetSandboxed]
+    [forgetProjectRef, forgetSandboxed],
   );
 
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
@@ -273,7 +272,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     (ref: ProjectRef) => {
       void window.tet.tabs.create(ref, "shell").then((tab) => showTab(refKeyOf(ref), tab.tabId));
     },
-    [showTab]
+    [showTab],
   );
 
   /** Ctrl/Cmd+Shift+./, — within the focused pane. */
@@ -291,7 +290,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
       const next = list[(at + direction + list.length) % list.length];
       activateTab(activeRefKey, next.tabId, layout.focusedPane);
     },
-    [activeRefKey, stripTabs, layouts, activateTab]
+    [activeRefKey, stripTabs, layouts, activateTab],
   );
 
   /** Ctrl/Cmd+Shift+T. */
@@ -326,7 +325,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     jumpToWaiting,
     nextTab: () => cycleTab(1),
     previousTab: () => cycleTab(-1),
-    newShellTab
+    newShellTab,
   });
 
   const activeState = (activeRefKey ? states[activeRefKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
@@ -340,7 +339,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
     ...pinnedOrder.filter((lane) => shownLanes.has(lane)),
     ...LANES.filter(slidingIn),
     ...LANES.filter((lane) => shownLanes.has(lane) && !pinnedLanes.has(lane)),
-    ...LANES.filter((lane) => !shownLanes.has(lane) && !slidingIn(lane))
+    ...LANES.filter((lane) => !shownLanes.has(lane) && !slidingIn(lane)),
   ];
   /** What the lanes out take together; a sash leaves the tab area its floor beside it. */
   const lanesWidth = LANES.reduce((sum, lane) => (shownLanes.has(lane) ? sum + widthOf(lane)[0] : sum), 0);
@@ -352,22 +351,14 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const openSbxSettings = useCallback(
     (projectId: string) => setSbxSettingsProject(projects.find((candidate) => candidate.id === projectId) ?? null),
-    [projects]
+    [projects],
   );
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   /** Opening and closing editor tabs (use-editor-opening.ts). */
-  const { openEditor, openActiveDiff, closeEditors } = useEditorOpening(
-    editorTabsRef,
-    setEditorTabs,
-    activateTab,
-    activateRef,
-    activeRef
-  );
+  const { openEditor, openActiveDiff, closeEditors } = useEditorOpening(editorTabsRef, setEditorTabs, activateTab, activateRef, activeRef);
   useEffect(() => {
     const offRequest = window.tet.env.onRequest(setEnvRequest);
-    const offWithdrawn = window.tet.env.onWithdrawn((id) =>
-      setEnvRequest((current) => (current?.id === id ? null : current))
-    );
+    const offWithdrawn = window.tet.env.onWithdrawn((id) => setEnvRequest((current) => (current?.id === id ? null : current)));
     return () => {
       offRequest();
       offWithdrawn();
@@ -400,9 +391,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
             <Fragment key={lane}>
               <div
                 {...drag?.target}
-                className={["lane", slidingLanes.has(lane) && "sliding", ...(drag?.classes ?? [])]
-                  .filter(Boolean)
-                  .join(" ")}
+                className={["lane", slidingLanes.has(lane) && "sliding", ...(drag?.classes ?? [])].filter(Boolean).join(" ")}
                 style={{ width: shown ? width : 0 }}
                 onTransitionEnd={() => stopSliding(lane)}
                 onContextMenu={(event) => {
@@ -450,7 +439,9 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                     <FilesLane
                       resolved={activeResolved}
                       shown={shown}
-                      openPath={editorTabs[activeResolved.refKey]?.find((tab) => tab.tabId === activeEditors[activeResolved.refKey])?.path ?? null}
+                      openPath={
+                        editorTabs[activeResolved.refKey]?.find((tab) => tab.tabId === activeEditors[activeResolved.refKey])?.path ?? null
+                      }
                       onOpenFile={openEditor}
                       searchHeight={fileSearchHeight}
                       onSearchHeight={setFileSearchHeight}
@@ -482,9 +473,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
             </Fragment>
           );
         })}
-        {laneMenu.render((lane) => [
-          { label: pinnedLanes.has(lane) ? "Unpin" : "Pin", run: () => togglePin(lane) }
-        ])}
+        {laneMenu.render((lane) => [{ label: pinnedLanes.has(lane) ? "Unpin" : "Pin", run: () => togglePin(lane) }])}
 
         <main className="content">
           {/* Every repository's and worktree's terminals stay mounted, so switching keeps buffers
@@ -529,13 +518,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
 
       {settingsOpen && <SettingsDialog onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
-      {envRequest && (
-        <EnvDialog
-          key={envRequest.id}
-          request={envRequest}
-          onClose={closeEnvRequest}
-        />
-      )}
+      {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 
       <Notices />
       <Dialogs />

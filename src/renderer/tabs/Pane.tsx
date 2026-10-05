@@ -57,7 +57,7 @@ export interface PaneChrome {
 const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
   projects: { noun: "projects", Icon: ProjectsIcon },
   git: { noun: "git", Icon: GitIcon },
-  files: { noun: "files", Icon: FilesIcon }
+  files: { noun: "files", Icon: FilesIcon },
 };
 
 /** A toggle's drag, its own so no tab strip or terminal takes the drop. */
@@ -71,7 +71,7 @@ function LaneToggles({ chrome }: { chrome: PaneChrome }) {
     count: toggleOrder.length,
     payloadOf: (index) => toggleOrder[index],
     indexOf: (lane) => toggleOrder.indexOf(lane as Lane),
-    onMove: onMoveToggle
+    onMove: onMoveToggle,
   });
   return toggleOrder.map((lane, index) => {
     const { noun, Icon } = LANE_TOGGLES[lane];
@@ -163,7 +163,7 @@ export const Pane = memo(function Pane({
   onDragStart,
   onDragOverChange,
   onDropTab,
-  onDragEnd
+  onDragEnd,
 }: PaneProps) {
   const plusMenu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom + 6 }));
   const tabMenu = useContextMenu<string>();
@@ -204,7 +204,7 @@ export const Pane = memo(function Pane({
       const descriptor = await window.tet.tabs.create(at, agentId);
       onActivate(descriptor.tabId, paneId);
     },
-    [at, paneId, onActivate]
+    [at, paneId, onActivate],
   );
 
   /**
@@ -222,13 +222,10 @@ export const Pane = memo(function Pane({
         void window.tet.tabs.close(at, terminalIds);
       }
     },
-    [at, onCloseEditors]
+    [at, onCloseEditors],
   );
 
-  const restartTab = useCallback(
-    (tabId: string) => void window.tet.tabs.restart(at, tabId),
-    [at]
-  );
+  const restartTab = useCallback((tabId: string) => void window.tet.tabs.restart(at, tabId), [at]);
 
   /** The new tab opens beside this one; no question is up to show a refusal, so it is a notice. */
   const handOver = useCallback(
@@ -240,7 +237,7 @@ export const Pane = memo(function Pane({
         notify("error", result.error ?? "Could not hand the session over");
       }
     },
-    [at, paneId, onActivate]
+    [at, paneId, onActivate],
   );
 
   // The menu's tab closed or moved away under it (`tet-ctl`, another pane): its close entries,
@@ -259,11 +256,10 @@ export const Pane = memo(function Pane({
         current: tab.title,
         confirmLabel: "Rename",
         maxLength: MAX_TITLE_LENGTH,
-        submit: async (name) =>
-          refusal(await window.tet.tabs.rename(at, tab.tabId, name), "Could not rename the session")
+        submit: async (name) => refusal(await window.tet.tabs.rename(at, tab.tabId, name), "Could not rename the session"),
       });
     },
-    [at]
+    [at],
   );
 
   /** The session title; a session-less agent's name; the editor tab's file name. */
@@ -274,9 +270,7 @@ export const Pane = memo(function Pane({
     if (tab.title) {
       return tab.title;
     }
-    return agentInfo(agents, tab.agentId)?.hasSessions === false
-      ? agentName(agents, tab.agentId)
-      : "New session";
+    return agentInfo(agents, tab.agentId)?.hasSessions === false ? agentName(agents, tab.agentId) : "New session";
   };
 
   const tabTooltip = (tab: PaneTab): string => {
@@ -311,31 +305,29 @@ export const Pane = memo(function Pane({
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
     const restartable =
       terminal !== undefined &&
-      (terminal.savedCommand === true ||
-        terminal.status === "running" ||
-        terminal.status === "stopped" ||
-        terminal.status === "error");
+      (terminal.savedCommand === true || terminal.status === "running" || terminal.status === "stopped" || terminal.status === "error");
     const closeAction = (label: string, targets: string[]): ContextMenuEntry => ({
       label,
-      run: targets.length > 0 ? () => closeTabs(targets) : undefined
+      run: targets.length > 0 ? () => closeTabs(targets) : undefined,
     });
     const moveEntries: ContextMenuEntry[] =
       siblingPanes.length > 0
         ? [
             SEPARATOR,
-            ...siblingPanes.map(
-              (target): ContextMenuEntry => ({
-                label: `Move to ${PANE_LABELS[preset][target]}`,
-                run: () => onActivate(tabId, target)
-              })
-            )
+            ...siblingPanes.map((target): ContextMenuEntry => ({
+              label: `Move to ${PANE_LABELS[preset][target]}`,
+              run: () => onActivate(tabId, target),
+            })),
           ]
         : [];
     const closeEntries: ContextMenuEntry[] = [
       closeAction("Close", [tabId]),
-      closeAction("Close Others", ids.filter((id) => id !== tabId)),
+      closeAction(
+        "Close Others",
+        ids.filter((id) => id !== tabId),
+      ),
       closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
-      closeAction("Close All", ids)
+      closeAction("Close All", ids),
     ];
     if (!terminal) {
       return [
@@ -343,7 +335,7 @@ export const Pane = memo(function Pane({
         { label: "Keep Open", run: getEditorSnapshot(tabId).preview ? () => keepEditor(tabId) : undefined },
         SEPARATOR,
         ...closeEntries,
-        ...moveEntries
+        ...moveEntries,
       ];
     }
     // Rename and hand-over act on a session: an agent that keeps none never offers them.
@@ -355,24 +347,20 @@ export const Pane = memo(function Pane({
       hasSessions && handOverAgents.length > 0
         ? [
             SEPARATOR,
-            ...handOverAgents.map(
-              (agent): ContextMenuEntry => ({
-                label: `Hand over to ${agent.displayName}`,
-                icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
-                run: withSession ? () => void handOver(withSession.tabId, agent.id) : undefined
-              })
-            )
+            ...handOverAgents.map((agent): ContextMenuEntry => ({
+              label: `Hand over to ${agent.displayName}`,
+              icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
+              run: withSession ? () => void handOver(withSession.tabId, agent.id) : undefined,
+            })),
           ]
         : [];
     return [
       {
         label: "Restart",
-        run: restartable ? () => restartTab(tabId) : undefined
+        run: restartable ? () => restartTab(tabId) : undefined,
       },
       // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
-      ...(agentInfo(agents, terminal.agentId)?.clearable === true
-        ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }]
-        : []),
+      ...(agentInfo(agents, terminal.agentId)?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
       SEPARATOR,
       ...closeEntries,
       ...(hasSessions
@@ -381,18 +369,17 @@ export const Pane = memo(function Pane({
             // No persisted session, nothing to rename: the host would revert the label.
             {
               label: "Rename...",
-              run: withSession ? () => void askRename(withSession) : undefined
-            }
+              run: withSession ? () => void askRename(withSession) : undefined,
+            },
           ] satisfies ContextMenuEntry[])
         : []),
       ...handOverEntries,
-      ...moveEntries
+      ...moveEntries,
     ];
   };
 
   // Built only while the menu is open: a pane re-renders on every tab push, and icons are elements.
-  const newTabEntries = (): ContextMenuEntry[] =>
-    agents.map((agent) => agentEntry(agent, () => void createTab(agent.id)));
+  const newTabEntries = (): ContextMenuEntry[] => agents.map((agent) => agentEntry(agent, () => void createTab(agent.id)));
 
   return (
     <div
@@ -409,7 +396,7 @@ export const Pane = memo(function Pane({
         onDragOverChange(paneId, {
           x: event.clientX,
           y: event.clientY,
-          overStrip: (event.target as Element).closest(".tab-strip") !== null
+          overStrip: (event.target as Element).closest(".tab-strip") !== null,
         });
       }}
       onDragLeave={(event) => {
@@ -505,13 +492,7 @@ export const Pane = memo(function Pane({
                 <span className="tab-label">{tabLabel(tab)}</span>
               )}
               <IconButton
-                title={
-                  isEditorTab(tab)
-                    ? "Close file"
-                    : tab.sessionId !== undefined
-                      ? "Close tab and delete its session"
-                      : "Close tab"
-                }
+                title={isEditorTab(tab) ? "Close file" : tab.sessionId !== undefined ? "Close tab and delete its session" : "Close tab"}
                 isolated
                 onClick={() => closeTabs([tab.tabId])}
               >
@@ -524,11 +505,7 @@ export const Pane = memo(function Pane({
             bootstrap session listing. */}
         {(busy || editorBusy) && <ProgressBar />}
         <div className="new-tab">
-          <button
-            className="icon-button"
-            title="New tab"
-            onMouseDown={plusMenu.open}
-          >
+          <button className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
             <PlusIcon />
           </button>
         </div>
@@ -537,13 +514,7 @@ export const Pane = memo(function Pane({
       <div className="pane-body">
         {tabs.map((tab) =>
           isEditorTab(tab) ? (
-            <EditorHost
-              key={tab.tabId}
-              tabId={tab.tabId}
-              active={tab.tabId === activeTabId}
-              visible={visible}
-              focused={focused}
-            />
+            <EditorHost key={tab.tabId} tabId={tab.tabId} active={tab.tabId === activeTabId} visible={visible} focused={focused} />
           ) : (
             <TerminalHost
               key={tab.tabId}
@@ -554,7 +525,7 @@ export const Pane = memo(function Pane({
               visible={visible}
               focused={focused}
             />
-          )
+          ),
         )}
         {tabs.length === 0 && <div className="placeholder">No tabs open.</div>}
       </div>

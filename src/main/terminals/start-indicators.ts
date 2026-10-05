@@ -16,7 +16,7 @@ export class StartIndicators {
     /** The first began or the last ended. */
     private readonly onProgress: (show: boolean) => void,
     /** A tab's first began or its last ended. */
-    private readonly onTabChange: () => void
+    private readonly onTabChange: () => void,
   ) {}
 
   acquire(tabId?: string): void {

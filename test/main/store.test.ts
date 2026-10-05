@@ -10,7 +10,14 @@ import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
 import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir } from "../../src/main/store/data-root";
-import { newWorktreeKey, ownedWorktreeKeys, sandboxDir, sandboxSessionDir, worktreeDir, worktreeKeyOf } from "../../src/main/store/project-dirs";
+import {
+  newWorktreeKey,
+  ownedWorktreeKeys,
+  sandboxDir,
+  sandboxSessionDir,
+  worktreeDir,
+  worktreeKeyOf,
+} from "../../src/main/store/project-dirs";
 import { SettingsStore } from "../../src/main/store/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../src/shared/prompts";
 import { DEFAULT_KEYBINDING_PRESET_ID, laneSettings, withLanePinned, withSettings } from "../../src/shared/types/settings";
@@ -24,7 +31,10 @@ describe("a project's folder under ~/.tet", () => {
     const repository = { projectId: "p" };
     const worktree = { projectId: "p", worktree: "k1" };
     assert.equal(sandboxDir(root, worktree, "codex"), path.join(root, "projects", "p", "sandboxes", "k1", "codex"));
-    assert.equal(sandboxSessionDir(sandboxDir(root, repository, "pi")), path.join(root, "projects", "p", "sandboxes", "repository", "pi", "sessions"));
+    assert.equal(
+      sandboxSessionDir(sandboxDir(root, repository, "pi")),
+      path.join(root, "projects", "p", "sandboxes", "repository", "pi", "sessions"),
+    );
     assert.equal(agentConfigDir(root, "claude"), path.join(root, "config", "claude"));
   });
 
@@ -60,7 +70,7 @@ describe("the environment variables kept in TET", () => {
     store.set([row("GITLAB_TOKEN", "new"), row("STRIPE_KEY", "sk")]);
     assert.deepEqual(store.list(), [
       { name: "GITLAB_TOKEN", overridesMachine: false },
-      { name: "STRIPE_KEY", overridesMachine: false }
+      { name: "STRIPE_KEY", overridesMachine: false },
     ]);
     // Its own name: the first one in process.env may be one a TET this runs in kept (TET_KEPT_ENV).
     process.env.TET_TEST_MACHINE = "machine";
@@ -123,9 +133,13 @@ describe("the environment variables kept in TET", () => {
     store.set([row("GITHUB_TOKEN", "token")]);
     assert.deepEqual(
       (JSON.parse(fs.readFileSync(file, "utf8")) as { name: string }[]).map((entry) => entry.name),
-      ["FUTURE", "GITHUB_TOKEN"]
+      ["FUTURE", "GITHUB_TOKEN"],
     );
-    assert.deepEqual(store.list().map((entry) => entry.name), ["GITHUB_TOKEN"], "listed only when understood");
+    assert.deepEqual(
+      store.list().map((entry) => entry.name),
+      ["GITHUB_TOKEN"],
+      "listed only when understood",
+    );
   });
 
   it("take the Settings' tab whole: added, renamed with its value, replaced, and the rest deleted", () => {
@@ -134,7 +148,7 @@ describe("the environment variables kept in TET", () => {
     store.edit([
       { name: "GITLAB_API_TOKEN", from: "GITLAB_TOKEN" },
       { name: "STRIPE_KEY", from: "STRIPE_KEY", value: "sk-new" },
-      { name: "SENDGRID_API_KEY", value: "sg" }
+      { name: "SENDGRID_API_KEY", value: "sg" },
     ]);
     assert.deepEqual(store.values(), { GITLAB_API_TOKEN: "gl", STRIPE_KEY: "sk-new", SENDGRID_API_KEY: "sg" });
   });
@@ -146,7 +160,13 @@ describe("the environment variables kept in TET", () => {
       [[{ name: "1TOKEN", value: "x" }], /not an environment variable name/],
       [[{ name: "Path", value: "x" }], /TET's own to set/],
       [[{ name: "NEW" }], /NEW needs a value/],
-      [[{ name: "A", value: "x" }, { name: "A", value: "y" }], /A is there twice/]
+      [
+        [
+          { name: "A", value: "x" },
+          { name: "A", value: "y" },
+        ],
+        /A is there twice/,
+      ],
     ];
     for (const [rows, refusal] of refusals) {
       assert.throws(() => store.edit(rows), refusal);
@@ -164,7 +184,7 @@ describe("the environment variables kept in TET", () => {
         shown.push(request);
         return true;
       },
-      () => undefined
+      () => undefined,
     );
     const alive = new AbortController().signal;
     const first = requests.ask({ names: ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"] }, alive);
@@ -173,12 +193,12 @@ describe("the environment variables kept in TET", () => {
     assert.equal(shown.length, 1, "the second waits for the first");
     assert.deepEqual(shown[0].variables, [
       { name: "AUTOCONTRACT_USER", overridesMachine: false, stored: true },
-      { name: "AUTOCONTRACT_PASSWORD", overridesMachine: false, stored: false }
+      { name: "AUTOCONTRACT_PASSWORD", overridesMachine: false, stored: false },
     ]);
     assert.match(requests.answer(1, [row("AUTOCONTRACT_USER", "admin")]) ?? "", /needs a value/, "one missing");
     assert.equal(
       requests.answer(1, [row("AUTOCONTRACT_USER", "admin"), row("AUTOCONTRACT_PASSWORD", "secret"), row("OTHER", "x")]),
-      undefined
+      undefined,
     );
     assert.deepEqual(await first, ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"]);
     assert.deepEqual(store.values(), { AUTOCONTRACT_USER: "admin", AUTOCONTRACT_PASSWORD: "secret" }, "only what was asked for");
@@ -194,7 +214,7 @@ describe("the environment variables kept in TET", () => {
     const requests = new EnvRequests(
       new EnvStore(tempRoot()),
       () => listening,
-      (id) => withdrawn.push(id)
+      (id) => withdrawn.push(id),
     );
     const caller = new AbortController();
     const asked = requests.ask({ names: ["GITHUB_TOKEN"] }, caller.signal);
@@ -218,17 +238,21 @@ describe("the stores", () => {
     assert.deepEqual(new SettingsStore(dir).get().appearance.lanes, [
       { lane: "projects", pinned: true },
       { lane: "git", pinned: false },
-      { lane: "files", pinned: false }
+      { lane: "files", pinned: false },
     ]);
     fs.writeFileSync(
       file,
       JSON.stringify({
-        appearance: { colorScheme: "sepia", darkTheme: "solarized", lanes: [{ lane: "files" }, { lane: 3 }, { lane: "git", pinned: true }, { lane: "files", pinned: true }, "junk"] },
+        appearance: {
+          colorScheme: "sepia",
+          darkTheme: "solarized",
+          lanes: [{ lane: "files" }, { lane: 3 }, { lane: "git", pinned: true }, { lane: "files", pinned: true }, "junk"],
+        },
         notifications: { finished: false, waiting: "yes" },
         files: { editorKeybindingPreset: "", excludeGitIgnore: true, compactFolders: "no", sortOrder: "sideways" },
         git: { pushOnCommit: true, checkNewChanges: "yes" },
-        prompts: { texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }, commitSuggester: "claude" }
-      })
+        prompts: { texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }, commitSuggester: "claude" },
+      }),
     );
     const settings = new SettingsStore(dir).get();
     assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: false });
@@ -237,7 +261,7 @@ describe("the stores", () => {
       pushOnCommit: true,
       deleteBranchOnRemote: false,
       deleteTagOnRemote: false,
-      deleteWorktreeOnRemote: false
+      deleteWorktreeOnRemote: false,
     });
     assert.equal(settings.appearance.colorScheme, "system");
     assert.equal(settings.appearance.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
@@ -247,15 +271,15 @@ describe("the stores", () => {
       [
         { lane: "files", pinned: false },
         { lane: "git", pinned: true },
-        { lane: "projects", pinned: false }
+        { lane: "projects", pinned: false },
       ],
-      "no lane named twice or unknown, the ones it misses join at its end"
+      "no lane named twice or unknown, the ones it misses join at its end",
     );
     assert.deepEqual(settings.files, {
       editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,
       excludeGitIgnore: true,
       compactFolders: true,
-      sortOrder: "default"
+      sortOrder: "default",
     });
     assert.deepEqual(settings.prompts.texts, { commitMessage: "", handover: "" }, "TET's own text spelled out is stored as none");
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "", model: "" });
@@ -284,21 +308,28 @@ describe("the stores", () => {
         { id: "a", path: pathOf("a"), name: "a" },
         { id: "b", path: pathOf("b") },
         "junk",
-        { id: "c", path: pathOf("c"), name: "c" }
-      ])
+        { id: "c", path: pathOf("c"), name: "c" },
+      ]),
     );
     const store = new ProjectStore(dir);
-    assert.deepEqual(store.list().map((project) => project.id), ["a", "c"]);
+    assert.deepEqual(
+      store.list().map((project) => project.id),
+      ["a", "c"],
+    );
     const added = store.add(path.join(dir, "repo"), "r");
     assert.deepEqual([added.name, added.worktrees], ["repo", []]);
     store.reorder(["nope", added.id]);
-    assert.deepEqual(store.list().map((project) => project.id), [added.id, "a", "c"], "unknown dropped, omitted kept behind");
+    assert.deepEqual(
+      store.list().map((project) => project.id),
+      [added.id, "a", "c"],
+      "unknown dropped, omitted kept behind",
+    );
     assert.ok(store.setWorktrees("a", [{ path: pathOf("wt"), branch: "feature" }]));
     assert.equal(store.setWorktrees("a", [{ path: pathOf("wt"), branch: "feature" }]), false, "unchanged");
     assert.deepEqual(
       (JSON.parse(fs.readFileSync(path.join(dir, "projects.json"), "utf8")) as unknown[])[1],
       { id: "a", path: pathOf("a"), name: "a" },
-      "worktrees are read off the disk, never stored"
+      "worktrees are read off the disk, never stored",
     );
     assert.equal(new ProjectStore(dir).list().length, 3, "persisted");
     assert.deepEqual(fs.readdirSync(dir), ["projects.json"], "renamed into place, no temporary file left");
@@ -325,12 +356,15 @@ describe("a settings write", () => {
     const stored = {
       appearance: { colorScheme: "light", darkTheme: "dark-modern" },
       prompts: { texts: { a: "", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
-      notifications: { finished: false, waiting: true }
+      notifications: { finished: false, waiting: true },
     };
-    assert.deepEqual(withSettings(stored as never, { appearance: { darkTheme: "dark-slate" }, prompts: { texts: { a: "mine" } as never } }), {
-      appearance: { colorScheme: "light", darkTheme: "dark-slate" },
-      prompts: { texts: { a: "mine", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
-      notifications: { finished: false, waiting: true }
-    });
+    assert.deepEqual(
+      withSettings(stored as never, { appearance: { darkTheme: "dark-slate" }, prompts: { texts: { a: "mine" } as never } }),
+      {
+        appearance: { colorScheme: "light", darkTheme: "dark-slate" },
+        prompts: { texts: { a: "mine", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
+        notifications: { finished: false, waiting: true },
+      },
+    );
   });
 });

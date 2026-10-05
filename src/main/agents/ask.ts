@@ -14,7 +14,7 @@ export async function askAgent(
   executable: string,
   args: string[],
   question: string,
-  onSpawn?: RunProcessOptions["onSpawn"]
+  onSpawn?: RunProcessOptions["onSpawn"],
 ): Promise<string> {
   const result = await runProcess(executable, args, { cwd: root, stdin: question, timeoutMs: ASK_TIMEOUT_MS, onSpawn });
   const reply = result.stdout.trim();

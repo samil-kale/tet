@@ -18,7 +18,19 @@ import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { useBusy } from "../ui/use-busy";
 import { PLATFORM } from "../platform";
-import { atLeastOne, EditRow, firstMark, OverridesMachine, patched, RowInput, RowSection, SecretInput, typedRows, withId, type Row } from "../ui/RowSection";
+import {
+  atLeastOne,
+  EditRow,
+  firstMark,
+  OverridesMachine,
+  patched,
+  RowInput,
+  RowSection,
+  SecretInput,
+  typedRows,
+  withId,
+  type Row,
+} from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
 import { SuggesterPicker } from "./SuggesterPicker";
 
@@ -36,7 +48,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "git", label: "Git" },
   { id: "prompts", label: "Prompts" },
   { id: "environment", label: "Environment" },
-  { id: "info", label: "Info" }
+  { id: "info", label: "Info" },
 ];
 
 type EnvRow = Row<{ name: string; from?: string; value: string; overridesMachine: boolean }>;
@@ -83,12 +95,12 @@ function envMarks(rows: EnvRow[]): Map<string, string> {
 const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
   system: "System",
   light: "Light",
-  dark: "Dark"
+  dark: "Dark",
 };
 
 const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message",
-  handover: "Session handover"
+  handover: "Session handover",
 };
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
@@ -96,7 +108,7 @@ const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[
   { key: "waiting", label: "Waiting for an answer - a permission prompt or a question" },
   // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
   // so it reaches tabs started afterwards (AgentPaths.idleReminder).
-  { key: "idleReminder", label: "Still waiting - no new prompt for a while (Claude Code only)" }
+  { key: "idleReminder", label: "Still waiting - no new prompt for a while (Claude Code only)" },
 ];
 
 const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
@@ -104,7 +116,7 @@ const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
   { key: "pushOnCommit", label: "Also push when committing" },
   { key: "deleteBranchOnRemote", label: "Also delete branch on the remote" },
   { key: "deleteTagOnRemote", label: "Also delete tag on the remote" },
-  { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" }
+  { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" },
 ];
 
 /**
@@ -116,7 +128,7 @@ const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
   { id: "mixed", label: "Mixed" },
   { id: "filesFirst", label: "Files First" },
   { id: "type", label: "Type" },
-  { id: "modified", label: "Modified" }
+  { id: "modified", label: "Modified" },
 ];
 
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
@@ -124,7 +136,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
   { key: "electron", label: "Electron" },
   { key: "chromium", label: "Chromium" },
   { key: "node", label: "Node" },
-  { key: "os", label: "Platform" }
+  { key: "os", label: "Platform" },
 ];
 
 /**
@@ -162,16 +174,26 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
         // Cannot change while the process runs.
         window.tet.app.info().then(setInfo),
         window.tet.env.list().then((list) => {
-          setVariables(atLeastOne(list.map((variable) => withId({ ...variable, from: variable.name, value: "" })), BLANK_ENV_ROW));
+          setVariables(
+            atLeastOne(
+              list.map((variable) => withId({ ...variable, from: variable.name, value: "" })),
+              BLANK_ENV_ROW,
+            ),
+          );
           setLoadedVariables(list.map((variable) => variable.name));
-        })
-      ])
+        }),
+      ]),
     ).catch((error: unknown) => setLoadFailed(errorMessage(error)));
   }, [load]);
 
   /** The Environment tab if touched, then the settings.json write — last, since it applies at once
    *  (the theme among it) and Cancel could not take it back after a later write refused. */
-  const { busy: saving, refused, submit: save, changing } = useSubmit(
+  const {
+    busy: saving,
+    refused,
+    submit: save,
+    changing,
+  } = useSubmit(
     async () => {
       if (variablesEdited.current) {
         const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
@@ -199,10 +221,10 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
           submit: () => {
             window.tet.app.restart();
             return new Promise(() => {});
-          }
+          },
         });
       }
-    }
+    },
   );
 
   /** Edits the shown copy and records the change for Save. */
@@ -233,8 +255,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
 
   /** A pick not offered on this machine is shown replaced, not saved: another machine may offer it. */
   const replaceSuggester = useCallback(
-    (suggester: Suggester): void => setSettings((current) => (current ? { ...current, prompts: { ...current.prompts, commitSuggester: suggester } } : current)),
-    []
+    (suggester: Suggester): void =>
+      setSettings((current) => (current ? { ...current, prompts: { ...current.prompts, commitSuggester: suggester } } : current)),
+    [],
   );
 
   const editVariables = changing((change: (rows: typeof variables) => typeof variables): void => {
@@ -290,7 +313,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
               onChange={(id) => applyTheme(chosenKind, id)}
               options={THEMES.filter((theme) => theme.kind === chosenKind).map((theme) => ({
                 value: theme.id,
-                label: theme.label
+                label: theme.label,
               }))}
             />
           </Field>
@@ -301,12 +324,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
           <FieldGroup label="Desktop notifications for agent activity">
             {settings &&
               NOTIFICATION_SWITCHES.map(({ key, label }) => (
-                <Checkbox
-                  key={key}
-                  label={label}
-                  checked={settings.notifications[key]}
-                  onChange={(next) => flipNotification(key, next)}
-                />
+                <Checkbox key={key} label={label} checked={settings.notifications[key]} onChange={(next) => flipNotification(key, next)} />
               ))}
           </FieldGroup>
           {/* No restart caveat: hooks report every turn, and the notification reads the settings as they

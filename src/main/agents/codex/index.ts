@@ -33,13 +33,13 @@ export const codexAgent: SandboxedAgent = {
     // mid-shutdown, where ConPTY turns it into a CTRL_C_EVENT that kills the shutdown.
     quitPresses: 1,
     // ESC+CR, which its input reads as a newline rather than a submit.
-    shiftEnter: "\x1b\r"
+    shiftEnter: "\x1b\r",
   },
   // `--ephemeral` writes no rollout, so no session is left behind.
   ask: {
     args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
     models: listModels,
-    modelArgs: (model) => ["--model", model]
+    modelArgs: (model) => ["--model", model],
   },
   sessions: codexSessionProvider,
   // See AgentTurns.questionOutlivesTurn.
@@ -54,7 +54,7 @@ export const codexAgent: SandboxedAgent = {
         logError("could not set up Codex hooks", error);
       }
       return Promise.resolve({ args });
-    }
+    },
   },
   sandbox: {
     prepare: () => {
@@ -74,10 +74,10 @@ export const codexAgent: SandboxedAgent = {
       return {
         skills: [{ host: path.join(home, "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
         plugins: [{ host: path.join(home, "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
-        instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : []
+        instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : [],
       };
     },
     sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
-    sessions: codexSandboxSessions
-  }
+    sessions: codexSandboxSessions,
+  },
 };

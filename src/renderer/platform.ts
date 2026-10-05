@@ -5,9 +5,7 @@ import { platformOf } from "../shared/platform";
 export const PLATFORM = platformOf(detectPlatform());
 
 export function detectPlatform(
-  nav: { userAgentData?: { platform?: string }; platform?: string; userAgent?: string } = typeof navigator !== "undefined"
-    ? navigator
-    : {}
+  nav: { userAgentData?: { platform?: string }; platform?: string; userAgent?: string } = typeof navigator !== "undefined" ? navigator : {},
 ): string {
   const reported = (nav.userAgentData?.platform || nav.userAgent || nav.platform || "").toLowerCase();
   if (reported.includes("mac") || reported.includes("darwin")) {

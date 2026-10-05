@@ -17,7 +17,7 @@ import { useCoversWindow } from "./window-covered";
  */
 export function useSubmit(
   run: () => Promise<string | undefined>,
-  onDone?: () => void
+  onDone?: () => void,
 ): {
   busy: boolean;
   refused: string | undefined;
@@ -162,7 +162,7 @@ export function DialogFrame<T extends string>({
   actions = [],
   primary,
   selectField,
-  children
+  children,
 }: DialogFrameProps<T>) {
   const overlay = useRef<HTMLDialogElement>(null);
   const body = useRef<HTMLFieldSetElement>(null);
@@ -261,12 +261,7 @@ export function DialogFrame<T extends string>({
           <span className="dialog-title">{header.title}</span>
         )}
         {onCancel && (
-          <IconButton
-            className={"tabs" in header ? "dialog-tabs-close" : undefined}
-            title="Close"
-            disabled={locked}
-            onClick={cancel}
-          >
+          <IconButton className={"tabs" in header ? "dialog-tabs-close" : undefined} title="Close" disabled={locked} onClick={cancel}>
             <CloseIcon />
           </IconButton>
         )}

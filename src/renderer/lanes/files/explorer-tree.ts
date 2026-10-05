@@ -44,9 +44,7 @@ export function buildForest(files: ExplorerListing): TreeNode[] {
 /** A root with an open child folder? */
 export function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolean>): boolean {
   return roots.some(
-    (root) =>
-      isExpanded(root, expanded) &&
-      root.children!.some((child) => child.children && (expanded[child.id] ?? false))
+    (root) => isExpanded(root, expanded) && root.children!.some((child) => child.children && (expanded[child.id] ?? false)),
   );
 }
 

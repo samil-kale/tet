@@ -44,7 +44,7 @@ import {
   Wand,
   WholeWord,
   X,
-  type LucideIcon
+  type LucideIcon,
 } from "lucide-react";
 import type { NoticeSeverity } from "../../shared/types/app";
 
@@ -73,7 +73,7 @@ function geometry(extent: number, cx: number, cy: number, grid: number, stroke: 
   const side = (extent * grid) / ((TARGET_EXTENT / GRID) * grid);
   return {
     viewBox: `${cx - side / 2} ${cy - side / 2} ${side} ${side}`,
-    strokeWidth: (stroke * side) / grid
+    strokeWidth: (stroke * side) / grid,
   };
 }
 
@@ -86,7 +86,7 @@ export function FillSvg({
   cy,
   grid,
   shapeRendering,
-  children
+  children,
 }: IconProps & {
   extent: number;
   cx: number;
@@ -120,7 +120,7 @@ export function Svg({
   extent = TARGET_EXTENT,
   cx = 8,
   cy = 8,
-  stroke = 1.5
+  stroke = 1.5,
 }: IconProps & {
   children: React.ReactNode;
   extent?: number;
@@ -161,7 +161,7 @@ function Lucide({
   extent,
   cx = 12,
   cy = 12,
-  stroke = 2
+  stroke = 2,
 }: IconProps & {
   icon: LucideIcon;
   extent?: number;
@@ -215,7 +215,7 @@ export function ChangesIcon(props: IconProps) {
 const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
   error: CircleX,
   warning: CircleAlert,
-  info: Info
+  info: Info,
 };
 
 /**

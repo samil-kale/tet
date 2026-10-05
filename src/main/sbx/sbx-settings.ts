@@ -34,7 +34,7 @@ function checkProject(
   values: ValueNames,
   organization: string | undefined,
   sandboxes?: SandboxList,
-  rules?: Known["rules"]
+  rules?: Known["rules"],
 ): Promise<SbxProblems> {
   return readSbxProblems({
     projectId: project.id,
@@ -45,7 +45,7 @@ function checkProject(
     organization,
     ports: true,
     sandboxes,
-    rules
+    rules,
   });
 }
 
@@ -64,7 +64,7 @@ export async function readProjectSbxProblems(
   settings: SbxProjectSettings,
   knowledge: SbxKnowledgeSettings,
   values: ValueNames,
-  known?: Known
+  known?: Known,
 ): Promise<SbxProblems> {
   return checkProject(project, settings, knowledge, values, await organizationOf(known), known?.sandboxes, known?.rules);
 }
@@ -88,7 +88,7 @@ export function saveProjectSbx(
   project: Project,
   request: SbxProjectSettings,
   local: SbxLocalSave,
-  known?: KnownOrganization
+  known?: KnownOrganization,
 ): Promise<SbxSaveResult> {
   return inTurn(saves, project.id, () => saveNow(deps, project, request, local, known));
 }
@@ -98,10 +98,10 @@ async function saveNow(
   project: Project,
   request: SbxProjectSettings,
   local: SbxLocalSave,
-  known?: KnownOrganization
+  known?: KnownOrganization,
 ): Promise<SbxSaveResult> {
   const worktrees = project.worktrees.flatMap((worktree): SbxSaveTarget[] =>
-    worktree.key === undefined ? [] : [{ ref: projectRef(project.id, worktree.key), path: worktree.path }]
+    worktree.key === undefined ? [] : [{ ref: projectRef(project.id, worktree.key), path: worktree.path }],
   );
   const nameOf = (ref: ProjectRef): string => projectRefName(project, ref);
   const stored = sbxLocal.encrypted(project.id);
@@ -123,7 +123,14 @@ async function saveNow(
         })
       : {};
     const wanted = withoutProblems(request, knowledge, problems);
-    const { removed, orphans, refused, failures, settings, knowledge: applied } = await saveSbxSettings(
+    const {
+      removed,
+      orphans,
+      refused,
+      failures,
+      settings,
+      knowledge: applied,
+    } = await saveSbxSettings(
       { ref: { projectId: project.id }, path: project.path },
       worktrees,
       wanted.settings,
@@ -131,7 +138,7 @@ async function saveNow(
       secretValues,
       new Set(Object.keys(local.secrets.values)),
       organization,
-      sandboxes
+      sandboxes,
     );
     sbxLocal.update(project.id, { secrets: keptValues(settings.secrets), variables: keptValues(settings.variables), knowledge: applied });
     for (const { ref, agentId } of removed) {

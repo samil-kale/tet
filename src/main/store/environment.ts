@@ -124,7 +124,7 @@ export class EnvStore {
     }
     return {
       variables: parsed.filter(isStoredVar),
-      others: parsed.filter((entry) => !isStoredVar(entry))
+      others: parsed.filter((entry) => !isStoredVar(entry)),
     };
   }
 

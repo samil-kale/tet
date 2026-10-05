@@ -5,7 +5,16 @@ import type { SbxAccess, SbxBlocker, SbxStatus } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { normalizeHostPath, relativeInside } from "../util/path-inside";
-import { isMountAllowed, parseFilesystemRules, parseGovernance, parseSbxJson, sbxBlocked, sbxNotReady, type FilesystemRule, type PathFlavor } from "./sbx-policy";
+import {
+  isMountAllowed,
+  parseFilesystemRules,
+  parseGovernance,
+  parseSbxJson,
+  sbxBlocked,
+  sbxNotReady,
+  type FilesystemRule,
+  type PathFlavor,
+} from "./sbx-policy";
 import { projectsDir, sandboxDir } from "../store/project-dirs";
 import { augmentAgentPath } from "../agents/agent-path";
 import { PLATFORM } from "../util/host-platform";
@@ -44,7 +53,7 @@ export type SandboxList = Map<string, string[]>;
  */
 export async function checkSbxReady(
   projectRefPath: string,
-  ref: ProjectRef
+  ref: ProjectRef,
 ): Promise<{ notReady: string } | { sandboxes: SandboxList; organization?: string; rules?: FilesystemRule[] }> {
   // No PATH re-read on the spawn path: on macOS/Linux that is a login shell per call.
   const { status, sandboxes, policy } = await probeSbx(false);
@@ -113,7 +122,7 @@ function folderRule(folder: string): string {
 async function readSbxBlockers(
   projectRefPath: string,
   ref: ProjectRef,
-  rules: FilesystemRule[] | undefined
+  rules: FilesystemRule[] | undefined,
 ): Promise<{ blockers: SbxBlocker[]; rules?: FilesystemRule[]; failure?: string }> {
   const channelAllowed = await isControlChannelAllowed();
   if (channelAllowed === undefined || rules === undefined) {
@@ -212,7 +221,7 @@ async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sand
   const [version, list, listedPolicy] = await Promise.all([
     readSbxVersion(),
     runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),
-    runSbx(["policy", "ls", "--type", "filesystem", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS })
+    runSbx(["policy", "ls", "--type", "filesystem", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),
   ]);
   const policy = policyOf(listedPolicy);
   status.installed = version !== undefined;

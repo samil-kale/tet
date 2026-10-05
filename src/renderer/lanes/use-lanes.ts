@@ -46,7 +46,7 @@ interface Lanes {
 export function useLanes(
   initial: LaneSettings,
   activeRefKeyRef: RefObject<string | null>,
-  setActiveRefKey: (refKey: string) => void
+  setActiveRefKey: (refKey: string) => void,
 ): Lanes {
   const [lanes, setLanes] = useState(initial);
   // Set by `tet-ctl`, or the window's own write coming back, which keeps what is shown.
@@ -57,24 +57,21 @@ export function useLanes(
           current.length === stored.length &&
           current.every((entry, i) => entry.lane === stored[i].lane && entry.pinned === stored[i].pinned)
             ? current
-            : stored
-        )
+            : stored,
+        ),
       ),
-    []
+    [],
   );
   const { pinned: pinnedOrder, toggles: toggleOrder } = useMemo(() => laneOrders(lanes), [lanes]);
   const pinnedLanes = useMemo(() => new Set(pinnedOrder), [pinnedOrder]);
   const [freeChoice, setFreeChoice] = useStoredChoice("lanes-free", FREE_CHOICES, "projects");
   // A lane pinned since it was stored is no longer free.
   const freeLane = freeChoice === "none" || pinnedLanes.has(freeChoice) ? null : freeChoice;
-  const openLanes = useMemo(
-    () => new Set<Lane>([...pinnedLanes, ...(freeLane ? [freeLane] : [])]),
-    [pinnedLanes, freeLane]
-  );
+  const openLanes = useMemo(() => new Set<Lane>([...pinnedLanes, ...(freeLane ? [freeLane] : [])]), [pinnedLanes, freeLane]);
   const pinnedWidths: Record<Lane, LaneWidth> = {
     projects: useStoredSize("lane-width-projects", 300, MIN_AREA_WIDTH),
     git: useStoredSize("lane-width-git", 300, MIN_AREA_WIDTH),
-    files: useStoredSize("lane-width-files", 300, MIN_AREA_WIDTH)
+    files: useStoredSize("lane-width-files", 300, MIN_AREA_WIDTH),
   };
   const freeWidth = useStoredSize("lane-width-free", 300, MIN_AREA_WIDTH);
   const widthOf = (lane: Lane): LaneWidth => (pinnedLanes.has(lane) ? pinnedWidths[lane] : freeWidth);
@@ -105,7 +102,7 @@ export function useLanes(
         next.delete(lane);
         return next;
       }),
-    []
+    [],
   );
   const slide = useCallback((lane: Lane) => setSlidingLanes((current) => new Set([...current, lane])), []);
 
@@ -122,7 +119,7 @@ export function useLanes(
         slide(lane);
       }
     },
-    [live, setFreeChoice, slide]
+    [live, setFreeChoice, slide],
   );
   /** A pin takes the lane to the end of the pinned ones (`withLanePinned`): the free lane keeps its
    *  place and hands over its width. An unpinned lane slides in, the free one staying. */
@@ -140,21 +137,21 @@ export function useLanes(
         slide(lane);
       }
     },
-    [live, writeLanes, setFreeChoice, slide]
+    [live, writeLanes, setFreeChoice, slide],
   );
   const movePinned = useCallback(
     (from: number, to: number) => {
       const now = live.current;
       writeLanes(laneSettings(reorder(now.pinnedOrder, from, to), now.toggleOrder));
     },
-    [live, writeLanes]
+    [live, writeLanes],
   );
   const moveToggle = useCallback(
     (from: number, to: number) => {
       const now = live.current;
       writeLanes(laneSettings(now.pinnedOrder, reorder(now.toggleOrder, from, to)));
     },
-    [live, writeLanes]
+    [live, writeLanes],
   );
   /**
    * A row's git mark: switches to the repository or worktree and slides git out; on the active one,
@@ -168,7 +165,7 @@ export function useLanes(
         toggleLane("git");
       }
     },
-    [activeRefKeyRef, setActiveRefKey, live, toggleLane]
+    [activeRefKeyRef, setActiveRefKey, live, toggleLane],
   );
 
   return {
@@ -184,6 +181,6 @@ export function useLanes(
     togglePin,
     movePinned,
     moveToggle,
-    showChanges
+    showChanges,
   };
 }

@@ -8,7 +8,7 @@ import type {
   SandboxedAgent,
   SandboxSessionStore,
   SessionWatch,
-  SpawnPreparation
+  SpawnPreparation,
 } from "../agents/agent";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
@@ -114,7 +114,7 @@ export class HostPlace implements StartingPlace {
   constructor(
     protected readonly context: PlaceContext,
     /** HostSetups.preparation, read at launch: a setup may be redone meanwhile. */
-    private readonly preparation: () => SpawnPreparation | undefined
+    private readonly preparation: () => SpawnPreparation | undefined,
   ) {}
 
   dropsDir(): string {
@@ -156,7 +156,7 @@ export class HostPlace implements StartingPlace {
     return {
       remove: (sessionId) => sessions.remove(executable, at.path, sessionId),
       rename: (sessionId, title) => sessions.rename(executable, at.path, sessionId, title),
-      files: (sessionId) => sessions.files(at.path, sessionId)
+      files: (sessionId) => sessions.files(at.path, sessionId),
     };
   }
 
@@ -166,7 +166,7 @@ export class HostPlace implements StartingPlace {
     return Promise.resolve({
       executable: this.context.executable,
       args: [...(preparation?.args ?? []), ...input.agentArgs(input.handover?.files)],
-      env: preparation?.env
+      env: preparation?.env,
     });
   }
 }
@@ -189,7 +189,7 @@ export interface SavedCommand {
 export class CommandPlace extends HostPlace {
   constructor(
     context: PlaceContext,
-    private readonly command: SavedCommand
+    private readonly command: SavedCommand,
   ) {
     super(context, () => undefined);
   }
@@ -264,12 +264,14 @@ export class SandboxPlace implements TabPlace {
 
   sessionActions(): SessionActions | undefined {
     const { sessions } = this;
-    return sessions && {
-      remove: (sessionId) => sessions.remove(sessionId),
-      rename: (sessionId, title) => sessions.rename(sessionId, title),
-      files: (sessionId) => sessions.files(sessionId),
-      root: this.agentDir
-    };
+    return (
+      sessions && {
+        remove: (sessionId) => sessions.remove(sessionId),
+        rename: (sessionId, title) => sessions.rename(sessionId, title),
+        files: (sessionId) => sessions.files(sessionId),
+        root: this.agentDir,
+      }
+    );
   }
 
   /** Nothing: a sandboxed tab's own output schedules the listing (AgentSandbox.sessions). */
@@ -309,7 +311,7 @@ export class SandboxPlace implements TabPlace {
       host: path.join(root, mount.sub),
       target: mount.target,
       file: mount.file,
-      within: this.agentDir
+      within: this.agentDir,
     }));
   }
 }
@@ -318,7 +320,7 @@ export class SandboxPlace implements TabPlace {
 class SandboxStart extends SandboxPlace implements StartingPlace {
   constructor(
     context: PlaceContext<SandboxedAgent>,
-    private readonly start: SbxStart
+    private readonly start: SbxStart,
   ) {
     super(context);
   }
@@ -357,7 +359,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
         sessionMounts: this.sessionMounts(),
         secretValues: start.secretValues,
         variableValues: start.variableValues,
-        onData: input.onData
+        onData: input.onData,
       });
       for (const notice of sbxProblemNotices(problems)) {
         onNotice("warning", notice);
@@ -396,6 +398,6 @@ async function copyInto({ files, within }: HandoverFiles, dir: string, agentDir:
         await source.close();
       }
       return copy;
-    })
+    }),
   );
 }

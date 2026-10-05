@@ -25,7 +25,7 @@ export function useRefHeads(states: Record<string, RepositoryState>): Record<str
         defaultBranch: target && refName(target),
         remoteName: state.remotes[0]?.name,
         remoteUrl: state.remotes[0]?.url,
-        dirty: state.changes.length > 0
+        dirty: state.changes.length > 0,
       };
     }
     return stableRecord(headsRef, next);

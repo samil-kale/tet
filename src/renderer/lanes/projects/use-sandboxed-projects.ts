@@ -39,10 +39,7 @@ export function useSandboxedProjects(projects: Project[]): SandboxedProjects {
       }
     }
   }, [projects, applySandboxed]);
-  useEffect(
-    () => window.tet.commands.onChanged(({ projectId, sbxEnabled }) => applySandboxed(projectId, sbxEnabled)),
-    [applySandboxed]
-  );
+  useEffect(() => window.tet.commands.onChanged(({ projectId, sbxEnabled }) => applySandboxed(projectId, sbxEnabled)), [applySandboxed]);
 
   return { sandboxed, forgetSandboxed };
 }

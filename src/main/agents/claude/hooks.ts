@@ -18,7 +18,7 @@ import type { HookEvent } from "../../../shared/ctl";
  */
 export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TARGET): string[] {
   const command = (event: Parameters<typeof hookCommand>[0]): { type: string; command: string }[] => [
-    { type: "command", command: hookCommand(event) }
+    { type: "command", command: hookCommand(event) },
   ];
 
   const hooks = {
@@ -29,10 +29,10 @@ export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TA
     // No guard on the first two: they are raised only when Claude Code has actually stopped.
     Notification: [
       { matcher: "permission_prompt|elicitation_dialog", hooks: command("permission") },
-      ...(paths.idleReminder ? [{ matcher: "idle_prompt", hooks: command("idle") }] : [])
+      ...(paths.idleReminder ? [{ matcher: "idle_prompt", hooks: command("idle") }] : []),
     ],
     // `AskUserQuestion` is a tool, not a Notification event.
-    PreToolUse: [{ matcher: "AskUserQuestion", hooks: command("question") }]
+    PreToolUse: [{ matcher: "AskUserQuestion", hooks: command("question") }],
   };
 
   // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process.

@@ -18,7 +18,7 @@ describe("a Markdown preview's image fetch", () => {
       return Promise.resolve(
         location === undefined
           ? new Response("image bytes", { status: 200, headers: { "content-type": "image/png" } })
-          : new Response(null, { status: 302, headers: { location } })
+          : new Response(null, { status: 302, headers: { location } }),
       );
     };
     return { asked, fetchFn };
@@ -26,7 +26,7 @@ describe("a Markdown preview's image fetch", () => {
 
   it("follows an https redirect chain to the image", async () => {
     const { asked, fetchFn } = server({
-      "https://a.example/badge.svg": "https://b.example/real.png"
+      "https://a.example/badge.svg": "https://b.example/real.png",
     });
     const response = await fetchHttpsImage("https://a.example/badge.svg", fetchFn);
     assert.equal(response?.status, 200);
@@ -50,7 +50,7 @@ describe("a Markdown preview's image fetch", () => {
       "data:text/html,<script>x</script>",
       // No URL at all — neither followed nor thrown out of the handler.
       "http://[",
-      "//"
+      "//",
     ];
     for (const target of targets) {
       const { asked, fetchFn } = server({ "https://a.example/badge.svg": target });
@@ -70,7 +70,7 @@ describe("a Markdown preview's image fetch", () => {
   it("gives up on a redirect loop", async () => {
     const { asked, fetchFn } = server({
       "https://a.example/1": "https://a.example/2",
-      "https://a.example/2": "https://a.example/1"
+      "https://a.example/2": "https://a.example/1",
     });
     assert.equal(await fetchHttpsImage("https://a.example/1", fetchFn), undefined);
     assert.ok(asked.length <= 7, `stopped after ${asked.length} hops`);
