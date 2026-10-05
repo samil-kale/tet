@@ -5,8 +5,6 @@ import { EditRow, OverridesMachine, RowInput, RowSection, SecretInput } from "..
 
 interface EnvDialogProps {
   request: EnvRequest;
-  /** Who asks, as the window names that tab: "Claude Code in autocontract". */
-  requester: string;
   /** Answered, withdrawn or put off: App takes the dialog down. */
   onClose: () => void;
 }
@@ -17,7 +15,7 @@ interface EnvDialogProps {
  * refuses Save stays in the dialog. A tab takes up saved values only when it starts, so saving restarts
  * the asking one; a request without a tab only saves.
  */
-export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
+export function EnvDialog({ request, onClose }: EnvDialogProps) {
   // Keyed by name: the agent's names are unique (the verb dedupes them).
   const [rows, setRows] = useState(() =>
     request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" }))
@@ -55,7 +53,6 @@ export function EnvDialog({ request, requester, onClose }: EnvDialogProps) {
       // Plain to see why it waits: a value left empty.
       primary={{ label: tab ? "Save & Restart" : "Save", disabled: !complete, run: () => void save() }}
     >
-      <p className="dialog-message">{requester} asks for environment variables.</p>
       <RowSection
         label="Environment variables"
         rows={rows}

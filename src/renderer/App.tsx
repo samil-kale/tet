@@ -2,10 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useLatest } from "./ui/use-latest";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
 import { refKeyOf, projectRefsOf } from "../shared/types/project";
-import type { AgentInfo } from "../shared/types/agents";
 import type { EnvRequest } from "../shared/types/environment";
 import type { Project, ProjectRef } from "../shared/types/project";
-import type { TabDescriptor } from "../shared/types/terminals";
 import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
@@ -32,7 +30,7 @@ import { disposeRefTerminals } from "./tabs/terminal-views";
 import { NO_IDS, useTabMarks } from "./tabs/use-tab-marks";
 import { PlusIcon } from "./ui/icons";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
-import { agentName, useAgents } from "./ui/use-agents";
+import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
 import { PLATFORM } from "./platform";
 import { defaultLayout, paneOf, tabsOnScreen } from "./tabs/pane-layout";
@@ -45,21 +43,6 @@ import { useRefHeads } from "./lanes/projects/use-ref-heads";
 import { useWindowFocused } from "./ui/use-window-focused";
 import { useWindowShortcuts } from "./ui/use-window-shortcuts";
 import { useRefFeeds } from "./use-ref-feeds";
-
-/** Who asks for environment variables, as the window names that tab: "Claude Code (fix login) in
- *  autocontract". */
-function requesterOf(
-  request: EnvRequest,
-  resolvedRefs: Record<string, ResolvedRef>,
-  tabs: Record<string, TabDescriptor[]>,
-  agents: AgentInfo[]
-): string {
-  const resolved = request.ref && resolvedRefs[refKeyOf(request.ref)];
-  const tab = resolved && tabs[resolved.refKey]?.find((entry) => entry.tabId === request.tabId);
-  const agent = tab && agentName(agents, tab.agentId);
-  const who = agent ? (tab.title ? `${agent} (${tab.title})` : agent) : "An agent";
-  return resolved ? `${who} in ${resolved.name}` : who;
-}
 
 const DEFAULT_LAYOUT = defaultLayout();
 
@@ -550,7 +533,6 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
         <EnvDialog
           key={envRequest.id}
           request={envRequest}
-          requester={requesterOf(envRequest, resolvedRefs, tabs, agents)}
           onClose={closeEnvRequest}
         />
       )}
