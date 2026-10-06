@@ -397,8 +397,11 @@ function createWindow(): void {
  * git only within a process. Asked before anything opens.
  */
 if (!app.requestSingleInstanceLock()) {
+  // Logged: even a refused start runs from its install folder until it quits.
+  logError(`start: ${app.getVersion()}, pid ${process.pid} from ${process.execPath}, another instance runs, quitting`);
   app.quit();
 } else {
+  logError(`start: ${app.getVersion()}, pid ${process.pid} from ${process.execPath}`);
   // A second start brings the running window to the front.
   app.on("second-instance", appWindow.reveal);
 
