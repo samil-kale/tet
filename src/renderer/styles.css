@@ -514,12 +514,6 @@ textarea:focus,
   fill: var(--vscode-list-activeSelectionBackground);
 }
 
-.graph-author {
-  margin-left: 6px;
-  color: var(--vscode-descriptionForeground);
-  font-size: var(--small-font-size);
-}
-
 .section ~ .section {
   border-top: 1px solid var(--vscode-panel-border);
 }
@@ -933,7 +927,7 @@ textarea:focus,
 .tree-dir {
   margin-left: 6px;
   color: var(--vscode-descriptionForeground);
-  font-size: var(--small-font-size);
+  font-size: var(--tiny-font-size);
 }
 
 /* Pushed to the right edge, where a branch row's counts sit. */

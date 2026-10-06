@@ -204,7 +204,7 @@ export function CommitGraph({ resolved, state, commits, hasMore, loading, onMore
               icon={<Lanes row={row} expanded={open === commit.sha} />}
               label={
                 <>
-                  {commit.subject} <span className="graph-author">{commit.author}</span>
+                  {commit.subject} <span className="tree-dir">{commit.author}</span>
                 </>
               }
             />

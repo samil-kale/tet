@@ -297,7 +297,7 @@ export const ProjectList = memo(function ProjectList({
       >
         <span className="project-main">
           <span className="project-label">{worktree ? worktreeName(worktree) : resolved.name}</span>
-          {extra && <span className="project-extra">({extra})</span>}
+          {extra && <span className="project-extra">{extra}</span>}
         </span>
         {/* All three session states can hold at once, each a button to a session. No ranking as
             on a tab: a row has no single icon to replace. */}
