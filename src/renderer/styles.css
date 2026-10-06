@@ -463,6 +463,11 @@ textarea:focus,
 }
 
 /* The GRAPH: a row's lanes, then its subject and author, as VS Code's graph rows. */
+.graph-tree {
+  /* The first row's lanes stand clear of the header's border. */
+  padding-top: 6px;
+}
+
 .graph-tree .tree-row {
   height: 22px;
   gap: 0;
