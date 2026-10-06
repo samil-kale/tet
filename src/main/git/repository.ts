@@ -18,6 +18,7 @@ import type {
 } from "../../shared/types/files";
 import type {
   CheckoutTarget,
+  CommitSearch,
   FileChange,
   GitActionResult,
   GitLogin,
@@ -641,14 +642,38 @@ export class Repository {
     return this.runAction(() => git.checkoutTag(this.at.path, name));
   }
 
+  /** Why these paths, or all changes, cannot be committed: a conflict left unresolved among them —
+   *  `add` would take it as resolved. A read beside the actions, never on the refresh path, and no
+   *  git process unless the list shows a conflict. */
+  async commitRefusal(paths?: string[]): Promise<string | undefined> {
+    const changes = this.changesByPath();
+    const conflicted = (paths ?? [...changes.keys()]).filter((filePath) => changes.get(filePath)?.status === "conflicted");
+    if (conflicted.length === 0) {
+      return undefined;
+    }
+    try {
+      const unresolved = await git.unresolvedConflicts(this.at.path, conflicted);
+      return unresolved.length > 0 ? `Resolve the conflicts in ${unresolved.join(", ")} before committing` : undefined;
+    } catch (error) {
+      return errorMessage(error);
+    }
+  }
+
   /** Commits everything, untracked files included. */
   commitAll(message: string): Promise<GitActionResult> {
-    return this.runAction(() => git.commitAll(this.at.path, message));
+    return this.runAction(async () => {
+      const refusal = await this.commitRefusal();
+      return refusal ? { ok: false, error: refusal } : git.commitAll(this.at.path, message);
+    });
   }
 
   /** Commits only these files, untracked ones included. */
   commitPaths(message: string, paths: string[]): Promise<GitActionResult> {
-    return this.runAction(() => {
+    return this.runAction(async () => {
+      const refusal = await this.commitRefusal(paths);
+      if (refusal) {
+        return { ok: false, error: refusal };
+      }
       const changes = this.changesByPath();
       const untracked = paths.filter((filePath) => changes.get(filePath)?.status === "untracked");
       return git.commitPaths(this.at.path, message, this.pathspec(paths), untracked);
@@ -838,10 +863,11 @@ export class Repository {
     return git.readHeadBlob(this.at.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES }).catch(() => undefined);
   }
 
-  /** The GRAPH's commits. A read beside `runAction`: it touches neither index nor working tree. */
-  log(limit: number): Promise<GraphCommit[]> {
+  /** The GRAPH's commits, only those `search` finds if given. A read beside `runAction`: it touches
+   *  neither index nor working tree. */
+  log(limit: number, search?: CommitSearch): Promise<GraphCommit[]> {
     return git
-      .readLog(this.at.path, Math.min(Math.max(Math.floor(limit) || 1, 1), MAX_GRAPH_COMMITS), graphRevisions(this.state))
+      .readLog(this.at.path, Math.min(Math.max(Math.floor(limit) || 1, 1), MAX_GRAPH_COMMITS), graphRevisions(this.state), search)
       .catch(() => []);
   }
 

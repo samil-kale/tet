@@ -15,6 +15,7 @@ import type {
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types/git";
 import type {
   CheckoutTarget,
+  CommitSearch,
   FileChange,
   GitActionResult,
   GitLogin,
@@ -126,6 +127,10 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
     "repository:checkout-tag",
     inRepository((repository, name: string) => repository.checkoutTag(name)),
   );
+  handle("repository:commit-refusal", async (_event, ref: ProjectRef, paths?: string[]): Promise<string | undefined> => {
+    const repository = repositories.get(ref);
+    return repository ? repository.commitRefusal(paths) : notOpenMessage(store, ref);
+  });
   handle(
     "repository:commit-all",
     inRepository((repository, message: string) => repository.commitAll(message)),
@@ -218,8 +223,8 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
     return repository.readFile(filePath);
   });
 
-  handle("repository:log", async (_event, ref: ProjectRef, limit: number): Promise<GraphCommit[]> => {
-    return (await repositories.get(ref)?.log(limit)) ?? [];
+  handle("repository:log", async (_event, ref: ProjectRef, limit: number, search?: CommitSearch): Promise<GraphCommit[]> => {
+    return (await repositories.get(ref)?.log(limit, search)) ?? [];
   });
 
   handle("repository:commit-files", async (_event, ref: ProjectRef, sha: string, parent: string | undefined): Promise<FileChange[]> => {

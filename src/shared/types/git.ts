@@ -58,6 +58,12 @@ export interface GraphCommit {
   head?: true;
 }
 
+/** What the GRAPH searches for: `text` in one `field`, as a fixed string, case ignored. */
+export interface CommitSearch {
+  text: string;
+  field: "message" | "author" | "path";
+}
+
 export interface RepositoryState {
   /** Branch name, or the short commit id while HEAD is detached. */
   head: string;

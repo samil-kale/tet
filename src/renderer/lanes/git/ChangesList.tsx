@@ -109,6 +109,12 @@ export async function confirmDiscard(ref: ProjectRef, paths: string[], act: File
  *  staging area: the checked files are what one commit takes. Every change given is all of them. */
 export async function askCommit(ref: ProjectRef, state: RepositoryState, given: string[] | undefined, ask: FileAsk): Promise<void> {
   const paths = given?.length === state.changes.length ? undefined : given;
+  // Told before the question: a message typed for a commit that cannot go is typed for nothing.
+  const refusal = await window.tet.repository.commitRefusal(ref, paths);
+  if (refusal !== undefined) {
+    notify("error", refusal);
+    return;
+  }
   const { remote, canSync } = syncRemote(state);
   // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitLane).
   const pushLabel = canSync ? (state.upstream === undefined ? "Also publish branch" : `Also push ${remote}`) : undefined;

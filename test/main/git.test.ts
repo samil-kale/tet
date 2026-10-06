@@ -38,6 +38,7 @@ import {
   resolveRoot,
   stash,
   stashPush,
+  unresolvedConflicts,
   updateRemoteHead,
   version,
 } from "../../src/main/git/git";
@@ -559,6 +560,39 @@ describe("a merge stopped on conflicts, discarded file by file", () => {
   });
 });
 
+describe("unresolved conflicts, before a commit", () => {
+  before(async () => {
+    cwd = initRepository("tet-git-unresolved-", { "fixed.txt": "a\n", "marked.txt": "a\n", "gone.txt": "a\n", "image.bin": "\0a" });
+    run("switch", "-q", "-c", "feature");
+    for (const name of ["fixed.txt", "marked.txt", "gone.txt"]) {
+      write(name, "feature\n");
+    }
+    write("image.bin", "\0feature");
+    run("commit", "-q", "--all", "--message", "feature");
+    run("switch", "-q", "main");
+    for (const name of ["fixed.txt", "marked.txt"]) {
+      write(name, "main\n");
+    }
+    write("image.bin", "\0main");
+    run("rm", "-q", "gone.txt");
+    run("commit", "-q", "--all", "--message", "main");
+    assert.equal((await merge(cwd, "feature")).ok, false);
+    write("fixed.txt", "resolved\n");
+    write("clean.txt", "clean\n");
+  });
+
+  it("counts a marker line, a binary file and a side's deletion, not a text file cleared of markers", async () => {
+    const paths = ["clean.txt", "fixed.txt", "gone.txt", "image.bin", "marked.txt"];
+    assert.deepEqual(await unresolvedConflicts(cwd, paths), ["gone.txt", "image.bin", "marked.txt"]);
+  });
+
+  it("finds none once the markers are gone and the rest is added", async () => {
+    write("marked.txt", "resolved\n");
+    run("add", "gone.txt", "image.bin");
+    assert.deepEqual(await unresolvedConflicts(cwd, ["fixed.txt", "gone.txt", "image.bin", "marked.txt"]), []);
+  });
+});
+
 describe("a network command's ssh", () => {
   it("follows a core.sshCommand set after an earlier network command", async (t) => {
     const inherited = { GIT_SSH: process.env.GIT_SSH, GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND };
@@ -927,6 +961,30 @@ describe("the commits the GRAPH shows", () => {
 
   it("stops at the limit", async () => {
     assert.equal((await readLog(repo, 2, ["HEAD"])).length, 2);
+  });
+
+  it("finds commits by message, author or path, as a fixed string with case ignored", async () => {
+    const searched = initRepository("tet-git-graph-search", { "a.txt": "one\n" });
+    fs.mkdirSync(path.join(searched, "src", "Deep"), { recursive: true });
+    fs.writeFileSync(path.join(searched, "src", "Deep", "Graph.tsx"), "graph\n");
+    git(searched, "add", "-A");
+    git(searched, "commit", "-q", "-m", "Fix Resize", "--author=Other Person <other@tet.invalid>");
+    fs.writeFileSync(path.join(searched, "x1.txt"), "plain\n");
+    git(searched, "add", "-A");
+    git(searched, "commit", "-q", "-m", "plain name");
+    fs.writeFileSync(path.join(searched, "x[1].txt"), "bracketed\n");
+    git(searched, "add", "-A");
+    git(searched, "commit", "-q", "-m", "bracketed name");
+    const subjects = async (text: string, field: "message" | "author" | "path"): Promise<string[]> =>
+      (await readLog(searched, 50, ["HEAD"], { text, field })).map((commit) => commit.subject);
+
+    assert.deepEqual(await subjects("fix resize", "message"), ["Fix Resize"]);
+    assert.deepEqual(await subjects("fix.resize", "message"), [], "a dot is a dot");
+    assert.deepEqual(await subjects("OTHER", "author"), ["Fix Resize"]);
+    assert.deepEqual(await subjects("other@tet", "author"), ["Fix Resize"], "the e-mail too");
+    assert.deepEqual(await subjects("deep/graph", "path"), ["Fix Resize"], "across folders");
+    assert.deepEqual(await subjects("x[1]", "path"), ["bracketed name"], "wildcards taken literally");
+    assert.deepEqual(await subjects("nowhere", "path"), []);
   });
 
   it("is empty before the first commit", async () => {

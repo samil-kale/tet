@@ -14,6 +14,7 @@ import type {
   BranchUpstream,
   ChangeStatus,
   CheckoutTarget,
+  CommitSearch,
   FileChange,
   GitActionResult,
   GitLogin,
@@ -1054,9 +1055,11 @@ export async function merge(cwd: string, ref: string, fastForwardOnto?: string):
   return run(cwd, ["merge", "--ff-only", ref]);
 }
 
+/** A conflict marker line. `=======` alone is left out: Markdown underlines a heading with it. */
+const CONFLICT_MARKER = "^(<<<<<<<|>>>>>>>) ";
+
 /** The files differing between `base` and HEAD that still hold a conflict marker line, text files
- *  only. `=======` alone is left out: Markdown underlines a heading with it. Thrown when git fails:
- *  its empty output would read as no markers. */
+ *  only. Thrown when git fails: its empty output would read as no markers. */
 export async function conflictMarkers(cwd: string, base: string): Promise<string[]> {
   const diff = await git(cwd, ["diff", "--name-only", "-z", `${base}...HEAD`]);
   if (diff.code !== 0) {
@@ -1067,11 +1070,40 @@ export async function conflictMarkers(cwd: string, base: string): Promise<string
     return [];
   }
   // grep exits with 1 when nothing matches.
-  const found = await gitOnPaths(cwd, ["grep", "-I", "-l", "-z", "-E", "^(<<<<<<<|>>>>>>>) "], changed, 1);
+  const found = await gitOnPaths(cwd, ["grep", "-I", "-l", "-z", "-E", CONFLICT_MARKER], changed, 1);
   if (found.code !== 0) {
     throw new Error(found.stderr.trim() || `git grep exited with ${found.code}`);
   }
   return found.stdout.split("\0").filter(Boolean);
+}
+
+/** Which of these paths hold an unresolved conflict, as GitHub Desktop counts them: a text file both
+ *  sides changed while it holds a marker line, any other conflict — binary, or deleted on one side
+ *  — always, since TET picks no side. Thrown when git fails: its empty output would read as none. */
+export async function unresolvedConflicts(cwd: string, paths: string[]): Promise<string[]> {
+  const unmerged = await gitOnPaths(cwd, ["ls-files", "--unmerged", "-z"], paths);
+  if (unmerged.code !== 0) {
+    throw new Error(unmerged.stderr.trim() || `git ls-files exited with ${unmerged.code}`);
+  }
+  // "<mode> <object> <stage>\t<path>", one per stage present: 2 is ours, 3 theirs.
+  const stages = new Map<string, Set<string>>();
+  for (const entry of unmerged.stdout.split("\0").filter(Boolean)) {
+    const tab = entry.indexOf("\t");
+    const filePath = entry.slice(tab + 1);
+    stages.set(filePath, (stages.get(filePath) ?? new Set()).add(entry.charAt(tab - 1)));
+  }
+  const conflicted = paths.filter((filePath) => stages.has(filePath));
+  const bothSides = conflicted.filter((filePath) => stages.get(filePath)!.has("2") && stages.get(filePath)!.has("3"));
+  if (bothSides.length === 0) {
+    return conflicted;
+  }
+  // Text files without a marker line; grep exits with 1 when it lists none.
+  const clean = await gitOnPaths(cwd, ["grep", "-I", "-L", "-z", "-E", CONFLICT_MARKER], bothSides, 1);
+  if (clean.code !== 0) {
+    throw new Error(clean.stderr.trim() || `git grep exited with ${clean.code}`);
+  }
+  const resolved = new Set(clean.stdout.split("\0").filter(Boolean));
+  return conflicted.filter((filePath) => !resolved.has(filePath));
 }
 
 export function rebase(cwd: string, ref: string): Promise<GitActionResult> {
@@ -1452,9 +1484,10 @@ const LOG_FIELD = "\x1f";
 /**
  * The commits reachable from `revisions` (full ref names, or HEAD), newest first in topological
  * order — a child before its parents, which the lane layout relies on. `--decorate=full` so a local
- * branch and a remote's are told apart by their prefix, not guessed from a slash.
+ * branch and a remote's are told apart by their prefix, not guessed from a slash. A `search` keeps
+ * only the commits it finds.
  */
-export async function readLog(cwd: string, limit: number, revisions: string[]): Promise<GraphCommit[]> {
+export async function readLog(cwd: string, limit: number, revisions: string[], search?: CommitSearch): Promise<GraphCommit[]> {
   const result = await git(cwd, [
     "log",
     ...revisions,
@@ -1463,6 +1496,7 @@ export async function readLog(cwd: string, limit: number, revisions: string[]): 
     `-${limit}`,
     "-z",
     `--format=%H${LOG_FIELD}%P${LOG_FIELD}%an${LOG_FIELD}%at${LOG_FIELD}%D${LOG_FIELD}%s`,
+    ...(search ? searchArgs(search) : []),
   ]);
   // An unborn branch has no HEAD to log: an empty graph, not an error.
   if (result.code !== 0) {
@@ -1488,6 +1522,23 @@ export async function readLog(cwd: string, limit: number, revisions: string[]): 
     commits.push(commit);
   }
   return commits;
+}
+
+/**
+ * `log`'s options for a search: the text as a fixed string, case ignored. A path is any containing
+ * the text — a pathspec without `glob` magic lets `*` match across `/` — its own wildcards each put
+ * in a class of their own: Git for Windows reads a backslash as a separator, not an escape. The text
+ * is always part of an `--option=` or after `--`, never taken for an option itself.
+ */
+function searchArgs({ text, field }: CommitSearch): string[] {
+  switch (field) {
+    case "message":
+      return ["--fixed-strings", "-i", `--grep=${text}`];
+    case "author":
+      return ["--fixed-strings", "-i", `--author=${text}`];
+    case "path":
+      return ["--", `:(icase)*${text.replace(/[*?[]/g, "[$&]")}*`];
+  }
 }
 
 const REF_KINDS: [prefix: string, kind: GraphRef["kind"]][] = [

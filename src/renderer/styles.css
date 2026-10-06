@@ -306,6 +306,9 @@ textarea:focus,
   --area-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 30px;
+  /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
+     are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
+  --tree-row-height: 24px;
   /* One height for every single-line field, and for a button beside one: input,
      .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
   --field-height: 28px;
@@ -330,6 +333,7 @@ textarea:focus,
    inside it scrolls instead of growing it. */
 .lane-content,
 .branch-tree,
+.commit-graph,
 .explorer-tree,
 .editor-body,
 .image-diff {
@@ -463,16 +467,16 @@ textarea:focus,
 }
 
 /* The GRAPH: a row's lanes, then its subject and author, as VS Code's graph rows. */
-.graph-tree {
-  /* The first row's lanes stand clear of the header's border. */
-  padding-top: 6px;
+.graph-tree .tree-row {
+  height: var(--tree-row-height);
+  gap: 0;
+  /* The Explorer's and SEARCH's (INDENT_BASE in ui/tree-row.tsx). */
+  padding-left: 9px;
 }
 
-.graph-tree .tree-row {
-  height: 22px;
-  gap: 0;
-  /* On top of the lane's width the drawing keeps clear of its lanes (CommitGraph.tsx). */
-  padding-left: 6px;
+/* A search's find, in a commit's place: spaced from its subject as a file icon from its name. */
+.graph-tree .commit-icon {
+  margin-right: 4px;
 }
 
 .graph-lanes {
@@ -728,7 +732,7 @@ textarea:focus,
   opacity: 0.5;
 }
 
-/* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH section's box,
+/* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH and GRAPH sections' box,
    which adds to it below. */
 .filter-field {
   position: relative;
@@ -750,7 +754,7 @@ textarea:focus,
   pointer-events: none;
 }
 
-/* The SEARCH section's box, VS Code's: the three toggles stand inside the field, which leaves its own
+/* The SEARCH and GRAPH sections' box, VS Code's: the three toggles stand inside the field, which leaves its own
    padding to the row. */
 .filter-row {
   padding: 8px 6px;
@@ -850,7 +854,7 @@ textarea:focus,
    It nests arbitrarily deep, so rows set `padding-left` inline. The Explorer's row: no flex gap,
    the chevron and the file icon carry their own. */
 .explorer-tree .tree-row {
-  height: 24px;
+  height: var(--tree-row-height);
   gap: 0;
 }
 

@@ -10,6 +10,7 @@ import {
   CircleAlert,
   CircleX,
   Columns2,
+  File,
   FileCode,
   FilePlus,
   FolderCode,
@@ -30,6 +31,7 @@ import {
   MessageCircleCheck,
   MessageCircleQuestionMark,
   MessageCircleX,
+  MessageSquareText,
   Package,
   Play,
   Plus,
@@ -41,6 +43,7 @@ import {
   Shield,
   Tag,
   Undo2,
+  User,
   View,
   Wand,
   WholeWord,
@@ -280,6 +283,21 @@ export function WholeWordIcon(props: IconProps) {
 /** Lucide's `regex` — "Use Regular Expression", VS Code's `.*`. */
 export function RegexIcon(props: IconProps) {
   return <Lucide {...props} icon={Regex} />;
+}
+
+/** Lucide's `message-square-text` — the GRAPH's search in commit messages. */
+export function MessageIcon(props: IconProps) {
+  return <Lucide {...props} icon={MessageSquareText} />;
+}
+
+/** Lucide's `user` — the GRAPH's search in authors. */
+export function UserIcon(props: IconProps) {
+  return <Lucide {...props} icon={User} />;
+}
+
+/** Lucide's `file` — the GRAPH's search in paths. */
+export function PathIcon(props: IconProps) {
+  return <Lucide {...props} icon={File} />;
 }
 
 /** Lucide's `chevron-down` or `chevron-right`. */

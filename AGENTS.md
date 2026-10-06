@@ -258,10 +258,10 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
 
 **Scope.** Everything the git lane does fits in a context menu, an icon button or a question. Of
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, branch
-and tag create/rename/delete, merge and rebase onto a branch, abort, per-file diff, discard,
+create/rename/delete, tag create/delete, merge and rebase onto a branch, abort, per-file diff, discard,
 `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
 staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and the default branch — read-only,
-a commit's files and their diffs against its first parent), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
+a commit's files and their diffs against its first parent, searched by message, author or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), and a commit message suggested by an installed agent.
 Where Desktop differs from git's defaults, follow Desktop. The project row's entries are 
 repository-wide and never touch the working tree — a worktree's own row excepted, which is that 

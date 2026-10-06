@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import type { GraphCommit, RepositoryState } from "../../../shared/types/git";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CommitSearch, GraphCommit, RepositoryState } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 
 /** Commits asked for at first, and added by each "load more". */
 const GRAPH_PAGE = 300;
 
+/** Typing runs the search, as SEARCH's does — but only once the typing stops. */
+const SEARCH_DELAY_MS = 300;
+
 const NO_COMMITS: GraphCommit[] = [];
+
+const NO_SEARCH: CommitSearch = { text: "", field: "message" };
 
 /** What moves the graph: the pushed state names HEAD, its upstream and the default branch, not each
  *  ref's commit, so a fetch shows through the counts it changes, and any git action's end covers
@@ -19,14 +24,31 @@ function graphVersion(state: RepositoryState): string {
  * git action (`busy`) ends — a fetch moves refs the state does not name — and only while the lane
  * is `enabled` (shown, graph on screen): the log is a git process of its own. `more` asks for
  * another page.
+ *
+ * The search typed above them is held with its repository or worktree, as the commits are: another
+ * one shows none. It reaches git once the typing stops, and only with text.
  */
 export function useCommitGraph(resolved: ResolvedRef, state: RepositoryState, enabled: boolean, busy: boolean) {
   const { ref, refKey } = resolved;
   const [limits, setLimits] = useState<Record<string, number>>({});
-  const [loaded, setLoaded] = useState<{ refKey: string; commits: GraphCommit[] } | undefined>();
+  const [loaded, setLoaded] = useState<{ refKey: string; commits: GraphCommit[]; searched: boolean } | undefined>();
   const [loading, setLoading] = useState(false);
+  const [typed, setTyped] = useState<{ refKey: string; search: CommitSearch } | undefined>();
+  const [sent, setSent] = useState<{ refKey: string; search: CommitSearch } | undefined>();
   const limit = limits[refKey] ?? GRAPH_PAGE;
   const version = useMemo(() => graphVersion(state), [state]);
+  const search = typed?.refKey === refKey ? typed.search : NO_SEARCH;
+  const asked = sent?.refKey === refKey ? sent.search : undefined;
+
+  useEffect(() => {
+    const text = search.text.trim();
+    if (text === "") {
+      setSent(undefined);
+      return;
+    }
+    const timer = setTimeout(() => setSent({ refKey, search: { text, field: search.field } }), SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [refKey, search]);
 
   useEffect(() => {
     if (!enabled || busy) {
@@ -36,22 +58,28 @@ export function useCommitGraph(resolved: ResolvedRef, state: RepositoryState, en
     }
     let current = true;
     setLoading(true);
-    void window.tet.repository.log(ref, limit).then((commits) => {
+    void window.tet.repository.log(ref, limit, asked).then((commits) => {
       if (current) {
-        setLoaded({ refKey, commits });
+        setLoaded({ refKey, commits, searched: asked !== undefined });
         setLoading(false);
       }
     });
     return () => {
       current = false;
     };
-  }, [enabled, busy, ref, refKey, limit, version]);
+  }, [enabled, busy, ref, refKey, limit, version, asked]);
 
-  const commits = loaded?.refKey === refKey ? loaded.commits : NO_COMMITS;
+  const shown = loaded?.refKey === refKey ? loaded : undefined;
+  const commits = shown?.commits ?? NO_COMMITS;
+  const setSearch = useCallback((next: CommitSearch) => setTyped({ refKey, search: next }), [refKey]);
   return {
     commits,
     loading,
     hasMore: commits.length >= limit,
     more: () => setLimits((current) => ({ ...current, [refKey]: limit + GRAPH_PAGE })),
+    search,
+    setSearch,
+    /** The commits shown are a search's finds, not the graph. */
+    searched: shown?.searched ?? false,
   };
 }

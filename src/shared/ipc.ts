@@ -72,6 +72,7 @@ export interface InvokeChannels {
   "repository:delete-tag": TETApi["repository"]["deleteTag"];
   "repository:delete-remote-tag": TETApi["repository"]["deleteRemoteTag"];
   "repository:checkout-tag": TETApi["repository"]["checkoutTag"];
+  "repository:commit-refusal": TETApi["repository"]["commitRefusal"];
   "repository:commit-all": TETApi["repository"]["commitAll"];
   "repository:commit-paths": TETApi["repository"]["commitPaths"];
   "repository:suggest-commit-message": TETApi["repository"]["suggestCommitMessage"];

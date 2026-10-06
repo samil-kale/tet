@@ -2,7 +2,16 @@ import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResul
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
-import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, GraphCommit, RepositoryState, StashCommand } from "./types/git";
+import type {
+  CheckoutTarget,
+  CommitSearch,
+  FileChange,
+  GitActionResult,
+  GitLogin,
+  GraphCommit,
+  RepositoryState,
+  StashCommand,
+} from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
 import type {
@@ -186,6 +195,9 @@ export interface TETApi {
     deleteRemoteTag: (ref: ProjectRef, name: string, login?: GitLogin) => Promise<GitActionResult>;
     /** Leaves HEAD detached. */
     checkoutTag: (ref: ProjectRef, name: string) => Promise<GitActionResult>;
+    /** Why these files, or all changes, cannot be committed — a conflict left unresolved — asked
+     *  before the commit's question; nothing where they can. */
+    commitRefusal: (ref: ProjectRef, paths?: string[]) => Promise<string | undefined>;
     /** Everything the changes list shows, untracked included. */
     commitAll: (ref: ProjectRef, message: string) => Promise<GitActionResult>;
     /** These files alone, untracked included; nothing else staged goes with them. */
@@ -221,8 +233,9 @@ export interface TETApi {
     /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */
     searchFiles: (ref: ProjectRef, query: FileSearchQuery) => Promise<FileSearchResult>;
     readFile: (ref: ProjectRef, path: string) => Promise<FileContent>;
-    /** The GRAPH's `limit` newest commits of HEAD, its upstream and the default branch, topologically ordered. */
-    log: (ref: ProjectRef, limit: number) => Promise<GraphCommit[]>;
+    /** The GRAPH's `limit` newest commits of HEAD, its upstream and the default branch, topologically
+     *  ordered; with `search`, only those it finds. */
+    log: (ref: ProjectRef, limit: number, search?: CommitSearch) => Promise<GraphCommit[]>;
     /** The files a commit changed against its first parent (`parent` absent for a root commit). */
     commitFiles: (ref: ProjectRef, sha: string, parent: string | undefined) => Promise<FileChange[]>;
     /** One of them, both sides as the read-only diff shows them. */

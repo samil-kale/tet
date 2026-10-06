@@ -1,19 +1,22 @@
 import { useMemo, useState, type ReactNode, type UIEvent } from "react";
-import type { FileChange, GraphCommit, RepositoryState } from "../../../shared/types/git";
+import type { CommitSearch, FileChange, GraphCommit, RepositoryState } from "../../../shared/types/git";
 import type { OpenEditor } from "../../editor/editor-tab";
 import { baseName, parentOf } from "../../paths";
 import type { ResolvedRef } from "../../resolved-ref";
-import { TreeRow } from "../../ui/tree-row";
+import { FilterField } from "../../ui/FilterField";
+import { IconButton } from "../../ui/IconButton";
+import { CommitIcon, MessageIcon, PathIcon, UserIcon, type IconProps } from "../../ui/icons";
+import { MATCH_INDENT, TreeRow } from "../../ui/tree-row";
 import { STATUS_LETTER } from "./ChangesList";
 import { graphRefColors, layoutGraph, nodeLane, type GraphColor, type GraphRow } from "./graph-layout";
 
 /*
- * The lanes are drawn as VS Code's graph draws them (`renderSCMHistoryItemGraph`): these sizes are
- * its geometry, which the arcs below depend on — a lane is as wide as half a row is high, so an
- * arc from one lane to the next is a quarter circle. A row is `.graph-tree .tree-row`'s height.
+ * The lanes are drawn as VS Code's graph draws them (`renderSCMHistoryItemGraph`), in its geometry
+ * at the height of every tree row that draws (`--tree-row-height` in styles.css): a lane is as wide
+ * as half a row is high, so an arc from one lane to the next is a quarter circle.
  */
-const ROW_HEIGHT = 22;
-const LANE_WIDTH = 11;
+const ROW_HEIGHT = 24;
+const LANE_WIDTH = ROW_HEIGHT / 2;
 const CURVE_RADIUS = 5;
 const CIRCLE_RADIUS = 4;
 const CIRCLE_STROKE_WIDTH = 2;
@@ -21,10 +24,21 @@ const CIRCLE_STROKE_WIDTH = 2;
 const laneX = (index: number): number => LANE_WIDTH * (index + 1);
 const colorOf = (color: GraphColor): string => `var(--vscode-scmGraph-${color})`;
 
+/** What the search field's toggles pick between, one at a time. */
+const SEARCH_FIELDS: { field: CommitSearch["field"]; title: string; Icon: (props: IconProps) => ReactNode }[] = [
+  { field: "message", title: "Search Messages", Icon: MessageIcon },
+  { field: "author", title: "Search Authors", Icon: UserIcon },
+  { field: "path", title: "Search Paths", Icon: PathIcon },
+];
+
 interface CommitGraphProps {
   resolved: ResolvedRef;
   state: RepositoryState;
   commits: GraphCommit[];
+  /** `commits` are a search's finds: listed flat, since the commits between them are missing. */
+  searched: boolean;
+  search: CommitSearch;
+  onSearch: (search: CommitSearch) => void;
   hasMore: boolean;
   loading: boolean;
   onMore: () => void;
@@ -80,7 +94,7 @@ function Lanes({ row, expanded }: { row: GraphRow; expanded: boolean }) {
             color={lane.color}
             d={[
               `M ${laneX(index)} 0`,
-              `V 6`,
+              `V ${half - CURVE_RADIUS}`,
               `A ${CURVE_RADIUS} ${CURVE_RADIUS} 0 0 1 ${laneX(index) - CURVE_RADIUS} ${half}`,
               `H ${laneX(outputIndex) + CURVE_RADIUS}`,
               `A ${CURVE_RADIUS} ${CURVE_RADIUS} 0 0 0 ${laneX(outputIndex)} ${half + CURVE_RADIUS}`,
@@ -162,12 +176,24 @@ function LanesBeside({ row }: { row: GraphRow }) {
 }
 
 /**
- * The GRAPH section's commits, newest first, laid out and drawn as VS Code's graph is. A commit
- * opens to the files it changed, and a file to its diff against the commit's first parent. The log
- * is read by `useCommitGraph`, which the section's header and bar belong to.
+ * The GRAPH section's commits, newest first, laid out and drawn as VS Code's graph is, under the
+ * field searching them. A commit opens to the files it changed, and a file to its diff against the
+ * commit's first parent. The log is read by `useCommitGraph`, which the section's header and bar
+ * belong to.
  */
-export function CommitGraph({ resolved, state, commits, hasMore, loading, onMore, onOpenDiff }: CommitGraphProps) {
-  const rows = useMemo(() => layoutGraph(commits, graphRefColors(state)), [commits, state]);
+export function CommitGraph({
+  resolved,
+  state,
+  commits,
+  searched,
+  search,
+  onSearch,
+  hasMore,
+  loading,
+  onMore,
+  onOpenDiff,
+}: CommitGraphProps) {
+  const rows = useMemo(() => (searched ? undefined : layoutGraph(commits, graphRefColors(state))), [searched, commits, state]);
   const [open, setOpen] = useState<string | undefined>();
   const [files, setFiles] = useState<Record<string, FileChange[]>>({});
 
@@ -192,44 +218,59 @@ export function CommitGraph({ resolved, state, commits, hasMore, loading, onMore
   };
 
   return (
-    <div className="graph-tree tree" onScroll={scrolled}>
-      {rows.map((row) => {
-        const { commit } = row;
-        return (
-          <div key={commit.sha}>
-            <TreeRow
-              className={open === commit.sha ? "selected" : undefined}
-              title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
-              onClick={() => toggle(commit)}
-              icon={<Lanes row={row} expanded={open === commit.sha} />}
-              label={
-                <>
-                  {commit.subject} <span className="tree-dir">{commit.author}</span>
-                </>
-              }
-            />
-            {open === commit.sha &&
-              (files[commit.sha] ?? []).map((file) => (
-                <TreeRow
-                  key={file.path}
-                  title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}
-                  onClick={() => openFile(commit, file, false)}
-                  // As the Explorer: a single click previews, a double click keeps.
-                  onDoubleClick={() => openFile(commit, file, true)}
-                  icon={
-                    <>
-                      <LanesBeside row={row} />
-                      <span className={`tree-icon change-status ${file.status}`}>{STATUS_LETTER[file.status]}</span>
-                    </>
-                  }
-                  label={baseName(file.path)}
-                >
-                  {parentOf(file.path) && <span className="tree-dir">{parentOf(file.path)}</span>}
-                </TreeRow>
-              ))}
-          </div>
-        );
-      })}
+    <div className="commit-graph">
+      <div className="filter-row">
+        <FilterField placeholder="Search commits..." value={search.text} onChange={(text) => onSearch({ ...search, text })}>
+          <span className="filter-toggles">
+            {SEARCH_FIELDS.map(({ field, title, Icon }) => (
+              <IconButton key={field} active={search.field === field} title={title} onClick={() => onSearch({ ...search, field })}>
+                <Icon />
+              </IconButton>
+            ))}
+          </span>
+        </FilterField>
+      </div>
+      <div className="graph-tree tree" onScroll={scrolled}>
+        {commits.map((commit, index) => {
+          const row = rows?.[index];
+          return (
+            <div key={commit.sha}>
+              <TreeRow
+                className={open === commit.sha ? "selected" : undefined}
+                title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
+                onClick={() => toggle(commit)}
+                icon={row ? <Lanes row={row} expanded={open === commit.sha} /> : <CommitIcon className="tree-icon commit-icon" />}
+                label={
+                  <>
+                    {commit.subject} <span className="tree-dir">{commit.author}</span>
+                  </>
+                }
+              />
+              {open === commit.sha &&
+                (files[commit.sha] ?? []).map((file) => (
+                  <TreeRow
+                    key={file.path}
+                    // A search's find has no lanes to run beside: its files start past its subject, as SEARCH's matches.
+                    indent={row ? undefined : MATCH_INDENT}
+                    title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}
+                    onClick={() => openFile(commit, file, false)}
+                    // As the Explorer: a single click previews, a double click keeps.
+                    onDoubleClick={() => openFile(commit, file, true)}
+                    icon={
+                      <>
+                        {row && <LanesBeside row={row} />}
+                        <span className={`tree-icon change-status ${file.status}`}>{STATUS_LETTER[file.status]}</span>
+                      </>
+                    }
+                    label={baseName(file.path)}
+                  >
+                    {parentOf(file.path) && <span className="tree-dir">{parentOf(file.path)}</span>}
+                  </TreeRow>
+                ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
