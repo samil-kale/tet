@@ -462,6 +462,59 @@ textarea:focus,
   flex: 1;
 }
 
+/* The GRAPH: a row's lanes, then its subject and author, as VS Code's graph rows. */
+.graph-tree .tree-row {
+  height: 22px;
+  gap: 0;
+  /* On top of the lane's width the drawing keeps clear of its lanes (CommitGraph.tsx). */
+  padding-left: 6px;
+}
+
+.graph-lanes {
+  flex: none;
+  margin-right: 10px;
+}
+
+/* A node's circles are stroked in what lies behind them, which cuts a gap round each from the lines
+   it crosses; the row's own background while it has one. HEAD's inner circle is a hole in its ring. */
+.graph-lanes circle {
+  stroke: var(--vscode-sideBar-background);
+}
+
+.graph-lanes.head circle:last-child {
+  fill: var(--vscode-sideBar-background);
+}
+
+.graph-tree .tree-row:hover .graph-lanes circle:first-of-type {
+  stroke: transparent;
+}
+
+.graph-tree .tree-row:hover .graph-lanes circle:nth-of-type(2) {
+  stroke: var(--vscode-list-hoverBackground);
+}
+
+.graph-tree .tree-row:hover .graph-lanes.head circle:last-child {
+  fill: var(--vscode-list-hoverBackground);
+}
+
+.graph-tree .tree-row.selected .graph-lanes circle:first-of-type {
+  stroke: transparent;
+}
+
+.graph-tree .tree-row.selected .graph-lanes circle:nth-of-type(2) {
+  stroke: var(--vscode-list-activeSelectionBackground);
+}
+
+.graph-tree .tree-row.selected .graph-lanes.head circle:last-child {
+  fill: var(--vscode-list-activeSelectionBackground);
+}
+
+.graph-author {
+  margin-left: 6px;
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--small-font-size);
+}
+
 .section ~ .section {
   border-top: 1px solid var(--vscode-panel-border);
 }
@@ -1326,7 +1379,6 @@ textarea:focus,
 .lane.sliding {
   transition: width 0.15s ease;
 }
-
 
 .lane-content {
   min-width: var(--area-min-width);

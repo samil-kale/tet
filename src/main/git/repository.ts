@@ -3,10 +3,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote } from "../../shared/types/git";
+import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote, refName } from "../../shared/types/git";
 import { refKeyOf } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type {
+  CommitFileContent,
   ExplorerListing,
   ExplorerSettings,
   FileContent,
@@ -15,7 +16,15 @@ import type {
   FileWriteResult,
   HeadBlob,
 } from "../../shared/types/files";
-import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
+import type {
+  CheckoutTarget,
+  FileChange,
+  GitActionResult,
+  GitLogin,
+  GraphCommit,
+  RepositoryState,
+  StashCommand,
+} from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { PROJECT_FILE } from "../store/tet-json";
 import type { ResolvedRef } from "../store/resolved-ref";
@@ -54,6 +63,45 @@ function settle(timer: ReturnType<typeof setTimeout> | undefined, lastAt: number
 }
 /** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
  *  from" merges what the last fetch brought, whatever the host. */
+/** What the renderer asks the graph's reads about is a commit and nothing git could take for an
+ *  option. */
+const isObjectId = (value: string): boolean => /^[0-9a-f]{4,64}$/i.test(value);
+
+/** The most commits the GRAPH reads at once. */
+const MAX_GRAPH_COMMITS = 5000;
+
+/**
+ * What the GRAPH reads, as VS Code's "Auto": HEAD, the current branch's upstream and the default
+ * branch. Only refs the state lists: git fails the whole log for one it lacks, as a remote branch
+ * deleted since the last fetch.
+ */
+function graphRevisions(state: RepositoryState): string[] {
+  const revisions = new Set(["HEAD"]);
+  const remoteBranch = (name: string): string | undefined => {
+    const remote = state.remotes.find((candidate) => name.startsWith(`${candidate.name}/`));
+    return remote?.branches.includes(name.slice(remote.name.length + 1)) ? `refs/remotes/${name}` : undefined;
+  };
+  if (state.upstream) {
+    const ref = state.localBranches.includes(state.upstream) ? `refs/heads/${state.upstream}` : remoteBranch(state.upstream);
+    if (ref) {
+      revisions.add(ref);
+    }
+  }
+  const base = state.defaultBranch;
+  if (base) {
+    const ref =
+      base.remote === undefined
+        ? state.localBranches.includes(base.name)
+          ? `refs/heads/${base.name}`
+          : undefined
+        : remoteBranch(refName(base));
+    if (ref) {
+      revisions.add(ref);
+    }
+  }
+  return [...revisions];
+}
+
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
 /** How long the periodic fetch may hold back a click (runAction waits for it). Well past the minute
  *  git and ssh give a silent connection (git.ts's NETWORK_ENV): this catches a credential helper
@@ -788,6 +836,41 @@ export class Repository {
       return Promise.resolve({ content: "", binary: false, missing: true });
     }
     return git.readHeadBlob(this.at.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES }).catch(() => undefined);
+  }
+
+  /** The GRAPH's commits. A read beside `runAction`: it touches neither index nor working tree. */
+  log(limit: number): Promise<GraphCommit[]> {
+    return git
+      .readLog(this.at.path, Math.min(Math.max(Math.floor(limit) || 1, 1), MAX_GRAPH_COMMITS), graphRevisions(this.state))
+      .catch(() => []);
+  }
+
+  /** What a GRAPH commit changed against its first parent (`parent` absent for a root commit). */
+  commitFiles(sha: string, parent: string | undefined): Promise<FileChange[]> {
+    if (!isObjectId(sha) || (parent !== undefined && !isObjectId(parent))) {
+      return Promise.resolve([]);
+    }
+    return git.readCommitFiles(this.at.path, sha, parent).catch(() => []);
+  }
+
+  /** A commit's file against its first parent, both sides read-only. A side git cannot read is
+   *  `missing`, so the diff shows the file added or deleted. */
+  async readCommitFile(
+    sha: string,
+    parent: string | undefined,
+    filePath: string,
+    origPath: string | undefined,
+  ): Promise<CommitFileContent> {
+    const options = { maxBytes: MAX_EDIT_BYTES };
+    const lacking: HeadBlob = { content: "", binary: false, missing: true };
+    if (!isObjectId(sha) || (parent !== undefined && !isObjectId(parent))) {
+      return { original: lacking, modified: lacking };
+    }
+    const [original, modified] = await Promise.all([
+      parent ? git.readBlobAt(this.at.path, parent, filePath, { ...options, origPath }).catch(() => lacking) : lacking,
+      git.readBlobAt(this.at.path, sha, filePath, options).catch(() => lacking),
+    ]);
+    return { original, modified };
   }
 
   /** Refuses when the mtime changed since the read, so a save never silently overwrites another

@@ -115,6 +115,14 @@
   --vscode-gitDecoration-untrackedResourceForeground: #82b65d;
   --vscode-gitDecoration-addedResourceForeground: #82b65d;
   --vscode-gitDecoration-conflictingResourceForeground: #db5761;
+  --vscode-scmGraph-foreground1: #ffb000;
+  --vscode-scmGraph-foreground2: #dc267f;
+  --vscode-scmGraph-foreground3: #994f00;
+  --vscode-scmGraph-foreground4: #40b0a6;
+  --vscode-scmGraph-foreground5: #b66dff;
+  --vscode-scmGraph-historyItemRefColor: #3794ff;
+  --vscode-scmGraph-historyItemRemoteRefColor: #b180d7;
+  --vscode-scmGraph-historyItemBaseRefColor: #ea5c00;
 
   --vscode-diffEditor-insertedLineBackground: #82b65d26;
   --vscode-diffEditor-removedLineBackground: #db576126;

@@ -10,7 +10,7 @@ import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-hig
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
-import type { EditorReveal, OpenEditor } from "./editor-tab";
+import type { CommitSide, EditorReveal, OpenEditor } from "./editor-tab";
 import { openFile } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
 
@@ -75,6 +75,8 @@ export interface EditorSnapshot {
   sideBySide: boolean;
   /** The diff's unchanged regions collapsed (`setDiffOption`), as the user last left it. */
   unchangedCollapsed: boolean;
+  /** A GRAPH diff: the file at this commit, which nothing outside the tab changes. */
+  commit?: CommitSide;
 }
 
 type DiffState = Pick<EditorSnapshot, "diff" | "file" | "dirty">;
@@ -195,7 +197,7 @@ export function editorKind(file: FileContent | null): EditorKind {
 
 /** Nothing to save: a file that is gone, or one there is no editor for. */
 export function isReadOnly(file: FileContent | null): boolean {
-  return Boolean(file?.deleted || file?.binary || file?.extracted || file?.tooLarge || file?.error);
+  return Boolean(file?.readOnly || file?.deleted || file?.binary || file?.extracted || file?.tooLarge || file?.error);
 }
 
 function subscribe(map: Map<string, Set<() => void>>, key: string, listener: () => void): () => void {
@@ -343,7 +345,7 @@ export function getEditorSnapshot(tabId: string): EditorSnapshot {
 /** Whether opening `path` with its Markdown preview would land in a tab withholding it: one opened with
  *  its diff if `diff`, else the tab already showing it with its own. */
 export function previewWithheldAt(ref: ProjectRef, path: string, diff: boolean): boolean {
-  const open = refViews(ref).find((view) => view.snapshot.path === path);
+  const open = refViews(ref).find((view) => view.snapshot.path === path && !view.snapshot.commit);
   return diff || (open ? previewWithheld(open.snapshot) : false);
 }
 
@@ -465,7 +467,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     saving: false,
     dirty: false,
     preview,
-    diff: how.diff === true,
+    diff: how.diff === true || how.commit !== undefined,
+    commit: how.commit,
     markdownPreview: markdownPreviewByDefault.get() && isMarkdown(path),
     sideBySide: diffDefaults.sideBySide.get(),
     unchangedCollapsed: diffDefaults.unchangedCollapsed.get(),
@@ -474,7 +477,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   // The diff editor is the tab's for every file it opens.
   applyDiffOptions(view);
   const current = view;
-  void window.tet.repository.readFile(ref, path).then((file) => {
+  const read = how.commit ? readCommitFile(ref, path, how.commit) : window.tet.repository.readFile(ref, path);
+  void read.then((file) => {
     if (views.get(tabId) !== current || current.readSeq !== seq) {
       return;
     }
@@ -494,6 +498,23 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   });
 }
 
+/** A commit's file as the editor tab holds a file: the commit's text with the parent's as its
+ *  original, so the diff and the placeholders for images and binaries work unchanged. */
+async function readCommitFile(ref: ProjectRef, path: string, commit: CommitSide): Promise<FileContent> {
+  const { original, modified } = await window.tet.repository.readCommitFile(ref, commit.sha, commit.parent, path, commit.origPath);
+  return {
+    path,
+    content: modified.content,
+    mtimeMs: 0,
+    binary: modified.binary,
+    tooLarge: false,
+    image: modified.image,
+    head: original,
+    deleted: modified.missing || undefined,
+    readOnly: true,
+  };
+}
+
 /**
  * Folds outside changes into the open file on a HEAD or status change. The edited side only while
  * clean, in place so undo and cursor survive — a dirty tab keeps the read as `onDisk`; HEAD's side
@@ -503,7 +524,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
  */
 export function setEditorVersion(tabId: string, version: string): void {
   const view = views.get(tabId);
-  if (!view) {
+  // A commit's file never changes.
+  if (!view || view.snapshot.commit) {
     return;
   }
   const { path, file, loading } = view.snapshot;
@@ -761,11 +783,17 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   // One model per URI or monaco throws; the repository or worktree is the authority, as two can
   // show one path. Within a repository or worktree a path is open in one tab at most
   // (use-editor-opening.ts's openEditor), and the previous models are cleared before the next open.
+  // A commit's file lies under its sha, its own models beside the working tree's.
+  const commit = view.snapshot.commit;
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
-    monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${file.path}` });
+    monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${commit ? `${commit.sha}/` : ""}${file.path}` });
   const models = {
-    original: monaco.editor.createModel(file.head?.content ?? file.content, language ?? "plaintext", uri("tet-head")),
-    modified: monaco.editor.createModel(file.content, language ?? "plaintext", uri("tet")),
+    original: monaco.editor.createModel(
+      file.head?.content ?? file.content,
+      language ?? "plaintext",
+      uri(commit ? "tet-parent" : "tet-head"),
+    ),
+    modified: monaco.editor.createModel(file.content, language ?? "plaintext", uri(commit ? "tet-commit" : "tet")),
   };
   view.savedVersionId = models.modified.getAlternativeVersionId();
   models.modified.onDidChangeContent(() => {

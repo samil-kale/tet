@@ -129,6 +129,14 @@
   --vscode-gitDecoration-untrackedResourceForeground: #007100;
   --vscode-gitDecoration-addedResourceForeground: #3e7718;
   --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+  --vscode-scmGraph-foreground1: #ffb000;
+  --vscode-scmGraph-foreground2: #dc267f;
+  --vscode-scmGraph-foreground3: #994f00;
+  --vscode-scmGraph-foreground4: #40b0a6;
+  --vscode-scmGraph-foreground5: #b66dff;
+  --vscode-scmGraph-historyItemRefColor: #1a85ff;
+  --vscode-scmGraph-historyItemRemoteRefColor: #652d90;
+  --vscode-scmGraph-historyItemBaseRefColor: #ea5c00;
 
   /* Unset; the registry's, and the overview ruler the text colors at twice their alpha. */
   --vscode-diffEditor-insertedLineBackground: #9bb95533;

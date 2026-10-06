@@ -11,6 +11,12 @@ export interface HeadBlob {
   image?: string;
 }
 
+/** A file of a commit against its first parent — a read-only diff's two sides. */
+export interface CommitFileContent {
+  original: HeadBlob;
+  modified: HeadBlob;
+}
+
 /** The working tree's text plus HEAD's, read once per open. */
 export interface FileContent {
   path: string;
@@ -27,6 +33,8 @@ export interface FileContent {
   head?: HeadBlob;
   /** Missing from the working tree; the editor is read-only. */
   deleted?: boolean;
+  /** A commit's file against its parent (`CommitSide`): never saved. */
+  readOnly?: boolean;
   error?: string;
 }
 

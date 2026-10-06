@@ -18,6 +18,8 @@ import type {
   GitActionResult,
   GitLogin,
   GitOperation,
+  GraphCommit,
+  GraphRef,
   RemoteInfo,
   RepositoryState,
   StashCommand,
@@ -1388,29 +1390,34 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
   }
 }
 
-interface HeadBlobOptions {
-  /** A rename's source path — the one HEAD has. */
+interface BlobOptions {
+  /** A rename's source path — the one the earlier revision has. */
   origPath?: string;
   /** Past this the blob counts as binary: the editor's own cap, since both sides share the editor. */
   maxBytes: number;
 }
 
+/** HEAD's version of a file, the diff editor's original side for a changed file. */
+export function readHeadBlob(cwd: string, filePath: string, options: BlobOptions): Promise<HeadBlob> {
+  return readBlobAt(cwd, "HEAD", filePath, options);
+}
+
 /**
- * HEAD's version of a file, the diff editor's original side. A path HEAD lacks (untracked, newly
- * added, unborn branch) is `missing`, not an error: it diffs as all new.
+ * A file at `revision`, a diff editor's side. A path the revision lacks (untracked, newly added,
+ * unborn branch) is `missing`, not an error: it diffs as all new.
  *
  * `cat-file --filters`, not `show`: it applies the smudge filters and eol conversion of
  * `.gitattributes` and `core.autocrlf`, so the text reads like the working tree. `show` returns the
  * stored blob, which under an LFS or `ident` filter is not the file (pinned in `git.test.ts`).
  * Buffer encoding, as in `readFile`: utf8 replaces invalid bytes and would break an image.
  */
-export async function readHeadBlob(cwd: string, filePath: string, options: HeadBlobOptions): Promise<HeadBlob> {
-  // A rename is one entry over two paths, and only the old one is in HEAD.
+export async function readBlobAt(cwd: string, revision: string, filePath: string, options: BlobOptions): Promise<HeadBlob> {
+  // A rename is one entry over two paths, and only the old one is in the earlier revision.
   const at = (options.origPath ?? filePath).replace(/\\/g, "/");
-  const read = await git(cwd, ["cat-file", "--filters", `HEAD:${at}`], {
+  const read = await git(cwd, ["cat-file", "--filters", `${revision}:${at}`], {
     encoding: "buffer",
     // One byte over the cap: git is killed and the result `overflowed`, which tells a blob too large
-    // from one HEAD lacks.
+    // from one the revision lacks.
     maxBuffer: options.maxBytes + 1,
     // `--filters` runs the repository's smudge filter, and an LFS one fetches: never ask for
     // credentials without a terminal, nor hold a queue slot while it does.
@@ -1421,7 +1428,7 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
   if (read?.overflowed) {
     return { content: "", binary: true, missing: false };
   }
-  // Any failure, git not started included, is a path HEAD lacks.
+  // Any failure, git not started included, is a path the revision lacks.
   if (read?.code !== 0) {
     return { content: "", binary: false, missing: true };
   }
@@ -1437,6 +1444,109 @@ export async function readHeadBlob(cwd: string, filePath: string, options: HeadB
     return { content: "", binary: true, missing: false };
   }
   return { content: blob.toString("utf8"), binary: false, missing: false };
+}
+
+/** Separates the fields of one `readLog` record; none of them can hold it. */
+const LOG_FIELD = "\x1f";
+
+/**
+ * The commits reachable from `revisions` (full ref names, or HEAD), newest first in topological
+ * order — a child before its parents, which the lane layout relies on. `--decorate=full` so a local
+ * branch and a remote's are told apart by their prefix, not guessed from a slash.
+ */
+export async function readLog(cwd: string, limit: number, revisions: string[]): Promise<GraphCommit[]> {
+  const result = await git(cwd, [
+    "log",
+    ...revisions,
+    "--topo-order",
+    "--decorate=full",
+    `-${limit}`,
+    "-z",
+    `--format=%H${LOG_FIELD}%P${LOG_FIELD}%an${LOG_FIELD}%at${LOG_FIELD}%D${LOG_FIELD}%s`,
+  ]);
+  // An unborn branch has no HEAD to log: an empty graph, not an error.
+  if (result.code !== 0) {
+    return [];
+  }
+  const commits: GraphCommit[] = [];
+  for (const record of result.stdout.split("\0")) {
+    const [sha, parents, author, date, decorations, subject] = record.split(LOG_FIELD);
+    if (!sha || subject === undefined) {
+      continue;
+    }
+    const commit: GraphCommit = {
+      sha,
+      parents: parents === "" ? [] : parents.split(" "),
+      subject,
+      author,
+      date: Number(date),
+      refs: [],
+    };
+    for (const decoration of decorations === "" ? [] : decorations.split(", ")) {
+      readDecoration(commit, decoration);
+    }
+    commits.push(commit);
+  }
+  return commits;
+}
+
+const REF_KINDS: [prefix: string, kind: GraphRef["kind"]][] = [
+  ["refs/heads/", "local"],
+  ["refs/remotes/", "remote"],
+  ["refs/tags/", "tag"],
+];
+
+/** One `%D` entry, e.g. `HEAD -> refs/heads/main`, `refs/remotes/origin/main`, `tag: refs/tags/v1`. */
+function readDecoration(commit: GraphCommit, decoration: string): void {
+  if (decoration === "HEAD") {
+    commit.head = true;
+    return;
+  }
+  const current = decoration.startsWith("HEAD -> ");
+  const full = (current ? decoration.slice("HEAD -> ".length) : decoration).replace(/^tag: /, "");
+  const kind = REF_KINDS.find(([prefix]) => full.startsWith(prefix));
+  // `refs/remotes/origin/HEAD` is a pointer, not a branch.
+  if (!kind || /^refs\/remotes\/[^/]+\/HEAD$/.test(full)) {
+    return;
+  }
+  if (current) {
+    commit.head = true;
+  }
+  commit.refs.push({ name: full.slice(kind[0].length), kind: kind[1] });
+}
+
+/**
+ * The files a commit changed against its first parent, renames detected; a root commit against
+ * nothing (`--root`). A merge's files are what it brought in over its first parent, as in VS Code.
+ */
+export async function readCommitFiles(cwd: string, sha: string, parent: string | undefined): Promise<FileChange[]> {
+  const result = await git(cwd, [
+    "-c",
+    "core.quotePath=false",
+    "diff-tree",
+    "-r",
+    "-M",
+    "--name-status",
+    "-z",
+    "--no-commit-id",
+    ...(parent ? [parent, sha] : ["--root", sha]),
+  ]);
+  if (result.code !== 0) {
+    return [];
+  }
+  const fields = result.stdout.split("\0");
+  const files: FileChange[] = [];
+  for (let at = 0; fields[at];) {
+    const letter = fields[at][0];
+    if (letter === "R" || letter === "C") {
+      files.push({ path: fields[at + 2], origPath: fields[at + 1], status: letter === "R" ? "renamed" : "added" });
+      at += 3;
+    } else {
+      files.push({ path: fields[at + 1], status: letter === "A" ? "added" : letter === "D" ? "deleted" : "modified" });
+      at += 2;
+    }
+  }
+  return files;
 }
 
 /** Every path the exclude chain hides, repository-relative with forward slashes; `--directory`

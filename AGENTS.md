@@ -260,13 +260,14 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, branch
 and tag create/rename/delete, merge and rebase onto a branch, abort, per-file diff, discard,
 `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
-staging), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
+staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and the default branch — read-only,
+a commit's files and their diffs against its first parent), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), and a commit message suggested by an installed agent.
 Where Desktop differs from git's defaults, follow Desktop. The project row's entries are 
 repository-wide and never touch the working tree — a worktree's own row excepted, which is that 
 tree, and its merge into the base, run where the base is checked out.
 
-Don't add without being asked: staging or per-line staging, history or graph, cherry-pick, revert,
+Don't add without being asked: staging or per-line staging, history beyond the graph, cherry-pick, revert,
 squash, reorder, bisect, submodules, conflict resolution beyond aborting,
 discarding single lines, pull with rebase, force push. A command needing a list, a message field
 or a per-line decision is for an agent.
@@ -282,7 +283,7 @@ or a per-line decision is for an agent.
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
-  `CommandList`, BRANCHES `BranchTree`, LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
+  `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`), LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
   EXPLORER `Explorer`; each title heads a `Section`, drawn by `ProjectList` and `CommandList`
   themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap

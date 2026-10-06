@@ -8,10 +8,23 @@ import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHand
 import { useFileAct, type BranchActions } from "../../git/run-action";
 import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
-import { ArrowDownIcon, ArrowUpIcon, CommitIcon, DiscardIcon, ListIcon, ListTreeIcon, StashIcon, SyncIcon } from "../../ui/icons";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BranchIcon,
+  CommitIcon,
+  DiscardIcon,
+  GraphIcon,
+  ListIcon,
+  ListTreeIcon,
+  StashIcon,
+  SyncIcon,
+} from "../../ui/icons";
 import { CollapseExpandAllButton } from "../../ui/CollapseExpandAllButton";
 import { useStoredToggle } from "../../ui/layout-storage";
 import { Section } from "../../ui/Section";
+import { CommitGraph } from "./CommitGraph";
+import { useCommitGraph } from "./use-commit-graph";
 
 interface GitLaneProps {
   resolved: ResolvedRef;
@@ -29,7 +42,7 @@ interface GitLaneProps {
   onActivateRef: (refKey: string) => void;
 }
 
-/** The git lane: branches over the changed files, nothing else. */
+/** The git lane: branches, or their commit graph, over the changed files, nothing else. */
 export const GitLane = memo(function GitLane({
   resolved,
   state: latestState,
@@ -55,6 +68,10 @@ export const GitLane = memo(function GitLane({
     held.current = { refKey: resolved.refKey, state: latestState };
   }
   const state = held.current.state;
+  /** What the top section holds, BRANCHES or their GRAPH: one for every project, as the lanes' toggles. */
+  const [showGraph, setShowGraph] = useStoredToggle("branches-graph", false);
+  // Read only while the graph is on screen: the log is a git process of its own.
+  const graph = useCommitGraph(resolved, state, shown && showGraph, branch.busy);
 
   // Fetch, pull and push share the one action slot with discard and stash.
   const { remote, canSync } = syncRemote(state);
@@ -67,11 +84,14 @@ export const GitLane = memo(function GitLane({
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       {/* This section's bar — everything `branch.run` covers. */}
       <Section
-        title="BRANCHES"
-        busy={branch.busy}
+        title={showGraph ? "GRAPH" : "BRANCHES"}
+        busy={branch.busy || graph.loading}
         height={treeHeight}
         actions={
           <>
+            <IconButton title={showGraph ? "Show Branches" : "Show Graph"} onClick={() => setShowGraph(!showGraph)}>
+              {showGraph ? <BranchIcon /> : <GraphIcon />}
+            </IconButton>
             <IconButton
               title={remote ? `Fetch ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
@@ -101,7 +121,20 @@ export const GitLane = memo(function GitLane({
         }
       >
         {/* Keyed: a menu left open across a switch of repository or worktree would act on the next one. */}
-        <BranchTree key={resolved.refKey} resolved={resolved} state={state} branch={branch} onActivateRef={onActivateRef} />
+        {showGraph ? (
+          <CommitGraph
+            key={resolved.refKey}
+            resolved={resolved}
+            state={state}
+            commits={graph.commits}
+            hasMore={graph.hasMore}
+            loading={graph.loading}
+            onMore={graph.more}
+            onOpenDiff={onOpenDiff}
+          />
+        ) : (
+          <BranchTree key={resolved.refKey} resolved={resolved} state={state} branch={branch} onActivateRef={onActivateRef} />
+        )}
       </Section>
       <Sash orientation="horizontal" size={treeHeight} min={MIN_AREA_HEIGHT} minOther={MIN_AREA_HEIGHT} onResize={onTreeHeight} />
       {/* The checked changes, ordered by cost — stash takes all, git stashing no single paths

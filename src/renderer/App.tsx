@@ -35,7 +35,7 @@ import { forget, sameList } from "./identity";
 import { PLATFORM } from "./platform";
 import { defaultLayout, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./tabs/use-project-layouts";
-import type { EditorTab, PaneTab } from "./editor/editor-tab";
+import { workingTreePathOf, type EditorTab, type PaneTab } from "./editor/editor-tab";
 import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
 import { useEditorSync } from "./tabs/use-editor-sync";
@@ -439,9 +439,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                     <FilesLane
                       resolved={activeResolved}
                       shown={shown}
-                      openPath={
-                        editorTabs[activeResolved.refKey]?.find((tab) => tab.tabId === activeEditors[activeResolved.refKey])?.path ?? null
-                      }
+                      openPath={workingTreePathOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
                       onOpenFile={openEditor}
                       searchHeight={fileSearchHeight}
                       onSearchHeight={setFileSearchHeight}

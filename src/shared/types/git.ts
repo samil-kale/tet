@@ -38,6 +38,26 @@ export interface FileChange {
   origPath?: string;
 }
 
+/** A ref standing at a commit of the GRAPH. */
+export interface GraphRef {
+  /** Without `refs/heads/`, `refs/remotes/` or `refs/tags/`. */
+  name: string;
+  kind: "local" | "remote" | "tag";
+}
+
+export interface GraphCommit {
+  sha: string;
+  /** First parent first; empty for a root commit. */
+  parents: string[];
+  subject: string;
+  author: string;
+  /** Unix seconds. */
+  date: number;
+  refs: GraphRef[];
+  /** HEAD itself, detached or not. */
+  head?: true;
+}
+
 export interface RepositoryState {
   /** Branch name, or the short commit id while HEAD is detached. */
   head: string;

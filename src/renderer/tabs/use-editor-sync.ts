@@ -85,7 +85,14 @@ export function useEditorSync(
     for (const [refKey, editors] of Object.entries(editorTabs)) {
       const [first] = editors;
       if (first) {
-        const paths = sameList(previous[refKey]?.paths, editors.map((tab) => tab.path).sort(), NO_PATHS);
+        const paths = sameList(
+          previous[refKey]?.paths,
+          editors
+            .filter((tab) => !tab.commit)
+            .map((tab) => tab.path)
+            .sort(),
+          NO_PATHS,
+        );
         next[refKey] = { ref: first.ref, paths };
       }
     }

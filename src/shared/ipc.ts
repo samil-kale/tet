@@ -89,6 +89,9 @@ export interface InvokeChannels {
   "repository:list-explorer": TETApi["repository"]["listExplorer"];
   "repository:search-files": TETApi["repository"]["searchFiles"];
   "repository:read-file": TETApi["repository"]["readFile"];
+  "repository:log": TETApi["repository"]["log"];
+  "repository:commit-files": TETApi["repository"]["commitFiles"];
+  "repository:read-commit-file": TETApi["repository"]["readCommitFile"];
   "repository:write-file": TETApi["repository"]["writeFile"];
   "repository:watch-files": TETApi["repository"]["watchFiles"];
   "commands:list": TETApi["commands"]["list"];

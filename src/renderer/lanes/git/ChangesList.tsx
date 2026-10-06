@@ -49,7 +49,7 @@ interface ChangesListProps {
 /** For the LOCAL CHANGES header's collapse/expand button. */
 export type ChangesListHandle = CollapseExpandAll;
 
-const STATUS_LETTER: Record<ChangeStatus, string> = {
+export const STATUS_LETTER: Record<ChangeStatus, string> = {
   modified: "M",
   added: "A",
   deleted: "D",

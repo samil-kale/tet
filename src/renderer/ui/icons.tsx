@@ -16,6 +16,7 @@ import {
   FolderGit2,
   FolderPlus,
   GitBranch,
+  GitGraph,
   GitCommitHorizontal,
   GitCompare,
   Globe,
@@ -229,6 +230,11 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
 /** Lucide's `git-branch`. */
 export function BranchIcon(props: IconProps) {
   return <Lucide {...props} icon={GitBranch} />;
+}
+
+/** Lucide's `git-graph` — BRANCHES' switch to the commit graph. */
+export function GraphIcon(props: IconProps) {
+  return <Lucide {...props} icon={GitGraph} />;
 }
 
 /** Lucide's `folder-code` — the projects lane. */

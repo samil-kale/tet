@@ -111,6 +111,14 @@
   --vscode-gitDecoration-untrackedResourceForeground: #007100;
   --vscode-gitDecoration-addedResourceForeground: #587c0c;
   --vscode-gitDecoration-conflictingResourceForeground: #ad0707;
+  --vscode-scmGraph-foreground1: #ffb000;
+  --vscode-scmGraph-foreground2: #dc267f;
+  --vscode-scmGraph-foreground3: #994f00;
+  --vscode-scmGraph-foreground4: #40b0a6;
+  --vscode-scmGraph-foreground5: #b66dff;
+  --vscode-scmGraph-historyItemRefColor: #1a85ff;
+  --vscode-scmGraph-historyItemRemoteRefColor: #652d90;
+  --vscode-scmGraph-historyItemBaseRefColor: #ea5c00;
 
   /* The registry's defaultInsertColor/defaultRemoveColor serve both grounds. */
   --vscode-diffEditor-insertedLineBackground: #2ea04326;

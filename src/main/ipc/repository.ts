@@ -4,9 +4,24 @@ import { listAskableAgents } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { failure } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
-import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "../../shared/types/files";
+import type {
+  CommitFileContent,
+  ExplorerListing,
+  FileContent,
+  FileSearchQuery,
+  FileSearchResult,
+  FileWriteResult,
+} from "../../shared/types/files";
 import { EMPTY_REPOSITORY_STATE } from "../../shared/types/git";
-import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "../../shared/types/git";
+import type {
+  CheckoutTarget,
+  FileChange,
+  GitActionResult,
+  GitLogin,
+  GraphCommit,
+  RepositoryState,
+  StashCommand,
+} from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { addExclude, addFolder, removeFolder } from "../store/tet-json";
 import { cancelCommitSuggestion, suggestCommitMessage } from "../agents/commit-message";
@@ -202,6 +217,29 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
     }
     return repository.readFile(filePath);
   });
+
+  handle("repository:log", async (_event, ref: ProjectRef, limit: number): Promise<GraphCommit[]> => {
+    return (await repositories.get(ref)?.log(limit)) ?? [];
+  });
+
+  handle("repository:commit-files", async (_event, ref: ProjectRef, sha: string, parent: string | undefined): Promise<FileChange[]> => {
+    return (await repositories.get(ref)?.commitFiles(sha, parent)) ?? [];
+  });
+
+  handle(
+    "repository:read-commit-file",
+    async (
+      _event,
+      ref: ProjectRef,
+      sha: string,
+      parent: string | undefined,
+      filePath: string,
+      origPath: string | undefined,
+    ): Promise<CommitFileContent> => {
+      const missing = { content: "", binary: false, missing: true };
+      return (await repositories.get(ref)?.readCommitFile(sha, parent, filePath, origPath)) ?? { original: missing, modified: missing };
+    },
+  );
 
   handle(
     "repository:write-file",

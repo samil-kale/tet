@@ -1,8 +1,8 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
-import type { ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
-import type { CheckoutTarget, GitActionResult, GitLogin, RepositoryState, StashCommand } from "./types/git";
+import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
+import type { CheckoutTarget, FileChange, GitActionResult, GitLogin, GraphCommit, RepositoryState, StashCommand } from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
 import type {
@@ -221,6 +221,18 @@ export interface TETApi {
     /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */
     searchFiles: (ref: ProjectRef, query: FileSearchQuery) => Promise<FileSearchResult>;
     readFile: (ref: ProjectRef, path: string) => Promise<FileContent>;
+    /** The GRAPH's `limit` newest commits of HEAD, its upstream and the default branch, topologically ordered. */
+    log: (ref: ProjectRef, limit: number) => Promise<GraphCommit[]>;
+    /** The files a commit changed against its first parent (`parent` absent for a root commit). */
+    commitFiles: (ref: ProjectRef, sha: string, parent: string | undefined) => Promise<FileChange[]>;
+    /** One of them, both sides as the read-only diff shows them. */
+    readCommitFile: (
+      ref: ProjectRef,
+      sha: string,
+      parent: string | undefined,
+      path: string,
+      origPath: string | undefined,
+    ) => Promise<CommitFileContent>;
     /** Nothing is written unless `expectedMtimeMs` matches the disk. */
     writeFile: (ref: ProjectRef, path: string, content: string, expectedMtimeMs: number) => Promise<FileWriteResult>;
     /** Git command, file watcher or refresh. */

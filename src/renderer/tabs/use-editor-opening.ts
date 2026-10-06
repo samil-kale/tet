@@ -45,7 +45,7 @@ export function useEditorOpening(
   const openEditor = useCallback(
     (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
       const refKey = refKeyOf(ref);
-      const open = editorTabsRef.current[refKey]?.find((tab) => tab.path === path);
+      const open = editorTabsRef.current[refKey]?.find((tab) => tab.path === path && tab.commit?.sha === how.commit?.sha);
       const preview = how.keep ? undefined : previewEditorTab(ref);
       let tabId: string;
       if (open) {
@@ -67,12 +67,12 @@ export function useEditorOpening(
         openEditorFile(ref, tabId, path, true, how);
         setEditorTabs((current) => ({
           ...current,
-          [refKey]: (current[refKey] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path } : tab)),
+          [refKey]: (current[refKey] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path, commit: how.commit } : tab)),
         }));
       } else {
         tabId = nextEditorTabId();
         openEditorFile(ref, tabId, path, how.keep !== true, how);
-        setEditorTabs((current) => ({ ...current, [refKey]: [...(current[refKey] ?? []), { tabId, ref, path }] }));
+        setEditorTabs((current) => ({ ...current, [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit }] }));
       }
       activateTab(refKey, tabId);
     },

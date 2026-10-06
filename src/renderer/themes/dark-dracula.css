@@ -126,6 +126,14 @@
   /* Unset; the registry's. */
   --vscode-gitDecoration-addedResourceForeground: #81b88b;
   --vscode-gitDecoration-conflictingResourceForeground: #ffb86c;
+  --vscode-scmGraph-foreground1: #ffb000;
+  --vscode-scmGraph-foreground2: #dc267f;
+  --vscode-scmGraph-foreground3: #994f00;
+  --vscode-scmGraph-foreground4: #40b0a6;
+  --vscode-scmGraph-foreground5: #b66dff;
+  --vscode-scmGraph-historyItemRefColor: #3794ff;
+  --vscode-scmGraph-historyItemRemoteRefColor: #b180d7;
+  --vscode-scmGraph-historyItemBaseRefColor: #ea5c00;
 
   /* Unset; the registry's. */
   --vscode-diffEditor-insertedLineBackground: #9bb95533;

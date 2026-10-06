@@ -265,7 +265,7 @@ export const Pane = memo(function Pane({
   /** The session title; a session-less agent's name; the editor tab's file name. */
   const tabLabel = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
-      return baseName(tab.path);
+      return tab.commit ? `${baseName(tab.path)} (${tab.commit.sha.slice(0, 7)})` : baseName(tab.path);
     }
     if (tab.title) {
       return tab.title;
@@ -275,7 +275,7 @@ export const Pane = memo(function Pane({
 
   const tabTooltip = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
-      return tab.path;
+      return tab.commit ? `${tab.path} (${tab.commit.sha.slice(0, 7)})` : tab.path;
     }
     const lines =
       tab.status === "missing"

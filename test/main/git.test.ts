@@ -26,9 +26,12 @@ import {
   merge,
   pull,
   push,
+  readBlobAt,
   readCommitContext,
+  readCommitFiles,
   readHeadBlob,
   readHeadPaths,
+  readLog,
   readState,
   rebaseRewritesPushed,
   renameBranch,
@@ -859,5 +862,99 @@ describe("a login for an http remote", () => {
     assert.equal(await hasCredentialHelper(repo, "https://other.invalid/repo.git"), true);
     git(repo, "config", "credential.helper", "store");
     assert.equal(await hasCredentialHelper(repo, "https://example.invalid/repo.git"), true);
+  });
+});
+
+describe("the commits the GRAPH shows", () => {
+  let repo: string;
+  let base: string;
+  let feature: string;
+  let merged: string;
+
+  before(() => {
+    repo = initRepository("tet-git-graph", { "a.txt": "one\n", "old.txt": "moved\n" });
+    base = git(repo, "rev-parse", "HEAD");
+    git(repo, "switch", "-q", "-c", "feature");
+    fs.writeFileSync(path.join(repo, "a.txt"), "two\n");
+    fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
+    git(repo, "mv", "old.txt", "new.txt");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "work on feature");
+    feature = git(repo, "rev-parse", "HEAD");
+    git(repo, "switch", "-q", "main");
+    fs.writeFileSync(path.join(repo, "c.txt"), "main\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "work on main");
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
+    merged = git(repo, "rev-parse", "HEAD");
+    git(repo, "tag", "v1", base);
+    git(repo, "switch", "-q", "-c", "side", base);
+    fs.writeFileSync(path.join(repo, "side.txt"), "side\n");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-q", "-m", "side work");
+    git(repo, "switch", "-q", "main");
+  });
+
+  it("lists the commits of a revision, a child before its parents, with the refs at them", async () => {
+    const commits = await readLog(repo, 50, ["HEAD"]);
+    assert.equal(commits.length, 4);
+    const [top] = commits;
+    assert.equal(top.sha, merged);
+    assert.equal(top.subject, "merge feature");
+    assert.equal(top.parents.length, 2);
+    assert.equal(top.head, true);
+    assert.deepEqual(top.refs, [{ name: "main", kind: "local" }]);
+    assert.ok(commits.find((commit) => commit.sha === feature)?.refs.some((ref) => ref.name === "feature" && ref.kind === "local"));
+    assert.deepEqual(commits.find((commit) => commit.sha === base)?.refs, [{ name: "v1", kind: "tag" }]);
+    const index = new Map(commits.map((commit, at) => [commit.sha, at]));
+    for (const commit of commits) {
+      for (const parent of commit.parents) {
+        assert.ok(index.get(parent)! > index.get(commit.sha)!, "a parent comes after its child");
+      }
+    }
+  });
+
+  it("reads only the revisions it is given", async () => {
+    assert.equal(
+      (await readLog(repo, 50, ["HEAD"])).some((commit) => commit.subject === "side work"),
+      false,
+    );
+    assert.equal(
+      (await readLog(repo, 50, ["HEAD", "refs/heads/side"])).some((commit) => commit.subject === "side work"),
+      true,
+    );
+  });
+
+  it("stops at the limit", async () => {
+    assert.equal((await readLog(repo, 2, ["HEAD"])).length, 2);
+  });
+
+  it("is empty before the first commit", async () => {
+    const empty = tempDir("tet-git-graph-empty");
+    git(empty, "init", "-q", "--initial-branch=main");
+    assert.deepEqual(await readLog(empty, 10, ["HEAD"]), []);
+  });
+
+  it("names the files a commit changed against its first parent, renames detected", async () => {
+    const files = await readCommitFiles(repo, feature, base);
+    assert.deepEqual(files.map((file) => `${file.status} ${file.origPath ? `${file.origPath} -> ` : ""}${file.path}`).sort(), [
+      "added b.txt",
+      "modified a.txt",
+      "renamed old.txt -> new.txt",
+    ]);
+  });
+
+  it("names what a merge brought in over its first parent, and a root commit's files against nothing", async () => {
+    const [top] = await readLog(repo, 1, ["HEAD"]);
+    assert.deepEqual((await readCommitFiles(repo, merged, top.parents[0])).map((file) => file.path).sort(), ["a.txt", "b.txt", "new.txt"]);
+    assert.deepEqual((await readCommitFiles(repo, base, undefined)).map((file) => file.path).sort(), ["a.txt", "old.txt"]);
+  });
+
+  it("reads a file as a commit left it, and a path it lacks as missing", async () => {
+    const options = { maxBytes: MAX_BYTES };
+    assert.equal((await readBlobAt(repo, feature, "a.txt", options)).content, "two\n");
+    assert.equal((await readBlobAt(repo, base, "a.txt", options)).content, "one\n");
+    assert.equal((await readBlobAt(repo, base, "b.txt", options)).missing, true);
+    assert.equal((await readBlobAt(repo, base, "new.txt", { ...options, origPath: "old.txt" })).content, "moved\n");
   });
 });
