@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.2 (2026-10-06)
+
+- **Start logged.** Each start writes TET's version, process id and path to `errors.log`, to
+  trace an update that could not replace the install.
+
 ## 0.18.1 (2026-10-06)
 
 - **Graph search.** GRAPH finds commits by message, author or path.
