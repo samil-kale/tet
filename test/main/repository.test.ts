@@ -243,6 +243,48 @@ describe("a command clicked during the periodic fetch", () => {
   });
 });
 
+describe("a commit while conflicts stay unresolved, refused as GitHub Desktop warns of it", () => {
+  const names = ["c1.txt", "c2.txt", "c3.txt", "c4.txt", "c5.txt", "c6.txt"];
+  let dir: string;
+  let repository: Repository;
+
+  before(async () => {
+    dir = initRepository("tet-repository-unresolved-", Object.fromEntries(names.map((name) => [name, "base\n"])));
+    git(dir, "switch", "-q", "--create", "feature");
+    names.forEach((name) => fs.writeFileSync(path.join(dir, name), "feature\n"));
+    git(dir, "commit", "-q", "--all", "-m", "feature");
+    git(dir, "switch", "-q", "main");
+    names.forEach((name) => fs.writeFileSync(path.join(dir, name), "main\n"));
+    git(dir, "commit", "-q", "--all", "-m", "main");
+    repository = await open(dir);
+  });
+
+  it("refuses the commit itself, though the list was read before the conflicts came", async () => {
+    assert.deepEqual(repository.getState().changes, []);
+    assert.equal(spawnSync("git", ["merge", "feature"], { cwd: dir }).status, 1, "stopped on conflicts");
+    const head = git(dir, "rev-parse", "HEAD");
+    const refused = await repository.commitAll("markers");
+    assert.equal(refused.ok, false);
+    assert.equal(git(dir, "rev-parse", "HEAD"), head, "nothing was committed");
+  });
+
+  it("names five files at most, the rest counted", async () => {
+    await repository.refresh();
+    assert.equal(
+      await repository.commitRefusal(),
+      "Resolve the conflicts in c1.txt, c2.txt, c3.txt, c4.txt and 2 more files before committing",
+    );
+    assert.equal(await repository.commitRefusal(["c6.txt"]), "Resolve the conflicts in c6.txt before committing");
+  });
+
+  it("commits once every conflict is resolved", async () => {
+    names.forEach((name) => fs.writeFileSync(path.join(dir, name), "resolved\n"));
+    assert.equal(await repository.commitRefusal(), undefined);
+    assert.deepEqual(await repository.commitAll("resolved"), { ok: true });
+    assert.equal(git(dir, "show", "HEAD:c1.txt"), "resolved");
+  });
+});
+
 describe("worktrees, each with a branch of its own", () => {
   let dir: string;
   let worktrees: string;

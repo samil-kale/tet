@@ -71,6 +71,9 @@ const isObjectId = (value: string): boolean => /^[0-9a-f]{4,64}$/i.test(value);
 /** The most commits the GRAPH reads at once. */
 const MAX_GRAPH_COMMITS = 5000;
 
+/** The most files a refused commit names, the rest counted: a merge may leave dozens. */
+const MAX_NAMED_CONFLICTS = 5;
+
 /**
  * What the GRAPH reads, as VS Code's "Auto": HEAD, the current branch's upstream and the default
  * branch. Only refs the state lists: git fails the whole log for one it lacks, as a remote branch
@@ -642,18 +645,28 @@ export class Repository {
     return this.runAction(() => git.checkoutTag(this.at.path, name));
   }
 
-  /** Why these paths, or all changes, cannot be committed: a conflict left unresolved among them —
-   *  `add` would take it as resolved. A read beside the actions, never on the refresh path, and no
-   *  git process unless the list shows a conflict. */
-  async commitRefusal(paths?: string[]): Promise<string | undefined> {
+  /** Why these paths, or all changes, cannot be committed, asked before the commit's question: a
+   *  conflict left unresolved among them — `add` would take it as resolved. A read beside the
+   *  actions, never on the refresh path, and no git process unless the list shows a conflict. */
+  commitRefusal(paths?: string[]): Promise<string | undefined> {
     const changes = this.changesByPath();
-    const conflicted = (paths ?? [...changes.keys()]).filter((filePath) => changes.get(filePath)?.status === "conflicted");
-    if (conflicted.length === 0) {
-      return undefined;
-    }
+    const listed = paths ?? [...changes.keys()];
+    return listed.some((filePath) => changes.get(filePath)?.status === "conflicted")
+      ? this.unresolvedRefusal(paths)
+      : Promise.resolve(undefined);
+  }
+
+  /** `commitRefusal` asked of git alone: the commit's own check, which a list not yet refreshed
+   *  must not let through. */
+  private async unresolvedRefusal(paths?: string[]): Promise<string | undefined> {
     try {
-      const unresolved = await git.unresolvedConflicts(this.at.path, conflicted);
-      return unresolved.length > 0 ? `Resolve the conflicts in ${unresolved.join(", ")} before committing` : undefined;
+      const unresolved = await git.unresolvedConflicts(this.at.path, paths);
+      if (unresolved.length === 0) {
+        return undefined;
+      }
+      const named = unresolved.length > MAX_NAMED_CONFLICTS ? unresolved.slice(0, MAX_NAMED_CONFLICTS - 1) : unresolved;
+      const rest = unresolved.length - named.length;
+      return `Resolve the conflicts in ${named.join(", ")}${rest > 0 ? ` and ${rest} more files` : ""} before committing`;
     } catch (error) {
       return errorMessage(error);
     }
@@ -662,7 +675,7 @@ export class Repository {
   /** Commits everything, untracked files included. */
   commitAll(message: string): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const refusal = await this.commitRefusal();
+      const refusal = await this.unresolvedRefusal();
       return refusal ? { ok: false, error: refusal } : git.commitAll(this.at.path, message);
     });
   }
@@ -670,7 +683,7 @@ export class Repository {
   /** Commits only these files, untracked ones included. */
   commitPaths(message: string, paths: string[]): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const refusal = await this.commitRefusal(paths);
+      const refusal = await this.unresolvedRefusal(paths);
       if (refusal) {
         return { ok: false, error: refusal };
       }

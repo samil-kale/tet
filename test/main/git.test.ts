@@ -586,6 +586,15 @@ describe("unresolved conflicts, before a commit", () => {
     assert.deepEqual(await unresolvedConflicts(cwd, paths), ["gone.txt", "image.bin", "marked.txt"]);
   });
 
+  it("asks of every path where given none", async () => {
+    assert.deepEqual((await unresolvedConflicts(cwd)).sort(), ["gone.txt", "image.bin", "marked.txt"]);
+  });
+
+  it("takes a text file both sides changed as resolved once deleted", async () => {
+    fs.rmSync(path.join(cwd, "marked.txt"));
+    assert.deepEqual(await unresolvedConflicts(cwd, ["marked.txt"]), []);
+  });
+
   it("finds none once the markers are gone and the rest is added", async () => {
     write("marked.txt", "resolved\n");
     run("add", "gone.txt", "image.bin");

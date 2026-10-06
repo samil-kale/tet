@@ -1077,10 +1077,11 @@ export async function conflictMarkers(cwd: string, base: string): Promise<string
   return found.stdout.split("\0").filter(Boolean);
 }
 
-/** Which of these paths hold an unresolved conflict, as GitHub Desktop counts them: a text file both
- *  sides changed while it holds a marker line, any other conflict — binary, or deleted on one side
- *  — always, since TET picks no side. Thrown when git fails: its empty output would read as none. */
-export async function unresolvedConflicts(cwd: string, paths: string[]): Promise<string[]> {
+/** Which of these paths, or of all, hold an unresolved conflict, as GitHub Desktop counts them: a
+ *  text file both sides changed while it holds a marker line — deleting it resolves it — and any
+ *  other conflict, binary or deleted on one side, always, since TET picks no side. Thrown when git
+ *  fails: its empty output would read as none. */
+export async function unresolvedConflicts(cwd: string, paths?: string[]): Promise<string[]> {
   const unmerged = await gitOnPaths(cwd, ["ls-files", "--unmerged", "-z"], paths);
   if (unmerged.code !== 0) {
     throw new Error(unmerged.stderr.trim() || `git ls-files exited with ${unmerged.code}`);
@@ -1092,17 +1093,20 @@ export async function unresolvedConflicts(cwd: string, paths: string[]): Promise
     const filePath = entry.slice(tab + 1);
     stages.set(filePath, (stages.get(filePath) ?? new Set()).add(entry.charAt(tab - 1)));
   }
-  const conflicted = paths.filter((filePath) => stages.has(filePath));
+  const conflicted = paths ? paths.filter((filePath) => stages.has(filePath)) : [...stages.keys()];
   const bothSides = conflicted.filter((filePath) => stages.get(filePath)!.has("2") && stages.get(filePath)!.has("3"));
   if (bothSides.length === 0) {
     return conflicted;
   }
-  // Text files without a marker line; grep exits with 1 when it lists none.
+  // Text files without a marker line; grep exits with 1 when it lists none, and skips a deleted one.
   const clean = await gitOnPaths(cwd, ["grep", "-I", "-L", "-z", "-E", CONFLICT_MARKER], bothSides, 1);
   if (clean.code !== 0) {
     throw new Error(clean.stderr.trim() || `git grep exited with ${clean.code}`);
   }
   const resolved = new Set(clean.stdout.split("\0").filter(Boolean));
+  for (const filePath of bothSides.filter((unlisted) => !resolved.has(unlisted))) {
+    await fs.lstat(path.join(cwd, filePath)).catch(() => resolved.add(filePath));
+  }
   return conflicted.filter((filePath) => !resolved.has(filePath));
 }
 
