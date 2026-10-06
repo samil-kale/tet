@@ -14,6 +14,10 @@ const CHEVRON_GAP = 4;
 /** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the chevron and its
  *  gap): the line it found gets the width the rest of the nesting would have eaten. */
 export const MATCH_INDENT = INDENT_BASE + CHEVRON_WIDTH + CHEVRON_GAP + 1;
+/** A level of every other tree TET lays out itself (BRANCHES, the GRAPH's finds): one column, the
+ *  width a chevron, an icon or a status letter takes with its gap, so a child starts under its
+ *  parent's label. */
+export const COLUMN_STEP = CHEVRON_WIDTH + CHEVRON_GAP;
 /** A level of a tree with checkboxes, as IntelliJ's: every row keeps the chevron's box, so a child's
  *  checkbox stands just past its parent's (`.tree-checkbox`'s 16px and 1px more). */
 export const CHECK_INDENT_STEP = 17;

@@ -6,7 +6,7 @@ import type { ResolvedRef } from "../../resolved-ref";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
 import { CommitIcon, MessageIcon, PathIcon, UserIcon, type IconProps } from "../../ui/icons";
-import { MATCH_INDENT, TreeRow } from "../../ui/tree-row";
+import { COLUMN_STEP, INDENT_BASE, TreeRow } from "../../ui/tree-row";
 import { STATUS_LETTER } from "./ChangesList";
 import { graphRefColors, layoutGraph, nodeLane, type GraphColor, type GraphRow } from "./graph-layout";
 
@@ -239,7 +239,7 @@ export function CommitGraph({
                 className={open === commit.sha ? "selected" : undefined}
                 title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
                 onClick={() => toggle(commit)}
-                icon={row ? <Lanes row={row} expanded={open === commit.sha} /> : <CommitIcon className="tree-icon commit-icon" />}
+                icon={row ? <Lanes row={row} expanded={open === commit.sha} /> : <CommitIcon className="tree-icon" />}
                 label={
                   <>
                     {commit.subject} <span className="tree-dir">{commit.author}</span>
@@ -250,8 +250,8 @@ export function CommitGraph({
                 (files[commit.sha] ?? []).map((file) => (
                   <TreeRow
                     key={file.path}
-                    // A search's find has no lanes to run beside: its files start past its subject, as SEARCH's matches.
-                    indent={row ? undefined : MATCH_INDENT}
+                    // A search's find has no lanes to run beside: its files start a column in, under its subject.
+                    indent={row ? undefined : INDENT_BASE + COLUMN_STEP}
                     title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}
                     onClick={() => openFile(commit, file, false)}
                     // As the Explorer: a single click previews, a double click keeps.

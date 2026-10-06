@@ -469,14 +469,6 @@ textarea:focus,
 /* The GRAPH: a row's lanes, then its subject and author, as VS Code's graph rows. */
 .graph-tree .tree-row {
   height: var(--tree-row-height);
-  gap: 0;
-  /* The Explorer's and SEARCH's (INDENT_BASE in ui/tree-row.tsx). */
-  padding-left: 9px;
-}
-
-/* A search's find, in a commit's place: spaced from its subject as a file icon from its name. */
-.graph-tree .commit-icon {
-  margin-right: 4px;
 }
 
 .graph-lanes {
@@ -587,7 +579,8 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: var(--action-gap);
-  padding: 0 6px 0 10px;
+  /* INDENT_BASE in ui/tree-row.tsx. */
+  padding: 0 6px 0 9px;
   font-size: var(--vscode-font-size);
 }
 
@@ -596,9 +589,9 @@ textarea:focus,
   cursor: pointer;
 }
 
-/* A worktree under its project's row, indented as `.tree-row.nested`. */
+/* A worktree under its project's row, a column in (COLUMN_STEP in ui/tree-row.tsx). */
 .worktree-row {
-  padding-left: 30px;
+  padding-left: 27px;
 }
 
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees, a pinned
@@ -814,18 +807,25 @@ textarea:focus,
   font-weight: 400;
 }
 
+/* What leads a row stands in columns, each carrying its own gap (ui/tree-row.tsx); a row sets its
+   own `padding-left` by its depth. */
 .tree-row {
   display: flex;
   align-items: center;
-  gap: 5px;
   width: 100%;
-  padding: 0 6px 0 23px;
+  padding: 0 6px 0 9px;
   text-align: left;
   font-size: var(--vscode-font-size);
 }
 
-.tree-row.nested {
-  padding-left: 43px;
+.tree-row > .tree-icon {
+  margin-right: 4px;
+}
+
+/* What trails a branch tree's label, spaced as `.tree-dir`. */
+.tree-row > .tree-extra,
+.tree-row > .count-badge {
+  margin-left: 6px;
 }
 
 /* Every list's rows, one hover and one selection. */
@@ -851,11 +851,9 @@ textarea:focus,
 }
 
 /* The files lane's EXPLORER tree, and the SEARCH section under it, whose rows are of the same shape.
-   It nests arbitrarily deep, so rows set `padding-left` inline. The Explorer's row: no flex gap,
-   the chevron and the file icon carry their own. */
+   It nests arbitrarily deep, so rows set `padding-left` inline. */
 .explorer-tree .tree-row {
   height: var(--tree-row-height);
-  gap: 0;
 }
 
 /* A file icon is a glyph of Seti's font (lanes/files/file-icons.ts), centred in the chevron's

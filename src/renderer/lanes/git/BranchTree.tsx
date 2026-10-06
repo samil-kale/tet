@@ -5,7 +5,7 @@ import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/projec
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 import { runWithFollowUp, type BranchActions } from "../../git/run-action";
-import { TreeRow } from "../../ui/tree-row";
+import { COLUMN_STEP, INDENT_BASE, TreeRow } from "../../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
 import { TextField } from "../../ui/Field";
@@ -35,6 +35,10 @@ const COMMITS_LOST = "Commits that exist only on this branch are lost.";
 const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or add a worktree";
 
 /** A branch merged into the default branch has its icon dimmed. */
+/** A row under its group's header, and a remote's branch under its remote: a column each. */
+const ROW_INDENT = INDENT_BASE + COLUMN_STEP;
+const NESTED_INDENT = ROW_INDENT + COLUMN_STEP;
+
 function branchIconClass(merged: boolean): string {
   return merged ? "tree-icon merged" : "tree-icon";
 }
@@ -436,6 +440,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
               return (
                 <TreeRow
                   key={localBranch}
+                  indent={ROW_INDENT}
                   className={isCurrent(localBranch) ? "current" : undefined}
                   title="Double-click to check out"
                   onDoubleClick={() => checkout({ name: localBranch })}
@@ -474,6 +479,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
             worktrees.map((worktree) => (
               <TreeRow
                 key={worktree.path}
+                indent={ROW_INDENT}
                 className={worktree.current ? "current" : undefined}
                 title={`${worktree.path}${worktree.key === undefined ? `\nA worktree ${MADE_ELSEWHERE}` : worktree.current ? "" : "\nDouble-click to open"}`}
                 onDoubleClick={() => !worktree.current && worktree.key !== undefined && openWorktree(worktree)}
@@ -499,6 +505,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
               <div key={entry.name}>
                 <TreeRow
                   className="remote"
+                  indent={ROW_INDENT}
                   onClick={() => toggle(`remote:${entry.name}`)}
                   icon={
                     <>
@@ -514,7 +521,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
                   entry.branches.map((remoteBranch) => (
                     <TreeRow
                       key={remoteBranch}
-                      className="nested"
+                      indent={NESTED_INDENT}
                       title="Double-click to check out"
                       onDoubleClick={() => checkout({ name: remoteBranch, remote: entry.name })}
                       onContextMenu={(event) => menu.open(event, { kind: "branch", name: remoteBranch, remote: entry.name })}
@@ -536,6 +543,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
             tags.map((tag) => (
               <TreeRow
                 key={tag}
+                indent={ROW_INDENT}
                 title="Double-click to check out"
                 onDoubleClick={() => checkoutTag(tag)}
                 onContextMenu={(event) => menu.open(event, { kind: "tag", name: tag })}
@@ -555,6 +563,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
             state.stashes.map((stash) => (
               <TreeRow
                 key={stash.ref}
+                indent={ROW_INDENT}
                 // No double-click: apply and drop sit one right-click apart, and a drop is final.
                 title={`${stash.ref}: ${stash.message}\nRight-click to apply, pop or drop it`}
                 onContextMenu={(event) => menu.open(event, { kind: "stash", stash })}
