@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.1 (2026-10-06)
+
+- **Graph search.** GRAPH finds commits by message, author or path.
+- **No commit over conflicts.** A commit is refused while conflicts stay unresolved, naming the
+  files; a deleted conflicted file counts as resolved.
+- **Fixes.** Rows in the branch tree, the graph's finds and the worktrees line up under their
+  parent's label.
+
 ## 0.18.0 (2026-10-06)
 
 - **Commit graph.** The branch tree's header button swaps BRANCHES for GRAPH: HEAD, its upstream and
