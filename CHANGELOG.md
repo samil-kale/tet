@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.0 (2026-10-06)
+
+- **Commit graph.** The branch tree's header button swaps BRANCHES for GRAPH: HEAD, its upstream and
+  the default branch as lanes, read-only, with a commit's files and their diffs against its first
+  parent.
+- **Fixes.** The stash and Markdown preview icons changed.
+
 ## 0.17.3 (2026-10-05)
 
 - **Image diff layouts.** An image diff shows before and after side by side or alone through the
