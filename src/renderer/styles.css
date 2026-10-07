@@ -1162,15 +1162,20 @@ textarea:focus,
 /* Spinner while a turn runs, question mark while it waits, speech bubble once it finished out of
    sight. One rule for all three, on tab and project row; colour only, size is the site's. */
 .tab-mark {
+  --tab-mark-color: var(--vscode-focusBorder);
   flex: none;
-  color: var(--vscode-focusBorder);
+  color: var(--tab-mark-color);
+}
+
+.tab-mark.spinning {
+  --tab-mark-color: var(--tet-tabMark-workingForeground, var(--vscode-focusBorder));
 }
 
 /* On the active tab or row's selection background. */
 .tab.active .tab-mark:not(.tab-mark-error),
 .project-row.active .tab-mark:not(.tab-mark-error),
 .worktree-row.active .tab-mark:not(.tab-mark-error) {
-  color: var(--tet-tabMark-activeForeground, var(--vscode-focusBorder));
+  color: var(--tet-tabMark-activeForeground, var(--tab-mark-color));
 }
 
 /* Not a fourth turn state: red is the one colour Dark Modern names for this meaning. */

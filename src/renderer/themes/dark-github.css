@@ -37,12 +37,14 @@
   --vscode-panel-border: #30363d;
 
   --vscode-tab-activeBackground: #0d1117;
-  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
-  --vscode-tab-activeBorder: #1f6feb;
+  /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
+  --vscode-tab-activeBorder: #f78166;
   --vscode-tab-activeForeground: #e6edf3;
   --vscode-tab-inactiveBackground: #010409;
   --vscode-tab-inactiveForeground: #7d8590;
   --vscode-tab-border: #30363d;
+  /* TET's own: the working mark in GitHub's in-progress colour, its attention.fg. */
+  --tet-tabMark-workingForeground: #d29922;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --vscode-toolbar-hoverBackground: #5a5d5e50;
