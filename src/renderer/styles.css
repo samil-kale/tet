@@ -79,6 +79,7 @@ button:focus-visible {
    background is VS Code's settings editor's dropdown, for the fields too. */
 input,
 textarea,
+.code-field,
 .dropdown-trigger {
   font: inherit;
   border-radius: 2px;
@@ -103,6 +104,7 @@ input::placeholder {
    label, a dropdown with its arrow. */
 input:not([type="checkbox"]):disabled,
 textarea:disabled,
+.code-field:has(textarea:disabled),
 .select-field:has(.dropdown-trigger:disabled),
 .dialog-checkbox:has(input:disabled),
 .button:disabled,
@@ -133,6 +135,7 @@ input:disabled,
 /* A dropdown also while its list is open, and on a click's focus, not only the keyboard's. */
 input:focus,
 textarea:focus,
+.code-field:focus-within,
 .dropdown-trigger:focus,
 .dropdown-trigger.open {
   border-color: var(--tet-focusBorder);
@@ -2248,6 +2251,20 @@ textarea:focus,
   min-height: 0;
   resize: none;
   padding: 5px 6px;
+}
+
+/* The box scrolls, its textarea and colored text grow together inside it (`CodeField`), filling
+   it so a click below the last line still lands in the textarea. */
+.code-field {
+  overflow: auto;
+}
+
+.code-field.sbx-setup {
+  padding: 0;
+}
+
+.code-field-editor {
+  min-height: 100%;
 }
 
 /* A script, so in the editor's font. */

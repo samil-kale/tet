@@ -14,6 +14,7 @@ import type {
   SbxStoredLocal,
 } from "../../shared/types/sbx";
 import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal, setupLines } from "../../shared/sbx-rules";
+import { CodeField } from "../editor/CodeField";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import {
@@ -559,12 +560,12 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
   if (section === "setup") {
     return (
       <FieldGroup label="Setup script">
-        <textarea
+        <CodeField
           className="sbx-setup"
-          spellCheck={false}
+          language="shellscript"
           placeholder={"apt-get update\napt-get install -y ffmpeg"}
           value={state.setup}
-          onChange={(event) => update("setup", () => event.target.value)}
+          onChange={(setup) => update("setup", () => setup)}
         />
         <p className="dialog-detail">
           Runs once per sandbox when its first tab starts, and again after every change. Write it so that running it twice does no harm.
