@@ -65,15 +65,13 @@ export const codexAgent: SandboxedAgent = {
         return { args: BASE_ARGS };
       }
     },
-    // Skills in `~/.codex/skills` and `~/.agents/skills`; all of `~/.codex/plugins`;
-    // `~/.codex/AGENTS.md`, `AGENTS.override.md` preferred. Under the config root the sessions are
+    // Skills in `~/.codex/skills` and `~/.agents/skills`; `~/.codex/AGENTS.md`, `AGENTS.override.md` preferred. Under the config root the sessions are
     // read from.
     knowledge: () => {
       const home = codexHome();
       const instructionsHost = [path.join(home, "AGENTS.override.md"), path.join(home, "AGENTS.md")].find((file) => fs.existsSync(file));
       return {
         skills: [{ host: path.join(home, "skills"), target: `${SANDBOX_HOME}/.codex/skills` }],
-        plugins: [{ host: path.join(home, "plugins"), target: `${SANDBOX_HOME}/.codex/plugins` }],
         instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.codex/AGENTS.md` }] : [],
       };
     },

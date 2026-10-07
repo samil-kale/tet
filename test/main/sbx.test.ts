@@ -618,12 +618,12 @@ describe("what of the SBX Settings could not be applied", () => {
   const problems = {
     hosts: { "a.example.com": "Forbidden by governance", "b.example.com": "Forbidden by governance" },
     paths: { "/data/one": "Does not exist on this machine", "/data/two": "Forbidden by governance" },
-    knowledge: { plugins: "Forbidden by governance" },
+    knowledge: { instructions: "Forbidden by governance" },
   };
 
   it("is told once per option and reason, its rows listed, in the dialog's tab order", () => {
     assert.deepEqual(sbxProblemNotices(problems), [
-      "Could not set knowledge:\n - plugins\nForbidden by governance",
+      "Could not set knowledge:\n - instructions\nForbidden by governance",
       "Could not set paths:\n - /data/one\nDoes not exist on this machine",
       "Could not set paths:\n - /data/two\nForbidden by governance",
       "Could not set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance",
@@ -646,10 +646,10 @@ describe("what of the SBX Settings could not be applied", () => {
         { path: "/data/three", access: "rw" as const },
       ],
     };
-    const knowledge = { skills: "ro" as const, plugins: "rw" as const, instructions: false as const };
+    const knowledge = { skills: "ro" as const, instructions: "rw" as const };
     assert.deepEqual(withoutProblems(settings, knowledge, problems), {
       settings: { ...settings, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
-      knowledge: { skills: "ro", plugins: false, instructions: false },
+      knowledge: { skills: "ro", instructions: false },
     });
   });
 });
@@ -745,7 +745,7 @@ describe("what sbx keeps on this machine", () => {
     const root = tempDir("tet-secrets-");
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
-    const knowledge = { skills: "ro" as const, plugins: false as const, instructions: "rw" as const, skillsFolder: "/skills" };
+    const knowledge = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
     store.update("p", { secrets: none, variables: none, knowledge });
     assert.deepEqual(new SbxLocalStore(root).knowledge("p"), knowledge, "read back, with no keyring needed");
     store.update("p", { secrets: none, variables: none, knowledge: EMPTY_SBX_KNOWLEDGE });

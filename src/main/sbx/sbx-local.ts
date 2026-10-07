@@ -28,7 +28,6 @@ function toKnowledge(value: unknown): SbxKnowledgeSettings | undefined {
   const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((access) => access === field) ?? false;
   const knowledge: SbxKnowledgeSettings = {
     skills: toAccess(value.skills),
-    plugins: toAccess(value.plugins),
     instructions: toAccess(value.instructions),
   };
   if (typeof value.skillsFolder === "string" && value.skillsFolder !== "") {

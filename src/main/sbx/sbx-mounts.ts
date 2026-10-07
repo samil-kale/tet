@@ -91,7 +91,7 @@ function skillsTargets(agent: SandboxedAgent): string[] {
 export async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: string): Promise<KnowledgeEntries> {
   const own = (await agentInstalled(agent, os.tmpdir())) ? agent.sandbox.knowledge() : undefined;
   const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => existsSync(entry.host));
-  const rest = { plugins: existing(own?.plugins), instructions: existing(own?.instructions) };
+  const rest = { instructions: existing(own?.instructions) };
   if (skillsFolder !== undefined) {
     const skills = existsSync(skillsFolder) ? skillsTargets(agent).map((target) => ({ host: skillsFolder, target })) : [];
     return { skills, ...rest };

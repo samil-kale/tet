@@ -78,11 +78,9 @@ export const claudeAgent: SandboxedAgent = {
     // Claude Code falls back to its classic renderer where the sandbox's network rule blocks its
     // feature flags; this forces fullscreen.
     env: Object.entries(FULLSCREEN_ENV).map(([key, value]) => `${key}=${value}`),
-    // `~/.claude/skills`, `~/.claude/plugins`, `~/.claude/CLAUDE.md` — under the config root the
-    // sessions are read from.
+    // `~/.claude/skills`, `~/.claude/CLAUDE.md` — under the config root the sessions are read from.
     knowledge: () => ({
       skills: [{ host: path.join(claudeConfigDir(), "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
-      plugins: [{ host: path.join(claudeConfigDir(), "plugins"), target: `${SANDBOX_HOME}/.claude/plugins` }],
       instructions: [{ host: path.join(claudeConfigDir(), "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }],
     }),
     // No `sharedSkillsTarget`: Claude Code reads only its own skills folder, and putting

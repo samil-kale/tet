@@ -23,7 +23,6 @@ export interface SbxPath {
  *  machine per project, never in tet.json (sbx-local.ts): it names this machine's folders. */
 export interface SbxKnowledgeSettings {
   skills: SbxAccess | false;
-  plugins: SbxAccess | false;
   /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */
   instructions: SbxAccess | false;
   /** A folder every agent's skills come from instead of its own, mounted at each one's own skills
@@ -112,7 +111,7 @@ export interface SbxLocalSave extends Record<SbxValueKind, SbxLocalEdits> {
 }
 
 /** Every kind off, each agent's own skills: no knowledge stored for a project. */
-export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeSettings = { skills: false, plugins: false, instructions: false };
+export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeSettings = { skills: false, instructions: false };
 
 /** A rule sbx's policy must allow before TET can sandbox a project (sbx-status.ts's
  *  readSbxBlockers). */

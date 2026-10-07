@@ -25,7 +25,7 @@ const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prom
  * Deliberately unset: `PI_CODING_AGENT_DIR` (would move the user's sessions and auth) and
  * `PI_OFFLINE`.
  *
- * Sandboxed through a community kit — see `sandbox.kit` (its Anthropic credential comes from sbx's
+ * Sandboxed through Docker's kit — see `sandbox.kit` (its Anthropic credential comes from sbx's
  * store).
  */
 export const piAgent: SandboxedAgent = {
@@ -87,9 +87,8 @@ export const piAgent: SandboxedAgent = {
         return { args };
       }
     },
-    // Skills in `~/.pi/agent/skills` and `~/.agents/skills`, extensions in
-    // `~/.pi/agent/extensions`, `~/.pi/agent/AGENTS.md` (`AGENTS.override.md` preferred) — under
-    // the agent dir the sessions are read from.
+    // Skills in `~/.pi/agent/skills` and `~/.agents/skills`, `~/.pi/agent/AGENTS.md`
+    // (`AGENTS.override.md` preferred) — under the agent dir the sessions are read from.
     knowledge: () => {
       const agentDir = piAgentDir();
       const instructionsHost = [path.join(agentDir, "AGENTS.override.md"), path.join(agentDir, "AGENTS.md")].find((file) =>
@@ -97,16 +96,15 @@ export const piAgent: SandboxedAgent = {
       );
       return {
         skills: [{ host: path.join(agentDir, "skills"), target: `${SANDBOX_HOME}/.pi/agent/skills` }],
-        plugins: [{ host: path.join(agentDir, "extensions"), target: `${SANDBOX_HOME}/.pi/agent/extensions` }],
         instructions: instructionsHost ? [{ host: instructionsHost, target: `${SANDBOX_HOME}/.pi/agent/AGENTS.md` }] : [],
       };
     },
     sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
-    // pi has no built-in kit, so it is the community kit, whose image sbx pulls on the first
+    // pi has no built-in kit, so it is Docker's v3 kit, whose image sbx pulls on the first
     // create; home is `/home/agent` like every built-in. It is `create`'s first positional (`--kit`
     // means a mixin); `sbx run` reattaches by `--name` with plain `pi`. Auth is not TET's: the kit
     // takes an Anthropic credential from sbx's store, without which every model call fails.
-    kit: "docker.io/sbx/pi-kit:latest",
+    kit: "docker.io/docker/sbx-kit-pi:latest",
     sessions: piSandboxSessions,
   },
 };

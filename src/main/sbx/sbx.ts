@@ -525,12 +525,11 @@ async function readySandboxRun(
   }
   addProblems(problems, "setup", await runSetup(name, settings.setup, onData));
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
-  // sbx run refuses them on an existing one even when unchanged. The agent positional is only
-  // verified by sbx; `--name` finds the sandbox. The plain agent id even for a kit
-  // (AgentSandbox.kit).
+  // sbx run refuses them on an existing one even when unchanged. No agent positional either: sbx
+  // reads it from the sandbox `--name` finds, and refuses one that differs from it — a kit's own
+  // name (AgentSandbox.kit) is not the agent's id.
   const args = [
     "run",
-    agent.id,
     "--name",
     name,
     ...env.flatMap((entry) => ["-e", entry]),

@@ -18,7 +18,7 @@ import type {
 } from "./types/sbx";
 
 /** Every kind of knowledge, in the Knowledge tab's order. */
-export const SBX_KNOWLEDGE_KINDS: SbxKnowledgeKind[] = ["skills", "plugins", "instructions"];
+export const SBX_KNOWLEDGE_KINDS: SbxKnowledgeKind[] = ["skills", "instructions"];
 
 /** What `sbx ports --publish` and `sbx run -p` take: a whole number from 1 to 65535. */
 export function isPort(value: string): boolean {

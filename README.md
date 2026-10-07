@@ -124,7 +124,7 @@ The agent does not even have to be installed on the host: `sbx` alone is enough.
 Sandboxed tabs behave like native TET tabs. Sessions can be resumed, renamed and deleted; turn
 marks, desktop notifications and `tet-ctl` continue to work across the sandbox boundary.
 
-**SBX Settings** keeps the boundary explicit and project-specific. Choose which skills, plugins,
+**SBX Settings** keeps the boundary explicit and project-specific. Choose which skills,
 instruction files and additional paths enter the sandbox, with read-only or read-write access;
 forward development ports; and allow only the network hosts the project needs. The configuration
 lives in the repository's `tet.json`.

@@ -51,7 +51,6 @@ const SKILLS_SOURCE_OPTIONS: { value: SkillsSource; label: string }[] = [
  *  `AgentSandbox.knowledge`. */
 const KNOWLEDGE_LABELS: { kind: SbxKnowledgeKind; label: string }[] = [
   { kind: "skills", label: "Skills" },
-  { kind: "plugins", label: "Plugins" },
   { kind: "instructions", label: "CLAUDE.md / AGENTS.md" },
 ];
 

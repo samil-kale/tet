@@ -398,7 +398,7 @@ const VERBS = [
     verb: "sbx-set-knowledge",
     group: "TET itself",
     usage: `sbx-set-knowledge <${SBX_KNOWLEDGE_KINDS.join("|")}> <off|ro|rw> [--project <id>]`,
-    summary: "Mount the agents' own skills, plugins or instructions file (CLAUDE.md, AGENTS.md) into the sandboxes, or not.",
+    summary: "Mount the agents' own skills or instructions file (CLAUDE.md, AGENTS.md) into the sandboxes, or not.",
     positionals: ["kind", "access"],
   },
   {
