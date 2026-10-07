@@ -227,7 +227,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
 interface ColorFieldProps {
   label: string;
   /** Each choice's answer and the color it is drawn in — an ANSI name and its
-   *  `--vscode-terminal-ansi*` variable, so the swatches follow the theme. */
+   *  `--tet-terminal-ansi*` variable, so the swatches follow the theme. */
   choices: { value: string; color: string; title: string }[];
   /** The picked choice's value; "" for none. */
   value: string;

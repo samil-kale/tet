@@ -1,27 +1,27 @@
 import type { ITheme } from "@xterm/xterm";
 
 const ANSI_CSS_VARS: Record<string, string> = {
-  black: "--vscode-terminal-ansiBlack",
-  red: "--vscode-terminal-ansiRed",
-  green: "--vscode-terminal-ansiGreen",
-  yellow: "--vscode-terminal-ansiYellow",
-  blue: "--vscode-terminal-ansiBlue",
-  magenta: "--vscode-terminal-ansiMagenta",
-  cyan: "--vscode-terminal-ansiCyan",
-  white: "--vscode-terminal-ansiWhite",
-  brightBlack: "--vscode-terminal-ansiBrightBlack",
-  brightRed: "--vscode-terminal-ansiBrightRed",
-  brightGreen: "--vscode-terminal-ansiBrightGreen",
-  brightYellow: "--vscode-terminal-ansiBrightYellow",
-  brightBlue: "--vscode-terminal-ansiBrightBlue",
-  brightMagenta: "--vscode-terminal-ansiBrightMagenta",
-  brightCyan: "--vscode-terminal-ansiBrightCyan",
-  brightWhite: "--vscode-terminal-ansiBrightWhite",
+  black: "--tet-terminal-ansiBlack",
+  red: "--tet-terminal-ansiRed",
+  green: "--tet-terminal-ansiGreen",
+  yellow: "--tet-terminal-ansiYellow",
+  blue: "--tet-terminal-ansiBlue",
+  magenta: "--tet-terminal-ansiMagenta",
+  cyan: "--tet-terminal-ansiCyan",
+  white: "--tet-terminal-ansiWhite",
+  brightBlack: "--tet-terminal-ansiBrightBlack",
+  brightRed: "--tet-terminal-ansiBrightRed",
+  brightGreen: "--tet-terminal-ansiBrightGreen",
+  brightYellow: "--tet-terminal-ansiBrightYellow",
+  brightBlue: "--tet-terminal-ansiBrightBlue",
+  brightMagenta: "--tet-terminal-ansiBrightMagenta",
+  brightCyan: "--tet-terminal-ansiBrightCyan",
+  brightWhite: "--tet-terminal-ansiBrightWhite",
 };
 
 /** The theme's editor font, resolved for xterm and monaco alike, which take no var(). */
 export function editorFontFamily(): string {
-  return getComputedStyle(document.documentElement).getPropertyValue("--vscode-editor-font-family").trim() || "monospace";
+  return getComputedStyle(document.documentElement).getPropertyValue("--tet-editor-font-family").trim() || "monospace";
 }
 
 /** xterm draws on canvas and needs resolved colors, not var() references. */
@@ -29,18 +29,17 @@ export function buildXtermTheme(): ITheme {
   const styles = getComputedStyle(document.documentElement);
   const read = (name: string): string | undefined => styles.getPropertyValue(name).trim() || undefined;
 
-  const background = read("--vscode-terminal-background") ?? read("--vscode-editor-background");
-  const foreground = read("--vscode-terminal-foreground") ?? read("--vscode-editor-foreground");
+  const background = read("--tet-terminal-background") ?? read("--tet-editor-background");
+  const foreground = read("--tet-terminal-foreground") ?? read("--tet-editor-foreground");
   const theme: ITheme = {
     background,
     foreground,
     // xterm's default cursor and selection are white — invisible on a light background. xterm
     // thins an opaque selection to 30% itself.
-    cursor: read("--vscode-terminalCursor-foreground") ?? foreground,
+    cursor: read("--tet-terminalCursor-foreground") ?? foreground,
     cursorAccent: background,
-    selectionBackground: read("--vscode-terminal-selectionBackground") ?? read("--vscode-editor-selectionBackground"),
-    selectionInactiveBackground:
-      read("--vscode-terminal-inactiveSelectionBackground") ?? read("--vscode-editor-inactiveSelectionBackground"),
+    selectionBackground: read("--tet-terminal-selectionBackground") ?? read("--tet-editor-selectionBackground"),
+    selectionInactiveBackground: read("--tet-terminal-inactiveSelectionBackground") ?? read("--tet-editor-inactiveSelectionBackground"),
     // xterm's right-edge lane, invisible. A theme color, not CSS: xterm repaints its own elements
     // with it. `#00000000`, not `transparent`: it goes through xterm's color parser. The theme's
     // scrollbar variables are for the app's lists.
@@ -56,7 +55,7 @@ export function buildXtermTheme(): ITheme {
   return theme;
 }
 
-/** Resolves color id → --vscode-* variable, skipping unset ones. */
+/** Resolves color id → --tet-* variable, skipping unset ones. */
 function readCssVars(vars: Record<string, string>): Record<string, string> {
   const styles = getComputedStyle(document.documentElement);
   const colors: Record<string, string> = {};
@@ -75,24 +74,25 @@ function readCssVars(vars: Record<string, string>): Record<string, string> {
  * `applyChrome`).
  */
 const EDITOR_CSS_VARS: Record<string, string> = {
-  "editor.background": "--vscode-editor-background",
-  "editor.foreground": "--vscode-editor-foreground",
-  "editorLineNumber.foreground": "--vscode-editorLineNumber-foreground",
-  "editorLineNumber.activeForeground": "--vscode-editorLineNumber-activeForeground",
-  "editorCursor.foreground": "--vscode-editorCursor-foreground",
-  "editor.selectionBackground": "--vscode-editor-selectionBackground",
-  "editor.inactiveSelectionBackground": "--vscode-editor-inactiveSelectionBackground",
-  "editor.lineHighlightBorder": "--vscode-editor-lineHighlightBorder",
-  "editor.findMatchBackground": "--vscode-editor-findMatchBackground",
-  "editor.findMatchHighlightBackground": "--vscode-editor-findMatchHighlightBackground",
-  "editorIndentGuide.background1": "--vscode-editorIndentGuide-background1",
-  "editorIndentGuide.activeBackground1": "--vscode-editorIndentGuide-activeBackground1",
-  "editorWidget.background": "--vscode-editorWidget-background",
-  // The find widget's text and, through `styles.css`, its buttons: unset, monaco falls back to the
-  // shiki theme's own foreground, which is the one color in the widget not from TET's stylesheet.
-  "editorWidget.foreground": "--vscode-foreground",
-  "editorWidget.border": "--vscode-editorWidget-border",
-  "widget.shadow": "--vscode-widget-shadow",
+  "editor.background": "--tet-editor-background",
+  "editor.foreground": "--tet-editor-foreground",
+  "editorLineNumber.foreground": "--tet-editorLineNumber-foreground",
+  "editorLineNumber.activeForeground": "--tet-editorLineNumber-activeForeground",
+  "editorCursor.foreground": "--tet-editorCursor-foreground",
+  "editor.selectionBackground": "--tet-editor-selectionBackground",
+  "editor.inactiveSelectionBackground": "--tet-editor-inactiveSelectionBackground",
+  "editor.lineHighlightBorder": "--tet-editor-lineHighlightBorder",
+  "editor.findMatchBackground": "--tet-editor-findMatchBackground",
+  "editor.findMatchHighlightBackground": "--tet-editor-findMatchHighlightBackground",
+  "editorIndentGuide.background1": "--tet-editorIndentGuide-background1",
+  "editorIndentGuide.activeBackground1": "--tet-editorIndentGuide-activeBackground1",
+  "editorWidget.background": "--tet-editorWidget-background",
+  // The find widget's text, its buttons the same variable in `styles.css`: unset, monaco falls back
+  // to the shiki theme's own foreground, which is the one color in the widget not from TET's
+  // stylesheet.
+  "editorWidget.foreground": "--tet-foreground",
+  "editorWidget.border": "--tet-editorWidget-border",
+  "widget.shadow": "--tet-widget-shadow",
 };
 
 /** The editor surface's colors, read for shiki's theme — see `EDITOR_CSS_VARS`. */
@@ -109,36 +109,36 @@ export function buildShikiColors(): Record<string, string> {
  * `defineTheme`'s colors reach it.
  */
 const MONACO_CSS_VARS: Record<string, string> = {
-  "input.background": "--vscode-input-background",
-  "input.foreground": "--vscode-input-foreground",
-  "input.border": "--vscode-input-border",
-  "input.placeholderForeground": "--vscode-input-placeholderForeground",
-  focusBorder: "--vscode-focusBorder",
+  "input.background": "--tet-input-background",
+  "input.foreground": "--tet-input-foreground",
+  "input.border": "--tet-input-border",
+  "input.placeholderForeground": "--tet-input-placeholderForeground",
+  focusBorder: "--tet-focusBorder",
   // The find widget's Aa/ab/.* toggles: an action button's hover grey, not monaco's `#007ACC`.
-  "inputOption.activeForeground": "--vscode-foreground",
-  "inputOption.activeBackground": "--vscode-toolbar-hoverBackground",
-  "scrollbarSlider.background": "--vscode-scrollbarSlider-background",
-  "scrollbarSlider.hoverBackground": "--vscode-scrollbarSlider-hoverBackground",
-  "scrollbarSlider.activeBackground": "--vscode-scrollbarSlider-activeBackground",
-  "menu.background": "--vscode-menu-background",
-  "menu.foreground": "--vscode-menu-foreground",
-  "menu.border": "--vscode-menu-border",
-  "menu.selectionBackground": "--vscode-menu-selectionBackground",
-  "menu.selectionForeground": "--vscode-menu-selectionForeground",
-  "menu.separatorBackground": "--vscode-menu-separatorBackground",
-  "list.hoverBackground": "--vscode-list-hoverBackground",
-  "list.activeSelectionBackground": "--vscode-list-activeSelectionBackground",
-  "list.activeSelectionForeground": "--vscode-list-activeSelectionForeground",
+  "inputOption.activeForeground": "--tet-foreground",
+  "inputOption.activeBackground": "--tet-toolbar-hoverBackground",
+  "scrollbarSlider.background": "--tet-scrollbarSlider-background",
+  "scrollbarSlider.hoverBackground": "--tet-scrollbarSlider-hoverBackground",
+  "scrollbarSlider.activeBackground": "--tet-scrollbarSlider-activeBackground",
+  "menu.background": "--tet-menu-background",
+  "menu.foreground": "--tet-menu-foreground",
+  "menu.border": "--tet-menu-border",
+  "menu.selectionBackground": "--tet-menu-selectionBackground",
+  "menu.selectionForeground": "--tet-menu-selectionForeground",
+  "menu.separatorBackground": "--tet-menu-separatorBackground",
+  "list.hoverBackground": "--tet-list-hoverBackground",
+  "list.activeSelectionBackground": "--tet-list-activeSelectionBackground",
+  "list.activeSelectionForeground": "--tet-list-activeSelectionForeground",
   // The inline diff: lines, words, gutter, and the overview ruler — how a change is found at all,
   // so set rather than left to monaco's doubled-alpha fallback.
-  "diffEditor.insertedLineBackground": "--vscode-diffEditor-insertedLineBackground",
-  "diffEditor.removedLineBackground": "--vscode-diffEditor-removedLineBackground",
-  "diffEditor.insertedTextBackground": "--vscode-diffEditor-insertedTextBackground",
-  "diffEditor.removedTextBackground": "--vscode-diffEditor-removedTextBackground",
-  "diffEditorGutter.insertedLineBackground": "--vscode-diffEditor-insertedLineBackground",
-  "diffEditorGutter.removedLineBackground": "--vscode-diffEditor-removedLineBackground",
-  "diffEditorOverview.insertedForeground": "--vscode-diffEditorOverview-insertedForeground",
-  "diffEditorOverview.removedForeground": "--vscode-diffEditorOverview-removedForeground",
+  "diffEditor.insertedLineBackground": "--tet-diffEditor-insertedLineBackground",
+  "diffEditor.removedLineBackground": "--tet-diffEditor-removedLineBackground",
+  "diffEditor.insertedTextBackground": "--tet-diffEditor-insertedTextBackground",
+  "diffEditor.removedTextBackground": "--tet-diffEditor-removedTextBackground",
+  "diffEditorGutter.insertedLineBackground": "--tet-diffEditor-insertedLineBackground",
+  "diffEditorGutter.removedLineBackground": "--tet-diffEditor-removedLineBackground",
+  "diffEditorOverview.insertedForeground": "--tet-diffEditorOverview-insertedForeground",
+  "diffEditorOverview.removedForeground": "--tet-diffEditorOverview-removedForeground",
 };
 
 /** `MONACO_CSS_VARS` plus a few fixed values, laid over shiki's theme. */

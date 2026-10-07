@@ -5,7 +5,7 @@ import { baseName } from "../paths";
 import { buildShikiColors } from "../themes/theme-colors";
 
 /** The shiki theme coloring the editor (monaco has no grammars, see monaco-core.ts). Token colors
- *  are the one thing not from a --vscode-* variable; this is the token half of the Settings theme
+ *  are the one thing not from a --tet-* variable; this is the token half of the Settings theme
  *  (Dark Modern's from Dark+, Light Modern's from Light+), its surface patched in `loadTheme`. */
 let theme = resolveTheme(window.tet.initialTheme).shikiTheme;
 
@@ -30,7 +30,7 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "light-claude": () => import("../themes/light-claude.json") as unknown as Promise<{ default: ThemeRegistration }>,
 };
 
-/** Shiki theme `name` with its editor surface patched from TET's --vscode-* values, for shiki and
+/** Shiki theme `name` with its editor surface patched from TET's --tet-* values, for shiki and
  *  the monaco theme built on it (editor.ts). */
 async function loadTheme(name: ThemeDefinition["shikiTheme"]): Promise<ThemeRegistration> {
   const { default: registration } = await THEME_MODULES[name]();

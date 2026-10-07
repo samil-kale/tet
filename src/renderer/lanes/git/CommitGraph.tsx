@@ -22,7 +22,7 @@ const CIRCLE_RADIUS = 4;
 const CIRCLE_STROKE_WIDTH = 2;
 /** Lane `index`'s line, one lane in from the left so a node never touches the edge. */
 const laneX = (index: number): number => LANE_WIDTH * (index + 1);
-const colorOf = (color: GraphColor): string => `var(--vscode-scmGraph-${color})`;
+const colorOf = (color: GraphColor): string => `var(--tet-scmGraph-${color})`;
 
 /** What the search field's toggles pick between, one at a time. */
 const SEARCH_FIELDS: { field: CommitSearch["field"]; title: string; Icon: (props: IconProps) => ReactNode }[] = [

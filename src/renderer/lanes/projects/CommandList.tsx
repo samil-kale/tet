@@ -23,7 +23,7 @@ function capitalized(color: CommandColor): string {
 
 /** The terminal's own color for a name, so the rows recolor with the theme. */
 function colorVariable(color: CommandColor): string {
-  return `var(--vscode-terminal-ansiBright${capitalized(color)})`;
+  return `var(--tet-terminal-ansiBright${capitalized(color)})`;
 }
 
 /** The swatches the dialog offers, the bright six in the theme's own colors. */

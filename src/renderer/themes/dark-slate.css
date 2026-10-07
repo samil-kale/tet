@@ -3,165 +3,158 @@
  * dark-slate.json beside this file: GitHub Dark Default (@shikijs/themes/github-dark-default)
  * with its own surfaces and accents; what it does not set stays GitHub Dark Default's, marked
  * where it stands. The primary button is light with dark text, not a filled accent. See
- * dark-modern.css for the layer.
+ * THEMES.md for the layer.
  */
 :root[data-theme="dark-slate"] {
   color-scheme: dark;
 
-  --vscode-foreground: #dde2e9;
-  --vscode-descriptionForeground: #a8b0bd;
-  --vscode-errorForeground: #db5761;
-  --vscode-textLink-foreground: #58a6f0;
-  --vscode-textLink-activeForeground: #2f81f7;
-  --vscode-textPreformat-foreground: #7d8590;
-  --vscode-textPreformat-background: #6e768166;
-  --vscode-textBlockQuote-background: #010409;
-  --vscode-textBlockQuote-border: #30363d;
-  --vscode-textCodeBlock-background: #6e768166;
-  --vscode-focusBorder: #58a6f0;
-  --vscode-sash-hoverBorder: #58a6f0;
+  --tet-foreground: #dde2e9;
+  --tet-descriptionForeground: #a8b0bd;
+  --tet-errorForeground: #db5761;
+  --tet-textLink-foreground: #58a6f0;
+  --tet-textLink-activeForeground: #2f81f7;
+  --tet-textPreformat-foreground: #7d8590;
+  --tet-textPreformat-background: #6e768166;
+  --tet-textBlockQuote-background: #010409;
+  --tet-textBlockQuote-border: #30363d;
+  --tet-textCodeBlock-background: #6e768166;
+  --tet-focusBorder: #58a6f0;
+  --tet-sash-hoverBorder: #58a6f0;
 
-  --vscode-editor-background: #1b1f27;
-  --vscode-editor-foreground: #dde2e9;
-  --vscode-terminal-background: #1b1f27;
-  --vscode-terminal-foreground: #dde2e9;
+  --tet-editor-background: #1b1f27;
+  --tet-editor-foreground: #dde2e9;
+  --tet-terminal-background: #1b1f27;
+  --tet-terminal-foreground: #dde2e9;
 
-  --vscode-sideBar-background: #14171c;
-  --vscode-sideBarSectionHeader-foreground: #dde2e9;
-  --vscode-titleBar-activeBackground: #14171c;
-  --vscode-titleBar-activeForeground: #dde2e9;
+  --tet-sideBar-background: #14171c;
+  --tet-sideBarSectionHeader-foreground: #dde2e9;
+  --tet-titleBar-activeBackground: #14171c;
+  --tet-titleBar-activeForeground: #dde2e9;
 
-  --vscode-panel-background: #14171c;
-  --vscode-panel-border: #24272c;
+  --tet-panel-background: #14171c;
+  --tet-panel-border: #24272c;
 
-  --vscode-tab-activeBackground: #1b1f27;
+  --tet-tab-activeBackground: #1b1f27;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
-  --vscode-tab-activeBorder: #58a6f0;
-  --vscode-tab-activeForeground: #dde2e9;
-  --vscode-tab-inactiveBackground: #14171c;
-  --vscode-tab-inactiveForeground: #7b8391;
-  --vscode-tab-border: #24272c;
+  --tet-tab-activeBorder: #58a6f0;
+  --tet-tab-activeForeground: #dde2e9;
+  --tet-tab-inactiveBackground: #14171c;
+  --tet-tab-inactiveForeground: #7b8391;
+  --tet-tab-border: #24272c;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
-  --vscode-toolbar-hoverBackground: #5a5d5e50;
+  --tet-toolbar-hoverBackground: #5a5d5e50;
 
   /* A selected row takes a neutral lift, not a blue; the blue-tinted #273a50 is the badge
      background and serves as the text selection below. */
-  --vscode-list-activeSelectionBackground: #232830;
-  --vscode-list-activeSelectionForeground: #dde2e9;
-  --vscode-list-hoverBackground: #1f232b;
+  --tet-list-activeSelectionBackground: #232830;
+  --tet-list-activeSelectionForeground: #dde2e9;
+  --tet-list-hoverBackground: #1f232b;
 
-  --vscode-input-background: #14171c;
-  --vscode-input-foreground: #dde2e9;
-  --vscode-input-border: #2a2d35;
-  --vscode-input-placeholderForeground: #7b8391;
+  --tet-input-background: #14171c;
+  --tet-input-foreground: #dde2e9;
+  --tet-input-border: #2a2d35;
+  --tet-input-placeholderForeground: #7b8391;
 
-  /* Unset; the registry's is dropdown.background. */
-  --vscode-settings-dropdownBackground: #14171c;
-  /* Unset; the registry's are checkbox.*, its foreground unset too: dropdown.foreground. */
-  --vscode-settings-checkboxBackground: #161b22;
-  --vscode-settings-checkboxBorder: #30363d;
-  --vscode-settings-checkboxForeground: #dde2e9;
+  --tet-settings-dropdownBackground: #14171c;
+  --tet-settings-checkboxBackground: #161b22;
+  --tet-settings-checkboxBorder: #30363d;
+  --tet-settings-checkboxForeground: #dde2e9;
 
-  /* radio.* unset: activeForeground the registry's; activeBackground the registry's: focusBorder
-     at 0.4 alpha; activeBorder the registry's; inactiveForeground none in the registry: the
-     foreground; inactiveBackground none in the registry: none; inactiveHoverBackground the
-     registry's. */
-  --vscode-radio-activeForeground: #ffffff;
-  --vscode-radio-activeBackground: #58a6f066;
-  --vscode-radio-activeBorder: #007acc;
-  --vscode-radio-inactiveForeground: #dde2e9;
-  --vscode-radio-inactiveHoverBackground: #5a5d5e80;
+  --tet-radio-activeForeground: #ffffff;
+  --tet-radio-activeBackground: #58a6f066;
+  --tet-radio-activeBorder: #007acc;
+  --tet-radio-inactiveForeground: #dde2e9;
+  --tet-radio-inactiveHoverBackground: #5a5d5e80;
 
-  --vscode-button-background: #dde2e9;
-  --vscode-button-foreground: #14171c;
-  /* Unset; the registry's is contrastBorder, set only in high contrast. */
-  --vscode-button-border: #00000000;
-  --vscode-button-hoverBackground: #eef1f5;
-  --vscode-button-secondaryBackground: #232830;
-  --vscode-button-secondaryForeground: #dde2e9;
-  --vscode-button-secondaryHoverBackground: #2a2f39;
+  --tet-button-background: #dde2e9;
+  --tet-button-foreground: #14171c;
+  --tet-button-border: #00000000;
+  --tet-button-hoverBackground: #eef1f5;
+  --tet-button-secondaryBackground: #232830;
+  --tet-button-secondaryForeground: #dde2e9;
+  --tet-button-secondaryHoverBackground: #2a2f39;
 
   /* Raised off the editor the way GitHub Dark Default's widget sits over its editor — at the
      editor's own tone find/replace shows only its border. */
-  --vscode-editorWidget-background: #232830;
-  --vscode-editorWidget-border: #2a2d35;
+  --tet-editorWidget-background: #232830;
+  --tet-editorWidget-border: #2a2d35;
   /* Dark Modern's. */
-  --vscode-widget-shadow: #0000005c;
+  --tet-widget-shadow: #0000005c;
 
-  --vscode-menu-background: #1b1f27;
-  --vscode-menu-foreground: #dde2e9;
-  --vscode-menu-border: #2a2d35;
-  --vscode-menu-selectionBackground: #273a50;
-  --vscode-menu-selectionForeground: #dde2e9;
-  --vscode-menu-separatorBackground: #2a2d35;
+  --tet-menu-background: #1b1f27;
+  --tet-menu-foreground: #dde2e9;
+  --tet-menu-border: #2a2d35;
+  --tet-menu-selectionBackground: #273a50;
+  --tet-menu-selectionForeground: #dde2e9;
+  --tet-menu-separatorBackground: #2a2d35;
 
-  --vscode-progressBar-background: #58a6f0;
+  --tet-progressBar-background: #58a6f0;
 
-  --vscode-notifications-background: #1b1f27;
-  --vscode-notifications-foreground: #dde2e9;
-  --vscode-notifications-border: #2a2d35;
-  --vscode-notificationsErrorIcon-foreground: #db5761;
-  --vscode-notificationsWarningIcon-foreground: #d9b45c;
-  --vscode-notificationsInfoIcon-foreground: #58a6f0;
+  --tet-notifications-background: #1b1f27;
+  --tet-notifications-foreground: #dde2e9;
+  --tet-notifications-border: #2a2d35;
+  --tet-notificationsErrorIcon-foreground: #db5761;
+  --tet-notificationsWarningIcon-foreground: #d9b45c;
+  --tet-notificationsInfoIcon-foreground: #58a6f0;
 
   /* GitHub Dark Default's. */
-  --vscode-scrollbarSlider-background: #8b949e33;
-  --vscode-scrollbarSlider-hoverBackground: #8b949e3d;
-  --vscode-scrollbarSlider-activeBackground: #8b949e47;
+  --tet-scrollbarSlider-background: #8b949e33;
+  --tet-scrollbarSlider-hoverBackground: #8b949e3d;
+  --tet-scrollbarSlider-activeBackground: #8b949e47;
 
-  --vscode-gitDecoration-modifiedResourceForeground: #d9b45c;
-  --vscode-gitDecoration-deletedResourceForeground: #db5761;
-  --vscode-gitDecoration-untrackedResourceForeground: #82b65d;
-  --vscode-gitDecoration-addedResourceForeground: #82b65d;
-  --vscode-gitDecoration-conflictingResourceForeground: #db5761;
-  --vscode-scmGraph-foreground1: #ffb000;
-  --vscode-scmGraph-foreground2: #dc267f;
-  --vscode-scmGraph-foreground3: #994f00;
-  --vscode-scmGraph-foreground4: #40b0a6;
-  --vscode-scmGraph-foreground5: #b66dff;
-  --vscode-scmGraph-historyItemRefColor: #3794ff;
-  --vscode-scmGraph-historyItemRemoteRefColor: #b180d7;
-  --vscode-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-gitDecoration-modifiedResourceForeground: #d9b45c;
+  --tet-gitDecoration-deletedResourceForeground: #db5761;
+  --tet-gitDecoration-untrackedResourceForeground: #82b65d;
+  --tet-gitDecoration-addedResourceForeground: #82b65d;
+  --tet-gitDecoration-conflictingResourceForeground: #db5761;
+  --tet-scmGraph-foreground1: #ffb000;
+  --tet-scmGraph-foreground2: #dc267f;
+  --tet-scmGraph-foreground3: #994f00;
+  --tet-scmGraph-foreground4: #40b0a6;
+  --tet-scmGraph-foreground5: #b66dff;
+  --tet-scmGraph-historyItemRefColor: #3794ff;
+  --tet-scmGraph-historyItemRemoteRefColor: #b180d7;
+  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
 
-  --vscode-diffEditor-insertedLineBackground: #82b65d26;
-  --vscode-diffEditor-removedLineBackground: #db576126;
-  --vscode-diffEditor-insertedTextBackground: #82b65d40;
-  --vscode-diffEditor-removedTextBackground: #db576140;
-  --vscode-diffEditorOverview-insertedForeground: #82b65d80;
-  --vscode-diffEditorOverview-removedForeground: #db576180;
-  --vscode-editorLineNumber-foreground: #5a626f;
-  --vscode-editorLineNumber-activeForeground: #dde2e9;
-  --vscode-editorCursor-foreground: #dde2e9;
-  --vscode-editor-selectionBackground: #273a50;
-  --vscode-editor-inactiveSelectionBackground: #232830;
-  --vscode-editor-lineHighlightBorder: #232830;
+  --tet-diffEditor-insertedLineBackground: #82b65d26;
+  --tet-diffEditor-removedLineBackground: #db576126;
+  --tet-diffEditor-insertedTextBackground: #82b65d40;
+  --tet-diffEditor-removedTextBackground: #db576140;
+  --tet-diffEditorOverview-insertedForeground: #82b65d80;
+  --tet-diffEditorOverview-removedForeground: #db576180;
+  --tet-editorLineNumber-foreground: #5a626f;
+  --tet-editorLineNumber-activeForeground: #dde2e9;
+  --tet-editorCursor-foreground: #dde2e9;
+  --tet-editor-selectionBackground: #273a50;
+  --tet-editor-inactiveSelectionBackground: #232830;
+  --tet-editor-lineHighlightBorder: #232830;
   /* GitHub Dark Default's find colors. */
-  --vscode-editor-findMatchBackground: #9e6a03;
-  --vscode-editor-findMatchHighlightBackground: #f2cc6080;
-  --vscode-editorIndentGuide-background1: #2a2d35;
-  --vscode-editorIndentGuide-activeBackground1: #5a626f;
+  --tet-editor-findMatchBackground: #9e6a03;
+  --tet-editor-findMatchHighlightBackground: #f2cc6080;
+  --tet-editorIndentGuide-background1: #2a2d35;
+  --tet-editorIndentGuide-activeBackground1: #5a626f;
 
-  --vscode-terminalCursor-foreground: #dde2e9;
-  --vscode-terminal-selectionBackground: #273a50;
-  --vscode-terminal-inactiveSelectionBackground: #232830;
+  --tet-terminalCursor-foreground: #dde2e9;
+  --tet-terminal-selectionBackground: #273a50;
+  --tet-terminal-inactiveSelectionBackground: #232830;
 
   /* Red, green, yellow (the modified mark), blue, cyan and white are the theme's own; the rest
      GitHub Dark Default's. */
-  --vscode-terminal-ansiBlack: #484f58;
-  --vscode-terminal-ansiRed: #db5761;
-  --vscode-terminal-ansiGreen: #82b65d;
-  --vscode-terminal-ansiYellow: #d9b45c;
-  --vscode-terminal-ansiBlue: #58a6f0;
-  --vscode-terminal-ansiMagenta: #bc8cff;
-  --vscode-terminal-ansiCyan: #5dcfbc;
-  --vscode-terminal-ansiWhite: #dde2e9;
-  --vscode-terminal-ansiBrightBlack: #6e7681;
-  --vscode-terminal-ansiBrightRed: #ffa198;
-  --vscode-terminal-ansiBrightGreen: #56d364;
-  --vscode-terminal-ansiBrightYellow: #e3b341;
-  --vscode-terminal-ansiBrightBlue: #79c0ff;
-  --vscode-terminal-ansiBrightMagenta: #d2a8ff;
-  --vscode-terminal-ansiBrightCyan: #56d4dd;
-  --vscode-terminal-ansiBrightWhite: #ffffff;
+  --tet-terminal-ansiBlack: #484f58;
+  --tet-terminal-ansiRed: #db5761;
+  --tet-terminal-ansiGreen: #82b65d;
+  --tet-terminal-ansiYellow: #d9b45c;
+  --tet-terminal-ansiBlue: #58a6f0;
+  --tet-terminal-ansiMagenta: #bc8cff;
+  --tet-terminal-ansiCyan: #5dcfbc;
+  --tet-terminal-ansiWhite: #dde2e9;
+  --tet-terminal-ansiBrightBlack: #6e7681;
+  --tet-terminal-ansiBrightRed: #ffa198;
+  --tet-terminal-ansiBrightGreen: #56d364;
+  --tet-terminal-ansiBrightYellow: #e3b341;
+  --tet-terminal-ansiBrightBlue: #79c0ff;
+  --tet-terminal-ansiBrightMagenta: #d2a8ff;
+  --tet-terminal-ansiBrightCyan: #56d4dd;
+  --tet-terminal-ansiBrightWhite: #ffffff;
 }

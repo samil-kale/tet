@@ -33,9 +33,9 @@
 }
 
 :root {
-  --vscode-font-family: "Inter", sans-serif;
-  --vscode-font-size: 13px;
-  --vscode-editor-font-family: "JetBrains Mono", monospace;
+  --tet-font-family: "Inter", sans-serif;
+  --tet-font-size: 13px;
+  --tet-editor-font-family: "JetBrains Mono", monospace;
 }
 
 html,
@@ -48,10 +48,10 @@ body,
 /* The panel colour, not the editor's: it fills the window before the views draw, matching
    BrowserWindow's backgroundColor in main.ts. */
 body {
-  font-family: var(--vscode-font-family);
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-foreground);
-  background: var(--vscode-panel-background);
+  font-family: var(--tet-font-family);
+  font-size: var(--tet-font-size);
+  color: var(--tet-foreground);
+  background: var(--tet-panel-background);
   overflow: hidden;
   user-select: none;
 }
@@ -66,12 +66,12 @@ button {
 
 /* Monaco and xterm draw their own selection; this is for plain text that opts back in. */
 ::selection {
-  background: var(--vscode-editor-selectionBackground);
+  background: var(--tet-editor-selectionBackground);
 }
 
 /* Keyboard focus only, never a mouse click. */
 button:focus-visible {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--tet-focusBorder);
   outline-offset: -1px;
 }
 
@@ -84,9 +84,9 @@ textarea,
   border-radius: 2px;
   outline: none;
   padding: 3px 6px;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-settings-dropdownBackground);
-  border: 1px solid var(--vscode-input-border);
+  color: var(--tet-input-foreground);
+  background: var(--tet-settings-dropdownBackground);
+  border: 1px solid var(--tet-input-border);
 }
 
 input[type="text"],
@@ -96,7 +96,7 @@ input[type="password"],
 }
 
 input::placeholder {
-  color: var(--vscode-input-placeholderForeground);
+  color: var(--tet-input-placeholderForeground);
 }
 
 /* Every control that cannot be used now: dimmed, never recolored. A checkbox is dimmed with its
@@ -135,7 +135,7 @@ input:focus,
 textarea:focus,
 .dropdown-trigger:focus,
 .dropdown-trigger.open {
-  border-color: var(--vscode-focusBorder);
+  border-color: var(--tet-focusBorder);
 }
 
 /* Text cut short with an ellipsis rather than wrapped or pushing its row wider: the label, name or
@@ -178,7 +178,7 @@ textarea:focus,
   margin-top: 4px;
   padding: 0;
   font-size: var(--small-font-size);
-  color: var(--vscode-textLink-foreground);
+  color: var(--tet-textLink-foreground);
 }
 
 .action-link:hover:not(:disabled) {
@@ -195,11 +195,11 @@ textarea:focus,
 .radio-option {
   height: var(--field-height);
   padding: 0 11px;
-  color: var(--vscode-radio-inactiveForeground);
+  color: var(--tet-radio-inactiveForeground);
   /* No background: VS Code's registry has no `radio.inactiveBackground`, and the button reset
      above leaves none. Not radio.inactiveBorder: the fields' border, so the group reads as one of
      them. */
-  border: 1px solid var(--vscode-input-border);
+  border: 1px solid var(--tet-input-border);
 }
 
 .radio-option:first-child {
@@ -221,13 +221,13 @@ textarea:focus,
 }
 
 .radio-option:hover:not(.active):not(:disabled) {
-  background: var(--vscode-radio-inactiveHoverBackground);
+  background: var(--tet-radio-inactiveHoverBackground);
 }
 
 .radio-option.active {
-  color: var(--vscode-radio-activeForeground);
-  background: var(--vscode-radio-activeBackground);
-  border-color: var(--vscode-radio-activeBorder);
+  color: var(--tet-radio-activeForeground);
+  background: var(--tet-radio-activeBackground);
+  border-color: var(--tet-radio-activeBorder);
 }
 
 /* Anchors `.select-chevron` over the dropdown's right edge. */
@@ -264,7 +264,7 @@ textarea:focus,
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: var(--vscode-input-foreground);
+  color: var(--tet-input-foreground);
 }
 
 /* Scrollbars: no arrows, no track, a translucent slider. A view wanting none hides them itself. */
@@ -279,15 +279,15 @@ textarea:focus,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--vscode-scrollbarSlider-background);
+  background: var(--tet-scrollbarSlider-background);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--vscode-scrollbarSlider-hoverBackground);
+  background: var(--tet-scrollbarSlider-hoverBackground);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: var(--vscode-scrollbarSlider-activeBackground);
+  background: var(--tet-scrollbarSlider-activeBackground);
 }
 
 .app {
@@ -297,8 +297,8 @@ textarea:focus,
   height: 100%;
   /* Shared measurements, checked against the neighbouring view before inventing one: a bar along
      an edge is --bar-height (tab strip, title bar, `.section-header`, the editor tab's bar); the
-     border between panes is 1px --vscode-panel-border; anything that marks or points at something
-     is 1px --vscode-focusBorder. */
+     border between panes is 1px --tet-panel-border; anything that marks or points at something
+     is 1px --tet-focusBorder. */
   --bar-height: 35px;
   /* Pane floors, as MIN_AREA_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
@@ -356,7 +356,7 @@ textarea:focus,
   /* Stops short of the platform's window controls, whose geometry the overlay publishes as
      env() variables. No overlay (macOS, controls on the left): the fallback gives 0. */
   padding-right: calc(100% - env(titlebar-area-width, 100%));
-  background: var(--vscode-titleBar-activeBackground);
+  background: var(--tet-titleBar-activeBackground);
   -webkit-app-region: drag;
 }
 
@@ -378,7 +378,7 @@ textarea:focus,
   font-size: var(--small-font-size);
   font-weight: 600;
   letter-spacing: 1.5px;
-  color: var(--vscode-titleBar-activeForeground);
+  color: var(--tet-titleBar-activeForeground);
 }
 
 /* Just enough room around the icon for the hover background. A `.status-icon` is a status in an
@@ -415,7 +415,7 @@ textarea:focus,
 
 /* Never the list hover colour: invisible on a hovered row, a patch on a selected one. */
 .icon-button:hover:not(:disabled) {
-  background: var(--vscode-toolbar-hoverBackground);
+  background: var(--tet-toolbar-hoverBackground);
   opacity: 1;
 }
 
@@ -440,7 +440,7 @@ textarea:focus,
   display: flex;
   flex: 1;
   min-height: 0;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--tet-panel-border);
 }
 
 .content {
@@ -448,7 +448,7 @@ textarea:focus,
   display: flex;
   flex: 1;
   min-width: var(--content-min-width);
-  background: var(--vscode-editor-background);
+  background: var(--tet-editor-background);
 }
 
 /* Project list --------------------------------------------------------------------------- */
@@ -479,11 +479,11 @@ textarea:focus,
 /* A node's circles are stroked in what lies behind them, which cuts a gap round each from the lines
    it crosses; the row's own background while it has one. HEAD's inner circle is a hole in its ring. */
 .graph-lanes circle {
-  stroke: var(--vscode-sideBar-background);
+  stroke: var(--tet-sideBar-background);
 }
 
 .graph-lanes.head circle:last-child {
-  fill: var(--vscode-sideBar-background);
+  fill: var(--tet-sideBar-background);
 }
 
 .graph-tree .tree-row:hover .graph-lanes circle:first-of-type {
@@ -491,11 +491,11 @@ textarea:focus,
 }
 
 .graph-tree .tree-row:hover .graph-lanes circle:nth-of-type(2) {
-  stroke: var(--vscode-list-hoverBackground);
+  stroke: var(--tet-list-hoverBackground);
 }
 
 .graph-tree .tree-row:hover .graph-lanes.head circle:last-child {
-  fill: var(--vscode-list-hoverBackground);
+  fill: var(--tet-list-hoverBackground);
 }
 
 .graph-tree .tree-row.selected .graph-lanes circle:first-of-type {
@@ -503,15 +503,15 @@ textarea:focus,
 }
 
 .graph-tree .tree-row.selected .graph-lanes circle:nth-of-type(2) {
-  stroke: var(--vscode-list-activeSelectionBackground);
+  stroke: var(--tet-list-activeSelectionBackground);
 }
 
 .graph-tree .tree-row.selected .graph-lanes.head circle:last-child {
-  fill: var(--vscode-list-activeSelectionBackground);
+  fill: var(--tet-list-activeSelectionBackground);
 }
 
 .section ~ .section {
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--tet-panel-border);
 }
 
 .section-header-actions {
@@ -527,7 +527,7 @@ textarea:focus,
 }
 
 .command-label {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--tet-editor-font-family);
 }
 
 /* The titles of a lane's sections and of a tree's groups: one type. */
@@ -535,7 +535,7 @@ textarea:focus,
 .tree-header {
   font-size: var(--small-font-size);
   letter-spacing: 0.3px;
-  color: var(--vscode-sideBarSectionHeader-foreground);
+  color: var(--tet-sideBarSectionHeader-foreground);
 }
 
 /* The tab strip's 35px, border included, so titles and tabs line up. The line above is drawn by
@@ -550,7 +550,7 @@ textarea:focus,
   height: var(--bar-height);
   flex: none;
   padding: 0 6px 0 10px;
-  border-bottom: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--tet-panel-border);
   font-weight: 600;
 }
 
@@ -581,7 +581,7 @@ textarea:focus,
   gap: var(--action-gap);
   /* INDENT_BASE in ui/tree-row.tsx. */
   padding: 0 6px 0 9px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--tet-font-size);
 }
 
 .project-row,
@@ -605,11 +605,11 @@ textarea:focus,
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
 .command-row.drop-before {
-  box-shadow: inset 0 1px 0 var(--vscode-focusBorder);
+  box-shadow: inset 0 1px 0 var(--tet-focusBorder);
 }
 
 .command-row.drop-after {
-  box-shadow: inset 0 -1px 0 var(--vscode-focusBorder);
+  box-shadow: inset 0 -1px 0 var(--tet-focusBorder);
 }
 
 /* A group's, a lane's and a toggle's line is drawn over what it holds, whose hover and
@@ -636,7 +636,7 @@ textarea:focus,
 .lane-toggle.drop-before::before,
 .project-group.drop-after::after,
 .lane-toggle.drop-after::after {
-  background: var(--vscode-focusBorder);
+  background: var(--tet-focusBorder);
 }
 
 .project-group.drop-before::before,
@@ -670,7 +670,7 @@ textarea:focus,
 /* A border as the split view's drop frames, 2px as theirs. */
 .lane.drop-before::before,
 .lane.drop-after::after {
-  border-left: 2px solid var(--vscode-focusBorder);
+  border-left: 2px solid var(--tet-focusBorder);
 }
 
 .lane.drop-before::before,
@@ -706,7 +706,7 @@ textarea:focus,
 .tree-extra {
   flex: 0 1 auto;
   font-size: var(--tiny-font-size);
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* Branch tree ----------------------------------------------------------------------------- */
@@ -815,7 +815,7 @@ textarea:focus,
   width: 100%;
   padding: 0 6px 0 9px;
   text-align: left;
-  font-size: var(--vscode-font-size);
+  font-size: var(--tet-font-size);
 }
 
 .tree-row > .tree-icon {
@@ -836,7 +836,7 @@ textarea:focus,
 .tree-row:hover,
 .account-row:not(.disabled):hover,
 .repository-row:hover {
-  background: var(--vscode-list-hoverBackground);
+  background: var(--tet-list-hoverBackground);
 }
 
 /* After the hover rule: a selected row keeps its selection colour while hovered. HEAD gets a
@@ -846,8 +846,8 @@ textarea:focus,
 .tree-row.current,
 .tree-row.selected,
 .account-row.active {
-  background: var(--vscode-list-activeSelectionBackground);
-  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--tet-list-activeSelectionBackground);
+  color: var(--tet-list-activeSelectionForeground);
 }
 
 /* The files lane's EXPLORER tree, and the SEARCH section under it, whose rows are of the same shape.
@@ -883,31 +883,31 @@ textarea:focus,
 /* Seti's palette (FileIconColor in lanes/files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
 .explorer-tree .tree-icon.blue {
-  color: var(--vscode-terminal-ansiBlue);
+  color: var(--tet-terminal-ansiBlue);
 }
 
 .explorer-tree .tree-icon.yellow {
-  color: var(--vscode-terminal-ansiYellow);
+  color: var(--tet-terminal-ansiYellow);
 }
 
 .explorer-tree .tree-icon.green {
-  color: var(--vscode-terminal-ansiGreen);
+  color: var(--tet-terminal-ansiGreen);
 }
 
 .explorer-tree .tree-icon.red {
-  color: var(--vscode-terminal-ansiRed);
+  color: var(--tet-terminal-ansiRed);
 }
 
 .explorer-tree .tree-icon.orange {
-  color: var(--vscode-terminal-ansiBrightRed);
+  color: var(--tet-terminal-ansiBrightRed);
 }
 
 .explorer-tree .tree-icon.purple {
-  color: var(--vscode-terminal-ansiMagenta);
+  color: var(--tet-terminal-ansiMagenta);
 }
 
 .explorer-tree .tree-icon.pink {
-  color: var(--vscode-terminal-ansiBrightMagenta);
+  color: var(--tet-terminal-ansiBrightMagenta);
 }
 
 /* What the search found in the files (lanes/files/FileSearch.tsx). The rows are the tree's, so
@@ -921,14 +921,14 @@ textarea:focus,
 
 /* A regex that will not parse takes the SEARCH summary's place. */
 .count-badge.error {
-  color: var(--vscode-errorForeground);
+  color: var(--tet-errorForeground);
 }
 
 /* The folder a file sits in, after its name as VS Code's result rows show it: SEARCH's results,
    the flat LOCAL CHANGES. */
 .tree-dir {
   margin-left: 6px;
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
   font-size: var(--tiny-font-size);
 }
 
@@ -941,12 +941,12 @@ textarea:focus,
 
 /* A match row carries the line it found, in the editor's font as VS Code shows it. */
 .search-match {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--tet-editor-font-family);
   font-size: var(--small-font-size);
 }
 
 .search-hit {
-  background: var(--vscode-editor-findMatchHighlightBackground);
+  background: var(--tet-editor-findMatchHighlightBackground);
 }
 
 /* A tree's and a tab's icons are the size of every other, as IntelliJ's. */
@@ -960,7 +960,7 @@ textarea:focus,
 }
 
 .count-badge {
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
   font-weight: 400;
 }
 
@@ -981,7 +981,7 @@ textarea:focus,
   align-items: center;
   gap: 3px;
   font-size: var(--tiny-font-size);
-  border: 1px solid var(--vscode-foreground);
+  border: 1px solid var(--tet-foreground);
   border-radius: 999px;
   padding: 2px 7px 2px 5px;
   font-weight: 200;
@@ -1042,7 +1042,7 @@ textarea:focus,
 .snap-preview,
 .terminal-host.drag-over::after {
   position: absolute;
-  border: 2px solid var(--vscode-focusBorder);
+  border: 2px solid var(--tet-focusBorder);
   z-index: 10;
   pointer-events: none;
 }
@@ -1059,8 +1059,8 @@ textarea:focus,
   /* VS Code's editor tab height. */
   height: var(--bar-height);
   flex: none;
-  background: var(--vscode-tab-inactiveBackground);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--tet-tab-inactiveBackground);
+  border-bottom: 1px solid var(--tet-panel-border);
 }
 
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
@@ -1080,7 +1080,7 @@ textarea:focus,
   position: absolute;
   top: 0;
   height: 100%;
-  background: var(--vscode-progressBar-background);
+  background: var(--tet-progressBar-background);
   animation: tab-progress-loop linear infinite;
 }
 
@@ -1114,9 +1114,9 @@ textarea:focus,
 .dialog-tab {
   display: flex;
   align-items: center;
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-tab-inactiveForeground);
-  border-right: 1px solid var(--vscode-tab-border);
+  font-size: var(--tet-font-size);
+  color: var(--tet-tab-inactiveForeground);
+  border-right: 1px solid var(--tet-tab-border);
 }
 
 .tab {
@@ -1124,16 +1124,16 @@ textarea:focus,
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 6px 0 12px;
   max-width: 270px;
-  background: var(--vscode-tab-inactiveBackground);
+  background: var(--tet-tab-inactiveBackground);
   cursor: pointer;
 }
 
 /* The active tab, in the strip and a dialog's header (`.dialog-tab`) alike. */
 .tab.active,
 .dialog-tab.active {
-  color: var(--vscode-tab-activeForeground);
-  background: var(--vscode-tab-activeBackground);
-  box-shadow: inset 0 -1px 0 var(--vscode-tab-activeBorder);
+  color: var(--tet-tab-activeForeground);
+  background: var(--tet-tab-activeBackground);
+  box-shadow: inset 0 -1px 0 var(--tet-tab-activeBorder);
 }
 
 /* Plain icon buttons at the strip's start, none tab-shaped; boxed like `.new-tab` at the other
@@ -1145,7 +1145,7 @@ textarea:focus,
   align-items: center;
   gap: var(--action-gap);
   flex: none;
-  border-right: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--tet-panel-border);
   padding: 0 6px;
 }
 
@@ -1163,39 +1163,39 @@ textarea:focus,
    sight. One rule for all three, on tab and project row; colour only, size is the site's. */
 .tab-mark {
   flex: none;
-  color: var(--vscode-focusBorder);
+  color: var(--tet-focusBorder);
 }
 
 .tab-mark-working {
-  color: var(--tet-tabMark-workingForeground, var(--vscode-focusBorder));
+  color: var(--tet-tabMark-workingForeground, var(--tet-focusBorder));
 }
 
 .tab-mark-finished {
-  color: var(--tet-tabMark-finishedForeground, var(--vscode-focusBorder));
+  color: var(--tet-tabMark-finishedForeground, var(--tet-focusBorder));
 }
 
 /* On the active tab or row's selection background, else in the mark's own colour. */
 .tab.active .tab-mark-waiting,
 .project-row.active .tab-mark-waiting,
 .worktree-row.active .tab-mark-waiting {
-  color: var(--tet-tabMark-activeForeground, var(--vscode-focusBorder));
+  color: var(--tet-tabMark-activeForeground, var(--tet-focusBorder));
 }
 
 .tab.active .tab-mark-working,
 .project-row.active .tab-mark-working,
 .worktree-row.active .tab-mark-working {
-  color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-workingForeground, var(--vscode-focusBorder)));
+  color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-workingForeground, var(--tet-focusBorder)));
 }
 
 .tab.active .tab-mark-finished,
 .project-row.active .tab-mark-finished,
 .worktree-row.active .tab-mark-finished {
-  color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-finishedForeground, var(--vscode-focusBorder)));
+  color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-finishedForeground, var(--tet-focusBorder)));
 }
 
 /* Not a fourth turn state: red is the one colour Dark Modern names for this meaning. */
 .tab-mark-error {
-  color: var(--vscode-errorForeground);
+  color: var(--tet-errorForeground);
 }
 
 /* Holds the tab's icon or mark and, on a sandboxed tab, the badge over its lower right. */
@@ -1217,11 +1217,11 @@ textarea:focus,
   width: 11.4px;
   height: 11.4px;
   overflow: visible;
-  fill: var(--vscode-tab-inactiveBackground);
+  fill: var(--tet-tab-inactiveBackground);
 }
 
 .tab-badge-ring {
-  stroke: var(--vscode-tab-inactiveBackground);
+  stroke: var(--tet-tab-inactiveBackground);
   stroke-width: 9.1;
 }
 
@@ -1233,11 +1233,11 @@ textarea:focus,
 
 .tab.active .tab-badge,
 .tab.active .tab-badge-ring {
-  fill: var(--vscode-tab-activeBackground);
+  fill: var(--tet-tab-activeBackground);
 }
 
 .tab.active .tab-badge-ring {
-  stroke: var(--vscode-tab-activeBackground);
+  stroke: var(--tet-tab-activeBackground);
 }
 
 .new-tab {
@@ -1245,7 +1245,7 @@ textarea:focus,
   align-items: center;
   flex: none;
   padding: 0 6px;
-  border-left: 1px solid var(--vscode-tab-border);
+  border-left: 1px solid var(--tet-tab-border);
   margin-left: -1px;
 }
 
@@ -1254,12 +1254,12 @@ textarea:focus,
   position: fixed;
   z-index: 20;
   padding: 4px 0;
-  font-size: var(--vscode-font-size);
-  background: var(--vscode-menu-background);
-  color: var(--vscode-menu-foreground);
-  border: 1px solid var(--vscode-menu-border);
+  font-size: var(--tet-font-size);
+  background: var(--tet-menu-background);
+  color: var(--tet-menu-foreground);
+  border: 1px solid var(--tet-menu-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
+  box-shadow: 0 4px 12px var(--tet-widget-shadow);
 }
 
 .context-menu-item {
@@ -1274,8 +1274,8 @@ textarea:focus,
 
 .context-menu-item:not(.disabled):hover,
 .context-menu-item.open {
-  background: var(--vscode-menu-selectionBackground);
-  color: var(--vscode-menu-selectionForeground);
+  background: var(--tet-menu-selectionBackground);
+  color: var(--tet-menu-selectionForeground);
 }
 
 /* A submenu's chevron, at the entry's right edge as in VS Code's menus. */
@@ -1323,7 +1323,7 @@ textarea:focus,
 .context-menu-separator {
   height: 0;
   margin: 4px 0;
-  border-bottom: 1px solid var(--vscode-menu-separatorBackground);
+  border-bottom: 1px solid var(--tet-menu-separatorBackground);
 }
 
 .pane-body {
@@ -1332,7 +1332,7 @@ textarea:focus,
   min-height: 0;
   /* The 6px gutter rows keep from their pane elsewhere. */
   padding: 6px;
-  background: var(--vscode-terminal-background);
+  background: var(--tet-terminal-background);
 }
 
 /* Where one xterm mounts. `-host`, never `terminal`: xterm's own element has class "terminal",
@@ -1343,7 +1343,7 @@ textarea:focus,
   position: absolute;
   /* The stack's padding: an absolute child is placed against the padding box. */
   inset: 6px;
-  background: var(--vscode-terminal-background);
+  background: var(--tet-terminal-background);
   /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. No
      `paint`: it would clip the drag-over frame reaching past the host. */
   contain: size layout style;
@@ -1393,7 +1393,7 @@ textarea:focus,
      laid out under the clip. */
   min-width: 0;
   overflow: hidden;
-  background: var(--vscode-sideBar-background);
+  background: var(--tet-sideBar-background);
 }
 
 /* Only while sliding: left on, it would animate sash drags too. */
@@ -1423,29 +1423,29 @@ textarea:focus,
    modification of a moved file. */
 .change-status {
   margin-top: 2px;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--tet-editor-font-family);
   font-size: var(--small-font-size);
   opacity: 1;
 }
 
 .change-status.modified {
-  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+  color: var(--tet-gitDecoration-modifiedResourceForeground);
 }
 
 .change-status.added {
-  color: var(--vscode-gitDecoration-addedResourceForeground);
+  color: var(--tet-gitDecoration-addedResourceForeground);
 }
 
 .change-status.deleted {
-  color: var(--vscode-gitDecoration-deletedResourceForeground);
+  color: var(--tet-gitDecoration-deletedResourceForeground);
 }
 
 .change-status.untracked {
-  color: var(--vscode-gitDecoration-untrackedResourceForeground);
+  color: var(--tet-gitDecoration-untrackedResourceForeground);
 }
 
 .change-status.conflicted {
-  color: var(--vscode-gitDecoration-conflictingResourceForeground);
+  color: var(--tet-gitDecoration-conflictingResourceForeground);
 }
 
 /* The editor tab's slot in `.pane-body`, over its padding: monaco has its own gutter. Hidden
@@ -1455,7 +1455,7 @@ textarea:focus,
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--vscode-editor-background);
+  background: var(--tet-editor-background);
 }
 
 /* Descendants too, `!important`: monaco writes `visibility: visible` inline on its editors (the
@@ -1508,7 +1508,7 @@ textarea:focus,
 
 /* Unsaved edits: on from the first keystroke until Ctrl+S reaches disk. */
 .editor-dirty {
-  color: var(--vscode-gitDecoration-modifiedResourceForeground);
+  color: var(--tet-gitDecoration-modifiedResourceForeground);
 }
 
 /* Monaco's tooltips off. The container holds both `.monaco-hover` and its arrow
@@ -1521,7 +1521,7 @@ textarea:focus,
    after this file and wins on order. The color is TET's own `.button` undone: monaco names these
    `button` too, and a rule matching them beats the color they would inherit from the widget. */
 .editor-host .find-widget .button {
-  color: var(--vscode-editorWidget-foreground);
+  color: var(--tet-foreground);
   width: var(--action-size) !important;
   height: var(--action-size) !important;
   border-radius: 3px !important;
@@ -1548,8 +1548,8 @@ textarea:focus,
   flex: none;
   height: var(--bar-height);
   padding: 0 12px 0 0;
-  background: var(--vscode-panel-background);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--tet-panel-background);
+  border-bottom: 1px solid var(--tet-panel-border);
 }
 
 /* Boxed with `.tab-strip-actions`; the bar's full height. */
@@ -1560,19 +1560,19 @@ textarea:focus,
 .editor-path {
   flex: 1;
   min-width: 0;
-  font-size: var(--vscode-font-size);
+  font-size: var(--tet-font-size);
 }
 
 /* A toggle whose lane is out (the strip's lane toggles). focusBorder, as everything that
-   points: `--vscode-button-background` is near white in Dark Slate. A disabled one marks nothing. */
+   points: `--tet-button-background` is near white in Dark Slate. A disabled one marks nothing. */
 .icon-button.active:not(:disabled) {
   opacity: 1;
-  color: var(--vscode-focusBorder);
+  color: var(--tet-focusBorder);
 }
 
 /* The checkerboard an image viewer puts behind transparency. */
 .image-diff {
-  --checkerboard: repeating-conic-gradient(var(--vscode-panel-border) 0% 25%, var(--vscode-editor-background) 0% 50%) 50% / 16px 16px;
+  --checkerboard: repeating-conic-gradient(var(--tet-panel-border) 0% 25%, var(--tet-editor-background) 0% 50%) 50% / 16px 16px;
 }
 
 /* Two columns split at the middle: before hugs it from the left, after from the right, a caption
@@ -1622,7 +1622,7 @@ textarea:focus,
   max-width: 100%;
   max-height: var(--image-max-height);
   background: var(--checkerboard);
-  border: 1px solid var(--vscode-panel-border);
+  border: 1px solid var(--tet-panel-border);
 }
 
 /* A side that would not decode, at the other side's size until that is known. */
@@ -1633,8 +1633,8 @@ textarea:focus,
 }
 
 .image-diff figcaption {
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-descriptionForeground);
+  font-size: var(--tet-font-size);
+  color: var(--tet-descriptionForeground);
 }
 
 /* The Markdown preview's scroller, in the page so the scrollbars above reach it; what it shows
@@ -1655,14 +1655,14 @@ textarea:focus,
   flex: none;
 }
 
-/* Always drawn: the 1px `--vscode-panel-border` of every pane boundary, not the 4px hit area.
+/* Always drawn: the 1px `--tet-panel-border` of every pane boundary, not the 4px hit area.
    A border, not a 1px background: at a fractional scale Chromium snaps a box's edges, so 1px
    paints one or two device pixels depending on where the sash sits, but rounds a border's width
    to whole device pixels. */
 .sash::before {
   content: "";
   position: absolute;
-  border: 0 solid var(--vscode-panel-border);
+  border: 0 solid var(--tet-panel-border);
   /* Fades to the drag color and back, not from nothing. */
   transition: border-color 0.1s linear;
 }
@@ -1695,7 +1695,7 @@ textarea:focus,
 
 /* Only while dragged: on hover it would recolor whenever the pointer rests near a border. */
 .sash.dragging::before {
-  border-color: var(--vscode-sash-hoverBorder);
+  border-color: var(--tet-sash-hoverBorder);
 }
 
 /* Shared bits ---------------------------------------------------------------------------- */
@@ -1708,8 +1708,8 @@ textarea:focus,
 
 .placeholder {
   padding: 12px;
-  color: var(--vscode-descriptionForeground);
-  font-size: var(--vscode-font-size);
+  color: var(--tet-descriptionForeground);
+  font-size: var(--tet-font-size);
 }
 
 .empty-workspace {
@@ -1719,7 +1719,7 @@ textarea:focus,
   justify-content: center;
   gap: 12px;
   flex: 1;
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 .button {
@@ -1728,23 +1728,23 @@ textarea:focus,
   height: var(--field-height);
   gap: 6px;
   padding: 5px 11px;
-  border: 1px solid var(--vscode-button-border);
+  border: 1px solid var(--tet-button-border);
   border-radius: 2px;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
+  color: var(--tet-button-foreground);
+  background: var(--tet-button-background);
 }
 
 .button:hover:not(:disabled):not(.disabled) {
-  background: var(--vscode-button-hoverBackground);
+  background: var(--tet-button-hoverBackground);
 }
 
 .button.secondary {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
+  color: var(--tet-button-secondaryForeground);
+  background: var(--tet-button-secondaryBackground);
 }
 
 .button.secondary:hover:not(:disabled):not(.disabled) {
-  background: var(--vscode-button-secondaryHoverBackground);
+  background: var(--tet-button-secondaryHoverBackground);
 }
 
 /* Dialog --------------------------------------------------------------------------------- */
@@ -1781,13 +1781,13 @@ textarea:focus,
   width: 540px;
   max-width: calc(100vw - 32px);
   padding: 16px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--tet-font-size);
   /* The terminal's ground, a step off the header's tab-strip color as the terminal is off the
      tab strip; not the editor widget's. */
-  background: var(--vscode-terminal-background);
-  border: 1px solid var(--vscode-editorWidget-border);
+  background: var(--tet-terminal-background);
+  border: 1px solid var(--tet-editorWidget-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px var(--vscode-widget-shadow);
+  box-shadow: 0 4px 12px var(--tet-widget-shadow);
 }
 
 /* A card dialog's header (tab strip or title bar), drawn by `DialogFrame` as its first child:
@@ -1799,8 +1799,8 @@ textarea:focus,
   height: var(--bar-height);
   margin: -16px -16px 0;
   border-radius: 5px 5px 0 0;
-  background: var(--vscode-tab-inactiveBackground);
-  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--tet-tab-inactiveBackground);
+  border-bottom: 1px solid var(--tet-panel-border);
 }
 
 .dialog-tabs {
@@ -1818,7 +1818,7 @@ textarea:focus,
 .dialog-tab-mark {
   display: flex;
   margin-left: 6px;
-  color: var(--vscode-errorForeground);
+  color: var(--tet-errorForeground);
 }
 
 .dialog-tabs-close {
@@ -1837,7 +1837,7 @@ textarea:focus,
 .dialog-title {
   flex: 1;
   min-width: 0;
-  font-size: var(--vscode-font-size);
+  font-size: var(--tet-font-size);
   font-weight: 600;
 }
 
@@ -1905,8 +1905,8 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 4px;
-  background: var(--vscode-panel-background);
-  border: 1px solid var(--vscode-panel-border);
+  background: var(--tet-panel-background);
+  border: 1px solid var(--tet-panel-border);
   border-radius: 3px;
   padding: 4px;
 }
@@ -1943,7 +1943,7 @@ textarea:focus,
 }
 
 .sbx-arrow {
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* Plain text, pinned to the row's height; a long path is cut, and whole in the title. */
@@ -1951,7 +1951,7 @@ textarea:focus,
   flex: 1;
   min-width: 0;
   line-height: var(--field-height);
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--tet-editor-font-family);
 }
 
 /* The word for a variable this machine sets too, in the row's font
@@ -1960,7 +1960,7 @@ textarea:focus,
   flex: none;
   line-height: var(--field-height);
   white-space: nowrap;
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--tet-editor-font-family);
 }
 
 /* A row Save, sbx's policy or an action refuses: the error mark's colour, as .tab-mark-error,
@@ -1969,7 +1969,7 @@ textarea:focus,
 .dialog-field .row-mark {
   display: flex;
   flex: none;
-  color: var(--vscode-errorForeground);
+  color: var(--tet-errorForeground);
 }
 
 /* EditRow's promise: the field before the mark gives up the mark's room (icon plus the row's gap),
@@ -2003,7 +2003,7 @@ textarea:focus,
 .sbx-account {
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--vscode-panel-border);
+  border-top: 1px solid var(--tet-panel-border);
 }
 
 .sbx-account-status {
@@ -2068,7 +2068,7 @@ textarea:focus,
 
 .dialog-detail {
   margin: 0;
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* A word or path inside a sentence, set off from the words around it by weight alone. */
@@ -2093,12 +2093,12 @@ textarea:focus,
 }
 
 .dialog-field span {
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* A checkbox's label in a field group is a control's, not the group's label. */
 .dialog-field .dialog-checkbox > span {
-  color: var(--vscode-foreground);
+  color: var(--tet-foreground);
 }
 
 /* Every row of controls in a dialog (`FieldRow`), spaced alike. */
@@ -2173,19 +2173,19 @@ textarea:focus,
 .tree-checkbox {
   appearance: none;
   padding: 0;
-  background: var(--vscode-settings-checkboxBackground);
-  border: 1px solid var(--vscode-settings-checkboxBorder);
+  background: var(--tet-settings-checkboxBackground);
+  border: 1px solid var(--tet-settings-checkboxBorder);
   border-radius: 3px;
   cursor: pointer;
 }
 
 /* Not the fields' focus border on a click: only the keyboard's, as a button's. */
 .dialog-checkbox input:focus {
-  border-color: var(--vscode-settings-checkboxBorder);
+  border-color: var(--tet-settings-checkboxBorder);
 }
 
 .dialog-checkbox input:focus-visible {
-  border-color: var(--vscode-focusBorder);
+  border-color: var(--tet-focusBorder);
 }
 
 /* Lucide's `check`, as a mask so it takes the theme's color. */
@@ -2195,7 +2195,7 @@ textarea:focus,
   content: "";
   width: 14px;
   height: 14px;
-  background: var(--vscode-settings-checkboxForeground);
+  background: var(--tet-settings-checkboxForeground);
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
@@ -2255,7 +2255,7 @@ textarea:focus,
 
 /* A script, so in the editor's font. */
 .sbx-setup {
-  font-family: var(--vscode-editor-font-family);
+  font-family: var(--tet-editor-font-family);
 }
 
 /* The Info tab: the versions left, the shortcuts right, filling the rest and wrapping a long
@@ -2277,7 +2277,7 @@ textarea:focus,
 .settings-shortcut-row span:first-child {
   width: 85px;
   flex: none;
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* What refused an answer, wherever the answer was given (`DialogError`): the error mark's colour,
@@ -2289,13 +2289,13 @@ textarea:focus,
   overflow-wrap: anywhere;
   /* A failure of several lines keeps them, as a notice does (.notice-message). */
   white-space: pre-line;
-  color: var(--vscode-errorForeground);
+  color: var(--tet-errorForeground);
 }
 
 /* Edits a running tab takes up only once restarted (RestartNote): words alone, in the warning's
    colour, as .dialog-error in the error's. */
 .restart-note {
-  color: var(--vscode-notificationsWarningIcon-foreground);
+  color: var(--tet-notificationsWarningIcon-foreground);
 }
 
 /* A prompt's color swatches, in the 22px of every action button. The colors themselves come from
@@ -2308,7 +2308,7 @@ textarea:focus,
 .dialog-color {
   width: var(--action-size);
   height: var(--action-size);
-  border: 1px solid var(--vscode-panel-border);
+  border: 1px solid var(--tet-panel-border);
   border-radius: 2px;
 }
 
@@ -2317,14 +2317,14 @@ textarea:focus,
   background: linear-gradient(
     to bottom right,
     transparent calc(50% - 1px),
-    var(--vscode-descriptionForeground) calc(50% - 1px),
-    var(--vscode-descriptionForeground) calc(50% + 1px),
+    var(--tet-descriptionForeground) calc(50% - 1px),
+    var(--tet-descriptionForeground) calc(50% + 1px),
     transparent calc(50% + 1px)
   );
 }
 
 .dialog-color.selected {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: 1px solid var(--tet-focusBorder);
   outline-offset: 1px;
 }
 
@@ -2374,16 +2374,16 @@ textarea:focus,
 /* What to try in a terminal to see what the check saw, or the rule to allow. */
 .requirement-command {
   flex: 1;
-  font-family: var(--vscode-editor-font-family);
-  color: var(--vscode-descriptionForeground);
+  font-family: var(--tet-editor-font-family);
+  color: var(--tet-descriptionForeground);
 }
 
 .requirement-state {
-  color: var(--vscode-errorForeground);
+  color: var(--tet-errorForeground);
 }
 
 .requirement-state.found {
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* Add repository ------------------------------------------------------------------------- */
@@ -2407,7 +2407,7 @@ textarea:focus,
   flex: none;
   overflow-y: auto;
   padding-right: 12px;
-  border-right: 1px solid var(--vscode-panel-border);
+  border-right: 1px solid var(--tet-panel-border);
 }
 
 .account-add {
@@ -2434,7 +2434,7 @@ textarea:focus,
 
 .account-host {
   font-size: var(--small-font-size);
-  color: var(--vscode-descriptionForeground);
+  color: var(--tet-descriptionForeground);
 }
 
 /* Keeps the description readable on the selection blue, where its usual grey is not. */
@@ -2454,7 +2454,7 @@ textarea:focus,
   align-items: center;
   gap: 12px;
   padding: 0 0 0 8px;
-  font-size: var(--vscode-font-size);
+  font-size: var(--tet-font-size);
   height: var(--field-height);
   border-radius: 2px;
 }
@@ -2511,13 +2511,13 @@ textarea:focus,
   margin: 4px;
   padding: 10px 9px;
   text-align: left;
-  font-size: var(--vscode-font-size);
-  color: var(--vscode-notifications-foreground);
-  background: var(--vscode-notifications-background);
-  border: 1px solid var(--vscode-notifications-border);
+  font-size: var(--tet-font-size);
+  color: var(--tet-notifications-foreground);
+  background: var(--tet-notifications-background);
+  border: 1px solid var(--tet-notifications-border);
   border-radius: 4px;
   /* VS Code's notification shadow, all around rather than dropped. */
-  box-shadow: 0 0 8px 2px var(--vscode-widget-shadow);
+  box-shadow: 0 0 8px 2px var(--tet-widget-shadow);
   /* VS Code's slide in from below. */
   animation: notice-slide-in 0.3s ease-out;
 }
@@ -2537,15 +2537,15 @@ textarea:focus,
 }
 
 .notice.error .notice-icon {
-  color: var(--vscode-notificationsErrorIcon-foreground);
+  color: var(--tet-notificationsErrorIcon-foreground);
 }
 
 .notice.warning .notice-icon {
-  color: var(--vscode-notificationsWarningIcon-foreground);
+  color: var(--tet-notificationsWarningIcon-foreground);
 }
 
 .notice.info .notice-icon {
-  color: var(--vscode-notificationsInfoIcon-foreground);
+  color: var(--tet-notificationsInfoIcon-foreground);
 }
 
 /* Long paths break anywhere; a multi-line git message keeps its lines. */
@@ -2564,6 +2564,6 @@ textarea:focus,
 .notice-progress-fill {
   display: block;
   height: 100%;
-  background: var(--vscode-progressBar-background);
+  background: var(--tet-progressBar-background);
   transition: width 0.2s linear;
 }

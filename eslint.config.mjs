@@ -71,11 +71,11 @@ const AGENT_ID = comparedWith(
   "No code outside agents/ names an agent: whether it can do something is whether it has the group (agent.ts)."
 );
 
-/** Colors come from `--vscode-*` variables, set by the themes alone. */
+/** Colors come from `--tet-*` variables, set by the themes alone. */
 const COLOR = "/#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b|\\b(rgba?|hsla?)\\(/";
 const COLOR_LITERAL = [`Literal[value=${COLOR}]`, `TemplateElement[value.raw=${COLOR}]`].map((selector) => ({
   selector,
-  message: "Colors only from --vscode-* variables (renderer/themes/)."
+  message: "Colors only from --tet-* variables (renderer/themes/)."
 }));
 
 /** A function, object or array literal handed to a component is new on every render: the views under App are memoized. */

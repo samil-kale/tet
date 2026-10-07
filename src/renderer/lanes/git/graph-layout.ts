@@ -1,7 +1,7 @@
 import { refName } from "../../../shared/types/git";
 import type { GraphCommit, GraphRef, RepositoryState } from "../../../shared/types/git";
 
-/** A lane's color: a name of VS Code's `--vscode-scmGraph-*` variables. */
+/** A lane's color: a name of the `--tet-scmGraph-*` variables, VS Code's `scmGraph.*` colors. */
 export type GraphColor =
   | "foreground1"
   | "foreground2"

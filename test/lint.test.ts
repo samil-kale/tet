@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { DEFAULT_THEME_IDS } from "../src/shared/themes";
 import { ROOT } from "./helpers";
 
 /** eslint.config.mjs: the layers, the process borders and the rules AGENTS.md states, each held by
@@ -146,7 +147,7 @@ const CALLS: Probe[] = [
   ["src/renderer/ui/x.ts", 'export const a = "#1e1e1e";', "no-restricted-syntax"],
   ["src/renderer/ui/x.tsx", 'export const a = <div style={{ color: "rgba(0, 0, 0, 0.4)" }} />;', "no-restricted-syntax"],
   ["src/renderer/ui/x.ts", "const n = 1;\nexport const a = `hsl(${n} 0% 0%)`;", "no-restricted-syntax"],
-  ["src/renderer/ui/x.ts", 'export const a = "var(--vscode-focusBorder)";', null],
+  ["src/renderer/ui/x.ts", 'export const a = "var(--tet-focusBorder)";', null],
   ["src/renderer/themes/x.ts", 'export const a = "#1e1e1e";', null],
   // App hands the memoized views stable props.
   ["src/renderer/App.tsx", "export const a = <Foo onX={() => 1} />;", "no-restricted-syntax"],
@@ -216,13 +217,34 @@ const CSS_COLOR = /#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(rgba?|
 /** The dialog overlay's fixed dim, the one color no theme sets. */
 const OVERLAY_DIM = { selector: ".dialog-overlay", declaration: "background: rgb(0 0 0 / 40%)" };
 
+/** A stylesheet without its comments. */
+const readCss = (file: string): string => fs.readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+
 /** The renderer's stylesheets but the themes, which ESLint does not read. */
 function stylesheets(): { file: string; css: string }[] {
   const renderer = path.join(ROOT, "src", "renderer");
   return fs
     .readdirSync(renderer, { recursive: true, encoding: "utf8" })
     .filter((file) => file.endsWith(".css") && !file.startsWith(`themes${path.sep}`))
-    .map((file) => ({ file, css: fs.readFileSync(path.join(renderer, file), "utf8").replace(/\/\*[\s\S]*?\*\//g, "") }));
+    .map((file) => ({ file, css: readCss(path.join(renderer, file)) }));
+}
+
+/** The `--tet-*` variables a stylesheet declares. */
+const declaredIn = (css: string): string[] => [...css.matchAll(/(--tet-[\w-]+)\s*:/g)].map((m) => m[1]);
+
+/** What every theme declares — the bare `:root`'s theme's variables, and the fonts styles.css declares
+ *  itself — and what only some do: an optional variable. */
+function themeVariables(): { required: Set<string>; optional: Set<string> } {
+  const themes = path.join(ROOT, "src", "renderer", "themes");
+  const sheets = new Map(
+    fs
+      .readdirSync(themes)
+      .filter((name) => name.endsWith(".css"))
+      .map((name) => [name, declaredIn(readCss(path.join(themes, name)))]),
+  );
+  const required = new Set([...sheets.get(`${DEFAULT_THEME_IDS.dark}.css`)!, ...stylesheets().flatMap(({ css }) => declaredIn(css))]);
+  const optional = new Set([...sheets.values()].flat().filter((name) => !required.has(name)));
+  return { required, optional };
 }
 
 describe("the renderer's stylesheets", () => {
@@ -237,11 +259,26 @@ describe("the renderer's stylesheets", () => {
     }
   });
 
-  it("use a --tet-* variable only with its --vscode-* fallback, maybe behind other --tet-* ones", () => {
+  it("read only declared variables, an optional one behind a fallback every theme declares", () => {
+    const { required, optional } = themeVariables();
     for (const { file, css } of stylesheets()) {
-      for (const [use, fallback] of css.matchAll(/var\(--tet-[\w-]+(,\s*var\((?:--tet-[\w-]+,\s*var\()*--vscode-)?/g)) {
-        assert.ok(fallback, `${file}: ${use} has no --vscode-* fallback`);
+      for (const [use, chain] of css.matchAll(/var\((--tet-[\w-]+(?:,\s*var\(--tet-[\w-]+)*)/g)) {
+        const names = chain.split(/,\s*var\(/);
+        for (const name of names) {
+          assert.ok(required.has(name) || optional.has(name), `${file}: ${name} is declared nowhere`);
+        }
+        assert.ok(required.has(names[names.length - 1]), `${file}: ${use} has no fallback every theme declares`);
       }
+    }
+  });
+
+  it("read every optional variable a theme declares", () => {
+    const { optional } = themeVariables();
+    const read = stylesheets()
+      .map(({ css }) => css)
+      .join("\n");
+    for (const name of optional) {
+      assert.match(read, new RegExp(`var\\(${name}(?![\\w-])`), `${name} is declared but read nowhere`);
     }
   });
 });

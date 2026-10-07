@@ -95,7 +95,7 @@ export interface AddRepositoryResult {
 }
 
 /** A command row's color, stored as the ANSI name so a theme change recolors the rows: the row is
- *  drawn in --vscode-terminal-ansiBright<Name>. The six hues only — black, white and the greys are
+ *  drawn in --tet-terminal-ansiBright<Name>. The six hues only — black, white and the greys are
  *  the terminal's own background or foreground in one theme or another. */
 export const COMMAND_COLORS = ["red", "green", "yellow", "blue", "magenta", "cyan"] as const;
 

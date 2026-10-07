@@ -212,7 +212,7 @@ export class AppWindow {
       minWidth: 800,
       minHeight: 340,
       // Painted before the first frame in the title bar's color, since the window controls overlay
-      // shows at once. Equals --vscode-titleBar-activeBackground and --vscode-sideBar-background.
+      // shows at once. Equals --tet-titleBar-activeBackground and --tet-sideBar-background.
       backgroundColor: theme.windowBackground,
       show: false,
       // Windows takes the .ico (generated from icon.png): per-size frames stay sharp in the taskbar,

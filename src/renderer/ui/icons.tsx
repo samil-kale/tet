@@ -367,7 +367,7 @@ export function QuestionIcon(props: IconProps) {
 
 /**
  * Lucide's `circle-alert` — what cannot work as it stands in a dialog: its row or tab (`RowMark`,
- * `DialogTab.mark`). Its own color, not `--vscode-focusBorder`: see `.tab-mark-error`.
+ * `DialogTab.mark`). Its own color, not `--tet-focusBorder`: see `.tab-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
   return <Lucide {...props} icon={CircleAlert} />;
