@@ -71,7 +71,8 @@ export function sbxVariableRefusal(
  * Whether going from `loaded` and `loadedKnowledge` to `settings` and `knowledge` reaches a running
  * tab only once it restarts: a mount is added at a tab's start (a removed one goes at Save), and
  * `sbx run -e` sets a variable, a new secret's placeholder included, only there (sbx.ts's
- * prepareSbxRun). Ports, hosts and a secret's value or hosts apply at Save.
+ * prepareSbxRun), as a changed setup script runs there. Ports, hosts and a secret's value or hosts
+ * apply at Save; an emptied setup script applies to nothing.
  */
 export function sbxNeedsRestart(
   loaded: SbxProjectSettings,
@@ -85,7 +86,8 @@ export function sbxNeedsRestart(
     (knowledge.skills !== false && knowledge.skillsFolder !== loadedKnowledge.skillsFolder) ||
     settings.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
     settings.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
-    names(settings.variables) !== names(loaded.variables)
+    names(settings.variables) !== names(loaded.variables) ||
+    (settings.setup.length > 0 && settings.setup.join("\n") !== loaded.setup.join("\n"))
   );
 }
 
@@ -99,7 +101,21 @@ export const SBX_PROBLEM = {
   notStarted: "Its sandbox could not be started",
   secretsUnlisted: "sbx did not list the sandbox's secrets",
   hostsUnlisted: "sbx did not list the sandbox's allowed hosts",
+  failed: "Tried again at the next start",
 } as const;
+
+/** A setup script's text as its lines (SbxProjectSettings.setup): each without trailing
+ *  whitespace, blank lines dropped at either end. */
+export function setupLines(text: string): string[] {
+  const lines = text.split(/\r?\n/).map((line) => line.trimEnd());
+  while (lines[0] === "") {
+    lines.shift();
+  }
+  while (lines.at(-1) === "") {
+    lines.pop();
+  }
+  return lines;
+}
 
 /** The policy's no: under governance the organization's, else sbx's own. */
 export function forbiddenBy(organization: string | undefined): string {
@@ -107,7 +123,7 @@ export function forbiddenBy(organization: string | undefined): string {
 }
 
 /** In the dialog's tab order. */
-const SBX_OPTIONS: SbxOption[] = ["knowledge", "ports", "paths", "hosts", "secrets", "variables"];
+const SBX_OPTIONS: SbxOption[] = ["knowledge", "ports", "paths", "hosts", "secrets", "variables", "setup"];
 
 /**
  * What a sandboxed session's start could not apply, one notice per option and reason, its rows
@@ -116,13 +132,19 @@ const SBX_OPTIONS: SbxOption[] = ["knowledge", "ports", "paths", "hosts", "secre
  *   Could not set hosts:
  *    - api.example.com
  *   Forbidden by governance
+ *
+ * The setup script is run, not set; its row is the last line it printed to stderr.
  */
 export function sbxProblemNotices(problems: SbxProblems): string[] {
   return SBX_OPTIONS.flatMap((option) => {
     const rows = Object.entries(problems[option] ?? {});
     const reasons = [...new Set(rows.map(([, reason]) => reason))];
     return reasons.map((reason) =>
-      [`Could not set ${option}:`, ...rows.filter(([, why]) => why === reason).map(([row]) => ` - ${row}`), reason].join("\n"),
+      [
+        `Could not ${option === "setup" ? "run" : "set"} ${option}:`,
+        ...rows.filter(([, why]) => why === reason).map(([row]) => ` - ${row}`),
+        reason,
+      ].join("\n"),
     );
   });
 }

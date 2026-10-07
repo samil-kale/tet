@@ -82,6 +82,10 @@ export interface SbxProjectSettings {
   hosts: string[];
   secrets: SbxSecret[];
   variables: SbxVariable[];
+  /** A script, by its lines (sbx-rules.ts's setupLines), run by `sh -e` as root in each sandbox at a
+   *  tab's start: once per sandbox, and again once its text changes (sbx.ts's runSetup). What an
+   *  earlier version did is not undone. */
+  setup: string[];
 }
 
 /** The two lists of the SBX Settings whose values stay on this machine (sbx-local.ts). */
@@ -161,12 +165,14 @@ export interface SbxSignInResult {
 }
 
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
-export type SbxOption = "hosts" | "paths" | "knowledge" | "ports" | "secrets" | "variables";
+export type SbxOption = "hosts" | "paths" | "knowledge" | "ports" | "secrets" | "variables" | "setup";
 
 /**
  * What of the SBX Settings cannot be applied here, per option: each row's key (the host, the path
- * as configured, the knowledge kind, `host:container`, the env name) with what is wrong with it
- * (sbx.ts's readSbxProblems). Such a row is neither saved nor applied.
+ * as configured, the knowledge kind, `host:container`, the env name, the setup script's last error
+ * line) with what is wrong with it (sbx.ts's readSbxProblems). Such a row is neither saved nor
+ * applied — the setup script, known to fail only once run, is saved and tried again at the next
+ * start.
  */
 export type SbxProblems = Partial<Record<SbxOption, Record<string, string>>>;
 
@@ -183,4 +189,5 @@ export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {
   hosts: [],
   secrets: [],
   variables: [],
+  setup: [],
 };

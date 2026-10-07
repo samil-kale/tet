@@ -18,7 +18,7 @@ import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../../src
 import { SbxAccountStore } from "../../src/main/sbx/sbx-accounts";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { sandboxDir } from "../../src/main/store/project-dirs";
-import { sbxProblemNotices, sbxSecretRefusal, withoutProblems } from "../../src/shared/sbx-rules";
+import { SBX_PROBLEM, sbxNeedsRestart, sbxProblemNotices, sbxSecretRefusal, setupLines, withoutProblems } from "../../src/shared/sbx-rules";
 import { EMPTY_SBX_SETTINGS, EMPTY_SBX_KNOWLEDGE, type SbxPath, type SbxPort, type SbxProjectSettings } from "../../src/shared/types/sbx";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
@@ -630,6 +630,12 @@ describe("what of the SBX Settings could not be applied", () => {
     ]);
   });
 
+  it("says the setup script was run, not set", () => {
+    assert.deepEqual(sbxProblemNotices({ setup: { "sh: 1: abt-get: not found": SBX_PROBLEM.failed } }), [
+      "Could not run setup:\n - sh: 1: abt-get: not found\nTried again at the next start",
+    ]);
+  });
+
   it("is left out of what is saved and applied, a kind of knowledge turned off", () => {
     const settings = {
       ...EMPTY_SBX_SETTINGS,
@@ -645,6 +651,29 @@ describe("what of the SBX Settings could not be applied", () => {
       settings: { ...settings, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
       knowledge: { skills: "ro", plugins: false, instructions: false },
     });
+  });
+});
+
+describe("the SBX Settings' setup script", () => {
+  const loaded = { ...EMPTY_SBX_SETTINGS, setup: ["apt-get update", "apt-get install -y ffmpeg"] };
+  const restart = (setup: string[]): boolean => sbxNeedsRestart(loaded, EMPTY_SBX_KNOWLEDGE, { ...loaded, setup }, EMPTY_SBX_KNOWLEDGE);
+
+  it("waits for a restart once changed, never once emptied", () => {
+    assert.equal(restart(loaded.setup), false, "unchanged");
+    assert.equal(restart([...loaded.setup, "npm i -g pnpm"]), true, "a line added");
+    assert.equal(restart(["apt-get update", "apt-get install -y ffmpeg imagemagick"]), true, "a line changed");
+    assert.equal(restart([]), false, "emptied");
+  });
+
+  it("is kept by its lines as typed, without trailing whitespace or blank lines at either end", () => {
+    assert.deepEqual(setupLines("\r\n\napt-get update  \r\nif true; then\n  echo hi\nfi\n\n"), [
+      "apt-get update",
+      "if true; then",
+      "  echo hi",
+      "fi",
+    ]);
+    assert.deepEqual(setupLines("a\n\nb"), ["a", "", "b"], "a blank line inside stays");
+    assert.deepEqual(setupLines(" \n\t\n"), []);
   });
 });
 

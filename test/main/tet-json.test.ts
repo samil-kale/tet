@@ -290,6 +290,7 @@ describe("readSbxSettings", () => {
       hosts: ["gitlab.example.com", "*.s3.example.net:443"],
       secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }],
       variables: [{ env: "NPM_TOKEN" }],
+      setup: ["apt-get update", "", "apt-get install -y ffmpeg"],
     };
     await writeSbxSettings(root, config);
     assert.deepEqual(await readSbxSettings(root), config, "the rows that apply here come back, the other OS's does not");
@@ -333,6 +334,7 @@ describe("readSbxSettings", () => {
             "BARE_STRING",
             {},
           ],
+          setup: ["", "apt-get update", 7, "  apt-get install -y ffmpeg  ", ""],
           tokens: { claude: "sk-ant-should-not-be-read" },
         },
       }),
@@ -344,6 +346,7 @@ describe("readSbxSettings", () => {
       hosts: ["ok.example.com", "spaced.example.com"],
       secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
       variables: [{ env: "NPM_TOKEN" }],
+      setup: ["apt-get update", "  apt-get install -y ffmpeg"],
     });
   });
 });

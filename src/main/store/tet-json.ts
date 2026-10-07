@@ -5,6 +5,7 @@ import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError
 import writeFileAtomic from "write-file-atomic";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
+import { setupLines } from "../../shared/sbx-rules";
 import { COMMAND_COLORS } from "../../shared/types/project";
 import { SBX_ACCESS } from "../../shared/types/sbx";
 import type { ExplorerRoot } from "../../shared/types/files";
@@ -360,6 +361,11 @@ function toSbxHosts(value: unknown): string[] {
     .filter(Boolean);
 }
 
+/** The setup script's lines, as the dialog takes them (setupLines); a line not a string dropped. */
+function toSbxSetup(value: unknown): string[] {
+  return Array.isArray(value) ? setupLines(value.filter((line): line is string => typeof line === "string").join("\n")) : [];
+}
+
 /** A row needs an env name and a host; hosts trimmed as toSbxHosts, a repeated env name dropped —
  *  sbx refuses a second secret for one. */
 function toSbxSecrets(value: unknown): SbxSecret[] {
@@ -413,9 +419,9 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
 }
 
 /** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
- *  hosts and the variables' names. Never holds a token: each sandboxed agent signs in with its own
- *  `/login` inside the sandbox, and a secret's or variable's value stays on this machine, as does
- *  the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this machine reaches one
+ *  hosts, the variables' names and the setup script. Never holds a token: each sandboxed agent signs
+ *  in with its own `/login` inside the sandbox, and a secret's or variable's value stays on this
+ *  machine, as does the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this machine reaches one
  *  sandbox, and its repository's has it. */
 export async function readSbxSettings(root: string): Promise<SbxProjectSettings> {
   const own = configRoot(root);
@@ -435,6 +441,7 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
     hosts: toSbxHosts(sbx.hosts),
     secrets,
     variables: toSbxVariables(sbx.variables, secrets),
+    setup: toSbxSetup(sbx.setup),
   };
 }
 
@@ -453,6 +460,7 @@ export function writeSbxSettings(root: string, config: SbxProjectSettings): Prom
           hosts: config.hosts,
           secrets: config.secrets,
           variables: config.variables,
+          setup: config.setup,
         },
       ],
     ];

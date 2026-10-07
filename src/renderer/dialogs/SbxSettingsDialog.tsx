@@ -52,6 +52,7 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "hosts", label: "Hosts" },
   { id: "secrets", label: "Secrets" },
   { id: "variables", label: "Variables" },
+  { id: "setup", label: "Setup" },
 ];
 
 /**

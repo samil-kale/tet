@@ -2225,11 +2225,17 @@ textarea:focus,
   max-height: none;
 }
 
-.settings-prompt {
+.settings-prompt,
+.sbx-setup {
   flex: 1;
   min-height: 0;
   resize: none;
   padding: 5px 6px;
+}
+
+/* A script, so in the editor's font. */
+.sbx-setup {
+  font-family: var(--vscode-editor-font-family);
 }
 
 /* The Info tab: the versions left, the shortcuts right, filling the rest and wrapping a long

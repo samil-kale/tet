@@ -21,7 +21,7 @@ import { inTurn } from "../util/async";
 import type { SandboxedAgent } from "../agents/agent";
 import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
-import { runSbx, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
+import { runSbx, sbxError, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
 import { listSandboxes, mountableBy, readHostAllowed, readPolicy, sandboxControl, type SandboxList } from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
@@ -47,7 +47,7 @@ export function sandboxName(ref: ProjectRef, agentId: AgentId): string {
 }
 
 /** An id's share of a sandbox name (a repository's or worktree's) and of a secret placeholder (a
- *  project's). */
+ *  project's); the setup script's mark in its sandbox (runSetup). */
 function idHash(id: string): string {
   return crypto.createHash("sha1").update(id).digest("hex").slice(0, 12);
 }
@@ -165,6 +165,46 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
   } else {
     sbxFailure(written, `writing tet-ctl into the ${name} sandbox`);
   }
+}
+
+/** The idHash of the setup script that last ran to its end in a sandbox: in its own filesystem, not
+ *  a mount, so it goes with the sandbox, as does what the script installed. */
+const SETUP_DONE = "/var/lib/tet/setup";
+
+/**
+ * Runs the setup script by `sh -e` as root, unless SETUP_DONE holds its hash already, and records
+ * it once it ran to its end. A script that fails is not recorded, to be tried at the next start,
+ * and comes back as the line it last printed to stderr, for the start's notice. What an earlier
+ * version did is not undone: the sandbox keeps it until it is created anew. One turn per sandbox
+ * (`sandboxSetups`): two tabs starting together would both run it. Script and hash go in as
+ * arguments, so nothing of them is quoted into the command line. `DEBIAN_FRONTEND=noninteractive`:
+ * there is no terminal to answer a package's question (tzdata's), so apt takes the defaults.
+ */
+async function runSetup(name: string, lines: readonly string[], onData?: OnData): Promise<Record<string, string>> {
+  if (lines.length === 0) {
+    return {};
+  }
+  const script = lines.join("\n");
+  const ran = await inTurn(sandboxSetups, name, () =>
+    runSbx(
+      [
+        "exec",
+        "-u",
+        "root",
+        "-e",
+        "DEBIAN_FRONTEND=noninteractive",
+        name,
+        "sh",
+        "-c",
+        `[ "$(cat ${SETUP_DONE} 2>/dev/null)" = "$2" ] || { sh -e -c "$1" && mkdir -p "$(dirname ${SETUP_DONE})" && echo "$2" > ${SETUP_DONE}; }`,
+        "tet-setup",
+        script,
+        idHash(script),
+      ],
+      { onData },
+    ),
+  );
+  return ran.ok ? {} : { [sbxError(ran) || `exit ${ran.code ?? "none"}`]: SBX_PROBLEM.failed };
 }
 
 /**
@@ -483,6 +523,7 @@ async function readySandboxRun(
     // The sandbox's secrets went with any earlier one of its name.
     addProblems(problems, "secrets", await applySecrets(name, projectId, settings.secrets, secretValues, [], new Set(), onData));
   }
+  addProblems(problems, "setup", await runSetup(name, settings.setup, onData));
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged. The agent positional is only
   // verified by sbx; `--name` finds the sandbox. The plain agent id even for a kit

@@ -13,7 +13,7 @@ import type {
   SbxProjectSettings,
   SbxStoredLocal,
 } from "../../shared/types/sbx";
-import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal } from "../../shared/sbx-rules";
+import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal, setupLines } from "../../shared/sbx-rules";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
 import {
@@ -70,6 +70,8 @@ export interface FieldsState {
   secrets: Row<{ env: string; hosts: string; value: string; from?: string }>[];
   /** `value` and `from` as for `secrets`. */
   variables: Row<{ env: string; value: string; from?: string }>[];
+  /** The setup script as typed. */
+  setup: string;
 }
 
 /** A typed section's row as "+ Add" makes it, and as one stands in where the section has none
@@ -99,6 +101,7 @@ export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLoca
       settings.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
       BLANK_VARIABLE,
     ),
+    setup: settings.setup.join("\n"),
   };
 }
 
@@ -168,7 +171,8 @@ export function saveBlocked(state: FieldsState): string | undefined {
   return undefined;
 }
 
-/** The inverse, for Save: ids dropped, as are empty port, host, secret and variable rows. */
+/** The inverse, for Save: ids dropped, as are empty port, host, secret and variable rows; the
+ *  setup script as its lines. */
 export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enabled"> {
   return {
     ports: state.ports
@@ -178,6 +182,7 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
     secrets: state.secrets.filter((row) => !isEmptySecretRow(row)).map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
     variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() })),
+    setup: setupLines(state.setup),
   };
 }
 
@@ -549,6 +554,23 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         }}
         add={variables.add}
       />
+    );
+  }
+
+  if (section === "setup") {
+    return (
+      <FieldGroup label="Setup script">
+        <textarea
+          className="sbx-setup"
+          spellCheck={false}
+          placeholder={"apt-get update\napt-get install -y ffmpeg"}
+          value={state.setup}
+          onChange={(event) => update("setup", () => event.target.value)}
+        />
+        <p className="dialog-detail">
+          Runs once per sandbox when its first tab starts, and again after every change. Write it so that running it twice does no harm.
+        </p>
+      </FieldGroup>
     );
   }
 
