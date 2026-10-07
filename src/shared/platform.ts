@@ -80,8 +80,6 @@ export interface Platform {
   readonly modifierLabel: string;
   /** The context menu entry showing a file in the file manager. */
   readonly revealLabel: string;
-  /** Monaco's own Replace key, which TET unbinds (editor-views.ts). */
-  readonly replaceKey: string;
 }
 
 /** POSIX shells: `$SHELL`, `-c`; a `'` closed, escaped and reopened. */
@@ -131,7 +129,6 @@ export const WINDOWS: Platform = {
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in Explorer",
-  replaceKey: "ctrl+h",
 };
 
 const POSIX_INSTALL = "curl -fsSL https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.sh | sh";
@@ -165,7 +162,6 @@ export const MAC: Platform = {
   modifierKey: "Meta",
   modifierLabel: "⌘",
   revealLabel: "Reveal in Finder",
-  replaceKey: "alt+ctrl+f",
 };
 
 export const LINUX: Platform = {
@@ -197,7 +193,6 @@ export const LINUX: Platform = {
   modifierKey: "Control",
   modifierLabel: "Ctrl",
   revealLabel: "Show in your file manager",
-  replaceKey: "ctrl+h",
 };
 
 /** The platform an id names (`process.platform`); any other Unix is taken as Linux. */

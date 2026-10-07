@@ -1522,18 +1522,15 @@ textarea:focus,
    `button` too, and a rule matching them beats the color they would inherit from the widget. */
 .editor-host .find-widget .button {
   color: var(--tet-foreground);
-  width: var(--action-size) !important;
-  height: var(--action-size) !important;
   border-radius: 3px !important;
   background-color: transparent !important;
   opacity: 0.8;
 }
 
-/* No replace: the widget's only `.toggle` is the one opening the replace row, which TET offers
-   neither in the context menu nor on a key (`configureEditor`). */
-.editor-host .find-widget .button.toggle,
-.editor-host .find-widget > .replace-part {
-  display: none !important;
+/* The replace toggle keeps monaco's size: a strip along the widget's whole height. */
+.editor-host .find-widget .button:not(.toggle) {
+  width: var(--action-size) !important;
+  height: var(--action-size) !important;
 }
 
 .editor-host .find-widget .button:not(.disabled):hover {
