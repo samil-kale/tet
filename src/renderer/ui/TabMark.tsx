@@ -14,6 +14,6 @@ export function TabMark({ kind, className }: { kind: TabMarkKind; className?: st
     case "working":
       return <SpinnerIcon className={classes("spinning")} />;
     case "finished":
-      return <CommentIcon className={classes("")} />;
+      return <CommentIcon className={classes("tab-mark-finished")} />;
   }
 }

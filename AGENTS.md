@@ -375,8 +375,8 @@ or a per-line decision is for an agent.
   marks or points. Exceptions: git status letters,
   the error mark, a notice's severity icon, an editor tab's unsaved dot, the file icons. A theme
   whose own mark colour differs sets it in place of the accent: the active tab's underline
-  (`tab.activeBorder`, from its `tab.activeBorderTop`) and the working mark
-  (`--tet-tabMark-workingForeground`), as GitHub's and Dracula's.
+  (`tab.activeBorder`, from its `tab.activeBorderTop`) and the working and finished marks
+  (`--tet-tabMark-workingForeground`, `--tet-tabMark-finishedForeground`), as GitHub's and Dracula's.
 - Row hover is `--vscode-list-hoverBackground`, action button hover
   `--vscode-toolbar-hoverBackground`.
 - A disabled control is dimmed, never recolored (opacity 0.4, the default cursor): every new

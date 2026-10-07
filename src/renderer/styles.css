@@ -1171,6 +1171,10 @@ textarea:focus,
   --tab-mark-color: var(--tet-tabMark-workingForeground, var(--vscode-focusBorder));
 }
 
+.tab-mark-finished {
+  --tab-mark-color: var(--tet-tabMark-finishedForeground, var(--vscode-focusBorder));
+}
+
 /* On the active tab or row's selection background. */
 .tab.active .tab-mark:not(.tab-mark-error),
 .project-row.active .tab-mark:not(.tab-mark-error),
