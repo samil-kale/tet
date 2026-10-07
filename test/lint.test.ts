@@ -237,9 +237,9 @@ describe("the renderer's stylesheets", () => {
     }
   });
 
-  it("use a --tet-* variable only with its --vscode-* fallback", () => {
+  it("use a --tet-* variable only with its --vscode-* fallback, maybe behind other --tet-* ones", () => {
     for (const { file, css } of stylesheets()) {
-      for (const [use, fallback] of css.matchAll(/var\(--tet-[\w-]+(,\s*var\(--vscode-)?/g)) {
+      for (const [use, fallback] of css.matchAll(/var\(--tet-[\w-]+(,\s*var\((?:--tet-[\w-]+,\s*var\()*--vscode-)?/g)) {
         assert.ok(fallback, `${file}: ${use} has no --vscode-* fallback`);
       }
     }

@@ -421,8 +421,8 @@ function sbxSection(content: ProjectFile): Record<string, unknown> {
 /** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
  *  hosts, the variables' names and the setup script. Never holds a token: each sandboxed agent signs
  *  in with its own `/login` inside the sandbox, and a secret's or variable's value stays on this
- *  machine, as does the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this machine reaches one
- *  sandbox, and its repository's has it. */
+ *  machine, as does the knowledge (sbx-local.ts). A worktree forwards no ports: a port of this
+ *  machine reaches one sandbox, and its repository's has it. */
 export async function readSbxSettings(root: string): Promise<SbxProjectSettings> {
   const own = configRoot(root);
   return toSbxSettings(await read(path.join(own, PROJECT_FILE)), own !== root);

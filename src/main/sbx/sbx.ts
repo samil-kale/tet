@@ -55,7 +55,8 @@ function idHash(id: string): string {
 /** Sandboxes given the `tet-ctl` launcher this run; cleared in removeSandbox. */
 const launcherWritten = new Set<string>();
 
-/** The `sbx create` (or rebuild) underway per sandbox name — see ensureSandboxExists. */
+/** The `sbx create` (or rebuild) or setup script underway per sandbox name — see
+ *  ensureSandboxExists and runSetup. */
 const sandboxSetups = new Map<string, Promise<unknown>>();
 
 export async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {

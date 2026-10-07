@@ -310,7 +310,7 @@ describe("readSbxSettings", () => {
       JSON.stringify({
         sbx: {
           enabled: true,
-          knowledge: { skills: "not-a-real-access", plugins: true, instructions: "ro" },
+          knowledge: { skills: "not-a-real-access", instructions: "ro" },
           ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
           paths: [
             { path: "", os: PLATFORM.id },

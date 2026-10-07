@@ -5,15 +5,15 @@ type TabMarkKind = "error" | "waiting" | "working" | "finished";
 
 /** A session's mark; which one wins where several hold is the site's to rank. */
 export function TabMark({ kind, className }: { kind: TabMarkKind; className?: string }) {
-  const classes = (extra: string) => [className, "tab-mark", extra].filter(Boolean).join(" ");
+  const classes = (extra?: string) => [className, "tab-mark", `tab-mark-${kind}`, extra].filter(Boolean).join(" ");
   switch (kind) {
     case "error":
-      return <TabErrorIcon className={classes("tab-mark-error")} />;
+      return <TabErrorIcon className={classes()} />;
     case "waiting":
-      return <QuestionIcon className={classes("")} />;
+      return <QuestionIcon className={classes()} />;
     case "working":
       return <SpinnerIcon className={classes("spinning")} />;
     case "finished":
-      return <CommentIcon className={classes("tab-mark-finished")} />;
+      return <CommentIcon className={classes()} />;
   }
 }

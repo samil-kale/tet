@@ -102,8 +102,9 @@ export const piAgent: SandboxedAgent = {
     sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
     // pi has no built-in kit, so it is Docker's v3 kit, whose image sbx pulls on the first
     // create; home is `/home/agent` like every built-in. It is `create`'s first positional (`--kit`
-    // means a mixin); `sbx run` reattaches by `--name` with plain `pi`. Auth is not TET's: the kit
-    // takes an Anthropic credential from sbx's store, without which every model call fails.
+    // means a mixin); `sbx run` reattaches by `--name` alone, the agent read from the sandbox.
+    // Auth is not TET's: the kit takes an Anthropic credential from sbx's store, without which
+    // every model call fails.
     kit: "docker.io/docker/sbx-kit-pi:latest",
     sessions: piSandboxSessions,
   },
