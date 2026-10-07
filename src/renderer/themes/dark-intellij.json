@@ -650,6 +650,14 @@
       "settings": {
         "fontStyle": "strikethrough"
       }
+    },
+    {
+      "scope": [
+        "constant.other.option"
+      ],
+      "settings": {
+        "foreground": "#ce8e6d"
+      }
     }
   ],
   "type": "dark"

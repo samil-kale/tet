@@ -1493,6 +1493,15 @@
       "settings": {
         "foreground": "#8B8B85"
       }
+    },
+    {
+      "name": "Command Options",
+      "scope": [
+        "constant.other.option"
+      ],
+      "settings": {
+        "foreground": "#B35A2A"
+      }
     }
   ]
 }

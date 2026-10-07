@@ -67,7 +67,9 @@ maps id to variable.
      with a mark color of its own (`tab.activeBorderTop`) takes that instead.
 5. **Deviate from the theme only where its value fails in TET** — unreadable, invisible on its
    ground, or drawing a line TET does not want — and comment it at the value, saying what it is
-   instead and why: `Not the theme's <value>: …`.
+   instead and why: `Not the theme's <value>: …`. A token rule the theme file lacks goes at the
+   end of its `tokenColors`, in a color of the theme's own, and is named in the stylesheet's header
+   comment, since the JSON holds none.
 6. **Wire it up**:
    - Its entry in `THEMES`: `id`, `label` (without Dark/Light), `kind` (the theme's `type`), and
      `shikiTheme`. `windowBackground` and `titleBarSymbolColor` copy `--tet-titleBar-activeBackground`

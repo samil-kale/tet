@@ -1754,6 +1754,15 @@
       "settings": {
         "foreground": "#bcbec4"
       }
+    },
+    {
+      "name": "Command Options",
+      "scope": [
+        "constant.other.option"
+      ],
+      "settings": {
+        "foreground": "#E07A47"
+      }
     }
   ]
 }

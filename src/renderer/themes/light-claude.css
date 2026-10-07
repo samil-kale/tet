@@ -1,8 +1,10 @@
 /*
  * "Light Claude": the Light variant of sathishsk-me.claude-theme-for-vscode (MIT, S K). Values,
  * token colors included, come from light-claude.json beside this file: the extension's theme file
- * as it ships, renamed. See THEMES.md for the layer. Exceptions: the surfaces and their borders are
- * claude.ai's; the dimmed text, the selection and the toolbar hover; each marked where it stands.
+ * as it ships, renamed, plus its last token rule: a command's options (`constant.other.option`) in
+ * the theme's parameter color, which the file leaves to the string around them. See THEMES.md for
+ * the layer. Exceptions: the surfaces and their borders are claude.ai's; the dimmed text, the
+ * selection and the toolbar hover; each marked where it stands.
  */
 :root[data-theme="light-claude"] {
   color-scheme: light;

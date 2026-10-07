@@ -1,7 +1,9 @@
 /*
  * "Dark IntelliJ": the Dark variant of compassak.intellij-idea-new-ui (MIT, Ananda Bibek Ray).
  * Values, token colors included, come from dark-intellij.json beside this file: the extension's
- * theme file as it ships, renamed. See THEMES.md for the layer.
+ * theme file as it ships, renamed, plus its last token rule: a command's options
+ * (`constant.other.option`) in the theme's constant color, which the file leaves to the string
+ * around them. See THEMES.md for the layer.
  */
 :root[data-theme="dark-intellij"] {
   color-scheme: dark;
