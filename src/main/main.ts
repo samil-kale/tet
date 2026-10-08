@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BaseWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git/git-logins";
@@ -19,6 +19,8 @@ import { EnvRequests } from "./ctl/env-requests";
 import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { stopExplorerProcess } from "./git/explorer-client";
+import { browserAutomation } from "./browser/browser-client";
+import { BrowserTabs } from "./browser/browser-tabs";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
 import { resolveProjectRef } from "./store/resolved-ref";
@@ -216,6 +218,18 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onNotice: notice,
 });
 
+/** The browser tabs' pages, and Playwright driving them for the browser verbs. */
+const browserTabs = new BrowserTabs({
+  host: appWindow,
+  onTabs: (ref, tabs) => send("browser:changed", { ref, tabs }),
+  onOpened: (ref, tabId) => send("tabs:show", { ref, tabId }),
+  onPressed: (ref, tabId) => send("browser:pressed", { ref, tabId }),
+  onClosed: (tabId) => browser.tabClosed(tabId),
+  onShortcut: (shortcut) => send("browser:shortcut", shortcut),
+  notice,
+});
+const browser = browserAutomation((tabId) => browserTabs.pageById(tabId));
+
 function openProjectRef(ref: ProjectRef): void {
   const resolved = resolveProjectRef(dataRoot, store, ref);
   repositories.open(resolved);
@@ -227,6 +241,7 @@ const projectDeps: ProjectDeps = {
   store,
   repositories,
   tabManagers,
+  browserTabs,
   records,
   sbxLocal,
   openProjectRef,
@@ -320,6 +335,7 @@ async function startControl(): Promise<void> {
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
+        browser: { tabs: browserTabs, automation: browser.api },
         showDesktopNotification,
         environment,
         envRequests,
@@ -429,6 +445,7 @@ if (!app.requestSingleInstanceLock()) {
       envRequests,
       repositories,
       tabManagers,
+      browserTabs,
       records,
       projectDeps,
       notice,
@@ -443,7 +460,7 @@ if (!app.requestSingleInstanceLock()) {
     startAutoUpdate(installed, releasesUrl, dataRoot, notice, appWindow.noticeProgress);
 
     app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (BaseWindow.getAllWindows().length === 0) {
         createWindow();
       }
     });
@@ -486,6 +503,7 @@ function shutdown(relaunch: boolean): void {
       repositories.disposeAll();
       stopGitProcess();
       stopExplorerProcess();
+      browser.stop();
       await controlServer?.close();
       if (relaunch) {
         app.relaunch();

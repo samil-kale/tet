@@ -1,9 +1,10 @@
+import { useRef } from "react";
 import { createPortal } from "react-dom";
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { SeverityIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
-import { useTopDialog } from "./window-covered";
+import { useFloatsOver, useTopDialog } from "./window-covered";
 
 /** VS Code's durations. */
 const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
@@ -109,11 +110,14 @@ function dismissNotice(id: number): void {
 export function Notices() {
   const notices = useStore(shown);
   const dialog = useTopDialog();
+  const stackRef = useRef<HTMLDivElement>(null);
+  // Over a browser tab's page, which gives way; inside a dialog, the dialog covers it anyway.
+  useFloatsOver(stackRef, notices.length > 0 && !dialog);
   if (notices.length === 0) {
     return null;
   }
   const stack = (
-    <div className="notices">
+    <div className="notices" ref={stackRef}>
       {notices.map((notice) => (
         <button
           key={notice.id}

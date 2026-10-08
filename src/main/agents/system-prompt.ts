@@ -36,6 +36,18 @@ const WORKTREE_SENTENCE =
 const TASK_SENTENCE =
   " When the user wants another agent or a tab of its own on a task, open one with tet-ctl; your own subagents stay as they are.";
 
+/** Only where the browser verbs answer. An agent's own browser tools drive another browser than the
+ *  tab the user watches beside it. */
+const BROWSER_SENTENCE =
+  " When you need a web browser, to check a web app or read a page, use tet-ctl's browser verbs rather than your own browser tools: " +
+  "the page opens in a tab the user sees.";
+
 export function systemPrompt(side: ControlSide): string {
-  return tetSentences(side) + WORKTREE_SENTENCE + TASK_SENTENCE + (admitsVerb(side, "env-request") ? ENVIRONMENT_SENTENCE : "");
+  return (
+    tetSentences(side) +
+    WORKTREE_SENTENCE +
+    TASK_SENTENCE +
+    (admitsVerb(side, "browser-open") ? BROWSER_SENTENCE : "") +
+    (admitsVerb(side, "env-request") ? ENVIRONMENT_SENTENCE : "")
+  );
 }

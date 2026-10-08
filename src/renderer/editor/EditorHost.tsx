@@ -20,7 +20,7 @@ import {
   subscribeRefEditors,
   type EditorSnapshot,
 } from "./editor-views";
-import { isEditorTab, type PaneTab } from "./editor-tab";
+import { isEditorTabId } from "./editor-tab";
 import { IconButton } from "../ui/IconButton";
 import { CollapseAllIcon, CompareIcon, ExpandAllIcon, SaveIcon, SideBySideIcon, ViewIcon } from "../ui/icons";
 import { useStoredShare } from "../ui/layout-storage";
@@ -47,9 +47,9 @@ export function useEditorPreview(tabId: string): boolean {
  * holding them. One subscription for the repository or worktree: a pane's tabs come and go, and
  * hooks can't follow them.
  */
-export function useEditorBusy(ref: ProjectRef, tabs: PaneTab[]): boolean {
+export function useEditorBusy(ref: ProjectRef, tabs: readonly { tabId: string }[]): boolean {
   const subscribe = useCallback((listener: () => void) => subscribeRefEditors(ref, listener), [ref]);
-  return useSyncExternalStore(subscribe, () => tabs.some((tab) => isEditorTab(tab) && busy(getEditorSnapshot(tab.tabId))));
+  return useSyncExternalStore(subscribe, () => tabs.some((tab) => isEditorTabId(tab.tabId) && busy(getEditorSnapshot(tab.tabId))));
 }
 
 interface EditorHostProps {

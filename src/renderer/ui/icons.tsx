@@ -1,5 +1,7 @@
 import {
   ArrowDown,
+  ArrowLeft,
+  ArrowRight,
   ArrowUp,
   CaseSensitive,
   Check,
@@ -37,6 +39,7 @@ import {
   Plus,
   RefreshCw,
   Regex,
+  RotateCw,
   Save,
   Search,
   Settings,
@@ -387,6 +390,26 @@ export function CommentIcon(props: IconProps) {
 /** Lucide's `globe` — a remote. */
 export function RemoteIcon(props: IconProps) {
   return <Lucide {...props} icon={Globe} />;
+}
+
+/** Lucide's `globe` — a browser tab. */
+export function BrowserIcon(props: IconProps) {
+  return <Lucide {...props} icon={Globe} />;
+}
+
+/** Lucide's `arrow-left` — a browser tab's back. */
+export function BackIcon(props: IconProps) {
+  return <Lucide {...props} icon={ArrowLeft} />;
+}
+
+/** Lucide's `arrow-right` — a browser tab's forward. */
+export function ForwardIcon(props: IconProps) {
+  return <Lucide {...props} icon={ArrowRight} />;
+}
+
+/** Lucide's `rotate-cw` — a browser tab's reload. */
+export function ReloadIcon(props: IconProps) {
+  return <Lucide {...props} icon={RotateCw} />;
 }
 
 /** Lucide's `settings`. */

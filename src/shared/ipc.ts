@@ -105,6 +105,9 @@ export interface InvokeChannels {
   "tabs:handover": TETApi["tabs"]["handOver"];
   "tabs:restart": TETApi["tabs"]["restart"];
   "tabs:starting": TETApi["tabs"]["starting"];
+  "browser:list": TETApi["browser"]["list"];
+  "browser:create": TETApi["browser"]["create"];
+  "browser:close": TETApi["browser"]["close"];
   "agents:list": TETApi["agents"]["list"];
   "agents:askable": TETApi["agents"]["askable"];
   "agents:ask-models": TETApi["agents"]["askModels"];
@@ -134,6 +137,11 @@ export interface SendChannels {
   "tabs:on-screen": TETApi["tabs"]["reportOnScreen"];
   "tabs:input": TETApi["tabs"]["input"];
   "tabs:resize": TETApi["tabs"]["resize"];
+  "browser:navigate": TETApi["browser"]["navigate"];
+  "browser:go": TETApi["browser"]["go"];
+  "browser:place": TETApi["browser"]["place"];
+  "browser:active": TETApi["browser"]["reportActive"];
+  "browser:raise": TETApi["browser"]["raise"];
   [reply: WindowReply]: (answer: string | undefined) => void;
 }
 
@@ -160,4 +168,7 @@ export interface EventChannels {
   "tabs:show": Payload<TETApi["tabs"]["onShow"]>;
   /** `onTextRequest`'s question; the answer goes back on `reply`. */
   "tabs:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
+  "browser:changed": Payload<TETApi["browser"]["onTabs"]>;
+  "browser:shortcut": Payload<TETApi["browser"]["onShortcut"]>;
+  "browser:pressed": Payload<TETApi["browser"]["onPressed"]>;
 }

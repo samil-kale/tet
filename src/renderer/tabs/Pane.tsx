@@ -14,12 +14,15 @@ import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
-import { isEditorTab, isEditorTabId, type PaneTab } from "../editor/editor-tab";
+import { isEditorTabId } from "../editor/editor-tab";
+import { isBrowserTabId } from "../../shared/types/browser";
+import { isBrowserTab, isEditorTab, isTerminalTab, isTerminalTabId, type PaneTab } from "./pane-tab";
+import { BrowserHost } from "./BrowserHost";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
 import { useDragReorder } from "../ui/drag-reorder";
-import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
+import { BrowserIcon, CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -198,6 +201,9 @@ export const Pane = memo(function Pane({
   }, [activeTabId]);
 
   const editorBusy = useEditorBusy(at, tabs);
+  /** A browser tab's page takes its clicks before this pane's mousedown sees them. */
+  const focusHere = useCallback(() => onFocus(paneId), [onFocus, paneId]);
+  const browserBusy = tabs.some((tab) => isBrowserTab(tab) && tab.loading);
 
   const createTab = useCallback(
     async (agentId: AgentId) => {
@@ -207,19 +213,28 @@ export const Pane = memo(function Pane({
     [at, paneId, onActivate],
   );
 
+  /** A blank page, its address bar focused to type into (BrowserHost). */
+  const createBrowserTab = useCallback(async () => {
+    const tab = await window.tet.browser.create(at, "about:blank");
+    onActivate(tab.tabId, paneId);
+  }, [at, paneId, onActivate]);
+
   /**
    * Editor tabs close in the renderer, the rest in main. Their unsaved-edit question may keep them
-   * open while the same "Close All"'s terminals go.
+   * open while the same "Close All"'s terminals and browser tabs go.
    */
   const closeTabs = useCallback(
     (tabIds: string[]) => {
       const editorIds = tabIds.filter(isEditorTabId);
-      const terminalIds = tabIds.filter((tabId) => !isEditorTabId(tabId));
+      const terminalIds = tabIds.filter(isTerminalTabId);
       if (editorIds.length > 0) {
         onCloseEditors(editorIds);
       }
       if (terminalIds.length > 0) {
         void window.tet.tabs.close(at, terminalIds);
+      }
+      for (const tabId of tabIds.filter(isBrowserTabId)) {
+        void window.tet.browser.close(at, tabId);
       }
     },
     [at, onCloseEditors],
@@ -262,10 +277,13 @@ export const Pane = memo(function Pane({
     [at],
   );
 
-  /** The session title; a session-less agent's name; the editor tab's file name. */
+  /** The session title; a session-less agent's name; the editor tab's file name; the page's title. */
   const tabLabel = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
       return tab.commit ? `${baseName(tab.path)} (${tab.commit.sha.slice(0, 7)})` : baseName(tab.path);
+    }
+    if (isBrowserTab(tab)) {
+      return tab.title || (tab.url === "about:blank" ? "New tab" : tab.url);
     }
     if (tab.title) {
       return tab.title;
@@ -276,6 +294,9 @@ export const Pane = memo(function Pane({
   const tabTooltip = (tab: PaneTab): string => {
     if (isEditorTab(tab)) {
       return tab.commit ? `${tab.path} (${tab.commit.sha.slice(0, 7)})` : tab.path;
+    }
+    if (isBrowserTab(tab)) {
+      return tab.title ? `${tab.title}\n${tab.url}` : tab.url;
     }
     const lines =
       tab.status === "missing"
@@ -295,11 +316,11 @@ export const Pane = memo(function Pane({
   /**
    * Restart, Clear for the shell, the close actions, rename and hand-over for an agent with sessions, and the moves
    * to sibling panes. A close with nothing to close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
-   * moves.
+   * moves; a browser tab the close actions and the moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
-    const terminal = tabs.find((tab): tab is TabDescriptor => tab.tabId === tabId && !isEditorTab(tab));
+    const terminal = tabs.find((tab): tab is TabDescriptor => tab.tabId === tabId && isTerminalTab(tab));
     const withSession = terminal?.sessionId !== undefined ? terminal : undefined;
     // A saved command restarts anytime; an agent once started — a running one quits first and its
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
@@ -329,6 +350,9 @@ export const Pane = memo(function Pane({
       closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
       closeAction("Close All", ids),
     ];
+    if (isBrowserTabId(tabId)) {
+      return [...closeEntries, ...moveEntries];
+    }
     if (!terminal) {
       return [
         // VS Code's wording; a kept tab has nothing to keep.
@@ -379,7 +403,11 @@ export const Pane = memo(function Pane({
   };
 
   // Built only while the menu is open: a pane re-renders on every tab push, and icons are elements.
-  const newTabEntries = (): ContextMenuEntry[] => agents.map((agent) => agentEntry(agent, () => void createTab(agent.id)));
+  const newTabEntries = (): ContextMenuEntry[] => [
+    ...agents.map((agent) => agentEntry(agent, () => void createTab(agent.id))),
+    SEPARATOR,
+    { label: "Browser", icon: <BrowserIcon className="tab-icon" />, run: () => void createBrowserTab() },
+  ];
 
   return (
     <div
@@ -441,7 +469,7 @@ export const Pane = memo(function Pane({
                   tabElements.current.delete(tab.tabId);
                 }
               }}
-              className={`tab${tab.tabId === activeTabId ? " active" : ""}${!isEditorTab(tab) && tab.status === "stopped" ? " inactive" : ""}`}
+              className={`tab${tab.tabId === activeTabId ? " active" : ""}${isTerminalTab(tab) && tab.status === "stopped" ? " inactive" : ""}`}
               // Always: even the only pane has the snap zones to drop on.
               draggable
               onDragStart={(event) => {
@@ -465,6 +493,8 @@ export const Pane = memo(function Pane({
                     > finished ("Turns and tab marks" in AGENTS.md). */}
                 {isEditorTab(tab) ? (
                   <FilesIcon className="tab-icon" />
+                ) : isBrowserTab(tab) ? (
+                  <BrowserIcon className="tab-icon" />
                 ) : tab.status === "missing" || tab.status === "error" ? (
                   <TabMark kind="error" className="tab-icon" />
                 ) : waitingTabIds.includes(tab.tabId) ? (
@@ -479,7 +509,7 @@ export const Pane = memo(function Pane({
                   <AgentIcon agentId={tab.agentId} className="tab-icon" />
                 )}
                 {/* Over the mark too: where the tab runs outlasts its turn. */}
-                {!isEditorTab(tab) && tab.sandboxed && (
+                {isTerminalTab(tab) && tab.sandboxed && (
                   <>
                     <ShieldIcon className="tab-badge-ring" />
                     <ShieldIcon className="tab-badge" />
@@ -492,7 +522,13 @@ export const Pane = memo(function Pane({
                 <span className="tab-label">{tabLabel(tab)}</span>
               )}
               <IconButton
-                title={isEditorTab(tab) ? "Close file" : tab.sessionId !== undefined ? "Close tab and delete its session" : "Close tab"}
+                title={
+                  isEditorTab(tab)
+                    ? "Close file"
+                    : isTerminalTab(tab) && tab.sessionId !== undefined
+                      ? "Close tab and delete its session"
+                      : "Close tab"
+                }
                 isolated
                 onClick={() => closeTabs([tab.tabId])}
               >
@@ -501,9 +537,9 @@ export const Pane = memo(function Pane({
             </div>
           ))}
         </div>
-        {/* This pane's one progress bar: a tab starting, an editor tab busy, or in pane "a" the
-            bootstrap session listing. */}
-        {(busy || editorBusy) && <ProgressBar />}
+        {/* This pane's one progress bar: a tab starting, an editor tab busy, a page loading, or in
+            pane "a" the bootstrap session listing. */}
+        {(busy || editorBusy || browserBusy) && <ProgressBar />}
         <div className="new-tab">
           <button className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
             <PlusIcon />
@@ -515,6 +551,16 @@ export const Pane = memo(function Pane({
         {tabs.map((tab) =>
           isEditorTab(tab) ? (
             <EditorHost key={tab.tabId} tabId={tab.tabId} active={tab.tabId === activeTabId} visible={visible} focused={focused} />
+          ) : isBrowserTab(tab) ? (
+            <BrowserHost
+              key={tab.tabId}
+              at={at}
+              tab={tab}
+              active={tab.tabId === activeTabId}
+              visible={visible}
+              focused={focused}
+              onPressed={focusHere}
+            />
           ) : (
             <TerminalHost
               key={tab.tabId}

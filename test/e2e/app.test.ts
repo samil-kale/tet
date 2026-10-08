@@ -1,6 +1,8 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as http from "node:http";
+import type { AddressInfo } from "node:net";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { PLATFORM } from "../../src/main/util/host-platform";
@@ -131,6 +133,44 @@ ${stderr.slice(uncaught)}`);
     assert.notEqual((await state())?.finishedAt, undefined, "and left the mark that outlives it");
     for (const id of [tab, activeTab]) {
       assert.equal((await ctl("tabs-close", id, "--project", project.id)).status, 0);
+    }
+  });
+
+  // The whole way of a browser verb: the tab's page in main, the CDP proxy, Playwright in its own
+  // process. Asked as a tab of the project, as an agent asks: the verbs answer only there.
+  it("opens a page in a browser tab and acts on it through Playwright", async () => {
+    const [project] = (await ctl("projects-list")).result as Project[];
+    const shell = (await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TabDescriptor;
+    const server = http.createServer((_request, response) => {
+      response.setHeader("Content-Type", "text/html");
+      response.end(
+        "<title>Probe</title><label>Name <input></label>" +
+          "<button onclick=\"document.body.append('Saved ' + document.querySelector('input').value)\">Save</button>",
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const browser = (...args: string[]) => tetCtl(args, started().asTab(project.id, shell.tabId));
+      const opened = await browser("browser-open", `127.0.0.1:${(server.address() as AddressInfo).port}`);
+      assert.equal(opened.status, 0, opened.stderr);
+      assert.equal((opened.result as { title: string }).title, "Probe");
+      const { snapshot } = (await browser("browser-snapshot")).result as { snapshot: string };
+      const ref = (role: string): string => {
+        const found = new RegExp(`${role}[^\\n]*\\[ref=(e\\d+)\\]`).exec(snapshot)?.[1];
+        assert.ok(found, `${role} in ${snapshot}`);
+        return found;
+      };
+      assert.equal((await browser("browser-fill", ref('textbox "Name"'), "Ada")).status, 0);
+      assert.equal((await browser("browser-click", ref('button "Save"'))).status, 0);
+      const waited = await browser("browser-wait", "--text", "Saved Ada");
+      assert.equal(waited.status, 0, waited.stderr);
+      const shot = (await browser("browser-screenshot")).result as { path: string };
+      assert.equal(fs.readFileSync(shot.path).subarray(1, 4).toString(), "PNG");
+      assert.equal((await browser("browser-close")).status, 0);
+      assert.deepEqual((await browser("browser-list")).result, []);
+    } finally {
+      server.close();
+      await ctl("tabs-close", shell.tabId, "--project", project.id);
     }
   });
 

@@ -18,6 +18,8 @@ import type {
 } from "../../shared/types/sbx";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
+import type { BrowserAutomation } from "../browser/browser-client";
+import type { BrowserTabs } from "../browser/browser-tabs";
 import type { NotificationTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -173,6 +175,12 @@ export interface ControlDeps {
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front. */
   showDesktopNotification(title: string, body: string, target?: NotificationTarget): void;
+  /** The browser tabs (browser/browser-tabs.ts) and Playwright driving their pages
+   *  (browser/browser-client.ts). */
+  browser: {
+    tabs: Pick<BrowserTabs, "list" | "page" | "create" | "navigate" | "close" | "capture">;
+    automation: BrowserAutomation["api"];
+  };
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;
@@ -224,6 +232,8 @@ export interface ControlTerminals {
   handOver(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
   createCommandTab(command: ProjectCommand): TabDescriptor | undefined;
   closeTabs(tabIds: string[]): Promise<void>;
+  /** Where content without a path of its own lands for the tab (store/drops.ts). */
+  dropsDir(tabId: string): string;
   /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */

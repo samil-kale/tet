@@ -42,7 +42,9 @@ project's tabs.
      (`sbx-local.ts`, `providers/accounts.ts`).
   2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
      everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
-     the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
+     the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update),
+     `browser/` (the browser tabs' pages, the CDP proxy onto each, and Playwright driving them in a
+     `utilityProcess` of its own).
   3. `terminals/`: pty, sessions, where a tab runs and the side it runs on (`TabSide`), its
      control token.
   4. `ctl/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
@@ -65,7 +67,7 @@ project's tabs.
      tree it lists, icons.
   2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
   3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
-     editor tabs beside them.
+     editor and browser tabs beside them (`pane-tab.ts` tells the three apart).
   4. `git/`: running a git action from the views above it (`run-action.ts`), and the questions and
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
@@ -110,7 +112,10 @@ project's tabs.
 
 Everything TET keeps lives here (`data-root.ts`, `project-dirs.ts`). The layout is fixed: every
 change, and every agent added, fits it. The one file TET writes elsewhere is sbx's first-run
-marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of a tab.
+marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of a tab. Chromium's
+own profile stays in Electron's `userData` (`data-root.ts`), the browser tabs' with it: a
+worktree's tabs share a partition of their own, cleared when the worktree goes; the repository's
+share the global one.
 
 ```
 ~/.tet/
@@ -279,9 +284,17 @@ or a per-line decision is for an agent.
   lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
   by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
   the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
-  layout storage. The tab strip is the agent, shell and editor
+  layout storage. The tab strip is the agent, shell, browser and editor
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
+- **A browser tab's page is main's view, drawn above TET's own page** (`browser-tabs.ts`), which
+  is itself a transparent view filling the window (`window.ts`): the tab's box only says where
+  (`BrowserHost`). Under a dialog, and wherever something floats over a page — a menu, the notices,
+  a tab dragged over the panes — TET's page is raised above it, transparent beneath every live page
+  (`browser-raised`), so the page stays live and what floats lies over it: what floats says so
+  (`useFloatsOver`, `window-covered.ts`), or the page hides it. A page takes its own keys and clicks
+  but the window's shortcuts and its pane's focus, which main reads there and hands on. Never
+  persisted.
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`), LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
   EXPLORER `Explorer`; each title heads a `Section`, drawn by `ProjectList` and `CommandList`
@@ -351,7 +364,7 @@ or a per-line decision is for an agent.
   the one spinner is a session's working mark. The one determinate bar is the update download's,
   in its notice (`showProgress`), which runs the indeterminate one while the update is prepared.
 - **The keyboard belongs to the terminal**: TET's key handler runs before xterm and takes nothing
-  an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
+  an agent could have received. Check every new shortcut against `src/shared/shortcuts.ts`. No
   window shortcut closes a tab.
 - **The renderer**: terminal output never goes through React state — xterms and editors live
   outside React (`terminal-views.ts`, `editor-views.ts`). The views under `App` are memoized: hand
@@ -406,6 +419,11 @@ and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`Contr
 
 - `app-restart` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
+- **The browser verbs** (`ctl-browser-verbs.ts`) drive a browser tab's page through Playwright
+  (`browser-automation.ts`), connected over the CDP proxy (`cdp-proxy.ts`) that makes that one page
+  a whole browser to it: the agent sees neither the window nor another tab. A page's content is
+  someone else's, said in every answer carrying it. A browser tab is this machine's: no verb answers
+  in a sandbox, and its system prompt never mentions them.
 - Agents learn of `tet-ctl` once per session: `systemPrompt`
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
   `SessionStart` hook's added context), never replacing the user's instructions.

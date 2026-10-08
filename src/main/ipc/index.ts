@@ -1,4 +1,5 @@
 import { registerAppIpc } from "./app";
+import { registerBrowserIpc } from "./browser";
 import { registerCommandsIpc } from "./commands";
 import { registerEnvironmentIpc } from "./environment";
 import type { IpcDeps } from "./deps";
@@ -21,6 +22,7 @@ export function registerIpc(deps: IpcDeps): void {
   registerRepositoryIpc(deps);
   registerCommandsIpc(deps);
   registerTerminalsIpc(deps);
+  registerBrowserIpc(deps);
   registerShellIpc(deps);
   registerDropsIpc(deps);
 }

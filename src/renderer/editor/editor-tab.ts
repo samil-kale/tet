@@ -1,5 +1,4 @@
 import type { ProjectRef } from "../../shared/types/project";
-import type { TabDescriptor } from "../../shared/types/terminals";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview
@@ -71,15 +70,8 @@ export function workingTreePathOf(tabs: EditorTab[] | undefined, tabId: string |
   return tab && !tab.commit ? tab.path : null;
 }
 
-/** What a tab strip holds: a project's terminals, then its editor tabs. */
-export type PaneTab = TabDescriptor | EditorTab;
-
 export function isEditorTabId(tabId: string): boolean {
   return tabId.startsWith(EDITOR_TAB_PREFIX);
-}
-
-export function isEditorTab(tab: PaneTab): tab is EditorTab {
-  return isEditorTabId(tab.tabId);
 }
 
 /** Opens a file of the repository or worktree in its preview tab, a Markdown file with its preview

@@ -201,7 +201,7 @@ const processBorder = (folder) => ({
 const MAIN_LAYERS = [
   { util: [] },
   { store: ["*"] },
-  { git: [], agents: [], sbx: ["agents"], providers: [], update: [] },
+  { git: [], agents: [], sbx: ["agents"], providers: [], update: [], browser: [] },
   { terminals: [] },
   { ctl: [] },
   { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], uncaught: ["*"] }
@@ -353,7 +353,7 @@ export default tseslint.config(
   },
   ...layerConfigs("renderer", RENDERER_LAYERS, (area) => [NODE_BUILTIN, ...(area === "lanes" ? [LANE_FOLDER] : [])]),
   {
-    // The utility processes (git-host.ts, explorer-host.ts) and the CLI run without electron;
+    // The utility processes (git-host.ts, explorer-host.ts, browser-host.ts) and the CLI run without electron;
     // `shared/` runs in every process. None of them may import it, and the utility processes may
     // import nothing from the rest of main either but the util/ files listed here, each held to the
     // same — util/utility-client.ts is the main-process side of that boundary.
@@ -362,6 +362,8 @@ export default tseslint.config(
       "src/main/git/git-host.ts",
       "src/main/git/explorer-read.ts",
       "src/main/git/explorer-host.ts",
+      "src/main/browser/browser-automation.ts",
+      "src/main/browser/browser-host.ts",
       "src/main/util/linked-git-dir.ts",
       "src/main/util/host-platform.ts",
       "src/main/util/utility-host.ts",

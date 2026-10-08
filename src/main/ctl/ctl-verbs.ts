@@ -21,6 +21,7 @@ import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
 import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
+import { browserVerbs } from "./ctl-browser-verbs";
 import { sbxVerbs } from "./ctl-sbx-verbs";
 import { worktreeVerbs } from "./ctl-worktree-verbs";
 import {
@@ -129,6 +130,7 @@ export function verbs(deps: ControlDeps): Handlers {
   return {
     ...sbxVerbs(deps, refFrom),
     ...worktreeVerbs(deps, refFrom),
+    ...browserVerbs(deps, refFrom),
 
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 

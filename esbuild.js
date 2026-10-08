@@ -34,14 +34,17 @@ const mainConfig = {
 };
 
 /** `<name>-host`, a module the main process runs in a utilityProcess of its own
- *  (util/utility-client.ts): `git`, the git CLI wrapper — see AGENTS.md — and `explorer`, the Explorer's
- *  walk and search. Nothing from electron in either (eslint.config.mjs). */
+ *  (util/utility-client.ts), from its area's folder: `git`, the git CLI wrapper — see AGENTS.md —,
+ *  `explorer`, the Explorer's walk and search, and `browser`, Playwright driving the browser tabs.
+ *  Nothing from electron in any (eslint.config.mjs). playwright-core reads its own files at run
+ *  time, so it stays a package of its own (package.json's dependencies), as node-pty does. */
 /** @returns {import('esbuild').BuildOptions} */
-function hostConfig(name) {
+function hostConfig(folder, name) {
   return {
     ...node,
-    entryPoints: [path.join(__dirname, "src", "main", "git", `${name}-host.ts`)],
-    outfile: path.join(dist, `${name}-host.js`)
+    entryPoints: [path.join(__dirname, "src", "main", folder, `${name}-host.ts`)],
+    outfile: path.join(dist, `${name}-host.js`),
+    external: ["playwright-core"]
   };
 }
 
@@ -129,8 +132,9 @@ async function build() {
 
   const configs = [
     mainConfig,
-    hostConfig("git"),
-    hostConfig("explorer"),
+    hostConfig("git", "git"),
+    hostConfig("git", "explorer"),
+    hostConfig("browser", "browser"),
     cliConfig("tet-ctl"),
     cliConfig("tet-update"),
     preloadConfig,

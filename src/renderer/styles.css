@@ -1474,6 +1474,39 @@ textarea:focus,
   visibility: hidden !important;
 }
 
+/* A browser tab: the editor tab's bar (`.editor-bar`) with its address field, then the box its
+   page is drawn over — main's own view, above TET's page (BrowserHost). */
+.browser-tab {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--tet-editor-background);
+}
+
+.browser-tab.hidden {
+  visibility: hidden;
+}
+
+.browser-address {
+  flex: 1;
+  min-width: 0;
+}
+
+.browser-page {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+/* While TET's page is raised above the browser tabs' pages (a dialog, a menu over one: window.ts),
+   nothing beneath a live page paints, so it shows through; what lies over it still does. */
+html.browser-raised,
+html.browser-raised body,
+html.browser-raised :has(.browser-page.live) {
+  background: transparent !important;
+}
+
 /* Below the bar: a placeholder or the image view in flow, the editor's split over them. */
 .editor-body {
   position: relative;

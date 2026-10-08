@@ -25,9 +25,10 @@ interface Pending {
  * through utility-host.ts's `serveModule`) in a `utilityProcess` of its own, `tet-<name>`: off the
  * main process, which relays pty output, so work there would lag typing. Started on the first call. A process that dies rejects every call in flight and is
  * restarted on the next one, not supervised: the calls are independent, so no state is lost. An
- * AbortSignal among a call's arguments reaches the function as one of the host's own.
+ * AbortSignal among a call's arguments reaches the function as one of the host's own. `onStart`
+ * sees each process forked, to hand it a port of its own (utility-host.ts's `serveModule`).
  */
-export function utilityClient<Module>(name: string): UtilityClient<Module> {
+export function utilityClient<Module>(name: string, onStart?: (child: UtilityProcess) => void): UtilityClient<Module> {
   let child: UtilityProcess | undefined;
   const pending = new Map<number, Pending>();
   let nextId = 0;
@@ -65,6 +66,7 @@ export function utilityClient<Module>(name: string): UtilityClient<Module> {
       fail(`The ${name} process stopped (exit code ${code})`);
     });
     child = started;
+    onStart?.(started);
     return started;
   };
 

@@ -8,10 +8,11 @@ import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
+import { useFloatsOver } from "../ui/window-covered";
 import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
 import type { Lane } from "../../shared/types/settings";
-import { isEditorTab, type PaneTab } from "../editor/editor-tab";
+import { isTerminalTab, type PaneTab } from "./pane-tab";
 import { NO_TABS } from "./use-project-layouts";
 
 /**
@@ -120,8 +121,9 @@ export const TabArea = memo(function TabArea({
     knownTabs.current = tabs;
     const ids = new Set(tabs.map((tab) => tab.tabId));
     for (const tab of previous) {
-      // An editor tab's editor is disposed where it closes (use-editor-opening.ts's closeEditors).
-      if (!ids.has(tab.tabId) && !isEditorTab(tab)) {
+      // An editor tab's editor is disposed where it closes (use-editor-opening.ts's closeEditors), a
+      // browser tab's page in main.
+      if (!ids.has(tab.tabId) && isTerminalTab(tab)) {
         disposeTerminal(resolved.ref, tab.tabId);
       }
     }
@@ -173,8 +175,14 @@ export const TabArea = memo(function TabArea({
   /** A ref so the drag callbacks stay stable. */
   const presetRef = useLatest(layout.preset);
 
+  /** A tab is dragged: every browser tab's page in the panes gives way, or it would take the
+   *  drag's events from the panes and their snap zones. */
+  const [dragging, setDragging] = useState(false);
+  useFloatsOver(gridRef, dragging);
+
   const onDragStart = useCallback((paneId: PaneId) => {
     dragSource.current = paneId;
+    setDragging(true);
   }, []);
 
   /**
@@ -217,6 +225,7 @@ export const TabArea = memo(function TabArea({
       const target = dragTargetRef.current;
       setDragTarget(null);
       dragSource.current = null;
+      setDragging(false);
       if (target?.transition) {
         onSnapTab(resolved.refKey, tabId, target.transition);
       } else {
@@ -231,6 +240,7 @@ export const TabArea = memo(function TabArea({
   const onDragEnd = useCallback(() => {
     setDragTarget(null);
     dragSource.current = null;
+    setDragging(false);
   }, [setDragTarget]);
 
   // Each pane's tabs, identity kept when unchanged. Keyed on the fields `paneOf` reads, not the

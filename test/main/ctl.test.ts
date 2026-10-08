@@ -109,6 +109,8 @@ interface Calls {
   sbxSaved: [string, SbxProjectSettings, SbxLocalSave][];
   /** The users sbx was signed in as with a kept access token. */
   sbxSignedIn: string[];
+  /** Per browser verb that reached a page: the verb's name, the tab and what it was handed. */
+  browser: string[][];
 }
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
@@ -192,6 +194,9 @@ let sbxUser: string | undefined;
 /** Why the faked store could not keep a token sbx took. */
 let sbxNotKept: string | undefined;
 
+/** The faked browser tabs, of every repository and worktree. */
+let browserTabs: { ref: string; tabId: string; url: string }[];
+
 /** The terminals of the repository or a worktree, by its `refKey`. */
 function terminalsOf(key: string): ControlTerminals {
   return {
@@ -240,6 +245,7 @@ function terminalsOf(key: string): ControlTerminals {
     closeTabs: async (tabIds) => {
       calls.closed.push(...tabIds);
     },
+    dropsDir: (tabId) => path.join(workDir, "drops", key, tabId),
     // A sandboxed tab sees the path at its container path, a host tab as it is.
     seenPaths: async (tabId, hostPaths) => {
       calls.handed.push([tabId, hostPaths]);
@@ -262,6 +268,69 @@ function terminalsOf(key: string): ControlTerminals {
         ? { stdout }
         : { stdout, notification: { title: "Claude: Finished", body: "Finished in one" } };
     },
+  };
+}
+
+/** The browser tabs as BrowserTabs keeps them: the last opened is the one acted on; an address
+ *  naming "unreachable" fails to load as Chromium's would. */
+function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
+  const pageOf = (tab: (typeof browserTabs)[number]) => ({
+    tabId: tab.tabId,
+    targetId: tab.tabId,
+    url: tab.url,
+    title: "Page",
+    debugger: {} as never,
+  });
+  const load = (url: string): Promise<void> =>
+    url.includes("unreachable") ? Promise.reject(new Error("ERR_CONNECTION_REFUSED (-102)")) : Promise.resolve();
+  return {
+    list: (ref) =>
+      browserTabs
+        .filter((tab) => tab.ref === refKeyOf(ref))
+        .map(({ tabId, url }) => ({ tabId, url, title: "Page", loading: false, canGoBack: false, canGoForward: false })),
+    page: (ref, tabId) => {
+      const own = browserTabs.filter((tab) => tab.ref === refKeyOf(ref));
+      const tab = tabId === undefined ? own.at(-1) : own.find((entry) => entry.tabId === tabId);
+      return tab && pageOf(tab);
+    },
+    create: (ref, url) => {
+      const tab = { ref: refKeyOf(ref), tabId: `tet:browser:${browserTabs.length + 1}`, url };
+      browserTabs.push(tab);
+      return { tab: { tabId: tab.tabId, url, title: "", loading: true, canGoBack: false, canGoForward: false }, loaded: load(url) };
+    },
+    navigate: async (ref, tabId, url) => {
+      const tab = browserTabs.find((entry) => entry.ref === refKeyOf(ref) && entry.tabId === tabId);
+      if (tab) {
+        tab.url = url;
+      }
+      await load(url);
+    },
+    close: (ref, tabId) => {
+      browserTabs = browserTabs.filter((entry) => !(entry.ref === refKeyOf(ref) && entry.tabId === tabId));
+    },
+    capture: async () => Buffer.from("png"),
+  };
+}
+
+/** Playwright on the page, as browser-automation.ts answers: a ref other than e1 has gone stale. */
+function fakeAutomation(): ControlDeps["browser"]["automation"] {
+  const onElement = async (verb: string, tabId: string, element: string, ...rest: string[]): Promise<void> => {
+    if (element !== "e1") {
+      throw new Error(`Element ${element} not found: take a new snapshot`);
+    }
+    calls.browser.push([verb, tabId, element, ...rest]);
+  };
+  return {
+    snapshot: async (tabId) => ({ url: "http://localhost:3000/", title: "Page", snapshot: `- button "Save" [ref=e1] (${tabId})` }),
+    click: (tabId, element) => onElement("click", tabId, element),
+    fill: (tabId, element, text) => onElement("fill", tabId, element, text),
+    press: async (tabId, key) => {
+      calls.browser.push(["press", tabId, key]);
+    },
+    waitFor: async (tabId, text, url) => {
+      calls.browser.push(["wait", tabId, text ?? "", url ?? ""]);
+    },
+    consoleMessages: async () => ["error: boom"],
   };
 }
 
@@ -303,6 +372,7 @@ function deps(): ControlDeps {
     tabManagers: {
       get: (ref) => (open(ref) ? terminalsOf(refKeyOf(ref)) : undefined),
     },
+    browser: { tabs: fakeBrowserTabs(), automation: fakeAutomation() },
     repositories: {
       get: (ref) =>
         open(ref)
@@ -481,7 +551,9 @@ describe("tet-ctl against the control server", () => {
       envWithdrawn: [],
       sbxSaved: [],
       sbxSignedIn: [],
+      browser: [],
     };
+    browserTabs = [];
     server = await startControlServer(deps(), TOKEN, port);
   });
 
@@ -1384,6 +1456,77 @@ describe("tet-ctl against the control server", () => {
     }
   });
 
+  it("opens a page in the caller's browser tab and acts on it there", async () => {
+    const opened = (await tetCtl(["browser-open", "localhost:3000"])).result as { tabId: string };
+    assert.equal(opened.tabId, "tet:browser:1");
+    // The next address lands in the same tab.
+    assert.equal(((await tetCtl(["browser-open", "localhost:3000/login"])).result as { tabId: string }).tabId, opened.tabId);
+    assert.deepEqual(
+      calls.shown,
+      [
+        [PROJECT.id, opened.tabId],
+        [PROJECT.id, opened.tabId],
+      ],
+      "brought to the front",
+    );
+    assert.deepEqual((await tetCtl(["browser-list"])).result, [
+      { tabId: opened.tabId, url: "localhost:3000/login", title: "Page", loading: false, active: true },
+    ]);
+    assert.deepEqual((await tetCtl(["browser-snapshot"])).result, {
+      tabId: opened.tabId,
+      url: "http://localhost:3000/",
+      title: "Page",
+      snapshot: `- button "Save" [ref=e1] (${opened.tabId})`,
+      untrustedContent: true,
+    });
+    assert.equal((await tetCtl(["browser-click", "e1"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["browser-fill", "e1", "hello"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["browser-press", "Enter"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["browser-wait", "--text", "Saved"])).status, EXIT_CODES.ok);
+    assert.deepEqual(calls.browser, [
+      ["click", opened.tabId, "e1"],
+      ["fill", opened.tabId, "e1", "hello"],
+      ["press", opened.tabId, "Enter"],
+      ["wait", opened.tabId, "Saved", ""],
+    ]);
+    const shot = (await tetCtl(["browser-screenshot"])).result as { path: string };
+    assert.equal(fs.readFileSync(shot.path, "utf8"), "png");
+    assert.ok(shot.path.startsWith(path.join(workDir, "drops", PROJECT.id, OWN_TAB)), "in the caller's drops folder");
+    assert.deepEqual((await tetCtl(["browser-console"])).result, { messages: ["error: boom"], untrustedContent: true });
+    assert.deepEqual((await tetCtl(["browser-close"])).result, { closed: opened.tabId });
+    assert.deepEqual(browserTabs, []);
+  });
+
+  it("says why a browser verb could not act, in Playwright's or Chromium's words", async () => {
+    const none = await tetCtl(["browser-snapshot"]);
+    assert.equal(none.status, EXIT_CODES.usage);
+    assert.match(none.stderr, /no browser tab/);
+    const unreachable = await tetCtl(["browser-open", "localhost:9/unreachable"]);
+    assert.equal(unreachable.status, EXIT_CODES.usage);
+    assert.match(unreachable.stderr, /ERR_CONNECTION_REFUSED/);
+    const stale = await tetCtl(["browser-click", "e7"]);
+    assert.equal(stale.status, EXIT_CODES.usage);
+    assert.match(stale.stderr, /take a new snapshot/);
+    assert.equal((await tetCtl(["browser-wait"])).status, EXIT_CODES.usage, "nothing to wait for");
+    assert.match((await tetCtl(["browser-click", "e1", "--tab", "tet:browser:99"])).stderr, /unknown browser tab/);
+    assertRefused(await tetCtl(["browser-list", "--project", OTHER.id]), /own project/, "another project");
+  });
+
+  it("opens and reads no browser tab from a sandbox", async () => {
+    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+    const before = [...browserTabs];
+    for (const args of [
+      ["browser-open", "localhost:3000"],
+      ["browser-list"],
+      ["browser-snapshot"],
+      ["browser-click", "e1"],
+      ["browser-screenshot"],
+    ]) {
+      assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
+    }
+    assert.deepEqual(browserTabs, before);
+  });
+
   it("opens a file under the path the editor tabs match, and refuses one outside the repository", async () => {
     // PROJECT's root is "", resolved like the working directory.
     for (const typed of ["./src/a.ts", "src\\a.ts", "src/../src/a.ts", path.resolve("src", "a.ts")]) {
@@ -1658,13 +1801,14 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.desktopNotifications, [], "nothing to notify about a session");
   });
 
-  it("tells a sandboxed session start nothing of the environment variables", async () => {
+  it("tells a sandboxed session start nothing of the environment variables or the browser", async () => {
     const run = await tetCtl(["hook", "session-start"], { [CONTROL_ENV.tabId]: SANDBOX_TAB }, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     const context = (JSON.parse(run.stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     assert.equal(context, systemPrompt(SANDBOX_SIDE));
-    assert.doesNotMatch(context, /environment variable/);
+    assert.doesNotMatch(context, /environment variable|browser/);
     assert.match(systemPrompt(HOST_SIDE), /environment variable/);
+    assert.match(systemPrompt(HOST_SIDE), /browser verbs/);
   });
 
   it("lists the variables it keeps without values, with those it overrides on this machine, and removes them", async () => {

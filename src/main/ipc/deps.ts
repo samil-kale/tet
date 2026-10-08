@@ -1,4 +1,5 @@
 import type { NoticeSeverity } from "../../shared/types/app";
+import type { BrowserTabs } from "../browser/browser-tabs";
 import type { ControlRecords } from "../ctl/ctl-records";
 import type { EnvRequests } from "../ctl/env-requests";
 import type { EnvStore } from "../store/environment";
@@ -26,6 +27,7 @@ export interface IpcDeps {
   envRequests: EnvRequests;
   repositories: RepositoryManager;
   tabManagers: SessionManagerRegistry;
+  browserTabs: BrowserTabs;
   /** The window's reports for the control verbs. */
   records: ControlRecords;
   /** Shared with the control channel (main.ts). */
