@@ -220,6 +220,12 @@ export class AppWindow {
     }
   };
 
+  focusPage = (): void => {
+    if (this.page && !this.page.webContents.isDestroyed()) {
+      this.page.webContents.focus();
+    }
+  };
+
   /** Hands the window the lanes as stored; a window still loading reads them at its start. */
   showLanes(lanes: LaneSettings): void {
     this.send("app:lanes", lanes);

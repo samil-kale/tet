@@ -30,6 +30,8 @@ import { isOpenableUrl } from "../util/shell-open";
 export interface ViewHost {
   addView(view: WebContentsView): void;
   removeView(view: WebContentsView): void;
+  /** Gives TET's own page the keyboard focus back. */
+  focusPage(): void;
 }
 
 export interface BrowserTabsDeps {
@@ -121,8 +123,6 @@ interface Tab {
   popup: boolean;
   /** The sandbox it loads through; none for this machine's. */
   sandbox?: BrowserSandbox;
-  /** Loading for a caller that says itself why it failed (`load`'s `quiet`): no notice. */
-  quiet?: boolean;
 }
 
 /**
@@ -268,10 +268,10 @@ export class BrowserTabs {
 
   /** A new tab loading `typed` (browserUrl), made the active one, through `sandbox` where given;
    *  `loaded` settles as `load` does. */
-  create(ref: ProjectRef, typed: string, sandbox?: BrowserSandbox, quiet = false): { tab: BrowserTabInfo; loaded: Promise<void> } {
+  create(ref: ProjectRef, typed: string, sandbox?: BrowserSandbox): { tab: BrowserTabInfo; loaded: Promise<void> } {
     const url = browserUrl(typed);
     const tab = this.open(ref, this.newView(ref, sandbox), false, sandbox);
-    const loaded = this.load(tab, url, quiet);
+    const loaded = this.load(tab, url);
     this.sendTabs(ref);
     return { tab: infoOf(tab), loaded };
   }
@@ -286,18 +286,21 @@ export class BrowserTabs {
    * goes through the sandbox, and nothing at all when the sandbox cannot be reached — never from
    * this machine. A failure names what the sandbox's proxy refused.
    */
-  private async load(tab: Tab, url: string, quiet: boolean): Promise<void> {
+  private async load(tab: Tab, url: string): Promise<void> {
+    await this.reaching(tab, url, () => loadPage(tab, url));
+  }
+
+  /** `reach` once the tab's way out stands; its failure carries the sandbox's refusal of `url`,
+   *  where there is one. */
+  private async reaching(tab: Tab, url: string, reach: () => Promise<void>): Promise<void> {
     if (tab.sandbox) {
       await this.routeOf(tab.ref, tab.sandbox);
     }
-    tab.quiet = quiet;
     try {
-      await loadPage(tab, url);
+      await reach();
     } catch (error) {
       const refused = await this.refusalOf(tab, url);
       throw refused === undefined ? error : new Error(`${errorMessage(error)}: ${refused}`);
-    } finally {
-      tab.quiet = false;
     }
   }
 
@@ -323,7 +326,7 @@ export class BrowserTabs {
     });
     view.webContents.on("did-navigate-in-page", changed);
     view.webContents.on("did-fail-load", (_event, code, description, failedUrl, isMainFrame) => {
-      if (isMainFrame && code !== ERR_ABORTED && !tab.quiet) {
+      if (isMainFrame && code !== ERR_ABORTED) {
         void this.refusalOf(tab, failedUrl).then((refused) =>
           this.deps.notice("warning", `Could not load ${failedUrl}: ${description}${refused === undefined ? "" : ` (${refused})`}`),
         );
@@ -358,7 +361,7 @@ export class BrowserTabs {
             ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }), true, sandbox)
             : this.open(ref, this.newView(ref, sandbox), true, sandbox);
           if (!page) {
-            this.load(popup, browserUrl(opened), false).catch(() => undefined);
+            this.load(popup, browserUrl(opened)).catch(() => undefined);
           }
           this.sendTabs(ref);
           this.deps.onOpened(ref, popup.tabId);
@@ -402,7 +405,16 @@ export class BrowserTabs {
         canSelectAll: params.editFlags.canSelectAll,
       }),
     );
-    view.webContents.on("focus", () => this.deps.onFocused(ref, tab.tabId));
+    view.webContents.on("focus", () => {
+      // Chromium focuses a page it loads, out of sight too (`browser-open` behind a dialog): the keys
+      // stay with whatever of TET's had them. Only while loading: the menu's edit command focuses
+      // the page still under its still.
+      if (!view.getVisible() && view.webContents.isLoading()) {
+        this.deps.host.focusPage();
+        return;
+      }
+      this.deps.onFocused(ref, tab.tabId);
+    });
     // The page's own DevTools, by the keys that open TET's for the window (window.ts); taken before
     // the page, as Chrome takes them.
     view.webContents.on("before-input-event", (event, input) => {
@@ -421,14 +433,37 @@ export class BrowserTabs {
     return tab;
   }
 
-  /** Loads `typed` (browserUrl) in the tab; rejects with Chromium's reason when it cannot, which
-   *  `quiet` leaves to the caller alone. */
-  async navigate(ref: ProjectRef, tabId: string, typed: string, quiet = false): Promise<void> {
+  /** Loads `typed` (browserUrl) in the tab; rejects with Chromium's reason when it cannot. */
+  async navigate(ref: ProjectRef, tabId: string, typed: string): Promise<void> {
+    await this.load(this.tabOf(ref, tabId), browserUrl(typed));
+  }
+
+  /**
+   * Settles once a server answers `typed` (browserUrl) in the tab's profile, whatever it answers;
+   * rejects with why none does. Asked without loading, so as often as wanted (`browser-open
+   * --wait`): every load takes the focus. A certificate refused is an answer too: the page's own
+   * load decides on it.
+   */
+  async answers(ref: ProjectRef, tabId: string, typed: string): Promise<void> {
+    const tab = this.tabOf(ref, tabId);
+    const url = browserUrl(typed);
+    await this.reaching(tab, url, async () => {
+      try {
+        await tab.view.webContents.session.fetch(url, { method: "HEAD", signal: AbortSignal.timeout(LOAD_WAIT_MS) });
+      } catch (error) {
+        if (!errorMessage(error).includes("ERR_CERT_")) {
+          throw error;
+        }
+      }
+    });
+  }
+
+  private tabOf(ref: ProjectRef, tabId: string): Tab {
     const tab = this.find(ref, tabId);
     if (!tab) {
       throw new Error(`no browser tab ${tabId}`);
     }
-    await this.load(tab, browserUrl(typed), quiet);
+    return tab;
   }
 
   go(ref: ProjectRef, tabId: string, where: BrowserGo): void {

@@ -200,7 +200,7 @@ let sbxNotKept: string | undefined;
 /** The faked browser tabs, of every repository and worktree, each a sandbox's or this machine's. */
 let browserTabs: { ref: string; tabId: string; url: string; sandbox?: string }[];
 
-/** How many more loads of an address naming "starting" fail, as a server still starting refuses. */
+/** How many more times an address naming "starting" finds no server, as one still starting. */
 let startingRefusals = 0;
 
 /** The sandbox SANDBOX_TAB runs in, in PROJECT's repository; its worktrees' tabs run in none. */
@@ -317,6 +317,7 @@ function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
       }
       await load(url);
     },
+    answers: async (_ref, _tabId, url) => load(url),
     close: (ref, tabId) => {
       browserTabs = browserTabs.filter((entry) => !(entry.ref === refKeyOf(ref) && entry.tabId === tabId));
     },
@@ -1553,15 +1554,15 @@ describe("tet-ctl against the control server", () => {
     assertRefused(await tetCtl(["browser-list", "--project", OTHER.id]), /own project/, "another project");
   });
 
-  it("loads a page again with --wait until its server answers, and shows it only then", async () => {
+  it("waits with --wait until a server answers, then loads the page once and shows it", async () => {
     startingRefusals = 2;
     const opened = await tetCtl(["browser-open", "localhost:3000/starting", "--wait", "5"]);
     assert.equal(opened.status, EXIT_CODES.ok);
-    assert.equal(startingRefusals, -1, "loaded three times");
-    assert.deepEqual(calls.shown, [[PROJECT.id, (opened.result as { tabId: string }).tabId]], "shown once, when loaded");
+    assert.equal(startingRefusals, -2, "asked three times, then loaded");
+    assert.deepEqual(calls.shown, [[PROJECT.id, (opened.result as { tabId: string }).tabId]], "shown once, when answered");
     const gaveUp = await tetCtl(["browser-open", "localhost:9/unreachable", "--wait", "1"]);
     assert.equal(gaveUp.status, EXIT_CODES.timeout);
-    assert.match(gaveUp.stderr, /did not load within 1 s: .*ERR_CONNECTION_REFUSED/);
+    assert.match(gaveUp.stderr, /did not answer within 1 s: .*ERR_CONNECTION_REFUSED/);
     assert.deepEqual(
       calls.notices.map(([severity]) => severity),
       ["warning"],

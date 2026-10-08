@@ -1,7 +1,7 @@
 import type { ControlVerbName } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types/project";
-import type { BrowserSandbox, BrowserScope } from "../browser/browser-tabs";
+import { browserUrl, type BrowserSandbox, type BrowserScope } from "../browser/browser-tabs";
 import { writeDropFile } from "../store/drops";
 import {
   callerTab,
@@ -16,7 +16,7 @@ import {
   type RefFrom,
 } from "./ctl-verb";
 
-/** How often `browser-open --wait` loads the page again while the server still refuses it. */
+/** How often `browser-open --wait` asks again while no server answers. */
 const OPEN_RETRY_MS = 500;
 
 /**
@@ -72,6 +72,30 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
     return { ref, tabId: page.tabId };
   }
 
+  /**
+   * `browser-open --wait`: until a server answers `url` in the tab, asked over and over without
+   * loading it (BrowserTabs.answers); one notice when it gives up, not one per try.
+   */
+  const answered = async (ref: ProjectRef, tabId: string, url: string, seconds: number, gone: AbortSignal): Promise<void> => {
+    const deadline = Date.now() + seconds * 1000;
+    for (;;) {
+      try {
+        await tabs.answers(ref, tabId, url);
+        return;
+      } catch (error) {
+        if (gone.aborted) {
+          throw new ControlError("timeout", `stopped waiting for ${url}: the caller is gone`);
+        }
+        if (Date.now() >= deadline) {
+          const message = `${url} did not answer within ${seconds} s: ${errorMessage(error)}`;
+          deps.notice("warning", message);
+          throw new ControlError("timeout", message);
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, OPEN_RETRY_MS));
+    }
+  };
+
   /** A `[ref=eN]` of the last browser-snapshot: an element, not a repository or worktree. */
   const element = (args: Record<string, unknown>): string => text(args, "ref", "ref: pass one of browser-snapshot's [ref=…]");
 
@@ -87,47 +111,35 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
   return {
     "browser-open": async (args, caller, _at, gone) => {
       const url = text(args, "url", "url");
-      const waiting = args.wait !== undefined;
-      const deadline = Date.now() + (waiting ? count(args, "wait", 0) * 1000 : 0);
+      const seconds = args.wait === undefined ? undefined : count(args, "wait", 0);
       const sandbox = sandboxOf(caller);
       const scope = { sandbox: sandbox?.name };
       const { ref, tabId: existing } = pageOf(args, caller, true, scope);
       let tabId = existing;
       try {
+        if (seconds !== undefined) {
+          browserUrl(url);
+          // An empty tab first: its profile, and a sandbox's way out, ask for the page.
+          if (tabId === undefined) {
+            const blank = tabs.create(ref, "", sandbox);
+            tabId = blank.tab.tabId;
+            await blank.loaded;
+          }
+          await answered(ref, tabId, url, seconds, gone);
+        }
         let loaded: Promise<void>;
         if (tabId === undefined) {
-          const created = tabs.create(ref, url, sandbox, waiting);
+          const created = tabs.create(ref, url, sandbox);
           tabId = created.tab.tabId;
           loaded = created.loaded;
         } else {
-          loaded = tabs.navigate(ref, tabId, url, waiting);
+          loaded = tabs.navigate(ref, tabId, url);
         }
-        // With --wait, a server still starting refuses the page: loaded again until it answers, and
-        // only then brought to the front, over the tab that started it. Each refusal quietly: one
-        // notice at the end, not one per try.
-        if (!waiting) {
-          deps.showTab(ref, tabId);
-        }
-        for (;;) {
-          try {
-            await loaded;
-            break;
-          } catch (error) {
-            if (Date.now() >= deadline || gone.aborted) {
-              throw error;
-            }
-          }
-          await new Promise((resolve) => setTimeout(resolve, OPEN_RETRY_MS));
-          loaded = tabs.navigate(ref, tabId, url, true);
-        }
-        if (waiting) {
-          deps.showTab(ref, tabId);
-        }
+        deps.showTab(ref, tabId);
+        await loaded;
       } catch (error) {
-        if (waiting && Date.now() >= deadline) {
-          const message = `${url} did not load within ${String(args.wait)} s: ${errorMessage(error)}`;
-          deps.notice("warning", message);
-          throw new ControlError("timeout", message);
+        if (error instanceof ControlError) {
+          throw error;
         }
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);
       }
