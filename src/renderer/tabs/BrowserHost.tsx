@@ -105,8 +105,10 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   const { tabId } = tab;
   const page = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
-  /** The address bar while typed into; null shows the page's own address. */
+  /** The address bar while typed into; null shows the page's own address. As in Chrome, an edit
+   *  outlives leaving the bar and goes with Escape or the page going elsewhere. */
   const [typed, setTyped] = useState<string | null>(null);
+  useEffect(() => setTyped(null), [tab.url]);
   const covered = useWindowCovered();
   const shown = active && visible;
   const floating = useFloating(shown);
@@ -328,7 +330,6 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           value={typed ?? (blank ? "" : tab.url)}
           onChange={(event) => setTyped(event.target.value)}
           onKeyDown={onKeyDown}
-          onBlur={() => setTyped(null)}
           onContextMenu={onContextMenu}
         />
       </div>
