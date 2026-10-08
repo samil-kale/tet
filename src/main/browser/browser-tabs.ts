@@ -5,6 +5,7 @@ import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/pr
 import type { NoticeSeverity } from "../../shared/types/app";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
+import { isOpenableUrl } from "../util/shell-open";
 
 /** The one window, whose content the pages are drawn into above TET's own page (window.ts). */
 export interface ViewHost {
@@ -45,6 +46,22 @@ interface Tab {
   view: WebContentsView;
 }
 
+/**
+ * What a page gets without asking, as Chrome grants it itself; every other permission (camera,
+ * microphone, location, notifications, reading the clipboard) is refused, which Electron would
+ * otherwise grant unasked. The local network ones answer `permissions.query` as Electron already
+ * behaves: it never checks local network access, and sites that ask first break on a denial.
+ */
+const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set([
+  "pointerLock",
+  "keyboardLock",
+  "fullscreen",
+  "clipboard-sanitized-write",
+  "local-network-access",
+  "local-network",
+  "loopback-network",
+]);
+
 /** Chromium's code for a load a newer one replaced: no failure. */
 const ERR_ABORTED = -3;
 
@@ -78,13 +95,16 @@ export function browserUrl(typed: string): string {
  * Every repository's and worktree's browser tabs, each page a `WebContentsView` drawn into the
  * window where its tab's box lies (`place`). A worktree's tabs share a profile of its own, deleted
  * with it (`clearProfile`); the repository's share the global one. Chromium keeps both in its own
- * `userData` (data-root.ts), so logins outlive a restart. Never persisted: a restart opens none.
+ * `userData` (data-root.ts), so logins outlive a restart. Never persisted: a restart opens none,
+ * and the tabs close with the window.
  */
 export class BrowserTabs {
   /** By tab id, unique across every repository and worktree; in the order opened. */
   private readonly tabs = new Map<string, Tab>();
   /** Per `refKey`: the tab the browser verbs act on without `--tab`, as the window reports it. */
   private readonly active = new Map<string, string>();
+  /** The partitions whose permissions are answered (`GRANTED_PERMISSIONS`). */
+  private readonly guarded = new Set<string>();
   private created = 0;
 
   constructor(private readonly deps: BrowserTabsDeps) {}
@@ -109,7 +129,7 @@ export class BrowserTabs {
   create(ref: ProjectRef, typed: string): { tab: BrowserTabInfo; loaded: Promise<void> } {
     const url = browserUrl(typed);
     const view = new WebContentsView({
-      webPreferences: { partition: partitionOf(ref), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
+      webPreferences: { session: this.profileOf(ref), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
     });
     const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view };
     const changed = (): void => this.changed(ref);
@@ -200,6 +220,12 @@ export class BrowserTabs {
     }
   }
 
+  /** The window closed: every tab goes with it, their pages drawn nowhere else. */
+  closeEverything(): void {
+    [...this.tabs.values()].forEach((tab) => this.dispose(tab));
+    this.active.clear();
+  }
+
   /** The repository or worktree closed: every tab of it goes. */
   closeAll(ref: ProjectRef): void {
     this.of(ref).forEach((tab) => this.dispose(tab));
@@ -251,6 +277,24 @@ export class BrowserTabs {
     );
   }
 
+  /** The repository's or worktree's profile, its permissions answered from its first tab on. */
+  private profileOf(ref: ProjectRef): Electron.Session {
+    const partition = partitionOf(ref);
+    const profile = session.fromPartition(partition);
+    if (!this.guarded.has(partition)) {
+      this.guarded.add(partition);
+      // A link to mail leaves for the mail app, as one in TET's own page does (window.ts).
+      profile.setPermissionRequestHandler((_contents, permission, callback, details) =>
+        callback(
+          GRANTED_PERMISSIONS.has(permission) ||
+            (permission === "openExternal" && "externalURL" in details && isOpenableUrl(details.externalURL ?? "")),
+        ),
+      );
+      profile.setPermissionCheckHandler((_contents, permission) => GRANTED_PERMISSIONS.has(permission));
+    }
+    return profile;
+  }
+
   private of(ref: ProjectRef): Tab[] {
     return [...this.tabs.values()].filter((tab) => sameProjectRef(tab.ref, ref));
   }
@@ -275,7 +319,16 @@ export class BrowserTabs {
 /** Settles once the page has loaded, or after LOAD_WAIT_MS while it still loads; rejects with
  *  Chromium's reason for a page that cannot load. */
 function load(tab: Tab, url: string): Promise<void> {
-  return Promise.race([tab.view.webContents.loadURL(url), new Promise<void>((resolve) => setTimeout(resolve, LOAD_WAIT_MS).unref())]);
+  const loaded = tab.view.webContents.loadURL(url).catch((error: unknown) => {
+    if ((error as { errno?: number }).errno !== ERR_ABORTED) {
+      throw error;
+    }
+    // Replaced by a navigation of the page's own (a redirect in script): loaded once that one is.
+    return tab.view.webContents.isLoading()
+      ? new Promise<void>((resolve) => tab.view.webContents.once("did-stop-loading", () => resolve()))
+      : undefined;
+  });
+  return Promise.race([loaded, new Promise<void>((resolve) => setTimeout(resolve, LOAD_WAIT_MS).unref())]);
 }
 
 /** A worktree's own profile, or the global one of every repository. */

@@ -27,6 +27,8 @@ export interface AppWindowDeps {
   hasTab(ref: ProjectRef, tabId: string): boolean;
   /** A page load began, reloads included: what the page showed is gone with it. */
   onPageLoad(): void;
+  /** The window closed, and the browser tabs' pages drawn into it with it. */
+  onClosed(): void;
 }
 
 /**
@@ -291,6 +293,8 @@ export class AppWindow {
 
     // Every load, reloads included, has no listener until App subscribes.
     page.webContents.on("did-start-loading", () => {
+      // The new page knows of nothing lying over a browser tab's page, so it starts beneath them.
+      this.raise(false);
       this.noticesHeard = false;
       this.deps.onPageLoad();
     });
@@ -317,6 +321,7 @@ export class AppWindow {
       }
       // A view's page outlives its window unless closed.
       page.webContents.close();
+      this.deps.onClosed();
     });
 
     page.webContents.on("render-process-gone", (_event, details) => {

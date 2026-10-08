@@ -115,6 +115,7 @@ const appWindow: AppWindow = new AppWindow({
   hasTab: (ref, tabId): boolean => tabManagers.get(ref)?.hasTab(tabId) === true,
   // The environment dialog went with the page.
   onPageLoad: (): void => envRequests.drop(),
+  onClosed: (): void => browserTabs.closeEverything(),
 });
 const { send, notice } = appWindow;
 
