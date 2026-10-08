@@ -222,9 +222,11 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     [tabId],
   );
 
+  /** The address bar's buttons and the menu's entries alike. */
+  const go = (where: BrowserGo) => () => window.tet.browser.go(at, tabId, where);
+
   /** Chrome's entries for a page; one that cannot go is disabled. */
   const menuEntries = (opened: BrowserMenu): ContextMenuEntry[] => {
-    const go = (where: BrowserGo) => () => window.tet.browser.go(at, tabId, where);
     const edit = (command: BrowserEdit) => () => window.tet.browser.edit(at, tabId, command);
     const link: ContextMenuEntry[] = opened.linkUrl
       ? [
@@ -284,17 +286,35 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     }
   };
 
+  // A right click as in a terminal (terminal-views.ts): copies a selection, else pastes at the
+  // caret, on one line as a paste into the field would.
+  const onContextMenu = (event: React.MouseEvent<HTMLInputElement>): void => {
+    event.preventDefault();
+    const input = event.currentTarget;
+    const { selectionStart: start, selectionEnd: end } = input;
+    if (start !== null && end !== null && start !== end) {
+      void navigator.clipboard.writeText(input.value.slice(start, end));
+      return;
+    }
+    input.focus();
+    void navigator.clipboard.readText().then((text) => {
+      const caret = input.selectionStart ?? input.value.length;
+      input.setRangeText(text.replace(/\r?\n/g, ""), caret, caret, "end");
+      setTyped(input.value);
+    });
+  };
+
   return (
     <div className={`browser-tab${active ? "" : " hidden"}`}>
       <div className="editor-bar">
         <div className="editor-bar-actions">
-          <IconButton title="Back" disabled={!tab.canGoBack} onClick={() => window.tet.browser.go(at, tabId, "back")}>
+          <IconButton title="Back" disabled={!tab.canGoBack} onClick={go("back")}>
             <BackIcon />
           </IconButton>
-          <IconButton title="Forward" disabled={!tab.canGoForward} onClick={() => window.tet.browser.go(at, tabId, "forward")}>
+          <IconButton title="Forward" disabled={!tab.canGoForward} onClick={go("forward")}>
             <ForwardIcon />
           </IconButton>
-          <IconButton title="Reload" onClick={() => window.tet.browser.go(at, tabId, "reload")}>
+          <IconButton title="Reload" onClick={go("reload")}>
             <ReloadIcon />
           </IconButton>
         </div>
@@ -309,6 +329,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           onChange={(event) => setTyped(event.target.value)}
           onKeyDown={onKeyDown}
           onBlur={() => setTyped(null)}
+          onContextMenu={onContextMenu}
         />
       </div>
       <div ref={page} className="browser-page">

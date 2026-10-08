@@ -259,7 +259,6 @@ async function sandboxRoute(sandbox: BrowserSandbox): Promise<SandboxRoute> {
   }
 }
 
-/** The sandbox a tab runs in, which its browser tabs load through. */
 function openProjectRef(ref: ProjectRef): void {
   const resolved = resolveProjectRef(dataRoot, store, ref);
   repositories.open(resolved);

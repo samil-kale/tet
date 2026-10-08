@@ -1,12 +1,12 @@
 import * as net from "node:net";
 import type { Readable, Writable } from "node:stream";
 import { errorMessage } from "../shared/errors";
-import { isLoopbackHost } from "../shared/loopback";
+import { bareHost, isLoopbackHost } from "../shared/loopback";
 import { lineReader, parseRelayFrame, RelayStreams, type RelayFrame } from "../shared/browser-relay";
 
 /**
  * The browser relay: what a sandboxed agent's browser tab dials, dialled from inside its sandbox
- * (src/shared/browser-relay.ts holds the wire). TET writes it into the sandbox's agent folder and
+ * (src/shared/browser-relay.ts holds the wire). TET writes it into the sandbox's own filesystem and
  * runs it with the sandbox's node over `sbx exec -i` (sbx/sbx-relay.ts). A host the sandbox reaches
  * directly — its own loopback, its dev server there, and what its NO_PROXY names — is dialled
  * directly; anything else goes through the sandbox's proxy, as every process of the sandbox goes,
@@ -39,7 +39,7 @@ export function bypassesProxy(host: string, noProxy: string | undefined): boolea
   if (isLoopbackHost(host)) {
     return true;
   }
-  const name = host.replace(/^\[|\]$/g, "").toLowerCase();
+  const name = bareHost(host).toLowerCase();
   return (noProxy ?? "")
     .split(",")
     .map((entry) =>
@@ -133,7 +133,7 @@ type Dialled = { socket: net.Socket; proxied: boolean } | { message: string };
 /** `host:port` dialled as the sandbox dials it (see the file's comment), through `proxy` unless
  *  `noProxy` names the host. */
 async function dial(host: string, port: number, http: boolean, proxy: URL | undefined, noProxy: string | undefined): Promise<Dialled> {
-  const target = host.replace(/^\[|\]$/g, "");
+  const target = bareHost(host);
   if (!proxy || bypassesProxy(host, noProxy)) {
     try {
       return { socket: await connect(target, port), proxied: false };
@@ -143,7 +143,7 @@ async function dial(host: string, port: number, http: boolean, proxy: URL | unde
   }
   let socket: net.Socket;
   try {
-    socket = await connect(proxy.hostname.replace(/^\[|\]$/g, ""), Number(proxy.port || 80));
+    socket = await connect(bareHost(proxy.hostname), Number(proxy.port || 80));
   } catch (error) {
     return { message: `the sandbox's proxy: ${errorMessage(error)}` };
   }

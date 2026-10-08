@@ -23,6 +23,13 @@ function endToEnd(raw: string[]): string[] {
   return kept;
 }
 
+/** A tunnel's answer, written on its socket as no `ServerResponse` writes one: `message` as plain
+ *  text, the connection closed. */
+function tunnelAnswer(status: string, message = ""): string {
+  const body = Buffer.from(message);
+  return `HTTP/1.1 ${status}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n${message}`;
+}
+
 /**
  * The proxy a sandboxed agent's browser tabs load through (browser-tabs.ts's sandbox profile): an
  * HTTP proxy on this machine's loopback whose every connection is dialled from inside the sandbox
@@ -72,13 +79,18 @@ export class SandboxProxy {
     return message;
   }
 
+  /** `host` reached: its last refusal no longer stands. */
+  private accept(host: string): void {
+    this.refused.delete(host.toLowerCase());
+  }
+
   private tunnel(dialer: SandboxDialer, request: http.IncomingMessage, socket: Duplex, head: Buffer): void {
     socket.on("error", () => undefined);
     let target: URL;
     try {
       target = new URL(`http://${request.url ?? ""}`);
     } catch {
-      socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+      socket.end(tunnelAnswer("400 Bad Request"));
       return;
     }
     dialer.open(target.hostname, Number(target.port || 443), false).then(
@@ -87,7 +99,7 @@ export class SandboxProxy {
           stream.destroy();
           return;
         }
-        this.refused.delete(target.hostname.toLowerCase());
+        this.accept(target.hostname);
         socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
         if (head.length > 0) {
           stream.write(head);
@@ -97,13 +109,7 @@ export class SandboxProxy {
         stream.on("close", () => socket.destroy());
         socket.pipe(stream).pipe(socket);
       },
-      (error: unknown) => {
-        const message = this.refuse(target.hostname, error);
-        const body = Buffer.from(message);
-        socket.end(
-          `HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: ${body.length}\r\nConnection: close\r\n\r\n${body.toString()}`,
-        );
-      },
+      (error: unknown) => socket.end(tunnelAnswer("502 Bad Gateway", this.refuse(target.hostname, error))),
     );
   }
 
@@ -115,20 +121,19 @@ export class SandboxProxy {
         response.writeHead(502, { "Content-Type": "text/plain; charset=utf-8", Connection: "close" }).end(message);
       }
     };
-    let target: URL;
+    let target: URL | undefined;
     try {
       target = new URL(request.url ?? "");
     } catch {
-      response.writeHead(400, { Connection: "close" }).end();
-      return;
+      target = undefined;
     }
-    if (target.protocol !== "http:") {
+    if (target?.protocol !== "http:") {
       response.writeHead(400, { Connection: "close" }).end();
       return;
     }
     dialer.open(target.hostname, Number(target.port || 80), true).then(
       ({ stream, proxied }) => {
-        this.refused.delete(target.hostname.toLowerCase());
+        this.accept(target.hostname);
         // One request per connection to the sandbox: the next may be for another host.
         const sent = http.request({
           createConnection: () => stream,

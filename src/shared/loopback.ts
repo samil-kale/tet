@@ -5,6 +5,11 @@
  * dials it in the sandbox itself (src/cli/browser-relay.ts).
  */
 export function isLoopbackHost(hostname: string): boolean {
-  const name = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const name = bareHost(hostname).toLowerCase();
   return name === "localhost" || name.endsWith(".localhost") || name === "::1" || name === "0.0.0.0" || /^127\.\d+\.\d+\.\d+$/.test(name);
+}
+
+/** `host` without the brackets a URL puts around an IPv6 address. */
+export function bareHost(host: string): string {
+  return host.replace(/^\[|\]$/g, "");
 }

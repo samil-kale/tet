@@ -20,6 +20,7 @@ import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/pr
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
 import { downloadsDir, ownedWorktreeKeys, sandboxDir } from "../store/project-dirs";
+import { isDevToolsKey } from "../util/devtools-key";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
 import { openInside } from "../util/path-inside";
@@ -397,10 +398,10 @@ export class BrowserTabs {
       }),
     );
     view.webContents.on("focus", () => this.deps.onFocused(ref, tab.tabId));
-    // The page's own DevTools, as F12 opens TET's for the window (window.ts); taken before the page,
-    // as Chrome takes it.
+    // The page's own DevTools, by the keys that open TET's for the window (window.ts); taken before
+    // the page, as Chrome takes them.
     view.webContents.on("before-input-event", (event, input) => {
-      if (input.type === "keyDown" && input.key === "F12") {
+      if (isDevToolsKey(input)) {
         event.preventDefault();
         if (view.webContents.isDevToolsOpened()) {
           view.webContents.closeDevTools();
@@ -444,7 +445,7 @@ export class BrowserTabs {
     }
   }
 
-  /** The page's DevTools, as F12 opens them, on the element at `x`, `y`. */
+  /** The page's DevTools, as its keys open them, on the element at `x`, `y`. */
   inspect(ref: ProjectRef, tabId: string, x: number, y: number): void {
     const view = this.find(ref, tabId)?.view;
     if (view) {
@@ -458,7 +459,7 @@ export class BrowserTabs {
    * the window then takes. One a page handled stays the page's, as in VS Code's browser.
    */
   pageKey(senderId: number, key: ShortcutKey): void {
-    const tab = [...this.tabs.values()].find((held) => held.view.webContents.id === senderId);
+    const tab = this.byContents(senderId);
     const shortcut = tab && isShortcutKey(key) ? shortcutOf(key, PLATFORM) : undefined;
     if (shortcut) {
       this.deps.onShortcut(shortcut);
@@ -518,20 +519,24 @@ export class BrowserTabs {
     view.setVisible(bounds !== null);
   }
 
-  /** The page as it looks, a PNG, for `browser-screenshot`; drawn or not, out of sight too. Null
-   *  when it has no look yet. */
+  /** The page as it looks, a PNG, for `browser-screenshot` (`look`). */
   async capture(ref: ProjectRef, tabId: string): Promise<Buffer | null> {
-    const image = await this.find(ref, tabId)?.view.webContents.capturePage();
-    return image && !image.isEmpty() ? image.toPNG() : null;
+    return (await this.look(ref, tabId))?.toPNG() ?? null;
+  }
+
+  /** The page as it looks (`look`), a JPEG data URL, for the window to show in its place while
+   *  something of it lies over the page (BrowserHost). */
+  async still(ref: ProjectRef, tabId: string): Promise<string | null> {
+    const image = await this.look(ref, tabId);
+    return image && `data:image/jpeg;base64,${image.toJPEG(STILL_QUALITY).toString("base64")}`;
   }
 
   /**
-   * The page as it looks, a JPEG data URL, for the window to show in its place while something of
-   * it lies over the page (BrowserHost); taken hidden too, as VS Code's browser takes it: a hidden
+   * The page as it looks, drawn or not, out of sight too, as VS Code's browser takes it: a hidden
    * page is shown and hidden once to have its drawing ready, and Chromium's `UnknownVizError`, no
    * frame there yet, is tried again. Null when it has no look yet.
    */
-  async still(ref: ProjectRef, tabId: string): Promise<string | null> {
+  private async look(ref: ProjectRef, tabId: string): Promise<Electron.NativeImage | null> {
     const view = this.find(ref, tabId)?.view;
     if (!view) {
       return null;
@@ -541,7 +546,7 @@ export class BrowserTabs {
       view.setVisible(false);
     }
     const image = await capturePage(view);
-    return image && !image.isEmpty() ? `data:image/jpeg;base64,${image.toJPEG(STILL_QUALITY).toString("base64")}` : null;
+    return image.isEmpty() ? null : image;
   }
 
   setActive(ref: ProjectRef, tabId: string): void {
@@ -597,7 +602,7 @@ export class BrowserTabs {
   private async refusalOf(tab: Tab, url: string): Promise<string | undefined> {
     const route = tab.sandbox && this.routes.get(partitionOf(tab.ref, tab.sandbox));
     try {
-      return route && (await route).refusal(new URL(url).hostname);
+      return route && (await route).refusal(hostnameOf(url));
     } catch {
       return undefined;
     }
@@ -649,7 +654,7 @@ export class BrowserTabs {
    *  user's — a sandbox's tab's then handed into its agent folder, which it sees (`handOver`); a
    *  notice says where once it is there. */
   private download(item: Electron.DownloadItem, contents: Electron.WebContents): void {
-    const tab = [...this.tabs.values()].find((held) => held.view.webContents.id === contents.id);
+    const tab = this.byContents(contents.id);
     if (!tab) {
       item.cancel();
       return;
@@ -718,6 +723,11 @@ export class BrowserTabs {
     return tab && sameProjectRef(tab.ref, ref) ? tab : undefined;
   }
 
+  /** The tab whose page `contentsId` (its `webContents.id`) names, of any repository or worktree. */
+  private byContents(contentsId: number): Tab | undefined {
+    return [...this.tabs.values()].find((held) => held.view.webContents.id === contentsId);
+  }
+
   /** `closePage` false for a page already gone, whose view then holds none. */
   private dispose(tab: Tab, closePage = true): void {
     this.tabs.delete(tab.tabId);
@@ -733,9 +743,8 @@ export class BrowserTabs {
     }
     // A sandbox's last tab lets go of its relay, which holds the sandbox running; its profile keeps
     // the proxy gone, so nothing loads from this machine meanwhile.
-    const { sandbox } = tab;
-    if (sandbox && ![...this.tabs.values()].some((held) => held.sandbox?.name === sandbox.name && sameProjectRef(held.ref, tab.ref))) {
-      const partition = partitionOf(tab.ref, sandbox);
+    const partition = tab.sandbox && partitionOf(tab.ref, tab.sandbox);
+    if (partition && ![...this.tabs.values()].some((held) => held.sandbox && partitionOf(held.ref, held.sandbox) === partition)) {
       const route = this.routes.get(partition);
       this.routes.delete(partition);
       route?.then((opened) => opened.close()).catch(() => undefined);
