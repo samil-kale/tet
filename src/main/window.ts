@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { app, BaseWindow, shell, WebContentsView, type Menu } from "electron";
+import { app, BaseWindow, shell, WebContentsView } from "electron";
 import { WINDOW_ARGS } from "../shared/api";
 import type { EventChannels, WindowReply } from "../shared/ipc";
 import type { ThemeDefinition } from "../shared/themes";
@@ -216,13 +216,6 @@ export class AppWindow {
   removeView = (view: WebContentsView): void => {
     if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.removeChildView(view);
-    }
-  };
-
-  /** A browser tab's page's own menu, native and so above every view, at the pointer. */
-  popup = (menu: Menu): void => {
-    if (this.window && !this.window.isDestroyed()) {
-      menu.popup({ window: this.window });
     }
   };
 

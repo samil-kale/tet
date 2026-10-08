@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
-import { app, clipboard, Menu, session, WebContentsView, type Debugger, type MenuItemConstructorOptions } from "electron";
+import { app, session, WebContentsView, type Debugger } from "electron";
 import { errorMessage } from "../../shared/errors";
 import { isLoopbackHost } from "../../shared/loopback";
 import { shortcutOf, type ShortcutId, type ShortcutKey } from "../../shared/shortcuts";
@@ -10,8 +10,10 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserBounds,
   type BrowserCredentials,
+  type BrowserEdit,
   type BrowserGo,
   type BrowserLogin,
+  type BrowserMenu,
   type BrowserTabInfo,
 } from "../../shared/types/browser";
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
@@ -27,8 +29,6 @@ import { isOpenableUrl } from "../util/shell-open";
 export interface ViewHost {
   addView(view: WebContentsView): void;
   removeView(view: WebContentsView): void;
-  /** A page's own menu, native, so it draws above every page. */
-  popup(menu: Menu): void;
 }
 
 export interface BrowserTabsDeps {
@@ -45,8 +45,8 @@ export interface BrowserTabsDeps {
   onClosed(tabId: string): void;
   /** A window shortcut pressed on a page and left alone by it (`pageKey`), which the window never sees. */
   onShortcut(shortcut: ShortcutId): void;
-  /** A page's "Open Link in New Tab", for the window to open beside it. */
-  onOpenLink(ref: ProjectRef, tabId: string, url: string): void;
+  /** A right click into a page, whose menu the window draws. */
+  onMenu(ref: ProjectRef, tabId: string, menu: BrowserMenu): void;
   /** A page asking for a login, which its tab asks the user for (`answerLogin`). */
   onLogin(ref: ProjectRef, tabId: string, login: BrowserLogin): void;
   /** The way a sandbox's tabs reach the network (SandboxRoute); rejects when the sandbox cannot be
@@ -382,7 +382,17 @@ export class BrowserTabs {
       this.logins.set(id, { tabId: tab.tabId, answer: callback });
       this.deps.onLogin(ref, tab.tabId, { id, host: authInfo.host, realm: authInfo.realm, proxy: authInfo.isProxy });
     });
-    view.webContents.on("context-menu", (_event, params) => this.deps.host.popup(this.menuOf(tab, params)));
+    view.webContents.on("context-menu", (_event, params) =>
+      this.deps.onMenu(ref, tab.tabId, {
+        x: params.x,
+        y: params.y,
+        linkUrl: params.linkURL,
+        canCut: params.editFlags.canCut,
+        canCopy: params.editFlags.canCopy,
+        canPaste: params.editFlags.canPaste,
+        canSelectAll: params.editFlags.canSelectAll,
+      }),
+    );
     view.webContents.on("focus", () => this.deps.onFocused(ref, tab.tabId));
     // The page's own DevTools, as F12 opens TET's for the window (window.ts); taken before the page,
     // as Chrome takes it.
@@ -419,6 +429,24 @@ export class BrowserTabs {
       view?.webContents.navigationHistory.goForward();
     } else {
       view?.webContents.reload();
+    }
+  }
+
+  /** The menu's edit command; the page then has the focus again, which the menu took. */
+  edit(ref: ProjectRef, tabId: string, edit: BrowserEdit): void {
+    const view = this.find(ref, tabId)?.view;
+    if (view) {
+      view.webContents[edit]();
+      view.webContents.focus();
+    }
+  }
+
+  /** The page's DevTools, as F12 opens them, on the element at `x`, `y`. */
+  inspect(ref: ProjectRef, tabId: string, x: number, y: number): void {
+    const view = this.find(ref, tabId)?.view;
+    if (view) {
+      openDevTools(view);
+      view.webContents.inspectElement(x, y);
     }
   }
 
@@ -663,43 +691,6 @@ export class BrowserTabs {
         )
         .finally(() => fs.promises.rm(saved, { force: true }).catch(() => undefined));
     });
-  }
-
-  /** Chrome's entries for a page's right click; one that cannot go is disabled. An edit hands the
-   *  page the focus back, which the menu took. */
-  private menuOf(tab: Tab, params: Electron.ContextMenuParams): Menu {
-    const { view, ref, tabId } = tab;
-    const history = view.webContents.navigationHistory;
-    const edit = (command: "cut" | "copy" | "paste" | "selectAll") => (): void => {
-      view.webContents[command]();
-      view.webContents.focus();
-    };
-    const link: MenuItemConstructorOptions[] = params.linkURL
-      ? [
-          { label: "Open Link in New Tab", click: () => this.deps.onOpenLink(ref, tabId, params.linkURL) },
-          { label: "Copy Link Address", click: () => clipboard.writeText(params.linkURL) },
-          { type: "separator" },
-        ]
-      : [];
-    return Menu.buildFromTemplate([
-      ...link,
-      { label: "Back", enabled: history.canGoBack(), click: () => history.goBack() },
-      { label: "Forward", enabled: history.canGoForward(), click: () => history.goForward() },
-      { label: "Reload", click: () => view.webContents.reload() },
-      { type: "separator" },
-      { label: "Cut", enabled: params.editFlags.canCut, click: edit("cut") },
-      { label: "Copy", enabled: params.editFlags.canCopy, click: edit("copy") },
-      { label: "Paste", enabled: params.editFlags.canPaste, click: edit("paste") },
-      { label: "Select All", enabled: params.editFlags.canSelectAll, click: edit("selectAll") },
-      { type: "separator" },
-      {
-        label: "Inspect",
-        click: () => {
-          openDevTools(view);
-          view.webContents.inspectElement(params.x, params.y);
-        },
-      },
-    ]);
   }
 
   /** Every tab of the repository or worktree, or those within `scope`. */

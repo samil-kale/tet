@@ -1,7 +1,7 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { ShortcutId } from "./shortcuts";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
-import type { BrowserBounds, BrowserCredentials, BrowserGo, BrowserLogin, BrowserTabInfo } from "./types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserGo, BrowserLogin, BrowserMenu, BrowserTabInfo } from "./types/browser";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
 import type {
@@ -322,6 +322,10 @@ export interface TETApi {
     /** As `create` takes it; a page that cannot load is a notice. */
     navigate: (ref: ProjectRef, tabId: string, url: string) => void;
     go: (ref: ProjectRef, tabId: string, where: BrowserGo) => void;
+    /** One of the page's own edit commands, from its context menu; the page takes the focus back. */
+    edit: (ref: ProjectRef, tabId: string, edit: BrowserEdit) => void;
+    /** The page's DevTools on the element at `x`, `y` (BrowserMenu's). */
+    inspect: (ref: ProjectRef, tabId: string, x: number, y: number) => void;
     /** The login a page asked for (`onLogin`); null cancels it, and the page shows its refusal. */
     answerLogin: (id: number, login: BrowserCredentials | null) => void;
     /** Where the page is drawn; null hides it, out of sight. */
@@ -338,8 +342,8 @@ export interface TETApi {
     onFocused: (listener: (payload: { ref: ProjectRef; tabId: string }) => void) => Unsubscribe;
     /** A window shortcut pressed on a page and left alone by it; the window never sees its keys. */
     onShortcut: (listener: (payload: ShortcutId) => void) => Unsubscribe;
-    /** "Open Link in New Tab" from a page's own menu, a tab to open beside it. */
-    onOpenLink: (listener: (payload: { ref: ProjectRef; tabId: string; url: string }) => void) => Unsubscribe;
+    /** A right click into a page, whose menu the window draws. */
+    onMenu: (listener: (payload: { ref: ProjectRef; tabId: string; menu: BrowserMenu }) => void) => Unsubscribe;
     /** A page asking for a login, which its tab asks the user for (`answerLogin`). */
     onLogin: (listener: (payload: { ref: ProjectRef; tabId: string; login: BrowserLogin }) => void) => Unsubscribe;
   };

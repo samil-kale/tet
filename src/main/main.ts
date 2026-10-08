@@ -230,7 +230,7 @@ const browserTabs = new BrowserTabs({
   onFocused: (ref, tabId) => send("browser:focused", { ref, tabId }),
   onClosed: (tabId) => browser.tabClosed(tabId),
   onShortcut: (shortcut) => send("browser:shortcut", shortcut),
-  onOpenLink: (ref, tabId, url) => send("browser:open-link", { ref, tabId, url }),
+  onMenu: (ref, tabId, menu) => send("browser:menu", { ref, tabId, menu }),
   onLogin: (ref, tabId, login) => send("browser:login", { ref, tabId, login }),
   route: sandboxRoute,
   notice,

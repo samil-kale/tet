@@ -1504,7 +1504,6 @@ textarea:focus,
 /* The page's still while something of the window lies over it (BrowserHost), the page hidden. */
 .browser-still {
   position: absolute;
-  top: 0;
   pointer-events: none;
 }
 

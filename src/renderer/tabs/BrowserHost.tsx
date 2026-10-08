@@ -1,6 +1,15 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { BrowserBounds, BrowserCredentials, BrowserLogin, BrowserTabInfo } from "../../shared/types/browser";
+import type {
+  BrowserBounds,
+  BrowserCredentials,
+  BrowserEdit,
+  BrowserGo,
+  BrowserLogin,
+  BrowserMenu,
+  BrowserTabInfo,
+} from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
 import { BackIcon, ForwardIcon, ReloadIcon } from "../ui/icons";
@@ -60,18 +69,21 @@ const STILL_INTERVAL_MS = 1000;
 /**
  * Where the page is drawn within its box. A pane's left border is the sash's line, drawn in the
  * pane's first pixel column (`.sash`), which the page, drawn above TET's page, would cover: it
- * starts one pixel in, past it.
+ * starts one pixel in, past it. Whole pixels, as main sets a view's bounds: its still, laid where
+ * these say, then lies exactly where the page did.
  */
-function pageBounds({ left, top, width, height }: DOMRect): BrowserBounds {
-  const inset = left > 0 ? Math.min(1, width) : 0;
-  return { x: left + inset, y: top, width: width - inset, height };
+function pageBounds({ left, top, right, bottom }: DOMRect): BrowserBounds {
+  const x = Math.round(left > 0 ? Math.min(left + 1, right) : left);
+  const y = Math.round(top);
+  return { x, y, width: Math.round(right) - x, height: Math.round(bottom) - y };
 }
 
-/** A page's still (`browser.still`), where it lay in its box when taken: in from its left edge
- *  as the page is (`pageBounds`), at the page's size then. */
+/** A page's still (`browser.still`), where it lay in its box when taken (`pageBounds`), at the
+ *  page's size then. */
 interface Still {
   url: string;
   left: number;
+  top: number;
   width: number;
   height: number;
 }
@@ -122,8 +134,8 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       const box = page.current?.getBoundingClientRect();
       const url = await window.tet.browser.still(at, tabId);
       if (!gone && url && box) {
-        const { x, width, height } = pageBounds(box);
-        setStill({ url, left: x - box.left, width, height });
+        const { x, y, width, height } = pageBounds(box);
+        setStill({ url, left: x - box.left, top: y - box.top, width, height });
       }
     };
     void take();
@@ -176,16 +188,44 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     [tabId, onFocused],
   );
 
-  // "Open Link in New Tab" from the page's own menu (browser-tabs.ts's menuOf).
+  // A right click into the page: its menu, at the click, drawn by the window over the page's still.
+  const [menu, setMenu] = useState<{ x: number; y: number; menu: BrowserMenu } | null>(null);
   useEffect(
     () =>
-      window.tet.browser.onOpenLink((opened) => {
-        if (opened.tabId === tabId) {
-          onOpenTab(opened.url);
+      window.tet.browser.onMenu((opened) => {
+        const box = page.current && pageBounds(page.current.getBoundingClientRect());
+        if (opened.tabId === tabId && box) {
+          setMenu({ x: box.x + opened.menu.x, y: box.y + opened.menu.y, menu: opened.menu });
         }
       }),
-    [tabId, onOpenTab],
+    [tabId],
   );
+
+  /** Chrome's entries for a page; one that cannot go is disabled. */
+  const menuEntries = (opened: BrowserMenu): ContextMenuEntry[] => {
+    const go = (where: BrowserGo) => () => window.tet.browser.go(at, tabId, where);
+    const edit = (command: BrowserEdit) => () => window.tet.browser.edit(at, tabId, command);
+    const link: ContextMenuEntry[] = opened.linkUrl
+      ? [
+          { label: "Open Link in New Tab", run: () => onOpenTab(opened.linkUrl) },
+          { label: "Copy Link Address", run: () => void navigator.clipboard.writeText(opened.linkUrl) },
+          SEPARATOR,
+        ]
+      : [];
+    return [
+      ...link,
+      { label: "Back", run: tab.canGoBack ? go("back") : undefined },
+      { label: "Forward", run: tab.canGoForward ? go("forward") : undefined },
+      { label: "Reload", run: go("reload") },
+      SEPARATOR,
+      { label: "Cut", run: opened.canCut ? edit("cut") : undefined },
+      { label: "Copy", run: opened.canCopy ? edit("copy") : undefined },
+      { label: "Paste", run: opened.canPaste ? edit("paste") : undefined },
+      { label: "Select All", run: opened.canSelectAll ? edit("selectAll") : undefined },
+      SEPARATOR,
+      { label: "Inspect", run: () => window.tet.browser.inspect(at, tabId, opened.x, opened.y) },
+    ];
+  };
 
   useEffect(
     () =>
@@ -252,7 +292,12 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       </div>
       <div ref={page} className="browser-page">
         {still && (
-          <img className="browser-still" src={still.url} alt="" style={{ left: still.left, width: still.width, height: still.height }} />
+          <img
+            className="browser-still"
+            src={still.url}
+            alt=""
+            style={{ left: still.left, top: still.top, width: still.width, height: still.height }}
+          />
         )}
         {paused && (
           <div className="browser-paused">
@@ -263,6 +308,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           </div>
         )}
       </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.menu)} onClose={() => setMenu(null)} />}
     </div>
   );
 });
