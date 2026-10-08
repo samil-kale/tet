@@ -40,6 +40,8 @@ export interface BrowserTabsDeps {
   onOpened(ref: ProjectRef, tabId: string): void;
   /** A click into a page, which the window never sees: its pane takes the focus. */
   onPressed(ref: ProjectRef, tabId: string): void;
+  /** The editor tab's color, which an empty page shows (`paintBlank`); none while no window stands. */
+  pageBackground(): string | undefined;
   /** A tab closed: what drives its page lets go (browser-automation's). */
   onClosed(tabId: string): void;
   /** A window shortcut pressed on a page, which the window never sees. */
@@ -116,6 +118,12 @@ interface Tab {
   popup: boolean;
   /** The sandbox it loads through; none for this machine's. */
   sandbox?: BrowserSandbox;
+  /** `insertCSS`'s key for the color an empty page shows (`paintBlank`); a navigation drops it. */
+  blankCss?: string;
+  /** Its first load drew something (`reveal`): till then it stays hidden, its tab's color showing. */
+  ready: boolean;
+  /** Its box is on screen (`place`), shown once `ready`. */
+  placed: boolean;
 }
 
 /**
@@ -281,16 +289,24 @@ export class BrowserTabs {
   /** `view` as a tab of the repository or worktree, made the active one: a new page, or a popup a
    *  page opened, of the sandbox its opener loads through. */
   private open(ref: ProjectRef, view: WebContentsView, popup: boolean, sandbox: BrowserSandbox | undefined): Tab {
-    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup, sandbox };
+    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup, sandbox, ready: false, placed: false };
     /** Told once that a popup was blocked, not once per popup. */
     let blocked = false;
     const changed = (): void => this.changed(ref);
     view.setVisible(false);
     view.webContents.on("did-start-loading", changed);
     view.webContents.on("did-stop-loading", changed);
+    // A load that fails, or stops before its page is ready, reveals it too: never hidden for good.
+    view.webContents.on("did-stop-loading", () => reveal(tab));
     view.webContents.on("page-title-updated", changed);
     view.webContents.on("did-navigate", changed);
     view.webContents.on("did-navigate-in-page", changed);
+    view.webContents.on("dom-ready", () => {
+      tab.blankCss = undefined;
+      this.paintBlank(tab)
+        .catch(() => undefined)
+        .finally(() => reveal(tab));
+    });
     view.webContents.on("did-fail-load", (_event, code, description, failedUrl, isMainFrame) => {
       if (isMainFrame && code !== ERR_ABORTED) {
         void this.refusalOf(tab, failedUrl).then((refused) =>
@@ -477,12 +493,13 @@ export class BrowserTabs {
     this.active.delete(refKeyOf(ref));
   }
 
-  /** Draws the page over `bounds`, or hides it. */
+  /** Draws the page over `bounds`, once it is `ready`, or hides it. */
   place(ref: ProjectRef, tabId: string, bounds: BrowserBounds | null): void {
-    const view = this.find(ref, tabId)?.view;
-    if (!view) {
+    const tab = this.find(ref, tabId);
+    if (!tab) {
       return;
     }
+    const { view } = tab;
     if (bounds) {
       view.setBounds({
         x: Math.round(bounds.x),
@@ -491,7 +508,8 @@ export class BrowserTabs {
         height: Math.round(bounds.height),
       });
     }
-    view.setVisible(bounds !== null);
+    tab.placed = bounds !== null;
+    view.setVisible(tab.placed && tab.ready);
   }
 
   /** The page as it looks, a PNG, for `browser-screenshot`; drawn or not, out of sight too. Null
@@ -504,6 +522,13 @@ export class BrowserTabs {
   /** TET's page above every tab's page, which it lets through where it is transparent; or back. */
   raise(raised: boolean): void {
     this.deps.host.raise(raised);
+  }
+
+  /** The theme changed: every empty page shows its editor tab's color anew. */
+  repaint(): void {
+    for (const tab of this.tabs.values()) {
+      this.paintBlank(tab).catch(() => undefined);
+    }
   }
 
   setActive(ref: ProjectRef, tabId: string): void {
@@ -670,6 +695,23 @@ export class BrowserTabs {
     });
   }
 
+  /**
+   * An empty page (`about:blank`) in its editor tab's color, not Chromium's own (#121212 in the
+   * dark). A page of the web keeps its own.
+   */
+  private async paintBlank(tab: Tab): Promise<void> {
+    const { view } = tab;
+    const color = this.deps.pageBackground();
+    if (view.webContents.isDestroyed() || view.webContents.getURL() !== "about:blank" || color === undefined) {
+      return;
+    }
+    const previous = tab.blankCss;
+    tab.blankCss = await view.webContents.insertCSS(`html { background: ${color}; }`);
+    if (previous !== undefined) {
+      await view.webContents.removeInsertedCSS(previous);
+    }
+  }
+
   /** Every tab of the repository or worktree, or those within `scope`. */
   private of(ref: ProjectRef, scope: BrowserScope | undefined): Tab[] {
     return [...this.tabs.values()].filter((tab) => sameProjectRef(tab.ref, ref) && (scope === undefined || inside(tab, scope)));
@@ -707,6 +749,15 @@ export class BrowserTabs {
   private changed(ref: ProjectRef): void {
     this.deps.onTabs(ref, this.list(ref));
   }
+}
+
+/** Shows the page once its first load drew something, if its box is on screen (`place`). */
+function reveal(tab: Tab): void {
+  if (tab.ready || tab.view.webContents.isDestroyed()) {
+    return;
+  }
+  tab.ready = true;
+  tab.view.setVisible(tab.placed);
 }
 
 /** Settles once the page has loaded, or after LOAD_WAIT_MS while it still loads; rejects with

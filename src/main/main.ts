@@ -228,6 +228,7 @@ const browserTabs = new BrowserTabs({
   onTabs: (ref, tabs) => send("browser:changed", { ref, tabs }),
   onOpened: (ref, tabId) => send("tabs:show", { ref, tabId }),
   onPressed: (ref, tabId) => send("browser:pressed", { ref, tabId }),
+  pageBackground: () => appWindow.shownTheme()?.editorBackground,
   onClosed: (tabId) => browser.tabClosed(tabId),
   onShortcut: (shortcut) => send("browser:shortcut", shortcut),
   onMenu: (ref, tabId, menu) => send("browser:menu", { ref, tabId, menu }),
@@ -434,6 +435,7 @@ function applyTheme(): boolean {
   // The kind on screen, not the saved one: a pending kind switch must not block a change within it.
   const { kind } = shown;
   appWindow.showTheme(resolveTheme(settings.get().appearance[themeKey(kind)], kind));
+  browserTabs.repaint();
   const saved = currentTheme(settings);
   // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
   // restart is not handed to them.

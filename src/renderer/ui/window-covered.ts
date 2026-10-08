@@ -37,8 +37,8 @@ export function useTopDialog(): HTMLDialogElement | undefined {
 
 /**
  * What floats over the window's views without covering it: a context menu, the notices, a tab
- * being dragged over the panes. A browser tab's page is drawn above the whole window (BrowserHost),
- * so it gives way where one of these overlaps it, as it does to a dialog.
+ * being dragged over the panes, a sash being dragged. A browser tab's page is drawn above the whole
+ * window (BrowserHost), so it gives way where one of these overlaps it, as it does to a dialog.
  */
 const floating = createStore<readonly Floating[]>([]);
 
