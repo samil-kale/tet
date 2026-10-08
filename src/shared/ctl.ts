@@ -124,6 +124,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   tab: "value",
   text: "value",
   url: "value",
+  wait: "value",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
@@ -589,9 +590,9 @@ const VERBS = [
   {
     verb: "browser-open",
     group: "In front of the user",
-    usage: "browser-open <url> [--tab <id>] [--project <id>] [--worktree <key or branch>]",
+    usage: "browser-open <url> [--wait <seconds>] [--tab <id>] [--project <id>] [--worktree <key or branch>]",
     summary:
-      "Load a web page (localhost:3000 for a dev server) in the browser tab of the repository or worktree, opening one if it has none, and bring it to the front; waits for the page. A worktree's tabs have a profile of their own, the repository's the global one. From a sandbox, the tab is the sandbox's own and loads through it: localhost is the sandbox's, and its network policy applies.",
+      "Load a web page (localhost:3000 for a dev server) in the browser tab of the repository or worktree, opening one if it has none, and bring it to the front; waits for the page. With --wait, loads it again until it answers, for a server still starting, and brings it to the front only then; exits 4 after that many seconds. A worktree's tabs have a profile of their own, the repository's the global one. From a sandbox, the tab is the sandbox's own and loads through it: localhost is the sandbox's, and its network policy applies.",
     positionals: ["url"],
     ownProjectOnly: true,
     sandbox: "ownRef",

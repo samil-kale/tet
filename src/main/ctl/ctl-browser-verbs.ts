@@ -6,6 +6,7 @@ import { writeDropFile } from "../store/drops";
 import {
   callerTab,
   ControlError,
+  count,
   optionalText,
   seenPath,
   text,
@@ -14,6 +15,9 @@ import {
   type Handler,
   type RefFrom,
 } from "./ctl-verb";
+
+/** How often `browser-open --wait` loads the page again while the server still refuses it. */
+const OPEN_RETRY_MS = 500;
 
 /**
  * The browser verbs: open a page in the repository's or worktree's browser tab, read it, act on it
@@ -81,8 +85,9 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
   };
 
   return {
-    "browser-open": async (args, caller) => {
+    "browser-open": async (args, caller, _at, gone) => {
       const url = text(args, "url", "url");
+      const deadline = args.wait === undefined ? undefined : Date.now() + count(args, "wait", 0) * 1000;
       const sandbox = sandboxOf(caller);
       const scope = { sandbox: sandbox?.name };
       const { ref, tabId: existing } = pageOf(args, caller, true, scope);
@@ -96,9 +101,31 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
         } else {
           loaded = tabs.navigate(ref, tabId, url);
         }
-        deps.showTab(ref, tabId);
-        await loaded;
+        if (deadline === undefined) {
+          deps.showTab(ref, tabId);
+          await loaded;
+        } else {
+          // A server still starting refuses the page: loaded again until it answers, and only then
+          // brought to the front, over the tab that started it.
+          const opened = tabId;
+          for (;;) {
+            try {
+              await loaded;
+              break;
+            } catch (error) {
+              if (Date.now() >= deadline || gone.aborted) {
+                throw error;
+              }
+            }
+            await new Promise((resolve) => setTimeout(resolve, OPEN_RETRY_MS));
+            loaded = tabs.navigate(ref, opened, url);
+          }
+          deps.showTab(ref, opened);
+        }
       } catch (error) {
+        if (deadline !== undefined && Date.now() >= deadline) {
+          throw new ControlError("timeout", `${url} did not load within ${String(args.wait)} s: ${errorMessage(error)}`);
+        }
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);
       }
       const page = tabs.page(ref, tabId, scope);

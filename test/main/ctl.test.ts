@@ -198,6 +198,9 @@ let sbxNotKept: string | undefined;
 /** The faked browser tabs, of every repository and worktree, each a sandbox's or this machine's. */
 let browserTabs: { ref: string; tabId: string; url: string; sandbox?: string }[];
 
+/** How many more loads of an address naming "starting" fail, as a server still starting refuses. */
+let startingRefusals = 0;
+
 /** The sandbox SANDBOX_TAB runs in, in PROJECT's repository; its worktrees' tabs run in none. */
 const BROWSER_SANDBOX = { name: "tet-claude-sbx", agentId: "claude" as const, agentDir: "/agent", downloadsDir: "/agent/downloads" };
 
@@ -277,7 +280,8 @@ function terminalsOf(key: string): ControlTerminals {
 }
 
 /** The browser tabs as BrowserTabs keeps them: the last opened is the one acted on; an address
- *  naming "unreachable" fails to load as Chromium's would. */
+ *  naming "unreachable" fails to load as Chromium's would, one naming "starting" while
+ *  startingRefusals lasts. */
 function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
   const pageOf = (tab: (typeof browserTabs)[number]) => ({
     tabId: tab.tabId,
@@ -287,7 +291,9 @@ function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
     debugger: {} as never,
   });
   const load = (url: string): Promise<void> =>
-    url.includes("unreachable") ? Promise.reject(new Error("ERR_CONNECTION_REFUSED (-102)")) : Promise.resolve();
+    url.includes("unreachable") || (url.includes("starting") && startingRefusals-- > 0)
+      ? Promise.reject(new Error("ERR_CONNECTION_REFUSED (-102)"))
+      : Promise.resolve();
   const within = (ref: ProjectRef, scope?: BrowserScope) =>
     browserTabs.filter((tab) => tab.ref === refKeyOf(ref) && (scope === undefined || tab.sandbox === scope.sandbox));
   return {
@@ -1541,6 +1547,18 @@ describe("tet-ctl against the control server", () => {
     assert.match((await tetCtl(["browser-fill", "e1"])).stderr, /missing <text>/, "no text is no clearing");
     assert.match((await tetCtl(["browser-click", "e1", "--tab", "tet:browser:99"])).stderr, /unknown browser tab/);
     assertRefused(await tetCtl(["browser-list", "--project", OTHER.id]), /own project/, "another project");
+  });
+
+  it("loads a page again with --wait until its server answers, and shows it only then", async () => {
+    startingRefusals = 2;
+    const opened = await tetCtl(["browser-open", "localhost:3000/starting", "--wait", "5"]);
+    assert.equal(opened.status, EXIT_CODES.ok);
+    assert.equal(startingRefusals, -1, "loaded three times");
+    assert.deepEqual(calls.shown, [[PROJECT.id, (opened.result as { tabId: string }).tabId]], "shown once, when loaded");
+    const gaveUp = await tetCtl(["browser-open", "localhost:9/unreachable", "--wait", "1"]);
+    assert.equal(gaveUp.status, EXIT_CODES.timeout);
+    assert.match(gaveUp.stderr, /did not load within 1 s: .*ERR_CONNECTION_REFUSED/);
+    assert.match((await tetCtl(["browser-open", "localhost:3000", "--wait", "0"])).stderr, /positive whole number/);
   });
 
   it("opens a sandbox's browser tab in its sandbox, and shows it none of this machine's", async () => {
