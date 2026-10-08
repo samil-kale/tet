@@ -85,6 +85,16 @@ function lieOver(tabId: string, over: boolean): void {
 }
 
 /**
+ * Where the page is drawn within its box. A pane's left border is the sash's line, drawn in the
+ * pane's first pixel column (`.sash`), which the page, drawn above TET's page, would cover: it
+ * starts one pixel in, past it.
+ */
+function pageBounds({ left, top, width, height }: DOMRect): BrowserBounds {
+  const inset = left > 0 ? Math.min(1, width) : 0;
+  return { x: left + inset, y: top, width: width - inset, height };
+}
+
+/**
  * A browser tab: its address bar, then the box its page is drawn over. The page is main's own view
  * (browser/browser-tabs.ts), drawn above TET's page, so this box only says where: on screen, it
  * hands main its bounds, out of sight none. Under a dialog, or where something floats over it
@@ -129,8 +139,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       return;
     }
     const place = (): void => {
-      const { left, top, width, height } = element.getBoundingClientRect();
-      const bounds: BrowserBounds = { x: left, y: top, width, height };
+      const bounds = pageBounds(element.getBoundingClientRect());
       window.tet.browser.place(at, tabId, bounds);
       setMoved((count) => count + 1);
     };
@@ -161,9 +170,9 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   useEffect(
     () =>
       window.tet.browser.onMenu((opened) => {
-        const box = page.current?.getBoundingClientRect();
+        const box = page.current && pageBounds(page.current.getBoundingClientRect());
         if (opened.tabId === tabId && box) {
-          setMenu({ x: box.left + opened.menu.x, y: box.top + opened.menu.y, menu: opened.menu });
+          setMenu({ x: box.x + opened.menu.x, y: box.y + opened.menu.y, menu: opened.menu });
         }
       }),
     [tabId],
