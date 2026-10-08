@@ -12,7 +12,7 @@ import { useFloatsOver } from "../ui/window-covered";
 import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
 import type { Lane } from "../../shared/types/settings";
-import { isTerminalTab, type PaneTab } from "./pane-tab";
+import { paneTabKind, type PaneTab } from "./pane-tab";
 import { NO_TABS } from "./use-project-layouts";
 
 /**
@@ -123,7 +123,7 @@ export const TabArea = memo(function TabArea({
     for (const tab of previous) {
       // An editor tab's editor is disposed where it closes (use-editor-opening.ts's closeEditors), a
       // browser tab's page in main.
-      if (!ids.has(tab.tabId) && isTerminalTab(tab)) {
+      if (!ids.has(tab.tabId) && paneTabKind(tab.tabId) === "terminal") {
         disposeTerminal(resolved.ref, tab.tabId);
       }
     }

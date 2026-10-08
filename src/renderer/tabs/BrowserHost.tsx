@@ -1,5 +1,13 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { BrowserBounds, BrowserCredentials, BrowserLogin, BrowserMenu, BrowserTabInfo } from "../../shared/types/browser";
+import type {
+  BrowserBounds,
+  BrowserCredentials,
+  BrowserEdit,
+  BrowserGo,
+  BrowserLogin,
+  BrowserMenu,
+  BrowserTabInfo,
+} from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
@@ -108,8 +116,8 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   /** The address bar while typed into; null shows the page's own address. */
   const [typed, setTyped] = useState<string | null>(null);
   const covered = useWindowCovered();
-  const floating = useFloating();
   const shown = active && visible;
+  const floating = useFloating(shown);
 
   /** Counts the page's box changes (`place`): a window or pane resize moves it under what floats. */
   const [moved, setMoved] = useState(0);
@@ -138,8 +146,15 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     if (!element || !shown) {
       return;
     }
+    /** The bounds last handed main: a window resize reports the box twice, mostly unmoved. */
+    let placed = "";
     const place = (): void => {
       const bounds = pageBounds(element.getBoundingClientRect());
+      const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
+      if (key === placed) {
+        return;
+      }
+      placed = key;
       window.tet.browser.place(at, tabId, bounds);
       setMoved((count) => count + 1);
     };
@@ -180,8 +195,8 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
 
   /** Chrome's entries for a page; one that cannot go is disabled. */
   const menuEntries = (opened: BrowserMenu): ContextMenuEntry[] => {
-    const go = (where: "back" | "forward" | "reload") => () => window.tet.browser.go(at, tabId, where);
-    const edit = (command: "cut" | "copy" | "paste" | "selectAll") => () => window.tet.browser.edit(at, tabId, command);
+    const go = (where: BrowserGo) => () => window.tet.browser.go(at, tabId, where);
+    const edit = (command: BrowserEdit) => () => window.tet.browser.edit(at, tabId, command);
     const link: ContextMenuEntry[] = opened.linkUrl
       ? [
           { label: "Open Link in New Tab", run: () => onOpenTab(opened.linkUrl) },

@@ -25,7 +25,7 @@ import { SandboxProxy } from "./browser/sandbox-proxy";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
 import { resolveProjectRef } from "./store/resolved-ref";
-import { projectRefPath, sandboxDir } from "./store/project-dirs";
+import { projectRefPath } from "./store/project-dirs";
 import {
   addProject,
   addWorktree,
@@ -261,16 +261,6 @@ async function sandboxRoute(sandbox: BrowserSandbox): Promise<SandboxRoute> {
 }
 
 /** The sandbox a tab runs in, which its browser tabs load through. */
-function browserSandboxOf(ref: ProjectRef, tabId: string): BrowserSandbox | undefined {
-  const tab = tabManagers
-    .get(ref)
-    ?.inspect()
-    .find((held) => held.tabId === tabId);
-  return tab?.sandbox === undefined
-    ? undefined
-    : { name: tab.sandbox, agentId: tab.agentId, agentDir: sandboxDir(dataRoot, ref, tab.agentId) };
-}
-
 function openProjectRef(ref: ProjectRef): void {
   const resolved = resolveProjectRef(dataRoot, store, ref);
   repositories.open(resolved);
@@ -376,7 +366,7 @@ async function startControl(): Promise<void> {
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
-        browser: { tabs: browserTabs, automation: browser.api, sandboxOf: browserSandboxOf },
+        browser: { tabs: browserTabs, automation: browser.api },
         showDesktopNotification,
         environment,
         envRequests,

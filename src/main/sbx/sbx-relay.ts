@@ -3,24 +3,13 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { duplexPair, type Duplex } from "node:stream";
 import { lineReader, parseRelayFrame, RelayStreams, type RelayFrame } from "../../shared/browser-relay";
-import { logError } from "../util/error-log";
 import { killProcessTree, resolveCommand } from "../util/process";
-import { runSbx, sbxFailure } from "./sbx-cli";
+import { sbxError, sbxFailure, writeIntoSandbox } from "./sbx-cli";
 
 /** What the relay dialled: the stream, and whether it reaches the sandbox's proxy (RelayFrame). */
 export interface RelayDialled {
   stream: Duplex;
   proxied: boolean;
-}
-
-/** A dial the sandbox would not make: its proxy's status (its policy's refusal) and words. */
-export class RelayRefusal extends Error {
-  constructor(
-    message: string,
-    readonly status?: number,
-  ) {
-    super(message);
-  }
 }
 
 /** How long a dial is waited for: sbx's proxy answers a refused host at once. */
@@ -47,10 +36,11 @@ export class RelayClient {
     this.streams = new RelayStreams(send);
   }
 
-  /** `host:port` dialled from inside the sandbox; rejects with a RelayRefusal. */
+  /** `host:port` dialled from inside the sandbox; rejects with why the sandbox would not (its
+   *  proxy's refusal). */
   async open(host: string, port: number, http: boolean): Promise<RelayDialled> {
     if (this.gone) {
-      throw new RelayRefusal("the relay ended");
+      throw new Error("the relay ended");
     }
     const id = ++this.opened;
     const answer = await new Promise<RelayFrame>((resolve) => {
@@ -66,10 +56,7 @@ export class RelayClient {
       this.send(http ? { op: "open", id, host, port, http: true } : { op: "open", id, host, port });
     });
     if (answer.op !== "opened") {
-      throw new RelayRefusal(
-        answer.op === "refused" ? answer.message : "the relay ended",
-        answer.op === "refused" ? answer.status : undefined,
-      );
+      throw new Error(answer.op === "refused" ? answer.message : "the relay ended");
     }
     // One end for the caller, the other carried by the relay.
     const [mine, carried] = duplexPair();
@@ -112,9 +99,9 @@ export class RelayClient {
 /**
  * A sandbox's browser relay (src/cli/browser-relay.ts), as seen from the main process: run with
  * the sandbox's node over `sbx exec -i`, started by the first dial and again by the first after it
- * ended — a sandbox stopped or rebuilt meanwhile ends it. `bundle`, the relay's own build, is piped
- * into the sandbox's own filesystem first, as sbx.ts's ensureSandboxLauncher pipes `tet-ctl`; that
- * `exec` starts a stopped sandbox too.
+ * ended — a sandbox stopped or rebuilt meanwhile ends it. `bundle`, the relay's own build, is written
+ * into the sandbox's own filesystem first (writeIntoSandbox), as sbx.ts's ensureSandboxLauncher
+ * writes `tet-ctl`.
  */
 export class SandboxRelay {
   private child: ChildProcess | undefined;
@@ -136,12 +123,12 @@ export class SandboxRelay {
     return this.started;
   }
 
-  /** `host:port` dialled from inside the sandbox, the relay started first; rejects with a
-   *  RelayRefusal or why it would not start. */
+  /** `host:port` dialled from inside the sandbox, the relay started first; rejects as
+   *  RelayClient.open does, or with why it would not start. */
   async open(host: string, port: number, http: boolean): Promise<RelayDialled> {
     await this.hello();
     if (!this.client) {
-      throw new RelayRefusal(`the browser relay of ${this.name} ended`);
+      throw new Error(`the browser relay of ${this.name} ended`);
     }
     return this.client.open(host, port, http);
   }
@@ -160,10 +147,7 @@ export class SandboxRelay {
   }
 
   private async start(): Promise<{ ca?: string }> {
-    const written = await runSbx(
-      ["exec", "-i", this.name, "sh", "-c", `f=${RELAY_FILE} && mkdir -p "$(dirname "$f")" && t="$f.$$" && cat > "$t" && mv -f "$t" "$f"`],
-      { stdin: await fs.promises.readFile(this.bundle, "utf8") },
-    );
+    const written = await writeIntoSandbox(this.name, RELAY_FILE, await fs.promises.readFile(this.bundle, "utf8"));
     if (!written.ok) {
       throw new Error(`could not start the browser relay in ${this.name}: ${sbxFailure(written, "writing the browser relay")}`);
     }
@@ -198,11 +182,11 @@ export class SandboxRelay {
       child.stdin.on("error", () => undefined);
       child.once("error", (error) => reject(error));
       child.once("close", (code) => {
-        const why = stderr.trim().split(/\r?\n/).pop() || `exit ${code ?? "none"}`;
-        reject(new Error(`the browser relay of ${this.name} ended: ${why}`));
+        const ended = { ok: false, code, stdout: "", stderr };
+        reject(new Error(`the browser relay of ${this.name} ended: ${sbxError(ended) || `exit ${code ?? "none"}`}`));
         client.end();
         if (this.child === child) {
-          logError(`the browser relay of ${this.name} ended (exit ${code ?? "none"})\n${stderr.trim()}`);
+          sbxFailure(ended, `the browser relay of ${this.name}`);
           this.child = undefined;
           this.client = undefined;
           this.started = undefined;

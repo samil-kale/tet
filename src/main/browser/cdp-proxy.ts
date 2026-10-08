@@ -1,3 +1,4 @@
+import { errorMessage } from "../../shared/errors";
 import type { BrowserPage } from "./browser-tabs";
 
 /** One CDP message, either way: a command `{ id, method, params }`, its answer `{ id, result }` or
@@ -52,7 +53,7 @@ export class CdpProxy {
       this.send({ id, result: result ?? {}, sessionId });
     } catch (error) {
       const code = error instanceof CdpError ? error.code : SERVER_ERROR;
-      this.send({ id, error: { code, message: error instanceof Error ? error.message : String(error) }, sessionId });
+      this.send({ id, error: { code, message: errorMessage(error) }, sessionId });
     }
   }
 

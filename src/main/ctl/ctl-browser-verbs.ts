@@ -3,7 +3,17 @@ import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types/project";
 import type { BrowserSandbox, BrowserScope } from "../browser/browser-tabs";
 import { writeDropFile } from "../store/drops";
-import { callerRef, ControlError, optionalText, text, type Caller, type ControlDeps, type Handler, type RefFrom } from "./ctl-verb";
+import {
+  callerTab,
+  ControlError,
+  optionalText,
+  seenPath,
+  text,
+  type Caller,
+  type ControlDeps,
+  type Handler,
+  type RefFrom,
+} from "./ctl-verb";
 
 /**
  * The browser verbs: open a page in the repository's or worktree's browser tab, read it, act on it
@@ -23,8 +33,8 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
     if (!caller.side.browsesInSandbox) {
       return undefined;
     }
-    const own = callerRef(caller);
-    const sandbox = own && caller.tabId !== undefined ? deps.browser.sandboxOf(own, caller.tabId) : undefined;
+    const own = callerTab(deps, caller);
+    const sandbox = own?.terminals.browserSandbox(own.tabId);
     if (!sandbox) {
       throw new ControlError("unauthorized", "this tab runs in no sandbox its browser tabs could load through");
     }
@@ -33,21 +43,19 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
 
   const scopeOf = (caller: Caller): BrowserScope => ({ sandbox: sandboxOf(caller)?.name });
 
-  /** A path of this machine where the caller's tab sees it (TabPlace.handPaths): a sandbox's at its
-   *  container path; undefined where it would not be handed. */
-  const seen = async (caller: Caller, hostPath: string): Promise<string | undefined> => {
-    const own = callerRef(caller);
-    const terminals = own && deps.tabManagers.get(own);
-    return terminals && caller.tabId !== undefined ? (await terminals.seenPaths(caller.tabId, [hostPath]))[0] : hostPath;
-  };
-
-  /** The tab `--tab` names, else the active one; `optional` answers none rather than refusing. */
+  /** The tab `--tab` names within `scope`, else the active one; `optional` answers none rather than
+   *  refusing. */
   function pageOf(args: Record<string, unknown>, caller: Caller): { ref: ProjectRef; tabId: string };
-  function pageOf(args: Record<string, unknown>, caller: Caller, optional: true): { ref: ProjectRef; tabId?: string };
-  function pageOf(args: Record<string, unknown>, caller: Caller, optional = false): { ref: ProjectRef; tabId?: string } {
+  function pageOf(args: Record<string, unknown>, caller: Caller, optional: true, scope: BrowserScope): { ref: ProjectRef; tabId?: string };
+  function pageOf(
+    args: Record<string, unknown>,
+    caller: Caller,
+    optional = false,
+    scope = scopeOf(caller),
+  ): { ref: ProjectRef; tabId?: string } {
     const { ref } = refFrom(args, caller);
     const wanted = optionalText(args, "tab");
-    const page = tabs.page(ref, wanted, scopeOf(caller));
+    const page = tabs.page(ref, wanted, scope);
     if (!page && optional && wanted === undefined) {
       return { ref };
     }
@@ -75,23 +83,25 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
   return {
     "browser-open": async (args, caller) => {
       const url = text(args, "url", "url");
-      const { ref, tabId: existing } = pageOf(args, caller, true);
-      let tabId: string;
+      const sandbox = sandboxOf(caller);
+      const scope = { sandbox: sandbox?.name };
+      const { ref, tabId: existing } = pageOf(args, caller, true, scope);
+      let tabId = existing;
       try {
-        if (existing !== undefined) {
-          tabId = existing;
-          deps.showTab(ref, tabId);
-          await tabs.navigate(ref, tabId, url);
-        } else {
-          const created = tabs.create(ref, url, sandboxOf(caller));
+        let loaded: Promise<void>;
+        if (tabId === undefined) {
+          const created = tabs.create(ref, url, sandbox);
           tabId = created.tab.tabId;
-          deps.showTab(ref, tabId);
-          await created.loaded;
+          loaded = created.loaded;
+        } else {
+          loaded = tabs.navigate(ref, tabId, url);
         }
+        deps.showTab(ref, tabId);
+        await loaded;
       } catch (error) {
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);
       }
-      const page = tabs.page(ref, tabId, scopeOf(caller));
+      const page = tabs.page(ref, tabId, scope);
       return { result: { tabId, url: page?.url, title: page?.title, untrustedContent: true } };
     },
 
@@ -151,18 +161,16 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
     // Chromium's own capture, which a page out of sight answers too.
     "browser-screenshot": async (args, caller) => {
       const { ref, tabId } = pageOf(args, caller);
-      const own = callerRef(caller);
-      const callerTab = caller.tabId;
-      const terminals = own && callerTab !== undefined ? deps.tabManagers.get(own) : undefined;
-      if (!terminals || callerTab === undefined) {
+      const own = callerTab(deps, caller);
+      if (!own) {
         throw new ControlError("bad_args", "only from a tab, whose drops folder takes the file");
       }
       const png = await tabs.capture(ref, tabId);
       if (!png) {
         throw new ControlError("bad_args", "the page has drawn nothing yet");
       }
-      const file = await writeDropFile(terminals.dropsDir(callerTab), "browser.png", png);
-      return { result: { path: await seen(caller, file) } };
+      const file = await writeDropFile(own.terminals.dropsDir(own.tabId), "browser.png", png);
+      return { result: { path: await seenPath(deps, caller, file) } };
     },
 
     "browser-console": async (args, caller) => {
@@ -175,7 +183,7 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
       const { ref } = refFrom(args, caller);
       const downloads = await Promise.all(
         tabs.downloads(ref, scopeOf(caller)).map(async ({ path, url, state, receivedBytes, totalBytes }) => ({
-          path: await seen(caller, path),
+          path: await seenPath(deps, caller, path),
           url,
           state,
           receivedBytes,

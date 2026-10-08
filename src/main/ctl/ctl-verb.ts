@@ -180,9 +180,6 @@ export interface ControlDeps {
   browser: {
     tabs: Pick<BrowserTabs, "list" | "page" | "create" | "navigate" | "close" | "capture" | "downloads">;
     automation: BrowserAutomation["api"];
-    /** The sandbox the tab runs in, its browser tabs' (BrowserSandbox); none for a tab on this
-     *  machine, or one not started. */
-    sandboxOf(ref: ProjectRef, tabId: string): BrowserSandbox | undefined;
   };
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
@@ -237,6 +234,8 @@ export interface ControlTerminals {
   closeTabs(tabIds: string[]): Promise<void>;
   /** Where content without a path of its own lands for the tab (store/drops.ts). */
   dropsDir(tabId: string): string;
+  /** The sandbox the tab's browser tabs load through; none on this machine (TabPlace.browserSandbox). */
+  browserSandbox(tabId: string): BrowserSandbox | undefined;
   /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */
@@ -249,6 +248,23 @@ export interface ControlTerminals {
 /** The repository or worktree the caller's tab runs in; undefined for the run itself. */
 export function callerRef(caller: ControlRequest["caller"]): ProjectRef | undefined {
   return caller.projectId === undefined ? undefined : projectRef(caller.projectId, caller.worktree);
+}
+
+/** The caller's own tab and the terminals holding it; none for a caller outside a tab. */
+export function callerTab(
+  deps: Pick<ControlDeps, "tabManagers">,
+  caller: Caller,
+): { terminals: ControlTerminals; tabId: string } | undefined {
+  const own = callerRef(caller);
+  const terminals = own && deps.tabManagers.get(own);
+  return terminals && caller.tabId !== undefined ? { terminals, tabId: caller.tabId } : undefined;
+}
+
+/** A path of this machine where the caller's tab sees it (TabPlace.handPaths): mounted into its
+ *  sandbox where it would not; as it is where it is not handed, or for a caller outside a tab. */
+export async function seenPath(deps: Pick<ControlDeps, "tabManagers">, caller: Caller, hostPath: string): Promise<string> {
+  const own = callerTab(deps, caller);
+  return (own && (await own.terminals.seenPaths(own.tabId, [hostPath]))[0]) ?? hostPath;
 }
 
 /** A worktree of the project TET made, named as `tet-ctl` names one: by its branch, or else by

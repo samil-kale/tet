@@ -10,11 +10,12 @@ import type {
   SessionWatch,
   SpawnPreparation,
 } from "../agents/agent";
+import type { BrowserSandbox } from "../browser/browser-tabs";
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { SbxKnowledgeSettings, SbxProjectSettings } from "../../shared/types/sbx";
-import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoverDir, sandboxSessionDir } from "../store/project-dirs";
+import { dropsDir, sandboxDir, sandboxDownloadsDir, sandboxDropsDir, sandboxHandoverDir, sandboxSessionDir } from "../store/project-dirs";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { prepareSbxRun, sandboxName } from "../sbx/sbx";
 import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
@@ -78,6 +79,8 @@ export interface TabPlace {
   readonly sandbox?: string;
   /** Where the tab's pasted or dropped content without a path is written. */
   dropsDir(): string;
+  /** The sandbox the browser tabs it opens load through (browser-tabs.ts); none on this machine. */
+  browserSandbox(): BrowserSandbox | undefined;
   /** Pasted or dropped paths of this machine as the tab types them; a refused one is left out. */
   handPaths(hostPaths: string[]): Promise<string[]>;
   /** The agent's sessions living here, oldest first; none where it keeps none here. */
@@ -119,6 +122,10 @@ export class HostPlace implements StartingPlace {
 
   dropsDir(): string {
     return dropsDir(this.context.dataRoot, this.context.at.ref.projectId);
+  }
+
+  browserSandbox(): BrowserSandbox | undefined {
+    return undefined;
   }
 
   handPaths(hostPaths: string[]): Promise<string[]> {
@@ -241,6 +248,10 @@ export class SandboxPlace implements TabPlace {
 
   dropsDir(): string {
     return sandboxDropsDir(this.agentDir);
+  }
+
+  browserSandbox(): BrowserSandbox {
+    return { name: this.name, agentId: this.context.agent.id, agentDir: this.agentDir, downloadsDir: sandboxDownloadsDir(this.agentDir) };
   }
 
   /** The workspace and the agent folder need no asking; each mount and each refusal is said. */

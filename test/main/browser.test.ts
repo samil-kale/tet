@@ -8,6 +8,7 @@ import { describe, it, type TestContext } from "node:test";
 import { bypassesProxy, proxyOf, serveRelay } from "../../src/cli/browser-relay";
 import { browserUrl, chromiumUserAgent, handOver, issuedBy } from "../../src/main/browser/browser-tabs";
 import { SandboxProxy } from "../../src/main/browser/sandbox-proxy";
+import { sandboxDownloadsDir } from "../../src/main/store/project-dirs";
 import { RelayClient } from "../../src/main/sbx/sbx-relay";
 import { lineReader, parseRelayFrame, type RelayFrame } from "../../src/shared/browser-relay";
 import { tempDir } from "../helpers";
@@ -344,8 +345,14 @@ describe("handOver", () => {
     const saved = path.join(root, "app.zip");
     fs.writeFileSync(saved, "zip");
     const agentDir = path.join(root, "agent");
-    assert.equal(await handOver(saved, agentDir), path.join(agentDir, "downloads", "app.zip"));
-    assert.equal(await handOver(saved, agentDir), path.join(agentDir, "downloads", "app (1).zip"));
+    assert.equal(
+      await handOver(saved, { agentDir, downloadsDir: sandboxDownloadsDir(agentDir) }),
+      path.join(agentDir, "downloads", "app.zip"),
+    );
+    assert.equal(
+      await handOver(saved, { agentDir, downloadsDir: sandboxDownloadsDir(agentDir) }),
+      path.join(agentDir, "downloads", "app (1).zip"),
+    );
     assert.equal(fs.readFileSync(path.join(agentDir, "downloads", "app (1).zip"), "utf8"), "zip");
   });
 
@@ -363,7 +370,7 @@ describe("handOver", () => {
       t.skip("no links here");
       return;
     }
-    await assert.rejects(handOver(saved, agentDir), /leads outside/);
+    await assert.rejects(handOver(saved, { agentDir, downloadsDir: sandboxDownloadsDir(agentDir) }), /leads outside/);
     assert.deepEqual(fs.readdirSync(outside), []);
   });
 });

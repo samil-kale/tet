@@ -14,9 +14,7 @@ import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
-import { isEditorTabId } from "../editor/editor-tab";
-import { isBrowserTabId } from "../../shared/types/browser";
-import { isBrowserTab, isEditorTab, isTerminalTab, isTerminalTabId, type PaneTab } from "./pane-tab";
+import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { BrowserHost } from "./BrowserHost";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
@@ -138,6 +136,18 @@ export interface DragPosition {
   overStrip: boolean;
 }
 
+/** What the strip draws of one tab (faceOf). */
+interface TabFace {
+  label: React.ReactNode;
+  tooltip: string;
+  icon: React.ReactNode;
+  /** Runs in, or loads through, an sbx sandbox: the shield badge. */
+  sandboxed: boolean;
+  /** A stopped terminal, drawn dimmed. */
+  inactive: boolean;
+  closeTitle: string;
+}
+
 /** An editor tab's label, in italics while it is the preview — the editor's own state. */
 const EditorTabLabel = memo(function EditorTabLabel({ tabId, label }: { tabId: string; label: string }) {
   const preview = useEditorPreview(tabId);
@@ -203,7 +213,10 @@ export const Pane = memo(function Pane({
   const editorBusy = useEditorBusy(at, tabs);
   /** A browser tab's page takes its clicks before this pane's mousedown sees them. */
   const focusHere = useCallback(() => onFocus(paneId), [onFocus, paneId]);
-  const browserBusy = tabs.some((tab) => isBrowserTab(tab) && tab.loading);
+  const browserBusy = tabs.some((tab) => {
+    const kinded = kindOf(tab);
+    return kinded.kind === "browser" && kinded.tab.loading;
+  });
 
   const createTab = useCallback(
     async (agentId: AgentId) => {
@@ -229,15 +242,17 @@ export const Pane = memo(function Pane({
    */
   const closeTabs = useCallback(
     (tabIds: string[]) => {
-      const editorIds = tabIds.filter(isEditorTabId);
-      const terminalIds = tabIds.filter(isTerminalTabId);
-      if (editorIds.length > 0) {
-        onCloseEditors(editorIds);
+      const byKind: Record<PaneTabKind, string[]> = { terminal: [], browser: [], editor: [] };
+      for (const tabId of tabIds) {
+        byKind[paneTabKind(tabId)].push(tabId);
       }
-      if (terminalIds.length > 0) {
-        void window.tet.tabs.close(at, terminalIds);
+      if (byKind.editor.length > 0) {
+        onCloseEditors(byKind.editor);
       }
-      for (const tabId of tabIds.filter(isBrowserTabId)) {
+      if (byKind.terminal.length > 0) {
+        void window.tet.tabs.close(at, byKind.terminal);
+      }
+      for (const tabId of byKind.browser) {
         void window.tet.browser.close(at, tabId);
       }
     },
@@ -281,39 +296,79 @@ export const Pane = memo(function Pane({
     [at],
   );
 
-  /** The session title; a session-less agent's name; the editor tab's file name; the page's title. */
-  const tabLabel = (tab: PaneTab): string => {
-    if (isEditorTab(tab)) {
-      return tab.commit ? `${baseName(tab.path)} (${tab.commit.sha.slice(0, 7)})` : baseName(tab.path);
+  /**
+   * What the strip draws of a tab, by its kind. A terminal's icon gives way to its mark, ranked
+   * error/missing > waiting > working > finished ("Turns and tab marks" in AGENTS.md); the sandbox's
+   * badge goes over the mark too, as where a tab runs outlasts its turn.
+   */
+  const faceOf = (tab: PaneTab): TabFace => {
+    const kinded = kindOf(tab);
+    switch (kinded.kind) {
+      case "editor": {
+        const { path, commit } = kinded.tab;
+        const label = commit ? `${baseName(path)} (${commit.sha.slice(0, 7)})` : baseName(path);
+        return {
+          label: <EditorTabLabel tabId={tab.tabId} label={label} />,
+          tooltip: commit ? `${path} (${commit.sha.slice(0, 7)})` : path,
+          icon: <FilesIcon className="tab-icon" />,
+          sandboxed: false,
+          inactive: false,
+          closeTitle: "Close file",
+        };
+      }
+      case "browser": {
+        const { title, url, sandboxed } = kinded.tab;
+        const lines = title ? [title, url] : [url];
+        return {
+          label: <span className="tab-label">{title || (url === "about:blank" ? "New tab" : url)}</span>,
+          tooltip: [...lines, ...(sandboxed ? ["Loads through its agent's SBX sandbox"] : [])].join("\n"),
+          icon: <BrowserIcon className="tab-icon" />,
+          sandboxed: sandboxed === true,
+          inactive: false,
+          closeTitle: "Close tab",
+        };
+      }
+      case "terminal": {
+        const terminal = kinded.tab;
+        const name = agentName(agents, terminal.agentId);
+        const tooltip =
+          terminal.status === "missing"
+            ? [`${name} was not found — install it and reopen the project`]
+            : [`${name}${terminal.title ? `: ${terminal.title}` : ""}`];
+        if (terminal.createdAt) {
+          tooltip.push(`Created: ${formatIso(terminal.createdAt)}`);
+        }
+        if (terminal.updatedAt) {
+          tooltip.push(`Updated: ${formatIso(terminal.updatedAt)}`);
+        }
+        return {
+          // The session title; a session-less agent's name.
+          label: (
+            <span className="tab-label">
+              {terminal.title || (agentInfo(agents, terminal.agentId)?.hasSessions === false ? name : "New session")}
+            </span>
+          ),
+          tooltip: tooltip.join("\n"),
+          icon:
+            terminal.status === "missing" || terminal.status === "error" ? (
+              <TabMark kind="error" className="tab-icon" />
+            ) : waitingTabIds.includes(terminal.tabId) ? (
+              <TabMark kind="waiting" className="tab-icon" />
+            ) : isWorking(terminal) ? (
+              // A question hidden on the tab on screen (left out of `waitingTabIds`) gets no
+              // spinner: a session stopped on a question is not working.
+              <TabMark kind="working" className="tab-icon" />
+            ) : finishedTabIds.includes(terminal.tabId) ? (
+              <TabMark kind="finished" className="tab-icon" />
+            ) : (
+              <AgentIcon agentId={terminal.agentId} className="tab-icon" />
+            ),
+          sandboxed: terminal.sandboxed === true,
+          inactive: terminal.status === "stopped",
+          closeTitle: terminal.sessionId !== undefined ? "Close tab and delete its session" : "Close tab",
+        };
+      }
     }
-    if (isBrowserTab(tab)) {
-      return tab.title || (tab.url === "about:blank" ? "New tab" : tab.url);
-    }
-    if (tab.title) {
-      return tab.title;
-    }
-    return agentInfo(agents, tab.agentId)?.hasSessions === false ? agentName(agents, tab.agentId) : "New session";
-  };
-
-  const tabTooltip = (tab: PaneTab): string => {
-    if (isEditorTab(tab)) {
-      return tab.commit ? `${tab.path} (${tab.commit.sha.slice(0, 7)})` : tab.path;
-    }
-    if (isBrowserTab(tab)) {
-      const lines = tab.title ? [tab.title, tab.url] : [tab.url];
-      return [...lines, ...(tab.sandboxed ? ["Loads through its agent's SBX sandbox"] : [])].join("\n");
-    }
-    const lines =
-      tab.status === "missing"
-        ? [`${agentName(agents, tab.agentId)} was not found — install it and reopen the project`]
-        : [`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`];
-    if (tab.createdAt) {
-      lines.push(`Created: ${formatIso(tab.createdAt)}`);
-    }
-    if (tab.updatedAt) {
-      lines.push(`Updated: ${formatIso(tab.updatedAt)}`);
-    }
-    return lines.join("\n");
   };
 
   const siblingPanes = PRESET_PANES[preset].filter((id) => id !== paneId);
@@ -325,13 +380,7 @@ export const Pane = memo(function Pane({
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
-    const terminal = tabs.find((tab): tab is TabDescriptor => tab.tabId === tabId && isTerminalTab(tab));
-    const withSession = terminal?.sessionId !== undefined ? terminal : undefined;
-    // A saved command restarts anytime; an agent once started — a running one quits first and its
-    // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
-    const restartable =
-      terminal !== undefined &&
-      (terminal.savedCommand === true || terminal.status === "running" || terminal.status === "stopped" || terminal.status === "error");
+    const menuTab = tabs.find((tab) => tab.tabId === tabId);
     const closeAction = (label: string, targets: string[]): ContextMenuEntry => ({
       label,
       run: targets.length > 0 ? () => closeTabs(targets) : undefined,
@@ -355,18 +404,24 @@ export const Pane = memo(function Pane({
       closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
       closeAction("Close All", ids),
     ];
-    if (isBrowserTabId(tabId)) {
-      return [...closeEntries, ...moveEntries];
+    const kinded = menuTab && kindOf(menuTab);
+    if (kinded?.kind !== "terminal") {
+      return kinded?.kind === "editor"
+        ? [
+            // VS Code's wording; a kept tab has nothing to keep.
+            { label: "Keep Open", run: getEditorSnapshot(tabId).preview ? () => keepEditor(tabId) : undefined },
+            SEPARATOR,
+            ...closeEntries,
+            ...moveEntries,
+          ]
+        : [...closeEntries, ...moveEntries];
     }
-    if (!terminal) {
-      return [
-        // VS Code's wording; a kept tab has nothing to keep.
-        { label: "Keep Open", run: getEditorSnapshot(tabId).preview ? () => keepEditor(tabId) : undefined },
-        SEPARATOR,
-        ...closeEntries,
-        ...moveEntries,
-      ];
-    }
+    const terminal = kinded.tab;
+    const withSession = terminal.sessionId !== undefined ? terminal : undefined;
+    // A saved command restarts anytime; an agent once started — a running one quits first and its
+    // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
+    const restartable =
+      terminal.savedCommand === true || terminal.status === "running" || terminal.status === "stopped" || terminal.status === "error";
     // Rename and hand-over act on a session: an agent that keeps none never offers them.
     const hasSessions = agentInfo(agents, terminal.agentId)?.hasSessions === true;
     // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
@@ -464,83 +519,53 @@ export const Pane = memo(function Pane({
           </div>
         )}
         <div className="tabs" ref={strip}>
-          {tabs.map((tab) => (
-            <div
-              key={tab.tabId}
-              ref={(element) => {
-                if (element) {
-                  tabElements.current.set(tab.tabId, element);
-                } else {
-                  tabElements.current.delete(tab.tabId);
-                }
-              }}
-              className={`tab${tab.tabId === activeTabId ? " active" : ""}${isTerminalTab(tab) && tab.status === "stopped" ? " inactive" : ""}`}
-              // Always: even the only pane has the snap zones to drop on.
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.setData(TAB_DRAG_TYPE, tab.tabId);
-                event.dataTransfer.effectAllowed = "move";
-                onDragStart(paneId);
-              }}
-              onClick={() => onActivate(tab.tabId, paneId)}
-              // Keeps the terminal focused across a right-click: mousedown would blur xterm's
-              // textarea to <body>, leaving no typing once the menu closes.
-              onMouseDown={(event) => {
-                if (event.button === 2) {
-                  event.preventDefault();
-                }
-              }}
-              onContextMenu={(event) => tabMenu.open(event, tab.tabId)}
-              title={tabTooltip(tab)}
-            >
-              <span className="tab-icon-box">
-                {/* The mark takes the agent icon's place, ranked error/missing > waiting > working
-                    > finished ("Turns and tab marks" in AGENTS.md). */}
-                {isEditorTab(tab) ? (
-                  <FilesIcon className="tab-icon" />
-                ) : isBrowserTab(tab) ? (
-                  <BrowserIcon className="tab-icon" />
-                ) : tab.status === "missing" || tab.status === "error" ? (
-                  <TabMark kind="error" className="tab-icon" />
-                ) : waitingTabIds.includes(tab.tabId) ? (
-                  <TabMark kind="waiting" className="tab-icon" />
-                ) : isWorking(tab) ? (
-                  // A question hidden on the tab on screen (left out of `waitingTabIds`) gets no
-                  // spinner: a session stopped on a question is not working.
-                  <TabMark kind="working" className="tab-icon" />
-                ) : finishedTabIds.includes(tab.tabId) ? (
-                  <TabMark kind="finished" className="tab-icon" />
-                ) : (
-                  <AgentIcon agentId={tab.agentId} className="tab-icon" />
-                )}
-                {/* Over the mark too: where the tab runs outlasts its turn. */}
-                {(isTerminalTab(tab) || isBrowserTab(tab)) && tab.sandboxed && (
-                  <>
-                    <ShieldIcon className="tab-badge-ring" />
-                    <ShieldIcon className="tab-badge" />
-                  </>
-                )}
-              </span>
-              {isEditorTab(tab) ? (
-                <EditorTabLabel tabId={tab.tabId} label={tabLabel(tab)} />
-              ) : (
-                <span className="tab-label">{tabLabel(tab)}</span>
-              )}
-              <IconButton
-                title={
-                  isEditorTab(tab)
-                    ? "Close file"
-                    : isTerminalTab(tab) && tab.sessionId !== undefined
-                      ? "Close tab and delete its session"
-                      : "Close tab"
-                }
-                isolated
-                onClick={() => closeTabs([tab.tabId])}
+          {tabs.map((tab) => {
+            const face = faceOf(tab);
+            return (
+              <div
+                key={tab.tabId}
+                ref={(element) => {
+                  if (element) {
+                    tabElements.current.set(tab.tabId, element);
+                  } else {
+                    tabElements.current.delete(tab.tabId);
+                  }
+                }}
+                className={`tab${tab.tabId === activeTabId ? " active" : ""}${face.inactive ? " inactive" : ""}`}
+                // Always: even the only pane has the snap zones to drop on.
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.setData(TAB_DRAG_TYPE, tab.tabId);
+                  event.dataTransfer.effectAllowed = "move";
+                  onDragStart(paneId);
+                }}
+                onClick={() => onActivate(tab.tabId, paneId)}
+                // Keeps the terminal focused across a right-click: mousedown would blur xterm's
+                // textarea to <body>, leaving no typing once the menu closes.
+                onMouseDown={(event) => {
+                  if (event.button === 2) {
+                    event.preventDefault();
+                  }
+                }}
+                onContextMenu={(event) => tabMenu.open(event, tab.tabId)}
+                title={face.tooltip}
               >
-                <CloseIcon />
-              </IconButton>
-            </div>
-          ))}
+                <span className="tab-icon-box">
+                  {face.icon}
+                  {face.sandboxed && (
+                    <>
+                      <ShieldIcon className="tab-badge-ring" />
+                      <ShieldIcon className="tab-badge" />
+                    </>
+                  )}
+                </span>
+                {face.label}
+                <IconButton title={face.closeTitle} isolated onClick={() => closeTabs([tab.tabId])}>
+                  <CloseIcon />
+                </IconButton>
+              </div>
+            );
+          })}
         </div>
         {/* This pane's one progress bar: a tab starting, an editor tab busy, a page loading, or in
             pane "a" the bootstrap session listing. */}
@@ -553,32 +578,39 @@ export const Pane = memo(function Pane({
       </div>
 
       <div className="pane-body">
-        {tabs.map((tab) =>
-          isEditorTab(tab) ? (
-            <EditorHost key={tab.tabId} tabId={tab.tabId} active={tab.tabId === activeTabId} visible={visible} focused={focused} />
-          ) : isBrowserTab(tab) ? (
-            <BrowserHost
-              key={tab.tabId}
-              at={at}
-              tab={tab}
-              active={tab.tabId === activeTabId}
-              visible={visible}
-              focused={focused}
-              onPressed={focusHere}
-              onOpenTab={openBrowserTab}
-            />
-          ) : (
-            <TerminalHost
-              key={tab.tabId}
-              at={at}
-              tabId={tab.tabId}
-              shiftEnter={agentInfo(agents, tab.agentId)?.shiftEnter}
-              active={tab.tabId === activeTabId}
-              visible={visible}
-              focused={focused}
-            />
-          ),
-        )}
+        {tabs.map((tab) => {
+          const kinded = kindOf(tab);
+          const active = tab.tabId === activeTabId;
+          switch (kinded.kind) {
+            case "editor":
+              return <EditorHost key={tab.tabId} tabId={tab.tabId} active={active} visible={visible} focused={focused} />;
+            case "browser":
+              return (
+                <BrowserHost
+                  key={tab.tabId}
+                  at={at}
+                  tab={kinded.tab}
+                  active={active}
+                  visible={visible}
+                  focused={focused}
+                  onPressed={focusHere}
+                  onOpenTab={openBrowserTab}
+                />
+              );
+            case "terminal":
+              return (
+                <TerminalHost
+                  key={tab.tabId}
+                  at={at}
+                  tabId={tab.tabId}
+                  shiftEnter={agentInfo(agents, kinded.tab.agentId)?.shiftEnter}
+                  active={active}
+                  visible={visible}
+                  focused={focused}
+                />
+              );
+          }
+        })}
         {tabs.length === 0 && <div className="placeholder">No tabs open.</div>}
       </div>
 

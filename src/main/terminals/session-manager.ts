@@ -14,6 +14,7 @@ import type { NoticeSeverity } from "../../shared/types/app";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
+import type { BrowserSandbox } from "../browser/browser-tabs";
 import type { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
@@ -499,6 +500,13 @@ export class TabSessionManager {
   dropsDir(tabId: string): string {
     const tab = this.tabOf(tabId);
     return tab ? this.placeOf(tab).dropsDir() : dropsDir(this.dataRoot, this.at.ref.projectId);
+  }
+
+  /** The sandbox the tab's browser tabs load through (TabPlace.browserSandbox); none for a closed
+   *  tab. */
+  browserSandbox(tabId: string): BrowserSandbox | undefined {
+    const tab = this.tabOf(tabId);
+    return tab && this.placeOf(tab).browserSandbox();
   }
 
   /** Paths of this machine where the tab sees them (TabPlace.handPaths). A closed tab sees

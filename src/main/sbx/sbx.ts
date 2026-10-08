@@ -21,7 +21,7 @@ import { inTurn } from "../util/async";
 import type { SandboxedAgent } from "../agents/agent";
 import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
-import { runSbx, sbxError, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, type OnData } from "./sbx-cli";
+import { runSbx, sbxError, sbxFailure, sbxRefusal, suppressSbxFirstRunWizard, writeIntoSandbox, type OnData } from "./sbx-cli";
 import { listSandboxes, mountableBy, readHostAllowed, readPolicy, sandboxControl, type SandboxList } from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
@@ -135,8 +135,7 @@ function ensureSandboxExists(
  * Writes `tet-ctl` into the sandbox's `~/.local/bin` — first on every template's PATH and writable
  * by the "agent" user, unlike `/usr/local/bin`. Not a mounted launcher: `sbx run -e PATH=...`
  * replaces PATH, never prepends. The bundle is piped in behind a `#!/usr/bin/env node` shebang;
- * every template has node. Runs after ensureSandboxExists. Written beside it and renamed into
- * place, as every file another process reads.
+ * every template has node. Runs after ensureSandboxExists.
  */
 async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<void> {
   const control = sandboxControl();
@@ -150,17 +149,7 @@ async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<voi
   if (bundle === undefined) {
     return;
   }
-  const written = await runSbx(
-    [
-      "exec",
-      "-i",
-      name,
-      "sh",
-      "-c",
-      'mkdir -p ~/.local/bin && t=~/.local/bin/.tet-ctl.$$ && cat > "$t" && chmod +x "$t" && mv -f "$t" ~/.local/bin/tet-ctl',
-    ],
-    { stdin: `#!/usr/bin/env node\n${bundle}`, onData },
-  );
+  const written = await writeIntoSandbox(name, "~/.local/bin/tet-ctl", `#!/usr/bin/env node\n${bundle}`, { executable: true, onData });
   if (written.ok) {
     launcherWritten.add(name);
   } else {

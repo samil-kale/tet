@@ -4,7 +4,7 @@ import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { BrowserTabInfo } from "../shared/types/browser";
 import type { TabDescriptor } from "../shared/types/terminals";
-import { forget } from "./identity";
+import { forget, stableItems } from "./identity";
 import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
 import { useLatest } from "./ui/use-latest";
 
@@ -49,9 +49,12 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
           return list ? { ...current, [refKey]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) } : current;
         });
       }),
-      window.tet.browser.onTabs(({ ref, tabs: list }) =>
-        setBrowserTabs((current) => (list.length > 0 ? { ...current, [refKeyOf(ref)]: list } : forget(current, refKeyOf(ref)))),
-      ),
+      window.tet.browser.onTabs(({ ref, tabs: list }) => {
+        const refKey = refKeyOf(ref);
+        setBrowserTabs((current) =>
+          list.length > 0 ? { ...current, [refKey]: stableItems(current[refKey], list, (tab) => tab.tabId) } : forget(current, refKey),
+        );
+      }),
       window.tet.tabs.onStartupProgress(({ ref, show }) => {
         const refKey = refKeyOf(ref);
         setStarting((current) => (current[refKey] === show ? current : { ...current, [refKey]: show }));

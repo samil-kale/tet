@@ -199,3 +199,8 @@ export const LINUX: Platform = {
 export function platformOf(id: string): Platform {
   return id === "win32" ? WINDOWS : id === "darwin" ? MAC : LINUX;
 }
+
+/** The platform's modifier held (Platform.modifierKey), for shortcuts, links, copy and paste. */
+export function isModifierHeld(event: { ctrlKey: boolean; metaKey: boolean }, platform: Platform): boolean {
+  return platform.modifierKey === "Meta" ? event.metaKey : event.ctrlKey;
+}

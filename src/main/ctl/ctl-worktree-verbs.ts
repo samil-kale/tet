@@ -7,6 +7,7 @@ import {
   ControlError,
   refuseUnsaved,
   repositoryOf,
+  seenPath,
   tetWorktree,
   text,
   type ControlDeps,
@@ -118,12 +119,7 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
           throw new ControlError("bad_args", `${merged.error ?? "the merge failed"} — ${branch} is unchanged`);
         }
         // Where the caller sees the worktree: mounted into its sandbox if it would not.
-        const callers = callerRef(caller);
-        const [handed] =
-          callers === undefined || caller.tabId === undefined
-            ? []
-            : ((await tabManagers.get(callers)?.seenPaths(caller.tabId, [worktree.path])) ?? []);
-        const at = handed ?? worktree.path;
+        const at = await seenPath(deps, caller, worktree.path);
         return {
           result: {
             status: "conflicts",

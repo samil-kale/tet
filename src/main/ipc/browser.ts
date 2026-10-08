@@ -1,7 +1,7 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { browserUrl } from "../browser/browser-tabs";
-import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserTabInfo } from "../../shared/types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserGo, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import type { IpcDeps } from "./deps";
 
@@ -29,7 +29,7 @@ export function registerBrowserIpc({ browserTabs, notice }: Pick<IpcDeps, "brows
     browserTabs.navigate(ref, tabId, url).catch(() => undefined);
   });
 
-  on("browser:go", (_event, ref: ProjectRef, tabId: string, where: "back" | "forward" | "reload") => browserTabs.go(ref, tabId, where));
+  on("browser:go", (_event, ref: ProjectRef, tabId: string, where: BrowserGo) => browserTabs.go(ref, tabId, where));
 
   on("browser:edit", (_event, ref: ProjectRef, tabId: string, edit: BrowserEdit) => browserTabs.edit(ref, tabId, edit));
 

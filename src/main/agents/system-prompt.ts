@@ -42,15 +42,6 @@ const BROWSER_SENTENCE =
   " When you need a web browser, to check a web app or read a page, use tet-ctl's browser verbs rather than your own browser tools: " +
   "the page opens in a tab the user sees.";
 
-/** Only in a sandbox, which holds of this machine only what TET brings in: a question about
- *  something missing names neither TET nor the sandbox, and tet-ctl help there lists no verb that
- *  brings it in, so the agent is told where the user does. */
-const SANDBOX_SENTENCE =
-  " You run in an sbx sandbox TET set up, holding only what TET brings in from the user's machine. " +
-  "When something is missing, point the user to TET's SBX Settings: Knowledge for your skills and CLAUDE.md or AGENTS.md, " +
-  "Paths for folders and files, Ports, Allowed hosts, Secrets for tokens, Variables, and a Setup script for packages; " +
-  "or to drop a file or folder onto this tab, which mounts it until TET quits.";
-
 export function systemPrompt(side: ControlSide): string {
   return (
     tetSentences(side) +
@@ -58,6 +49,6 @@ export function systemPrompt(side: ControlSide): string {
     TASK_SENTENCE +
     (admitsVerb(side, "browser-open") ? BROWSER_SENTENCE : "") +
     (admitsVerb(side, "env-request") ? ENVIRONMENT_SENTENCE : "") +
-    (side.key === "sandbox" ? SANDBOX_SENTENCE : "")
+    side.promptNote
   );
 }

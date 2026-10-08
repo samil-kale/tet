@@ -3,12 +3,15 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
 import { app, session, WebContentsView, type Debugger } from "electron";
+import { errorMessage } from "../../shared/errors";
+import { isLoopbackHost } from "../../shared/loopback";
 import { shortcutOf, type ShortcutId } from "../../shared/shortcuts";
 import {
   BROWSER_TAB_PREFIX,
   type BrowserBounds,
   type BrowserCredentials,
   type BrowserEdit,
+  type BrowserGo,
   type BrowserLogin,
   type BrowserMenu,
   type BrowserTabInfo,
@@ -16,7 +19,7 @@ import {
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
-import { downloadsDir, ownedWorktreeKeys, sandboxDir, sandboxDownloadsDir } from "../store/project-dirs";
+import { downloadsDir, ownedWorktreeKeys, sandboxDir } from "../store/project-dirs";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
 import { openInside } from "../util/path-inside";
@@ -65,8 +68,11 @@ export interface BrowserSandbox {
   /** sbx's name of it (sbx.ts's sandboxName). */
   name: string;
   agentId: AgentId;
-  /** Its agent folder (project-dirs.ts's sandboxDir). */
+  /** Its agent folder (project-dirs.ts's sandboxDir), which a download handed over must not lead
+   *  out of. */
   agentDir: string;
+  /** Where its pages' downloads land, inside `agentDir` (sandboxDownloadsDir). */
+  downloadsDir: string;
 }
 
 /** A sandbox's way out: the proxy its profile loads through, and its proxy's certificate. */
@@ -101,7 +107,7 @@ export interface BrowserDownload {
   ref: ProjectRef;
   /** The sandbox's name whose tab downloaded it; none for this machine's. */
   sandbox?: string;
-  /** Where it is saved: the project's downloads folder, or its sandbox's (sandboxDownloadsDir). */
+  /** Where it is saved: the project's downloads folder, or its sandbox's (BrowserSandbox.downloadsDir). */
   path: string;
   url: string;
   state: "progressing" | "completed" | "cancelled" | "interrupted";
@@ -169,9 +175,6 @@ const SANDBOX_PROFILE = /^tet-sbx-([0-9a-f-]{36})-([0-9a-f]+|repository)-(.+)$/;
 /** Chromium's code for a certificate whose issuer it does not trust. */
 const ERR_CERT_AUTHORITY_INVALID = -202;
 
-/** A host the machine itself serves, reached over http as a dev server is. */
-const LOCAL_HOST = /^(localhost|127(\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(:\d+)?([/?#]|$)/i;
-
 /**
  * Chromium's own user agent from Electron's, which adds the app's token and its own
  * (`… tet-ide/43.4.0 Chrome/… Electron/43.4.0 …`): sign-in pages refuse a browser so named as an
@@ -198,7 +201,7 @@ export function browserUrl(typed: string): string {
   if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(url)) {
     throw new Error("not a web address");
   }
-  return `${LOCAL_HOST.test(url) ? "http" : "https"}://${url}`;
+  return `${isLoopbackHost(hostnameOf(`http://${url}`)) ? "http" : "https"}://${url}`;
 }
 
 /**
@@ -223,6 +226,10 @@ export class BrowserTabs {
   /** By partition, each sandbox's way out (SandboxRoute) while it has tabs; one that failed is
    *  forgotten, to be tried again by the next tab. */
   private readonly routes = new Map<string, Promise<SandboxRoute>>();
+  /** Per `refKey`, the repositories and worktrees whose pages changed this turn (`changed`). */
+  private readonly due = new Map<string, ProjectRef>();
+  /** Per `refKey`, the tabs last sent to the window, as JSON (`sendTabs`). */
+  private readonly sent = new Map<string, string>();
 
   constructor(private readonly deps: BrowserTabsDeps) {}
 
@@ -254,18 +261,13 @@ export class BrowserTabs {
     const url = browserUrl(typed);
     const tab = this.open(ref, this.newView(ref, sandbox), false, sandbox);
     const loaded = this.load(tab, url);
-    this.changed(ref);
+    this.sendTabs(ref);
     return { tab: infoOf(tab), loaded };
   }
 
   /** A page in the profile of the repository or worktree, or of its sandbox. */
   private newView(ref: ProjectRef, sandbox: BrowserSandbox | undefined): WebContentsView {
-    const view = new WebContentsView({ webPreferences: { session: this.profileOf(ref, sandbox), ...PAGE_PREFERENCES } });
-    if (sandbox) {
-      // WebRTC's UDP takes no proxy: it would leave from this machine, past the sandbox's policy.
-      view.webContents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
-    }
-    return view;
+    return new WebContentsView({ webPreferences: { session: this.profileOf(ref, sandbox), ...PAGE_PREFERENCES } });
   }
 
   /**
@@ -274,15 +276,14 @@ export class BrowserTabs {
    * this machine. A failure names what the sandbox's proxy refused.
    */
   private async load(tab: Tab, url: string): Promise<void> {
-    if (!tab.sandbox) {
-      return load(tab, url);
+    if (tab.sandbox) {
+      await this.routeOf(tab.ref, tab.sandbox);
     }
-    const route = await this.routeOf(tab.ref, tab.sandbox);
     try {
-      await load(tab, url);
+      await loadPage(tab, url);
     } catch (error) {
-      const refused = url === "about:blank" ? undefined : route.refusal(new URL(url).hostname);
-      throw refused === undefined ? error : new Error(`${error instanceof Error ? error.message : String(error)}: ${refused}`);
+      const refused = await this.refusalOf(tab, url);
+      throw refused === undefined ? error : new Error(`${errorMessage(error)}: ${refused}`);
     }
   }
 
@@ -294,6 +295,10 @@ export class BrowserTabs {
     let blocked = false;
     const changed = (): void => this.changed(ref);
     view.setVisible(false);
+    if (sandbox) {
+      // WebRTC's UDP takes no proxy: it would leave from this machine, past the sandbox's policy.
+      view.webContents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    }
     view.webContents.on("did-start-loading", changed);
     view.webContents.on("did-stop-loading", changed);
     // A load that fails, or stops before its page is ready, reveals it too: never hidden for good.
@@ -342,13 +347,10 @@ export class BrowserTabs {
           const popup = page
             ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }), true, sandbox)
             : this.open(ref, this.newView(ref, sandbox), true, sandbox);
-          if (page && sandbox) {
-            page.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
-          }
           if (!page) {
             this.load(popup, browserUrl(opened)).catch(() => undefined);
           }
-          this.changed(ref);
+          this.sendTabs(ref);
           this.deps.onOpened(ref, popup.tabId);
           // Electron takes the popup's page back; nothing is sent through it.
           // eslint-disable-next-line no-restricted-syntax
@@ -360,13 +362,13 @@ export class BrowserTabs {
     view.webContents.once("destroyed", () => {
       if (this.tabs.get(tab.tabId) === tab) {
         this.dispose(tab, false);
-        this.changed(ref);
+        this.sendTabs(ref);
       }
     });
     // A dev server's own certificate is taken on a local host, as Chrome's allow-insecure-localhost
     // takes it; anywhere else Chromium's refusal stands.
     view.webContents.on("certificate-error", (event, failedUrl, _error, _certificate, callback) => {
-      const local = LOCAL_HOST.test(new URL(failedUrl).host);
+      const local = isLoopbackHost(hostnameOf(failedUrl));
       if (local) {
         event.preventDefault();
       }
@@ -433,7 +435,7 @@ export class BrowserTabs {
     await this.load(tab, browserUrl(typed));
   }
 
-  go(ref: ProjectRef, tabId: string, where: "back" | "forward" | "reload"): void {
+  go(ref: ProjectRef, tabId: string, where: BrowserGo): void {
     const view = this.find(ref, tabId)?.view;
     if (where === "back") {
       view?.webContents.navigationHistory.goBack();
@@ -477,7 +479,7 @@ export class BrowserTabs {
     const tab = this.find(ref, tabId);
     if (tab) {
       this.dispose(tab);
-      this.changed(ref);
+      this.sendTabs(ref);
     }
   }
 
@@ -485,12 +487,17 @@ export class BrowserTabs {
   closeEverything(): void {
     [...this.tabs.values()].forEach((tab) => this.dispose(tab));
     this.active.clear();
+    this.due.clear();
+    this.sent.clear();
   }
 
   /** The repository or worktree closed: every tab of it goes. */
   closeAll(ref: ProjectRef): void {
     this.of(ref, undefined).forEach((tab) => this.dispose(tab));
-    this.active.delete(refKeyOf(ref));
+    const key = refKeyOf(ref);
+    this.active.delete(key);
+    this.due.delete(key);
+    this.sent.delete(key);
   }
 
   /** Draws the page over `bounds`, once it is `ready`, or hides it. */
@@ -649,7 +656,7 @@ export class BrowserTabs {
       ref: tab.ref,
       sandbox: sandbox?.name,
       // A sandbox's where it will land, settled once there.
-      path: sandbox ? path.join(sandboxDownloadsDir(sandbox.agentDir), path.basename(saved)) : saved,
+      path: sandbox ? path.join(sandbox.downloadsDir, path.basename(saved)) : saved,
       url: item.getURL(),
       state: "progressing",
       receivedBytes: 0,
@@ -680,7 +687,7 @@ export class BrowserTabs {
         }
         return;
       }
-      void handOver(saved, sandbox.agentDir)
+      void handOver(saved, sandbox)
         .then(
           (handed) => {
             download.path = handed;
@@ -746,8 +753,29 @@ export class BrowserTabs {
     }
   }
 
+  /** A page's own change (its loading, title or address): sent once the events of this turn are
+   *  in, as one load fires several. */
   private changed(ref: ProjectRef): void {
-    this.deps.onTabs(ref, this.list(ref));
+    if (this.due.size === 0) {
+      setImmediate(() => {
+        const due = [...this.due.values()];
+        this.due.clear();
+        due.forEach((each) => this.sendTabs(each));
+      });
+    }
+    this.due.set(refKeyOf(ref), ref);
+  }
+
+  /** The repository's or worktree's tabs to the window, now — before a tab opened is shown or a
+   *  closed one forgotten — unless they are as last sent. */
+  private sendTabs(ref: ProjectRef): void {
+    const key = refKeyOf(ref);
+    const tabs = this.list(ref);
+    const sent = JSON.stringify(tabs);
+    if (this.sent.get(key) !== sent) {
+      this.sent.set(key, sent);
+      this.deps.onTabs(ref, tabs);
+    }
   }
 }
 
@@ -762,7 +790,7 @@ function reveal(tab: Tab): void {
 
 /** Settles once the page has loaded, or after LOAD_WAIT_MS while it still loads; rejects with
  *  Chromium's reason for a page that cannot load. */
-function load(tab: Tab, url: string): Promise<void> {
+function loadPage(tab: Tab, url: string): Promise<void> {
   const loaded = tab.view.webContents.loadURL(url).catch((error: unknown) => {
     if ((error as { errno?: number }).errno !== ERR_ABORTED) {
       throw error;
@@ -781,11 +809,10 @@ function load(tab: Tab, url: string): Promise<void> {
  * the sandbox writes that folder too, and a link it left would have Chromium write anywhere on this
  * machine. Answers where it landed.
  */
-export async function handOver(saved: string, agentDir: string): Promise<string> {
-  const dir = sandboxDownloadsDir(agentDir);
-  await fs.promises.mkdir(dir, { recursive: true });
-  const target = freePath(dir, path.basename(saved), []);
-  const handle = await openInside(agentDir, target, "wx");
+export async function handOver(saved: string, sandbox: Pick<BrowserSandbox, "agentDir" | "downloadsDir">): Promise<string> {
+  await fs.promises.mkdir(sandbox.downloadsDir, { recursive: true });
+  const target = freePath(sandbox.downloadsDir, path.basename(saved), []);
+  const handle = await openInside(sandbox.agentDir, target, "wx");
   try {
     for await (const chunk of fs.createReadStream(saved)) {
       await handle.write(chunk as Buffer);
@@ -809,6 +836,15 @@ function freePath(dir: string, name: string, downloads: readonly BrowserDownload
   return candidate;
 }
 
+/** The host name of `url`, "" for one that is no URL. */
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
 /** Detached, as F12 opens TET's own for the window (window.ts). */
 function openDevTools(view: WebContentsView): void {
   if (!view.webContents.isDevToolsOpened()) {
@@ -824,6 +860,15 @@ export function sweepBrowserProfiles(dataRoot: string): void {
   void (async () => {
     const root = path.join(app.getPath("sessionData"), "Partitions");
     const names = await fs.promises.readdir(root).catch((): string[] => []);
+    const owned = new Map<string, ReadonlySet<string>>();
+    const ownedBy = (projectId: string): ReadonlySet<string> => {
+      let keys = owned.get(projectId);
+      if (!keys) {
+        keys = new Set(ownedWorktreeKeys(dataRoot, projectId));
+        owned.set(projectId, keys);
+      }
+      return keys;
+    };
     await Promise.all(
       names.map(async (name) => {
         const sandbox = SANDBOX_PROFILE.exec(name);
@@ -832,7 +877,7 @@ export function sweepBrowserProfiles(dataRoot: string): void {
           ? !fs.existsSync(
               sandboxDir(dataRoot, { projectId: sandbox[1], worktree: sandbox[2] === "repository" ? undefined : sandbox[2] }, sandbox[3]),
             )
-          : match !== null && !ownedWorktreeKeys(dataRoot, match[1]).includes(match[2]);
+          : match !== null && !ownedBy(match[1]).has(match[2]);
         if (!gone) {
           return;
         }
@@ -899,7 +944,7 @@ function infoOf(tab: Tab): BrowserTabInfo {
   const history = tab.view.webContents.navigationHistory;
   return {
     tabId: tab.tabId,
-    ...(tab.sandbox ? { sandboxed: true } : {}),
+    sandboxed: tab.sandbox !== undefined,
     url: tab.view.webContents.getURL(),
     title: tab.view.webContents.getTitle(),
     loading: tab.view.webContents.isLoading(),

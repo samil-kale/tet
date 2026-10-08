@@ -1,5 +1,7 @@
 import * as net from "node:net";
 import type { Readable, Writable } from "node:stream";
+import { errorMessage } from "../shared/errors";
+import { isLoopbackHost } from "../shared/loopback";
 import { lineReader, parseRelayFrame, RelayStreams, type RelayFrame } from "../shared/browser-relay";
 
 /**
@@ -34,10 +36,10 @@ export function proxyOf(env: NodeJS.ProcessEnv): URL | undefined {
  *  and what its NO_PROXY names — a host and its subdomains (`domain`, `.domain`, `*.domain`), or
  *  `*` for every one, as curl reads it. */
 export function bypassesProxy(host: string, noProxy: string | undefined): boolean {
-  const name = host.replace(/^\[|\]$/g, "").toLowerCase();
-  if (name === "localhost" || name.endsWith(".localhost") || name === "::1" || name === "0.0.0.0" || /^127\.\d+\.\d+\.\d+$/.test(name)) {
+  if (isLoopbackHost(host)) {
     return true;
   }
+  const name = host.replace(/^\[|\]$/g, "").toLowerCase();
   return (noProxy ?? "")
     .split(",")
     .map((entry) =>
@@ -63,14 +65,20 @@ function quiet(socket: net.Socket): net.Socket {
   return socket.on("error", () => undefined);
 }
 
-/** Resolves once `socket` is connected, rejects with why it is not. */
-function connected(socket: net.Socket): Promise<void> {
+/** A socket connected to `host:port`, quiet (see quiet); rejects with why it is not, the socket
+ *  destroyed. */
+function connect(host: string, port: number): Promise<net.Socket> {
+  const socket = quiet(net.connect({ host, port }));
   return new Promise((resolve, reject) => {
     socket.once("connect", () => {
-      socket.off("error", reject);
-      resolve();
+      socket.off("error", onError);
+      resolve(socket);
     });
-    socket.once("error", reject);
+    const onError = (error: Error): void => {
+      socket.destroy();
+      reject(error);
+    };
+    socket.once("error", onError);
   });
 }
 
@@ -120,28 +128,24 @@ function readRefusal(socket: net.Socket, rest: Buffer): Promise<string> {
   });
 }
 
-type Dialled = { socket: net.Socket; proxied: boolean } | { status?: number; message: string };
+type Dialled = { socket: net.Socket; proxied: boolean } | { message: string };
 
-/** `host:port` dialled as the sandbox dials it (see the file's comment). */
-export async function dial(host: string, port: number, http: boolean, env: NodeJS.ProcessEnv): Promise<Dialled> {
-  const proxy = proxyOf(env);
+/** `host:port` dialled as the sandbox dials it (see the file's comment), through `proxy` unless
+ *  `noProxy` names the host. */
+async function dial(host: string, port: number, http: boolean, proxy: URL | undefined, noProxy: string | undefined): Promise<Dialled> {
   const target = host.replace(/^\[|\]$/g, "");
-  if (!proxy || bypassesProxy(host, env.no_proxy ?? env.NO_PROXY)) {
-    const socket = quiet(net.connect({ host: target, port }));
+  if (!proxy || bypassesProxy(host, noProxy)) {
     try {
-      await connected(socket);
+      return { socket: await connect(target, port), proxied: false };
     } catch (error) {
-      socket.destroy();
-      return { message: error instanceof Error ? error.message : String(error) };
+      return { message: errorMessage(error) };
     }
-    return { socket, proxied: false };
   }
-  const socket = quiet(net.connect({ host: proxy.hostname.replace(/^\[|\]$/g, ""), port: Number(proxy.port || 80) }));
+  let socket: net.Socket;
   try {
-    await connected(socket);
+    socket = await connect(proxy.hostname.replace(/^\[|\]$/g, ""), Number(proxy.port || 80));
   } catch (error) {
-    socket.destroy();
-    return { message: `the sandbox's proxy: ${error instanceof Error ? error.message : String(error)}` };
+    return { message: `the sandbox's proxy: ${errorMessage(error)}` };
   }
   // Plain HTTP is the proxy's to read (RelayFrame's `http`); a login in the proxy's address is
   // only sent on a tunnel's CONNECT, which the sandbox's proxies need none for.
@@ -158,11 +162,11 @@ export async function dial(host: string, port: number, http: boolean, env: NodeJ
     answer = await readHead(socket);
   } catch (error) {
     socket.destroy();
-    return { message: `the sandbox's proxy: ${error instanceof Error ? error.message : String(error)}` };
+    return { message: `the sandbox's proxy: ${errorMessage(error)}` };
   }
   if (answer.status !== 200) {
     const body = await readRefusal(socket, answer.rest);
-    return { status: answer.status, message: body || answer.head.split("\r\n")[0] };
+    return { message: body || answer.head.split("\r\n")[0] };
   }
   if (answer.rest.length > 0) {
     socket.unshift(answer.rest);
@@ -174,11 +178,13 @@ export async function dial(host: string, port: number, http: boolean, env: NodeJ
  * Serves the wire on `input` and `output` until `input` ends: hello first, then each `open` dialled
  * and its stream carried.
  */
-export function serveRelay(input: Readable, output: Writable, env: NodeJS.ProcessEnv): RelayStreams {
+export function serveRelay(input: Readable, output: Writable, env: NodeJS.ProcessEnv): void {
   const send = (frame: RelayFrame): boolean => output.write(`${JSON.stringify(frame)}\n`);
   const streams = new RelayStreams(send);
   output.on("drain", () => streams.drained());
   // Sent as the proxy's own variable carries it: base64 of the PEM.
+  const proxy = proxyOf(env);
+  const noProxy = env.no_proxy ?? env.NO_PROXY;
   const ca = env.PROXY_CA_CERT_B64 ? Buffer.from(env.PROXY_CA_CERT_B64, "base64").toString("utf8") : undefined;
   send(ca ? { op: "hello", ca } : { op: "hello" });
   /** Opened and not dialled yet, by id: true once the main process closed it meanwhile. */
@@ -200,7 +206,7 @@ export function serveRelay(input: Readable, output: Writable, env: NodeJS.Proces
       }
       const { id } = frame;
       dialling.set(id, false);
-      void dial(frame.host, frame.port, frame.http === true, env).then((dialled) => {
+      void dial(frame.host, frame.port, frame.http === true, proxy, noProxy).then((dialled) => {
         const closed = dialling.get(id) === true;
         dialling.delete(id);
         if (closed) {
@@ -211,11 +217,10 @@ export function serveRelay(input: Readable, output: Writable, env: NodeJS.Proces
           send({ op: "opened", id, proxied: dialled.proxied });
           streams.attach(id, dialled.socket);
         } else {
-          send({ op: "refused", id, status: dialled.status, message: dialled.message });
+          send({ op: "refused", id, message: dialled.message });
         }
       });
     }),
   );
   input.on("end", () => streams.closeAll());
-  return streams;
 }

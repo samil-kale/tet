@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from "react";
+import { useEffect, useSyncExternalStore, type RefObject } from "react";
 import { createStore, useStore } from "./store";
 
 /**
@@ -66,6 +66,12 @@ export function useFloatsOver(element: RefObject<Element | null>, shown = true, 
   }, [element, shown, notice]);
 }
 
-export function useFloating(): readonly Floating[] {
-  return useStore(floating);
+const NOTHING_FLOATING: readonly Floating[] = [];
+const unwatched = (): (() => void) => () => undefined;
+const nothingFloating = (): readonly Floating[] => NOTHING_FLOATING;
+
+/** What floats over the window while `watched`; nothing, and no re-render for its changes, while
+ *  not. */
+export function useFloating(watched: boolean): readonly Floating[] {
+  return useSyncExternalStore(watched ? floating.subscribe : unwatched, watched ? floating.get : nothingFloating);
 }

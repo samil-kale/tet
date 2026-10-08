@@ -94,6 +94,27 @@ export async function runSbx(args: string[], options: RunOptions = {}): Promise<
   return { ok: result.code === 0, code: result.code, stdout: result.stdout, stderr: result.stderr };
 }
 
+/**
+ * Writes `content` into the sandbox's own filesystem at `file` (a path `sh` expands, `~` too), its
+ * folder made: beside it first and renamed into place, as every file another process reads;
+ * `executable` marks it so. Its `exec` starts a stopped sandbox.
+ */
+export function writeIntoSandbox(
+  name: string,
+  file: string,
+  content: string,
+  options: { executable?: boolean; onData?: OnData } = {},
+): Promise<RunResult> {
+  const mark = options.executable ? ' && chmod +x "$t"' : "";
+  return runSbx(
+    ["exec", "-i", name, "sh", "-c", `f=${file} && mkdir -p "$(dirname "$f")" && t="$f.$$" && cat > "$t"${mark} && mv -f "$t" "$f"`],
+    {
+      stdin: content,
+      onData: options.onData,
+    },
+  );
+}
+
 /** A `--json` run's stdout parsed: undefined when sbx failed or printed no JSON, so a reader
  *  answers "sbx cannot say" rather than an empty list. The shape is the caller's claim, read
  *  defensively at its site. */

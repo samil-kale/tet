@@ -191,6 +191,11 @@ export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
   }
 }
 
+/** What a worktree gone leaves outside its folder: its agents' sessions, its browser profile. */
+function forgetWorktree(deps: ProjectDeps, ref: ProjectRef, folder: string): Promise<void> {
+  return Promise.all([removeAllSessions(folder), deps.browserTabs.clearProfile(ref)]).then(() => undefined);
+}
+
 /** Stops a repository's or worktree's tabs and git; resolves once its tabs and git
  *  commands have ended, so a worktree's folder is removed only then. Its records go once the
  *  tabs have ended: a stopping tab still prints. */
@@ -261,8 +266,7 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
     if (!there) {
       // Their folders went with TET's; with the repository there, deleteWorktree took them.
       for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {
-        void removeAllSessions(worktree.path);
-        void deps.browserTabs.clearProfile(projectRef(projectId, worktree.key));
+        void forgetWorktree(deps, projectRef(projectId, worktree.key), worktree.path);
       }
     }
     return { ok: true };
@@ -364,8 +368,7 @@ export async function deleteWorktree(
     await deleteWorktreeData(deps.dataRoot, [], ref.projectId, ref.worktree!);
     // Only once it is gone: a worktree that stays keeps its sessions. Not waited on — each may
     // start its agent's CLI, and nothing here needs them gone.
-    void removeAllSessions(worktree.path);
-    void deps.browserTabs.clearProfile(ref);
+    void forgetWorktree(deps, ref, worktree.path);
     const left = deps.store.get(ref.projectId)?.worktrees.filter((entry) => entry.key !== ref.worktree) ?? [];
     deps.store.setWorktrees(ref.projectId, left);
     deps.projectsChanged({ removed: [ref] });
@@ -401,8 +404,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     const ref = projectRef(projectId, worktree.key);
     void closeProjectRef(deps, ref)
       .then(() => deleteWorktreeData(deps.dataRoot, [ref], projectId, worktree.key!))
-      .then(() => removeAllSessions(worktree.path))
-      .then(() => deps.browserTabs.clearProfile(ref))
+      .then(() => forgetWorktree(deps, ref, worktree.path))
       .catch((error: unknown) => logError(`could not clean up after the worktree ${worktree.path}`, error));
   }
   deps.projectsChanged({ removed: gone.map((worktree) => projectRef(projectId, worktree.key)) });

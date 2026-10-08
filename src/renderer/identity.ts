@@ -12,6 +12,16 @@ export function sameList<T>(previous: T[] | undefined, next: T[], empty: T[]): T
   return previous?.length === next.length && previous.every((item, i) => item === next[i]) ? previous : next;
 }
 
+/** `next` with each item kept as it was in `previous` where its fields are unchanged (by `idOf`),
+ *  so a view of one item skips the pushes that changed another. */
+export function stableItems<T extends object>(previous: T[] | undefined, next: T[], idOf: (item: T) => string): T[] {
+  const held = new Map(previous?.map((item) => [idOf(item), item]));
+  return next.map((item) => {
+    const before = held.get(idOf(item));
+    return before !== undefined && sameFields(before, item) ? before : item;
+  });
+}
+
 /**
  * Drops a closed repository's or worktree's (or project's) entry: nothing pushes for it, and a
  * reopened folder gets the same id, so a stale entry would show for a frame.

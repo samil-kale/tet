@@ -25,6 +25,8 @@ export interface ControlSide {
   /** What `tet-ctl help` closes with: the rules the verb list does not carry, each side told only
    *  its own. */
   readonly limits: readonly string[];
+  /** What the system prompt closes with for this side alone; empty where it adds nothing. */
+  readonly promptNote: string;
 }
 
 const OWN_LIMITS = [
@@ -47,6 +49,7 @@ export const HOST_SIDE: ControlSide = {
     "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
     "(tabs-output, tabs-keys, tabs-text).",
   ],
+  promptNote: "",
 };
 
 /** A tab in an sbx sandbox: only the verbs that say how far it may reach (ControlVerb.sandbox) —
@@ -66,6 +69,14 @@ export const SANDBOX_SIDE: ControlSide = {
     "network policy applies. The rest answers for this repository or worktree only (exit 2, the reason",
     "on stderr).",
   ],
+  // The sandbox holds of this machine only what TET brings in: a question about something missing
+  // names neither TET nor the sandbox, and tet-ctl help there lists no verb that brings it in, so the
+  // agent is told where the user does.
+  promptNote:
+    " You run in an sbx sandbox TET set up, holding only what TET brings in from the user's machine. " +
+    "When something is missing, point the user to TET's SBX Settings: Knowledge for your skills and CLAUDE.md or AGENTS.md, " +
+    "Paths for folders and files, Ports, Allowed hosts, Secrets for tokens, Variables, and a Setup script for packages; " +
+    "or to drop a file or folder onto this tab, which mounts it until TET quits.",
 };
 
 /** Whether the side admits the verb named; what the help and the system prompt mention follows it. */

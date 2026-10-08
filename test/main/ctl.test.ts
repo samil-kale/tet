@@ -199,7 +199,7 @@ let sbxNotKept: string | undefined;
 let browserTabs: { ref: string; tabId: string; url: string; sandbox?: string }[];
 
 /** The sandbox SANDBOX_TAB runs in, in PROJECT's repository; its worktrees' tabs run in none. */
-const BROWSER_SANDBOX = { name: "tet-claude-sbx", agentId: "claude" as const, agentDir: "/agent" };
+const BROWSER_SANDBOX = { name: "tet-claude-sbx", agentId: "claude" as const, agentDir: "/agent", downloadsDir: "/agent/downloads" };
 
 /** The terminals of the repository or a worktree, by its `refKey`. */
 function terminalsOf(key: string): ControlTerminals {
@@ -250,6 +250,7 @@ function terminalsOf(key: string): ControlTerminals {
       calls.closed.push(...tabIds);
     },
     dropsDir: (tabId) => path.join(workDir, "drops", key, tabId),
+    browserSandbox: (tabId) => (tabId === SANDBOX_TAB && key === PROJECT.id ? BROWSER_SANDBOX : undefined),
     // A sandboxed tab sees the path at its container path, a host tab as it is.
     seenPaths: async (tabId, hostPaths) => {
       calls.handed.push([tabId, hostPaths]);
@@ -388,7 +389,6 @@ function deps(): ControlDeps {
     browser: {
       tabs: fakeBrowserTabs(),
       automation: fakeAutomation(),
-      sandboxOf: (ref, tabId) => (tabId === SANDBOX_TAB && ref.worktree === undefined ? BROWSER_SANDBOX : undefined),
     },
     repositories: {
       get: (ref) =>

@@ -14,7 +14,7 @@ export interface BrowserTabInfo {
   canGoForward: boolean;
   /** Opened by an agent in an sbx sandbox, whose pages load through it: what the sandbox sees, under
    *  its policy. */
-  sandboxed?: true;
+  sandboxed?: boolean;
 }
 
 /** Every browser tab's id starts so, shaped unlike a session id or an editor tab's (`tet:editor:`). */
@@ -51,6 +51,9 @@ export interface BrowserCredentials {
   username: string;
   password: string;
 }
+
+/** Where the address bar's buttons take the page. */
+export type BrowserGo = "back" | "forward" | "reload";
 
 /** The page's own edit commands, on what has its focus or selection. */
 export type BrowserEdit = "cut" | "copy" | "paste" | "selectAll";

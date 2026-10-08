@@ -1,4 +1,4 @@
-import { platformOf } from "../shared/platform";
+import { isModifierHeld as isHeldOn, platformOf } from "../shared/platform";
 
 /** The platform the window runs on (src/shared/platform.ts), read off `navigator`: the renderer
  *  has no `process`. */
@@ -14,9 +14,9 @@ export function detectPlatform(
   return reported.includes("win") ? "win32" : "linux";
 }
 
-/** The platform's modifier held (Platform.modifierKey), for shortcuts, links, copy and paste. */
+/** The window's platform's modifier held (src/shared/platform.ts's isModifierHeld). */
 export function isModifierHeld(event: { ctrlKey: boolean; metaKey: boolean }): boolean {
-  return PLATFORM.modifierKey === "Meta" ? event.metaKey : event.ctrlKey;
+  return isHeldOn(event, PLATFORM);
 }
 
 export function isModifierKey(event: KeyboardEvent): boolean {

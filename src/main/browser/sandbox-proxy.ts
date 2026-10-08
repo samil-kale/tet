@@ -1,6 +1,7 @@
 import * as http from "node:http";
 import type * as net from "node:net";
 import type { Duplex } from "node:stream";
+import { errorMessage } from "../../shared/errors";
 
 /** Dials from inside a sandbox (sbx/sbx-relay.ts's SandboxRelay): rejects with why it would not. */
 export interface SandboxDialer {
@@ -66,7 +67,7 @@ export class SandboxProxy {
   }
 
   private refuse(host: string, error: unknown): string {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     this.refused.set(host.toLowerCase(), message);
     return message;
   }

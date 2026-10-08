@@ -1,4 +1,4 @@
-import type { Platform } from "./platform";
+import { isModifierHeld, type Platform } from "./platform";
 
 /**
  * The window's shortcuts, all on combinations xterm never turns into bytes. See "The keyboard
@@ -58,10 +58,9 @@ export interface ShortcutKey {
  * tab" and leave "previous tab" on no key.
  */
 export function shortcutOf(event: ShortcutKey, platform: Platform): ShortcutId | undefined {
-  const modifierHeld = platform.modifierKey === "Meta" ? event.metaKey : event.ctrlKey;
   // No shortcut takes Alt, and on Windows AltGr arrives as Ctrl+Alt: AltGr+Shift+Comma types "Ç"
   // on US International, which `code` alone would read as "previous tab".
-  if (!modifierHeld || event.altKey) {
+  if (!isModifierHeld(event, platform) || event.altKey) {
     return undefined;
   }
   const candidates = SHORTCUT_DEFS.filter((def) => def.shift === event.shiftKey);

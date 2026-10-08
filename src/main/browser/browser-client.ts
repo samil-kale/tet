@@ -19,9 +19,12 @@ export function browserAutomation(pageById: (tabId: string) => BrowserPage | und
   /** The tab's proxy, made on its connection's first message; none for a tab gone. */
   const proxyOf = (tabId: string): CdpProxy | undefined => {
     const held = proxies.get(tabId);
-    const page = held ? undefined : pageById(tabId);
-    if (!page) {
+    if (held) {
       return held;
+    }
+    const page = pageById(tabId);
+    if (!page) {
+      return undefined;
     }
     const proxy = new CdpProxy(page, (message) => post({ tabId, message }));
     proxies.set(tabId, proxy);

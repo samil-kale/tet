@@ -16,8 +16,8 @@ export type RelayFrame =
   /** Dialled. `proxied`: the stream reaches the sandbox's proxy, not the host, so a request takes
    *  its absolute form. */
   | { op: "opened"; id: number; proxied: boolean }
-  /** Not dialled: the proxy's status and words (its policy's refusal), else the dial's error. */
-  | { op: "refused"; id: number; status?: number; message: string }
+  /** Not dialled: the proxy's words (its policy's refusal), else the dial's error. */
+  | { op: "refused"; id: number; message: string }
   | { op: "data"; id: number; data: string }
   /** The sender's side ended: no more data from it. */
   | { op: "end"; id: number }

@@ -1,7 +1,7 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { ShortcutId } from "./shortcuts";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
-import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserLogin, BrowserMenu, BrowserTabInfo } from "./types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserGo, BrowserLogin, BrowserMenu, BrowserTabInfo } from "./types/browser";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
 import type {
@@ -321,7 +321,7 @@ export interface TETApi {
     close: (ref: ProjectRef, tabId: string) => Promise<void>;
     /** As `create` takes it; a page that cannot load is a notice. */
     navigate: (ref: ProjectRef, tabId: string, url: string) => void;
-    go: (ref: ProjectRef, tabId: string, where: "back" | "forward" | "reload") => void;
+    go: (ref: ProjectRef, tabId: string, where: BrowserGo) => void;
     /** One of the page's own edit commands, from its context menu; the page takes the focus back. */
     edit: (ref: ProjectRef, tabId: string, edit: BrowserEdit) => void;
     /** The page's DevTools on the element at `x`, `y` (BrowserMenu's). */
