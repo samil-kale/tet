@@ -78,8 +78,14 @@ function pageBounds({ left, top, right, bottom }: DOMRect): BrowserBounds {
   return { x, y, width: Math.round(right) - x, height: Math.round(bottom) - y };
 }
 
-/** A page's still (`browser.still`), where it lay in its box when taken (`pageBounds`), at the
- *  page's size then. */
+/**
+ * A page's still (`browser.still`), where the page lay in its box when taken, in CSS pixels. The
+ * page lies on whole CSS pixels (`pageBounds`), which at a fractional scale end inside a device
+ * pixel: the view is drawn from the rounded one (133 for 132.5), its still holds every device pixel
+ * the page touches (1248 for 132.5 to 1379.5). So the still is laid from that rounded device pixel,
+ * one image pixel to one device pixel, its surplus cut off by the box; on the page's CSS box Blink
+ * would round the other way than the view, a device pixel off.
+ */
 interface Still {
   url: string;
   left: number;
@@ -121,12 +127,19 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   const over = shown && (covered || overlapped.any);
   const paused = shown && !covered && overlapped.notice;
 
-  // Under something of the window, a still of the page, taken while it is still drawn; once gone,
-  // the still stays until the page is drawn again (two frames), or the box would show empty.
+  // Under something of the window, a still of the page, taken while it is still drawn. The page is
+  // hidden only once the still is painted (`laid`), and once nothing lies over it the still stays
+  // until the page is drawn again (two frames): either way round, the box would flash empty.
   const [still, setStill] = useState<Still | null>(null);
+  const [laid, setLaid] = useState(false);
   useEffect(() => {
     if (!over) {
-      const frame = requestAnimationFrame(() => requestAnimationFrame(() => setStill(null)));
+      const frame = requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          setStill(null);
+          setLaid(false);
+        }),
+      );
       return () => cancelAnimationFrame(frame);
     }
     let gone = false;
@@ -135,17 +148,25 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       const url = await window.tet.browser.still(at, tabId);
       if (!gone && url && box) {
         const { x, y, width, height } = pageBounds(box);
-        setStill({ url, left: x - box.left, top: y - box.top, width, height });
+        const ratio = window.devicePixelRatio;
+        const [left, top] = [Math.round(x * ratio) / ratio, Math.round(y * ratio) / ratio];
+        const pixels = {
+          width: Math.ceil((x + width) * ratio) - Math.floor(x * ratio),
+          height: Math.ceil((y + height) * ratio) - Math.floor(y * ratio),
+        };
+        setStill({ url, left: left - box.left, top: top - box.top, width: pixels.width / ratio, height: pixels.height / ratio });
       }
     };
-    void take();
-    const timer = setInterval(() => void take(), STILL_INTERVAL_MS);
+    // One not taken (no frame there yet) leaves the last still standing.
+    const takeOrNot = (): void => void take().catch(() => undefined);
+    takeOrNot();
+    const timer = setInterval(takeOrNot, STILL_INTERVAL_MS);
     return () => {
       gone = true;
       clearInterval(timer);
     };
   }, [at, tabId, over]);
-  const drawn = shown && !(over && still);
+  const drawn = shown && !(over && laid);
 
   // The page follows its box while drawn; under its still, out of sight, or gone from this pane
   // (closed, or moved to another, whose host places it anew), it is hidden.
@@ -297,6 +318,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
             src={still.url}
             alt=""
             style={{ left: still.left, top: still.top, width: still.width, height: still.height }}
+            onLoad={() => requestAnimationFrame(() => setLaid(true))}
           />
         )}
         {paused && (

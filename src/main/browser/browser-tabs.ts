@@ -155,6 +155,9 @@ const PAGE_BACKGROUND = "#ffffff";
 
 /** The still a page under something of the window is shown as (`still`): JPEG, as VS Code's. */
 const STILL_QUALITY = 80;
+/** How often, and how far apart, a still is taken again while Chromium has no frame yet. */
+const STILL_ATTEMPTS = 5;
+const STILL_RETRY_MS = 16;
 
 /** The tabs a repository's or worktree's pages may have opened at once: Chromium's popup blocker,
  *  which lets a popup through only after the user's input, is Chrome's and not Electron's, so a page
@@ -522,10 +525,22 @@ export class BrowserTabs {
     return image && !image.isEmpty() ? image.toPNG() : null;
   }
 
-  /** The page as it looks, a JPEG data URL, for the window to show in its place while something
-   *  of it lies over the page (BrowserHost). Null when it has no look yet. */
+  /**
+   * The page as it looks, a JPEG data URL, for the window to show in its place while something of
+   * it lies over the page (BrowserHost); taken hidden too, as VS Code's browser takes it: a hidden
+   * page is shown and hidden once to have its drawing ready, and Chromium's `UnknownVizError`, no
+   * frame there yet, is tried again. Null when it has no look yet.
+   */
   async still(ref: ProjectRef, tabId: string): Promise<string | null> {
-    const image = await this.find(ref, tabId)?.view.webContents.capturePage();
+    const view = this.find(ref, tabId)?.view;
+    if (!view) {
+      return null;
+    }
+    if (!view.getVisible()) {
+      view.setVisible(true);
+      view.setVisible(false);
+    }
+    const image = await capturePage(view);
     return image && !image.isEmpty() ? `data:image/jpeg;base64,${image.toJPEG(STILL_QUALITY).toString("base64")}` : null;
   }
 
@@ -749,6 +764,21 @@ export class BrowserTabs {
     if (this.sent.get(key) !== sent) {
       this.sent.set(key, sent);
       this.deps.onTabs(ref, tabs);
+    }
+  }
+}
+
+/** `view`'s page as it looks, without showing it; Chromium's `UnknownVizError` is tried again
+ *  STILL_ATTEMPTS times, STILL_RETRY_MS apart. */
+async function capturePage(view: WebContentsView): Promise<Electron.NativeImage> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await view.webContents.capturePage(undefined, { stayHidden: true });
+    } catch (error) {
+      if (attempt >= STILL_ATTEMPTS || errorMessage(error) !== "UnknownVizError") {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, STILL_RETRY_MS));
     }
   }
 }
