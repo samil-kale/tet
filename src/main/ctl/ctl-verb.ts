@@ -1,7 +1,7 @@
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
-import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
+import type { EditorListing, EditorReport, NoticeReport, NoticeSeverity } from "../../shared/types/app";
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
@@ -171,6 +171,8 @@ export interface ControlDeps {
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
   showTab(ref: ProjectRef, tabId: string): void;
+  /** A notice in the window, for what the caller's answer alone would not tell the user. */
+  notice(severity: NoticeSeverity, message: string): void;
   /** A desktop notification from this process, which holds the desktop session (a sandboxed hook has
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front. */

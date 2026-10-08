@@ -94,6 +94,8 @@ interface Calls {
   handed: [string, string[]][];
   shutdown: boolean[];
   desktopNotifications: [string, string, NotificationTarget | undefined][];
+  /** `[severity, message]` per notice in the window. */
+  notices: [string, string][];
   hooks: [string, string, string][];
   /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -462,6 +464,9 @@ function deps(): ControlDeps {
     showTab: (ref, tabId) => {
       calls.shown.push([refKeyOf(ref), tabId]);
     },
+    notice: (severity, message) => {
+      calls.notices.push([severity, message]);
+    },
     showDesktopNotification: (title, body, target) => {
       calls.desktopNotifications.push([title, body, target]);
     },
@@ -562,6 +567,7 @@ describe("tet-ctl against the control server", () => {
       handed: [],
       shutdown: [],
       desktopNotifications: [],
+      notices: [],
       hooks: [],
       hookTimes: [],
       started: [],
@@ -1556,6 +1562,11 @@ describe("tet-ctl against the control server", () => {
     const gaveUp = await tetCtl(["browser-open", "localhost:9/unreachable", "--wait", "1"]);
     assert.equal(gaveUp.status, EXIT_CODES.timeout);
     assert.match(gaveUp.stderr, /did not load within 1 s: .*ERR_CONNECTION_REFUSED/);
+    assert.deepEqual(
+      calls.notices.map(([severity]) => severity),
+      ["warning"],
+      "one notice when it gives up",
+    );
     assert.match((await tetCtl(["browser-open", "localhost:3000", "--wait", "0"])).stderr, /positive whole number/);
   });
 

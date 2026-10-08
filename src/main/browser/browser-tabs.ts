@@ -121,6 +121,8 @@ interface Tab {
   popup: boolean;
   /** The sandbox it loads through; none for this machine's. */
   sandbox?: BrowserSandbox;
+  /** Loading for a caller that says itself why it failed (`load`'s `quiet`): no notice. */
+  quiet?: boolean;
 }
 
 /**
@@ -266,10 +268,10 @@ export class BrowserTabs {
 
   /** A new tab loading `typed` (browserUrl), made the active one, through `sandbox` where given;
    *  `loaded` settles as `load` does. */
-  create(ref: ProjectRef, typed: string, sandbox?: BrowserSandbox): { tab: BrowserTabInfo; loaded: Promise<void> } {
+  create(ref: ProjectRef, typed: string, sandbox?: BrowserSandbox, quiet = false): { tab: BrowserTabInfo; loaded: Promise<void> } {
     const url = browserUrl(typed);
     const tab = this.open(ref, this.newView(ref, sandbox), false, sandbox);
-    const loaded = this.load(tab, url);
+    const loaded = this.load(tab, url, quiet);
     this.sendTabs(ref);
     return { tab: infoOf(tab), loaded };
   }
@@ -284,15 +286,18 @@ export class BrowserTabs {
    * goes through the sandbox, and nothing at all when the sandbox cannot be reached — never from
    * this machine. A failure names what the sandbox's proxy refused.
    */
-  private async load(tab: Tab, url: string): Promise<void> {
+  private async load(tab: Tab, url: string, quiet: boolean): Promise<void> {
     if (tab.sandbox) {
       await this.routeOf(tab.ref, tab.sandbox);
     }
+    tab.quiet = quiet;
     try {
       await loadPage(tab, url);
     } catch (error) {
       const refused = await this.refusalOf(tab, url);
       throw refused === undefined ? error : new Error(`${errorMessage(error)}: ${refused}`);
+    } finally {
+      tab.quiet = false;
     }
   }
 
@@ -318,7 +323,7 @@ export class BrowserTabs {
     });
     view.webContents.on("did-navigate-in-page", changed);
     view.webContents.on("did-fail-load", (_event, code, description, failedUrl, isMainFrame) => {
-      if (isMainFrame && code !== ERR_ABORTED) {
+      if (isMainFrame && code !== ERR_ABORTED && !tab.quiet) {
         void this.refusalOf(tab, failedUrl).then((refused) =>
           this.deps.notice("warning", `Could not load ${failedUrl}: ${description}${refused === undefined ? "" : ` (${refused})`}`),
         );
@@ -353,7 +358,7 @@ export class BrowserTabs {
             ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }), true, sandbox)
             : this.open(ref, this.newView(ref, sandbox), true, sandbox);
           if (!page) {
-            this.load(popup, browserUrl(opened)).catch(() => undefined);
+            this.load(popup, browserUrl(opened), false).catch(() => undefined);
           }
           this.sendTabs(ref);
           this.deps.onOpened(ref, popup.tabId);
@@ -416,13 +421,14 @@ export class BrowserTabs {
     return tab;
   }
 
-  /** Loads `typed` (browserUrl) in the tab; rejects with Chromium's reason when it cannot. */
-  async navigate(ref: ProjectRef, tabId: string, typed: string): Promise<void> {
+  /** Loads `typed` (browserUrl) in the tab; rejects with Chromium's reason when it cannot, which
+   *  `quiet` leaves to the caller alone. */
+  async navigate(ref: ProjectRef, tabId: string, typed: string, quiet = false): Promise<void> {
     const tab = this.find(ref, tabId);
     if (!tab) {
       throw new Error(`no browser tab ${tabId}`);
     }
-    await this.load(tab, browserUrl(typed));
+    await this.load(tab, browserUrl(typed), quiet);
   }
 
   go(ref: ProjectRef, tabId: string, where: BrowserGo): void {

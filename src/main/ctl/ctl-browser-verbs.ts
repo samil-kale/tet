@@ -96,14 +96,15 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
       try {
         let loaded: Promise<void>;
         if (tabId === undefined) {
-          const created = tabs.create(ref, url, sandbox);
+          const created = tabs.create(ref, url, sandbox, waiting);
           tabId = created.tab.tabId;
           loaded = created.loaded;
         } else {
-          loaded = tabs.navigate(ref, tabId, url);
+          loaded = tabs.navigate(ref, tabId, url, waiting);
         }
         // With --wait, a server still starting refuses the page: loaded again until it answers, and
-        // only then brought to the front, over the tab that started it.
+        // only then brought to the front, over the tab that started it. Each refusal quietly: one
+        // notice at the end, not one per try.
         if (!waiting) {
           deps.showTab(ref, tabId);
         }
@@ -117,14 +118,16 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
             }
           }
           await new Promise((resolve) => setTimeout(resolve, OPEN_RETRY_MS));
-          loaded = tabs.navigate(ref, tabId, url);
+          loaded = tabs.navigate(ref, tabId, url, true);
         }
         if (waiting) {
           deps.showTab(ref, tabId);
         }
       } catch (error) {
         if (waiting && Date.now() >= deadline) {
-          throw new ControlError("timeout", `${url} did not load within ${String(args.wait)} s: ${errorMessage(error)}`);
+          const message = `${url} did not load within ${String(args.wait)} s: ${errorMessage(error)}`;
+          deps.notice("warning", message);
+          throw new ControlError("timeout", message);
         }
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);
       }

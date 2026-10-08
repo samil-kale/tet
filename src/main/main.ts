@@ -364,6 +364,7 @@ async function startControl(): Promise<void> {
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
+        notice,
         browser: { tabs: browserTabs, automation: browser.api },
         showDesktopNotification,
         environment,
