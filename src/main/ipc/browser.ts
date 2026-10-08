@@ -1,7 +1,7 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { browserUrl } from "../browser/browser-tabs";
-import type { BrowserBounds, BrowserTabInfo } from "../../shared/types/browser";
+import type { BrowserBounds, BrowserEdit, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import type { IpcDeps } from "./deps";
 
@@ -30,6 +30,10 @@ export function registerBrowserIpc({ browserTabs, notice }: Pick<IpcDeps, "brows
   });
 
   on("browser:go", (_event, ref: ProjectRef, tabId: string, where: "back" | "forward" | "reload") => browserTabs.go(ref, tabId, where));
+
+  on("browser:edit", (_event, ref: ProjectRef, tabId: string, edit: BrowserEdit) => browserTabs.edit(ref, tabId, edit));
+
+  on("browser:inspect", (_event, ref: ProjectRef, tabId: string, x: number, y: number) => browserTabs.inspect(ref, tabId, x, y));
 
   on("browser:place", (_event, ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => browserTabs.place(ref, tabId, bounds));
 

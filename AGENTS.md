@@ -114,8 +114,8 @@ Everything TET keeps lives here (`data-root.ts`, `project-dirs.ts`). The layout 
 change, and every agent added, fits it. The one file TET writes elsewhere is sbx's first-run
 marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of a tab. Chromium's
 own profile stays in Electron's `userData` (`data-root.ts`), the browser tabs' with it: a
-worktree's tabs share a partition of their own, cleared when the worktree goes; the repository's
-share the global one.
+worktree's tabs share a partition of their own, cleared when the worktree goes and its folder
+deleted at the next start; the repository's share the global one.
 
 ```
 ~/.tet/

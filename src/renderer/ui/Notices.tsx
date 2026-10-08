@@ -112,7 +112,7 @@ export function Notices() {
   const dialog = useTopDialog();
   const stackRef = useRef<HTMLDivElement>(null);
   // Over a browser tab's page, which gives way; inside a dialog, the dialog covers it anyway.
-  useFloatsOver(stackRef, notices.length > 0 && !dialog);
+  useFloatsOver(stackRef, notices.length > 0 && !dialog, true);
   if (notices.length === 0) {
     return null;
   }

@@ -213,11 +213,15 @@ export const Pane = memo(function Pane({
     [at, paneId, onActivate],
   );
 
-  /** A blank page, its address bar focused to type into (BrowserHost). */
-  const createBrowserTab = useCallback(async () => {
-    const tab = await window.tet.browser.create(at, "about:blank");
-    onActivate(tab.tabId, paneId);
-  }, [at, paneId, onActivate]);
+  /** A blank page, its address bar focused to type into (BrowserHost); or a page's link. */
+  const createBrowserTab = useCallback(
+    async (url = "about:blank") => {
+      const tab = await window.tet.browser.create(at, url);
+      onActivate(tab.tabId, paneId);
+    },
+    [at, paneId, onActivate],
+  );
+  const openBrowserTab = useCallback((url: string) => void createBrowserTab(url), [createBrowserTab]);
 
   /**
    * Editor tabs close in the renderer, the rest in main. Their unsaved-edit question may keep them
@@ -560,6 +564,7 @@ export const Pane = memo(function Pane({
               visible={visible}
               focused={focused}
               onPressed={focusHere}
+              onOpenTab={openBrowserTab}
             />
           ) : (
             <TerminalHost

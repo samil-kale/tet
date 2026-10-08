@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { BrowserBounds, BrowserTabInfo } from "../../shared/types/browser";
+import type { BrowserBounds, BrowserMenu, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
+import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { BackIcon, ForwardIcon, ReloadIcon } from "../ui/icons";
 import { IconButton } from "../ui/IconButton";
 import { useFloating, useWindowCovered } from "../ui/window-covered";
@@ -16,6 +17,8 @@ interface BrowserHostProps {
   focused: boolean;
   /** A click into the page, which the pane's own mousedown never sees: the pane takes the focus. */
   onPressed: () => void;
+  /** A link of the page opened from its menu, as a new tab in this pane. */
+  onOpenTab: (url: string) => void;
 }
 
 function overlaps(a: DOMRect, b: DOMRect): boolean {
@@ -59,7 +62,7 @@ function lieOver(tabId: string, over: boolean): void {
  * (window-covered.ts), TET's page is raised above it and lets it through (`lieOver`): the page stays
  * as it is, live.
  */
-export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible, focused, onPressed }: BrowserHostProps) {
+export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible, focused, onPressed, onOpenTab }: BrowserHostProps) {
   const { tabId } = tab;
   const page = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
@@ -69,14 +72,18 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   const floating = useFloating();
   const shown = active && visible;
 
-  // Measured where the floating elements are: each change of them measures again.
-  const [overlapped, setOverlapped] = useState(false);
+  // Measured where the floating elements are: each change of them measures again. A notice over the
+  // page holds it until dismissed, which the page says, as VS Code's does.
+  const [overlapped, setOverlapped] = useState<{ any: boolean; notice: boolean }>({ any: false, notice: false });
   useEffect(() => {
     const box = page.current?.getBoundingClientRect();
-    setOverlapped(shown && box !== undefined && floating.some((entry) => overlaps(entry.getBoundingClientRect(), box)));
+    const over = shown && box !== undefined ? floating.filter((entry) => overlaps(entry.element.getBoundingClientRect(), box)) : [];
+    const next = { any: over.length > 0, notice: over.some((entry) => entry.notice) };
+    setOverlapped((current) => (current.any === next.any && current.notice === next.notice ? current : next));
   }, [floating, shown]);
 
-  const over = shown && (covered || overlapped);
+  const over = shown && (covered || overlapped.any);
+  const paused = shown && !covered && overlapped.notice;
   useEffect(() => {
     lieOver(tabId, over);
     return () => lieOver(tabId, false);
@@ -115,6 +122,45 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       }),
     [tabId, onPressed],
   );
+
+  // A right click into the page: its menu, at the click, drawn by the window over the page.
+  const [menu, setMenu] = useState<{ x: number; y: number; menu: BrowserMenu } | null>(null);
+  useEffect(
+    () =>
+      window.tet.browser.onMenu((opened) => {
+        const box = page.current?.getBoundingClientRect();
+        if (opened.tabId === tabId && box) {
+          setMenu({ x: box.left + opened.menu.x, y: box.top + opened.menu.y, menu: opened.menu });
+        }
+      }),
+    [tabId],
+  );
+
+  /** Chrome's entries for a page; one that cannot go is disabled. */
+  const menuEntries = (opened: BrowserMenu): ContextMenuEntry[] => {
+    const go = (where: "back" | "forward" | "reload") => () => window.tet.browser.go(at, tabId, where);
+    const edit = (command: "cut" | "copy" | "paste" | "selectAll") => () => window.tet.browser.edit(at, tabId, command);
+    const link: ContextMenuEntry[] = opened.linkUrl
+      ? [
+          { label: "Open Link in New Tab", run: () => onOpenTab(opened.linkUrl) },
+          { label: "Copy Link Address", run: () => void navigator.clipboard.writeText(opened.linkUrl) },
+          SEPARATOR,
+        ]
+      : [];
+    return [
+      ...link,
+      { label: "Back", run: tab.canGoBack ? go("back") : undefined },
+      { label: "Forward", run: tab.canGoForward ? go("forward") : undefined },
+      { label: "Reload", run: go("reload") },
+      SEPARATOR,
+      { label: "Cut", run: opened.canCut ? edit("cut") : undefined },
+      { label: "Copy", run: opened.canCopy ? edit("copy") : undefined },
+      { label: "Paste", run: opened.canPaste ? edit("paste") : undefined },
+      { label: "Select All", run: opened.canSelectAll ? edit("selectAll") : undefined },
+      SEPARATOR,
+      { label: "Inspect", run: () => window.tet.browser.inspect(at, tabId, opened.x, opened.y) },
+    ];
+  };
 
   // The tab the browser verbs act on is the one last on screen.
   useEffect(() => {
@@ -169,7 +215,17 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           onBlur={() => setTyped(null)}
         />
       </div>
-      <div ref={page} className={`browser-page${shown ? " live" : ""}`} />
+      <div ref={page} className={`browser-page${shown ? " live" : ""}`}>
+        {paused && (
+          <div className="browser-paused">
+            <div className="browser-paused-message">
+              <div className="browser-paused-heading">Paused due to Notification</div>
+              <div className="browser-paused-detail">Dismiss the notification to continue using the browser.</div>
+            </div>
+          </div>
+        )}
+      </div>
+      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.menu)} onClose={() => setMenu(null)} />}
     </div>
   );
 });

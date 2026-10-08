@@ -21,6 +21,22 @@ export function isBrowserTabId(tabId: string): boolean {
   return tabId.startsWith(BROWSER_TAB_PREFIX);
 }
 
+/** What a right click into a page offers, as Chromium reports it; the window draws the menu. */
+export interface BrowserMenu {
+  /** Where the click was, in the page's CSS pixels from its top left. */
+  x: number;
+  y: number;
+  /** The link clicked on, "" for none. */
+  linkUrl: string;
+  canCut: boolean;
+  canCopy: boolean;
+  canPaste: boolean;
+  canSelectAll: boolean;
+}
+
+/** The page's own edit commands, on what has its focus or selection. */
+export type BrowserEdit = "cut" | "copy" | "paste" | "selectAll";
+
 /** Where the page is drawn, in the window's CSS pixels. */
 export interface BrowserBounds {
   x: number;

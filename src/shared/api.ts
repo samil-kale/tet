@@ -1,7 +1,7 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { ShortcutId } from "./shortcuts";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
-import type { BrowserBounds, BrowserTabInfo } from "./types/browser";
+import type { BrowserBounds, BrowserEdit, BrowserMenu, BrowserTabInfo } from "./types/browser";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
 import type {
@@ -322,6 +322,10 @@ export interface TETApi {
     /** As `create` takes it; a page that cannot load is a notice. */
     navigate: (ref: ProjectRef, tabId: string, url: string) => void;
     go: (ref: ProjectRef, tabId: string, where: "back" | "forward" | "reload") => void;
+    /** One of the page's own edit commands, from its context menu; the page takes the focus back. */
+    edit: (ref: ProjectRef, tabId: string, edit: BrowserEdit) => void;
+    /** The page's DevTools on the element at `x`, `y` (BrowserMenu's). */
+    inspect: (ref: ProjectRef, tabId: string, x: number, y: number) => void;
     /** Where the page is drawn; null hides it, out of sight. */
     place: (ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => void;
     /** TET's own page above the browser tabs' pages, for a dialog or menu lying over one; or back
@@ -336,6 +340,8 @@ export interface TETApi {
     onPressed: (listener: (payload: { ref: ProjectRef; tabId: string }) => void) => Unsubscribe;
     /** A window shortcut pressed on a page, which takes its keys before the window sees them. */
     onShortcut: (listener: (payload: ShortcutId) => void) => Unsubscribe;
+    /** A right click into a page, whose menu the window draws. */
+    onMenu: (listener: (payload: { ref: ProjectRef; tabId: string; menu: BrowserMenu }) => void) => Unsubscribe;
   };
   agents: {
     list: () => Promise<AgentInfo[]>;

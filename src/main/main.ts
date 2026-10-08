@@ -20,7 +20,7 @@ import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { stopExplorerProcess } from "./git/explorer-client";
 import { browserAutomation } from "./browser/browser-client";
-import { BrowserTabs } from "./browser/browser-tabs";
+import { BrowserTabs, sweepBrowserProfiles } from "./browser/browser-tabs";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
 import { resolveProjectRef } from "./store/resolved-ref";
@@ -227,6 +227,7 @@ const browserTabs = new BrowserTabs({
   onPressed: (ref, tabId) => send("browser:pressed", { ref, tabId }),
   onClosed: (tabId) => browser.tabClosed(tabId),
   onShortcut: (shortcut) => send("browser:shortcut", shortcut),
+  onMenu: (ref, tabId, menu) => send("browser:menu", { ref, tabId, menu }),
   notice,
 });
 const browser = browserAutomation((tabId) => browserTabs.pageById(tabId));
@@ -429,6 +430,7 @@ if (!app.requestSingleInstanceLock()) {
     // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepDropFiles(dataRoot);
+    sweepBrowserProfiles(dataRoot);
     try {
       controlChannel = await prepareControl(dataRoot, __dirname, installed, (userDataArg && process.env[CONTROL_ENV.token]) || undefined);
     } catch (error) {

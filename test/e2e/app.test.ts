@@ -167,7 +167,7 @@ ${stderr.slice(uncaught)}`);
       const shot = (await browser("browser-screenshot")).result as { path: string };
       assert.equal(fs.readFileSync(shot.path).subarray(1, 4).toString(), "PNG");
       assert.equal((await browser("browser-close")).status, 0);
-      assert.deepEqual((await browser("browser-list")).result, []);
+      assert.deepEqual(((await browser("browser-list")).result as { tabs: unknown[] }).tabs, []);
     } finally {
       server.close();
       await ctl("tabs-close", shell.tabId, "--project", project.id);

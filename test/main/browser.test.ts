@@ -109,4 +109,15 @@ describe("CdpProxy", () => {
     assert.ok(!attached());
     assert.equal(listening(), 0);
   });
+
+  it("lets go of the page the client detaches from, which is not gone", async () => {
+    const { proxy, out, attached } = proxied();
+    await proxy.handle({ id: 1, method: "Target.setDiscoverTargets", params: { discover: true } });
+    await proxy.handle({ id: 2, method: "Target.attachToTarget", params: { targetId: "T1", flatten: true } });
+    await proxy.handle({ id: 3, method: "Target.detachFromTarget", params: { sessionId: "tet-page-T1" } });
+    const methods = out.map((message) => message.method).filter((method) => method !== undefined);
+    assert.ok(methods.includes("Target.detachedFromTarget"));
+    assert.ok(!methods.includes("Target.targetDestroyed"), "the page stays");
+    assert.ok(!attached());
+  });
 });

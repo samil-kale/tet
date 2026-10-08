@@ -1,8 +1,17 @@
-import { session, WebContentsView, type Debugger } from "electron";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { app, session, WebContentsView, type Debugger } from "electron";
 import { shortcutOf, type ShortcutId } from "../../shared/shortcuts";
-import { BROWSER_TAB_PREFIX, type BrowserBounds, type BrowserTabInfo } from "../../shared/types/browser";
+import {
+  BROWSER_TAB_PREFIX,
+  type BrowserBounds,
+  type BrowserEdit,
+  type BrowserMenu,
+  type BrowserTabInfo,
+} from "../../shared/types/browser";
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
+import { ownedWorktreeKeys } from "../store/project-dirs";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
 import { isOpenableUrl } from "../util/shell-open";
@@ -27,6 +36,8 @@ export interface BrowserTabsDeps {
   onClosed(tabId: string): void;
   /** A window shortcut pressed on a page, which the window never sees. */
   onShortcut(shortcut: ShortcutId): void;
+  /** A right click into a page, whose menu the window draws. */
+  onMenu(ref: ProjectRef, tabId: string, menu: BrowserMenu): void;
   notice(severity: NoticeSeverity, message: string): void;
 }
 
@@ -67,6 +78,9 @@ const ERR_ABORTED = -3;
 
 /** How long `load` waits for a page; one still loading then is no failure, the agent reads it on. */
 const LOAD_WAIT_MS = 30_000;
+
+/** A worktree's profile folder, as Chromium spells `partitionOf`'s name on disk: in lower case. */
+const WORKTREE_PROFILE = /^tet-([0-9a-f-]{36})-([0-9a-f]+)$/;
 
 /** A host the machine itself serves, reached over http as a dev server is. */
 const LOCAL_HOST = /^(localhost|127(\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(:\d+)?([/?#]|$)/i;
@@ -156,6 +170,26 @@ export class BrowserTabs {
       }
       return { action: "deny" };
     });
+    // A dev server's own certificate is taken on a local host, as Chrome's allow-insecure-localhost
+    // takes it; anywhere else Chromium's refusal stands.
+    view.webContents.on("certificate-error", (event, failedUrl, _error, _certificate, callback) => {
+      const local = LOCAL_HOST.test(new URL(failedUrl).host);
+      if (local) {
+        event.preventDefault();
+      }
+      callback(local);
+    });
+    view.webContents.on("context-menu", (_event, params) =>
+      this.deps.onMenu(ref, tab.tabId, {
+        x: params.x,
+        y: params.y,
+        linkUrl: params.linkURL,
+        canCut: params.editFlags.canCut,
+        canCopy: params.editFlags.canCopy,
+        canPaste: params.editFlags.canPaste,
+        canSelectAll: params.editFlags.canSelectAll,
+      }),
+    );
     view.webContents.on("before-mouse-event", (_event, mouse) => {
       if (mouse.type === "mouseDown") {
         this.deps.onPressed(ref, tab.tabId);
@@ -171,7 +205,7 @@ export class BrowserTabs {
         if (view.webContents.isDevToolsOpened()) {
           view.webContents.closeDevTools();
         } else {
-          view.webContents.openDevTools({ mode: "detach" });
+          openDevTools(view);
         }
         return;
       }
@@ -209,6 +243,24 @@ export class BrowserTabs {
       view?.webContents.navigationHistory.goForward();
     } else {
       view?.webContents.reload();
+    }
+  }
+
+  /** The menu's edit command; the page then has the focus again, which the menu took. */
+  edit(ref: ProjectRef, tabId: string, edit: BrowserEdit): void {
+    const view = this.find(ref, tabId)?.view;
+    if (view) {
+      view.webContents[edit]();
+      view.webContents.focus();
+    }
+  }
+
+  /** The page's DevTools, as F12 opens them, on the element at `x`, `y`. */
+  inspect(ref: ProjectRef, tabId: string, x: number, y: number): void {
+    const view = this.find(ref, tabId)?.view;
+    if (view) {
+      openDevTools(view);
+      view.webContents.inspectElement(x, y);
     }
   }
 
@@ -329,6 +381,35 @@ function load(tab: Tab, url: string): Promise<void> {
       : undefined;
   });
   return Promise.race([loaded, new Promise<void>((resolve) => setTimeout(resolve, LOAD_WAIT_MS).unref())]);
+}
+
+/** Detached, as F12 opens TET's own for the window (window.ts). */
+function openDevTools(view: WebContentsView): void {
+  if (!view.webContents.isDevToolsOpened()) {
+    view.webContents.openDevTools({ mode: "detach" });
+  }
+}
+
+/**
+ * Deletes the profiles of the worktrees gone, at startup before any tab opens: `clearProfile`
+ * empties one whose session stays loaded until TET quits, and Electron cannot unload a session.
+ */
+export function sweepBrowserProfiles(dataRoot: string): void {
+  void (async () => {
+    const root = path.join(app.getPath("sessionData"), "Partitions");
+    const names = await fs.promises.readdir(root).catch((): string[] => []);
+    await Promise.all(
+      names.map(async (name) => {
+        const match = WORKTREE_PROFILE.exec(name);
+        if (!match || ownedWorktreeKeys(dataRoot, match[1]).includes(match[2])) {
+          return;
+        }
+        await fs.promises
+          .rm(path.join(root, name), { recursive: true, force: true })
+          .catch((error: unknown) => logError(`could not delete the browser profile ${name}`, error));
+      }),
+    );
+  })();
 }
 
 /** A worktree's own profile, or the global one of every repository. */

@@ -56,15 +56,12 @@ export class CdpProxy {
     }
   }
 
-  /** The tab closed, or the client went: the page is announced gone, the debugger let go. */
+  /** The tab closed: the page is announced detached and gone, the debugger let go. */
   close(): void {
-    if (this.attached) {
-      this.send({ method: "Target.detachedFromTarget", params: { sessionId: this.pageSession, targetId: this.page.targetId } });
-    }
+    this.detach();
     if (this.discover) {
       this.send({ method: "Target.targetDestroyed", params: { targetId: this.page.targetId } });
     }
-    this.release();
   }
 
   /** Lets go of the debugger without telling the client, which is gone. */
@@ -125,7 +122,7 @@ export class CdpProxy {
         return { sessionId: this.pageSession };
       case "Target.detachFromTarget":
         if (args.sessionId === this.pageSession) {
-          this.close();
+          this.detach();
         }
         return {};
       default:
@@ -142,6 +139,14 @@ export class CdpProxy {
       return Promise.resolve({});
     }
     return this.page.debugger.sendCommand(method, params, sessionId === this.pageSession ? undefined : sessionId);
+  }
+
+  /** The client lets go of the page, which stays: announced detached, the debugger let go. */
+  private detach(): void {
+    if (this.attached) {
+      this.send({ method: "Target.detachedFromTarget", params: { sessionId: this.pageSession, targetId: this.page.targetId } });
+    }
+    this.release();
   }
 
   private attach(): void {

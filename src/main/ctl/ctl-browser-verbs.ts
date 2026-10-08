@@ -64,13 +64,15 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);
       }
       const page = tabs.page(ref, tabId);
-      return { result: { tabId, url: page?.url, title: page?.title } };
+      return { result: { tabId, url: page?.url, title: page?.title, untrustedContent: true } };
     },
 
     "browser-list": (args, caller) => {
       const { ref } = refFrom(args, caller);
       const active = tabs.page(ref)?.tabId;
-      return { result: tabs.list(ref).map(({ tabId, url, title, loading }) => ({ tabId, url, title, loading, active: tabId === active })) };
+      const listed = tabs.list(ref).map(({ tabId, url, title, loading }) => ({ tabId, url, title, loading, active: tabId === active }));
+      // The titles are the pages' own.
+      return { result: { tabs: listed, untrustedContent: true } };
     },
 
     "browser-snapshot": async (args, caller) => {

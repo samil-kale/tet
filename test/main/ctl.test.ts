@@ -1469,9 +1469,10 @@ describe("tet-ctl against the control server", () => {
       ],
       "brought to the front",
     );
-    assert.deepEqual((await tetCtl(["browser-list"])).result, [
-      { tabId: opened.tabId, url: "localhost:3000/login", title: "Page", loading: false, active: true },
-    ]);
+    assert.deepEqual((await tetCtl(["browser-list"])).result, {
+      tabs: [{ tabId: opened.tabId, url: "localhost:3000/login", title: "Page", loading: false, active: true }],
+      untrustedContent: true,
+    });
     assert.deepEqual((await tetCtl(["browser-snapshot"])).result, {
       tabId: opened.tabId,
       url: "http://localhost:3000/",

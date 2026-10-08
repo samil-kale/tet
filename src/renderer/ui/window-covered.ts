@@ -40,25 +40,32 @@ export function useTopDialog(): HTMLDialogElement | undefined {
  * being dragged over the panes. A browser tab's page is drawn above the whole window (BrowserHost),
  * so it gives way where one of these overlaps it, as it does to a dialog.
  */
-const floating = createStore<readonly Element[]>([]);
+const floating = createStore<readonly Floating[]>([]);
+
+export interface Floating {
+  element: Element;
+  /** The notices, which a page under them says it waits on (BrowserHost). */
+  notice: boolean;
+}
 
 /** `element` floats while mounted and `shown`; a change of its box tells the readers again. */
-export function useFloatsOver(element: RefObject<Element | null>, shown = true): void {
+export function useFloatsOver(element: RefObject<Element | null>, shown = true, notice = false): void {
   useEffect(() => {
     const current = element.current;
     if (!shown || !current) {
       return;
     }
-    floating.set([...floating.get(), current]);
+    const entry: Floating = { element: current, notice };
+    floating.set([...floating.get(), entry]);
     const observer = new ResizeObserver(() => floating.set([...floating.get()]));
     observer.observe(current);
     return () => {
       observer.disconnect();
-      floating.set(floating.get().filter((entry) => entry !== current));
+      floating.set(floating.get().filter((held) => held !== entry));
     };
-  }, [element, shown]);
+  }, [element, shown, notice]);
 }
 
-export function useFloating(): readonly Element[] {
+export function useFloating(): readonly Floating[] {
   return useStore(floating);
 }

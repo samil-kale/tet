@@ -1499,6 +1499,39 @@ textarea:focus,
   min-height: 0;
 }
 
+/* A notice over a page holds it, raised above it, until dismissed: VS Code's pause, its page dimmed
+   and the reason said in the middle, framed as a dialog is. */
+.browser-paused {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  color: var(--tet-foreground);
+  background: color-mix(in srgb, var(--tet-editor-background) 60%, transparent);
+}
+
+.browser-paused-message {
+  max-width: 80%;
+  padding: 20px 40px;
+  border: 1px solid var(--tet-editorWidget-border);
+  border-radius: 5px;
+  background: var(--tet-editor-background);
+  box-shadow: 0 4px 12px var(--tet-widget-shadow);
+  text-align: center;
+}
+
+.browser-paused-heading {
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.browser-paused-detail {
+  font-size: var(--small-font-size);
+  color: var(--tet-descriptionForeground);
+}
+
 /* While TET's page is raised above the browser tabs' pages (a dialog, a menu over one: window.ts),
    nothing beneath a live page paints, so it shows through; what lies over it still does. */
 html.browser-raised,
