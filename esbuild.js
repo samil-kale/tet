@@ -49,9 +49,10 @@ function hostConfig(folder, name) {
 }
 
 /** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
- *  them, and each run under tet's own electron as node: `tet-ctl`, which an agent runs from a
- *  terminal (see src/main/ctl/ctl-launcher.ts), and `tet-update`, which a new version's
- *  binary runs once tet has quit (src/main/update/auto-update.ts). */
+ *  them: `tet-ctl`, which an agent runs from a terminal (see src/main/ctl/ctl-launcher.ts), and
+ *  `tet-update`, which a new version's binary runs once tet has quit
+ *  (src/main/update/auto-update.ts), each under tet's own electron as node; `tet-browser-relay`,
+ *  which a sandbox's own node runs for its agent's browser tabs (src/main/sbx/sbx-relay.ts). */
 /** @returns {import('esbuild').BuildOptions} */
 function cliConfig(name) {
   return {
@@ -137,6 +138,7 @@ async function build() {
     hostConfig("browser", "browser"),
     cliConfig("tet-ctl"),
     cliConfig("tet-update"),
+    cliConfig("tet-browser-relay"),
     preloadConfig,
     rendererConfig,
     editorWorkerConfig,

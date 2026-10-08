@@ -131,6 +131,8 @@ const SPAWN_SITES = [
   "src/main/agents/agent-path.ts",
   // Codex's app server, from resolveCommand, held open over stdio.
   "src/main/agents/codex/app-server-client.ts",
+  // A sandbox's browser relay, from resolveCommand, held open over stdio like the app server.
+  "src/main/sbx/sbx-relay.ts",
   // The updater: the new binary by its absolute path, detached to outlive tet.
   "src/main/update/auto-update.ts"
 ];

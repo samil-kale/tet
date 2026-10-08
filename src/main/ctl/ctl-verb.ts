@@ -19,7 +19,7 @@ import type {
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { BrowserAutomation } from "../browser/browser-client";
-import type { BrowserTabs } from "../browser/browser-tabs";
+import type { BrowserSandbox, BrowserTabs } from "../browser/browser-tabs";
 import type { NotificationTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -180,6 +180,9 @@ export interface ControlDeps {
   browser: {
     tabs: Pick<BrowserTabs, "list" | "page" | "create" | "navigate" | "close" | "capture" | "downloads">;
     automation: BrowserAutomation["api"];
+    /** The sandbox the tab runs in, its browser tabs' (BrowserSandbox); none for a tab on this
+     *  machine, or one not started. */
+    sandboxOf(ref: ProjectRef, tabId: string): BrowserSandbox | undefined;
   };
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;

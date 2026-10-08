@@ -300,7 +300,8 @@ export const Pane = memo(function Pane({
       return tab.commit ? `${tab.path} (${tab.commit.sha.slice(0, 7)})` : tab.path;
     }
     if (isBrowserTab(tab)) {
-      return tab.title ? `${tab.title}\n${tab.url}` : tab.url;
+      const lines = tab.title ? [tab.title, tab.url] : [tab.url];
+      return [...lines, ...(tab.sandboxed ? ["Loads through its agent's SBX sandbox"] : [])].join("\n");
     }
     const lines =
       tab.status === "missing"
@@ -513,7 +514,7 @@ export const Pane = memo(function Pane({
                   <AgentIcon agentId={tab.agentId} className="tab-icon" />
                 )}
                 {/* Over the mark too: where the tab runs outlasts its turn. */}
-                {isTerminalTab(tab) && tab.sandboxed && (
+                {(isTerminalTab(tab) || isBrowserTab(tab)) && tab.sandboxed && (
                   <>
                     <ShieldIcon className="tab-badge-ring" />
                     <ShieldIcon className="tab-badge" />

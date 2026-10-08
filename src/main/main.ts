@@ -20,11 +20,12 @@ import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { stopExplorerProcess } from "./git/explorer-client";
 import { browserAutomation } from "./browser/browser-client";
-import { BrowserTabs, sweepBrowserProfiles } from "./browser/browser-tabs";
+import { BrowserTabs, sweepBrowserProfiles, type BrowserSandbox, type SandboxRoute } from "./browser/browser-tabs";
+import { SandboxProxy } from "./browser/sandbox-proxy";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
 import { resolveProjectRef } from "./store/resolved-ref";
-import { projectRefPath } from "./store/project-dirs";
+import { projectRefPath, sandboxDir } from "./store/project-dirs";
 import {
   addProject,
   addWorktree,
@@ -37,6 +38,7 @@ import {
 } from "./projects";
 import { ProjectStore } from "./store/project-store";
 import { readSbxUser } from "./sbx/sbx-cli";
+import { SandboxRelay } from "./sbx/sbx-relay";
 import { readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
 import { SbxAccountStore, signInToSbx } from "./sbx/sbx-accounts";
 import { SbxLocalStore } from "./sbx/sbx-local";
@@ -230,9 +232,43 @@ const browserTabs = new BrowserTabs({
   onShortcut: (shortcut) => send("browser:shortcut", shortcut),
   onMenu: (ref, tabId, menu) => send("browser:menu", { ref, tabId, menu }),
   onLogin: (ref, tabId, login) => send("browser:login", { ref, tabId, login }),
+  route: sandboxRoute,
   notice,
 });
 const browser = browserAutomation((tabId) => browserTabs.pageById(tabId));
+
+/** A sandbox's way out for its agent's browser tabs: its relay (sbx-relay.ts), and the proxy on
+ *  this machine's loopback dialling through it (sandbox-proxy.ts). */
+async function sandboxRoute(sandbox: BrowserSandbox): Promise<SandboxRoute> {
+  const relay = new SandboxRelay(sandbox.name, path.join(__dirname, "tet-browser-relay.js"));
+  try {
+    const { ca } = await relay.hello();
+    const proxy = await SandboxProxy.start(relay);
+    return {
+      port: proxy.port,
+      ca,
+      refusal: (host) => proxy.refusal(host),
+      close: () => {
+        proxy.close();
+        relay.stop();
+      },
+    };
+  } catch (error) {
+    relay.stop();
+    throw error;
+  }
+}
+
+/** The sandbox a tab runs in, which its browser tabs load through. */
+function browserSandboxOf(ref: ProjectRef, tabId: string): BrowserSandbox | undefined {
+  const tab = tabManagers
+    .get(ref)
+    ?.inspect()
+    .find((held) => held.tabId === tabId);
+  return tab?.sandbox === undefined
+    ? undefined
+    : { name: tab.sandbox, agentId: tab.agentId, agentDir: sandboxDir(dataRoot, ref, tab.agentId) };
+}
 
 function openProjectRef(ref: ProjectRef): void {
   const resolved = resolveProjectRef(dataRoot, store, ref);
@@ -339,7 +375,7 @@ async function startControl(): Promise<void> {
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
-        browser: { tabs: browserTabs, automation: browser.api },
+        browser: { tabs: browserTabs, automation: browser.api, sandboxOf: browserSandboxOf },
         showDesktopNotification,
         environment,
         envRequests,

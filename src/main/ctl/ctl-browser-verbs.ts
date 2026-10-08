@@ -1,6 +1,7 @@
 import type { ControlVerbName } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types/project";
+import type { BrowserSandbox, BrowserScope } from "../browser/browser-tabs";
 import { writeDropFile } from "../store/drops";
 import { callerRef, ControlError, optionalText, text, type Caller, type ControlDeps, type Handler, type RefFrom } from "./ctl-verb";
 
@@ -9,9 +10,36 @@ import { callerRef, ControlError, optionalText, text, type Caller, type ControlD
  * through Playwright (browser/browser-automation.ts). Without `--tab` a verb acts on the tab the
  * window last showed, or the last one opened. What a page says is someone else's: every answer
  * carrying its content says so (`untrustedContent`).
+ *
+ * A caller in a sandbox (CallerSide.browsesInSandbox) opens its tabs in its sandbox, loading
+ * through it, and sees no others; one on this machine sees no sandbox's.
  */
 export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `browser-${string}`>, Handler> {
   const { tabs, automation } = deps.browser;
+
+  /** The caller's sandbox, whose tabs alone it sees; none on this machine. Never this machine's for
+   *  a caller in a sandbox: one whose tab names none is refused. */
+  const sandboxOf = (caller: Caller): BrowserSandbox | undefined => {
+    if (!caller.side.browsesInSandbox) {
+      return undefined;
+    }
+    const own = callerRef(caller);
+    const sandbox = own && caller.tabId !== undefined ? deps.browser.sandboxOf(own, caller.tabId) : undefined;
+    if (!sandbox) {
+      throw new ControlError("unauthorized", "this tab runs in no sandbox its browser tabs could load through");
+    }
+    return sandbox;
+  };
+
+  const scopeOf = (caller: Caller): BrowserScope => ({ sandbox: sandboxOf(caller)?.name });
+
+  /** A path of this machine where the caller's tab sees it (TabPlace.handPaths): a sandbox's at its
+   *  container path; undefined where it would not be handed. */
+  const seen = async (caller: Caller, hostPath: string): Promise<string | undefined> => {
+    const own = callerRef(caller);
+    const terminals = own && deps.tabManagers.get(own);
+    return terminals && caller.tabId !== undefined ? (await terminals.seenPaths(caller.tabId, [hostPath]))[0] : hostPath;
+  };
 
   /** The tab `--tab` names, else the active one; `optional` answers none rather than refusing. */
   function pageOf(args: Record<string, unknown>, caller: Caller): { ref: ProjectRef; tabId: string };
@@ -19,7 +47,7 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
   function pageOf(args: Record<string, unknown>, caller: Caller, optional = false): { ref: ProjectRef; tabId?: string } {
     const { ref } = refFrom(args, caller);
     const wanted = optionalText(args, "tab");
-    const page = tabs.page(ref, wanted);
+    const page = tabs.page(ref, wanted, scopeOf(caller));
     if (!page && optional && wanted === undefined) {
       return { ref };
     }
@@ -55,7 +83,7 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
           deps.showTab(ref, tabId);
           await tabs.navigate(ref, tabId, url);
         } else {
-          const created = tabs.create(ref, url);
+          const created = tabs.create(ref, url, sandboxOf(caller));
           tabId = created.tab.tabId;
           deps.showTab(ref, tabId);
           await created.loaded;
@@ -63,14 +91,17 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
       } catch (error) {
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);
       }
-      const page = tabs.page(ref, tabId);
+      const page = tabs.page(ref, tabId, scopeOf(caller));
       return { result: { tabId, url: page?.url, title: page?.title, untrustedContent: true } };
     },
 
     "browser-list": (args, caller) => {
       const { ref } = refFrom(args, caller);
-      const active = tabs.page(ref)?.tabId;
-      const listed = tabs.list(ref).map(({ tabId, url, title, loading }) => ({ tabId, url, title, loading, active: tabId === active }));
+      const scope = scopeOf(caller);
+      const active = tabs.page(ref, undefined, scope)?.tabId;
+      const listed = tabs
+        .list(ref, scope)
+        .map(({ tabId, url, title, loading }) => ({ tabId, url, title, loading, active: tabId === active }));
       // The titles are the pages' own.
       return { result: { tabs: listed, untrustedContent: true } };
     },
@@ -131,7 +162,7 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
         throw new ControlError("bad_args", "the page has drawn nothing yet");
       }
       const file = await writeDropFile(terminals.dropsDir(callerTab), "browser.png", png);
-      return { result: { path: file } };
+      return { result: { path: await seen(caller, file) } };
     },
 
     "browser-console": async (args, caller) => {
@@ -140,15 +171,17 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
     },
 
     // The file names are the servers' own.
-    "browser-downloads": (args, caller) => {
+    "browser-downloads": async (args, caller) => {
       const { ref } = refFrom(args, caller);
-      const downloads = tabs.downloads(ref).map(({ path, url, state, receivedBytes, totalBytes }) => ({
-        path,
-        url,
-        state,
-        receivedBytes,
-        totalBytes,
-      }));
+      const downloads = await Promise.all(
+        tabs.downloads(ref, scopeOf(caller)).map(async ({ path, url, state, receivedBytes, totalBytes }) => ({
+          path: await seen(caller, path),
+          url,
+          state,
+          receivedBytes,
+          totalBytes,
+        })),
+      );
       return { result: { downloads, untrustedContent: true } };
     },
 

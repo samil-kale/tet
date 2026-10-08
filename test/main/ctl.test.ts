@@ -11,6 +11,7 @@ import { shellAgent } from "../../src/main/agents/shell";
 import { systemPrompt } from "../../src/main/agents/system-prompt";
 import { findControlPort } from "../../src/main/ctl/ctl-port";
 import { startControlServer } from "../../src/main/ctl/ctl-server";
+import type { BrowserScope } from "../../src/main/browser/browser-tabs";
 import type { ControlDeps, ControlTerminals } from "../../src/main/ctl/ctl-verb";
 import type { NotificationTarget } from "../../src/main/util/notifications";
 import type { EnvAsk } from "../../src/main/ctl/env-requests";
@@ -194,8 +195,11 @@ let sbxUser: string | undefined;
 /** Why the faked store could not keep a token sbx took. */
 let sbxNotKept: string | undefined;
 
-/** The faked browser tabs, of every repository and worktree. */
-let browserTabs: { ref: string; tabId: string; url: string }[];
+/** The faked browser tabs, of every repository and worktree, each a sandbox's or this machine's. */
+let browserTabs: { ref: string; tabId: string; url: string; sandbox?: string }[];
+
+/** The sandbox SANDBOX_TAB runs in, in PROJECT's repository; its worktrees' tabs run in none. */
+const BROWSER_SANDBOX = { name: "tet-claude-sbx", agentId: "claude" as const, agentDir: "/agent" };
 
 /** The terminals of the repository or a worktree, by its `refKey`. */
 function terminalsOf(key: string): ControlTerminals {
@@ -283,18 +287,18 @@ function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
   });
   const load = (url: string): Promise<void> =>
     url.includes("unreachable") ? Promise.reject(new Error("ERR_CONNECTION_REFUSED (-102)")) : Promise.resolve();
+  const within = (ref: ProjectRef, scope?: BrowserScope) =>
+    browserTabs.filter((tab) => tab.ref === refKeyOf(ref) && (scope === undefined || tab.sandbox === scope.sandbox));
   return {
-    list: (ref) =>
-      browserTabs
-        .filter((tab) => tab.ref === refKeyOf(ref))
-        .map(({ tabId, url }) => ({ tabId, url, title: "Page", loading: false, canGoBack: false, canGoForward: false })),
-    page: (ref, tabId) => {
-      const own = browserTabs.filter((tab) => tab.ref === refKeyOf(ref));
+    list: (ref, scope) =>
+      within(ref, scope).map(({ tabId, url }) => ({ tabId, url, title: "Page", loading: false, canGoBack: false, canGoForward: false })),
+    page: (ref, tabId, scope) => {
+      const own = within(ref, scope);
       const tab = tabId === undefined ? own.at(-1) : own.find((entry) => entry.tabId === tabId);
       return tab && pageOf(tab);
     },
-    create: (ref, url) => {
-      const tab = { ref: refKeyOf(ref), tabId: `tet:browser:${browserTabs.length + 1}`, url };
+    create: (ref, url, sandbox) => {
+      const tab = { ref: refKeyOf(ref), tabId: `tet:browser:${browserTabs.length + 1}`, url, sandbox: sandbox?.name };
       browserTabs.push(tab);
       return { tab: { tabId: tab.tabId, url, title: "", loading: true, canGoBack: false, canGoForward: false }, loaded: load(url) };
     },
@@ -309,17 +313,15 @@ function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
       browserTabs = browserTabs.filter((entry) => !(entry.ref === refKeyOf(ref) && entry.tabId === tabId));
     },
     capture: async () => Buffer.from("png"),
-    downloads: (ref) =>
-      browserTabs
-        .filter((tab) => tab.ref === refKeyOf(ref))
-        .map((tab) => ({
-          ref,
-          path: `/downloads/${tab.tabId}.zip`,
-          url: `${tab.url}/file.zip`,
-          state: "completed" as const,
-          receivedBytes: 3,
-          totalBytes: 3,
-        })),
+    downloads: (ref, scope) =>
+      within(ref, scope).map((tab) => ({
+        ref,
+        path: `/downloads/${tab.tabId}.zip`,
+        url: `${tab.url}/file.zip`,
+        state: "completed" as const,
+        receivedBytes: 3,
+        totalBytes: 3,
+      })),
   };
 }
 
@@ -383,7 +385,11 @@ function deps(): ControlDeps {
     tabManagers: {
       get: (ref) => (open(ref) ? terminalsOf(refKeyOf(ref)) : undefined),
     },
-    browser: { tabs: fakeBrowserTabs(), automation: fakeAutomation() },
+    browser: {
+      tabs: fakeBrowserTabs(),
+      automation: fakeAutomation(),
+      sandboxOf: (ref, tabId) => (tabId === SANDBOX_TAB && ref.worktree === undefined ? BROWSER_SANDBOX : undefined),
+    },
     repositories: {
       get: (ref) =>
         open(ref)
@@ -1537,20 +1543,43 @@ describe("tet-ctl against the control server", () => {
     assertRefused(await tetCtl(["browser-list", "--project", OTHER.id]), /own project/, "another project");
   });
 
-  it("opens and reads no browser tab from a sandbox", async () => {
+  it("opens a sandbox's browser tab in its sandbox, and shows it none of this machine's", async () => {
     const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    const before = [...browserTabs];
-    for (const args of [
-      ["browser-open", "localhost:3000"],
-      ["browser-list"],
-      ["browser-snapshot"],
-      ["browser-click", "e1"],
-      ["browser-screenshot"],
-      ["browser-downloads"],
-    ]) {
-      assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
-    }
-    assert.deepEqual(browserTabs, before);
+    const host = (await tetCtl(["browser-open", "localhost:3000"])).result as { tabId: string };
+    assert.deepEqual((await tetCtl(["browser-list"], fromSandbox)).result, { tabs: [], untrustedContent: true });
+    assert.match((await tetCtl(["browser-snapshot"], fromSandbox)).stderr, /no browser tab/);
+    assert.match((await tetCtl(["browser-click", "e1", "--tab", host.tabId], fromSandbox)).stderr, /unknown browser tab/, "this machine's");
+
+    const opened = (await tetCtl(["browser-open", "localhost:3000"], fromSandbox)).result as { tabId: string };
+    assert.notEqual(opened.tabId, host.tabId, "a tab of its own, not this machine's");
+    assert.equal(browserTabs.find((tab) => tab.tabId === opened.tabId)?.sandbox, BROWSER_SANDBOX.name, "loading through the sandbox");
+    assert.deepEqual(
+      ((await tetCtl(["browser-list"], fromSandbox)).result as { tabs: { tabId: string }[] }).tabs.map((tab) => tab.tabId),
+      [opened.tabId],
+    );
+    assert.deepEqual(
+      ((await tetCtl(["browser-list"])).result as { tabs: { tabId: string }[] }).tabs.map((tab) => tab.tabId),
+      [host.tabId],
+      "nor this machine's a sandbox's",
+    );
+    assert.equal((await tetCtl(["browser-click", "e1"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.deepEqual(calls.browser, [["click", opened.tabId, "e1"]]);
+    const shot = (await tetCtl(["browser-screenshot"], fromSandbox)).result as { path: string };
+    assert.ok(shot.path.startsWith(`/sbx${path.join(workDir, "drops", PROJECT.id, SANDBOX_TAB)}`), "where the sandbox sees it");
+    assert.deepEqual(
+      ((await tetCtl(["browser-downloads"], fromSandbox)).result as { downloads: { path: string }[] }).downloads.map((entry) => entry.path),
+      [`/sbx/downloads/${opened.tabId}.zip`],
+    );
+    assertRefused(
+      await tetCtl(["browser-list", "--worktree", WORKTREE.worktree ?? ""], fromSandbox),
+      /own repository or worktree/,
+      "a worktree's",
+    );
+    assertRefused(
+      await tetCtl(["browser-open", "localhost:3000"], { ...fromSandbox, [CONTROL_ENV.worktree]: WORKTREE.worktree }),
+      /no sandbox/,
+      "a sandboxed tab naming no sandbox loads nothing from this machine",
+    );
   });
 
   it("opens a file under the path the editor tabs match, and refuses one outside the repository", async () => {
@@ -1827,12 +1856,13 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.desktopNotifications, [], "nothing to notify about a session");
   });
 
-  it("tells a sandboxed session start nothing of the environment variables or the browser", async () => {
+  it("tells a sandboxed session start nothing of the environment variables, and of the browser alike", async () => {
     const run = await tetCtl(["hook", "session-start"], { [CONTROL_ENV.tabId]: SANDBOX_TAB }, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     const context = (JSON.parse(run.stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     assert.equal(context, systemPrompt(SANDBOX_SIDE));
-    assert.doesNotMatch(context, /environment variable|browser/);
+    assert.doesNotMatch(context, /environment variable/);
+    assert.match(context, /browser verbs/);
     assert.match(systemPrompt(HOST_SIDE), /environment variable/);
     assert.match(systemPrompt(HOST_SIDE), /browser verbs/);
   });

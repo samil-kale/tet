@@ -16,5 +16,14 @@
     "npm run format",
     "npm run format:check",
     "npm run dist"
-  ]
+  ],
+  "sbx": {
+    "enabled": true,
+    "ports": [],
+    "paths": [],
+    "hosts": [],
+    "secrets": [],
+    "variables": [],
+    "setup": []
+  }
 }

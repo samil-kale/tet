@@ -1,4 +1,6 @@
+import * as crypto from "node:crypto";
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 import { app, session, WebContentsView, type Debugger } from "electron";
 import { shortcutOf, type ShortcutId } from "../../shared/shortcuts";
@@ -12,10 +14,12 @@ import {
   type BrowserTabInfo,
 } from "../../shared/types/browser";
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
+import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
-import { downloadsDir, ownedWorktreeKeys } from "../store/project-dirs";
+import { downloadsDir, ownedWorktreeKeys, sandboxDir, sandboxDownloadsDir } from "../store/project-dirs";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
+import { openInside } from "../util/path-inside";
 import { isOpenableUrl } from "../util/shell-open";
 
 /** The one window, whose content the pages are drawn into above TET's own page (window.ts). */
@@ -44,7 +48,40 @@ export interface BrowserTabsDeps {
   onMenu(ref: ProjectRef, tabId: string, menu: BrowserMenu): void;
   /** A page asking for a login, which its tab asks the user for (`answerLogin`). */
   onLogin(ref: ProjectRef, tabId: string, login: BrowserLogin): void;
+  /** The way a sandbox's tabs reach the network (SandboxRoute); rejects when the sandbox cannot be
+   *  reached, and its tabs then load nothing. */
+  route(sandbox: BrowserSandbox): Promise<SandboxRoute>;
   notice(severity: NoticeSeverity, message: string): void;
+}
+
+/**
+ * The sbx sandbox a tab belongs to, opened by an agent running there (`tet-ctl browser-open`): its
+ * pages load through it (sandbox-proxy.ts), in a profile of its own, and what they download lands
+ * in its agent folder, which it sees.
+ */
+export interface BrowserSandbox {
+  /** sbx's name of it (sbx.ts's sandboxName). */
+  name: string;
+  agentId: AgentId;
+  /** Its agent folder (project-dirs.ts's sandboxDir). */
+  agentDir: string;
+}
+
+/** A sandbox's way out: the proxy its profile loads through, and its proxy's certificate. */
+export interface SandboxRoute {
+  /** The port of the proxy on this machine's loopback. */
+  port: number;
+  /** The certificate the sandbox's proxy signs every HTTPS site with, PEM; none where it
+   *  intercepts none. */
+  ca?: string;
+  /** Why a host was last refused, for the page's failure. */
+  refusal(host: string): string | undefined;
+  close(): void;
+}
+
+/** Whose tabs a browser verb sees: this machine's (no sandbox), or one sandbox's, by its name. */
+export interface BrowserScope {
+  sandbox?: string;
 }
 
 /** A page as the CDP proxy reaches it (cdp-proxy.ts). */
@@ -60,7 +97,9 @@ export interface BrowserPage {
 /** A file a page downloaded during this run, for `browser-downloads`. */
 export interface BrowserDownload {
   ref: ProjectRef;
-  /** Where it is saved, under the project's downloads folder. */
+  /** The sandbox's name whose tab downloaded it; none for this machine's. */
+  sandbox?: string;
+  /** Where it is saved: the project's downloads folder, or its sandbox's (sandboxDownloadsDir). */
   path: string;
   url: string;
   state: "progressing" | "completed" | "cancelled" | "interrupted";
@@ -75,6 +114,8 @@ interface Tab {
   view: WebContentsView;
   /** Opened by a page (MAX_POPUPS), not by the user or an agent. */
   popup: boolean;
+  /** The sandbox it loads through; none for this machine's. */
+  sandbox?: BrowserSandbox;
 }
 
 /**
@@ -112,6 +153,13 @@ const LOAD_WAIT_MS = 30_000;
 
 /** A worktree's profile folder, as Chromium spells `partitionOf`'s name on disk: in lower case. */
 const WORKTREE_PROFILE = /^tet-([0-9a-f-]{36})-([0-9a-f]+)$/;
+
+/** A sandbox's profile folder (`partitionOf`): its project, its worktree's key or `repository`, its
+ *  agent. */
+const SANDBOX_PROFILE = /^tet-sbx-([0-9a-f-]{36})-([0-9a-f]+|repository)-(.+)$/;
+
+/** Chromium's code for a certificate whose issuer it does not trust. */
+const ERR_CERT_AUTHORITY_INVALID = -202;
 
 /** A host the machine itself serves, reached over http as a dev server is. */
 const LOCAL_HOST = /^(localhost|127(\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(:\d+)?([/?#]|$)/i;
@@ -164,16 +212,25 @@ export class BrowserTabs {
   private asked = 0;
   private readonly downloaded: BrowserDownload[] = [];
   private created = 0;
+  /** By partition, each sandbox's way out (SandboxRoute) while it has tabs; one that failed is
+   *  forgotten, to be tried again by the next tab. */
+  private readonly routes = new Map<string, Promise<SandboxRoute>>();
 
   constructor(private readonly deps: BrowserTabsDeps) {}
 
-  list(ref: ProjectRef): BrowserTabInfo[] {
-    return this.of(ref).map(infoOf);
+  /** Every tab of the repository or worktree, for the window; a browser verb's `scope` alone. */
+  list(ref: ProjectRef, scope?: BrowserScope): BrowserTabInfo[] {
+    return this.of(ref, scope).map(infoOf);
   }
 
-  /** `tabId` of the repository or worktree, else its active tab, else its last opened. */
-  page(ref: ProjectRef, tabId?: string): BrowserPage | undefined {
-    const tab = tabId === undefined ? (this.find(ref, this.active.get(refKeyOf(ref))) ?? this.of(ref).at(-1)) : this.find(ref, tabId);
+  /** `tabId` of the repository or worktree within `scope`, else its active tab there, else its last
+   *  opened there. */
+  page(ref: ProjectRef, tabId: string | undefined, scope: BrowserScope): BrowserPage | undefined {
+    const inScope = (tab: Tab | undefined): Tab | undefined => (tab && inside(tab, scope) ? tab : undefined);
+    const tab =
+      tabId === undefined
+        ? (inScope(this.find(ref, this.active.get(refKeyOf(ref)))) ?? this.of(ref, scope).at(-1))
+        : inScope(this.find(ref, tabId));
     return tab && pageOf(tab);
   }
 
@@ -183,19 +240,48 @@ export class BrowserTabs {
     return tab && pageOf(tab);
   }
 
-  /** A new tab loading `typed` (browserUrl), made the active one; `loaded` settles as `load` does. */
-  create(ref: ProjectRef, typed: string): { tab: BrowserTabInfo; loaded: Promise<void> } {
+  /** A new tab loading `typed` (browserUrl), made the active one, through `sandbox` where given;
+   *  `loaded` settles as `load` does. */
+  create(ref: ProjectRef, typed: string, sandbox?: BrowserSandbox): { tab: BrowserTabInfo; loaded: Promise<void> } {
     const url = browserUrl(typed);
-    const tab = this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }), false);
-    const loaded = load(tab, url);
+    const tab = this.open(ref, this.newView(ref, sandbox), false, sandbox);
+    const loaded = this.load(tab, url);
     this.changed(ref);
     return { tab: infoOf(tab), loaded };
   }
 
+  /** A page in the profile of the repository or worktree, or of its sandbox. */
+  private newView(ref: ProjectRef, sandbox: BrowserSandbox | undefined): WebContentsView {
+    const view = new WebContentsView({ webPreferences: { session: this.profileOf(ref, sandbox), ...PAGE_PREFERENCES } });
+    if (sandbox) {
+      // WebRTC's UDP takes no proxy: it would leave from this machine, past the sandbox's policy.
+      view.webContents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+    }
+    return view;
+  }
+
+  /**
+   * `load` once the tab's way out is in place: a sandbox's tab loads nothing before its profile
+   * goes through the sandbox, and nothing at all when the sandbox cannot be reached — never from
+   * this machine. A failure names what the sandbox's proxy refused.
+   */
+  private async load(tab: Tab, url: string): Promise<void> {
+    if (!tab.sandbox) {
+      return load(tab, url);
+    }
+    const route = await this.routeOf(tab.ref, tab.sandbox);
+    try {
+      await load(tab, url);
+    } catch (error) {
+      const refused = url === "about:blank" ? undefined : route.refusal(new URL(url).hostname);
+      throw refused === undefined ? error : new Error(`${error instanceof Error ? error.message : String(error)}: ${refused}`);
+    }
+  }
+
   /** `view` as a tab of the repository or worktree, made the active one: a new page, or a popup a
-   *  page opened. */
-  private open(ref: ProjectRef, view: WebContentsView, popup: boolean): Tab {
-    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup };
+   *  page opened, of the sandbox its opener loads through. */
+  private open(ref: ProjectRef, view: WebContentsView, popup: boolean, sandbox: BrowserSandbox | undefined): Tab {
+    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup, sandbox };
     /** Told once that a popup was blocked, not once per popup. */
     let blocked = false;
     const changed = (): void => this.changed(ref);
@@ -207,7 +293,9 @@ export class BrowserTabs {
     view.webContents.on("did-navigate-in-page", changed);
     view.webContents.on("did-fail-load", (_event, code, description, failedUrl, isMainFrame) => {
       if (isMainFrame && code !== ERR_ABORTED) {
-        this.deps.notice("warning", `Could not load ${failedUrl}: ${description}`);
+        void this.refusalOf(tab, failedUrl).then((refused) =>
+          this.deps.notice("warning", `Could not load ${failedUrl}: ${description}${refused === undefined ? "" : ` (${refused})`}`),
+        );
       }
     });
     // A popup or a link to a new window opens as a tab of the same repository or worktree, in its
@@ -219,7 +307,7 @@ export class BrowserTabs {
         // Not a web address: nothing opens.
         return { action: "deny" };
       }
-      if (this.of(ref).filter((held) => held.popup).length >= MAX_POPUPS) {
+      if (this.of(ref, undefined).filter((held) => held.popup).length >= MAX_POPUPS) {
         if (!blocked) {
           blocked = true;
           this.deps.notice("warning", `Blocked a popup of ${view.webContents.getURL()}: its pages opened ${MAX_POPUPS} tabs already`);
@@ -236,10 +324,13 @@ export class BrowserTabs {
         }: Electron.BrowserWindowConstructorOptions & { webContents?: Electron.WebContents }) => {
           // A link opened in the background (a middle click) comes without its page: loaded anew.
           const popup = page
-            ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }), true)
-            : this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }), true);
+            ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }), true, sandbox)
+            : this.open(ref, this.newView(ref, sandbox), true, sandbox);
+          if (page && sandbox) {
+            page.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
+          }
           if (!page) {
-            load(popup, browserUrl(opened)).catch(() => undefined);
+            this.load(popup, browserUrl(opened)).catch(() => undefined);
           }
           this.changed(ref);
           this.deps.onOpened(ref, popup.tabId);
@@ -323,7 +414,7 @@ export class BrowserTabs {
     if (!tab) {
       throw new Error(`no browser tab ${tabId}`);
     }
-    await load(tab, browserUrl(typed));
+    await this.load(tab, browserUrl(typed));
   }
 
   go(ref: ProjectRef, tabId: string, where: "back" | "forward" | "reload"): void {
@@ -382,7 +473,7 @@ export class BrowserTabs {
 
   /** The repository or worktree closed: every tab of it goes. */
   closeAll(ref: ProjectRef): void {
-    this.of(ref).forEach((tab) => this.dispose(tab));
+    this.of(ref, undefined).forEach((tab) => this.dispose(tab));
     this.active.delete(refKeyOf(ref));
   }
 
@@ -419,25 +510,81 @@ export class BrowserTabs {
     this.active.set(refKeyOf(ref), tabId);
   }
 
-  /** A deleted worktree's logins, cookies and cache; the global profile is never cleared. A failure
-   *  is logged: the worktree is gone either way. */
+  /** A deleted worktree's logins, cookies and cache, and those of its sandboxes this run used; the
+   *  global profile is never cleared. A failure is logged: the worktree is gone either way. */
   async clearProfile(ref: ProjectRef): Promise<void> {
     if (ref.worktree === undefined) {
       return;
     }
-    const profile = session.fromPartition(partitionOf(ref));
-    await Promise.all([profile.clearStorageData(), profile.clearCache()]).catch((error: unknown) =>
-      logError(`could not clear the browser profile of ${refKeyOf(ref)}`, error),
+    const sandboxes = sandboxPartitionsOf(ref);
+    const partitions = [partitionOf(ref), ...[...this.guarded].filter((partition) => partition.startsWith(sandboxes))];
+    await Promise.all(
+      partitions.map((partition) => {
+        const profile = session.fromPartition(partition);
+        return Promise.all([profile.clearStorageData(), profile.clearCache()]).catch((error: unknown) =>
+          logError(`could not clear the browser profile of ${refKeyOf(ref)}`, error),
+        );
+      }),
     );
   }
 
-  /** The repository's or worktree's profile, its permissions answered and its user agent
-   *  Chromium's from its first tab on. */
-  private profileOf(ref: ProjectRef): Electron.Session {
-    const partition = partitionOf(ref);
+  /** The way out of the sandbox's profile, put in place by its first tab: the profile loads through
+   *  the sandbox's proxy, every loopback address included, which Chromium would otherwise dial
+   *  itself. */
+  private routeOf(ref: ProjectRef, sandbox: BrowserSandbox): Promise<SandboxRoute> {
+    const partition = partitionOf(ref, sandbox);
+    let route = this.routes.get(partition);
+    if (!route) {
+      const current = (): boolean => this.routes.get(partition) === route;
+      route = this.deps.route(sandbox).then(async (opened) => {
+        // Let go of meanwhile (its last tab closed): a newer route's proxy must not be replaced.
+        if (!current()) {
+          opened.close();
+          throw new Error(`the browser tabs of ${sandbox.name} closed`);
+        }
+        await session.fromPartition(partition).setProxy({ proxyRules: `127.0.0.1:${opened.port}`, proxyBypassRules: "<-loopback>" });
+        return opened;
+      });
+      this.routes.set(partition, route);
+      route.catch(() => {
+        if (this.routes.get(partition) === route) {
+          this.routes.delete(partition);
+        }
+      });
+    }
+    return route;
+  }
+
+  /** Why the sandbox's proxy refused the host of `url`, for a tab of a sandbox. */
+  private async refusalOf(tab: Tab, url: string): Promise<string | undefined> {
+    const route = tab.sandbox && this.routes.get(partitionOf(tab.ref, tab.sandbox));
+    try {
+      return route && (await route).refusal(new URL(url).hostname);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The profile of the repository or worktree, or of its sandbox: its permissions answered and its
+   *  user agent Chromium's from its first tab on; a sandbox's trusts its proxy's certificate too. */
+  private profileOf(ref: ProjectRef, sandbox: BrowserSandbox | undefined): Electron.Session {
+    const partition = partitionOf(ref, sandbox);
     const profile = session.fromPartition(partition);
     if (!this.guarded.has(partition)) {
       this.guarded.add(partition);
+      if (sandbox) {
+        profile.setCertificateVerifyProc((request, callback) => {
+          if (request.errorCode !== ERR_CERT_AUTHORITY_INVALID) {
+            callback(-3);
+            return;
+          }
+          void this.routes
+            .get(partition)
+            ?.then((route) => route.ca)
+            .catch(() => undefined)
+            .then((ca) => callback(ca !== undefined && issuedBy(request.certificate, request.hostname, ca) ? 0 : -3));
+        });
+      }
       // A link to mail leaves for the mail app, as one in TET's own page does (window.ts).
       profile.setPermissionRequestHandler((_contents, permission, callback, details) =>
         callback(
@@ -452,31 +599,38 @@ export class BrowserTabs {
     return profile;
   }
 
-  /** What the repository's or worktree's pages downloaded during this run, the oldest first, of the
-   *  last MAX_DOWNLOADS. */
-  downloads(ref: ProjectRef): BrowserDownload[] {
-    return this.downloaded.filter((download) => sameProjectRef(download.ref, ref)).map((download) => ({ ...download }));
+  /** What the repository's or worktree's pages within `scope` downloaded during this run, the oldest
+   *  first, of the last MAX_DOWNLOADS. */
+  downloads(ref: ProjectRef, scope: BrowserScope): BrowserDownload[] {
+    return this.downloaded
+      .filter((download) => sameProjectRef(download.ref, ref) && download.sandbox === scope.sandbox)
+      .map((download) => ({ ...download }));
   }
 
   /** Saved without a question into the project's downloads folder, as Chrome saves into the
-   *  user's; a notice says where once it is there. */
+   *  user's — a sandbox's tab's then handed into its agent folder, which it sees (`handOver`); a
+   *  notice says where once it is there. */
   private download(item: Electron.DownloadItem, contents: Electron.WebContents): void {
     const tab = [...this.tabs.values()].find((held) => held.view.webContents.id === contents.id);
     if (!tab) {
       item.cancel();
       return;
     }
+    const { sandbox } = tab;
     const dir = downloadsDir(this.deps.dataRoot, tab.ref.projectId);
     fs.mkdirSync(dir, { recursive: true });
+    const saved = freePath(dir, item.getFilename(), this.downloaded);
     const download: BrowserDownload = {
       ref: tab.ref,
-      path: freePath(dir, item.getFilename(), this.downloaded),
+      sandbox: sandbox?.name,
+      // A sandbox's where it will land, settled once there.
+      path: sandbox ? path.join(sandboxDownloadsDir(sandbox.agentDir), path.basename(saved)) : saved,
       url: item.getURL(),
       state: "progressing",
       receivedBytes: 0,
       totalBytes: item.getTotalBytes(),
     };
-    item.setSavePath(download.path);
+    item.setSavePath(saved);
     this.downloaded.push(download);
     this.downloaded.splice(0, this.downloaded.length - MAX_DOWNLOADS);
     item.on("updated", () => {
@@ -484,19 +638,41 @@ export class BrowserTabs {
       download.totalBytes = item.getTotalBytes();
     });
     item.once("done", (_event, state) => {
-      download.state = state;
       download.receivedBytes = item.getReceivedBytes();
-      const name = path.basename(download.path);
-      if (state === "completed") {
-        this.deps.notice("info", `Downloaded ${name} to ${dir}`);
-      } else if (state === "interrupted") {
-        this.deps.notice("warning", `Could not download ${name}`);
+      const name = path.basename(saved);
+      const settled = (final: BrowserDownload["state"], where: string): void => {
+        download.state = final;
+        if (final === "completed") {
+          this.deps.notice("info", `Downloaded ${name} to ${where}`);
+        } else if (final === "interrupted") {
+          this.deps.notice("warning", `Could not download ${name}`);
+        }
+      };
+      if (!sandbox || state !== "completed") {
+        settled(state, dir);
+        if (sandbox) {
+          void fs.promises.rm(saved, { force: true }).catch(() => undefined);
+        }
+        return;
       }
+      void handOver(saved, sandbox.agentDir)
+        .then(
+          (handed) => {
+            download.path = handed;
+            settled("completed", path.dirname(handed));
+          },
+          (error: unknown) => {
+            logError(`could not hand ${saved} to ${sandbox.name}`, error);
+            settled("interrupted", dir);
+          },
+        )
+        .finally(() => fs.promises.rm(saved, { force: true }).catch(() => undefined));
     });
   }
 
-  private of(ref: ProjectRef): Tab[] {
-    return [...this.tabs.values()].filter((tab) => sameProjectRef(tab.ref, ref));
+  /** Every tab of the repository or worktree, or those within `scope`. */
+  private of(ref: ProjectRef, scope: BrowserScope | undefined): Tab[] {
+    return [...this.tabs.values()].filter((tab) => sameProjectRef(tab.ref, ref) && (scope === undefined || inside(tab, scope)));
   }
 
   private find(ref: ProjectRef, tabId: string | undefined): Tab | undefined {
@@ -516,6 +692,15 @@ export class BrowserTabs {
     this.deps.host.removeView(tab.view);
     if (closePage) {
       tab.view.webContents.close();
+    }
+    // A sandbox's last tab lets go of its relay, which holds the sandbox running; its profile keeps
+    // the proxy gone, so nothing loads from this machine meanwhile.
+    const { sandbox } = tab;
+    if (sandbox && ![...this.tabs.values()].some((held) => held.sandbox?.name === sandbox.name && sameProjectRef(held.ref, tab.ref))) {
+      const partition = partitionOf(tab.ref, sandbox);
+      const route = this.routes.get(partition);
+      this.routes.delete(partition);
+      route?.then((opened) => opened.close()).catch(() => undefined);
     }
   }
 
@@ -537,6 +722,27 @@ function load(tab: Tab, url: string): Promise<void> {
       : undefined;
   });
   return Promise.race([loaded, new Promise<void>((resolve) => setTimeout(resolve, LOAD_WAIT_MS).unref())]);
+}
+
+/**
+ * A sandbox's download, moved from where Chromium saved it into the sandbox's downloads folder:
+ * written only inside its agent folder, links resolved (openInside), and never over a file there —
+ * the sandbox writes that folder too, and a link it left would have Chromium write anywhere on this
+ * machine. Answers where it landed.
+ */
+export async function handOver(saved: string, agentDir: string): Promise<string> {
+  const dir = sandboxDownloadsDir(agentDir);
+  await fs.promises.mkdir(dir, { recursive: true });
+  const target = freePath(dir, path.basename(saved), []);
+  const handle = await openInside(agentDir, target, "wx");
+  try {
+    for await (const chunk of fs.createReadStream(saved)) {
+      await handle.write(chunk as Buffer);
+    }
+  } finally {
+    await handle.close();
+  }
+  return target;
 }
 
 /** `name` in `dir`, or as Chrome numbers one already there or still downloading: `name (1).ext`. */
@@ -569,8 +775,14 @@ export function sweepBrowserProfiles(dataRoot: string): void {
     const names = await fs.promises.readdir(root).catch((): string[] => []);
     await Promise.all(
       names.map(async (name) => {
-        const match = WORKTREE_PROFILE.exec(name);
-        if (!match || ownedWorktreeKeys(dataRoot, match[1]).includes(match[2])) {
+        const sandbox = SANDBOX_PROFILE.exec(name);
+        const match = sandbox ? null : WORKTREE_PROFILE.exec(name);
+        const gone = sandbox
+          ? !fs.existsSync(
+              sandboxDir(dataRoot, { projectId: sandbox[1], worktree: sandbox[2] === "repository" ? undefined : sandbox[2] }, sandbox[3]),
+            )
+          : match !== null && !ownedWorktreeKeys(dataRoot, match[1]).includes(match[2]);
+        if (!gone) {
           return;
         }
         await fs.promises
@@ -581,9 +793,45 @@ export function sweepBrowserProfiles(dataRoot: string): void {
   })();
 }
 
-/** A worktree's own profile, or the global one of every repository. */
-function partitionOf(ref: ProjectRef): string {
+/** A worktree's own profile, or the global one of every repository; a sandbox's own (SANDBOX_PROFILE). */
+function partitionOf(ref: ProjectRef, sandbox?: BrowserSandbox): string {
+  if (sandbox) {
+    return `${sandboxPartitionsOf(ref)}${sandbox.agentId}`;
+  }
   return ref.worktree === undefined ? "persist:tet-global" : `persist:tet-${ref.projectId}-${ref.worktree}`;
+}
+
+/** What the profiles of the repository's or worktree's sandboxes begin with. */
+function sandboxPartitionsOf(ref: ProjectRef): string {
+  return `persist:tet-sbx-${ref.projectId}-${ref.worktree ?? "repository"}-`;
+}
+
+function inside(tab: Tab, scope: BrowserScope): boolean {
+  return tab.sandbox?.name === scope.sandbox;
+}
+
+/**
+ * Whether the sandbox's proxy signed the site's certificate, as it signs every HTTPS site the
+ * sandbox reaches: issued and signed by `ca` itself, for `hostname` (a name or an address), and both valid now. Anything
+ * else keeps Chromium's refusal.
+ */
+export function issuedBy(certificate: Electron.Certificate, hostname: string, ca: string): boolean {
+  try {
+    const authority = new crypto.X509Certificate(ca);
+    const site = new crypto.X509Certificate(certificate.data);
+    const now = Date.now();
+    const valid = (cert: crypto.X509Certificate): boolean => cert.validFromDate.getTime() <= now && now <= cert.validToDate.getTime();
+    return (
+      authority.ca &&
+      valid(authority) &&
+      valid(site) &&
+      site.checkIssued(authority) &&
+      site.verify(authority.publicKey) &&
+      (net.isIP(hostname) === 0 ? site.checkHost(hostname) : site.checkIP(hostname)) !== undefined
+    );
+  } catch {
+    return false;
+  }
 }
 
 function pageOf(tab: Tab): BrowserPage {
@@ -600,6 +848,7 @@ function infoOf(tab: Tab): BrowserTabInfo {
   const history = tab.view.webContents.navigationHistory;
   return {
     tabId: tab.tabId,
+    ...(tab.sandbox ? { sandboxed: true } : {}),
     url: tab.view.webContents.getURL(),
     title: tab.view.webContents.getTitle(),
     loading: tab.view.webContents.isLoading(),

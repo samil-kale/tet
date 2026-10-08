@@ -12,6 +12,9 @@ export interface BrowserTabInfo {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  /** Opened by an agent in an sbx sandbox, whose pages load through it: what the sandbox sees, under
+   *  its policy. */
+  sandboxed?: true;
 }
 
 /** Every browser tab's id starts so, shaped unlike a session id or an editor tab's (`tet:editor:`). */
