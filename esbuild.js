@@ -71,6 +71,14 @@ const preloadConfig = {
 };
 
 /** @type {import('esbuild').BuildOptions} */
+const pagePreloadConfig = {
+  ...node,
+  entryPoints: [path.join(__dirname, "src", "preload", "page-preload.ts")],
+  outfile: path.join(dist, "page-preload.js"),
+  external: ["electron"]
+};
+
+/** @type {import('esbuild').BuildOptions} */
 const rendererConfig = {
   ...browser,
   entryPoints: [path.join(__dirname, "src", "renderer", "main.tsx")],
@@ -140,6 +148,7 @@ async function build() {
     cliConfig("tet-update"),
     cliConfig("tet-browser-relay"),
     preloadConfig,
+    pagePreloadConfig,
     rendererConfig,
     editorWorkerConfig,
     testConfig

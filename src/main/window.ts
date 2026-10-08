@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { app, BaseWindow, shell, WebContentsView } from "electron";
+import { app, BaseWindow, shell, WebContentsView, type Menu } from "electron";
 import { WINDOW_ARGS } from "../shared/api";
 import type { EventChannels, WindowReply } from "../shared/ipc";
 import type { ThemeDefinition } from "../shared/themes";
@@ -38,16 +38,13 @@ export interface AppWindowDeps {
  *
  * The window draws nothing itself: TET's own page is a view filling it (`page`), transparent where
  * it paints nothing, and the browser tabs' pages are views of their own beside it
- * (browser/browser-tabs.ts). They lie above TET's page; while something of it must lie over one —
- * a dialog, a menu — TET's page is raised above them (`raise`), and lets them show through where
- * it is transparent, which it then is beneath every live one (BrowserHost).
+ * (browser/browser-tabs.ts), always above TET's page. Where something of TET's page must lie over
+ * one — a dialog, a menu — the page is hidden and a still of it shown in its place (BrowserHost).
  */
 export class AppWindow {
   private window: BaseWindow | undefined;
   /** TET's own page, filling the window. */
   private page: WebContentsView | undefined;
-  /** TET's page lies above the browser tabs' (`raise`). */
-  private raised = false;
   private rendererRebuiltAt = 0;
   /**
    * Notices sent before the window listens are held: `App` subscribes only after the requirements
@@ -208,14 +205,11 @@ export class AppWindow {
     this.send("app:theme", theme.id);
   }
 
-  /** A browser tab's page, drawn above TET's own where its tab lies (browser/browser-tabs.ts),
-   *  unless TET's is raised; dropped when no window stands. */
+  /** A browser tab's page, drawn above TET's own where its tab lies (browser/browser-tabs.ts);
+   *  dropped when no window stands. */
   addView = (view: WebContentsView): void => {
     if (this.window && !this.window.isDestroyed()) {
       this.window.contentView.addChildView(view);
-      if (this.raised && this.page) {
-        this.window.contentView.addChildView(this.page);
-      }
     }
   };
 
@@ -225,17 +219,10 @@ export class AppWindow {
     }
   };
 
-  /** TET's page above the browser tabs' (`true`), for what of it must lie over one, or back
-   *  beneath them. Adding a child again moves it: on top, or at the bottom with index 0. */
-  raise = (raised: boolean): void => {
-    if (raised === this.raised || !this.window || this.window.isDestroyed() || !this.page) {
-      return;
-    }
-    this.raised = raised;
-    if (raised) {
-      this.window.contentView.addChildView(this.page);
-    } else {
-      this.window.contentView.addChildView(this.page, 0);
+  /** A browser tab's page's own menu, native and so above every view, at the pointer. */
+  popup = (menu: Menu): void => {
+    if (this.window && !this.window.isDestroyed()) {
+      menu.popup({ window: this.window });
     }
   };
 
@@ -278,7 +265,7 @@ export class AppWindow {
         additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])],
       },
     });
-    // Transparent where the page paints nothing: raised, it lets the browser tabs' pages through.
+    // Transparent where the page paints nothing: before its first frame, the window's theme color.
     page.setBackgroundColor("#00000000");
     window.contentView.addChildView(page, 0);
     const fill = (): void => {
@@ -289,12 +276,9 @@ export class AppWindow {
     window.contentView.on("bounds-changed", fill);
     this.window = window;
     this.page = page;
-    this.raised = false;
 
     // Every load, reloads included, has no listener until App subscribes.
     page.webContents.on("did-start-loading", () => {
-      // The new page knows of nothing lying over a browser tab's page, so it starts beneath them.
-      this.raise(false);
       this.noticesHeard = false;
       this.deps.onPageLoad();
     });

@@ -36,15 +36,14 @@ describe("the color themes", () => {
     }
   });
 
-  // Hand-kept copies of five stylesheet values, for code that needs them outside the renderer's CSS.
-  it("keeps each definition's window, terminal and editor colors in step with its stylesheet", () => {
+  // Hand-kept copies of four stylesheet values, for code that needs them outside the renderer's CSS.
+  it("keeps each definition's window and terminal colors in step with its stylesheet", () => {
     for (const theme of THEMES) {
       const css = sheets.get(theme.id)!;
       assert.equal(valueOf(css, "--tet-titleBar-activeBackground"), theme.windowBackground, theme.id);
       assert.equal(valueOf(css, "--tet-titleBar-activeForeground"), theme.titleBarSymbolColor, theme.id);
       assert.equal(valueOf(css, "--tet-terminal-background"), theme.terminalBackground, theme.id);
       assert.equal(valueOf(css, "--tet-terminal-foreground"), theme.terminalForeground, theme.id);
-      assert.equal(valueOf(css, "--tet-editor-background"), theme.editorBackground, theme.id);
     }
   });
 });

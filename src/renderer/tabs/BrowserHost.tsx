@@ -1,15 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type {
-  BrowserBounds,
-  BrowserCredentials,
-  BrowserEdit,
-  BrowserGo,
-  BrowserLogin,
-  BrowserMenu,
-  BrowserTabInfo,
-} from "../../shared/types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserLogin, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
-import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
 import { BackIcon, ForwardIcon, ReloadIcon } from "../ui/icons";
@@ -25,8 +16,9 @@ interface BrowserHostProps {
   visible: boolean;
   /** In the repository's or worktree's focused pane, which gets keyboard focus. */
   focused: boolean;
-  /** A click into the page, which the pane's own mousedown never sees: the pane takes the focus. */
-  onPressed: () => void;
+  /** The page took the focus (a click into it), which the pane's own mousedown never sees: the
+   *  pane takes it too. */
+  onFocused: () => void;
   /** A link of the page opened from its menu, as a new tab in this pane. */
   onOpenTab: (url: string) => void;
 }
@@ -62,35 +54,8 @@ async function askLogin(login: BrowserLogin): Promise<void> {
   window.tet.browser.answerLogin(login.id, answered && { username: answered.username.trim(), password: answered.password });
 }
 
-/** The tabs whose page something of the window lies over; while there is one, TET's page is raised. */
-const lainOver = new Set<string>();
-
-/**
- * Raises TET's page above the browser tabs' pages while something of it lies over one, or lowers
- * it again (window.ts's `raise`). Raised, it must be transparent beneath every live page
- * (`browser-raised`, styles.css), so that is drawn before the raise and kept until after the lower:
- * either way round, an opaque frame would blank the page.
- */
-function lieOver(tabId: string, over: boolean): void {
-  const raised = lainOver.size > 0;
-  if (over) {
-    lainOver.add(tabId);
-  } else {
-    lainOver.delete(tabId);
-  }
-  if (raised === lainOver.size > 0) {
-    return;
-  }
-  const root = document.documentElement;
-  if (lainOver.size > 0) {
-    root.classList.add("browser-raised");
-    // Once that frame is drawn.
-    requestAnimationFrame(() => requestAnimationFrame(() => lainOver.size > 0 && window.tet.browser.raise(true)));
-  } else {
-    window.tet.browser.raise(false);
-    requestAnimationFrame(() => requestAnimationFrame(() => lainOver.size === 0 && root.classList.remove("browser-raised")));
-  }
-}
+/** How often the still of a page under something of the window is taken anew, as VS Code's. */
+const STILL_INTERVAL_MS = 1000;
 
 /**
  * Where the page is drawn within its box. A pane's left border is the sash's line, drawn in the
@@ -102,14 +67,23 @@ function pageBounds({ left, top, width, height }: DOMRect): BrowserBounds {
   return { x: left + inset, y: top, width: width - inset, height };
 }
 
+/** A page's still (`browser.still`), where it lay in its box when taken: in from its left edge
+ *  as the page is (`pageBounds`), at the page's size then. */
+interface Still {
+  url: string;
+  left: number;
+  width: number;
+  height: number;
+}
+
 /**
  * A browser tab: its address bar, then the box its page is drawn over. The page is main's own view
  * (browser/browser-tabs.ts), drawn above TET's page, so this box only says where: on screen, it
  * hands main its bounds, out of sight none. Under a dialog, or where something floats over it
- * (window-covered.ts), TET's page is raised above it and lets it through (`lieOver`): the page stays
- * as it is, live.
+ * (window-covered.ts), the page is hidden and a still of it shown in the box instead, taken anew
+ * every STILL_INTERVAL_MS, as VS Code's browser does.
  */
-export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible, focused, onPressed, onOpenTab }: BrowserHostProps) {
+export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible, focused, onFocused, onOpenTab }: BrowserHostProps) {
   const { tabId } = tab;
   const page = useRef<HTMLDivElement>(null);
   const address = useRef<HTMLInputElement>(null);
@@ -134,16 +108,38 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
 
   const over = shown && (covered || overlapped.any);
   const paused = shown && !covered && overlapped.notice;
-  useEffect(() => {
-    lieOver(tabId, over);
-    return () => lieOver(tabId, false);
-  }, [tabId, over]);
 
-  // The page follows its box while on screen; out of sight, or gone from this pane (closed, or moved
-  // to another, whose host places it anew), it is hidden.
+  // Under something of the window, a still of the page, taken while it is still drawn; once gone,
+  // the still stays until the page is drawn again (two frames), or the box would show empty.
+  const [still, setStill] = useState<Still | null>(null);
+  useEffect(() => {
+    if (!over) {
+      const frame = requestAnimationFrame(() => requestAnimationFrame(() => setStill(null)));
+      return () => cancelAnimationFrame(frame);
+    }
+    let gone = false;
+    const take = async (): Promise<void> => {
+      const box = page.current?.getBoundingClientRect();
+      const url = await window.tet.browser.still(at, tabId);
+      if (!gone && url && box) {
+        const { x, width, height } = pageBounds(box);
+        setStill({ url, left: x - box.left, width, height });
+      }
+    };
+    void take();
+    const timer = setInterval(() => void take(), STILL_INTERVAL_MS);
+    return () => {
+      gone = true;
+      clearInterval(timer);
+    };
+  }, [at, tabId, over]);
+  const drawn = shown && !(over && still);
+
+  // The page follows its box while drawn; under its still, out of sight, or gone from this pane
+  // (closed, or moved to another, whose host places it anew), it is hidden.
   useEffect(() => {
     const element = page.current;
-    if (!element || !shown) {
+    if (!element || !drawn) {
       return;
     }
     /** The bounds last handed main: a window resize reports the box twice, mostly unmoved. */
@@ -167,57 +163,29 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       window.removeEventListener("resize", place);
       window.tet.browser.place(at, tabId, null);
     };
-  }, [at, tabId, shown]);
+  }, [at, tabId, drawn]);
 
-  // A click into the page focuses this pane, as one into a terminal does.
+  // The page taking the focus focuses this pane, as a click into a terminal does.
   useEffect(
     () =>
-      window.tet.browser.onPressed((pressed) => {
-        if (pressed.tabId === tabId) {
-          onPressed();
+      window.tet.browser.onFocused((focusedPage) => {
+        if (focusedPage.tabId === tabId) {
+          onFocused();
         }
       }),
-    [tabId, onPressed],
+    [tabId, onFocused],
   );
 
-  // A right click into the page: its menu, at the click, drawn by the window over the page.
-  const [menu, setMenu] = useState<{ x: number; y: number; menu: BrowserMenu } | null>(null);
+  // "Open Link in New Tab" from the page's own menu (browser-tabs.ts's menuOf).
   useEffect(
     () =>
-      window.tet.browser.onMenu((opened) => {
-        const box = page.current && pageBounds(page.current.getBoundingClientRect());
-        if (opened.tabId === tabId && box) {
-          setMenu({ x: box.x + opened.menu.x, y: box.y + opened.menu.y, menu: opened.menu });
+      window.tet.browser.onOpenLink((opened) => {
+        if (opened.tabId === tabId) {
+          onOpenTab(opened.url);
         }
       }),
-    [tabId],
+    [tabId, onOpenTab],
   );
-
-  /** Chrome's entries for a page; one that cannot go is disabled. */
-  const menuEntries = (opened: BrowserMenu): ContextMenuEntry[] => {
-    const go = (where: BrowserGo) => () => window.tet.browser.go(at, tabId, where);
-    const edit = (command: BrowserEdit) => () => window.tet.browser.edit(at, tabId, command);
-    const link: ContextMenuEntry[] = opened.linkUrl
-      ? [
-          { label: "Open Link in New Tab", run: () => onOpenTab(opened.linkUrl) },
-          { label: "Copy Link Address", run: () => void navigator.clipboard.writeText(opened.linkUrl) },
-          SEPARATOR,
-        ]
-      : [];
-    return [
-      ...link,
-      { label: "Back", run: tab.canGoBack ? go("back") : undefined },
-      { label: "Forward", run: tab.canGoForward ? go("forward") : undefined },
-      { label: "Reload", run: go("reload") },
-      SEPARATOR,
-      { label: "Cut", run: opened.canCut ? edit("cut") : undefined },
-      { label: "Copy", run: opened.canCopy ? edit("copy") : undefined },
-      { label: "Paste", run: opened.canPaste ? edit("paste") : undefined },
-      { label: "Select All", run: opened.canSelectAll ? edit("selectAll") : undefined },
-      SEPARATOR,
-      { label: "Inspect", run: () => window.tet.browser.inspect(at, tabId, opened.x, opened.y) },
-    ];
-  };
 
   useEffect(
     () =>
@@ -282,7 +250,10 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           onBlur={() => setTyped(null)}
         />
       </div>
-      <div ref={page} className={`browser-page${shown ? " live" : ""}`}>
+      <div ref={page} className="browser-page">
+        {still && (
+          <img className="browser-still" src={still.url} alt="" style={{ left: still.left, width: still.width, height: still.height }} />
+        )}
         {paused && (
           <div className="browser-paused">
             <div className="browser-paused-message">
@@ -292,7 +263,6 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           </div>
         )}
       </div>
-      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.menu)} onClose={() => setMenu(null)} />}
     </div>
   );
 });

@@ -1,8 +1,9 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { browserUrl } from "../browser/browser-tabs";
-import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserGo, BrowserTabInfo } from "../../shared/types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserGo, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
+import type { ShortcutKey } from "../../shared/shortcuts";
 import type { IpcDeps } from "./deps";
 
 /** The browser tabs: their pages are main's (browser/browser-tabs.ts), the window draws their box. */
@@ -31,15 +32,14 @@ export function registerBrowserIpc({ browserTabs, notice }: Pick<IpcDeps, "brows
 
   on("browser:go", (_event, ref: ProjectRef, tabId: string, where: BrowserGo) => browserTabs.go(ref, tabId, where));
 
-  on("browser:edit", (_event, ref: ProjectRef, tabId: string, edit: BrowserEdit) => browserTabs.edit(ref, tabId, edit));
-
-  on("browser:inspect", (_event, ref: ProjectRef, tabId: string, x: number, y: number) => browserTabs.inspect(ref, tabId, x, y));
-
   on("browser:answer-login", (_event, id: number, login: BrowserCredentials | null) => browserTabs.answerLogin(id, login));
 
   on("browser:place", (_event, ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => browserTabs.place(ref, tabId, bounds));
 
   on("browser:active", (_event, ref: ProjectRef, tabId: string) => browserTabs.setActive(ref, tabId));
 
-  on("browser:raise", (_event, raised: boolean) => browserTabs.raise(raised));
+  handle("browser:still", (_event, ref: ProjectRef, tabId: string): Promise<string | null> => browserTabs.still(ref, tabId));
+
+  // From a page's own preload (page-preload.ts), not the window's: BrowserTabs checks which page.
+  on("browser:page-key", (event, key: ShortcutKey) => browserTabs.pageKey(event.sender.id, key));
 }

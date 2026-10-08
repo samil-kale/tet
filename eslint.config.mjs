@@ -21,8 +21,8 @@ const LANE_FOLDERS = fs
 
 /** Every file of src/, for the rules that hold all of it. */
 const SRC_FILES = ["src/**/*.{ts,tsx}"];
-/** The two files where IPC's channels are wired: main's wrappers and the preload. */
-const IPC_SITES = ["src/main/ipc/channels.ts", "src/preload/preload.ts"];
+/** The files where IPC's channels are wired: main's wrappers and the preloads, the window's and a browser tab's page's. */
+const IPC_SITES = ["src/main/ipc/channels.ts", "src/preload/preload.ts", "src/preload/page-preload.ts"];
 
 const IPC_MESSAGE = "Only through the typed wrappers: handle/on/once (ipc/channels.ts), invoke/send/subscribe (preload).";
 /** By its name, or off electron's namespace; an alias is refused at its import (IPC_IMPORT). */

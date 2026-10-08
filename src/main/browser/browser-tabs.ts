@@ -2,18 +2,16 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
-import { app, session, WebContentsView, type Debugger } from "electron";
+import { app, clipboard, Menu, session, WebContentsView, type Debugger, type MenuItemConstructorOptions } from "electron";
 import { errorMessage } from "../../shared/errors";
 import { isLoopbackHost } from "../../shared/loopback";
-import { shortcutOf, type ShortcutId } from "../../shared/shortcuts";
+import { shortcutOf, type ShortcutId, type ShortcutKey } from "../../shared/shortcuts";
 import {
   BROWSER_TAB_PREFIX,
   type BrowserBounds,
   type BrowserCredentials,
-  type BrowserEdit,
   type BrowserGo,
   type BrowserLogin,
-  type BrowserMenu,
   type BrowserTabInfo,
 } from "../../shared/types/browser";
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
@@ -29,8 +27,8 @@ import { isOpenableUrl } from "../util/shell-open";
 export interface ViewHost {
   addView(view: WebContentsView): void;
   removeView(view: WebContentsView): void;
-  /** TET's page above the pages, for what of it lies over one; or back beneath them. */
-  raise(raised: boolean): void;
+  /** A page's own menu, native, so it draws above every page. */
+  popup(menu: Menu): void;
 }
 
 export interface BrowserTabsDeps {
@@ -41,16 +39,14 @@ export interface BrowserTabsDeps {
   onTabs(ref: ProjectRef, tabs: BrowserTabInfo[]): void;
   /** A tab the page opened itself (a popup, a link to a new window), to bring to the front. */
   onOpened(ref: ProjectRef, tabId: string): void;
-  /** A click into a page, which the window never sees: its pane takes the focus. */
-  onPressed(ref: ProjectRef, tabId: string): void;
-  /** The editor tab's color, which an empty page shows (`paintBlank`); none while no window stands. */
-  pageBackground(): string | undefined;
+  /** A page took the focus (a click into it), which the window never sees: its pane takes it too. */
+  onFocused(ref: ProjectRef, tabId: string): void;
   /** A tab closed: what drives its page lets go (browser-automation's). */
   onClosed(tabId: string): void;
-  /** A window shortcut pressed on a page, which the window never sees. */
+  /** A window shortcut pressed on a page and left alone by it (`pageKey`), which the window never sees. */
   onShortcut(shortcut: ShortcutId): void;
-  /** A right click into a page, whose menu the window draws. */
-  onMenu(ref: ProjectRef, tabId: string, menu: BrowserMenu): void;
+  /** A page's "Open Link in New Tab", for the window to open beside it. */
+  onOpenLink(ref: ProjectRef, tabId: string, url: string): void;
   /** A page asking for a login, which its tab asks the user for (`answerLogin`). */
   onLogin(ref: ProjectRef, tabId: string, login: BrowserLogin): void;
   /** The way a sandbox's tabs reach the network (SandboxRoute); rejects when the sandbox cannot be
@@ -124,12 +120,6 @@ interface Tab {
   popup: boolean;
   /** The sandbox it loads through; none for this machine's. */
   sandbox?: BrowserSandbox;
-  /** `insertCSS`'s key for the color an empty page shows (`paintBlank`); a navigation drops it. */
-  blankCss?: string;
-  /** Its first load drew something (`reveal`): till then it stays hidden, its tab's color showing. */
-  ready: boolean;
-  /** Its box is on screen (`place`), shown once `ready`. */
-  placed: boolean;
 }
 
 /**
@@ -148,8 +138,23 @@ const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set([
   "loopback-network",
 ]);
 
-/** Every page's: Chromium's sandbox, and nothing of Electron's or Node's reaching it. */
-const PAGE_PREFERENCES = { sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false };
+/** Every page's: Chromium's sandbox, and nothing of Electron's or Node's reaching it. Its preload
+ *  (page-preload.ts) only hands main the key presses the page left alone, in a world of its own. */
+const PAGE_PREFERENCES = {
+  sandbox: true,
+  contextIsolation: true,
+  nodeIntegration: false,
+  spellcheck: false,
+  preload: path.join(__dirname, "page-preload.js"),
+};
+
+/** Where an empty page paints nothing, TET's tab beneath it shows, in its editor tab's color, not
+ *  Chromium's own (#121212 in the dark); a page of the web gets Chrome's white beneath its own. */
+const BLANK_BACKGROUND = "#00000000";
+const PAGE_BACKGROUND = "#ffffff";
+
+/** The still a page under something of the window is shown as (`still`): JPEG, as VS Code's. */
+const STILL_QUALITY = 80;
 
 /** The tabs a repository's or worktree's pages may have opened at once: Chromium's popup blocker,
  *  which lets a popup through only after the user's input, is Chrome's and not Electron's, so a page
@@ -290,28 +295,24 @@ export class BrowserTabs {
   /** `view` as a tab of the repository or worktree, made the active one: a new page, or a popup a
    *  page opened, of the sandbox its opener loads through. */
   private open(ref: ProjectRef, view: WebContentsView, popup: boolean, sandbox: BrowserSandbox | undefined): Tab {
-    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup, sandbox, ready: false, placed: false };
+    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup, sandbox };
     /** Told once that a popup was blocked, not once per popup. */
     let blocked = false;
     const changed = (): void => this.changed(ref);
     view.setVisible(false);
+    view.setBackgroundColor(BLANK_BACKGROUND);
     if (sandbox) {
       // WebRTC's UDP takes no proxy: it would leave from this machine, past the sandbox's policy.
       view.webContents.setWebRTCIPHandlingPolicy("disable_non_proxied_udp");
     }
     view.webContents.on("did-start-loading", changed);
     view.webContents.on("did-stop-loading", changed);
-    // A load that fails, or stops before its page is ready, reveals it too: never hidden for good.
-    view.webContents.on("did-stop-loading", () => reveal(tab));
     view.webContents.on("page-title-updated", changed);
-    view.webContents.on("did-navigate", changed);
-    view.webContents.on("did-navigate-in-page", changed);
-    view.webContents.on("dom-ready", () => {
-      tab.blankCss = undefined;
-      this.paintBlank(tab)
-        .catch(() => undefined)
-        .finally(() => reveal(tab));
+    view.webContents.on("did-navigate", (_event, url) => {
+      view.setBackgroundColor(url === "about:blank" ? BLANK_BACKGROUND : PAGE_BACKGROUND);
+      changed();
     });
+    view.webContents.on("did-navigate-in-page", changed);
     view.webContents.on("did-fail-load", (_event, code, description, failedUrl, isMainFrame) => {
       if (isMainFrame && code !== ERR_ABORTED) {
         void this.refusalOf(tab, failedUrl).then((refused) =>
@@ -381,43 +382,18 @@ export class BrowserTabs {
       this.logins.set(id, { tabId: tab.tabId, answer: callback });
       this.deps.onLogin(ref, tab.tabId, { id, host: authInfo.host, realm: authInfo.realm, proxy: authInfo.isProxy });
     });
-    view.webContents.on("context-menu", (_event, params) =>
-      this.deps.onMenu(ref, tab.tabId, {
-        x: params.x,
-        y: params.y,
-        linkUrl: params.linkURL,
-        canCut: params.editFlags.canCut,
-        canCopy: params.editFlags.canCopy,
-        canPaste: params.editFlags.canPaste,
-        canSelectAll: params.editFlags.canSelectAll,
-      }),
-    );
-    view.webContents.on("before-mouse-event", (_event, mouse) => {
-      if (mouse.type === "mouseDown") {
-        this.deps.onPressed(ref, tab.tabId);
-      }
-    });
+    view.webContents.on("context-menu", (_event, params) => this.deps.host.popup(this.menuOf(tab, params)));
+    view.webContents.on("focus", () => this.deps.onFocused(ref, tab.tabId));
+    // The page's own DevTools, as F12 opens TET's for the window (window.ts); taken before the page,
+    // as Chrome takes it.
     view.webContents.on("before-input-event", (event, input) => {
-      if (input.type !== "keyDown") {
-        return;
-      }
-      // The page's own DevTools, as F12 opens TET's for the window (window.ts).
-      if (input.key === "F12") {
+      if (input.type === "keyDown" && input.key === "F12") {
         event.preventDefault();
         if (view.webContents.isDevToolsOpened()) {
           view.webContents.closeDevTools();
         } else {
           openDevTools(view);
         }
-        return;
-      }
-      const shortcut = shortcutOf(
-        { key: input.key, code: input.code, shiftKey: input.shift, altKey: input.alt, ctrlKey: input.control, metaKey: input.meta },
-        PLATFORM,
-      );
-      if (shortcut) {
-        event.preventDefault();
-        this.deps.onShortcut(shortcut);
       }
     });
     this.deps.host.addView(view);
@@ -446,21 +422,15 @@ export class BrowserTabs {
     }
   }
 
-  /** The menu's edit command; the page then has the focus again, which the menu took. */
-  edit(ref: ProjectRef, tabId: string, edit: BrowserEdit): void {
-    const view = this.find(ref, tabId)?.view;
-    if (view) {
-      view.webContents[edit]();
-      view.webContents.focus();
-    }
-  }
-
-  /** The page's DevTools, as F12 opens them, on the element at `x`, `y`. */
-  inspect(ref: ProjectRef, tabId: string, x: number, y: number): void {
-    const view = this.find(ref, tabId)?.view;
-    if (view) {
-      openDevTools(view);
-      view.webContents.inspectElement(x, y);
+  /**
+   * A key the page left alone (page-preload.ts), from the page `senderId` names: a window shortcut
+   * the window then takes. One a page handled stays the page's, as in VS Code's browser.
+   */
+  pageKey(senderId: number, key: ShortcutKey): void {
+    const tab = [...this.tabs.values()].find((held) => held.view.webContents.id === senderId);
+    const shortcut = tab && isShortcutKey(key) ? shortcutOf(key, PLATFORM) : undefined;
+    if (shortcut) {
+      this.deps.onShortcut(shortcut);
     }
   }
 
@@ -500,13 +470,12 @@ export class BrowserTabs {
     this.sent.delete(key);
   }
 
-  /** Draws the page over `bounds`, once it is `ready`, or hides it. */
+  /** Draws the page over `bounds`, or hides it. */
   place(ref: ProjectRef, tabId: string, bounds: BrowserBounds | null): void {
-    const tab = this.find(ref, tabId);
-    if (!tab) {
+    const view = this.find(ref, tabId)?.view;
+    if (!view) {
       return;
     }
-    const { view } = tab;
     if (bounds) {
       view.setBounds({
         x: Math.round(bounds.x),
@@ -515,8 +484,7 @@ export class BrowserTabs {
         height: Math.round(bounds.height),
       });
     }
-    tab.placed = bounds !== null;
-    view.setVisible(tab.placed && tab.ready);
+    view.setVisible(bounds !== null);
   }
 
   /** The page as it looks, a PNG, for `browser-screenshot`; drawn or not, out of sight too. Null
@@ -526,16 +494,11 @@ export class BrowserTabs {
     return image && !image.isEmpty() ? image.toPNG() : null;
   }
 
-  /** TET's page above every tab's page, which it lets through where it is transparent; or back. */
-  raise(raised: boolean): void {
-    this.deps.host.raise(raised);
-  }
-
-  /** The theme changed: every empty page shows its editor tab's color anew. */
-  repaint(): void {
-    for (const tab of this.tabs.values()) {
-      this.paintBlank(tab).catch(() => undefined);
-    }
+  /** The page as it looks, a JPEG data URL, for the window to show in its place while something
+   *  of it lies over the page (BrowserHost). Null when it has no look yet. */
+  async still(ref: ProjectRef, tabId: string): Promise<string | null> {
+    const image = await this.find(ref, tabId)?.view.webContents.capturePage();
+    return image && !image.isEmpty() ? `data:image/jpeg;base64,${image.toJPEG(STILL_QUALITY).toString("base64")}` : null;
   }
 
   setActive(ref: ProjectRef, tabId: string): void {
@@ -702,21 +665,41 @@ export class BrowserTabs {
     });
   }
 
-  /**
-   * An empty page (`about:blank`) in its editor tab's color, not Chromium's own (#121212 in the
-   * dark). A page of the web keeps its own.
-   */
-  private async paintBlank(tab: Tab): Promise<void> {
-    const { view } = tab;
-    const color = this.deps.pageBackground();
-    if (view.webContents.isDestroyed() || view.webContents.getURL() !== "about:blank" || color === undefined) {
-      return;
-    }
-    const previous = tab.blankCss;
-    tab.blankCss = await view.webContents.insertCSS(`html { background: ${color}; }`);
-    if (previous !== undefined) {
-      await view.webContents.removeInsertedCSS(previous);
-    }
+  /** Chrome's entries for a page's right click; one that cannot go is disabled. An edit hands the
+   *  page the focus back, which the menu took. */
+  private menuOf(tab: Tab, params: Electron.ContextMenuParams): Menu {
+    const { view, ref, tabId } = tab;
+    const history = view.webContents.navigationHistory;
+    const edit = (command: "cut" | "copy" | "paste" | "selectAll") => (): void => {
+      view.webContents[command]();
+      view.webContents.focus();
+    };
+    const link: MenuItemConstructorOptions[] = params.linkURL
+      ? [
+          { label: "Open Link in New Tab", click: () => this.deps.onOpenLink(ref, tabId, params.linkURL) },
+          { label: "Copy Link Address", click: () => clipboard.writeText(params.linkURL) },
+          { type: "separator" },
+        ]
+      : [];
+    return Menu.buildFromTemplate([
+      ...link,
+      { label: "Back", enabled: history.canGoBack(), click: () => history.goBack() },
+      { label: "Forward", enabled: history.canGoForward(), click: () => history.goForward() },
+      { label: "Reload", click: () => view.webContents.reload() },
+      { type: "separator" },
+      { label: "Cut", enabled: params.editFlags.canCut, click: edit("cut") },
+      { label: "Copy", enabled: params.editFlags.canCopy, click: edit("copy") },
+      { label: "Paste", enabled: params.editFlags.canPaste, click: edit("paste") },
+      { label: "Select All", enabled: params.editFlags.canSelectAll, click: edit("selectAll") },
+      { type: "separator" },
+      {
+        label: "Inspect",
+        click: () => {
+          openDevTools(view);
+          view.webContents.inspectElement(params.x, params.y);
+        },
+      },
+    ]);
   }
 
   /** Every tab of the repository or worktree, or those within `scope`. */
@@ -779,15 +762,6 @@ export class BrowserTabs {
   }
 }
 
-/** Shows the page once its first load drew something, if its box is on screen (`place`). */
-function reveal(tab: Tab): void {
-  if (tab.ready || tab.view.webContents.isDestroyed()) {
-    return;
-  }
-  tab.ready = true;
-  tab.view.setVisible(tab.placed);
-}
-
 /** Settles once the page has loaded, or after LOAD_WAIT_MS while it still loads; rejects with
  *  Chromium's reason for a page that cannot load. */
 function loadPage(tab: Tab, url: string): Promise<void> {
@@ -821,6 +795,19 @@ export async function handOver(saved: string, sandbox: Pick<BrowserSandbox, "age
     await handle.close();
   }
   return target;
+}
+
+/** What a page's preload sent as a key press, checked: the page's process is not TET's. */
+function isShortcutKey(key: unknown): key is ShortcutKey {
+  if (typeof key !== "object" || key === null) {
+    return false;
+  }
+  const fields = key as Record<string, unknown>;
+  return (
+    typeof fields.key === "string" &&
+    typeof fields.code === "string" &&
+    ["shiftKey", "altKey", "ctrlKey", "metaKey"].every((name) => typeof fields[name] === "boolean")
+  );
 }
 
 /** `name` in `dir`, or as Chrome numbers one already there or still downloading: `name (1).ext`. */

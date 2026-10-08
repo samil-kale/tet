@@ -1497,10 +1497,19 @@ textarea:focus,
   position: relative;
   flex: 1;
   min-height: 0;
+  /* A still keeps the size it was taken at: a box shrinking under it cuts it off. */
+  overflow: hidden;
 }
 
-/* A notice over a page holds it, raised above it, until dismissed: VS Code's pause, its page dimmed
-   and the reason said in the middle, framed as a dialog is. */
+/* The page's still while something of the window lies over it (BrowserHost), the page hidden. */
+.browser-still {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+
+/* A notice over a page holds it, shown as its still, until dismissed: VS Code's pause, its page
+   dimmed and the reason said in the middle, framed as a dialog is. */
 .browser-paused {
   position: absolute;
   inset: 0;
@@ -1530,14 +1539,6 @@ textarea:focus,
 .browser-paused-detail {
   font-size: var(--small-font-size);
   color: var(--tet-descriptionForeground);
-}
-
-/* While TET's page is raised above the browser tabs' pages (a dialog, a menu over one: window.ts),
-   nothing beneath a live page paints, so it shows through; what lies over it still does. */
-html.browser-raised,
-html.browser-raised body,
-html.browser-raised :has(.browser-page.live) {
-  background: transparent !important;
 }
 
 /* Below the bar: a placeholder or the image view in flow, the editor's split over them. */

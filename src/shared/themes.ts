@@ -32,9 +32,6 @@ export interface ThemeDefinition {
    *  --tet-terminal-background / -foreground by hand. */
   terminalBackground: string;
   terminalForeground: string;
-  /** An empty browser tab's page (browser-tabs.ts's paintBlank). Kept in step with
-   *  --tet-editor-background by hand. */
-  editorBackground: string;
 }
 
 export const THEMES: ThemeDefinition[] = [
@@ -47,7 +44,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#cccccc",
     terminalBackground: "#1f1f1f",
     terminalForeground: "#cccccc",
-    editorBackground: "#1f1f1f",
   },
   {
     id: "dark-slate",
@@ -58,7 +54,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#dde2e9",
     terminalBackground: "#1b1f27",
     terminalForeground: "#dde2e9",
-    editorBackground: "#1b1f27",
   },
   {
     id: "dark-github",
@@ -69,7 +64,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#7d8590",
     terminalBackground: "#0d1117",
     terminalForeground: "#e6edf3",
-    editorBackground: "#0d1117",
   },
   {
     id: "dark-intellij",
@@ -80,7 +74,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#cccccc",
     terminalBackground: "#1e1f22",
     terminalForeground: "#bcbec3",
-    editorBackground: "#1e1f22",
   },
   {
     id: "dark-dracula",
@@ -91,7 +84,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#f8f8f2",
     terminalBackground: "#282a36",
     terminalForeground: "#f8f8f2",
-    editorBackground: "#282a36",
   },
   {
     id: "dark-claude",
@@ -102,7 +94,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#c3c1ba",
     terminalBackground: "#151515",
     terminalForeground: "#c3c1ba",
-    editorBackground: "#151515",
   },
   {
     id: "light-modern",
@@ -113,7 +104,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#1e1e1e",
     terminalBackground: "#ffffff",
     terminalForeground: "#3b3b3b",
-    editorBackground: "#ffffff",
   },
   {
     id: "light-github",
@@ -124,7 +114,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#656d76",
     terminalBackground: "#ffffff",
     terminalForeground: "#1f2328",
-    editorBackground: "#ffffff",
   },
   {
     id: "light-intellij",
@@ -135,7 +124,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#e7ebed",
     terminalBackground: "#ffffff",
     terminalForeground: "#000000",
-    editorBackground: "#ffffff",
   },
   {
     id: "light-gameboy",
@@ -146,7 +134,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#494786",
     terminalBackground: "#c0d297",
     terminalForeground: "#0f380f",
-    editorBackground: "#c0d297",
   },
   {
     id: "light-claude",
@@ -157,7 +144,6 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#2a2a28",
     terminalBackground: "#fcfcfb",
     terminalForeground: "#2a2a28",
-    editorBackground: "#fcfcfb",
   },
 ];
 

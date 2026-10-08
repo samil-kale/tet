@@ -294,11 +294,11 @@ or a per-line decision is for an agent.
 - **A browser tab's page is main's view, drawn above TET's own page** (`browser-tabs.ts`), which
   is itself a transparent view filling the window (`window.ts`): the tab's box only says where
   (`BrowserHost`). Under a dialog, and wherever something floats over a page — a menu, the notices,
-  a tab dragged over the panes — TET's page is raised above it, transparent beneath every live page
-  (`browser-raised`), so the page stays live and what floats lies over it: what floats says so
-  (`useFloatsOver`, `window-covered.ts`), or the page hides it. A page takes its own keys and clicks
-  but the window's shortcuts and its pane's focus, which main reads there and hands on. Never
-  persisted.
+  a tab or a sash dragged — the page is hidden and a still of it shown in its box, taken anew every
+  second, as VS Code's browser does: what floats says so (`useFloatsOver`, `window-covered.ts`), or
+  the page hides it. A page's own right-click menu is native (`Menu.popup`), above every view. A
+  page takes its own keys and clicks; the window's shortcuts it left alone come from its preload
+  (`page-preload.ts`), its focus from `webContents`' own, which main hands on. Never persisted.
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`), LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
   EXPLORER `Explorer`; each title heads a `Section`, drawn by `ProjectList` and `CommandList`

@@ -1,4 +1,5 @@
 import type { TETApi, Unsubscribe } from "./api";
+import type { ShortcutKey } from "./shortcuts";
 import type { ProjectRef } from "./types/project";
 
 /**
@@ -108,6 +109,7 @@ export interface InvokeChannels {
   "browser:list": TETApi["browser"]["list"];
   "browser:create": TETApi["browser"]["create"];
   "browser:close": TETApi["browser"]["close"];
+  "browser:still": TETApi["browser"]["still"];
   "agents:list": TETApi["agents"]["list"];
   "agents:askable": TETApi["agents"]["askable"];
   "agents:ask-models": TETApi["agents"]["askModels"];
@@ -139,12 +141,11 @@ export interface SendChannels {
   "tabs:resize": TETApi["tabs"]["resize"];
   "browser:navigate": TETApi["browser"]["navigate"];
   "browser:go": TETApi["browser"]["go"];
-  "browser:edit": TETApi["browser"]["edit"];
-  "browser:inspect": TETApi["browser"]["inspect"];
   "browser:answer-login": TETApi["browser"]["answerLogin"];
   "browser:place": TETApi["browser"]["place"];
   "browser:active": TETApi["browser"]["reportActive"];
-  "browser:raise": TETApi["browser"]["raise"];
+  /** From a browser tab's page (page-preload.ts), not the window: a key press the page left alone. */
+  "browser:page-key": (key: ShortcutKey) => void;
   [reply: WindowReply]: (answer: string | undefined) => void;
 }
 
@@ -173,7 +174,7 @@ export interface EventChannels {
   "tabs:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
   "browser:changed": Payload<TETApi["browser"]["onTabs"]>;
   "browser:shortcut": Payload<TETApi["browser"]["onShortcut"]>;
-  "browser:pressed": Payload<TETApi["browser"]["onPressed"]>;
-  "browser:menu": Payload<TETApi["browser"]["onMenu"]>;
+  "browser:focused": Payload<TETApi["browser"]["onFocused"]>;
+  "browser:open-link": Payload<TETApi["browser"]["onOpenLink"]>;
   "browser:login": Payload<TETApi["browser"]["onLogin"]>;
 }

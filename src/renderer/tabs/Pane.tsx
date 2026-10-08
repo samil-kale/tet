@@ -593,7 +593,7 @@ export const Pane = memo(function Pane({
                   active={active}
                   visible={visible}
                   focused={focused}
-                  onPressed={focusHere}
+                  onFocused={focusHere}
                   onOpenTab={openBrowserTab}
                 />
               );
