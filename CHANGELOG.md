@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.3 (2026-10-08)
+
+- **SBX setup script.** The SBX settings take a shell script, highlighted as one, that runs as root
+  once per sandbox and again after each change; a failure is told at the start and retried next
+  time.
+- **Sandbox knowledge without plugins.** A sandbox's knowledge carries skills and instructions
+  only; pi runs on Docker's current sandbox kit.
+- **Editor replace.** The editor's find widget offers replace again.
+- **Fixes.** The Claude, IntelliJ and Light Claude themes color a command's options; the GitHub
+  and Dracula themes draw the active tab and the working and finished marks in their own colors.
+
 ## 0.18.2 (2026-10-06)
 
 - **Start logged.** Each start writes TET's version, process id and path to `errors.log`, to
