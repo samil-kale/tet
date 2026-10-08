@@ -1,7 +1,7 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { browserUrl } from "../browser/browser-tabs";
-import type { BrowserBounds, BrowserEdit, BrowserTabInfo } from "../../shared/types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import type { IpcDeps } from "./deps";
 
@@ -34,6 +34,8 @@ export function registerBrowserIpc({ browserTabs, notice }: Pick<IpcDeps, "brows
   on("browser:edit", (_event, ref: ProjectRef, tabId: string, edit: BrowserEdit) => browserTabs.edit(ref, tabId, edit));
 
   on("browser:inspect", (_event, ref: ProjectRef, tabId: string, x: number, y: number) => browserTabs.inspect(ref, tabId, x, y));
+
+  on("browser:answer-login", (_event, id: number, login: BrowserCredentials | null) => browserTabs.answerLogin(id, login));
 
   on("browser:place", (_event, ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => browserTabs.place(ref, tabId, bounds));
 

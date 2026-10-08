@@ -34,6 +34,21 @@ export interface BrowserMenu {
   canSelectAll: boolean;
 }
 
+/** A page's server, or the proxy before it, asking for a login (HTTP authentication). */
+export interface BrowserLogin {
+  /** Names the request its answer goes back to. */
+  id: number;
+  host: string;
+  /** The server's name for what it protects, "" for none. */
+  realm: string;
+  proxy: boolean;
+}
+
+export interface BrowserCredentials {
+  username: string;
+  password: string;
+}
+
 /** The page's own edit commands, on what has its focus or selection. */
 export type BrowserEdit = "cut" | "copy" | "paste" | "selectAll";
 

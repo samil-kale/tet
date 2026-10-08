@@ -178,7 +178,7 @@ export interface ControlDeps {
   /** The browser tabs (browser/browser-tabs.ts) and Playwright driving their pages
    *  (browser/browser-client.ts). */
   browser: {
-    tabs: Pick<BrowserTabs, "list" | "page" | "create" | "navigate" | "close" | "capture">;
+    tabs: Pick<BrowserTabs, "list" | "page" | "create" | "navigate" | "close" | "capture" | "downloads">;
     automation: BrowserAutomation["api"];
   };
   /** main.ts's, shared with ipc/environment.ts. */

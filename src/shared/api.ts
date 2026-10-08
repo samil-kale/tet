@@ -1,7 +1,7 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { ShortcutId } from "./shortcuts";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
-import type { BrowserBounds, BrowserEdit, BrowserMenu, BrowserTabInfo } from "./types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserLogin, BrowserMenu, BrowserTabInfo } from "./types/browser";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
 import type {
@@ -326,6 +326,8 @@ export interface TETApi {
     edit: (ref: ProjectRef, tabId: string, edit: BrowserEdit) => void;
     /** The page's DevTools on the element at `x`, `y` (BrowserMenu's). */
     inspect: (ref: ProjectRef, tabId: string, x: number, y: number) => void;
+    /** The login a page asked for (`onLogin`); null cancels it, and the page shows its refusal. */
+    answerLogin: (id: number, login: BrowserCredentials | null) => void;
     /** Where the page is drawn; null hides it, out of sight. */
     place: (ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => void;
     /** TET's own page above the browser tabs' pages, for a dialog or menu lying over one; or back
@@ -342,6 +344,8 @@ export interface TETApi {
     onShortcut: (listener: (payload: ShortcutId) => void) => Unsubscribe;
     /** A right click into a page, whose menu the window draws. */
     onMenu: (listener: (payload: { ref: ProjectRef; tabId: string; menu: BrowserMenu }) => void) => Unsubscribe;
+    /** A page asking for a login, which its tab asks the user for (`answerLogin`). */
+    onLogin: (listener: (payload: { ref: ProjectRef; tabId: string; login: BrowserLogin }) => void) => Unsubscribe;
   };
   agents: {
     list: () => Promise<AgentInfo[]>;

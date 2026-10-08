@@ -135,6 +135,19 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
       return { result: { messages: await automation.consoleMessages(tabId), untrustedContent: true } };
     },
 
+    // The file names are the servers' own.
+    "browser-downloads": (args, caller) => {
+      const { ref } = refFrom(args, caller);
+      const downloads = tabs.downloads(ref).map(({ path, url, state, receivedBytes, totalBytes }) => ({
+        path,
+        url,
+        state,
+        receivedBytes,
+        totalBytes,
+      }));
+      return { result: { downloads, untrustedContent: true } };
+    },
+
     "browser-close": (args, caller) => {
       const { ref, tabId } = pageOf(args, caller);
       tabs.close(ref, tabId);

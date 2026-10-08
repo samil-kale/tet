@@ -309,6 +309,17 @@ function fakeBrowserTabs(): ControlDeps["browser"]["tabs"] {
       browserTabs = browserTabs.filter((entry) => !(entry.ref === refKeyOf(ref) && entry.tabId === tabId));
     },
     capture: async () => Buffer.from("png"),
+    downloads: (ref) =>
+      browserTabs
+        .filter((tab) => tab.ref === refKeyOf(ref))
+        .map((tab) => ({
+          ref,
+          path: `/downloads/${tab.tabId}.zip`,
+          url: `${tab.url}/file.zip`,
+          state: "completed" as const,
+          receivedBytes: 3,
+          totalBytes: 3,
+        })),
   };
 }
 
@@ -1494,6 +1505,18 @@ describe("tet-ctl against the control server", () => {
     assert.equal(fs.readFileSync(shot.path, "utf8"), "png");
     assert.ok(shot.path.startsWith(path.join(workDir, "drops", PROJECT.id, OWN_TAB)), "in the caller's drops folder");
     assert.deepEqual((await tetCtl(["browser-console"])).result, { messages: ["error: boom"], untrustedContent: true });
+    assert.deepEqual((await tetCtl(["browser-downloads"])).result, {
+      downloads: [
+        {
+          path: `/downloads/${opened.tabId}.zip`,
+          url: "localhost:3000/login/file.zip",
+          state: "completed",
+          receivedBytes: 3,
+          totalBytes: 3,
+        },
+      ],
+      untrustedContent: true,
+    });
     assert.deepEqual((await tetCtl(["browser-close"])).result, { closed: opened.tabId });
     assert.deepEqual(browserTabs, []);
   });
@@ -1522,6 +1545,7 @@ describe("tet-ctl against the control server", () => {
       ["browser-snapshot"],
       ["browser-click", "e1"],
       ["browser-screenshot"],
+      ["browser-downloads"],
     ]) {
       assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
     }

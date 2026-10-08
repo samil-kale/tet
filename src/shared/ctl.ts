@@ -660,6 +660,14 @@ const VERBS = [
     ownProjectOnly: true,
   },
   {
+    verb: "browser-downloads",
+    group: "In front of the user",
+    usage: "browser-downloads [--project <id>] [--worktree <key or branch>]",
+    summary: "What the browser tabs' pages downloaded since TET started: the saved file's path, its address, and whether it is complete.",
+    positionals: [],
+    ownProjectOnly: true,
+  },
+  {
     verb: "browser-close",
     group: "In front of the user",
     usage: "browser-close [--tab <id>] [--project <id>] [--worktree <key or branch>]",

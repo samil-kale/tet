@@ -127,6 +127,7 @@ deleted at the next start; the repository's share the global one.
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
     drops/                         pasted or dropped content without a path, for host tabs
+    downloads/                     what the browser tabs' pages downloaded
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
       handovers/                   another agent's session a tab here takes over, copied
@@ -312,8 +313,9 @@ or a per-line decision is for an agent.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
-  unasked. Card dialogs are drawn in `DialogFrame`. The one exception: an agent's
-  `env-request`, answered in `EnvDialog`, one at a time (`env-requests.ts`).
+  unasked. Card dialogs are drawn in `DialogFrame`. The two exceptions: an agent's
+  `env-request`, answered in `EnvDialog`, one at a time (`env-requests.ts`), and a browser tab's
+  page asking for an HTTP login, asked by its tab (`BrowserHost`).
 - **`DialogFrame` draws every dialog's button row**: Cancel with × and Escape (`onCancel`; a wall
   has none), the `actions`, and the `primary` button, which Enter runs from anywhere in the dialog
   unless it cannot go. One that cannot says why as its tooltip (`blocked`), unless an empty field

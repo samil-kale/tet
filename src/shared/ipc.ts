@@ -141,6 +141,7 @@ export interface SendChannels {
   "browser:go": TETApi["browser"]["go"];
   "browser:edit": TETApi["browser"]["edit"];
   "browser:inspect": TETApi["browser"]["inspect"];
+  "browser:answer-login": TETApi["browser"]["answerLogin"];
   "browser:place": TETApi["browser"]["place"];
   "browser:active": TETApi["browser"]["reportActive"];
   "browser:raise": TETApi["browser"]["raise"];
@@ -174,4 +175,5 @@ export interface EventChannels {
   "browser:shortcut": Payload<TETApi["browser"]["onShortcut"]>;
   "browser:pressed": Payload<TETApi["browser"]["onPressed"]>;
   "browser:menu": Payload<TETApi["browser"]["onMenu"]>;
+  "browser:login": Payload<TETApi["browser"]["onLogin"]>;
 }

@@ -1,7 +1,9 @@
 import { memo, useEffect, useRef, useState } from "react";
-import type { BrowserBounds, BrowserMenu, BrowserTabInfo } from "../../shared/types/browser";
+import type { BrowserBounds, BrowserCredentials, BrowserLogin, BrowserMenu, BrowserTabInfo } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
+import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
+import { TextField } from "../ui/Field";
 import { BackIcon, ForwardIcon, ReloadIcon } from "../ui/icons";
 import { IconButton } from "../ui/IconButton";
 import { useFloating, useWindowCovered } from "../ui/window-covered";
@@ -23,6 +25,33 @@ interface BrowserHostProps {
 
 function overlaps(a: DOMRect, b: DOMRect): boolean {
   return a.width > 0 && a.height > 0 && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/**
+ * A page's login, as a browser's own sign-in box asks for it; cancelled, the page shows its
+ * refusal. Main puts the question, which no other request of main's does: the page asked, not the
+ * user. Held back by another question, it is cancelled and said.
+ */
+async function askLogin(login: BrowserLogin): Promise<void> {
+  const what = `${login.proxy ? "The proxy " : ""}${login.host}`;
+  if (followUpHeldBack(`${what} wanted a login while another question was open: reload the page to sign in.`)) {
+    window.tet.browser.answerLogin(login.id, null);
+    return;
+  }
+  const answered = await prompt<BrowserCredentials>({
+    title: "Sign in",
+    detail: `${what} asks for a login${login.realm ? `: ${login.realm}` : "."}`,
+    value: { username: "", password: "" },
+    confirmLabel: "Sign in",
+    ready: (value) => filled(value.username),
+    render: ({ value, onChange, field }) => (
+      <>
+        <TextField label="Username" value={value.username} onChange={(username) => onChange({ ...value, username })} ref={field} />
+        <TextField label="Password" type="password" value={value.password} onChange={(password) => onChange({ ...value, password })} />
+      </>
+    ),
+  });
+  window.tet.browser.answerLogin(login.id, answered && { username: answered.username.trim(), password: answered.password });
 }
 
 /** The tabs whose page something of the window lies over; while there is one, TET's page is raised. */
@@ -161,6 +190,16 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       { label: "Inspect", run: () => window.tet.browser.inspect(at, tabId, opened.x, opened.y) },
     ];
   };
+
+  useEffect(
+    () =>
+      window.tet.browser.onLogin((asked) => {
+        if (asked.tabId === tabId) {
+          void askLogin(asked.login);
+        }
+      }),
+    [tabId],
+  );
 
   // The tab the browser verbs act on is the one last on screen.
   useEffect(() => {

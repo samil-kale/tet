@@ -222,12 +222,14 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
 /** The browser tabs' pages, and Playwright driving them for the browser verbs. */
 const browserTabs = new BrowserTabs({
   host: appWindow,
+  dataRoot,
   onTabs: (ref, tabs) => send("browser:changed", { ref, tabs }),
   onOpened: (ref, tabId) => send("tabs:show", { ref, tabId }),
   onPressed: (ref, tabId) => send("browser:pressed", { ref, tabId }),
   onClosed: (tabId) => browser.tabClosed(tabId),
   onShortcut: (shortcut) => send("browser:shortcut", shortcut),
   onMenu: (ref, tabId, menu) => send("browser:menu", { ref, tabId, menu }),
+  onLogin: (ref, tabId, login) => send("browser:login", { ref, tabId, login }),
   notice,
 });
 const browser = browserAutomation((tabId) => browserTabs.pageById(tabId));

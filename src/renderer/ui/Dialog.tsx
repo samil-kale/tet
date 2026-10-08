@@ -81,7 +81,8 @@ type Pending = Question & { cancel: () => void };
  * Asking the user, as `notify` tells them: a function anything can call, and one mounted component
  * drawing what is pending, in the window rather than Electron's `dialog.showMessageBox`. The main
  * process asks nothing: a question lives in the view offering the action, except an agent's
- * `env-request` (`EnvDialog`). Questions only — a form with two buttons;
+ * `env-request` (`EnvDialog`) and a browser tab's page asking for a login (`BrowserHost`).
+ * Questions only — a form with two buttons;
  * `SettingsDialog` and the rest of `dialogs/` are not part of this.
  *
  * `confirm` is for the irreversible only. `prompt` is for what is typed — a name, a message, a set

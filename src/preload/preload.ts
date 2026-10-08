@@ -169,6 +169,7 @@ const api: TETApi = {
     go: (ref, tabId, where) => send("browser:go", ref, tabId, where),
     edit: (ref, tabId, edit) => send("browser:edit", ref, tabId, edit),
     inspect: (ref, tabId, x, y) => send("browser:inspect", ref, tabId, x, y),
+    answerLogin: (id, login) => send("browser:answer-login", id, login),
     place: (ref, tabId, bounds) => send("browser:place", ref, tabId, bounds),
     raise: (raised) => send("browser:raise", raised),
     reportActive: (ref, tabId) => send("browser:active", ref, tabId),
@@ -176,6 +177,7 @@ const api: TETApi = {
     onShortcut: (listener) => subscribe("browser:shortcut", listener),
     onPressed: (listener) => subscribe("browser:pressed", listener),
     onMenu: (listener) => subscribe("browser:menu", listener),
+    onLogin: (listener) => subscribe("browser:login", listener),
   },
   agents: {
     list: () => invoke("agents:list"),

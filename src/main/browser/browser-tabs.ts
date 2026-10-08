@@ -5,13 +5,15 @@ import { shortcutOf, type ShortcutId } from "../../shared/shortcuts";
 import {
   BROWSER_TAB_PREFIX,
   type BrowserBounds,
+  type BrowserCredentials,
   type BrowserEdit,
+  type BrowserLogin,
   type BrowserMenu,
   type BrowserTabInfo,
 } from "../../shared/types/browser";
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
-import { ownedWorktreeKeys } from "../store/project-dirs";
+import { downloadsDir, ownedWorktreeKeys } from "../store/project-dirs";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
 import { isOpenableUrl } from "../util/shell-open";
@@ -26,6 +28,8 @@ export interface ViewHost {
 
 export interface BrowserTabsDeps {
   host: ViewHost;
+  /** `~/.tet`, under which each project's downloads lie (downloadsDir). */
+  dataRoot: string;
   /** The repository's or worktree's tabs changed: their list, title, address or loading. */
   onTabs(ref: ProjectRef, tabs: BrowserTabInfo[]): void;
   /** A tab the page opened itself (a popup, a link to a new window), to bring to the front. */
@@ -38,6 +42,8 @@ export interface BrowserTabsDeps {
   onShortcut(shortcut: ShortcutId): void;
   /** A right click into a page, whose menu the window draws. */
   onMenu(ref: ProjectRef, tabId: string, menu: BrowserMenu): void;
+  /** A page asking for a login, which its tab asks the user for (`answerLogin`). */
+  onLogin(ref: ProjectRef, tabId: string, login: BrowserLogin): void;
   notice(severity: NoticeSeverity, message: string): void;
 }
 
@@ -49,6 +55,18 @@ export interface BrowserPage {
   url: string;
   title: string;
   debugger: Debugger;
+}
+
+/** A file a page downloaded during this run, for `browser-downloads`. */
+export interface BrowserDownload {
+  ref: ProjectRef;
+  /** Where it is saved, under the project's downloads folder. */
+  path: string;
+  url: string;
+  state: "progressing" | "completed" | "cancelled" | "interrupted";
+  receivedBytes: number;
+  /** 0 when the server did not say. */
+  totalBytes: number;
 }
 
 interface Tab {
@@ -73,6 +91,9 @@ const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set([
   "loopback-network",
 ]);
 
+/** Every page's: Chromium's sandbox, and nothing of Electron's or Node's reaching it. */
+const PAGE_PREFERENCES = { sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false };
+
 /** Chromium's code for a load a newer one replaced: no failure. */
 const ERR_ABORTED = -3;
 
@@ -84,6 +105,15 @@ const WORKTREE_PROFILE = /^tet-([0-9a-f-]{36})-([0-9a-f]+)$/;
 
 /** A host the machine itself serves, reached over http as a dev server is. */
 const LOCAL_HOST = /^(localhost|127(\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(:\d+)?([/?#]|$)/i;
+
+/**
+ * Chromium's own user agent from Electron's, which adds the app's token and its own
+ * (`… tet-ide/43.4.0 Chrome/… Electron/43.4.0 …`): sign-in pages refuse a browser so named as an
+ * embedded one.
+ */
+export function chromiumUserAgent(electron: string): string {
+  return electron.replace(/ Electron\/\S+/, "").replace(/(\(KHTML, like Gecko\)) (?:\S+\/\S+ )*?(Chrome\/)/, "$1 $2");
+}
 
 /**
  * An address as typed into the address bar or handed to `tet-ctl browser-open`: http and https as
@@ -119,6 +149,10 @@ export class BrowserTabs {
   private readonly active = new Map<string, string>();
   /** The partitions whose permissions are answered (`GRANTED_PERMISSIONS`). */
   private readonly guarded = new Set<string>();
+  /** The logins the pages asked for, until answered or their tab goes. */
+  private readonly logins = new Map<number, { tabId: string; answer: (username?: string, password?: string) => void }>();
+  private asked = 0;
+  private readonly downloaded: BrowserDownload[] = [];
   private created = 0;
 
   constructor(private readonly deps: BrowserTabsDeps) {}
@@ -142,9 +176,15 @@ export class BrowserTabs {
   /** A new tab loading `typed` (browserUrl), made the active one; `loaded` settles as `load` does. */
   create(ref: ProjectRef, typed: string): { tab: BrowserTabInfo; loaded: Promise<void> } {
     const url = browserUrl(typed);
-    const view = new WebContentsView({
-      webPreferences: { session: this.profileOf(ref), sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false },
-    });
+    const tab = this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }));
+    const loaded = load(tab, url);
+    this.changed(ref);
+    return { tab: infoOf(tab), loaded };
+  }
+
+  /** `view` as a tab of the repository or worktree, made the active one: a new page, or a popup a
+   *  page opened. */
+  private open(ref: ProjectRef, view: WebContentsView): Tab {
     const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view };
     const changed = (): void => this.changed(ref);
     view.setVisible(false);
@@ -159,16 +199,43 @@ export class BrowserTabs {
       }
     });
     // A popup or a link to a new window opens as a tab of the same repository or worktree, in its
-    // profile; the opener does not reach it.
+    // profile, and stays its opener's: a sign-in popup hands its answer back (`window.opener`).
     view.webContents.setWindowOpenHandler(({ url: opened }) => {
       try {
-        const popup = this.create(ref, opened);
-        popup.loaded.catch(() => undefined);
-        this.deps.onOpened(ref, popup.tab.tabId);
+        browserUrl(opened);
       } catch {
         // Not a web address: nothing opens.
+        return { action: "deny" };
       }
-      return { action: "deny" };
+      return {
+        action: "allow",
+        overrideBrowserWindowOptions: { webPreferences: PAGE_PREFERENCES },
+        // Electron hands over the popup's page (`webContents`), which its types leave out.
+        createWindow: ({
+          webContents: page,
+          webPreferences,
+        }: Electron.BrowserWindowConstructorOptions & { webContents?: Electron.WebContents }) => {
+          // A link opened in the background (a middle click) comes without its page: loaded anew.
+          const popup = page
+            ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }))
+            : this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }));
+          if (!page) {
+            load(popup, browserUrl(opened)).catch(() => undefined);
+          }
+          this.changed(ref);
+          this.deps.onOpened(ref, popup.tabId);
+          // Electron takes the popup's page back; nothing is sent through it.
+          // eslint-disable-next-line no-restricted-syntax
+          return popup.view.webContents;
+        },
+      };
+    });
+    // A page closing itself (`window.close()`, a sign-in popup done) closes its tab.
+    view.webContents.once("destroyed", () => {
+      if (this.tabs.get(tab.tabId) === tab) {
+        this.dispose(tab, false);
+        this.changed(ref);
+      }
     });
     // A dev server's own certificate is taken on a local host, as Chrome's allow-insecure-localhost
     // takes it; anywhere else Chromium's refusal stands.
@@ -178,6 +245,13 @@ export class BrowserTabs {
         event.preventDefault();
       }
       callback(local);
+    });
+    // As a browser's own sign-in box: the tab asks the user, the one question a page puts.
+    view.webContents.on("login", (event, _details, authInfo, callback) => {
+      event.preventDefault();
+      const id = ++this.asked;
+      this.logins.set(id, { tabId: tab.tabId, answer: callback });
+      this.deps.onLogin(ref, tab.tabId, { id, host: authInfo.host, realm: authInfo.realm, proxy: authInfo.isProxy });
     });
     view.webContents.on("context-menu", (_event, params) =>
       this.deps.onMenu(ref, tab.tabId, {
@@ -221,9 +295,7 @@ export class BrowserTabs {
     this.deps.host.addView(view);
     this.tabs.set(tab.tabId, tab);
     this.active.set(refKeyOf(ref), tab.tabId);
-    const loaded = load(tab, url);
-    this.changed(ref);
-    return { tab: infoOf(tab), loaded };
+    return tab;
   }
 
   /** Loads `typed` (browserUrl) in the tab; rejects with Chromium's reason when it cannot. */
@@ -261,6 +333,17 @@ export class BrowserTabs {
     if (view) {
       openDevTools(view);
       view.webContents.inspectElement(x, y);
+    }
+  }
+
+  /** A login the user typed for a page's request, or none: the page then shows its refusal. */
+  answerLogin(id: number, login: BrowserCredentials | null): void {
+    const asked = this.logins.get(id);
+    this.logins.delete(id);
+    if (login) {
+      asked?.answer(login.username, login.password);
+    } else {
+      asked?.answer();
     }
   }
 
@@ -329,7 +412,8 @@ export class BrowserTabs {
     );
   }
 
-  /** The repository's or worktree's profile, its permissions answered from its first tab on. */
+  /** The repository's or worktree's profile, its permissions answered and its user agent
+   *  Chromium's from its first tab on. */
   private profileOf(ref: ProjectRef): Electron.Session {
     const partition = partitionOf(ref);
     const profile = session.fromPartition(partition);
@@ -343,8 +427,51 @@ export class BrowserTabs {
         ),
       );
       profile.setPermissionCheckHandler((_contents, permission) => GRANTED_PERMISSIONS.has(permission));
+      profile.setUserAgent(chromiumUserAgent(profile.getUserAgent()));
+      profile.on("will-download", (_event, item, contents) => this.download(item, contents));
     }
     return profile;
+  }
+
+  /** What the repository's or worktree's pages downloaded during this run, the oldest first. */
+  downloads(ref: ProjectRef): BrowserDownload[] {
+    return this.downloaded.filter((download) => sameProjectRef(download.ref, ref)).map((download) => ({ ...download }));
+  }
+
+  /** Saved without a question into the project's downloads folder, as Chrome saves into the
+   *  user's; a notice says where once it is there. */
+  private download(item: Electron.DownloadItem, contents: Electron.WebContents): void {
+    const tab = [...this.tabs.values()].find((held) => held.view.webContents.id === contents.id);
+    if (!tab) {
+      item.cancel();
+      return;
+    }
+    const dir = downloadsDir(this.deps.dataRoot, tab.ref.projectId);
+    fs.mkdirSync(dir, { recursive: true });
+    const download: BrowserDownload = {
+      ref: tab.ref,
+      path: freePath(dir, item.getFilename(), this.downloaded),
+      url: item.getURL(),
+      state: "progressing",
+      receivedBytes: 0,
+      totalBytes: item.getTotalBytes(),
+    };
+    item.setSavePath(download.path);
+    this.downloaded.push(download);
+    item.on("updated", () => {
+      download.receivedBytes = item.getReceivedBytes();
+      download.totalBytes = item.getTotalBytes();
+    });
+    item.once("done", (_event, state) => {
+      download.state = state;
+      download.receivedBytes = item.getReceivedBytes();
+      const name = path.basename(download.path);
+      if (state === "completed") {
+        this.deps.notice("info", `Downloaded ${name} to ${dir}`);
+      } else if (state === "interrupted") {
+        this.deps.notice("warning", `Could not download ${name}`);
+      }
+    });
   }
 
   private of(ref: ProjectRef): Tab[] {
@@ -356,11 +483,19 @@ export class BrowserTabs {
     return tab && sameProjectRef(tab.ref, ref) ? tab : undefined;
   }
 
-  private dispose(tab: Tab): void {
+  /** `closePage` false for a page already gone, whose view then holds none. */
+  private dispose(tab: Tab, closePage = true): void {
     this.tabs.delete(tab.tabId);
+    for (const [id, asked] of this.logins) {
+      if (asked.tabId === tab.tabId) {
+        this.logins.delete(id);
+      }
+    }
     this.deps.onClosed(tab.tabId);
     this.deps.host.removeView(tab.view);
-    tab.view.webContents.close();
+    if (closePage) {
+      tab.view.webContents.close();
+    }
   }
 
   private changed(ref: ProjectRef): void {
@@ -381,6 +516,19 @@ function load(tab: Tab, url: string): Promise<void> {
       : undefined;
   });
   return Promise.race([loaded, new Promise<void>((resolve) => setTimeout(resolve, LOAD_WAIT_MS).unref())]);
+}
+
+/** `name` in `dir`, or as Chrome numbers one already there or still downloading: `name (1).ext`. */
+function freePath(dir: string, name: string, downloads: readonly BrowserDownload[]): string {
+  const extension = path.extname(name);
+  const stem = name.slice(0, name.length - extension.length);
+  const taken = (candidate: string): boolean =>
+    fs.existsSync(candidate) || downloads.some((download) => download.state === "progressing" && download.path === candidate);
+  let candidate = path.join(dir, name);
+  for (let count = 1; taken(candidate); count++) {
+    candidate = path.join(dir, `${stem} (${count})${extension}`);
+  }
+  return candidate;
 }
 
 /** Detached, as F12 opens TET's own for the window (window.ts). */

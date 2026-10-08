@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { browserUrl } from "../../src/main/browser/browser-tabs";
+import { browserUrl, chromiumUserAgent } from "../../src/main/browser/browser-tabs";
 import { CdpProxy, type CdpMessage } from "../../src/main/browser/cdp-proxy";
 import type { BrowserPage } from "../../src/main/browser/browser-tabs";
 
@@ -20,6 +20,19 @@ describe("browserUrl", () => {
     for (const typed of ["file:///etc/passwd", "javascript:alert(1)", "chrome://settings"]) {
       assert.throws(() => browserUrl(typed), /not a web address/, typed);
     }
+  });
+});
+
+describe("chromiumUserAgent", () => {
+  it("drops the app's token and Electron's, leaving Chromium's own", () => {
+    const chromium = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36";
+    assert.equal(
+      chromiumUserAgent(
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) tet-ide/43.4.0 Chrome/150.0.7871.224 Electron/43.4.0 Safari/537.36",
+      ),
+      chromium,
+    );
+    assert.equal(chromiumUserAgent(chromium), chromium, "one without them stays");
   });
 });
 

@@ -36,6 +36,11 @@ export function projectDir(dataRoot: string, projectId: string): string {
   return path.join(projectsDir(dataRoot), projectId);
 }
 
+/** Where the project's browser tabs save what their pages download, kept until the project goes. */
+export function downloadsDir(dataRoot: string, projectId: string): string {
+  return path.join(projectDir(dataRoot, projectId), "downloads");
+}
+
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs
  *  keep theirs in their agent's folder (sandboxDropsDir). */
 export function dropsDir(dataRoot: string, projectId: string): string {
