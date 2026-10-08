@@ -116,7 +116,7 @@ export interface ProjectCommand {
   /** Its own field because PowerShell reads `PROFILE=x java ...` as a command name. Wins over the
    *  inherited environment. */
   env?: Record<string, string>;
-  /** Runs the line in a shell (pipes, redirections); then only works on the platform it was
-   *  written for. */
-  shell?: boolean;
+  /** The platform it runs on (`Platform.id`); absent is every one. Read only where it applies
+   *  (tet-json.ts), so it shows nowhere else. */
+  os?: string;
 }

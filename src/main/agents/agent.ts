@@ -171,11 +171,6 @@ export interface AgentAsk {
   modelArgs(model: string): string[];
 }
 
-/** One command line run in a terminal, for a saved command with `"shell": true`. */
-export interface AgentRun {
-  args(command: string): string[];
-}
-
 /** How the agent's hook reports (`tet-ctl hook <event>`) are read. */
 export interface AgentTurns {
   /** The session a hook report is about — the only thing binding a new tab to its session: a
@@ -287,8 +282,6 @@ interface AgentBase {
   install?: AgentInstall;
   /** Omitted by the shell. */
   terminal?: AgentTerminal;
-  /** Only the shell has it. */
-  run?: AgentRun;
   /** Omitted by an agent that cannot answer without a terminal. */
   ask?: AgentAsk;
   /** Omitted by an agent needing no setup (the shell). */

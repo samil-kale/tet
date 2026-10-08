@@ -28,9 +28,7 @@ export interface TabState extends TabDescriptor {
    * channel (a question just before the turn ends); an older one is dropped (turn-order.ts).
    */
   turnReportAt?: number;
-  /** A saved command's program, when not this agent's executable. */
-  executable?: string;
-  /** A saved command's arguments — its program's, or a shell's when it asked for one. */
+  /** A saved command's arguments to the shell running its line. */
   runArgs?: string[];
   /** The process's folder, when not the repository or worktree root. */
   cwd?: string;
@@ -132,9 +130,9 @@ export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolea
   };
 }
 
-/** Either field is set only by `createCommandTab`. */
+/** Set only by `createCommandTab`. */
 export function isSavedCommandTab(tab: TabState): boolean {
-  return tab.executable !== undefined || tab.runArgs !== undefined;
+  return tab.runArgs !== undefined;
 }
 
 /** Resumes this tab's session, on the host or in its sandbox alike. */

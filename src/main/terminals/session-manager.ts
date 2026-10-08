@@ -3,7 +3,6 @@ import * as path from "node:path";
 import { AGENTS, agentInstalled, getAgent } from "../agents";
 
 import type { AgentDefinition, AgentSessionInfo } from "../agents/agent";
-import { splitCommand } from "../../shared/command";
 import { errorMessage } from "../../shared/errors";
 import { CONTROL_ENV, CONTROL_START_SIZE } from "../../shared/ctl";
 import type { ControlEvent, HookEvent } from "../../shared/ctl";
@@ -42,6 +41,7 @@ import { StartIndicators } from "./start-indicators";
 import { currentTheme } from "../store/theme";
 import { effectivePrompt } from "../../shared/prompts";
 import { logError } from "../util/error-log";
+import { PLATFORM } from "../util/host-platform";
 
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
 const SESSION_REMOVE_DELAY_MS = 500;
@@ -55,11 +55,6 @@ const INDICATOR_LINGER_MS = 700;
 // Across managers, so a repository or worktree reopened in this run never reuses a closed tab's
 // id — and token.
 let newTabCounter = 0;
-/**
- * A shell-only token, refused in a saved command (no shell runs it). Whole tokens only — `2>&1`
- * and `>>` match, an argument holding a `>` does not.
- */
-const SHELL_OPERATOR = /^(?:&&|\|\||[|;&]|\d*>>?|\d*>&\d*|<)$/;
 
 /** Per-agent state within one repository or worktree. */
 interface AgentRuntime {
@@ -535,37 +530,16 @@ export class TabSessionManager {
     return prompt !== undefined && agent.terminal ? agent.terminal.initialPromptArgs(singleLine(prompt)) : [];
   }
 
-  /**
-   * A tab whose process *is* a saved command, started directly without a shell (`resolveCommand`)
-   * unless it asked for one.
-   */
-  createCommandTab(command: ProjectCommand): TabDescriptor | undefined {
-    const shared = {
+  /** A tab whose process is the platform's shell running a saved command's line. */
+  createCommandTab(command: ProjectCommand): TabDescriptor {
+    return this.addTab("shell", {
       title: command.name ?? command.command,
       command: command.command,
       // `resolve`, not `join`, so an absolute folder is left alone.
       cwd: command.cwd ? path.resolve(this.at.path, command.cwd) : undefined,
       env: command.env,
-    };
-    if (command.shell) {
-      const runArgs = getAgent("shell").run?.args(command.command);
-      return runArgs ? this.addTab("shell", { ...shared, runArgs }) : undefined;
-    }
-    const [executable, ...runArgs] = splitCommand(command.command);
-    if (!executable) {
-      return undefined;
-    }
-    // Shell syntax would reach the program as arguments — `rm x && y` deletes "&&" and "y".
-    const operator = [executable, ...runArgs].find((token) => SHELL_OPERATOR.test(token));
-    if (operator) {
-      this.callbacks.onNotice(
-        "error",
-        `"${command.command}" cannot run: ${operator} is shell syntax, and a saved command is ` +
-          `started without one. Split it into two commands, or add "shell": true to it in tet.json.`,
-      );
-      return undefined;
-    }
-    return this.addTab("shell", { ...shared, executable, runArgs });
+      runArgs: PLATFORM.shellCommandArgs(command.command),
+    });
   }
 
   private addTab(agentId: AgentId, extra: Partial<TabState>): TabDescriptor {
@@ -683,7 +657,7 @@ export class TabSessionManager {
     const runtime = this.runtimeFor(tab.agentId);
     if (isSavedCommandTab(tab)) {
       return new CommandPlace(this.placeContext(runtime.agent, runtime.executable), {
-        executable: tab.executable ?? runtime.executable,
+        executable: runtime.executable,
         args: tab.runArgs ?? [],
         env: tab.env,
       });

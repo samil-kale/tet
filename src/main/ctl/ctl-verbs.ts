@@ -494,10 +494,6 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("not_found", `no saved command named ${name} in ${found.name}'s tet.json`);
       }
       const tab = terminals(ref).createCommandTab(command);
-      if (!tab) {
-        // createCommandTab already showed a notice saying why.
-        throw new ControlError("bad_args", `${name} cannot be run without a shell — see the notice in TET`);
-      }
       deps.showTab(ref, tab.tabId);
       return { result: tab };
     },

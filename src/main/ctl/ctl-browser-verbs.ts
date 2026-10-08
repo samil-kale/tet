@@ -87,7 +87,8 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
   return {
     "browser-open": async (args, caller, _at, gone) => {
       const url = text(args, "url", "url");
-      const deadline = args.wait === undefined ? undefined : Date.now() + count(args, "wait", 0) * 1000;
+      const waiting = args.wait !== undefined;
+      const deadline = Date.now() + (waiting ? count(args, "wait", 0) * 1000 : 0);
       const sandbox = sandboxOf(caller);
       const scope = { sandbox: sandbox?.name };
       const { ref, tabId: existing } = pageOf(args, caller, true, scope);
@@ -101,29 +102,28 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
         } else {
           loaded = tabs.navigate(ref, tabId, url);
         }
-        if (deadline === undefined) {
+        // With --wait, a server still starting refuses the page: loaded again until it answers, and
+        // only then brought to the front, over the tab that started it.
+        if (!waiting) {
           deps.showTab(ref, tabId);
-          await loaded;
-        } else {
-          // A server still starting refuses the page: loaded again until it answers, and only then
-          // brought to the front, over the tab that started it.
-          const opened = tabId;
-          for (;;) {
-            try {
-              await loaded;
-              break;
-            } catch (error) {
-              if (Date.now() >= deadline || gone.aborted) {
-                throw error;
-              }
+        }
+        for (;;) {
+          try {
+            await loaded;
+            break;
+          } catch (error) {
+            if (Date.now() >= deadline || gone.aborted) {
+              throw error;
             }
-            await new Promise((resolve) => setTimeout(resolve, OPEN_RETRY_MS));
-            loaded = tabs.navigate(ref, opened, url);
           }
-          deps.showTab(ref, opened);
+          await new Promise((resolve) => setTimeout(resolve, OPEN_RETRY_MS));
+          loaded = tabs.navigate(ref, tabId, url);
+        }
+        if (waiting) {
+          deps.showTab(ref, tabId);
         }
       } catch (error) {
-        if (deadline !== undefined && Date.now() >= deadline) {
+        if (waiting && Date.now() >= deadline) {
           throw new ControlError("timeout", `${url} did not load within ${String(args.wait)} s: ${errorMessage(error)}`);
         }
         throw new ControlError("not_found", `could not load ${url}: ${errorMessage(error)}`);

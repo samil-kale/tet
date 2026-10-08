@@ -36,7 +36,7 @@ export interface Platform {
   readonly posixShell: boolean;
   /** The shell tab's program: PowerShell on win32, else the user's `$SHELL`. */
   shellExecutable(env: Record<string, string | undefined>): string;
-  /** The shell's arguments running one command line (a saved command with `"shell": true`). */
+  /** The shell's arguments running one command line (a saved command). */
   shellCommandArgs(command: string): string[];
   /** A path as one word for the shell: single-quoted where it holds anything the shell reads. */
   shellQuotePath(path: string): string;

@@ -246,8 +246,7 @@ function terminalsOf(key: string): ControlTerminals {
     },
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
-      // Refused for a shell operator, as createCommandTab does.
-      return command.command.includes("&&") ? undefined : tab("tab-cmd");
+      return tab("tab-cmd");
     },
     closeTabs: async (tabIds) => {
       calls.closed.push(...tabIds);
@@ -456,7 +455,7 @@ function deps(): ControlDeps {
       calls.worktreesDeleted.push([refKeyOf(worktree), force]);
       return force ? { ok: true } : (merging.deleteRefused ?? { ok: true });
     },
-    readCommands: async () => [{ command: "npm run build", name: "build" }, { command: "a && b" }],
+    readCommands: async () => [{ command: "npm run build", name: "build" }],
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
     },
@@ -1022,8 +1021,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(calls.shown.length, 2);
   });
 
-  it("reports a saved command that cannot run, and one that does not exist", async () => {
-    assert.equal((await tetCtl(["tabs-run-command", "a && b"])).status, EXIT_CODES.usage);
+  it("reports a saved command that does not exist", async () => {
     const missing = await tetCtl(["tabs-run-command", "deploy"]);
     assert.equal(missing.status, EXIT_CODES.usage);
     assert.match(missing.stderr, /no saved command named deploy/);

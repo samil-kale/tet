@@ -45,7 +45,7 @@ describe("readCommands", () => {
         commands: [
           "npm run build",
           "   ",
-          { command: "npm test", name: " unit ", cwd: "web", env: { A: "1", B: 2, PATH: "/bin", TET_TAB_ID: "x" }, shell: true },
+          { command: "npm test", name: " unit ", cwd: "web", env: { A: "1", B: 2, PATH: "/bin", TET_TAB_ID: "x" }, os: PLATFORM.id },
           { command: "", name: "empty" },
           { name: "no command" },
           42,
@@ -55,7 +55,7 @@ describe("readCommands", () => {
     );
     assert.deepEqual(await readCommands(root), [
       { command: "npm run build" },
-      { command: "npm test", name: " unit ", cwd: "web", env: { A: "1" }, shell: true },
+      { command: "npm test", name: " unit ", cwd: "web", env: { A: "1" }, os: PLATFORM.id },
     ]);
   });
 
@@ -127,6 +127,14 @@ describe("writeCommands", () => {
       other: true,
       commands: ["a", { command: "b", cwd: "web" }, { command: "c", name: "see" }, { command: "d", color: "cyan" }],
     });
+  });
+
+  it("reads and replaces only this platform's commands, keeping another platform's", async () => {
+    const theirs = { command: "./run.sh", os: "aix" };
+    put(JSON.stringify({ commands: [theirs, { command: "run.cmd", os: PLATFORM.id }, "everywhere"] }));
+    assert.deepEqual(await readCommands(root), [{ command: "run.cmd", os: PLATFORM.id }, { command: "everywhere" }]);
+    await writeCommands(root, [{ command: "mvn run", os: PLATFORM.id }]);
+    assert.deepEqual((stored() as { commands: unknown }).commands, [theirs, { command: "mvn run", os: PLATFORM.id }]);
   });
 });
 

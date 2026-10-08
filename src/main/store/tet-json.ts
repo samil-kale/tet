@@ -25,9 +25,10 @@ import { PLATFORM } from "../util/host-platform";
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
- *  shell. `"shell": true` hands the line to `AgentDefinition.run`, so it only works where it was
- *  written. */
-type StoredCommand = string | { command?: unknown; name?: unknown; color?: unknown; cwd?: unknown; env?: unknown; shell?: unknown };
+ *  os. The line runs in the platform's shell (`AgentDefinition.run`), so one written for a single
+ *  platform names it in `os`: readCommands reads and writeCommands replaces only this platform's,
+ *  as the SBX settings' paths (StoredSbxPath). */
+type StoredCommand = string | { command?: unknown; name?: unknown; color?: unknown; cwd?: unknown; env?: unknown; os?: unknown };
 
 interface ProjectFile {
   commands?: StoredCommand[];
@@ -205,8 +206,8 @@ function toCommand(entry: StoredCommand): ProjectCommand | undefined {
   if (env) {
     command.env = env;
   }
-  if (entry.shell === true) {
-    command.shell = true;
+  if (typeof entry.os === "string") {
+    command.os = entry.os;
   }
   return command;
 }
@@ -216,21 +217,28 @@ export async function readCommands(root: string): Promise<ProjectCommand[]> {
   return toCommands(await read(file(root)));
 }
 
-function toCommands(content: ProjectFile | null): ProjectCommand[] {
+/** Every platform's commands. */
+function allCommands(content: ProjectFile | null): ProjectCommand[] {
   if (!content || !Array.isArray(content.commands)) {
     return [];
   }
   return content.commands.map(toCommand).filter((command): command is ProjectCommand => command !== undefined);
 }
 
+function toCommands(content: ProjectFile | null): ProjectCommand[] {
+  return allCommands(content).filter(appliesHere);
+}
+
+/** Replaces only the commands that apply here — see StoredCommand. */
 export function writeCommands(root: string, commands: ProjectCommand[]): Promise<void> {
-  // The short form wherever the command line alone says it all.
-  return patch(root, () => [
-    [
-      ["commands"],
-      commands.map((command) => (command.name || command.color || command.cwd || command.env || command.shell ? command : command.command)),
-    ],
-  ]);
+  return patch(root, (content) => {
+    const others = allCommands(content).filter((command) => !appliesHere(command));
+    // The short form wherever the command line alone says it all.
+    const stored = [...others, ...commands].map((command) =>
+      command.name || command.color || command.cwd || command.env || command.os ? command : command.command,
+    );
+    return [[["commands"], stored]];
+  });
 }
 
 /** A `folders` path as the tree keys it: repository-relative, forward slashes, "" for the root;
@@ -397,7 +405,7 @@ interface StoredSbxPath extends SbxPath {
   os?: string;
 }
 
-function appliesHere(entry: StoredSbxPath): boolean {
+function appliesHere(entry: { os?: string }): boolean {
   return entry.os === undefined || entry.os === PLATFORM.id;
 }
 

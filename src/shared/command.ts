@@ -1,14 +1,11 @@
 import type { ProjectCommand } from "./types/project";
 
 /**
- * A saved command as program plus arguments, started directly — the same on every machine.
- * Deliberately not a shell: quotes group a word and are dropped, everything else is literal —
- * backslashes too, since `tet.json` holds Windows paths and is read on every platform. No pipes,
- * redirections, `&&`, `$(...)` or `$VAR`; those need `"shell": true`, and an operator surviving as
- * its own word is refused with a notice (session-manager.ts). Shared, so the dialog's environment
- * field splits words the same way.
+ * The words of the dialog's environment field. Deliberately not a shell: quotes group a word and
+ * are dropped, everything else is literal — backslashes too, since `tet.json` holds Windows paths
+ * and is read on every platform.
  */
-export function splitCommand(command: string): string[] {
+export function splitWords(command: string): string[] {
   const tokens: string[] = [];
   let current = "";
   // Not `current === ""`: an empty quoted argument must survive.
@@ -56,7 +53,7 @@ export function isSameCommand(one: ProjectCommand, other: ProjectCommand): boole
     one.color === other.color &&
     one.cwd === other.cwd &&
     envKey(one) === envKey(other) &&
-    one.shell === other.shell
+    one.os === other.os
   );
 }
 
@@ -79,7 +76,7 @@ export function formatEnv(env: Record<string, string> | undefined): string {
 /** Parses `NAME=value NAME2="a b"`. A word without `=` is dropped; the first `=` separates. */
 export function parseEnv(text: string): Record<string, string> | undefined {
   const env: Record<string, string> = {};
-  for (const token of splitCommand(text)) {
+  for (const token of splitWords(text)) {
     const separator = token.indexOf("=");
     if (separator > 0) {
       env[token.slice(0, separator)] = token.slice(separator + 1);

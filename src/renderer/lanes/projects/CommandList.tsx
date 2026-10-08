@@ -110,8 +110,8 @@ function toCommand(answer: CommandAnswer, edited?: ProjectCommand): ProjectComma
   if (variables) {
     command.env = variables;
   }
-  if (edited?.shell) {
-    command.shell = true;
+  if (edited?.os) {
+    command.os = edited.os;
   }
   return command;
 }
@@ -125,8 +125,8 @@ function describe(command: ProjectCommand): string {
   for (const [name, value] of Object.entries(command.env ?? {})) {
     lines.push(`${name}=${value}`);
   }
-  if (command.shell) {
-    lines.push("through a shell, so only on this platform");
+  if (command.os) {
+    lines.push("only on this platform");
   }
   return lines.join("\n");
 }

@@ -230,7 +230,7 @@ export interface ControlTerminals {
   createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TabDescriptor;
   /** The new tab taking over the tab's session, or why there is none. */
   handOver(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
-  createCommandTab(command: ProjectCommand): TabDescriptor | undefined;
+  createCommandTab(command: ProjectCommand): TabDescriptor;
   closeTabs(tabIds: string[]): Promise<void>;
   /** Where content without a path of its own lands for the tab (store/drops.ts). */
   dropsDir(tabId: string): string;
