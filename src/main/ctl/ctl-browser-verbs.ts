@@ -90,7 +90,11 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
     "browser-fill": async (args, caller) => {
       const { tabId } = pageOf(args, caller);
       const filled = element(args);
-      const value = typeof args.text === "string" ? args.text : "";
+      // Required, but may be empty: "" clears the field.
+      if (typeof args.text !== "string") {
+        throw new ControlError("bad_args", 'missing <text>: pass the text to type, "" to clear the field');
+      }
+      const value = args.text;
       await acting(() => automation.fill(tabId, filled, value));
       return { result: { filled } };
     },

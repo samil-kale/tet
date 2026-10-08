@@ -1532,6 +1532,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(stale.status, EXIT_CODES.usage);
     assert.match(stale.stderr, /take a new snapshot/);
     assert.equal((await tetCtl(["browser-wait"])).status, EXIT_CODES.usage, "nothing to wait for");
+    assert.match((await tetCtl(["browser-fill", "e1"])).stderr, /missing <text>/, "no text is no clearing");
     assert.match((await tetCtl(["browser-click", "e1", "--tab", "tet:browser:99"])).stderr, /unknown browser tab/);
     assertRefused(await tetCtl(["browser-list", "--project", OTHER.id]), /own project/, "another project");
   });

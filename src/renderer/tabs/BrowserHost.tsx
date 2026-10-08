@@ -101,15 +101,18 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   const floating = useFloating();
   const shown = active && visible;
 
-  // Measured where the floating elements are: each change of them measures again. A notice over the
-  // page holds it until dismissed, which the page says, as VS Code's does.
+  /** Counts the page's box changes (`place`): a window or pane resize moves it under what floats. */
+  const [moved, setMoved] = useState(0);
+
+  // Measured where the floating elements are: each change of them, or of the page's box, measures
+  // again. A notice over the page holds it until dismissed, which the page says, as VS Code's does.
   const [overlapped, setOverlapped] = useState<{ any: boolean; notice: boolean }>({ any: false, notice: false });
   useEffect(() => {
     const box = page.current?.getBoundingClientRect();
     const over = shown && box !== undefined ? floating.filter((entry) => overlaps(entry.element.getBoundingClientRect(), box)) : [];
     const next = { any: over.length > 0, notice: over.some((entry) => entry.notice) };
     setOverlapped((current) => (current.any === next.any && current.notice === next.notice ? current : next));
-  }, [floating, shown]);
+  }, [floating, shown, moved]);
 
   const over = shown && (covered || overlapped.any);
   const paused = shown && !covered && overlapped.notice;
@@ -129,6 +132,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       const { left, top, width, height } = element.getBoundingClientRect();
       const bounds: BrowserBounds = { x: left, y: top, width, height };
       window.tet.browser.place(at, tabId, bounds);
+      setMoved((count) => count + 1);
     };
     place();
     const observer = new ResizeObserver(place);

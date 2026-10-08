@@ -73,6 +73,8 @@ interface Tab {
   tabId: string;
   ref: ProjectRef;
   view: WebContentsView;
+  /** Opened by a page (MAX_POPUPS), not by the user or an agent. */
+  popup: boolean;
 }
 
 /**
@@ -93,6 +95,14 @@ const GRANTED_PERMISSIONS: ReadonlySet<string> = new Set([
 
 /** Every page's: Chromium's sandbox, and nothing of Electron's or Node's reaching it. */
 const PAGE_PREFERENCES = { sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false };
+
+/** The tabs a repository's or worktree's pages may have opened at once: Chromium's popup blocker,
+ *  which lets a popup through only after the user's input, is Chrome's and not Electron's, so a page
+ *  opening them in a loop would otherwise open them without end. */
+const MAX_POPUPS = 10;
+
+/** The downloads `browser-downloads` keeps, the newest. */
+const MAX_DOWNLOADS = 200;
 
 /** Chromium's code for a load a newer one replaced: no failure. */
 const ERR_ABORTED = -3;
@@ -176,7 +186,7 @@ export class BrowserTabs {
   /** A new tab loading `typed` (browserUrl), made the active one; `loaded` settles as `load` does. */
   create(ref: ProjectRef, typed: string): { tab: BrowserTabInfo; loaded: Promise<void> } {
     const url = browserUrl(typed);
-    const tab = this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }));
+    const tab = this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }), false);
     const loaded = load(tab, url);
     this.changed(ref);
     return { tab: infoOf(tab), loaded };
@@ -184,8 +194,10 @@ export class BrowserTabs {
 
   /** `view` as a tab of the repository or worktree, made the active one: a new page, or a popup a
    *  page opened. */
-  private open(ref: ProjectRef, view: WebContentsView): Tab {
-    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view };
+  private open(ref: ProjectRef, view: WebContentsView, popup: boolean): Tab {
+    const tab: Tab = { tabId: `${BROWSER_TAB_PREFIX}${++this.created}`, ref, view, popup };
+    /** Told once that a popup was blocked, not once per popup. */
+    let blocked = false;
     const changed = (): void => this.changed(ref);
     view.setVisible(false);
     view.webContents.on("did-start-loading", changed);
@@ -207,6 +219,13 @@ export class BrowserTabs {
         // Not a web address: nothing opens.
         return { action: "deny" };
       }
+      if (this.of(ref).filter((held) => held.popup).length >= MAX_POPUPS) {
+        if (!blocked) {
+          blocked = true;
+          this.deps.notice("warning", `Blocked a popup of ${view.webContents.getURL()}: its pages opened ${MAX_POPUPS} tabs already`);
+        }
+        return { action: "deny" };
+      }
       return {
         action: "allow",
         overrideBrowserWindowOptions: { webPreferences: PAGE_PREFERENCES },
@@ -217,8 +236,8 @@ export class BrowserTabs {
         }: Electron.BrowserWindowConstructorOptions & { webContents?: Electron.WebContents }) => {
           // A link opened in the background (a middle click) comes without its page: loaded anew.
           const popup = page
-            ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }))
-            : this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }));
+            ? this.open(ref, new WebContentsView({ webContents: page, webPreferences }), true)
+            : this.open(ref, new WebContentsView({ webPreferences: { session: this.profileOf(ref), ...PAGE_PREFERENCES } }), true);
           if (!page) {
             load(popup, browserUrl(opened)).catch(() => undefined);
           }
@@ -433,7 +452,8 @@ export class BrowserTabs {
     return profile;
   }
 
-  /** What the repository's or worktree's pages downloaded during this run, the oldest first. */
+  /** What the repository's or worktree's pages downloaded during this run, the oldest first, of the
+   *  last MAX_DOWNLOADS. */
   downloads(ref: ProjectRef): BrowserDownload[] {
     return this.downloaded.filter((download) => sameProjectRef(download.ref, ref)).map((download) => ({ ...download }));
   }
@@ -458,6 +478,7 @@ export class BrowserTabs {
     };
     item.setSavePath(download.path);
     this.downloaded.push(download);
+    this.downloaded.splice(0, this.downloaded.length - MAX_DOWNLOADS);
     item.on("updated", () => {
       download.receivedBytes = item.getReceivedBytes();
       download.totalBytes = item.getTotalBytes();
