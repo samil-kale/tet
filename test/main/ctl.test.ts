@@ -990,6 +990,14 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.shown, [[PROJECT.id, "tab-new"]]);
   });
 
+  it("leaves a tab it opens or starts behind with --background", async () => {
+    assert.equal((await tetCtl(["tabs-create", "--agent", "shell", "--background"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["tabs-run-command", "build", "--background"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["tabs-start", "tab-2", "--background"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["browser-open", "localhost:3000", "--background"])).status, EXIT_CODES.ok);
+    assert.deepEqual(calls.shown, []);
+  });
+
   it("refuses an agent it does not know", async () => {
     const run = await tetCtl(["tabs-create", "--agent", "gpt"]);
     assert.equal(run.status, EXIT_CODES.usage);
@@ -1078,6 +1086,14 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["tabs-restart", "tab-2"])).result, { restarted: "tab-2" });
     assert.equal((await tetCtl(["tabs-start", "tab-9"])).status, EXIT_CODES.usage);
     assert.deepEqual([calls.started, calls.restarted], [["tab-2"], ["tab-2"]]);
+    assert.deepEqual(
+      calls.shown,
+      [
+        [PROJECT.id, "tab-2"],
+        [PROJECT.id, "tab-2"],
+      ],
+      "brought to the front",
+    );
   });
 
   it("refuses to start or restart a tab with nothing to do", async () => {

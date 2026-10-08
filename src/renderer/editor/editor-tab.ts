@@ -46,6 +46,8 @@ export interface OpenEditor {
   diff?: boolean;
   /** A tab of its own instead of the project's preview tab. */
   keep?: boolean;
+  /** Left behind its pane's active tab (`tet-ctl editor-open --background`). */
+  background?: boolean;
   /** A Markdown file with its preview beside the editor, and the default for the ones after. */
   markdownPreview?: boolean;
   /** A search result's match, selected once the file's text is in the editor. */

@@ -74,17 +74,21 @@ export function useEditorOpening(
         openEditorFile(ref, tabId, path, how.keep !== true, how);
         setEditorTabs((current) => ({ ...current, [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit }] }));
       }
-      activateTab(refKey, tabId);
+      if (!how.background) {
+        activateTab(refKey, tabId);
+      }
     },
     [activateTab, editorTabsRef, setEditorTabs],
   );
 
-  // A file the control channel asked for, brought to front.
+  // A file the control channel asked for, brought to front unless in the background.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ ref, path, keep }) => {
-        activateRef(refKeyOf(ref));
-        openEditor(ref, path, { keep });
+      window.tet.repository.onOpenEditor(({ ref, path, keep, background }) => {
+        if (!background) {
+          activateRef(refKeyOf(ref));
+        }
+        openEditor(ref, path, { keep, background });
       }),
     [openEditor, activateRef],
   );

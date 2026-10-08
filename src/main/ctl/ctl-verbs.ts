@@ -25,6 +25,7 @@ import { browserVerbs } from "./ctl-browser-verbs";
 import { sbxVerbs } from "./ctl-sbx-verbs";
 import { worktreeVerbs } from "./ctl-worktree-verbs";
 import {
+  bringToFront,
   callerRef,
   ControlError,
   count,
@@ -324,21 +325,23 @@ export function verbs(deps: ControlDeps): Handlers {
     },
 
     "tabs-start": (args, caller) => {
-      const { tabs, tabId } = ownedTab(args, caller);
+      const { tabs, tabId, ref } = ownedTab(args, caller);
       if (!tabs.start(tabId)) {
         throw new ControlError(
           "bad_args",
           `tab ${tabId} is not waiting for its first start (see tabs-list; tabs-restart for one that stopped)`,
         );
       }
+      bringToFront(deps, args, ref, tabId);
       return { result: { started: tabId } };
     },
 
     "tabs-restart": (args, caller) => {
-      const { tabs, tabId } = ownedTab(args, caller);
+      const { tabs, tabId, ref } = ownedTab(args, caller);
       if (!tabs.restart(tabId)) {
         throw new ControlError("bad_args", `tab ${tabId} has nothing to restart: it neither stopped nor failed to start (see tabs-list)`);
       }
+      bringToFront(deps, args, ref, tabId);
       return { result: { restarted: tabId } };
     },
 
@@ -442,8 +445,9 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", `not inside the repository: ${typed}`);
       }
       const keep = args.keep === true;
+      const background = args.background === true;
       // In `after`, so a file the sandbox check refuses is never opened.
-      return { result: { opened: filePath, keep }, after: () => deps.openEditor(ref, filePath, keep) };
+      return { result: { opened: filePath, keep }, after: () => deps.openEditor(ref, filePath, keep, background) };
     },
 
     "editor-state": async (args, caller) => {
@@ -469,7 +473,7 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", `a ${agent.id} tab takes no prompt`);
       }
       const tab = terminals(ref).createTab(agent.id, caller.side.holdsTabs, prompt);
-      deps.showTab(ref, tab.tabId);
+      bringToFront(deps, args, ref, tab.tabId);
       return { result: tab };
     },
 
@@ -480,7 +484,7 @@ export function verbs(deps: ControlDeps): Handlers {
         // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
         throw new ControlError("internal", handed);
       }
-      deps.showTab(ref, handed.tabId);
+      bringToFront(deps, args, ref, handed.tabId);
       return { result: handed };
     },
 
@@ -494,7 +498,7 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("not_found", `no saved command named ${name} in ${found.name}'s tet.json`);
       }
       const tab = terminals(ref).createCommandTab(command);
-      deps.showTab(ref, tab.tabId);
+      bringToFront(deps, args, ref, tab.tabId);
       return { result: tab };
     },
 

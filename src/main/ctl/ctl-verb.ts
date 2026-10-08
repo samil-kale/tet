@@ -93,6 +93,13 @@ export function optionalText(args: Record<string, unknown>, name: string): strin
 /** The server's lookup of the repository or worktree a verb acts on (resolveCallerRef). */
 export type RefFrom = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: ProjectRef };
 
+/** Brings the tab a verb opened or started to the front, unless `--background` leaves it behind. */
+export function bringToFront(deps: Pick<ControlDeps, "showTab">, args: Record<string, unknown>, ref: ProjectRef, tabId: string): void {
+  if (args.background !== true) {
+    deps.showTab(ref, tabId);
+  }
+}
+
 /** A positive integer flag, or `fallback` when absent. */
 export function count(args: Record<string, unknown>, name: string, fallback: number): number {
   if (args[name] === undefined) {
@@ -147,8 +154,8 @@ export interface ControlDeps {
    *  unknown project. */
   projectRefPath(ref: ProjectRef): string | undefined;
   /** Opens a file in the repository's or worktree's preview tab, or a kept tab, and brings it to
-   *  the front. */
-  openEditor(ref: ProjectRef, path: string, keep: boolean): void;
+   *  the front unless `background`. */
+  openEditor(ref: ProjectRef, path: string, keep: boolean, background: boolean): void;
   /** The active editor tab's text, asked of the window live — the one thing not kept as a report
    *  (see EditorReport). */
   editorContent(ref: ProjectRef): Promise<string | undefined>;

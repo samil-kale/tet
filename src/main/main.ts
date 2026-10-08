@@ -360,7 +360,7 @@ async function startControl(): Promise<void> {
           const project = store.get(ref.projectId);
           return project && projectRefPath(dataRoot, project, ref);
         },
-        openEditor: (ref, filePath, keep) => send("editor:open", { ref, path: filePath, keep }),
+        openEditor: (ref, filePath, keep, background) => send("editor:open", { ref, path: filePath, keep, background }),
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),

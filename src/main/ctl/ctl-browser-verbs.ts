@@ -4,6 +4,7 @@ import type { ProjectRef } from "../../shared/types/project";
 import { browserUrl, type BrowserSandbox, type BrowserScope } from "../browser/browser-tabs";
 import { writeDropFile } from "../store/drops";
 import {
+  bringToFront,
   callerTab,
   ControlError,
   count,
@@ -118,6 +119,7 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
       let tabId = existing;
       try {
         if (seconds !== undefined) {
+          // A mistyped address fails now, not once the wait ran out.
           browserUrl(url);
           // An empty tab first: its profile, and a sandbox's way out, ask for the page.
           if (tabId === undefined) {
@@ -135,7 +137,7 @@ export function browserVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extrac
         } else {
           loaded = tabs.navigate(ref, tabId, url);
         }
-        deps.showTab(ref, tabId);
+        bringToFront(deps, args, ref, tabId);
         await loaded;
       } catch (error) {
         if (error instanceof ControlError) {

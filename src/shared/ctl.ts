@@ -120,6 +120,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   kb: "value",
   timeout: "value",
   keep: "switch",
+  background: "switch",
   force: "switch",
   tab: "value",
   text: "value",
@@ -502,41 +503,43 @@ const VERBS = [
   {
     verb: "tabs-create",
     group: "The other tabs",
-    usage: "tabs-create --agent <id> [--prompt <text>] [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-create --agent <id> [--prompt <text>] [--background] [--project <id>] [--worktree <key or branch>]",
     summary:
-      "Open a new terminal tab for that agent (an id from agents-list). With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
+      "Open a new terminal tab for that agent (an id from agents-list) and bring it to the front (not with --background). With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
     positionals: [],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-hand-over",
     group: "The other tabs",
-    usage: "tabs-hand-over <tab-id> --agent <id> [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-hand-over <tab-id> --agent <id> [--background] [--project <id>] [--worktree <key or branch>]",
     summary:
-      "Open a tab of another agent (an id from agents-list) that takes over the tab's session: it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
+      "Open a tab of another agent (an id from agents-list) that takes over the tab's session, and bring it to the front (not with --background): it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-run-command",
     group: "The other tabs",
-    usage: "tabs-run-command <name> [--project <id>] [--worktree <key or branch>]",
-    summary: "Run one of the project's saved commands (tet.json) in a new tab of the repository or a worktree.",
+    usage: "tabs-run-command <name> [--background] [--project <id>] [--worktree <key or branch>]",
+    summary:
+      "Run one of the project's saved commands (tet.json) in a new tab of the repository or a worktree and bring it to the front (not with --background).",
     positionals: ["name"],
   },
   {
     verb: "tabs-start",
     group: "The other tabs",
-    usage: "tabs-start <tab-id> [--project <id>] [--worktree <key or branch>]",
-    summary: "Start a tab's process without bringing it to the front.",
+    usage: "tabs-start <tab-id> [--background] [--project <id>] [--worktree <key or branch>]",
+    summary: "Start a tab's process and bring it to the front (not with --background).",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-restart",
     group: "The other tabs",
-    usage: "tabs-restart <tab-id> [--project <id>] [--worktree <key or branch>]",
-    summary: "Restart a tab that stopped or could not start, as its menu's Restart does.",
+    usage: "tabs-restart <tab-id> [--background] [--project <id>] [--worktree <key or branch>]",
+    summary:
+      "Restart a tab that stopped or could not start, as its menu's Restart does, and bring it to the front (not with --background).",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
@@ -559,9 +562,9 @@ const VERBS = [
   {
     verb: "editor-open",
     group: "In front of the user",
-    usage: "editor-open <path> [--keep] [--project <id>] [--worktree <key or branch>]",
+    usage: "editor-open <path> [--keep] [--background] [--project <id>] [--worktree <key or branch>]",
     summary:
-      "Open a repository-relative file in the repository's or worktree's preview tab and bring it to the front; the next file replaces it, --keep gives it a tab of its own.",
+      "Open a repository-relative file in the repository's or worktree's preview tab and bring it to the front (not with --background); the next file replaces it, --keep gives it a tab of its own.",
     positionals: ["path"],
     sandbox: "ownRef",
     sandboxFile: "opened",
@@ -590,9 +593,9 @@ const VERBS = [
   {
     verb: "browser-open",
     group: "In front of the user",
-    usage: "browser-open <url> [--wait <seconds>] [--tab <id>] [--project <id>] [--worktree <key or branch>]",
+    usage: "browser-open <url> [--wait <seconds>] [--background] [--tab <id>] [--project <id>] [--worktree <key or branch>]",
     summary:
-      "Load a web page (localhost:3000 for a dev server) in the browser tab of the repository or worktree, opening one if it has none, and bring it to the front; waits for the page. With --wait, first waits until a server answers it, for one still starting, and only then loads it and brings it to the front; exits 4 after that many seconds. A worktree's tabs have a profile of their own, the repository's the global one. From a sandbox, the tab is the sandbox's own and loads through it: localhost is the sandbox's, and its network policy applies.",
+      "Load a web page (localhost:3000 for a dev server) in the browser tab of the repository or worktree, opening one if it has none, and bring it to the front (not with --background); waits for the page. With --wait, first waits until a server answers it, for one still starting, and only then loads it; exits 4 after that many seconds. A worktree's tabs have a profile of their own, the repository's the global one. From a sandbox, the tab is the sandbox's own and loads through it: localhost is the sandbox's, and its network policy applies.",
     positionals: ["url"],
     ownProjectOnly: true,
     sandbox: "ownRef",
