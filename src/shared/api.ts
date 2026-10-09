@@ -1,7 +1,17 @@
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { ShortcutId } from "./shortcuts";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
-import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserGo, BrowserLogin, BrowserMenu, BrowserTabInfo } from "./types/browser";
+import type {
+  BrowserBounds,
+  BrowserCredentials,
+  BrowserDock,
+  BrowserEdit,
+  BrowserGo,
+  BrowserLogin,
+  BrowserMenu,
+  BrowserPart,
+  BrowserTabInfo,
+} from "./types/browser";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
 import type { CommitFileContent, ExplorerListing, FileContent, FileSearchQuery, FileSearchResult, FileWriteResult } from "./types/files";
 import type {
@@ -327,13 +337,17 @@ export interface TETApi {
     edit: (ref: ProjectRef, tabId: string, edit: BrowserEdit) => void;
     /** The page's DevTools on the element at `x`, `y` (BrowserMenu's). */
     inspect: (ref: ProjectRef, tabId: string, x: number, y: number) => void;
+    /** The page's DevTools opened, or closed while open (`BrowserTabInfo.devTools`). */
+    toggleDevTools: (ref: ProjectRef, tabId: string) => void;
+    /** Where every page's DevTools open from now on; those open move there. */
+    dock: (dock: BrowserDock) => void;
     /** The login a page asked for (`onLogin`); null cancels it, and the page shows its refusal. */
     answerLogin: (id: number, login: BrowserCredentials | null) => void;
-    /** Where the page is drawn; null hides it, out of sight. */
-    place: (ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => void;
-    /** The page as it looks, a JPEG data URL, shown in its place while something of the window lies
-     *  over it; null when it has no look yet. */
-    still: (ref: ProjectRef, tabId: string) => Promise<string | null>;
+    /** Where the page, or its docked DevTools, is drawn; null hides it, out of sight. */
+    place: (ref: ProjectRef, tabId: string, part: BrowserPart, bounds: BrowserBounds | null) => void;
+    /** The page, or its docked DevTools, as it looks, a JPEG data URL, shown in its place while
+     *  something of the window lies over it; null when it has no look yet. */
+    still: (ref: ProjectRef, tabId: string, part: BrowserPart) => Promise<string | null>;
     /** The repository's or worktree's active browser tab, which the browser verbs act on — the
      *  window's layout knows. */
     reportActive: (ref: ProjectRef, tabId: string) => void;

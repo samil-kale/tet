@@ -1,19 +1,25 @@
-import { memo, useEffect, useRef, useState } from "react";
-import type {
-  BrowserBounds,
-  BrowserCredentials,
-  BrowserEdit,
-  BrowserGo,
-  BrowserLogin,
-  BrowserMenu,
-  BrowserTabInfo,
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  BROWSER_DOCKS,
+  type BrowserBounds,
+  type BrowserCredentials,
+  type BrowserDock,
+  type BrowserEdit,
+  type BrowserGo,
+  type BrowserLogin,
+  type BrowserMenu,
+  type BrowserPart,
+  type BrowserTabInfo,
 } from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
 import { TextField } from "../ui/Field";
-import { BackIcon, ForwardIcon, ReloadIcon } from "../ui/icons";
+import { BackIcon, DevToolsIcon, DockIcon, ForwardIcon, ReloadIcon } from "../ui/icons";
 import { IconButton } from "../ui/IconButton";
+import { layoutChoice, useStoredShare } from "../ui/layout-storage";
+import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
+import { useElementSize } from "../ui/use-element-size";
 import { useFloating, useWindowCovered } from "../ui/window-covered";
 
 interface BrowserHostProps {
@@ -66,24 +72,45 @@ async function askLogin(login: BrowserLogin): Promise<void> {
 /** How often the still of a page under something of the window is taken anew, as VS Code's. */
 const STILL_INTERVAL_MS = 1000;
 
+/** Where DevTools open, as the user last docked them: one for every tab, as Chrome's dock side. */
+const devToolsDock = layoutChoice("browser.devtools-dock", BROWSER_DOCKS, "right");
+
+/** The dock button's title for where it docks to, as Chrome's dock side menu names them. */
+const DOCK_TITLES: Record<BrowserDock, string> = {
+  right: "Dock to Right",
+  bottom: "Dock to Bottom",
+  window: "Undock into Separate Window",
+};
+
+/** The side of a view's box the sash between page and DevTools lies on. */
+type SashSide = "left" | "top" | "right" | "bottom";
+
+/** Half the sash's hit area (`.sash`, 4px, its line in the middle): what each view beside it leaves
+ *  free, which it would otherwise cover, drawn above TET's page — the sash is grabbed on all of it. */
+const SASH_HALF = 2;
+
 /**
- * Where the page is drawn within its box. A pane's left border is the sash's line, drawn in the
- * pane's first pixel column (`.sash`), which the page, drawn above TET's page, would cover: it
- * starts one pixel in, past it. Whole pixels, as main sets a view's bounds: its still, laid where
- * these say, then lies exactly where the page did.
+ * Where the page, or its DevTools, is drawn within its box. A pane's left border is the sash's
+ * line, drawn in the pane's first pixel column (`.sash`), which the view would cover: it starts one
+ * pixel in, past it. Beside the sash between page and DevTools (`sashSide`), it leaves that sash's
+ * half free. Whole pixels, as main sets a view's bounds: its still, laid where these say, then lies
+ * exactly where the view did.
  */
-function pageBounds({ left, top, right, bottom }: DOMRect): BrowserBounds {
-  const x = Math.round(left > 0 ? Math.min(left + 1, right) : left);
-  const y = Math.round(top);
-  return { x, y, width: Math.round(right) - x, height: Math.round(bottom) - y };
+function viewBounds(box: DOMRect, sashSide?: SashSide): BrowserBounds {
+  const inset = (side: SashSide): number => (side === sashSide ? SASH_HALF : 0);
+  const x = Math.round(box.left > 0 ? Math.min(box.left + Math.max(1, inset("left")), box.right) : box.left);
+  const y = Math.round(Math.min(box.top + inset("top"), box.bottom));
+  const right = Math.round(Math.max(box.right - inset("right"), x));
+  const bottom = Math.round(Math.max(box.bottom - inset("bottom"), y));
+  return { x, y, width: right - x, height: bottom - y };
 }
 
 /**
- * A page's still (`browser.still`), where the page lay in its box when taken, in CSS pixels. The
- * page lies on whole CSS pixels (`pageBounds`), which at a fractional scale end inside a device
+ * A view's still (`browser.still`), where the view lay in its box when taken, in CSS pixels. The
+ * view lies on whole CSS pixels (`viewBounds`), which at a fractional scale end inside a device
  * pixel: the view is drawn from the rounded one (133 for 132.5), its still holds every device pixel
- * the page touches (1248 for 132.5 to 1379.5). So the still is laid from that rounded device pixel,
- * one image pixel to one device pixel, its surplus cut off by the box; on the page's CSS box Blink
+ * the view touches (1248 for 132.5 to 1379.5). So the still is laid from that rounded device pixel,
+ * one image pixel to one device pixel, its surplus cut off by the box; on the view's CSS box Blink
  * would round the other way than the view, a device pixel off.
  */
 interface Still {
@@ -94,44 +121,35 @@ interface Still {
   height: number;
 }
 
+interface BrowserViewProps {
+  at: ProjectRef;
+  tabId: string;
+  part: BrowserPart;
+  /** The box the view is drawn over. */
+  box: RefObject<HTMLDivElement | null>;
+  /** The docked DevTools' size, from their sash; the page takes the rest. */
+  style?: React.CSSProperties;
+  /** On screen in its pane, its pane on screen. */
+  shown: boolean;
+  /** Something of the window lies over the tab: a still of the view instead. */
+  over: boolean;
+  /** The side the sash between page and DevTools lies on, which it leaves free (`viewBounds`). */
+  sashSide?: SashSide;
+  /** Its box moved, which may move it under what floats. */
+  onPlaced: () => void;
+  children?: ReactNode;
+}
+
 /**
- * A browser tab: its address bar, then the box its page is drawn over. The page is main's own view
- * (browser/browser-tabs.ts), drawn above TET's page, so this box only says where: on screen, it
- * hands main its bounds, out of sight none. Under a dialog, or where something floats over it
- * (window-covered.ts), the page is hidden and a still of it shown in the box instead, taken anew
- * every STILL_INTERVAL_MS, as VS Code's browser does.
+ * A view of main's (browser/browser-tabs.ts), the page or its docked DevTools, drawn above TET's
+ * page, so this box only says where: on screen, it hands main its bounds, out of sight none. Under
+ * something of the window (`over`), the view is hidden and a still of it shown in the box instead,
+ * taken anew every STILL_INTERVAL_MS, as VS Code's browser does.
  */
-export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible, focused, onFocused, onOpenTab }: BrowserHostProps) {
-  const { tabId } = tab;
-  const page = useRef<HTMLDivElement>(null);
-  const address = useRef<HTMLInputElement>(null);
-  /** The address bar while typed into; null shows the page's own address. As in Chrome, an edit
-   *  outlives leaving the bar and goes with Escape or the page going elsewhere. */
-  const [typed, setTyped] = useState<string | null>(null);
-  useEffect(() => setTyped(null), [tab.url]);
-  const covered = useWindowCovered();
-  const shown = active && visible;
-  const floating = useFloating(shown);
-
-  /** Counts the page's box changes (`place`): a window or pane resize moves it under what floats. */
-  const [moved, setMoved] = useState(0);
-
-  // Measured where the floating elements are: each change of them, or of the page's box, measures
-  // again. A notice over the page holds it until dismissed, which the page says, as VS Code's does.
-  const [overlapped, setOverlapped] = useState<{ any: boolean; notice: boolean }>({ any: false, notice: false });
-  useEffect(() => {
-    const box = page.current?.getBoundingClientRect();
-    const over = shown && box !== undefined ? floating.filter((entry) => overlaps(entry.element.getBoundingClientRect(), box)) : [];
-    const next = { any: over.length > 0, notice: over.some((entry) => entry.notice) };
-    setOverlapped((current) => (current.any === next.any && current.notice === next.notice ? current : next));
-  }, [floating, shown, moved]);
-
-  const over = shown && (covered || overlapped.any);
-  const paused = shown && !covered && overlapped.notice;
-
-  // Under something of the window, a still of the page, taken while it is still drawn. The page is
+function BrowserView({ at, tabId, part, box, style, shown, over, sashSide, onPlaced, children }: BrowserViewProps) {
+  // Under something of the window, a still of the view, taken while it is still drawn. The view is
   // hidden only once the still is painted (`laid`), and once nothing lies over it the still stays
-  // until the page is drawn again (two frames): either way round, the box would flash empty.
+  // until the view is drawn again (two frames): either way round, the box would flash empty.
   const [still, setStill] = useState<Still | null>(null);
   const [laid, setLaid] = useState(false);
   useEffect(() => {
@@ -146,17 +164,17 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     }
     let gone = false;
     const take = async (): Promise<void> => {
-      const box = page.current?.getBoundingClientRect();
-      const url = await window.tet.browser.still(at, tabId);
-      if (!gone && url && box) {
-        const { x, y, width, height } = pageBounds(box);
+      const rect = box.current?.getBoundingClientRect();
+      const url = await window.tet.browser.still(at, tabId, part);
+      if (!gone && url && rect) {
+        const { x, y, width, height } = viewBounds(rect, sashSide);
         const ratio = window.devicePixelRatio;
         const [left, top] = [Math.round(x * ratio) / ratio, Math.round(y * ratio) / ratio];
         const pixels = {
           width: Math.ceil((x + width) * ratio) - Math.floor(x * ratio),
           height: Math.ceil((y + height) * ratio) - Math.floor(y * ratio),
         };
-        setStill({ url, left: left - box.left, top: top - box.top, width: pixels.width / ratio, height: pixels.height / ratio });
+        setStill({ url, left: left - rect.left, top: top - rect.top, width: pixels.width / ratio, height: pixels.height / ratio });
       }
     };
     // One not taken (no frame there yet) leaves the last still standing.
@@ -167,27 +185,27 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
       gone = true;
       clearInterval(timer);
     };
-  }, [at, tabId, over]);
+  }, [at, tabId, part, box, over, sashSide]);
   const drawn = shown && !(over && laid);
 
-  // The page follows its box while drawn; under its still, out of sight, or gone from this pane
+  // The view follows its box while drawn; under its still, out of sight, or gone from this pane
   // (closed, or moved to another, whose host places it anew), it is hidden.
   useEffect(() => {
-    const element = page.current;
+    const element = box.current;
     if (!element || !drawn) {
       return;
     }
     /** The bounds last handed main: a window resize reports the box twice, mostly unmoved. */
     let placed = "";
     const place = (): void => {
-      const bounds = pageBounds(element.getBoundingClientRect());
+      const bounds = viewBounds(element.getBoundingClientRect(), sashSide);
       const key = `${bounds.x},${bounds.y},${bounds.width},${bounds.height}`;
       if (key === placed) {
         return;
       }
       placed = key;
-      window.tet.browser.place(at, tabId, bounds);
-      setMoved((count) => count + 1);
+      window.tet.browser.place(at, tabId, part, bounds);
+      onPlaced();
     };
     place();
     const observer = new ResizeObserver(place);
@@ -196,9 +214,87 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", place);
-      window.tet.browser.place(at, tabId, null);
+      window.tet.browser.place(at, tabId, part, null);
     };
-  }, [at, tabId, drawn]);
+  }, [at, tabId, part, box, drawn, sashSide, onPlaced]);
+
+  return (
+    <div ref={box} className={`browser-view${part === "devTools" ? " browser-devtools" : ""}`} style={style}>
+      {still && (
+        <img
+          className="browser-still"
+          src={still.url}
+          alt=""
+          style={{ left: still.left, top: still.top, width: still.width, height: still.height }}
+          onLoad={() => requestAnimationFrame(() => setLaid(true))}
+        />
+      )}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A browser tab: its address bar, then the box its page is drawn over (BrowserView), its DevTools
+ * docked beside or below it. Under a dialog, or where something floats over the tab
+ * (window-covered.ts), both show stills instead.
+ */
+export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible, focused, onFocused, onOpenTab }: BrowserHostProps) {
+  const { tabId } = tab;
+  const body = useRef<HTMLDivElement>(null);
+  const page = useRef<HTMLDivElement>(null);
+  const devToolsBox = useRef<HTMLDivElement>(null);
+  const address = useRef<HTMLInputElement>(null);
+  /** The address bar while typed into; null shows the page's own address. As in Chrome, an edit
+   *  outlives leaving the bar and goes with Escape or the page going elsewhere. */
+  const [typed, setTyped] = useState<string | null>(null);
+  useEffect(() => setTyped(null), [tab.url]);
+  const covered = useWindowCovered();
+  const shown = active && visible;
+  const floating = useFloating(shown);
+
+  /** Counts the views' box changes (`onPlaced`): a window or pane resize moves them under what floats. */
+  const [moved, setMoved] = useState(0);
+  const placed = useCallback(() => setMoved((count) => count + 1), []);
+
+  // Measured where the floating elements are: each change of them, or of the views' boxes, measures
+  // again. A notice over the tab holds it until dismissed, which the page says, as VS Code's does.
+  const [overlapped, setOverlapped] = useState<{ any: boolean; notice: boolean }>({ any: false, notice: false });
+  useEffect(() => {
+    const box = body.current?.getBoundingClientRect();
+    const over = shown && box !== undefined ? floating.filter((entry) => overlaps(entry.element.getBoundingClientRect(), box)) : [];
+    const next = { any: over.length > 0, notice: over.some((entry) => entry.notice) };
+    setOverlapped((current) => (current.any === next.any && current.notice === next.notice ? current : next));
+  }, [floating, shown, moved]);
+
+  const over = shown && (covered || overlapped.any);
+  const paused = shown && !covered && overlapped.notice;
+
+  // Where every page's DevTools open, told main once: it starts with Chrome's default.
+  useEffect(() => {
+    window.tet.browser.dock(devToolsDock.get());
+  }, []);
+  const docked = tab.devTools === "right" || tab.devTools === "bottom" ? tab.devTools : undefined;
+  // Closed, the button offers what follows where they open next, disabled.
+  const nextDock = BROWSER_DOCKS[(BROWSER_DOCKS.indexOf(tab.devTools ?? devToolsDock.get()) + 1) % BROWSER_DOCKS.length];
+  const dock = (next: BrowserDock) => (): void => {
+    devToolsDock.set(next);
+    window.tet.browser.dock(next);
+  };
+
+  // One share for every tab's DevTools, beside or below, as for the Markdown preview; half until dragged.
+  const [devToolsShare, setDevToolsShare] = useStoredShare("browser-devtools", 1 / 2);
+  const bodySize = useElementSize(body, docked);
+  const bodyExtent = (docked === "right" ? bodySize?.width : bodySize?.height) ?? 0;
+  const devToolsSize = Math.round(bodyExtent * devToolsShare);
+  const resizeDevTools = useCallback(
+    (size: number) => {
+      if (bodyExtent > 0) {
+        setDevToolsShare(size / bodyExtent);
+      }
+    },
+    [setDevToolsShare, bodyExtent],
+  );
 
   // The page taking the focus focuses this pane, as a click into a terminal does.
   useEffect(
@@ -216,7 +312,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   useEffect(
     () =>
       window.tet.browser.onMenu((opened) => {
-        const box = page.current && pageBounds(page.current.getBoundingClientRect());
+        const box = page.current && viewBounds(page.current.getBoundingClientRect());
         if (opened.tabId === tabId && box) {
           setMenu({ x: box.x + opened.menu.x, y: box.y + opened.menu.y, menu: opened.menu });
         }
@@ -319,6 +415,16 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           <IconButton title="Reload" onClick={go("reload")}>
             <ReloadIcon />
           </IconButton>
+          <IconButton
+            active={tab.devTools !== undefined}
+            title={`${tab.devTools ? "Close" : "Open"} DevTools (F12)`}
+            onClick={() => window.tet.browser.toggleDevTools(at, tabId)}
+          >
+            <DevToolsIcon />
+          </IconButton>
+          <IconButton title={DOCK_TITLES[nextDock]} disabled={!tab.devTools} onClick={dock(nextDock)}>
+            <DockIcon dock={nextDock} />
+          </IconButton>
         </div>
         <input
           ref={address}
@@ -333,23 +439,39 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
           onContextMenu={onContextMenu}
         />
       </div>
-      <div ref={page} className="browser-page">
-        {still && (
-          <img
-            className="browser-still"
-            src={still.url}
-            alt=""
-            style={{ left: still.left, top: still.top, width: still.width, height: still.height }}
-            onLoad={() => requestAnimationFrame(() => setLaid(true))}
-          />
-        )}
-        {paused && (
-          <div className="browser-paused">
-            <div className="browser-paused-message">
-              <div className="browser-paused-heading">Paused due to Notification</div>
-              <div className="browser-paused-detail">Dismiss the notification to continue using the browser.</div>
+      <div ref={body} className={`browser-body${docked === "bottom" ? " bottom" : ""}`}>
+        <BrowserView at={at} tabId={tabId} part="page" box={page} shown={shown} over={over} sashSide={docked} onPlaced={placed}>
+          {paused && (
+            <div className="browser-paused">
+              <div className="browser-paused-message">
+                <div className="browser-paused-heading">Paused due to Notification</div>
+                <div className="browser-paused-detail">Dismiss the notification to continue using the browser.</div>
+              </div>
             </div>
-          </div>
+          )}
+        </BrowserView>
+        {docked && (
+          <>
+            <Sash
+              orientation={docked === "right" ? "vertical" : "horizontal"}
+              size={devToolsSize}
+              min={docked === "right" ? MIN_AREA_WIDTH : MIN_AREA_HEIGHT}
+              minOther={docked === "right" ? MIN_AREA_WIDTH : MIN_AREA_HEIGHT}
+              reverse
+              onResize={resizeDevTools}
+            />
+            <BrowserView
+              at={at}
+              tabId={tabId}
+              part="devTools"
+              box={devToolsBox}
+              style={docked === "right" ? { width: devToolsSize } : { height: devToolsSize }}
+              shown={shown}
+              over={over}
+              sashSide={docked === "right" ? "left" : "top"}
+              onPlaced={placed}
+            />
+          </>
         )}
       </div>
       {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(menu.menu)} onClose={() => setMenu(null)} />}

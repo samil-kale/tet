@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -9,6 +10,7 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  CodeXml,
   CircleAlert,
   CircleX,
   Columns2,
@@ -35,6 +37,8 @@ import {
   MessageCircleX,
   MessageSquareText,
   Package,
+  PanelBottom,
+  PanelRight,
   Play,
   Plus,
   RefreshCw,
@@ -54,6 +58,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { NoticeSeverity } from "../../shared/types/app";
+import type { BrowserDock } from "../../shared/types/browser";
 
 export interface IconProps {
   className?: string;
@@ -410,6 +415,23 @@ export function ForwardIcon(props: IconProps) {
 /** Lucide's `rotate-cw` — a browser tab's reload. */
 export function ReloadIcon(props: IconProps) {
   return <Lucide {...props} icon={RotateCw} />;
+}
+
+/** Lucide's `code-xml` — a browser tab's DevTools. */
+export function DevToolsIcon(props: IconProps) {
+  return <Lucide {...props} icon={CodeXml} />;
+}
+
+const DOCK_ICONS: Record<BrowserDock, LucideIcon> = {
+  right: PanelRight,
+  bottom: PanelBottom,
+  window: AppWindow,
+};
+
+/** Where a browser tab's DevTools go — Lucide's `panel-right`, `panel-bottom`, `app-window` — as
+ *  Chrome's dock side. */
+export function DockIcon({ dock, ...props }: IconProps & { dock: BrowserDock }) {
+  return <Lucide {...props} icon={DOCK_ICONS[dock]} />;
 }
 
 /** Lucide's `settings`. */

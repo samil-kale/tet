@@ -15,7 +15,17 @@ export interface BrowserTabInfo {
   /** Opened by an agent in an sbx sandbox, whose pages load through it: what the sandbox sees, under
    *  its policy. */
   sandboxed?: boolean;
+  /** Where its page's DevTools are open; none while closed. */
+  devTools?: BrowserDock;
 }
+
+/** Where a page's DevTools open, as Chrome's dock side: beside or below the page, or in a window of
+ *  their own. In the order the address bar's button goes through them. */
+export const BROWSER_DOCKS = ["right", "bottom", "window"] as const;
+export type BrowserDock = (typeof BROWSER_DOCKS)[number];
+
+/** What of a tab main draws into the window: its page, or its page's docked DevTools. */
+export type BrowserPart = "page" | "devTools";
 
 /** Every browser tab's id starts so, shaped unlike a session id or an editor tab's (`tet:editor:`). */
 export const BROWSER_TAB_PREFIX = "tet:browser:";

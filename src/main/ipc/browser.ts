@@ -1,7 +1,15 @@
 import { handle, on } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import { browserUrl } from "../browser/browser-tabs";
-import type { BrowserBounds, BrowserCredentials, BrowserEdit, BrowserGo, BrowserTabInfo } from "../../shared/types/browser";
+import type {
+  BrowserBounds,
+  BrowserCredentials,
+  BrowserDock,
+  BrowserEdit,
+  BrowserGo,
+  BrowserPart,
+  BrowserTabInfo,
+} from "../../shared/types/browser";
 import type { ProjectRef } from "../../shared/types/project";
 import type { ShortcutKey } from "../../shared/shortcuts";
 import type { IpcDeps } from "./deps";
@@ -36,13 +44,21 @@ export function registerBrowserIpc({ browserTabs, notice }: Pick<IpcDeps, "brows
 
   on("browser:inspect", (_event, ref: ProjectRef, tabId: string, x: number, y: number) => browserTabs.inspect(ref, tabId, x, y));
 
+  on("browser:toggle-devtools", (_event, ref: ProjectRef, tabId: string) => browserTabs.toggleDevTools(ref, tabId));
+
+  on("browser:dock", (_event, dock: BrowserDock) => browserTabs.dock(dock));
+
   on("browser:answer-login", (_event, id: number, login: BrowserCredentials | null) => browserTabs.answerLogin(id, login));
 
-  on("browser:place", (_event, ref: ProjectRef, tabId: string, bounds: BrowserBounds | null) => browserTabs.place(ref, tabId, bounds));
+  on("browser:place", (_event, ref: ProjectRef, tabId: string, part: BrowserPart, bounds: BrowserBounds | null) =>
+    browserTabs.place(ref, tabId, part, bounds),
+  );
 
   on("browser:active", (_event, ref: ProjectRef, tabId: string) => browserTabs.setActive(ref, tabId));
 
-  handle("browser:still", (_event, ref: ProjectRef, tabId: string): Promise<string | null> => browserTabs.still(ref, tabId));
+  handle("browser:still", (_event, ref: ProjectRef, tabId: string, part: BrowserPart): Promise<string | null> =>
+    browserTabs.still(ref, tabId, part),
+  );
 
   // From a page's own preload (page-preload.ts), not the window's: BrowserTabs checks which page.
   on("browser:page-key", (event, key: ShortcutKey) => browserTabs.pageKey(event.sender.id, key));

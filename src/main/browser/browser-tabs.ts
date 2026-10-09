@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
-import { app, session, WebContentsView, type Debugger } from "electron";
+import { app, BrowserWindow, session, WebContentsView, type Debugger } from "electron";
 import { errorMessage } from "../../shared/errors";
 import { isLoopbackHost } from "../../shared/loopback";
 import { shortcutOf, type ShortcutId, type ShortcutKey } from "../../shared/shortcuts";
@@ -10,10 +10,12 @@ import {
   BROWSER_TAB_PREFIX,
   type BrowserBounds,
   type BrowserCredentials,
+  type BrowserDock,
   type BrowserEdit,
   type BrowserGo,
   type BrowserLogin,
   type BrowserMenu,
+  type BrowserPart,
   type BrowserTabInfo,
 } from "../../shared/types/browser";
 import { refKeyOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
@@ -123,6 +125,18 @@ interface Tab {
   popup: boolean;
   /** The sandbox it loads through; none for this machine's. */
   sandbox?: BrowserSandbox;
+  /** Its page's DevTools while open (`openDevTools`). */
+  devTools?: DevTools;
+}
+
+/**
+ * A page's DevTools, always in a host of TET's own (`setDevToolsWebContents`): a view drawn into the
+ * window beside or below the page, where its tab's box says (`place`), or a window of their own.
+ * Electron docks DevTools only into a window's own page, never beside a view.
+ */
+interface DevTools {
+  dock: BrowserDock;
+  host: WebContentsView | BrowserWindow;
 }
 
 /**
@@ -241,6 +255,8 @@ export class BrowserTabs {
   private readonly due = new Map<string, ProjectRef>();
   /** Per `refKey`, the tabs last sent to the window, as JSON (`sendTabs`). */
   private readonly sent = new Map<string, string>();
+  /** Where DevTools open, as the window last said (`dock`). */
+  private devToolsDock: BrowserDock = "right";
 
   constructor(private readonly deps: BrowserTabsDeps) {}
 
@@ -415,18 +431,7 @@ export class BrowserTabs {
       }
       this.deps.onFocused(ref, tab.tabId);
     });
-    // The page's own DevTools, by the keys that open TET's for the window (window.ts); taken before
-    // the page, as Chrome takes them.
-    view.webContents.on("before-input-event", (event, input) => {
-      if (isDevToolsKey(input)) {
-        event.preventDefault();
-        if (view.webContents.isDevToolsOpened()) {
-          view.webContents.closeDevTools();
-        } else {
-          openDevTools(view);
-        }
-      }
-    });
+    this.takeDevToolsKeys(tab, view);
     this.deps.host.addView(view);
     this.tabs.set(tab.tabId, tab);
     this.active.set(refKeyOf(ref), tab.tabId);
@@ -488,10 +493,102 @@ export class BrowserTabs {
 
   /** The page's DevTools, as its keys open them, on the element at `x`, `y`. */
   inspect(ref: ProjectRef, tabId: string, x: number, y: number): void {
-    const view = this.find(ref, tabId)?.view;
-    if (view) {
-      openDevTools(view);
-      view.webContents.inspectElement(x, y);
+    const tab = this.find(ref, tabId);
+    if (tab) {
+      this.openDevTools(tab);
+      tab.view.webContents.inspectElement(x, y);
+      this.changed(ref);
+    }
+  }
+
+  /** The page's DevTools opened, or closed while open, as its keys do. */
+  toggleDevTools(ref: ProjectRef, tabId: string): void {
+    const tab = this.find(ref, tabId);
+    if (!tab) {
+      return;
+    }
+    if (tab.devTools) {
+      this.closeDevTools(tab);
+    } else {
+      this.openDevTools(tab);
+    }
+    this.changed(ref);
+  }
+
+  /** Where DevTools open from now on, as Chrome's dock side, for every page: those open move there. */
+  dock(dock: BrowserDock): void {
+    if (dock === this.devToolsDock) {
+      return;
+    }
+    this.devToolsDock = dock;
+    for (const tab of this.tabs.values()) {
+      if (tab.devTools) {
+        this.closeDevTools(tab);
+        this.openDevTools(tab);
+        this.changed(tab.ref);
+      }
+    }
+  }
+
+  /**
+   * The page's own DevTools, by the keys that open TET's for the window (window.ts), on `drawn` —
+   * the page or its DevTools' host alike; taken before either, as Chrome takes them.
+   */
+  private takeDevToolsKeys(tab: Tab, drawn: WebContentsView | BrowserWindow): void {
+    drawn.webContents.on("before-input-event", (event, input) => {
+      if (isDevToolsKey(input)) {
+        event.preventDefault();
+        this.toggleDevTools(tab.ref, tab.tabId);
+      }
+    });
+  }
+
+  /** The page's DevTools where `devToolsDock` says, in a host made for them: one that navigated
+   *  cannot host them (`setDevToolsWebContents`). */
+  private openDevTools(tab: Tab): void {
+    if (tab.devTools) {
+      return;
+    }
+    const dock = this.devToolsDock;
+    const host =
+      dock === "window" ? new BrowserWindow({ title: "DevTools", icon: path.join(__dirname, PLATFORM.windowIcon) }) : new WebContentsView();
+    tab.devTools = { dock, host };
+    this.takeDevToolsKeys(tab, host);
+    if (host instanceof WebContentsView) {
+      // Drawn once its tab's box places it, as the page is.
+      host.setVisible(false);
+      host.webContents.on("focus", () => this.deps.onFocused(tab.ref, tab.tabId));
+      this.deps.host.addView(host);
+    } else {
+      // Closed by the user, as Chrome's own DevTools window is.
+      host.on("closed", () => {
+        if (tab.devTools?.host === host) {
+          this.closeDevTools(tab);
+          this.changed(tab.ref);
+        }
+      });
+    }
+    // Electron draws the DevTools into the host's page; nothing is sent through it.
+    // eslint-disable-next-line no-restricted-syntax
+    tab.view.webContents.setDevToolsWebContents(host.webContents);
+    tab.view.webContents.openDevTools({ mode: "detach" });
+  }
+
+  /** The page's DevTools and their host gone; the window is told by the caller (`changed`). */
+  private closeDevTools(tab: Tab): void {
+    const devTools = tab.devTools;
+    if (!devTools) {
+      return;
+    }
+    tab.devTools = undefined;
+    if (!tab.view.webContents.isDestroyed()) {
+      tab.view.webContents.closeDevTools();
+    }
+    if (devTools.host instanceof WebContentsView) {
+      this.deps.host.removeView(devTools.host);
+      devTools.host.webContents.close();
+    } else if (!devTools.host.isDestroyed()) {
+      devTools.host.destroy();
     }
   }
 
@@ -543,9 +640,9 @@ export class BrowserTabs {
     this.sent.delete(key);
   }
 
-  /** Draws the page over `bounds`, or hides it. */
-  place(ref: ProjectRef, tabId: string, bounds: BrowserBounds | null): void {
-    const view = this.find(ref, tabId)?.view;
+  /** Draws the page, or its docked DevTools, over `bounds`, or hides it. */
+  place(ref: ProjectRef, tabId: string, part: BrowserPart, bounds: BrowserBounds | null): void {
+    const view = this.viewOf(ref, tabId, part);
     if (!view) {
       return;
     }
@@ -562,13 +659,13 @@ export class BrowserTabs {
 
   /** The page as it looks, a PNG, for `browser-screenshot` (`look`). */
   async capture(ref: ProjectRef, tabId: string): Promise<Buffer | null> {
-    return (await this.look(ref, tabId))?.toPNG() ?? null;
+    return (await this.look(ref, tabId, "page"))?.toPNG() ?? null;
   }
 
-  /** The page as it looks (`look`), a JPEG data URL, for the window to show in its place while
-   *  something of it lies over the page (BrowserHost). */
-  async still(ref: ProjectRef, tabId: string): Promise<string | null> {
-    const image = await this.look(ref, tabId);
+  /** The page, or its docked DevTools, as it looks (`look`), a JPEG data URL, for the window to
+   *  show in its place while something of it lies over it (BrowserHost). */
+  async still(ref: ProjectRef, tabId: string, part: BrowserPart): Promise<string | null> {
+    const image = await this.look(ref, tabId, part);
     return image && `data:image/jpeg;base64,${image.toJPEG(STILL_QUALITY).toString("base64")}`;
   }
 
@@ -577,8 +674,8 @@ export class BrowserTabs {
    * page is shown and hidden once to have its drawing ready, and Chromium's `UnknownVizError`, no
    * frame there yet, is tried again. Null when it has no look yet.
    */
-  private async look(ref: ProjectRef, tabId: string): Promise<Electron.NativeImage | null> {
-    const view = this.find(ref, tabId)?.view;
+  private async look(ref: ProjectRef, tabId: string, part: BrowserPart): Promise<Electron.NativeImage | null> {
+    const view = this.viewOf(ref, tabId, part);
     if (!view) {
       return null;
     }
@@ -588,6 +685,13 @@ export class BrowserTabs {
     }
     const image = await capturePage(view);
     return image.isEmpty() ? null : image;
+  }
+
+  /** The view of the tab's `part`: its page, or its DevTools while docked. */
+  private viewOf(ref: ProjectRef, tabId: string, part: BrowserPart): WebContentsView | undefined {
+    const tab = this.find(ref, tabId);
+    const host = tab?.devTools?.host;
+    return part === "page" ? tab?.view : host instanceof WebContentsView ? host : undefined;
   }
 
   setActive(ref: ProjectRef, tabId: string): void {
@@ -778,6 +882,7 @@ export class BrowserTabs {
       }
     }
     this.deps.onClosed(tab.tabId);
+    this.closeDevTools(tab);
     this.deps.host.removeView(tab.view);
     if (closePage) {
       tab.view.webContents.close();
@@ -903,13 +1008,6 @@ function hostnameOf(url: string): string {
   }
 }
 
-/** Detached, as F12 opens TET's own for the window (window.ts). */
-function openDevTools(view: WebContentsView): void {
-  if (!view.webContents.isDevToolsOpened()) {
-    view.webContents.openDevTools({ mode: "detach" });
-  }
-}
-
 /**
  * Deletes the profiles of the worktrees gone, at startup before any tab opens: `clearProfile`
  * empties one whose session stays loaded until TET quits, and Electron cannot unload a session.
@@ -1008,5 +1106,6 @@ function infoOf(tab: Tab): BrowserTabInfo {
     loading: tab.view.webContents.isLoading(),
     canGoBack: history.canGoBack(),
     canGoForward: history.canGoForward(),
+    devTools: tab.devTools?.dock,
   };
 }

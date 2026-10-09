@@ -143,6 +143,8 @@ export interface SendChannels {
   "browser:go": TETApi["browser"]["go"];
   "browser:edit": TETApi["browser"]["edit"];
   "browser:inspect": TETApi["browser"]["inspect"];
+  "browser:toggle-devtools": TETApi["browser"]["toggleDevTools"];
+  "browser:dock": TETApi["browser"]["dock"];
   "browser:answer-login": TETApi["browser"]["answerLogin"];
   "browser:place": TETApi["browser"]["place"];
   "browser:active": TETApi["browser"]["reportActive"];

@@ -1486,12 +1486,30 @@ textarea:focus,
   min-width: 0;
 }
 
-.browser-page {
+/* The page's box and its DevTools', beside or below it (BrowserHost). */
+.browser-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.browser-body.bottom {
+  flex-direction: column;
+}
+
+/* A box a view of main's is drawn over (BrowserView): the page's, or its docked DevTools'. */
+.browser-view {
   position: relative;
   flex: 1;
+  min-width: 0;
   min-height: 0;
   /* A still keeps the size it was taken at: a box shrinking under it cuts it off. */
   overflow: hidden;
+}
+
+/* Sized by its sash (BrowserHost), the page taking the rest. */
+.browser-devtools {
+  flex: none;
 }
 
 /* The page's still while something of the window lies over it (BrowserHost), the page hidden. */
