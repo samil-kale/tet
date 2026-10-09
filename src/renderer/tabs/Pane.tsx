@@ -467,7 +467,7 @@ export const Pane = memo(function Pane({
   const newTabEntries = (): ContextMenuEntry[] => [
     ...agents.map((agent) => agentEntry(agent, () => void createTab(agent.id))),
     SEPARATOR,
-    { label: "Browser", icon: <BrowserIcon className="tab-icon" />, run: () => void createBrowserTab() },
+    { label: "browser", icon: <BrowserIcon className="tab-icon" />, run: () => void createBrowserTab() },
   ];
 
   return (
