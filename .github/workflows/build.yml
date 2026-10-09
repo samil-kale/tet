@@ -37,10 +37,14 @@ jobs:
       - run: node -e "require('electron')"
 
       # The same four gates the working copy is held to, before anything is packaged. The
-      # tests are what exercises the control channel's loopback TCP port on each platform.
+      # tests are what exercises the control channel's loopback TCP port on each platform; the
+      # other three read the same sources everywhere, so one runner answers for all.
       - run: npm run typecheck
+        if: runner.os == 'Linux'
       - run: npm run lint
+        if: runner.os == 'Linux'
       - run: npm run format:check
+        if: runner.os == 'Linux'
       # test/e2e/app.test.ts starts the real app, which wants a display; the other two runners
       # have one.
       - run: xvfb-run -a npm test

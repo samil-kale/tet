@@ -20,8 +20,8 @@
     "lint": "eslint .",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"test/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"test/**/*.ts\"",
-    "test": "npm run compile && node --test \"dist-test/**/*.test.js\"",
-    "dist": "npm run compile -- --production && electron-builder --publish never"
+    "test": "npm run compile -- --tests && node --test \"dist-test/**/*.test.js\"",
+    "dist": "npm run compile -- --production --tests && electron-builder --publish never"
   },
   "dependencies": {
     "node-pty": "1.2.0-beta.14",

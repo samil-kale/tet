@@ -4,6 +4,9 @@ const path = require("node:path");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
+// Only `npm test` and `npm run dist` (whose archives CI install-tests) run the tests: a start or a
+// watch would rebundle every test file for nothing.
+const tests = process.argv.includes("--tests");
 const tsconfig = path.join(__dirname, "tsconfig.json");
 const dist = path.join(__dirname, "dist");
 const distTest = path.join(__dirname, "dist-test");
@@ -136,7 +139,9 @@ async function build() {
   }
   // `npm test` runs every file in dist-test/, so a test deleted or renamed in test/ must not keep
   // running from its old build.
-  fs.rmSync(distTest, { recursive: true, force: true });
+  if (tests) {
+    fs.rmSync(distTest, { recursive: true, force: true });
+  }
   copyStaticAssets();
 
   const configs = [
@@ -151,7 +156,7 @@ async function build() {
     pagePreloadConfig,
     rendererConfig,
     editorWorkerConfig,
-    testConfig
+    ...(tests ? [testConfig] : [])
   ];
   if (watch) {
     const contexts = await Promise.all(configs.map((config) => esbuild.context(config)));
