@@ -9,30 +9,35 @@ export function layoutKey(key: string): string {
   return STORAGE_PREFIX + key;
 }
 
+/** What storage holds under `key` when it is one of `choices`, else `initial`. */
+function storedChoice<T extends string>(key: string, choices: readonly T[], initial: T): T {
+  const stored = localStorage.getItem(layoutKey(key));
+  return choices.find((choice) => choice === stored) ?? initial;
+}
+
 /**
  * A yes or no kept outside React in the same storage — the last answer the user gave, which what
  * opens next takes as its default. Read once; `set` writes through.
  */
 export function layoutFlag(key: string): { get(): boolean; set(value: boolean): void } {
-  let value = localStorage.getItem(STORAGE_PREFIX + key) === "true";
+  let value = localStorage.getItem(layoutKey(key)) === "true";
   return {
     get: () => value,
     set: (next) => {
       value = next;
-      localStorage.setItem(STORAGE_PREFIX + key, String(next));
+      localStorage.setItem(layoutKey(key), String(next));
     },
   };
 }
 
 /** `layoutFlag` for one of `choices`; anything stored outside them is `initial`. */
 export function layoutChoice<T extends string>(key: string, choices: readonly T[], initial: T): { get(): T; set(value: T): void } {
-  const stored = localStorage.getItem(STORAGE_PREFIX + key);
-  let value = choices.find((choice) => choice === stored) ?? initial;
+  let value = storedChoice(key, choices, initial);
   return {
     get: () => value,
     set: (next) => {
       value = next;
-      localStorage.setItem(STORAGE_PREFIX + key, next);
+      localStorage.setItem(layoutKey(key), next);
     },
   };
 }
@@ -46,14 +51,14 @@ const PERSIST_MS = 300;
  */
 export function useStoredToggle(key: string, initial: boolean): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_PREFIX + key);
+    const stored = localStorage.getItem(layoutKey(key));
     return stored === null ? initial : stored === "true";
   });
   // Stable like a setState: a fresh function per render would re-render every memoized view.
   const set = useCallback(
     (next: boolean) => {
       setOpen(next);
-      localStorage.setItem(STORAGE_PREFIX + key, String(next));
+      localStorage.setItem(layoutKey(key), String(next));
     },
     [key],
   );
@@ -65,15 +70,12 @@ export function useStoredToggle(key: string, initial: boolean): [boolean, (open:
  * whether it is out. Anything stored outside `choices` is `initial`.
  */
 export function useStoredChoice<T extends string>(key: string, choices: readonly T[], initial: T): [T, (choice: T) => void] {
-  const [choice, setChoice] = useState<T>(() => {
-    const stored = localStorage.getItem(STORAGE_PREFIX + key);
-    return choices.find((candidate) => candidate === stored) ?? initial;
-  });
+  const [choice, setChoice] = useState<T>(() => storedChoice(key, choices, initial));
   // Stable like a setState, as `useStoredToggle`'s.
   const set = useCallback(
     (next: T) => {
       setChoice(next);
-      localStorage.setItem(STORAGE_PREFIX + key, next);
+      localStorage.setItem(layoutKey(key), next);
     },
     [key],
   );
@@ -85,7 +87,7 @@ export function useStoredChoice<T extends string>(key: string, choices: readonly
  * `initial` names what starts collapsed; a key never toggled stands expanded.
  */
 export function useCollapsedGroups(key: string, initial: string[]): [(group: string) => boolean, (group: string) => void] {
-  const storageKey = STORAGE_PREFIX + key;
+  const storageKey = layoutKey(key);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try {
       const stored = localStorage.getItem(storageKey);
@@ -135,7 +137,7 @@ function usePersistedNumber(storageKey: string, restore: (stored: number) => num
  * disagree with the area's own `min-*` until the sash is grabbed.
  */
 export function useStoredSize(key: string, initial: number, min: number): [number, (size: number) => void] {
-  return usePersistedNumber(STORAGE_PREFIX + key, (stored) => Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial));
+  return usePersistedNumber(layoutKey(key), (stored) => Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial));
 }
 
 /** What storage holds as a share, `initial` when outside (0, 1) — see `usePersistedShare`. */
@@ -168,11 +170,12 @@ function storedShare(storageKey: string, initial: number): ReturnType<typeof cre
  * unmounts is kept, and the others show it.
  */
 export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
-  const share = useStore(storedShare(storageKey, initial));
+  const store = storedShare(storageKey, initial);
+  const share = useStore(store);
   const set = useCallback(
     (next: number) => {
       if (next > 0 && next < 1) {
-        storedShare(storageKey, initial).set(next);
+        store.set(next);
         clearTimeout(sharePersists.get(storageKey));
         sharePersists.set(
           storageKey,
@@ -180,12 +183,12 @@ export function usePersistedShare(storageKey: string, initial: number): [number,
         );
       }
     },
-    [storageKey, initial],
+    [store, storageKey],
   );
   return [share, set];
 }
 
 /** `usePersistedShare` under a fixed layout key, like `useStoredSize`. */
 export function useStoredShare(key: string, initial: number): [number, (share: number) => void] {
-  return usePersistedShare(STORAGE_PREFIX + key, initial);
+  return usePersistedShare(layoutKey(key), initial);
 }

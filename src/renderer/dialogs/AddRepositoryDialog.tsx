@@ -17,6 +17,7 @@ import { CloseIcon } from "../ui/icons";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RowMark } from "../ui/RowSection";
 import { useBusy } from "../ui/use-busy";
+import { fetchHeld } from "../ui/fetch-held";
 
 /** Picked off an account's list, cloned from a url, or added from disk — initialized there where it
  *  holds no repository yet. Not in Dialog.tsx, which asks one question. */
@@ -43,15 +44,6 @@ function cloneFolder(url: string): string {
       .split(/[/\\:]/)
       .pop() ?? "";
   return segment.replace(/\.git$/, "");
-}
-
-/** Which provider a token is for; each validates against its own API. */
-function ProviderPicker({ provider, onPick }: { provider: ProviderId; onPick: (provider: ProviderId) => void }) {
-  return (
-    <FieldGroup label="Provider">
-      <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={onPick} />
-    </FieldGroup>
-  );
 }
 
 /**
@@ -85,9 +77,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   /** Replaces the host only while it is empty or a provider default. */
   const pick = (next: ProviderId): void => {
     setProvider(next);
-    setHost((current) =>
-      current === "" || current === DEFAULT_HOST.github || current === DEFAULT_HOST.gitlab ? DEFAULT_HOST[next] : current,
-    );
+    setHost((current) => (current === "" || Object.values(DEFAULT_HOST).includes(current) ? DEFAULT_HOST[next] : current));
   };
 
   const ready = host.trim() !== "" && token.trim() !== "";
@@ -101,7 +91,10 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
 
   return (
     <FieldColumn>
-      <ProviderPicker provider={provider} onPick={pick} />
+      {/* Which provider a token is for; each validates against its own API. */}
+      <FieldGroup label="Provider">
+        <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={pick} />
+      </FieldGroup>
       <TextField label="Host" value={host} onChange={changing(setHost)} />
       <TextField label="Personal access token" type="password" value={token} onChange={changing(setToken)} error={refused} />
     </FieldColumn>
@@ -187,38 +180,22 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
     if (selectedId === null || repos[selectedId]) {
       return;
     }
-    let cancelled = false;
-    let fetching = true;
     // A failure of this account's last listing stands only until it is listed again.
     setListFailure(undefined);
-    hold(true);
-    void window.tet.providers
-      .repos(selectedId)
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
+    // Its cleanup releases the bar only for a fetch still running: the next run turns the bar on
+    // only when it fetches, so an already-listed account shows none.
+    return fetchHeld(
+      () => window.tet.providers.repos(selectedId),
+      hold,
+      (result) => {
         const list = result.repos;
         if (list) {
           setRepos((current) => ({ ...current, [selectedId]: list }));
         } else {
           setListFailure({ accountId: selectedId, message: result.error ?? "The repositories could not be listed" });
         }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          fetching = false;
-          hold(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-      // Only a fetch still running: the next run turns the bar on only when it fetches, so an
-      // already-listed account shows none.
-      if (fetching) {
-        hold(false);
-      }
-    };
+      },
+    );
   }, [selectedId, repos, hold]);
 
   const accountAdded = (account: ProviderAccount): void => {

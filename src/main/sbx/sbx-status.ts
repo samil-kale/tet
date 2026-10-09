@@ -133,7 +133,6 @@ async function readSbxBlockers(
     blockers.push({ what: "TET's hooks", allow: "localhost (network, no port)" });
   }
   const mountable = mountableBy(rules);
-  const projects = dataRoot === undefined ? undefined : projectsDir(dataRoot);
   // A worktree TET made lies under projectsDir, which the rule below covers.
   const ownWorktree = ref.worktree !== undefined;
   if (!ownWorktree && !mountable(projectRefPath, "rw")) {
@@ -143,13 +142,13 @@ async function readSbxBlockers(
   if (repositoryGitDir !== undefined && !mountable(repositoryGitDir, "rw")) {
     blockers.push({ what: "The worktree's repository", allow: `${folderRule(repositoryGitDir)} (read and write)` });
   }
-  if (dataRoot !== undefined && projects !== undefined) {
+  if (dataRoot !== undefined) {
     const root = dataRoot;
     const own =
       SANDBOXED_AGENTS.every((agent) => mountable(sandboxDir(root, ref, agent.id), "rw")) &&
       (!ownWorktree || mountable(projectRefPath, "rw"));
     if (!own) {
-      blockers.push({ what: "TET's project data", allow: `${folderRule(projects)} (read and write)` });
+      blockers.push({ what: "TET's project data", allow: `${folderRule(projectsDir(root))} (read and write)` });
     }
   }
   return { blockers, rules };
@@ -280,12 +279,8 @@ let controlAllowed: Promise<boolean | undefined> | undefined;
  */
 async function isNetworkAllowed(target: string): Promise<boolean | undefined> {
   const checked = await runSbx(["policy", "check", "network", "--json", target]);
-  try {
-    const { allowed } = parseSbxJson(checked.stdout) as { allowed?: unknown };
-    return typeof allowed === "boolean" ? allowed : undefined;
-  } catch {
-    return undefined;
-  }
+  const allowed = (parseSbxJson(checked.stdout) as { allowed?: unknown } | null | undefined)?.allowed;
+  return typeof allowed === "boolean" ? allowed : undefined;
 }
 
 /**

@@ -7,6 +7,11 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A nested object of a file read defensively; anything not a plain object is an empty one. */
+export function recordOf(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
 /** One of TET's own files, parsed; undefined where there is none yet or it cannot be read — the
  *  store then starts empty, and its next save writes over it. The shape is the caller's to check. */
 export function readJson(file: string): unknown {

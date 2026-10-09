@@ -68,10 +68,11 @@ export class SessionManagerRegistry {
   }
 
   async close(ref: ProjectRef): Promise<void> {
-    const manager = this.managers.get(refKeyOf(ref));
+    const refKey = refKeyOf(ref);
+    const manager = this.managers.get(refKey);
     // Dropped before the wait, so a repository or worktree closed and reopened at once never has
     // two.
-    this.managers.delete(refKeyOf(ref));
+    this.managers.delete(refKey);
     await manager?.dispose();
   }
 

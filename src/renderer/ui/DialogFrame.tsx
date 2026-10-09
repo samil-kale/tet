@@ -229,91 +229,10 @@ export function DialogFrame<T extends string>({
   }, [locked]);
 
   const primaryReady = primary !== undefined && primary.blocked === undefined && !primary.disabled && !locked;
-  const cardClass = className ? `dialog ${className}` : "dialog";
-  const content = (
-    <>
-      <div className={"tabs" in header ? "dialog-header dialog-tabs" : "dialog-header dialog-bar"}>
-        {"tabs" in header ? (
-          header.tabs.map((entry) => (
-            <button
-              key={entry.id}
-              type="button"
-              // The context menu's disabled entry, not the attribute: chromium swallows a
-              // disabled control's tooltip, and the reason is the point. A held run holds the tab
-              // too: switching would unmount the form it answers into.
-              className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled || locked ? " disabled" : ""}`}
-              title={entry.disabled ?? entry.mark}
-              onClick={() => {
-                if (!entry.disabled && !locked) {
-                  header.onSelect(entry.id);
-                }
-              }}
-            >
-              {entry.label}
-              {entry.mark && (
-                <span className="dialog-tab-mark">
-                  <CircleAlertIcon />
-                </span>
-              )}
-            </button>
-          ))
-        ) : (
-          <span className="dialog-title">{header.title}</span>
-        )}
-        {onCancel && (
-          <IconButton className={"tabs" in header ? "dialog-tabs-close" : undefined} title="Close" disabled={locked} onClick={cancel}>
-            <CloseIcon />
-          </IconButton>
-        )}
-        {busy && <ProgressBar />}
-      </div>
-      <fieldset ref={body} className="dialog-body" disabled={locked}>
-        {children}
-      </fieldset>
-      <div className="dialog-buttons">
-        {error !== undefined ? (
-          <div className="dialog-buttons-message">
-            <DialogError message={error} />
-          </div>
-        ) : (
-          message && <div className="dialog-buttons-message">{message}</div>
-        )}
-        {onCancel && (
-          <button type="button" className="button secondary" disabled={locked} onClick={cancel}>
-            Cancel
-          </button>
-        )}
-        {actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            className={action.secondary ? "button secondary" : "button"}
-            disabled={action.disabled || locked}
-            onClick={action.run}
-          >
-            {action.label}
-          </button>
-        ))}
-        {primary && (
-          <button
-            ref={primaryButton}
-            type="submit"
-            // Blocked by class, so its reason shows as the tooltip: chromium swallows a disabled
-            // control's.
-            className={primary.blocked === undefined ? "button" : "button disabled"}
-            disabled={primary.disabled || locked}
-            title={primary.blocked}
-          >
-            {primary.label}
-          </button>
-        )}
-      </div>
-    </>
-  );
   return (
     <dialog ref={overlay} className="dialog-overlay" closedby="none">
       <form
-        className={cardClass}
+        className={className ? `dialog ${className}` : "dialog"}
         onSubmit={(event) => {
           event.preventDefault();
           if (primaryReady) {
@@ -324,7 +243,82 @@ export function DialogFrame<T extends string>({
         onPointerDown={() => (focusPending.current = false)}
         onKeyDown={() => (focusPending.current = false)}
       >
-        {content}
+        <div className={"tabs" in header ? "dialog-header dialog-tabs" : "dialog-header dialog-bar"}>
+          {"tabs" in header ? (
+            header.tabs.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                // The context menu's disabled entry, not the attribute: chromium swallows a
+                // disabled control's tooltip, and the reason is the point. A held run holds the tab
+                // too: switching would unmount the form it answers into.
+                className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled || locked ? " disabled" : ""}`}
+                title={entry.disabled ?? entry.mark}
+                onClick={() => {
+                  if (!entry.disabled && !locked) {
+                    header.onSelect(entry.id);
+                  }
+                }}
+              >
+                {entry.label}
+                {entry.mark && (
+                  <span className="dialog-tab-mark">
+                    <CircleAlertIcon />
+                  </span>
+                )}
+              </button>
+            ))
+          ) : (
+            <span className="dialog-title">{header.title}</span>
+          )}
+          {onCancel && (
+            <IconButton className={"tabs" in header ? "dialog-tabs-close" : undefined} title="Close" disabled={locked} onClick={cancel}>
+              <CloseIcon />
+            </IconButton>
+          )}
+          {busy && <ProgressBar />}
+        </div>
+        <fieldset ref={body} className="dialog-body" disabled={locked}>
+          {children}
+        </fieldset>
+        <div className="dialog-buttons">
+          {error !== undefined ? (
+            <div className="dialog-buttons-message">
+              <DialogError message={error} />
+            </div>
+          ) : (
+            message && <div className="dialog-buttons-message">{message}</div>
+          )}
+          {onCancel && (
+            <button type="button" className="button secondary" disabled={locked} onClick={cancel}>
+              Cancel
+            </button>
+          )}
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              className={action.secondary ? "button secondary" : "button"}
+              disabled={action.disabled || locked}
+              onClick={action.run}
+            >
+              {action.label}
+            </button>
+          ))}
+          {primary && (
+            <button
+              ref={primaryButton}
+              type="submit"
+              // Blocked by class, so its reason shows as the tooltip: chromium swallows a disabled
+              // control's.
+              className={primary.blocked === undefined ? "button" : "button disabled"}
+              disabled={primary.disabled || locked}
+              title={primary.blocked}
+            >
+              {primary.label}
+            </button>
+          )}
+        </div>
       </form>
     </dialog>
   );

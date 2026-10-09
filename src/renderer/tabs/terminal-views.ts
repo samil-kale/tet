@@ -129,17 +129,14 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-/** Types the words, as main quoted them for the tab (handPaths); term.paste, so no CLI input mode
- *  misreads them as keystrokes (vim mode, say). */
-function pastePaths(view: TerminalView, words: string[]): void {
+/** Types paths of this machine as the tab sees them (handPaths), in the order given: the words as
+ *  main quoted them for the tab, through term.paste, so no CLI input mode misreads them as
+ *  keystrokes (vim mode, say). */
+async function handPaths(view: TerminalView, paths: string[]): Promise<void> {
+  const words = await window.tet.drops.handPaths(view.ref, view.tabId, paths);
   if (words.length > 0) {
     view.term.paste(`${words.join(" ")} `);
   }
-}
-
-/** Types paths of this machine as the tab sees them (handPaths), in the order given. */
-async function handPaths(view: TerminalView, paths: string[]): Promise<void> {
-  pastePaths(view, await window.tet.drops.handPaths(view.ref, view.tabId, paths));
 }
 
 /**
@@ -258,8 +255,8 @@ function releaseWebgl(view: TerminalView): void {
  * Puts the terminal on WebGL if allowed. Before a fit: WebGL floors the cell width to whole device
  * pixels, so a renderer changed after the fit would resize the pty again.
  */
-function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void {
-  const key = viewKey(ref, tabId);
+function acquireWebgl(view: TerminalView): void {
+  const key = viewKey(view.ref, view.tabId);
   if (view.webgl || !view.term.element || !webglPool.mayRetry(key, Date.now())) {
     return;
   }
@@ -282,7 +279,7 @@ function acquireWebgl(ref: ProjectRef, tabId: string, view: TerminalView): void 
       // DOM cells measure differently: refit an on-screen terminal next frame, after the addon's
       // teardown. A hidden one is fitted on show, after `showTerminal` retries WebGL.
       if (onScreen.has(key)) {
-        requestAnimationFrame(() => fitTerminal(ref, tabId));
+        requestAnimationFrame(() => fitTerminal(view.ref, view.tabId));
       }
     });
     view.term.loadAddon(attached);
@@ -414,7 +411,7 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
     view.term.open(container);
     // A first open is a tab coming on screen, before its host's fit (acquireWebgl). A moved tab keeps
     // its renderer: the canvas moves with the element.
-    acquireWebgl(ref, tabId, view);
+    acquireWebgl(view);
   }
 
   // On the container, not the document: a drop belongs to the terminal it lands on. Files only.
@@ -490,7 +487,7 @@ export function showTerminal(ref: ProjectRef, tabId: string): void {
   webglPool.show(key);
   const view = views.get(key);
   if (view) {
-    acquireWebgl(ref, tabId, view);
+    acquireWebgl(view);
   }
 }
 

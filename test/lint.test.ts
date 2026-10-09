@@ -9,12 +9,15 @@ import { ROOT } from "./helpers";
 /** eslint.config.mjs: the layers, the process borders and the rules AGENTS.md states, each held by
  *  one import or call it lets through and one it refuses. */
 
-type Rule =
-  | "no-restricted-imports"
-  | "@typescript-eslint/no-restricted-imports"
-  | "no-restricted-syntax"
-  | "no-restricted-properties"
-  | "no-restricted-globals";
+const RESTRICTING = [
+  "no-restricted-imports",
+  "@typescript-eslint/no-restricted-imports",
+  "no-restricted-syntax",
+  "no-restricted-properties",
+  "no-restricted-globals",
+] as const;
+
+type Rule = (typeof RESTRICTING)[number];
 
 /** A file as it would lie in src/, what it holds, and the rule refusing it (null: none may). */
 type Probe = [file: string, code: string, refusedBy: Rule | null];
@@ -158,14 +161,6 @@ const CALLS: Probe[] = [
   ["src/renderer/ui/x.tsx", "export const a = <Foo onX={() => 1} />;", null],
 ];
 
-const RESTRICTING = [
-  "no-restricted-imports",
-  "@typescript-eslint/no-restricted-imports",
-  "no-restricted-syntax",
-  "no-restricted-properties",
-  "no-restricted-globals",
-];
-
 /** Every probe's restricting rules, in one ESLint run: the config loads once. */
 function lint(probes: Probe[]): string[][] {
   const script = `
@@ -190,7 +185,7 @@ function lint(probes: Probe[]): string[][] {
   `;
   const run = spawnSync(process.execPath, ["-e", script], { cwd: ROOT, input: JSON.stringify(probes), encoding: "utf8" });
   assert.equal(run.status, 0, run.stderr);
-  return (JSON.parse(run.stdout) as string[][]).map((rules) => rules.filter((rule) => RESTRICTING.includes(rule)));
+  return (JSON.parse(run.stdout) as string[][]).map((rules) => rules.filter((rule) => (RESTRICTING as readonly string[]).includes(rule)));
 }
 
 describe("the lint rules", () => {

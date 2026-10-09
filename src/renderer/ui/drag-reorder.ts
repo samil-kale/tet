@@ -83,28 +83,31 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
   );
   const handleProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => handles[index];
 
-  const targetProps = (index: number): HTMLAttributes<RowElement> => ({
+  /** What takes this list's drag where `takes` says so, dropping it at insertion index `to`. */
+  const dropProps = (to: number, takes: (event: DragEvent<RowElement>) => boolean = () => true): HTMLAttributes<RowElement> => ({
     onDragOver: (event) => {
       // Read off the drag, not state: it also rejects a file dragged in from outside.
-      if (!event.dataTransfer.types.includes(dragType)) {
+      if (!takes(event) || !event.dataTransfer.types.includes(dragType)) {
         return;
       }
       // Only a prevented dragover makes an element a drop target.
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-      setDropAt(insertionIndex(index));
+      setDropAt(to);
     },
     onDrop: (event) => {
       // A file still lands here (main.tsx prevents every file's dragover); its getData is "", and
       // Number("") is row 0.
-      if (!event.dataTransfer.types.includes(dragType)) {
+      if (!takes(event) || !event.dataTransfer.types.includes(dragType)) {
         return;
       }
       event.preventDefault();
       // Not the dragover state: it only draws the line, and a drop must not wait on it.
-      move(event.dataTransfer.getData(dragType), insertionIndex(index));
+      move(event.dataTransfer.getData(dragType), to);
     },
   });
+
+  const targetProps = (index: number): HTMLAttributes<RowElement> => dropProps(insertionIndex(index));
 
   const rowProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
     ...targetProps(index),
@@ -114,23 +117,7 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
   /** The empty space below the last row. Row drags bubble here too, and are left to the row. */
   const isBelowList = (event: DragEvent<RowElement>): boolean => event.target === event.currentTarget;
 
-  const listProps: HTMLAttributes<RowElement> = {
-    onDragOver: (event) => {
-      if (!isBelowList(event) || !event.dataTransfer.types.includes(dragType)) {
-        return;
-      }
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      setDropAt(count);
-    },
-    onDrop: (event) => {
-      if (!isBelowList(event) || !event.dataTransfer.types.includes(dragType)) {
-        return;
-      }
-      event.preventDefault();
-      move(event.dataTransfer.getData(dragType), count);
-    },
-  };
+  const listProps = dropProps(count, isBelowList);
 
   const rowClasses = (index: number): string[] => {
     const classes: string[] = [];

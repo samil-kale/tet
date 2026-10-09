@@ -30,7 +30,7 @@ function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>)
 export function buildForest(files: ExplorerListing): TreeNode[] {
   const compare = comparatorFor(files.sortOrder, files.mtimes ?? {});
   if (!files.roots) {
-    const tree = buildTree(files.files, files.emptyDirs, "", (path) => path);
+    const tree = buildTree(files.files, files.emptyDirs);
     sortTree(tree, compare);
     return tree;
   }

@@ -11,7 +11,7 @@ import { readSbxSettings, writeSbxSettings } from "../../src/main/store/tet-json
 import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../../src/main/sbx/sbx";
 import { parseSignedInUser, sbxError, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
 import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../../src/main/sbx/sbx-mounts";
-import { saveSbxSettings } from "../../src/main/sbx/sbx-save";
+import { saveSbxSettings, type SbxSaveTarget } from "../../src/main/sbx/sbx-save";
 import { listSandboxes, readHostAllowed } from "../../src/main/sbx/sbx-status";
 import { contractHome } from "../../src/main/util/path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../../src/main/sbx/sbx-policy";
@@ -144,6 +144,9 @@ describe("saving SBX settings", () => {
   const projectId = "a project with one sandbox";
   const main = { projectId };
   const name = sandboxName(main, "claude");
+  /** A worktree of the project, with a sandbox of its own. */
+  const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
+  const worktreeName = sandboxName(worktree.ref, "claude");
   /** No knowledge before or after: nothing of it to revoke. */
   const NO_KNOWLEDGE = { previous: EMPTY_SBX_KNOWLEDGE, current: EMPTY_SBX_KNOWLEDGE };
   // `sbx ports --publish` of a port another sandbox holds.
@@ -247,20 +250,32 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     }
   }
 
-  /** saveSbxSettings as sbx-settings.ts runs it: with the listing taken for its check. */
-  async function saveListed(...args: Parameters<typeof saveSbxSettings> extends [...infer A, unknown] ? A : never) {
-    const sandboxes = await listSandboxes();
-    assert.ok(sandboxes, "sbx lists the sandboxes");
-    return saveSbxSettings(...args, sandboxes);
+  /**
+   * Saves `request` for the project at `repoFolder`, with no knowledge, under the stand-in in `dir`:
+   * saveSbxSettings as sbx-settings.ts runs it, with the listing taken for its check.
+   */
+  function saveIn(
+    dir: string,
+    repoFolder: string,
+    request: SbxProjectSettings,
+    {
+      worktrees = [],
+      values = new Map(),
+      changed = new Set(),
+    }: { worktrees?: SbxSaveTarget[]; values?: Map<string, string>; changed?: Set<string> } = {},
+  ) {
+    return withSbx(dir, async () => {
+      const sandboxes = await listSandboxes();
+      assert.ok(sandboxes, "sbx lists the sandboxes");
+      return saveSbxSettings({ ref: main, path: repoFolder }, worktrees, request, NO_KNOWLEDGE, values, changed, undefined, sandboxes);
+    });
   }
 
   /** Saves `now` over a tet.json holding `before`, against a sandbox that has `has` published. */
   async function save(setup: { has: number[]; before: number[]; now: number[]; refuse?: string }) {
     const { dir, repoFolder } = fakeSbx({ published: setup.has.map(listed), refuse: setup.refuse });
     await writeSbxSettings(repoFolder, settings(setup.before.map(port)));
-    const saved = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], settings(setup.now.map(port)), NO_KNOWLEDGE, new Map(), new Set(), undefined),
-    );
+    const saved = await saveIn(dir, repoFolder, settings(setup.now.map(port)));
     return { ...saved, repoFolder };
   }
 
@@ -285,19 +300,12 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   it("brings a worktree's sandbox in line along with the project's, all but the ports", async () => {
-    const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
-    const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, repoFolder } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
-    const { result, calls } = await withSbx(dir, () =>
-      saveListed(
-        { ref: main, path: repoFolder },
-        [worktree],
-        { ...settings([port(3000)]), hosts: ["example.com"] },
-        NO_KNOWLEDGE,
-        new Map(),
-        new Set(),
-        undefined,
-      ),
+    const { result, calls } = await saveIn(
+      dir,
+      repoFolder,
+      { ...settings([port(3000)]), hosts: ["example.com"] },
+      { worktrees: [worktree] },
     );
     assert.deepEqual(result.removed, []);
     assert.deepEqual(
@@ -311,12 +319,8 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   });
 
   it("removes a worktree's sandbox along with the project's when SBX is disabled", async () => {
-    const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
-    const worktreeName = sandboxName(worktree.ref, "claude");
     const { dir, repoFolder } = fakeSbx({ published: [], others: [{ name: worktreeName, workspaces: [worktree.path] }] });
-    const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [worktree], EMPTY_SBX_SETTINGS, NO_KNOWLEDGE, new Map(), new Set(), undefined),
-    );
+    const { result, calls } = await saveIn(dir, repoFolder, EMPTY_SBX_SETTINGS, { worktrees: [worktree] });
     assert.deepEqual(result.removed, [
       { ref: main, agentId: "claude" },
       { ref: worktree.ref, agentId: "claude" },
@@ -355,9 +359,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       mounts: [{ host_path: held.path, container_target: toContainerPath(held.path) }],
     });
     await writeSbxSettings(repoFolder, { ...settings([]), paths: [held, unheld] });
-    const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined),
-    );
+    const { result, calls } = await saveIn(dir, repoFolder, settings([]));
     assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
     assert.deepEqual([result.refused, result.settings.paths], [{}, []]);
   });
@@ -418,16 +420,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       ["REHOSTED", "v-rehosted"],
       ["ADDED", "v-added"],
     ]);
-    const { result, calls } = await withSbx(dir, () =>
-      saveListed(
-        { ref: main, path: repoFolder },
-        [],
-        { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: now },
-        NO_KNOWLEDGE,
-        values,
-        new Set(["CHANGED"]),
-        undefined,
-      ),
+    const { result, calls } = await saveIn(
+      dir,
+      repoFolder,
+      { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: now },
+      { values, changed: new Set(["CHANGED"]) },
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
     // The two listings run together, in either order.
@@ -466,9 +463,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
         { name: "my-own-sandbox" },
       ],
     });
-    const { result, calls } = await withSbx(dir, () =>
-      saveListed({ ref: main, path: repoFolder }, [], settings([]), NO_KNOWLEDGE, new Map(), new Set(), undefined),
-    );
+    const { result, calls } = await saveIn(dir, repoFolder, settings([]));
     assert.deepEqual(result.orphans, [{ ref: main, agentId: "codex" }]);
     assert.deepEqual(
       calls.filter((call) => call.startsWith("rm ")),
@@ -481,16 +476,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
     const before = await readSbxSettings(repoFolder);
     await assert.rejects(
-      withSbx(dir, () =>
-        saveListed(
-          { ref: main, path: repoFolder },
-          [],
-          { ...EMPTY_SBX_SETTINGS, enabled: true, secrets },
-          NO_KNOWLEDGE,
-          new Map([["TOKEN", "v"]]),
-          new Set(["TOKEN"]),
-          undefined,
-        ),
+      saveIn(
+        dir,
+        repoFolder,
+        { ...EMPTY_SBX_SETTINGS, enabled: true, secrets },
+        { values: new Map([["TOKEN", "v"]]), changed: new Set(["TOKEN"]) },
       ),
       /could not list the sandboxes' secrets/,
     );
@@ -499,32 +489,18 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     assert.deepEqual(await readSbxSettings(repoFolder), before, "tet.json as it was");
   });
 
-  for (const [what, fail, message] of [
-    ["the sandboxes' allowed hosts", "policy ls --type network", /could not list the sandboxes' allowed hosts/],
-  ] as const) {
-    it(`stops a Save where sbx does not list ${what}, changing nothing`, async () => {
-      const { dir, repoFolder } = fakeSbx({ published: [], fail: [fail] });
-      await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["old.example.com"] });
-      const before = await readSbxSettings(repoFolder);
-      await assert.rejects(
-        withSbx(dir, () =>
-          saveListed(
-            { ref: main, path: repoFolder },
-            [],
-            { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["new.example.com"] },
-            NO_KNOWLEDGE,
-            new Map(),
-            new Set(),
-            undefined,
-          ),
-        ),
-        message,
-      );
-      const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
-      assert.ok(!/policy rm|policy allow|^rm /m.test(calls), calls);
-      assert.deepEqual(await readSbxSettings(repoFolder), before, "tet.json as it was");
-    });
-  }
+  it("stops a Save where sbx does not list the sandboxes' allowed hosts, changing nothing", async () => {
+    const { dir, repoFolder } = fakeSbx({ published: [], fail: ["policy ls --type network"] });
+    await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["old.example.com"] });
+    const before = await readSbxSettings(repoFolder);
+    await assert.rejects(
+      saveIn(dir, repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["new.example.com"] }),
+      /could not list the sandboxes' allowed hosts/,
+    );
+    const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
+    assert.ok(!/policy rm|policy allow|^rm /m.test(calls), calls);
+    assert.deepEqual(await readSbxSettings(repoFolder), before, "tet.json as it was");
+  });
 
   for (const [what, fail, rows] of [
     ["the governed policy", "policy check", { hosts: ["closed.example.com"] }],

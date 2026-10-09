@@ -103,7 +103,7 @@ export async function signInToSbx(
   if (token === undefined) {
     return { signedIn: false, error: "No access token stored for this account on this machine; enter it again" };
   }
-  const refused = await runSbxTokenSignIn(user, token, false);
+  const refused = await runSbxTokenSignIn(user, token);
   if (refused !== undefined) {
     return { signedIn: false, error: refused };
   }

@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../../src/shared/ctl-side";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { HOST_CALLER, SANDBOX_CALLER } from "../../src/main/ctl/caller-side";
@@ -77,13 +77,7 @@ describe("a turn's notification", () => {
       settings,
       new SbxLocalStore(root),
       new HostSetups(root, settings, () => undefined),
-      {
-        onTabs: (_projectId, tabs) => (pushed = tabs),
-        onOutput: () => undefined,
-        onStatus: () => undefined,
-        onStartupProgress: () => undefined,
-        onNotice: () => undefined,
-      },
+      { ...NO_CALLBACKS, onTabs: (_projectId, tabs) => (pushed = tabs) },
     );
     const { tabId } = manager.createTab("shell");
     let at = Date.now();
@@ -358,9 +352,11 @@ describe("a terminal's environment", () => {
 describe("when an agent's sessions are listed again", () => {
   /** A scheduler whose listings are counted, on the test's mocked clock. */
   const scheduler = (
+    t: TestContext,
     unsettled = false,
     working = false,
   ): { schedule: (delayMs?: number) => void; watched: () => void; runs: () => number } => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
     let runs = 0;
     const reconciler = new ReconcileScheduler({
       reconcile: async () => {
@@ -374,8 +370,7 @@ describe("when an agent's sessions are listed again", () => {
   };
 
   it("keeps a watcher's early listing when output arrives before it is due", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    const { schedule, runs } = scheduler();
+    const { schedule, runs } = scheduler(t);
     schedule(300);
     schedule();
     t.mock.timers.tick(300);
@@ -383,56 +378,49 @@ describe("when an agent's sessions are listed again", () => {
   });
 
   it("lists soon after a watcher's event outside a turn", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    const { watched, runs } = scheduler();
+    const { watched, runs } = scheduler(t);
     watched();
     t.mock.timers.tick(300);
     assert.equal(runs(), 1);
   });
 
-  it("debounces a turn's watcher events as output, into one listing once it goes quiet", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    const { watched, runs } = scheduler(false, true);
-    watched();
-    t.mock.timers.tick(4000);
-    watched();
-    t.mock.timers.tick(4000);
-    assert.equal(runs(), 0, "still within the debounce of the last write");
-    t.mock.timers.tick(1000);
-    assert.equal(runs(), 1);
-  });
-
-  it("lists a turn's watcher events by the cap while a title is unknown", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    const { watched, runs } = scheduler(true, true);
-    for (let elapsed = 0; elapsed < 10_000; elapsed += 1000) {
-      watched();
+  // A turn's watcher events are debounced and capped as output is.
+  for (const { trigger, working, last, debounces, caps } of [
+    {
+      trigger: "watched",
+      working: true,
+      last: "write",
+      debounces: "debounces a turn's watcher events as output, into one listing once it goes quiet",
+      caps: "lists a turn's watcher events by the cap while a title is unknown",
+    },
+    {
+      trigger: "schedule",
+      working: false,
+      last: "chunk",
+      debounces: "debounces a burst of output into one listing once it goes quiet",
+      caps: "lists by the cap however long the output keeps coming while a title is unknown",
+    },
+  ] as const) {
+    it(debounces, (t) => {
+      const { [trigger]: arrive, runs } = scheduler(t, false, working);
+      arrive();
+      t.mock.timers.tick(4000);
+      arrive();
+      t.mock.timers.tick(4000);
+      assert.equal(runs(), 0, `still within the debounce of the last ${last}`);
       t.mock.timers.tick(1000);
-    }
-    assert.equal(runs(), 1);
-  });
+      assert.equal(runs(), 1);
+    });
 
-  it("debounces a burst of output into one listing once it goes quiet", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    const { schedule, runs } = scheduler();
-    schedule();
-    t.mock.timers.tick(4000);
-    schedule();
-    t.mock.timers.tick(4000);
-    assert.equal(runs(), 0, "still within the debounce of the last chunk");
-    t.mock.timers.tick(1000);
-    assert.equal(runs(), 1);
-  });
-
-  it("lists by the cap however long the output keeps coming while a title is unknown", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
-    const { schedule, runs } = scheduler(true);
-    for (let elapsed = 0; elapsed < 10_000; elapsed += 1000) {
-      schedule();
-      t.mock.timers.tick(1000);
-    }
-    assert.equal(runs(), 1);
-  });
+    it(caps, (t) => {
+      const { [trigger]: arrive, runs } = scheduler(t, true, working);
+      for (let elapsed = 0; elapsed < 10_000; elapsed += 1000) {
+        arrive();
+        t.mock.timers.tick(1000);
+      }
+      assert.equal(runs(), 1);
+    });
+  }
 });
 
 describe("which of two turn reports counts", () => {

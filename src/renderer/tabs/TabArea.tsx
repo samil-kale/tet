@@ -25,17 +25,17 @@ function useSashFraction(refKey: string, name: string, initial: number): [number
   return usePersistedShare(layoutStorageKey(refKey, `sash.${name}`), initial);
 }
 
-/** `pixels` within the same bounds `Sash` applies to a drag. */
-function clampPixels(pixels: number, min: number, minOther: number, containerSize: number): number {
-  return Math.min(Math.max(pixels, min), Math.max(min, containerSize - minOther));
+/** `pixels` within the same bounds `Sash` applies to a drag, `min` on either side. */
+function clampPixels(pixels: number, min: number, containerSize: number): number {
+  return Math.min(Math.max(pixels, min), Math.max(min, containerSize - min));
 }
 
 /**
  * A sash's pixels: `fraction` of `containerSize`, clamped — a share set in a wider room can ask
  * for more than a narrower one has. `null` (not measured yet) gives `min`.
  */
-function pixelsFor(fraction: number, min: number, minOther: number, containerSize: number | null): number {
-  return containerSize === null ? min : clampPixels(Math.round(containerSize * fraction), min, minOther, containerSize);
+function pixelsFor(fraction: number, min: number, containerSize: number | null): number {
+  return containerSize === null ? min : clampPixels(Math.round(containerSize * fraction), min, containerSize);
 }
 
 /** Every sash's default share, and what "single" resets to. */
@@ -219,22 +219,6 @@ export const TabArea = memo(function TabArea({
     [presetRef, setDragTarget],
   );
 
-  // `dragover` never sees the tab id, so the drop joins it with the zone.
-  const onDropTab = useCallback(
-    (paneId: PaneId, tabId: string) => {
-      const target = dragTargetRef.current;
-      setDragTarget(null);
-      dragSource.current = null;
-      setDragging(false);
-      if (target?.transition) {
-        onSnapTab(resolved.refKey, tabId, target.transition);
-      } else {
-        onActivate(tabId, paneId);
-      }
-    },
-    [setDragTarget, onSnapTab, resolved.refKey, onActivate],
-  );
-
   // Unconditional, unlike "left": nothing stale follows a drag's end, and a snap preview would survive
   // an Escape.
   const onDragEnd = useCallback(() => {
@@ -242,6 +226,20 @@ export const TabArea = memo(function TabArea({
     dragSource.current = null;
     setDragging(false);
   }, [setDragTarget]);
+
+  // `dragover` never sees the tab id, so the drop joins it with the zone.
+  const onDropTab = useCallback(
+    (paneId: PaneId, tabId: string) => {
+      const target = dragTargetRef.current;
+      onDragEnd();
+      if (target?.transition) {
+        onSnapTab(resolved.refKey, tabId, target.transition);
+      } else {
+        onActivate(tabId, paneId);
+      }
+    },
+    [onDragEnd, onSnapTab, resolved.refKey, onActivate],
+  );
 
   // Each pane's tabs, identity kept when unchanged. Keyed on the fields `paneOf` reads, not the
   // layout: a selection change must not hand every pane a fresh list.
@@ -311,37 +309,33 @@ export const TabArea = memo(function TabArea({
     />
   );
 
-  const sash = (
-    orientation: "vertical" | "horizontal",
-    pixels: number,
-    min: number,
-    minOther: number,
-    containerSize: number | null,
-    commit: (fraction: number) => void,
-  ) => (
-    <Sash
-      orientation={orientation}
-      size={pixels}
-      min={min}
-      // Sash clamps against the whole grid, `containerSize` may be only part of it: the rest is
-      // "other" too, or dragging back from that edge first works off an overshoot.
-      minOther={minOther + ((orientation === "vertical" ? gridSize?.width : gridSize?.height) ?? 0) - (containerSize ?? 0)}
-      // Back to a fraction of the room and bounds `pixelsFor` used, so no share is stored that
-      // the room cannot show.
-      onResize={(next) => {
-        if (containerSize !== null && containerSize > 0) {
-          commit(clampPixels(next, min, minOther, containerSize) / containerSize);
-        }
-      }}
-    />
-  );
-
   // All three sashes whatever the preset: the snap preview needs the ones a switch would keep.
   const width = gridSize?.width ?? null;
   const height = gridSize?.height ?? null;
-  const colPixels = pixelsFor(colFraction, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width);
-  const leftRowPixels = pixelsFor(leftRowFraction, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height);
-  const rightRowPixels = pixelsFor(rightRowFraction, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height);
+  const colPixels = pixelsFor(colFraction, MIN_AREA_WIDTH, width);
+  const leftRowPixels = pixelsFor(leftRowFraction, MIN_AREA_HEIGHT, height);
+  const rightRowPixels = pixelsFor(rightRowFraction, MIN_AREA_HEIGHT, height);
+
+  /** A sash across the whole grid: a column's spans its width, a row's its height. */
+  const sash = (orientation: "vertical" | "horizontal", pixels: number, commit: (fraction: number) => void) => {
+    const min = orientation === "vertical" ? MIN_AREA_WIDTH : MIN_AREA_HEIGHT;
+    const containerSize = orientation === "vertical" ? width : height;
+    return (
+      <Sash
+        orientation={orientation}
+        size={pixels}
+        min={min}
+        minOther={min}
+        // Back to a fraction of the room and bounds `pixelsFor` used, so no share is stored that
+        // the room cannot show.
+        onResize={(next) => {
+          if (containerSize !== null && containerSize > 0) {
+            commit(clampPixels(next, min, containerSize) / containerSize);
+          }
+        }}
+      />
+    );
+  };
 
   // The pane a preset-switching zone drop would add, from the clamped pixels, not the stored
   // fractions, so the snap preview agrees with the drop.
@@ -355,9 +349,9 @@ export const TabArea = memo(function TabArea({
       : null;
 
   // The three sashes, once: a preset draws the ones it has.
-  const colSash = sash("vertical", colPixels, MIN_AREA_WIDTH, MIN_AREA_WIDTH, width, setColFraction);
-  const leftRowSash = sash("horizontal", leftRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setLeftRowFraction);
-  const rightRowSash = sash("horizontal", rightRowPixels, MIN_AREA_HEIGHT, MIN_AREA_HEIGHT, height, setRightRowFraction);
+  const colSash = sash("vertical", colPixels, setColFraction);
+  const leftRowSash = sash("horizontal", leftRowPixels, setLeftRowFraction);
+  const rightRowSash = sash("horizontal", rightRowPixels, setRightRowFraction);
 
   const renderGrid = () => {
     switch (layout.preset) {

@@ -17,11 +17,11 @@ import {
   type ScannedTail,
 } from "../transcript";
 import { renameThread } from "./app-server-client";
-import { runCodex } from "./cli";
+import { runAgent } from "../ask";
 import { SANDBOX_HOME } from "../hook-target";
 import { mapLimited } from "../../util/async";
 import { PLATFORM } from "../../util/host-platform";
-import { openInside, removeInside } from "../../util/path-inside";
+import { appendInside, removeInside } from "../../util/path-inside";
 
 /** Codex's config root; TET never overrides it. */
 export function codexHome(): string {
@@ -223,6 +223,10 @@ function samePath(a: string, b: string): boolean {
   return PLATFORM.pathsIgnoreCase ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
+/** As generous as the app-server call for the same one-offs (app-server-client.ts). Unlike the
+ *  app-server, parallel runs of `codex delete` are fine. */
+const DELETE_TIMEOUT_MS = 15_000;
+
 export const codexSessionProvider: SessionProvider = {
   list(cwd: string): Promise<AgentSessionInfo[]> {
     return listIn(codexHome(), cwd);
@@ -238,7 +242,7 @@ export const codexSessionProvider: SessionProvider = {
    *  the home folder where `cwd` is gone: the id alone names the thread. */
   async remove(executable: string, cwd: string, sessionId: string): Promise<void> {
     try {
-      await runCodex(executable, fs.existsSync(cwd) ? cwd : os.homedir(), ["delete", "--force", sessionId]);
+      await runAgent("codex", executable, fs.existsSync(cwd) ? cwd : os.homedir(), ["delete", "--force", sessionId], DELETE_TIMEOUT_MS);
     } catch (error) {
       if ((await rolloutFilesOf(codexHome(), sessionId)).length > 0) {
         throw error;
@@ -246,8 +250,9 @@ export const codexSessionProvider: SessionProvider = {
     }
   },
 
+  /** Only the app-server RPC writes a thread's name — no CLI command, no rollout entry. */
   rename(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-    return renameIn(executable, cwd, sessionId, title);
+    return renameThread(executable, cwd, sessionId, requireTitle(title));
   },
 
   /** Every rollout of the thread: a resumed one may continue in a file of its own. */
@@ -374,11 +379,6 @@ function listIn(home: string, cwd: string): Promise<AgentSessionInfo[]> {
   });
 }
 
-/** Only the app-server RPC writes a thread's name — no CLI command, no rollout entry. */
-async function renameIn(executable: string, cwd: string, sessionId: string, title: string): Promise<void> {
-  await renameThread(executable, cwd, sessionId, requireTitle(title));
-}
-
 /**
  * `codex delete` on the files alone: the rollout goes, and Codex inside the sandbox no longer lists
  * or resumes the thread; an unknown id resolves (SessionProvider.remove). The index lines stay:
@@ -410,10 +410,5 @@ async function renameInHome(home: string, sessionId: string, title: string, with
   const trimmed = requireTitle(title);
   const entry = { id: sessionId, thread_name: trimmed, updated_at: new Date().toISOString().replace("Z", "0000Z") };
   // Never created: the mount made it (sessionMountSpecs).
-  const handle = await openInside(within, sessionIndexFile(home), fs.constants.O_WRONLY | fs.constants.O_APPEND);
-  try {
-    await handle.appendFile(JSON.stringify(entry) + "\n");
-  } finally {
-    await handle.close();
-  }
+  await appendInside(within, sessionIndexFile(home), JSON.stringify(entry) + "\n");
 }

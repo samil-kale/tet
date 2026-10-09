@@ -22,14 +22,14 @@ interface StoredLogin {
  */
 export class GitLoginStore {
   private readonly file: string;
-  private logins: StoredLogin[] = [];
+  private logins: StoredLogin[];
   /** Where git.ts writes the askpass script handing a login to git. */
   readonly askpassDir: string;
 
   constructor(dataRoot: string) {
     this.file = path.join(dataRoot, "git-logins.json");
     this.askpassDir = path.join(dataRoot, "askpass");
-    this.load();
+    this.logins = readRows<StoredLogin>(this.file, ["origin", "username", "password"]);
   }
 
   /**
@@ -105,10 +105,6 @@ export class GitLoginStore {
       this.logins = kept;
       this.save();
     }
-  }
-
-  private load(): void {
-    this.logins = readRows<StoredLogin>(this.file, ["origin", "username", "password"]);
   }
 
   private save(): void {

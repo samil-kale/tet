@@ -33,7 +33,7 @@ import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
 import { PLATFORM } from "./platform";
-import { defaultLayout, paneOf, tabsOnScreen } from "./tabs/pane-layout";
+import { DEFAULT_LAYOUT, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS, useProjectLayouts } from "./tabs/use-project-layouts";
 import { workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import type { PaneTab } from "./tabs/pane-tab";
@@ -44,8 +44,6 @@ import { useRefHeads } from "./lanes/projects/use-ref-heads";
 import { useWindowFocused } from "./ui/use-window-focused";
 import { useWindowShortcuts } from "./ui/use-window-shortcuts";
 import { useRefFeeds } from "./use-ref-feeds";
-
-const DEFAULT_LAYOUT = defaultLayout();
 
 /** A lane's drag, its own so no list or terminal takes the drop. */
 const LANE_DRAG_TYPE = "application/x-tet-lane";
@@ -153,7 +151,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   useEffect(() => window.tet.onNotice(({ severity, message }) => notify(severity, message)), []);
 
   /** Makes a repository or worktree active, by its `refKey`, as a row or the git lane picks it. */
-  const activateRef = useCallback((refKey: string) => setActiveRefKey(refKey), []);
+  const activateRef: (refKey: string) => void = setActiveRefKey;
 
   /** The project row's remove, once the row asked about its worktrees; the list follows through
    *  `projects:changed`. */

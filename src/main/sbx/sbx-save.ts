@@ -1,7 +1,7 @@
-import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, sbxPortKey, sbxProblemNotices } from "../../shared/sbx-rules";
+import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, mergeProblems, sbxPortKey, sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { SbxKnowledgeSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
+import type { SbxKnowledgeSettings, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import type { SandboxedAgent } from "../agents/agent";
 import { readSbxSettings, writeSbxSettings } from "../store/tet-json";
@@ -253,9 +253,12 @@ export async function saveSbxSettings(
   // Sorted out first, removed only once `assertReadable` passed: a Save that stops changes nothing.
   const orphaned: (SbxRemoved & { name: string })[] = [];
   for (const [name, workspaces] of sandboxes) {
-    const target = targets.find((candidate) => orphanAgent(name, workspaces, candidate) !== undefined);
-    if (target !== undefined) {
-      orphaned.push({ name, ref: target.ref, agentId: orphanAgent(name, workspaces, target)! });
+    for (const target of targets) {
+      const agentId = orphanAgent(name, workspaces, target);
+      if (agentId !== undefined) {
+        orphaned.push({ name, ref: target.ref, agentId });
+        break;
+      }
     }
   }
   const kept: { agent: SandboxedAgent; name: string; projectId: string; ports: boolean }[] = [];
@@ -383,9 +386,7 @@ export async function saveSbxSettings(
       appliedKnowledge.skillsFolder = knowledge.previous.skillsFolder;
     }
   }
-  for (const [option, rows] of Object.entries(unrevoked) as [SbxOption, Record<string, string>][]) {
-    addProblems(refused, option, rows);
-  }
+  mergeProblems(refused, unrevoked);
   await writeSbxSettings(project.path, applied);
   return { removed, orphans, refused, failures, settings: applied, knowledge: appliedKnowledge };
 }

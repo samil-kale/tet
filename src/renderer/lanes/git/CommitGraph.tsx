@@ -62,7 +62,6 @@ const widthOf = ({ input, output }: GraphRow): number => LANE_WIDTH * (Math.max(
 function Lanes({ row, expanded }: { row: GraphRow; expanded: boolean }) {
   const { commit, input, output } = row;
   const circleLane = nodeLane(row);
-  const inputIndex = input.findIndex((lane) => lane.id === commit.sha);
   const circleColor: GraphColor =
     circleLane < output.length ? output[circleLane].color : circleLane < input.length ? input[circleLane].color : "historyItemRefColor";
   const half = ROW_HEIGHT / 2;
@@ -122,8 +121,9 @@ function Lanes({ row, expanded }: { row: GraphRow; expanded: boolean }) {
     );
   }
 
-  if (inputIndex !== -1) {
-    paths.push(<Path key="to" color={input[inputIndex].color} d={`M ${laneX(circleLane)} 0 V ${half}`} />);
+  // The node stands in a lane coming from above only where one was waiting for it (`nodeLane`).
+  if (circleLane < input.length) {
+    paths.push(<Path key="to" color={input[circleLane].color} d={`M ${laneX(circleLane)} 0 V ${half}`} />);
   }
   if (commit.parents.length > 0) {
     paths.push(<Path key="from" color={circleColor} width={expanded ? 3 : 1} d={`M ${laneX(circleLane)} ${half} V ${ROW_HEIGHT}`} />);

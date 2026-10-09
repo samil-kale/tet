@@ -13,7 +13,7 @@ export interface IconShape {
  * icons.tsx's hand drawings are: `fill` on its own grid (FillSvg), `stroke` on the 16 grid (Svg).
  */
 export type AgentIcon =
-  | { kind: "fill"; extent: number; cx: number; cy: number; grid: number; crisp?: boolean; shapes: IconShape[] }
+  | { kind: "fill"; extent: number; cx: number; cy: number; crisp?: boolean; shapes: IconShape[] }
   | { kind: "stroke"; extent: number; cx?: number; cy?: number; stroke?: number; shapes: IconShape[] };
 
 export interface AgentInfo {

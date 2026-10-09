@@ -275,6 +275,7 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
     window.tet.browser.dock(devToolsDock.get());
   }, []);
   const docked = tab.devTools === "right" || tab.devTools === "bottom" ? tab.devTools : undefined;
+  const beside = docked === "right";
   // Closed, the button offers what follows where they open next, disabled.
   const nextDock = BROWSER_DOCKS[(BROWSER_DOCKS.indexOf(tab.devTools ?? devToolsDock.get()) + 1) % BROWSER_DOCKS.length];
   const dock = (next: BrowserDock) => (): void => {
@@ -285,8 +286,9 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
   // One share for every tab's DevTools, beside or below, as for the Markdown preview; half until dragged.
   const [devToolsShare, setDevToolsShare] = useStoredShare("browser-devtools", 1 / 2);
   const bodySize = useElementSize(body, docked);
-  const bodyExtent = (docked === "right" ? bodySize?.width : bodySize?.height) ?? 0;
+  const bodyExtent = (beside ? bodySize?.width : bodySize?.height) ?? 0;
   const devToolsSize = Math.round(bodyExtent * devToolsShare);
+  const devToolsFloor = beside ? MIN_AREA_WIDTH : MIN_AREA_HEIGHT;
   const resizeDevTools = useCallback(
     (size: number) => {
       if (bodyExtent > 0) {
@@ -453,10 +455,10 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
         {docked && (
           <>
             <Sash
-              orientation={docked === "right" ? "vertical" : "horizontal"}
+              orientation={beside ? "vertical" : "horizontal"}
               size={devToolsSize}
-              min={docked === "right" ? MIN_AREA_WIDTH : MIN_AREA_HEIGHT}
-              minOther={docked === "right" ? MIN_AREA_WIDTH : MIN_AREA_HEIGHT}
+              min={devToolsFloor}
+              minOther={devToolsFloor}
               reverse
               onResize={resizeDevTools}
             />
@@ -465,10 +467,10 @@ export const BrowserHost = memo(function BrowserHost({ at, tab, active, visible,
               tabId={tabId}
               part="devTools"
               box={devToolsBox}
-              style={docked === "right" ? { width: devToolsSize } : { height: devToolsSize }}
+              style={beside ? { width: devToolsSize } : { height: devToolsSize }}
               shown={shown}
               over={over}
-              sashSide={docked === "right" ? "left" : "top"}
+              sashSide={beside ? "left" : "top"}
               onPlaced={placed}
             />
           </>

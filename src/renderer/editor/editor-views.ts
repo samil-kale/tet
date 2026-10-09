@@ -289,7 +289,7 @@ function switchEditor(view: EditorView, leaving: MonacoEditor.IStandaloneCodeEdi
   const focused = leaving?.hasTextFocus() ?? false;
   // Shown once the other editor is there, or the switch would uncover an empty frame while it builds.
   void ensureEditor(view).then((built) => {
-    if (views.get(view.tabId) !== view || !built || diffShown(view.snapshot) !== shown) {
+    if (disposed(view) || !built || diffShown(view.snapshot) !== shown) {
       return;
     }
     applyMode(view);
@@ -358,6 +358,16 @@ export function previewEditorTab(ref: ProjectRef): string | undefined {
   return refViews(ref).find((view) => view.snapshot.preview)?.tabId;
 }
 
+/** Closed meanwhile: what was awaited for it is dropped. */
+function disposed(view: EditorView): boolean {
+  return views.get(view.tabId) !== view;
+}
+
+/** Closed, or opened anew (`readSeq`), since read `seq` started. */
+function stale(view: EditorView, seq: number): boolean {
+  return disposed(view) || view.readSeq !== seq;
+}
+
 function emit(view: EditorView): void {
   tabListeners.get(view.tabId)?.forEach((listener) => listener());
   refListeners.get(refKeyOf(view.ref))?.forEach((listener) => listener());
@@ -366,7 +376,7 @@ function emit(view: EditorView): void {
 /** Dropped for a view disposed meanwhile. A tab without models yet takes its editor from
  *  `showText`. */
 function publish(view: EditorView, patch: Partial<EditorSnapshot>): void {
-  if (views.get(view.tabId) !== view) {
+  if (disposed(view)) {
     return;
   }
   const leaving = activeEditor(view);
@@ -478,7 +488,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   const current = view;
   const read = how.commit ? readCommitFile(ref, path, how.commit) : window.tet.repository.readFile(ref, path);
   void read.then((file) => {
-    if (views.get(tabId) !== current || current.readSeq !== seq) {
+    if (stale(current, seq)) {
       return;
     }
     if (file.error) {
@@ -547,7 +557,7 @@ export function setEditorVersion(tabId: string, version: string): void {
   const seq = view.readSeq;
   const saves = view.saves;
   void window.tet.repository.readFile(view.ref, path).then((result) => {
-    if (views.get(tabId) !== view || view.readSeq !== seq || result.error) {
+    if (stale(view, seq) || result.error) {
       return;
     }
     const held = view.snapshot.file;
@@ -625,7 +635,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   const content = model.getValue(undefined, true);
   const versionId = model.getAlternativeVersionId();
   let result = await window.tet.repository.writeFile(view.ref, path, content, file.mtimeMs);
-  if (views.get(tabId) !== view || view.readSeq !== seq) {
+  if (stale(view, seq)) {
     return;
   }
   // Changed on disk meanwhile (an agent wrote it): overwritten only once asked — the other version
@@ -641,7 +651,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
       },
       result.error ?? "Could not save the file",
     );
-    if (views.get(tabId) !== view || view.readSeq !== seq) {
+    if (stale(view, seq)) {
       return;
     }
     if (!overwrite) {
@@ -649,7 +659,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
     }
     publish(view, { saving: true });
     result = await window.tet.repository.writeFile(view.ref, path, content, result.diskMtimeMs);
-    if (views.get(tabId) !== view || view.readSeq !== seq) {
+    if (stale(view, seq)) {
       return;
     }
   }
@@ -776,7 +786,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   // A grammar diff-highlight.ts doesn't bundle is "plaintext".
   const language = languageForPath(file.path) ?? null;
   await ensureLanguage(monaco, language);
-  if (!built || views.get(view.tabId) !== view || view.readSeq !== seq) {
+  if (!built || stale(view, seq)) {
     return;
   }
   // One model per URI or monaco throws; the repository or worktree is the authority, as two can
@@ -890,7 +900,7 @@ function renderMarkdownPreview(view: EditorView, delay: number): void {
     renderMarkdown(text, view.snapshot.path, loadImage, preview.colored).then(
       ({ doc, colored }) => {
         preview.colored = colored;
-        if (views.get(view.tabId) === view && preview.renderSeq === seq) {
+        if (!disposed(view) && preview.renderSeq === seq) {
           preview.body.replaceChildren(...doc.body.childNodes);
           followEditor(view);
           if (skipped) {
@@ -965,7 +975,7 @@ async function editorSetup(view: EditorView): Promise<EditorSetup | null> {
   // Defines the theme before the editor exists, or it paints once in monaco's colors.
   await ensureLanguage(monaco, null);
   const { editorKeybindingPreset } = (await window.tet.settings.get()).files;
-  if (views.get(view.tabId) !== view) {
+  if (disposed(view)) {
     return null;
   }
   return { monaco, options: editorOptions(editorFontFamily()), keybindings: resolveKeybindings(editorKeybindingPreset) };

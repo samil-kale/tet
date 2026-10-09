@@ -14,7 +14,7 @@ import type {
   PromptTexts,
   SettingsEdits,
 } from "../../shared/types/settings";
-import { isRecord, readJson, writeJson } from "../util/json-file";
+import { isRecord, readJson, recordOf, writeJson } from "../util/json-file";
 
 const DEFAULTS: AppSettings = {
   appearance: {
@@ -100,18 +100,14 @@ export class SettingsStore {
 /** Every key as the store holds it, from the dialog or the file; a tab's object that isn't one
  *  takes its defaults whole. */
 function normalize(stored: unknown): AppSettings {
-  const value = record(stored);
+  const value = recordOf(stored);
   return {
-    appearance: appearance(record(value.appearance)),
-    notifications: switches(record(value.notifications), DEFAULTS.notifications),
-    files: files(record(value.files)),
-    git: switches(record(value.git), DEFAULTS.git),
-    prompts: prompts(record(value.prompts)),
+    appearance: appearance(recordOf(value.appearance)),
+    notifications: switches(recordOf(value.notifications), DEFAULTS.notifications),
+    files: files(recordOf(value.files)),
+    git: switches(recordOf(value.git), DEFAULTS.git),
+    prompts: prompts(recordOf(value.prompts)),
   };
-}
-
-function record(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
 }
 
 function appearance(value: Record<string, unknown>): AppearanceSettings {
@@ -131,7 +127,7 @@ function lanes(value: unknown): LaneSettings {
   }
   const entries: LaneSettings = [];
   for (const item of value) {
-    const entry = record(item);
+    const entry = recordOf(item);
     if (LANES.includes(entry.lane as Lane) && !entries.some((kept) => kept.lane === entry.lane)) {
       entries.push({ lane: entry.lane as Lane, pinned: entry.pinned === true });
     }
@@ -171,7 +167,7 @@ function themeId(value: unknown, kind: ThemeKind): string {
 }
 
 function prompts(value: Record<string, unknown>): PromptSettings {
-  return { texts: promptTexts(record(value.texts)), commitSuggester: suggester(value.commitSuggester) };
+  return { texts: promptTexts(recordOf(value.texts)), commitSuggester: suggester(value.commitSuggester) };
 }
 
 /** Anything but two strings is no pick; an agent or model no longer offered is replaced where it

@@ -1,4 +1,4 @@
-import type { AgentDefinition } from "../agents/agent";
+import type { AgentDefinition, AgentSessionInfo } from "../agents/agent";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { HandoverFiles, TabPlace } from "./tab-place";
 
@@ -48,6 +48,14 @@ export interface TabState extends TabDescriptor {
 /** This tab's hooks named a session it has not claimed: its first, or one it moved on to. */
 export function awaitsClaim(tab: TabState): boolean {
   return tab.reportedSessionId !== undefined && tab.reportedSessionId !== tab.sessionId;
+}
+
+/** What a tab takes of the listed session it shows: a restored one, or one it claims. */
+export function sessionFieldsOf(
+  info: AgentSessionInfo,
+): Pick<TabState, "sessionId" | "title" | "updatedAt" | "createdAt" | "provisionalTitle" | "sandbox"> {
+  const { title, updatedAt, createdAt, provisionalTitle, sandbox } = info;
+  return { sessionId: info.id, title, updatedAt, createdAt, provisionalTitle, sandbox };
 }
 
 /** No session claimed, no title, or only a stand-in the agent may still replace. */

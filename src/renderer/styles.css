@@ -403,7 +403,6 @@ textarea:focus,
      icon. */
   padding: 0;
   border-radius: 3px;
-  color: inherit;
 }
 
 /* The svg fills the box and its padding insets the drawing to --icon-size: centring a smaller
@@ -1445,8 +1444,11 @@ textarea:focus,
 }
 
 /* The editor tab's slot in `.pane-body`, over its padding: monaco has its own gutter. Hidden
-   by visibility, like `.terminal-host`, so monaco keeps a laid-out box. */
-.editor-tab {
+   by visibility, like `.terminal-host`, so monaco keeps a laid-out box. A browser tab: the editor
+   tab's bar (`.editor-bar`) with its address field, then the box its page is drawn over — main's
+   own view, above TET's page (BrowserHost). */
+.editor-tab,
+.browser-tab {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1465,16 +1467,6 @@ textarea:focus,
 .editor-host.hidden,
 .editor-host.hidden * {
   visibility: hidden !important;
-}
-
-/* A browser tab: the editor tab's bar (`.editor-bar`) with its address field, then the box its
-   page is drawn over — main's own view, above TET's page (BrowserHost). */
-.browser-tab {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--tet-editor-background);
 }
 
 .browser-tab.hidden {

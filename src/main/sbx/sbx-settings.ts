@@ -1,5 +1,5 @@
 import { errorMessage } from "../../shared/errors";
-import { addProblems, keptValues, sbxProblemNotices, withoutProblems } from "../../shared/sbx-rules";
+import { keptValues, mergeProblems, sbxProblemNotices, withoutProblems } from "../../shared/sbx-rules";
 import { projectRef, projectRefName } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { Project, ProjectRef } from "../../shared/types/project";
@@ -19,6 +19,12 @@ type Known = Omit<SbxReading, "status"> & { status: Pick<SbxStatus, "organizatio
 /** What a Save takes of it: the organization alone, as the sandboxes and rules it must read in its
  *  own turn — a Save queued behind another would work from what that one changed. */
 type KnownOrganization = Pick<Known, "status">;
+
+/** What a Save stores into and tells through. */
+interface SaveDeps {
+  sbxLocal: SbxLocalStore;
+  notice: (severity: NoticeSeverity, message: string) => void;
+}
 
 /** The env names holding a value, per list. */
 interface ValueNames {
@@ -84,7 +90,7 @@ const saves = new Map<string, Promise<unknown>>();
  * matching neither's tet.json.
  */
 export function saveProjectSbx(
-  deps: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
+  deps: SaveDeps,
   project: Project,
   request: SbxProjectSettings,
   local: SbxLocalSave,
@@ -94,7 +100,7 @@ export function saveProjectSbx(
 }
 
 async function saveNow(
-  { sbxLocal, notice }: { sbxLocal: SbxLocalStore; notice: (severity: NoticeSeverity, message: string) => void },
+  { sbxLocal, notice }: SaveDeps,
   project: Project,
   request: SbxProjectSettings,
   local: SbxLocalSave,
@@ -151,9 +157,7 @@ async function saveNow(
       notice("info", `An earlier ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed.`);
     }
     const left: SbxProblems = { ...problems };
-    for (const [option, rows] of Object.entries(refused) as [keyof SbxProblems, Record<string, string>][]) {
-      addProblems(left, option, rows);
-    }
+    mergeProblems(left, refused);
     const unexpected = [...sbxProblemNotices(refused), ...failures];
     return unexpected.length > 0 ? { ok: false, error: unexpected.join("\n\n"), problems: left } : { ok: true, problems: left };
   } catch (error) {

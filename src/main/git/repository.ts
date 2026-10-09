@@ -63,8 +63,7 @@ function settle(timer: ReturnType<typeof setTimeout> | undefined, lastAt: number
   clearTimeout(timer);
   return setTimeout(run, Math.max(REFRESH_DEBOUNCE_MS, lastAt + REFRESH_MIN_INTERVAL_MS - Date.now()));
 }
-/** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
- *  from" merges what the last fetch brought, whatever the host. */
+
 /** What the renderer asks the graph's reads about is a commit and nothing git could take for an
  *  option. */
 const isObjectId = (value: string): boolean => /^[0-9a-f]{4,64}$/i.test(value);
@@ -74,6 +73,9 @@ const MAX_GRAPH_COMMITS = 5000;
 
 /** The most files a refused commit names, the rest counted: a merge may leave dozens. */
 const MAX_NAMED_CONFLICTS = 5;
+
+/** A diff side the revision lacks: it diffs as all new, or all removed. */
+export const MISSING_BLOB: HeadBlob = { content: "", binary: false, missing: true };
 
 /**
  * What the GRAPH reads, as VS Code's "Auto": HEAD, the current branch's upstream and the default
@@ -107,6 +109,8 @@ function graphRevisions(state: RepositoryState): string[] {
   return [...revisions];
 }
 
+/** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
+ *  from" merges what the last fetch brought, whatever the host. */
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
 /** How long the periodic fetch may hold back a click (runAction waits for it). Well past the minute
  *  git and ssh give a silent connection (git.ts's NETWORK_ENV): this catches a credential helper
@@ -503,8 +507,13 @@ export class Repository {
 
   /** The config is read again by the refresh after, since only this changes a url. */
   setRemoteUrl(remote: string, url: string): Promise<GitActionResult> {
+    return this.configAction(() => git.setRemoteUrl(this.at.path, remote, url));
+  }
+
+  /** `runAction` for a command writing the config, which the refresh after then reads again. */
+  private configAction(action: () => Promise<GitActionResult>): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const result = await git.setRemoteUrl(this.at.path, remote, url);
+      const result = await action();
       this.configStale = true;
       return result;
     });
@@ -517,11 +526,7 @@ export class Repository {
   /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). The refresh after reads
    *  the config again: this is what records `branch.<name>.base`, and the new row shows it at once. */
   addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
-    return this.runAction(async () => {
-      const result = await git.worktreeAdd(this.at.path, target, branch, base);
-      this.configStale = true;
-      return result;
-    });
+    return this.configAction(() => git.worktreeAdd(this.at.path, target, branch, base));
   }
 
   removeWorktree(target: string, force: boolean): Promise<GitActionResult> {
@@ -535,11 +540,7 @@ export class Repository {
   /** git moves the branch's whole config section with it, `branch.<name>.base` included, so the
    *  refresh after reads the config again. */
   renameBranch(from: string, to: string): Promise<GitActionResult> {
-    return this.runAction(async () => {
-      const result = await git.renameBranch(this.at.path, from, to);
-      this.configStale = true;
-      return result;
-    });
+    return this.configAction(() => git.renameBranch(this.at.path, from, to));
   }
 
   /** Locally and, if asked, its upstream on the remote. Local first: it can't fail for reasons off the
@@ -873,9 +874,9 @@ export class Repository {
       return Promise.resolve(undefined);
     }
     if (change.status === "untracked") {
-      return Promise.resolve({ content: "", binary: false, missing: true });
+      return Promise.resolve(MISSING_BLOB);
     }
-    return git.readHeadBlob(this.at.path, filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES }).catch(() => undefined);
+    return git.readBlobAt(this.at.path, "HEAD", filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES }).catch(() => undefined);
   }
 
   /** The GRAPH's commits, only those `search` finds if given. A read beside `runAction`: it touches
@@ -903,13 +904,12 @@ export class Repository {
     origPath: string | undefined,
   ): Promise<CommitFileContent> {
     const options = { maxBytes: MAX_EDIT_BYTES };
-    const lacking: HeadBlob = { content: "", binary: false, missing: true };
     if (!isObjectId(sha) || (parent !== undefined && !isObjectId(parent))) {
-      return { original: lacking, modified: lacking };
+      return { original: MISSING_BLOB, modified: MISSING_BLOB };
     }
     const [original, modified] = await Promise.all([
-      parent ? git.readBlobAt(this.at.path, parent, filePath, { ...options, origPath }).catch(() => lacking) : lacking,
-      git.readBlobAt(this.at.path, sha, filePath, options).catch(() => lacking),
+      parent ? git.readBlobAt(this.at.path, parent, filePath, { ...options, origPath }).catch(() => MISSING_BLOB) : MISSING_BLOB,
+      git.readBlobAt(this.at.path, sha, filePath, options).catch(() => MISSING_BLOB),
     ]);
     return { original, modified };
   }

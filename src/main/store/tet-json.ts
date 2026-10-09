@@ -14,7 +14,7 @@ import type { SbxPath, SbxPort, SbxProjectSettings, SbxSecret, SbxVariable } fro
 import { machineName } from "./env-names";
 import { readRepositoryPath } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";
-import { isRecord } from "../util/json-file";
+import { isRecord, recordOf } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 
 /** A project's saved commands, Explorer folders and excludes and SBX settings, in its own root so
@@ -280,11 +280,6 @@ function toFolders(value: unknown, root: string): ExplorerRoot[] {
   return folders;
 }
 
-/** Any nested object of tet.json; anything not a plain object is an empty one. */
-function toSettings(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}
-
 /** `exclude`: a list of globs; an entry that isn't a non-blank string is no pattern. */
 function toExclude(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((pattern): pattern is string => typeof pattern === "string" && pattern.trim() !== "") : [];
@@ -422,10 +417,6 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
   });
 }
 
-function sbxSection(content: ProjectFile): Record<string, unknown> {
-  return toSettings(content.sbx);
-}
-
 /** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
  *  hosts, the variables' names and the setup script. Never holds a token: each sandboxed agent signs
  *  in with its own `/login` inside the sandbox, and a secret's or variable's value stays on this
@@ -437,7 +428,7 @@ export async function readSbxSettings(root: string): Promise<SbxProjectSettings>
 }
 
 function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProjectSettings {
-  const sbx = sbxSection(content ?? {});
+  const sbx = recordOf(content?.sbx);
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
     .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
@@ -456,7 +447,7 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
 /** Replaces only the rows that apply here — see StoredSbxPath. */
 export function writeSbxSettings(root: string, config: SbxProjectSettings): Promise<void> {
   return patch(root, (content) => {
-    const others = toSbxPaths(sbxSection(content).paths).filter((entry) => !appliesHere(entry));
+    const others = toSbxPaths(recordOf(content.sbx).paths).filter((entry) => !appliesHere(entry));
     const mine = config.paths.map((entry): StoredSbxPath => (entry.path.startsWith("~") ? entry : { ...entry, os: PLATFORM.id }));
     return [
       [

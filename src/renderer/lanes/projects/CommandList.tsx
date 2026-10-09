@@ -88,6 +88,15 @@ const renderCommandFields: PromptOptions<CommandAnswer>["render"] = ({ value, on
   </>
 );
 
+/** The add or edit dialog: the same fields, saved by `submit`. */
+async function askCommand(
+  title: string,
+  value: CommandAnswer,
+  submit: (answer: CommandAnswer) => Promise<string | undefined>,
+): Promise<void> {
+  await prompt({ title, detail: COMMAND_DETAIL, value, confirmLabel: "Save", ready: commandReady, render: renderCommandFields, submit });
+}
+
 /** The dialog's answer as an entry with only what was filled in, so a bare command stays a plain
  *  string in tet.json. `shell` carries over from the edited command: editing must not change how
  *  it starts. */
@@ -222,19 +231,11 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
   const save = notifying(saveAsked);
 
   const askAdd = async (): Promise<void> => {
-    await prompt({
-      title: "New command",
-      detail: COMMAND_DETAIL,
-      value: { command: "", name: "", cwd: "", env: "", color: "" },
-      confirmLabel: "Save",
-      ready: commandReady,
-      render: renderCommandFields,
-      submit: async (answer) => {
-        const command = toCommand(answer);
-        const current = latestCommands();
-        // Already saved word for word: nothing to add, and nothing to say about it.
-        return current.some((entry) => isSameCommand(entry, command)) ? undefined : saveAsked([...current, command]);
-      },
+    await askCommand("New command", { command: "", name: "", cwd: "", env: "", color: "" }, async (answer) => {
+      const command = toCommand(answer);
+      const current = latestCommands();
+      // Already saved word for word: nothing to add, and nothing to say about it.
+      return current.some((entry) => isSameCommand(entry, command)) ? undefined : saveAsked([...current, command]);
     });
   };
 
@@ -248,20 +249,16 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
 
   /** `askAdd`'s dialog, prefilled. */
   const askEdit = async (command: ProjectCommand): Promise<void> => {
-    await prompt({
-      title: "Edit command",
-      detail: COMMAND_DETAIL,
-      value: {
+    await askCommand(
+      "Edit command",
+      {
         command: command.command,
         name: command.name ?? "",
         cwd: command.cwd ?? "",
         env: formatEnv(command.env),
         color: command.color ?? "",
       },
-      confirmLabel: "Save",
-      ready: commandReady,
-      render: renderCommandFields,
-      submit: async (answer) => {
+      async (answer) => {
         const current = latestCommands();
         const index = indexOf(command);
         // Removed while the dialog was open: writing it back would resurrect it.
@@ -269,7 +266,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
           ? undefined
           : saveAsked(current.map((entry, position) => (position === index ? toCommand(answer, command) : entry)));
       },
-    });
+    );
   };
 
   const askRemove = async (command: ProjectCommand): Promise<void> => {

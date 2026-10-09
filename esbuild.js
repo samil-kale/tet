@@ -65,21 +65,16 @@ function cliConfig(name) {
   };
 }
 
-/** @type {import('esbuild').BuildOptions} */
-const preloadConfig = {
-  ...node,
-  entryPoints: [path.join(__dirname, "src", "preload", "preload.ts")],
-  outfile: path.join(dist, "preload.js"),
-  external: ["electron"]
-};
-
-/** @type {import('esbuild').BuildOptions} */
-const pagePreloadConfig = {
-  ...node,
-  entryPoints: [path.join(__dirname, "src", "preload", "page-preload.ts")],
-  outfile: path.join(dist, "page-preload.js"),
-  external: ["electron"]
-};
+/** A preload under src/preload: `preload`, the window's, and `page-preload`, a browser tab's page's. */
+/** @returns {import('esbuild').BuildOptions} */
+function preloadConfig(name) {
+  return {
+    ...node,
+    entryPoints: [path.join(__dirname, "src", "preload", `${name}.ts`)],
+    outfile: path.join(dist, `${name}.js`),
+    external: ["electron"]
+  };
+}
 
 /** @type {import('esbuild').BuildOptions} */
 const rendererConfig = {
@@ -152,8 +147,8 @@ async function build() {
     cliConfig("tet-ctl"),
     cliConfig("tet-update"),
     cliConfig("tet-browser-relay"),
-    preloadConfig,
-    pagePreloadConfig,
+    preloadConfig("preload"),
+    preloadConfig("page-preload"),
     rendererConfig,
     editorWorkerConfig,
     ...(tests ? [testConfig] : [])

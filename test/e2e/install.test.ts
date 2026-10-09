@@ -13,7 +13,7 @@ import { CONTROL_ENV } from "../../src/shared/ctl";
 import { assetName, preparedRoot, rootExecutable } from "../../src/shared/release";
 import type { UpdateResult } from "../../src/shared/release";
 import type { NoticeReport } from "../../src/shared/types/app";
-import { eventually, killApp, processAlive, ROOT, tempDir, tetCtl } from "../helpers";
+import { eventually, killApp, processAlive, ROOT, runEnv, tempDir, tetCtl } from "../helpers";
 
 /**
  * Install with the script, start, find a newer version, quit, start the update. Releases are
@@ -108,14 +108,7 @@ function startTet(): void {
 
 /** A verb's result, or undefined when TET does not answer. */
 async function ask(args: string[]): Promise<unknown> {
-  // No caller ids, which a run from a TET tab inherits: the run's token speaks for no tab.
-  const answer = await tetCtl(args, {
-    [CONTROL_ENV.port]: String(port),
-    [CONTROL_ENV.token]: TOKEN,
-    [CONTROL_ENV.projectId]: undefined,
-    [CONTROL_ENV.worktree]: undefined,
-    [CONTROL_ENV.tabId]: undefined,
-  });
+  const answer = await tetCtl(args, runEnv(port, TOKEN));
   return answer.status === 0 ? answer.result : undefined;
 }
 

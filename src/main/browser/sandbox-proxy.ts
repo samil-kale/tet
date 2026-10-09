@@ -46,6 +46,7 @@ export class SandboxProxy {
 
   private constructor(
     private readonly server: http.Server,
+    private readonly dialer: SandboxDialer,
     readonly port: number,
   ) {}
 
@@ -55,9 +56,9 @@ export class SandboxProxy {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", () => {
         server.off("error", reject);
-        const proxy = new SandboxProxy(server, (server.address() as net.AddressInfo).port);
-        server.on("connect", (request: http.IncomingMessage, socket: Duplex, head: Buffer) => proxy.tunnel(dialer, request, socket, head));
-        server.on("request", (request: http.IncomingMessage, response: http.ServerResponse) => proxy.forward(dialer, request, response));
+        const proxy = new SandboxProxy(server, dialer, (server.address() as net.AddressInfo).port);
+        server.on("connect", (request: http.IncomingMessage, socket: Duplex, head: Buffer) => proxy.tunnel(request, socket, head));
+        server.on("request", (request: http.IncomingMessage, response: http.ServerResponse) => proxy.forward(request, response));
         resolve(proxy);
       });
     });
@@ -84,16 +85,14 @@ export class SandboxProxy {
     this.refused.delete(host.toLowerCase());
   }
 
-  private tunnel(dialer: SandboxDialer, request: http.IncomingMessage, socket: Duplex, head: Buffer): void {
+  private tunnel(request: http.IncomingMessage, socket: Duplex, head: Buffer): void {
     socket.on("error", () => undefined);
-    let target: URL;
-    try {
-      target = new URL(`http://${request.url ?? ""}`);
-    } catch {
+    const target = URL.parse(`http://${request.url ?? ""}`);
+    if (!target) {
       socket.end(tunnelAnswer("400 Bad Request"));
       return;
     }
-    dialer.open(target.hostname, Number(target.port || 443), false).then(
+    this.dialer.open(target.hostname, Number(target.port || 443), false).then(
       ({ stream }) => {
         if (socket.destroyed) {
           stream.destroy();
@@ -113,7 +112,7 @@ export class SandboxProxy {
     );
   }
 
-  private forward(dialer: SandboxDialer, request: http.IncomingMessage, response: http.ServerResponse): void {
+  private forward(request: http.IncomingMessage, response: http.ServerResponse): void {
     const fail = (message: string): void => {
       if (response.headersSent) {
         response.destroy();
@@ -121,17 +120,12 @@ export class SandboxProxy {
         response.writeHead(502, { "Content-Type": "text/plain; charset=utf-8", Connection: "close" }).end(message);
       }
     };
-    let target: URL | undefined;
-    try {
-      target = new URL(request.url ?? "");
-    } catch {
-      target = undefined;
-    }
+    const target = URL.parse(request.url ?? "");
     if (target?.protocol !== "http:") {
       response.writeHead(400, { Connection: "close" }).end();
       return;
     }
-    dialer.open(target.hostname, Number(target.port || 80), true).then(
+    this.dialer.open(target.hostname, Number(target.port || 80), true).then(
       ({ stream, proxied }) => {
         this.accept(target.hostname);
         // One request per connection to the sandbox: the next may be for another host.

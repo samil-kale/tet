@@ -31,7 +31,9 @@ function yieldToLoop(): Promise<void> {
 }
 
 /** Checked one tick apart (yieldToLoop). */
-async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
+async function checkAgentRequirements(): Promise<Requirement[]> {
+  // No repository's directory: the checks are about the programs.
+  const cwd = os.tmpdir();
   // The shell has no `install`.
   const installable = AGENTS.filter((agent) => agent.install !== undefined);
   const agentChecks: Promise<Requirement>[] = [];
@@ -56,9 +58,6 @@ async function checkAgentRequirements(cwd: string): Promise<Requirement[]> {
  * Projects opened afterwards reuse this answer (`agentInstalled`).
  */
 export async function checkRequirements(): Promise<Requirements> {
-  // No repository's directory: the checks are about the programs.
-  const cwd = os.tmpdir();
-
   // In the git utility process (git-client.ts), so started alongside the agent checks.
   const gitVersion = isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
 
@@ -66,7 +65,7 @@ export async function checkRequirements(): Promise<Requirements> {
   const sbxInstalled = readSbxVersion().then((sbxVersion) => sbxVersion !== undefined);
   await yieldToLoop();
 
-  const agents = await checkAgentRequirements(cwd);
+  const agents = await checkAgentRequirements();
   const [version, sbx] = await Promise.all([gitVersion, sbxInstalled]);
   const installed = version !== undefined;
   return {
@@ -86,5 +85,5 @@ export async function checkRequirements(): Promise<Requirements> {
  */
 export async function anyAgentInstalled(): Promise<boolean> {
   await augmentAgentPath();
-  return (await checkAgentRequirements(os.tmpdir())).some((agent) => agent.installed);
+  return (await checkAgentRequirements()).some((agent) => agent.installed);
 }

@@ -73,7 +73,7 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     setLayouts((current) => {
       let next: Record<string, ProjectLayout> | undefined;
       for (const refKey of Object.keys(tabs)) {
-        const list = tabs[refKey] ?? NO_TABS;
+        const list = tabs[refKey];
         const held = current[refKey];
         if (held && list === previousTabs[refKey] && reconciled.get(held) === list) {
           continue;

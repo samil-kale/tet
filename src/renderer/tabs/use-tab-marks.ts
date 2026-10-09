@@ -61,15 +61,6 @@ export function useTabMarks(
   );
 
   /**
-   * Tabs the progress bar is about — runtime being prepared, CLI before its first frame. Tabs on
-   * screen included: the bar is about the pane's own tabs.
-   */
-  const startingTabs = useCallback(
-    (refKey: string): TabDescriptor[] => (tabs[refKey] ?? []).filter((tab) => tab.starting === true),
-    [tabs],
-  );
-
-  /**
    * The above as tab ids plus `working` (`RefMarks`), per repository or worktree, identity-stable
    * where unchanged: panes and the project list take them as props, and most pushes change nothing
    * here. `working` includes the tab on screen (a spinner is about now) but not one waiting on a
@@ -91,16 +82,18 @@ export function useTabMarks(
           markedTabs(refKey, "waitingAt").map((tab) => tab.tabId),
           NO_IDS,
         ),
+        // The tabs the progress bar is about — runtime being prepared, CLI before its first frame.
+        // Tabs on screen included: the bar is about the pane's own tabs.
         starting: sameList(
           previous?.starting,
-          startingTabs(refKey).map((tab) => tab.tabId),
+          tabs[refKey].filter((tab) => tab.starting === true).map((tab) => tab.tabId),
           NO_IDS,
         ),
-        working: (tabs[refKey] ?? []).some(isWorking),
+        working: tabs[refKey].some(isWorking),
       };
     }
     return stableRecord(marksRef, next);
-  }, [tabs, markedTabs, startingTabs]);
+  }, [tabs, markedTabs]);
 
   /**
    * The project row's spinner steps through working sessions, one per press. Viewing one does not

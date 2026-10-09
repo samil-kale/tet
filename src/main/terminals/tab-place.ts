@@ -342,9 +342,8 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
    * folder, since the other agent's store is out of the sandbox's sight.
    */
   async launch(input: LaunchInput): Promise<Launch> {
-    const { at, onNotice } = this.context;
+    const { at, onNotice, agent } = this.context;
     const { start } = this;
-    const { agent } = this.context;
     const paths = this.paths(start.idleReminder, start.theme);
     const hooks = agent.sandbox.prepare(paths);
     const handoverDir = input.handover && sandboxHandoverDir(this.agentDir, input.handover.from, input.handover.sessionId);

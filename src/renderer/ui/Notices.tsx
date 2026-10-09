@@ -38,6 +38,11 @@ export function notify(severity: NoticeSeverity, message: string): void {
   }
   shown.set([...shown.get(), { id, severity, message }]);
   scheduleDismiss(id, severity);
+  report(severity, message);
+}
+
+/** Every notice shown, for `tet-ctl notices-list`. */
+function report(severity: NoticeSeverity, message: string): void {
   window.tet.app.reportNotice({ severity, message, at: Date.now() });
 }
 
@@ -52,7 +57,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
     if (standing && done) {
       shown.set(shown.get().map((notice) => (notice === standing ? { id: notice.id, severity: "info", message } : notice)));
       scheduleDismiss(standing.id, "info");
-      window.tet.app.reportNotice({ severity: "info", message, at: Date.now() });
+      report("info", message);
     } else if (standing) {
       dismissNotice(standing.id);
     } else if (done) {
@@ -69,7 +74,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
     return;
   }
   shown.set([...shown.get(), { id: ++nextId, severity: "info", message, progress: { key, fraction } }]);
-  window.tet.app.reportNotice({ severity: "info", message, at: Date.now() });
+  report("info", message);
 }
 
 /**

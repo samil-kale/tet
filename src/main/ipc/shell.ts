@@ -29,13 +29,9 @@ export async function fetchHttpsImage(
   const signal = AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS);
   // A relative location resolves against the hop that sent it; undefined where it is no URL at all.
   const resolve = (value: string, base?: string): string | undefined => {
-    try {
-      const resolved = new URL(value, base);
-      // A `javascript:` or `data:` location resolves to itself and is refused here, like `http:`.
-      return resolved.protocol === "https:" ? resolved.href : undefined;
-    } catch {
-      return undefined;
-    }
+    const resolved = URL.parse(value, base);
+    // A `javascript:` or `data:` location resolves to itself and is refused here, like `http:`.
+    return resolved?.protocol === "https:" ? resolved.href : undefined;
   };
 
   let target = resolve(url);

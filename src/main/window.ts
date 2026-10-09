@@ -73,6 +73,16 @@ export class AppWindow {
     });
   }
 
+  /** The window while it stands; undefined before it exists, once closed, or while destroyed. */
+  private liveWindow(): BaseWindow | undefined {
+    return this.window?.isDestroyed() === false ? this.window : undefined;
+  }
+
+  /** TET's page while it stands, as `liveWindow`. */
+  private livePage(): WebContentsView | undefined {
+    return this.page?.webContents.isDestroyed() === false ? this.page : undefined;
+  }
+
   send = <C extends keyof EventChannels>(channel: C, payload: EventChannels[C]): void => {
     if (channel === "app:notice" && !this.noticesHeard) {
       this.heldNotices.push(payload as Notice);
@@ -85,9 +95,7 @@ export class AppWindow {
       }
       return;
     }
-    if (this.page && !this.page.webContents.isDestroyed()) {
-      this.page.webContents.send(channel, payload);
-    }
+    this.livePage()?.webContents.send(channel, payload);
   };
 
   /** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
@@ -101,13 +109,14 @@ export class AppWindow {
 
   /** Whether the page listens and a question can show now. */
   listening(): boolean {
-    return this.noticesHeard && this.window !== undefined && !this.window.isDestroyed();
+    return this.noticesHeard && this.liveWindow() !== undefined;
   }
 
   /** Out of the user's sight: unfocused, or minimized — a win32 window minimized by its button
    *  still reports `isFocused`. */
   inBackground(): boolean {
-    return this.window !== undefined && !this.window.isDestroyed() && (!this.window.isFocused() || this.window.isMinimized());
+    const window = this.liveWindow();
+    return window !== undefined && (!window.isFocused() || window.isMinimized());
   }
 
   /** A repository's or worktree's active editor tab text (ControlDeps.editorContent). */
@@ -122,7 +131,7 @@ export class AppWindow {
 
   /** Asks the window on a per-question reply channel; undefined when it does not answer. */
   private askWindow(ask: (reply: WindowReply) => void): Promise<string | undefined> {
-    if (!this.window || this.window.isDestroyed()) {
+    if (!this.liveWindow()) {
       return Promise.resolve(undefined);
     }
     this.windowQuestions += 1;
@@ -181,29 +190,31 @@ export class AppWindow {
   };
 
   reveal = (): void => {
-    if (!this.window || this.window.isDestroyed()) {
+    const window = this.liveWindow();
+    if (!window) {
       return;
     }
-    if (this.window.isMinimized()) {
-      this.window.restore();
+    if (window.isMinimized()) {
+      window.restore();
     }
-    this.window.focus();
+    window.focus();
   };
 
   /** The theme on screen, undefined while no window stands. */
   shownTheme(): ThemeDefinition | undefined {
-    return this.window && !this.window.isDestroyed() ? this.theme : undefined;
+    return this.liveWindow() ? this.theme : undefined;
   }
 
   /** Puts `theme` on screen live; within one `kind` only, which the caller keeps to. */
   showTheme(theme: ThemeDefinition): void {
-    if (!this.window || this.window.isDestroyed() || theme.id === this.theme?.id) {
+    const window = this.liveWindow();
+    if (!window || theme.id === this.theme?.id) {
       return;
     }
     this.theme = theme;
-    this.window.setBackgroundColor(theme.windowBackground);
+    window.setBackgroundColor(theme.windowBackground);
     if (PLATFORM.titleBarOverlay) {
-      this.window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
+      window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
     }
     this.send("app:theme", theme.id);
   }
@@ -211,21 +222,15 @@ export class AppWindow {
   /** A browser tab's page, drawn above TET's own where its tab lies (browser/browser-tabs.ts);
    *  dropped when no window stands. */
   addView = (view: WebContentsView): void => {
-    if (this.window && !this.window.isDestroyed()) {
-      this.window.contentView.addChildView(view);
-    }
+    this.liveWindow()?.contentView.addChildView(view);
   };
 
   removeView = (view: WebContentsView): void => {
-    if (this.window && !this.window.isDestroyed()) {
-      this.window.contentView.removeChildView(view);
-    }
+    this.liveWindow()?.contentView.removeChildView(view);
   };
 
   focusPage = (): void => {
-    if (this.page && !this.page.webContents.isDestroyed()) {
-      this.page.webContents.focus();
-    }
+    this.livePage()?.webContents.focus();
   };
 
   /** Hands the window the lanes as stored; a window still loading reads them at its start. */

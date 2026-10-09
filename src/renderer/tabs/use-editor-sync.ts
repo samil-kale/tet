@@ -4,13 +4,11 @@ import type { RepositoryState } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { forget, sameList, sameRecord } from "../identity";
 import type { EditorTab } from "../editor/editor-tab";
-import { activeEditorTab, defaultLayout, type ProjectLayout } from "./pane-layout";
+import { activeEditorTab, DEFAULT_LAYOUT, type ProjectLayout } from "./pane-layout";
 import { editorContent, setEditorVersion } from "../editor/editor-views";
 
 /** Shared instance, so a repository's or worktree's watched list is stable when empty. */
 const NO_PATHS: string[] = [];
-
-const DEFAULT_LAYOUT = defaultLayout();
 
 /** What an open file is re-read for: HEAD's branch and commit (so a pull or reset counts), the
  *  file's status, and a write on disk (`writes`), which leaves a modified file's status unchanged. */

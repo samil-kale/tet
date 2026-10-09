@@ -80,6 +80,9 @@ export function defaultLayout(): ProjectLayout {
   return { preset: "single", focusedPane: "a", tabPane: {}, activeTab: {}, commandPane: {} };
 }
 
+/** Shared instance, read where a repository or worktree has no layout yet: stable for memoized views. */
+export const DEFAULT_LAYOUT = defaultLayout();
+
 /** Which pane a tab lives in; the focused pane for one never assigned yet. */
 export function paneOf(layout: ProjectLayout, tabId: string): PaneId {
   return layout.tabPane[tabId] ?? layout.focusedPane;
@@ -274,10 +277,10 @@ function collapseTrailing(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayo
   let next = layout;
   for (;;) {
     const last = PRESET_PANES[next.preset].at(-1)!;
-    if (occupiedPanes(next, tabs).includes(last) || !COLLAPSE_TRANSITIONS[next.preset][last]) {
+    const transition = COLLAPSE_TRANSITIONS[next.preset][last];
+    if (occupiedPanes(next, tabs).includes(last) || !transition) {
       return next;
     }
-    const transition = COLLAPSE_TRANSITIONS[next.preset][last]!;
     next = retarget(next, transition.preset, transition.remap, tabs);
   }
 }
@@ -305,10 +308,8 @@ export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId
  * `previousTabs` and holds none of `tabs`.
  */
 export function collapseClosed(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[]): ProjectLayout {
-  const held = new Set(tabs.map((tab) => paneOf(layout, tab.tabId)));
-  const emptied = PRESET_PANES[layout.preset].filter(
-    (paneId) => !held.has(paneId) && previousTabs.some((tab) => paneOf(layout, tab.tabId) === paneId),
-  );
+  const occupied = occupiedPanes(layout, tabs);
+  const emptied = occupiedPanes(layout, previousTabs).filter((paneId) => !occupied.includes(paneId));
   return collapsePanes(normalizeLayout(layout, tabs, previousTabs), emptied, tabs);
 }
 

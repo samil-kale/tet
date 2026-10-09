@@ -40,8 +40,7 @@ export class TerminalSession {
   private status: TerminalStatus = "missing";
   private intentionalStop = false;
   /** The size of the last `ensureStarted` call — what `restart` respawns at. */
-  private lastCols: number | undefined;
-  private lastRows: number | undefined;
+  private lastSize: { cols: number; rows: number } | undefined;
   /** Set while killing for a restart, so a second click can't queue another. */
   private restartQueued = false;
   /** The teardown underway, which a second `stop()` joins. */
@@ -69,8 +68,7 @@ export class TerminalSession {
 
   /** Starts the agent on the first call, at the view's real size; afterwards forwards resizes. */
   ensureStarted(cols: number, rows: number): void {
-    this.lastCols = cols;
-    this.lastRows = rows;
+    this.lastSize = { cols, rows };
     if (this.process) {
       // A dead pty is held until node-pty's exit event, and resizing it throws in the main process.
       try {
@@ -166,11 +164,10 @@ export class TerminalSession {
    *  `this.process`, and firing late it would clobber an immediate respawn. No-op before the first
    *  `ensureStarted`. */
   restart(): void {
-    if (this.lastCols === undefined || this.lastRows === undefined || this.restartQueued) {
+    const size = this.lastSize;
+    if (size === undefined || this.restartQueued) {
       return;
     }
-    const cols = this.lastCols;
-    const rows = this.lastRows;
     const respawn = (): void => {
       this.restartQueued = false;
       // A `stop()` mid-kill wins: a process spawned now would never be killed.
@@ -178,7 +175,7 @@ export class TerminalSession {
         return;
       }
       this.setStatus("ready");
-      this.start(cols, rows);
+      this.start(size.cols, size.rows);
     };
     if (this.process) {
       this.restartQueued = true;

@@ -34,7 +34,7 @@ export function createModifierGatedLinkProvider(
 ): ILinkProvider {
   // Built once: provideLinks runs on every render while the pointer is over the terminal — nothing
   // expensive, and no logging, in that path.
-  const rex = new RegExp(regex.source, (regex.flags || "") + "g");
+  const rex = new RegExp(regex.source, regex.flags + "g");
   return {
     provideLinks(bufferLineNumber, callback) {
       callback(computeLinks(bufferLineNumber, terminal, rex, anchor, onActivate));

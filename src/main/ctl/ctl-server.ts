@@ -1,10 +1,8 @@
 import * as crypto from "node:crypto";
 import * as http from "node:http";
 import { errorMessage } from "../../shared/errors";
-import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB } from "../../shared/ctl";
-import type { ControlErrorCode, ControlRequest, ControlResponse } from "../../shared/ctl";
+import { CONTROL_HOST, CONTROL_VERBS, HELP_VERB, type ControlErrorCode, type ControlRequest, type ControlResponse } from "../../shared/ctl";
 import { sameProjectRef } from "../../shared/types/project";
-import type { ProjectRef } from "../../shared/types/project";
 import { CALLER_SIDES, HOST_CALLER } from "./caller-side";
 import { tabControlToken } from "../terminals/ctl-token";
 import { verbs } from "./ctl-verbs";
@@ -70,22 +68,17 @@ export async function startControlServer(deps: ControlDeps, token: string, port:
     // sandboxed one only its own, the one its sandbox mounts — but for an `ownProject` verb.
     const own = callerRef(caller);
     const reach = side.reach(entry);
-    if (reach !== "any") {
-      const ownOnly = reach === "ownRef";
-      let target: ProjectRef | undefined;
-      try {
-        target = own && resolveCallerRef(deps.store, request.args ?? {}, caller).ref;
-      } catch (error) {
-        return { response: error instanceof ControlError ? reject(error.code, error.message) : reject("internal", errorMessage(error)) };
-      }
-      const allowed =
-        own !== undefined && target !== undefined && (ownOnly ? sameProjectRef(target, own) : target.projectId === own.projectId);
-      if (!allowed) {
-        const whose = ownOnly ? "the caller's own repository or worktree" : "the caller's own project";
-        return { response: reject("unauthorized", `${request.verb} only answers for ${whose}`) };
-      }
-    }
     try {
+      if (reach !== "any") {
+        const ownOnly = reach === "ownRef";
+        const target = own && resolveCallerRef(deps.store, request.args ?? {}, caller).ref;
+        const allowed =
+          own !== undefined && target !== undefined && (ownOnly ? sameProjectRef(target, own) : target.projectId === own.projectId);
+        if (!allowed) {
+          const whose = ownOnly ? "the caller's own repository or worktree" : "the caller's own project";
+          return { response: reject("unauthorized", `${request.verb} only answers for ${whose}`) };
+        }
+      }
       const answer = await handler(request.args ?? {}, { ...caller, side }, request.at, gone);
       await side.checkAnswer(entry, answer.result, own && deps.projectRefPath(own));
       return { response: { ok: true, result: answer.result }, after: answer.after };

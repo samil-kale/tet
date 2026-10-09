@@ -1,16 +1,10 @@
 import { memo, type ReactNode } from "react";
 import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
+import { WORKTREES_NEED_GIT } from "../../../shared/types/git";
 import type { Project, ProjectRef, ProjectWorktree } from "../../../shared/types/project";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { GitRun } from "../../git/run-action";
-import {
-  askDeleteWorktree,
-  askNewWorktree,
-  askRenameWorktree,
-  MADE_ELSEWHERE,
-  newWorktreeRefusal,
-  worktreeEntry,
-} from "../../git/worktree-questions";
+import { askDeleteWorktree, askNewWorktree, askRenameWorktree, MADE_ELSEWHERE, worktreeEntry } from "../../git/worktree-questions";
 import { PLATFORM } from "../../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed, filled, prompt, singleField } from "../../ui/Dialog";
@@ -103,16 +97,13 @@ function webUrl(remoteUrl: string): string | null {
   if (scp) {
     return `https://${scp[1]}/${scp[2]}`;
   }
-  try {
-    const url = new URL(remoteUrl);
-    if (url.protocol === "ssh:") {
-      return `https://${url.hostname}${url.pathname.replace(/\.git\/?$/, "")}`;
-    }
-    if (url.protocol === "https:" || url.protocol === "http:") {
-      return `https://${url.host}${url.pathname.replace(/\.git\/?$/, "")}`;
-    }
-  } catch {
-    // Not a url, e.g. a local path.
+  // Null where it is no url, e.g. a local path.
+  const url = URL.parse(remoteUrl);
+  if (url?.protocol === "ssh:") {
+    return `https://${url.hostname}${url.pathname.replace(/\.git\/?$/, "")}`;
+  }
+  if (url?.protocol === "https:" || url?.protocol === "http:") {
+    return `https://${url.host}${url.pathname.replace(/\.git\/?$/, "")}`;
   }
   return null;
 }
@@ -256,7 +247,7 @@ export const ProjectList = memo(function ProjectList({
           SEPARATOR,
           worktreeEntry(
             "Add worktree",
-            newWorktreeRefusal(worktreesSupported),
+            worktreesSupported ? undefined : WORKTREES_NEED_GIT,
             defaultBranch ? () => void askNewWorktree(projectId, runIn(resolved.refKey), defaultBranch) : undefined,
           ),
         ];

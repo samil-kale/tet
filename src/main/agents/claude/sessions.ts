@@ -16,7 +16,7 @@ import {
   watchTranscriptDir,
 } from "../transcript";
 import { SANDBOX_HOME } from "../hook-target";
-import { openInside, removeInside } from "../../util/path-inside";
+import { appendInside, removeInside } from "../../util/path-inside";
 
 /** Claude Code has no session CLI: sessions are the `<uuid>.jsonl` transcripts in
  *  ~/.claude/projects/<cwd with non-alphanumerics as "-">; deleting one deletes its transcript.
@@ -138,12 +138,7 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   // Appended to, never created: a transcript gone would come back as a session of one title line,
   // listed and never resumable.
   try {
-    const handle = await openInside(within, transcriptPath(projectDir, sessionId), fs.constants.O_WRONLY | fs.constants.O_APPEND);
-    try {
-      await handle.appendFile(line);
-    } finally {
-      await handle.close();
-    }
+    await appendInside(within, transcriptPath(projectDir, sessionId), line);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       throw new Error("Claude Code session not found", { cause: error });

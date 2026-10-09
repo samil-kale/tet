@@ -27,7 +27,7 @@ import type { ProjectRef } from "../../shared/types/project";
 import { addExclude, addFolder, removeFolder } from "../store/tet-json";
 import { cancelCommitSuggestion, suggestCommitMessage } from "../agents/commit-message";
 import { git } from "../git/git-client";
-import type { Repository } from "../git/repository";
+import { MISSING_BLOB, type Repository } from "../git/repository";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import type { IpcDeps } from "./deps";
 
@@ -241,8 +241,9 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
       filePath: string,
       origPath: string | undefined,
     ): Promise<CommitFileContent> => {
-      const missing = { content: "", binary: false, missing: true };
-      return (await repositories.get(ref)?.readCommitFile(sha, parent, filePath, origPath)) ?? { original: missing, modified: missing };
+      return (
+        (await repositories.get(ref)?.readCommitFile(sha, parent, filePath, origPath)) ?? { original: MISSING_BLOB, modified: MISSING_BLOB }
+      );
     },
   );
 

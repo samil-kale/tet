@@ -14,6 +14,7 @@ import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import * as gitModule from "../../src/main/git/git";
 import * as explorerReadModule from "../../src/main/git/explorer-read";
 import { serving, type UtilityMessage, type UtilityResponse } from "../../src/main/util/utility-host";
+import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
 import { CONTROL_ENV } from "../../src/shared/ctl";
 import { HOST_SIDE } from "../../src/shared/ctl-side";
 import type { GitLogin } from "../../src/shared/types/git";
@@ -35,6 +36,16 @@ export function fakeSafeStorage(available = true): void {
       return text.slice("sealed:".length);
     },
   });
+}
+
+/** Stands in for the renderer's `localStorage`, answering the map it keeps its items in. */
+export function fakeLocalStorage(): Map<string, string> {
+  const storage = new Map<string, string>();
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => void storage.set(key, value),
+  };
+  return storage;
 }
 
 /** Whether a process is still there. */
@@ -157,17 +168,21 @@ export interface TestApp {
 /** Hidden when run locally, so no window takes the screen; CI runs it shown. */
 export const WINDOW_ARGS: string[] = process.env.CI ? [] : ["--hide-window"];
 
-/** Starts TET and resolves once it answers; a start that never answers is killed before rejecting. */
-export async function startApp(userData: string, token: string, startupMs: number): Promise<TestApp> {
-  // Speaks for no tab: the run's token takes no caller ids, and a run from a TET tab inherits some.
-  const env: Record<string, string | undefined> = {
-    [CONTROL_ENV.port]: String(await findControlPort(userData)),
+/** A `tetCtl` environment reaching the TET on `port` as the run itself: it speaks for no tab, since
+ *  the run's token takes no caller ids, and a run from a TET tab inherits some. */
+export function runEnv(port: number, token: string): Record<string, string | undefined> {
+  return {
+    [CONTROL_ENV.port]: String(port),
     [CONTROL_ENV.token]: token,
     [CONTROL_ENV.projectId]: undefined,
     [CONTROL_ENV.worktree]: undefined,
     [CONTROL_ENV.tabId]: undefined,
-    [CONTROL_ENV.host]: undefined,
   };
+}
+
+/** Starts TET and resolves once it answers; a start that never answers is killed before rejecting. */
+export async function startApp(userData: string, token: string, startupMs: number): Promise<TestApp> {
+  const env = runEnv(await findControlPort(userData), token);
   const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
   if (PLATFORM.startsWithoutChromeSandbox) {
     args.push("--no-sandbox");
@@ -220,6 +235,28 @@ export async function startApp(userData: string, token: string, startupMs: numbe
   return app;
 }
 
+/**
+ * Ends the app started by `startApp`, `pid` the instance answering, and removes `dirs`. A pty's
+ * conhost can hold a file a moment longer than the app; in the temp dir that's fine. Then an
+ * unhandled exception fails the run even when every assertion passed — otherwise it shows only as
+ * what it broke (e.g. a timeout behind Electron's frozen dialog). Covers the spawned instance only;
+ * the one `app-restart` leaves is not on this pipe.
+ */
+export async function stopApp(app: TestApp | undefined, pid: number | undefined, dirs: string[]): Promise<void> {
+  if (pid !== undefined) {
+    killApp(pid);
+  }
+  await eventually("TET gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
+  for (const dir of dirs) {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+  }
+  const stderr = app?.stderr() ?? "";
+  const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
+  if (uncaught >= 0) {
+    assert.fail(`tet reported an uncaught exception:\n${stderr.slice(uncaught)}`);
+  }
+}
+
 /** Ends the app; on win32 always by force, as the signal is not a thing there. */
 export function killApp(target: number, signal: "SIGTERM" | "SIGKILL" = "SIGTERM"): void {
   if (PLATFORM.killsWithTaskkill) {
@@ -258,16 +295,21 @@ export function git(cwd: string, ...args: string[]): string {
   return result.stdout.trim();
 }
 
+/** Writes `files` (name to content) into `dir` and commits them with what is already staged. */
+export function commitFiles(dir: string, message: string, files: Record<string, string>): void {
+  for (const [name, content] of Object.entries(files)) {
+    fs.writeFileSync(path.join(dir, name), content);
+  }
+  git(dir, "add", "--", ...Object.keys(files));
+  git(dir, "commit", "-q", "-m", message);
+}
+
 /** A repository on main with one commit, "base", of `files` (name to content), in a temporary
  *  folder named after `prefix`. */
 export function initRepository(prefix: string, files: Record<string, string> = { "a.txt": "committed\n" }): string {
   const dir = tempDir(prefix);
   git(dir, "init", "-q", "--initial-branch=main");
-  for (const [name, content] of Object.entries(files)) {
-    fs.writeFileSync(path.join(dir, name), content);
-  }
-  git(dir, "add", "--", ...Object.keys(files));
-  git(dir, "commit", "-q", "-m", "base");
+  commitFiles(dir, "base", files);
   return dir;
 }
 

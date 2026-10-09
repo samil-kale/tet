@@ -9,6 +9,7 @@ import type { FileAct, FileAsk } from "../../git/run-action";
 import { openEntries, pathEntries } from "../../editor/file-menu";
 import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
 import { baseName, parentOf } from "../../paths";
+import { sameRecord } from "../../identity";
 import { FileIconView } from "./file-icon";
 import { compactTree, filterTree, foldersIn, isExpanded, visibleRows, type TreeNode, type VisibleRow } from "../../ui/tree";
 import { INDENT_BASE, INDENT_STEP, TreeRow, ChevronBox } from "../../ui/tree-row";
@@ -348,26 +349,25 @@ export function useExplorerListing(
   const [explorerVersion, setExplorerVersion] = useState(0);
   const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
   useEffect(() => {
-    const bump = (): void => setExplorerVersion((count) => count + 1);
     // tet.json is the project's, wherever it shows; the files are this repository's or worktree's
     // own.
     const unsubscribeCommands = window.tet.commands.onChanged(({ projectId }) => {
       if (projectId === resolved.ref.projectId) {
-        bump();
+        refreshExplorer();
       }
     });
     const unsubscribeFiles = window.tet.repository.onFilesChanged((payload) => {
       if (refKeyOf(payload.ref) === resolved.refKey) {
-        bump();
+        refreshExplorer();
       }
     });
-    window.addEventListener("focus", bump);
+    window.addEventListener("focus", refreshExplorer);
     return () => {
       unsubscribeCommands();
       unsubscribeFiles();
-      window.removeEventListener("focus", bump);
+      window.removeEventListener("focus", refreshExplorer);
     };
-  }, [resolved]);
+  }, [resolved, refreshExplorer]);
   // Read only while shown, and again on return: changes meanwhile went unread.
   useEffect(() => {
     if (!shown) {
@@ -403,9 +403,7 @@ function keepListing(previous: ExplorerListing | undefined, next: ExplorerListin
 function sameListing(a: ExplorerListing, b: ExplorerListing): boolean {
   const sameStrings = (x: string[], y: string[]): boolean => x.length === y.length && x.every((item, index) => item === y[index]);
   const sameMtimes = (x: Record<string, number> | undefined, y: Record<string, number> | undefined): boolean =>
-    x === undefined || y === undefined
-      ? x === y
-      : Object.keys(x).length === Object.keys(y).length && Object.entries(x).every(([key, mtime]) => y[key] === mtime);
+    x === undefined || y === undefined ? x === y : sameRecord(x, y) === x;
   return (
     a.compactFolders === b.compactFolders &&
     a.sortOrder === b.sortOrder &&

@@ -3,7 +3,7 @@ import { envRowRefusal } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
-import { resolveTheme, schemeKind, themeKey, THEMES, type ThemeKind } from "../../shared/themes";
+import { resolveTheme, schemeKind, themeKey, THEMES } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
 import type { Suggester } from "../../shared/types/agents";
 import type { AppInfo } from "../../shared/types/app";
@@ -68,7 +68,7 @@ function envEdit(row: EnvRow): EnvEdit | undefined {
 /** Whether the rows differ from the variables `loaded` — a value typed, a name changed, a row added
  *  or removed — which a running tab takes up only once it restarts (pty.ts's buildEnv). */
 function envChanged(rows: EnvRow[], loaded: readonly string[]): boolean {
-  const edits = rows.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+  const edits = rows.flatMap((row) => envEdit(row) ?? []);
   return (
     edits.some((edit) => edit.value !== undefined || edit.name !== edit.from) ||
     loaded.some((name) => !edits.some((edit) => edit.from === name))
@@ -123,12 +123,12 @@ const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
  * `foldersNestsFiles` is left out: without file nesting it sorts like `default`. A hand-written
  * settings.json can still hold it.
  */
-const SORT_ORDERS: { id: ExplorerSortOrder; label: string }[] = [
-  { id: "default", label: "Default" },
-  { id: "mixed", label: "Mixed" },
-  { id: "filesFirst", label: "Files First" },
-  { id: "type", label: "Type" },
-  { id: "modified", label: "Modified" },
+const SORT_ORDERS: { value: ExplorerSortOrder; label: string }[] = [
+  { value: "default", label: "Default" },
+  { value: "mixed", label: "Mixed" },
+  { value: "filesFirst", label: "Files First" },
+  { value: "type", label: "Type" },
+  { value: "modified", label: "Modified" },
 ];
 
 const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
@@ -196,7 +196,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   } = useSubmit(
     async () => {
       if (variablesEdited.current) {
-        const rows = variables.map(envEdit).filter((edit): edit is EnvEdit => edit !== undefined);
+        const rows = variables.flatMap((row) => envEdit(row) ?? []);
         const refusal = await window.tet.env.save(rows);
         if (refusal) {
           return refusal;
@@ -232,16 +232,6 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
     edits.current = withSettings(edits.current, change);
     setSettings((current) => (current ? withSettings(current, change) : current));
   });
-
-  const flipNotification = (key: keyof NotificationSettings, value: boolean): void => edit({ notifications: { [key]: value } });
-
-  const flipGit = (key: keyof GitSettings, value: boolean): void => edit({ git: { [key]: value } });
-
-  const applyPreset = (id: string): void => edit({ files: { editorKeybindingPreset: id } });
-
-  const applyColorScheme = (scheme: ColorScheme): void => edit({ appearance: { colorScheme: scheme } });
-
-  const applyTheme = (kind: ThemeKind, id: string): void => edit({ appearance: { [themeKey(kind)]: id } });
 
   // The kind shown now, and the one Save asks for — "system" resolved by the OS now (Electron's
   // prefers-color-scheme follows nativeTheme, which theme.ts's currentTheme reads).
@@ -303,14 +293,14 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
           <FieldGroup label="Color scheme">
             <RadioGroup
               value={scheme}
-              onChange={applyColorScheme}
+              onChange={(colorScheme) => edit({ appearance: { colorScheme } })}
               options={COLOR_SCHEMES.map((option) => ({ value: option, label: COLOR_SCHEME_LABELS[option] }))}
             />
           </FieldGroup>
           <Field label={chosenKind === "dark" ? "Dark theme" : "Light theme"}>
             <Dropdown
               value={resolveTheme(settings?.appearance[themeKey(chosenKind)], chosenKind).id}
-              onChange={(id) => applyTheme(chosenKind, id)}
+              onChange={(id) => edit({ appearance: { [themeKey(chosenKind)]: id } })}
               options={THEMES.filter((theme) => theme.kind === chosenKind).map((theme) => ({
                 value: theme.id,
                 label: theme.label,
@@ -324,7 +314,12 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
           <FieldGroup label="Desktop notifications for agent activity">
             {settings &&
               NOTIFICATION_SWITCHES.map(({ key, label }) => (
-                <Checkbox key={key} label={label} checked={settings.notifications[key]} onChange={(next) => flipNotification(key, next)} />
+                <Checkbox
+                  key={key}
+                  label={label}
+                  checked={settings.notifications[key]}
+                  onChange={(next) => edit({ notifications: { [key]: next } })}
+                />
               ))}
           </FieldGroup>
           {/* No restart caveat: hooks report every turn, and the notification reads the settings as they
@@ -350,7 +345,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
                   <Dropdown
                     value={settings.files.sortOrder}
                     onChange={(order) => edit({ files: { sortOrder: order } })}
-                    options={SORT_ORDERS.map((order) => ({ value: order.id, label: order.label }))}
+                    options={SORT_ORDERS}
                   />
                 </Field>
               </>
@@ -359,7 +354,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
           <Field label="Editor keybindings">
             <Dropdown
               value={settings?.files.editorKeybindingPreset ?? DEFAULT_KEYBINDING_PRESET_ID}
-              onChange={applyPreset}
+              onChange={(id) => edit({ files: { editorKeybindingPreset: id } })}
               options={KEYBINDING_PRESETS.map((preset) => ({ value: preset.id, label: preset.label }))}
             />
           </Field>
@@ -369,7 +364,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
         <FieldGroup label="Checked to begin with">
           {settings &&
             GIT_SWITCHES.map(({ key, label }) => (
-              <Checkbox key={key} label={label} checked={settings.git[key]} onChange={(next) => flipGit(key, next)} />
+              <Checkbox key={key} label={label} checked={settings.git[key]} onChange={(next) => edit({ git: { [key]: next } })} />
             ))}
         </FieldGroup>
       )}

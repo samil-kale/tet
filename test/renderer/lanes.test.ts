@@ -5,6 +5,7 @@ import { graphRefColors, layoutGraph, nodeLane, type GraphColor } from "../../sr
 import { EMPTY_REPOSITORY_STATE } from "../../src/shared/types/git";
 import type { GraphCommit } from "../../src/shared/types/git";
 import type { Project } from "../../src/shared/types/project";
+import { fakeLocalStorage } from "../helpers";
 
 const main: Project = { id: "main", path: "/repo", name: "repo", worktrees: [{ path: "/wt/feature", branch: "feature", key: "k1" }] };
 const other: Project = { id: "other", path: "/other", name: "other", worktrees: [] };
@@ -33,11 +34,7 @@ describe("the active repository or worktree after the list changed", () => {
 });
 
 describe("the active repository or worktree at startup", () => {
-  const storage = new Map<string, string>();
-  (globalThis as { localStorage?: unknown }).localStorage = {
-    getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => void storage.set(key, value),
-  };
+  fakeLocalStorage();
 
   it("is the one active when TET last closed, while it is still open", () => {
     assert.equal(activeAtStart([other, main]), "other", "none remembered: the first");

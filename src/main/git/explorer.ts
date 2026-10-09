@@ -74,16 +74,16 @@ function sameEntry(a: string, b: string): boolean {
   }
 }
 
-/** A repository-relative path for a new entry, resolved, or an error if outside or taken.
+/** A repository-relative path for a new entry, resolved, or the failure if outside or taken.
  *  `renaming` is the source: on a case-insensitive filesystem `Readme.md` → `README.md` finds the
  *  source at the target, which is no conflict. */
-function resolveNew(root: string, filePath: string, renaming?: string): { absolute: string } | { error: string } {
+function resolveNew(root: string, filePath: string, renaming?: string): { absolute: string } | GitActionResult {
   const absolute = resolveInside(root, filePath);
   if (!absolute) {
-    return { error: OUTSIDE_REPOSITORY.error };
+    return OUTSIDE_REPOSITORY;
   }
   if (fs.existsSync(absolute) && !(renaming && sameEntry(absolute, renaming))) {
-    return { error: `A file or folder "${filePath}" already exists at this location` };
+    return { ok: false, error: `A file or folder "${filePath}" already exists at this location` };
   }
   return { absolute };
 }
@@ -91,8 +91,8 @@ function resolveNew(root: string, filePath: string, renaming?: string): { absolu
 /** The Explorer's "New File...", creating parent directories. */
 export async function createFile(root: string, filePath: string): Promise<GitActionResult> {
   const target = resolveNew(root, filePath);
-  if ("error" in target) {
-    return { ok: false, error: target.error };
+  if ("ok" in target) {
+    return target;
   }
   return attempt(async () => {
     await fs.promises.mkdir(path.dirname(target.absolute), { recursive: true });
@@ -103,8 +103,8 @@ export async function createFile(root: string, filePath: string): Promise<GitAct
 /** The Explorer's "New Folder...". */
 export async function createDirectory(root: string, dirPath: string): Promise<GitActionResult> {
   const target = resolveNew(root, dirPath);
-  if ("error" in target) {
-    return { ok: false, error: target.error };
+  if ("ok" in target) {
+    return target;
   }
   return attempt(() => fs.promises.mkdir(target.absolute, { recursive: true }));
 }
@@ -125,8 +125,8 @@ export async function renamePath(root: string, fromPath: string, toPath: string)
     return OUTSIDE_REPOSITORY;
   }
   const to = resolveNew(root, toPath, from);
-  if ("error" in to) {
-    return { ok: false, error: to.error };
+  if ("ok" in to) {
+    return to;
   }
   // Before the `mkdir` below, which would leave its folders inside the source.
   if (relativeInside(from, to.absolute) !== undefined) {

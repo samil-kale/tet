@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { hookCommand } from "../hook-command";
 import { HOST_TARGET, type HookTarget } from "../hook-target";
@@ -17,9 +16,7 @@ import type { HookEvent } from "../../../shared/ctl";
  * prompt goes in once at spawn (index.ts).
  */
 export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TARGET): string[] {
-  const command = (event: Parameters<typeof hookCommand>[0]): { type: string; command: string }[] => [
-    { type: "command", command: hookCommand(event) },
-  ];
+  const command = (event: HookEvent): { type: string; command: string }[] => [{ type: "command", command: hookCommand(event) }];
 
   const hooks = {
     UserPromptSubmit: [{ hooks: command("prompt-submit") }],
@@ -38,7 +35,6 @@ export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TA
   // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process.
   // Built-in only: a custom theme loads after the first render, drawing a dark frame meanwhile.
   const settingsFile = path.join(paths.agentDir, "tet-hooks-settings.json");
-  fs.mkdirSync(paths.agentDir, { recursive: true });
   // Rename into place: a sandbox's copy is rewritten on every spawn while another tab may read it.
   writeIfChanged(settingsFile, JSON.stringify({ hooks, theme: paths.theme.kind }, null, 2));
   return ["--settings", target.embed(settingsFile)];

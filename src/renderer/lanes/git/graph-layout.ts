@@ -74,12 +74,12 @@ export function layoutGraph(commits: GraphCommit[], refColors: Map<string, Graph
   let colorIndex = -1;
   const rows: GraphRow[] = [];
   for (const commit of commits) {
-    const input = (rows.at(-1)?.output ?? []).map((lane) => ({ ...lane }));
+    const input = rows.at(-1)?.output ?? [];
     const output: Swimlane[] = [];
     let firstParentAdded = false;
     for (const lane of input) {
       if (lane.id !== commit.sha) {
-        output.push({ ...lane });
+        output.push(lane);
       } else if (!firstParentAdded && commit.parents.length > 0) {
         output.push({ id: commit.parents[0], color: refColor(commit) ?? lane.color });
         firstParentAdded = true;

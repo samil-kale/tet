@@ -156,6 +156,13 @@ export function addProblems(problems: SbxProblems, option: SbxOption, rows: Reco
   }
 }
 
+/** Adds every option's rows of `from` to `problems` (addProblems). */
+export function mergeProblems(problems: SbxProblems, from: SbxProblems): void {
+  for (const [option, rows] of Object.entries(from) as [SbxOption, Record<string, string>][]) {
+    addProblems(problems, option, rows);
+  }
+}
+
 /** A list's edits that type no value and keep each row's stored one (SbxLocalEdits): a Save that
  *  changes no value, of rows under their stored names. */
 export function keptValues(rows: { env: string }[]): SbxLocalEdits {

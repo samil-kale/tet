@@ -1001,11 +1001,7 @@ function freePath(dir: string, name: string, downloads: readonly BrowserDownload
 
 /** The host name of `url`, "" for one that is no URL. */
 function hostnameOf(url: string): string {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return "";
-  }
+  return URL.parse(url)?.hostname ?? "";
 }
 
 /**
@@ -1028,7 +1024,7 @@ export function sweepBrowserProfiles(dataRoot: string): void {
     await Promise.all(
       names.map(async (name) => {
         const sandbox = SANDBOX_PROFILE.exec(name);
-        const match = sandbox ? null : WORKTREE_PROFILE.exec(name);
+        const match = WORKTREE_PROFILE.exec(name);
         const gone = sandbox
           ? !fs.existsSync(
               sandboxDir(dataRoot, { projectId: sandbox[1], worktree: sandbox[2] === "repository" ? undefined : sandbox[2] }, sandbox[3]),

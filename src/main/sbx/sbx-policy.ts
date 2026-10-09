@@ -21,12 +21,7 @@ type FilesystemAction = "read" | "write";
  * `organization_unavailable` when sbx could not look it up). An ungoverned account has neither.
  */
 export function parseGovernance(json: string): string | undefined {
-  let parsed: unknown;
-  try {
-    parsed = parseSbxJson(json);
-  } catch {
-    return undefined;
-  }
+  const parsed = parseSbxJson(json);
   if (!isRecord(parsed)) {
     return undefined;
   }
@@ -72,20 +67,21 @@ export interface FilesystemRule {
 }
 
 /**
- * A `--json` stdout parsed, throwing when it holds none: sbx appends notices (an update banner) to
+ * A `--json` stdout parsed, undefined when it holds none: sbx appends notices (an update banner) to
  * stdout after the JSON, so what is read is the value from the first `{` or `[` to the last
  * closing one.
  */
 export function parseSbxJson(stdout: string): unknown {
   try {
     return JSON.parse(stdout);
-  } catch (error) {
+  } catch {
     const start = stdout.search(/[{[]/);
     const end = Math.max(stdout.lastIndexOf("}"), stdout.lastIndexOf("]"));
-    if (start === -1 || end < start) {
-      throw error;
+    try {
+      return start === -1 || end < start ? undefined : JSON.parse(stdout.slice(start, end + 1));
+    } catch {
+      return undefined;
     }
-    return JSON.parse(stdout.slice(start, end + 1));
   }
 }
 
@@ -98,12 +94,7 @@ export function parseSbxJson(stdout: string): unknown {
  * test/e2e/agents.test.ts.
  */
 export function parseFilesystemRules(json: string): FilesystemRule[] {
-  let parsed: unknown;
-  try {
-    parsed = parseSbxJson(json);
-  } catch {
-    return [];
-  }
+  const parsed = parseSbxJson(json);
   const rules = isRecord(parsed) ? parsed.rules : undefined;
   if (!Array.isArray(rules)) {
     return [];

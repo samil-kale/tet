@@ -6,7 +6,6 @@ import type { SbxBlocker, SbxKnowledgeSource, SbxProjectSettings, SbxStoredLocal
 import {
   SbxSettingsFields,
   fromSettings,
-  policyName,
   needsRestart,
   saveBlocked,
   tabMarks,
@@ -325,7 +324,8 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       {phase.kind === "blocked" && (
         <>
           <p className="dialog-message">
-            {policyName(phase.organization !== undefined)} has to allow these before TET can sandbox {project.name}:
+            {phase.organization !== undefined ? "Your organization's SBX policy" : "SBX's policy"} has to allow these before TET can sandbox{" "}
+            {project.name}:
           </p>
           <div className="requirement-list">
             {phase.blockers.map((blocker) => (
@@ -345,7 +345,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             checked={enabled}
             disabled={locked || !signedIn}
             onChange={editEnabled}
-            label={<>Enable SBX sandboxing for this project</>}
+            label="Enable SBX sandboxing for this project"
           />
           <div className={`sbx-governance${organization ? "" : " hidden"}`}>
             <span className="sbx-governance-icon">

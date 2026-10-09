@@ -1,4 +1,3 @@
-import { WORKTREES_NEED_GIT } from "../../shared/types/git";
 import type { GitActionResult } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { canDiscardRefEdits } from "../editor/editor-views";
@@ -21,11 +20,6 @@ export const MADE_ELSEWHERE = "made elsewhere";
  *  one (Requirements.worktrees), or one made elsewhere. */
 export function worktreeEntry(label: string, why: string | undefined, run: (() => void) | undefined): ContextMenuEntry {
   return why === undefined ? { label: `${label}...`, run } : { label: `${label} (${why})` };
-}
-
-/** Why "Add worktree" is disabled, if it is. */
-export function newWorktreeRefusal(supported: boolean): string | undefined {
-  return supported ? undefined : WORKTREES_NEED_GIT;
 }
 
 /** Names the new branch, which names the worktree. It starts at the default branch, `base`. */
@@ -72,11 +66,10 @@ export async function askDeleteWorktree(worktree: ProjectRef, branch: string, up
   if (!answer.confirmed || !(await canDiscardRefEdits(worktree))) {
     return;
   }
-  const options = { force: false, onRemote: answer.checked };
   /** No login is asked for the upstream: the worktree and its branch are gone by then, and with
    *  them what names the upstream to try again. git's words are notified. */
   const deleted = async (force: boolean): Promise<GitActionResult> => {
-    const result = await window.tet.projects.deleteWorktree(worktree, { ...options, force });
+    const result = await window.tet.projects.deleteWorktree(worktree, { force, onRemote: answer.checked });
     return result.needsConfirmation === "uncommitted" ? result : { ok: result.ok, error: result.error };
   };
   runWithFollowUp(

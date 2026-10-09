@@ -61,6 +61,16 @@ export async function openInside(root: string, file: string, flags: string | num
   }
 }
 
+/** Appends `text` to `file`, opened as openInside opens it; never creates it. */
+export async function appendInside(root: string, file: string, text: string): Promise<void> {
+  const handle = await openInside(root, file, fs.constants.O_WRONLY | fs.constants.O_APPEND);
+  try {
+    await handle.appendFile(text);
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Throws unless `target`, links resolved, is `root` or inside it. */
 export async function assertInside(root: string, target: string): Promise<void> {
   const [realRoot, real] = await Promise.all([root, target].map((entry) => fs.promises.realpath(entry)));

@@ -50,7 +50,7 @@ interface GitOptions {
   unqueued?: true;
 }
 
-/** Output as bytes: utf8 replaces invalid bytes and would break an image (`readHeadBlob`). */
+/** Output as bytes: utf8 replaces invalid bytes and would break an image (`readBlobAt`). */
 interface GitBufferOptions extends GitOptions {
   encoding: "buffer";
 }
@@ -490,16 +490,19 @@ function toChangeStatus(code: string): ChangeStatus {
     return "conflicted";
   }
   // Index status, then worktree status; the first non-space one describes the change.
-  const letter = !code.startsWith(" ") ? code[0] : code[1];
+  return letterStatus(!code.startsWith(" ") ? code[0] : code[1]);
+}
+
+/** One status letter, as `status` and `diff-tree --name-status` print it; a copy counts as added. */
+function letterStatus(letter: string): ChangeStatus {
   switch (letter) {
     case "A":
+    case "C":
       return "added";
     case "D":
       return "deleted";
     case "R":
       return "renamed";
-    case "C":
-      return "added";
     default:
       return "modified";
   }
@@ -632,7 +635,7 @@ async function readOperation(gitDir: string): Promise<GitOperation | undefined> 
  * refresh: its `HEAD` for the repository, and per linked one under `worktrees/<id>` a `gitdir`
  * naming the worktree's `.git` (relative with `--relative-paths`) and its own `HEAD`.
  */
-async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs = resolveGitDirs(cwd)): Promise<WorktreeInfo[]> {
+async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs): Promise<WorktreeInfo[]> {
   const linkedRoot = path.join(commonDir, "worktrees");
   const ids = await fs.readdir(linkedRoot).catch(() => [] as string[]);
   const worktree = async (worktreePath: string, adminDir: string, repository: boolean): Promise<WorktreeInfo> => {
@@ -1451,11 +1454,6 @@ interface BlobOptions {
   maxBytes: number;
 }
 
-/** HEAD's version of a file, the diff editor's original side for a changed file. */
-export function readHeadBlob(cwd: string, filePath: string, options: BlobOptions): Promise<HeadBlob> {
-  return readBlobAt(cwd, "HEAD", filePath, options);
-}
-
 /**
  * A file at `revision`, a diff editor's side. A path the revision lacks (untracked, newly added,
  * unborn branch) is `missing`, not an error: it diffs as all new.
@@ -1612,10 +1610,10 @@ export async function readCommitFiles(cwd: string, sha: string, parent: string |
   for (let at = 0; fields[at];) {
     const letter = fields[at][0];
     if (letter === "R" || letter === "C") {
-      files.push({ path: fields[at + 2], origPath: fields[at + 1], status: letter === "R" ? "renamed" : "added" });
+      files.push({ path: fields[at + 2], origPath: fields[at + 1], status: letterStatus(letter) });
       at += 3;
     } else {
-      files.push({ path: fields[at + 1], status: letter === "A" ? "added" : letter === "D" ? "deleted" : "modified" });
+      files.push({ path: fields[at + 1], status: letterStatus(letter) });
       at += 2;
     }
   }

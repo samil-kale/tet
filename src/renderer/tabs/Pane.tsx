@@ -306,10 +306,10 @@ export const Pane = memo(function Pane({
     switch (kinded.kind) {
       case "editor": {
         const { path, commit } = kinded.tab;
-        const label = commit ? `${baseName(path)} (${commit.sha.slice(0, 7)})` : baseName(path);
+        const suffix = commit ? ` (${commit.sha.slice(0, 7)})` : "";
         return {
-          label: <EditorTabLabel tabId={tab.tabId} label={label} />,
-          tooltip: commit ? `${path} (${commit.sha.slice(0, 7)})` : path,
+          label: <EditorTabLabel tabId={tab.tabId} label={baseName(path) + suffix} />,
+          tooltip: path + suffix,
           icon: <FilesIcon className="tab-icon" />,
           sandboxed: false,
           inactive: false,
@@ -422,8 +422,9 @@ export const Pane = memo(function Pane({
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
     const restartable =
       terminal.savedCommand === true || terminal.status === "running" || terminal.status === "stopped" || terminal.status === "error";
+    const info = agentInfo(agents, terminal.agentId);
     // Rename and hand-over act on a session: an agent that keeps none never offers them.
-    const hasSessions = agentInfo(agents, terminal.agentId)?.hasSessions === true;
+    const hasSessions = info?.hasSessions === true;
     // Every other agent that starts on a prompt — the shell takes none; nothing to hand over
     // before the session is persisted.
     const handOverAgents = agents.filter((agent) => agent.takesPrompt && agent.id !== terminal.agentId);
@@ -444,7 +445,7 @@ export const Pane = memo(function Pane({
         run: restartable ? () => restartTab(tabId) : undefined,
       },
       // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
-      ...(agentInfo(agents, terminal.agentId)?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
+      ...(info?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
       SEPARATOR,
       ...closeEntries,
       ...(hasSessions
@@ -474,7 +475,7 @@ export const Pane = memo(function Pane({
       className={`pane${width === undefined && height === undefined ? " fill" : ""}${dragOver ? " drag-over" : ""}`}
       style={width !== undefined ? { width } : height !== undefined ? { height } : undefined}
       // Capture: xterm's mousedown calls stopPropagation() once a TUI turns on mouse tracking.
-      onMouseDownCapture={() => onFocus(paneId)}
+      onMouseDownCapture={focusHere}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {
           return;

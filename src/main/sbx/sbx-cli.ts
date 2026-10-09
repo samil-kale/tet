@@ -119,14 +119,7 @@ export function writeIntoSandbox(
  *  answers "sbx cannot say" rather than an empty list. The shape is the caller's claim, read
  *  defensively at its site. */
 export function jsonOf<T>(result: RunResult): T | undefined {
-  if (!result.ok) {
-    return undefined;
-  }
-  try {
-    return parseSbxJson(result.stdout) as T;
-  } catch {
-    return undefined;
-  }
+  return result.ok ? (parseSbxJson(result.stdout) as T | undefined) : undefined;
 }
 
 /** One `sbx … --json` read (jsonOf). */
@@ -225,8 +218,8 @@ export async function readSbxUser(cancellable: boolean): Promise<string | undefi
  * keeps running sandboxes running and listed, a refused one keeps the sign-in there was;
  * governance follows the account at once.
  */
-export async function runSbxTokenSignIn(user: string, token: string, cancellable: boolean): Promise<string | undefined> {
-  const result = await runSbx(["login", "--username", user, "--password-stdin"], { stdin: token, cancellable });
+export async function runSbxTokenSignIn(user: string, token: string): Promise<string | undefined> {
+  const result = await runSbx(["login", "--username", user, "--password-stdin"], { stdin: token });
   return result.ok ? undefined : sbxFailure(result, "sbx login");
 }
 

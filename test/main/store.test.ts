@@ -120,13 +120,14 @@ describe("the environment variables kept in TET", () => {
   it("write nothing over a file they cannot read, and drop no row they do not understand", () => {
     const root = tempRoot();
     const file = path.join(root, "environment.json");
-    fs.writeFileSync(file, '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ');
+    const unreadable = '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ';
+    fs.writeFileSync(file, unreadable);
     const broken = new EnvStore(root);
     assert.deepEqual(broken.list(), []);
     assert.deepEqual(broken.values(), {});
     assert.throws(() => broken.set([row("GITHUB_TOKEN", "token")]), /environment\.json/);
     assert.throws(() => broken.remove("GITLAB_TOKEN"), /environment\.json/);
-    assert.equal(fs.readFileSync(file, "utf8"), '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ', "left as it was");
+    assert.equal(fs.readFileSync(file, "utf8"), unreadable, "left as it was");
 
     fs.writeFileSync(file, JSON.stringify([{ name: "FUTURE", value: 7 }]));
     const store = new EnvStore(root);

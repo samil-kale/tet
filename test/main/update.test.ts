@@ -46,26 +46,31 @@ describe("an update's download, continued after it was cut short", () => {
     return { url: `http://127.0.0.1:${port}/TET.zip`, ranges, close: () => server.close() };
   }
 
-  const archive = (): string => path.join(tempDir("tet-download-test-"), "TET.zip");
-  const signal = (): AbortSignal => AbortSignal.timeout(10_000);
-  const ignore = (): void => undefined;
-
-  it("fetches the whole file when there is no part", async () => {
-    const server = await releaseServer({});
+  /** Runs `use` on a fresh archive path against a server of `mode`, closed once it is done. */
+  async function withRelease(
+    mode: Parameters<typeof releaseServer>[0],
+    use: (server: Awaited<ReturnType<typeof releaseServer>>, file: string) => Promise<void>,
+  ): Promise<void> {
+    const server = await releaseServer(mode);
     try {
-      const file = archive();
-      await resumableDownload(server.url, file, signal(), ignore, fetch);
-      assert.deepEqual(fs.readFileSync(file), BODY);
-      assert.deepEqual(server.ranges, [undefined]);
+      await use(server, path.join(tempDir("tet-download-test-"), "TET.zip"));
     } finally {
       server.close();
     }
-  });
+  }
 
-  it("keeps the part of a dropped connection and asks only for the rest", async () => {
-    const server = await releaseServer({ cutAt: 200 * 1024 });
-    try {
-      const file = archive();
+  const signal = (): AbortSignal => AbortSignal.timeout(10_000);
+  const ignore = (): void => undefined;
+
+  it("fetches the whole file when there is no part", () =>
+    withRelease({}, async (server, file) => {
+      await resumableDownload(server.url, file, signal(), ignore, fetch);
+      assert.deepEqual(fs.readFileSync(file), BODY);
+      assert.deepEqual(server.ranges, [undefined]);
+    }));
+
+  it("keeps the part of a dropped connection and asks only for the rest", () =>
+    withRelease({ cutAt: 200 * 1024 }, async (server, file) => {
       await assert.rejects(resumableDownload(server.url, file, signal(), ignore, fetch));
       const part = fs.statSync(file).size;
       assert.ok(part > 0 && part <= 200 * 1024, `part of ${part} bytes`);
@@ -76,45 +81,27 @@ describe("an update's download, continued after it was cut short", () => {
       // Counted from the part on, not from zero.
       assert.ok(fractions[0] > part / BODY.length, `first fraction ${fractions[0]}`);
       assert.equal(fractions.at(-1), 1);
-    } finally {
-      server.close();
-    }
-  });
+    }));
 
-  it("overwrites the part when the server sends the whole file", async () => {
-    const server = await releaseServer({ ignoreRange: true });
-    try {
-      const file = archive();
+  it("overwrites the part when the server sends the whole file", () =>
+    withRelease({ ignoreRange: true }, async (server, file) => {
       fs.writeFileSync(file, BODY.subarray(0, 1000));
       await resumableDownload(server.url, file, signal(), ignore, fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
       assert.deepEqual(server.ranges, ["bytes=1000-"]);
-    } finally {
-      server.close();
-    }
-  });
+    }));
 
-  it("leaves a complete file as it is", async () => {
-    const server = await releaseServer({});
-    try {
-      const file = archive();
+  it("leaves a complete file as it is", () =>
+    withRelease({}, async (server, file) => {
       fs.writeFileSync(file, BODY);
       await resumableDownload(server.url, file, signal(), ignore, fetch);
       assert.deepEqual(fs.readFileSync(file), BODY);
-    } finally {
-      server.close();
-    }
-  });
+    }));
 
-  it("drops the part when the server answers another range", async () => {
-    const server = await releaseServer({ wrongStart: true });
-    try {
-      const file = archive();
+  it("drops the part when the server answers another range", () =>
+    withRelease({ wrongStart: true }, async (server, file) => {
       fs.writeFileSync(file, BODY.subarray(0, 1000));
       await assert.rejects(resumableDownload(server.url, file, signal(), ignore, fetch), /bytes 0-/);
       assert.equal(fs.existsSync(file), false);
-    } finally {
-      server.close();
-    }
-  });
+    }));
 });

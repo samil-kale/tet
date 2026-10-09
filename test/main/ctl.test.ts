@@ -69,6 +69,9 @@ const OWN_TAB = "tab-own";
 /** A tab of PROJECT whose process runs in its sbx sandbox. */
 const SANDBOX_TAB = "tab-sbx";
 
+/** The caller as SANDBOX_TAB, for `tetCtl`'s `env`. */
+const FROM_SANDBOX = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
+
 /** The caller's own tab is a shell; "tab-2" an agent, with a session and a sandbox. */
 function tab(tabId: string): TabDescriptor {
   return { tabId, agentId: tabId === OWN_TAB ? "shell" : "claude", title: "", status: "running" };
@@ -209,7 +212,6 @@ const BROWSER_SANDBOX = { name: "tet-claude-sbx", agentId: "claude" as const, ag
 /** The terminals of the repository or a worktree, by its `refKey`. */
 function terminalsOf(key: string): ControlTerminals {
   return {
-    snapshot: () => [tab(OWN_TAB), tab("tab-2")],
     inspect: () => {
       calls.inspected.push(key);
       return [
@@ -544,6 +546,12 @@ function assertRefused(run: Run, stderr: RegExp, what: string): void {
   assert.match(run.stderr, stderr, what);
 }
 
+/** A run the CLI refused as wrongly used, saying why. */
+function assertUsage(run: Run, stderr: RegExp, what?: string): void {
+  assert.equal(run.status, EXIT_CODES.usage, what);
+  assert.match(run.stderr, stderr, what);
+}
+
 /** How often `help` lists `usage` as a line of its own. */
 function helpLines(stdout: string, usage: string): number {
   return stdout.split("\n").filter((line) => line === `  ${usage}`).length;
@@ -614,6 +622,7 @@ describe("tet-ctl against the control server", () => {
     }
     tab2Session = undefined;
     tab2Working = false;
+    editorListing = EDITOR_LISTING;
     worktreeEditors = [];
     merging = { checkedOut: "main", changes: [], markers: [], deleteRefused: { ok: false, needsConfirmation: "uncommitted" } };
     themeWaits = false;
@@ -683,27 +692,28 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses an unknown verb before connecting", async () => {
-    const run = await tetCtl(["frobnicate"]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /unknown verb: frobnicate/);
+    assertUsage(await tetCtl(["frobnicate"]), /unknown verb: frobnicate/);
   });
 
   /** A raw HTTP request, bypassing the CLI, which would not send such a request. */
-  async function post(body: string): Promise<string> {
-    const nodeHttp = await import("node:http");
+  function send(body: string): http.ClientRequest {
+    const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } });
+    // A server answering past the cap closes the socket while the body is still being sent, and a
+    // request destroyed as a gone CLI fails alike.
+    req.on("error", () => undefined);
+    req.end(body);
+    return req;
+  }
+
+  /** `send`, answering the server's response body. */
+  function post(body: string): Promise<string> {
     return new Promise<string>((resolve) => {
-      const req = nodeHttp.request(
-        { host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } },
-        (res) => {
-          let data = "";
-          res.setEncoding("utf8");
-          res.on("data", (chunk: string) => (data += chunk));
-          res.on("end", () => resolve(data));
-        },
-      );
-      // A server answering past the cap closes the socket while the body is still being sent.
-      req.on("error", () => undefined);
-      req.end(body);
+      send(body).on("response", (res) => {
+        let data = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk: string) => (data += chunk));
+        res.on("end", () => resolve(data));
+      });
     });
   }
 
@@ -772,9 +782,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses an unknown theme rather than storing it", async () => {
-    const run = await tetCtl(["settings-set-theme", "solarized"]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /unknown theme: solarized/);
+    assertUsage(await tetCtl(["settings-set-theme", "solarized"]), /unknown theme: solarized/);
     assert.equal(settings.appearance.darkTheme, "dark-modern");
   });
 
@@ -783,9 +791,7 @@ describe("tet-ctl against the control server", () => {
     const set = await tetCtl(["settings-set-color-scheme", "light"]);
     assert.deepEqual(set.result, { saved: true, restartRequired: true });
     assert.equal(settings.appearance.colorScheme, "light");
-    const unknown = await tetCtl(["settings-set-color-scheme", "sepia"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown color scheme: sepia/);
+    assertUsage(await tetCtl(["settings-set-color-scheme", "sepia"]), /unknown color scheme: sepia/);
     assert.equal(settings.appearance.colorScheme, "light");
     assert.deepEqual(calls.shutdown, []);
   });
@@ -795,9 +801,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(settings.appearance.lanes, laneSettings(["projects", "files"], ["git"]));
     await tetCtl(["settings-set-lane-pin", "projects", "off"]);
     assert.deepEqual(settings.appearance.lanes, laneSettings(["files"], ["projects", "git"]));
-    const unknown = await tetCtl(["settings-set-lane-pin", "terminals", "on"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown lane: terminals/);
+    assertUsage(await tetCtl(["settings-set-lane-pin", "terminals", "on"]), /unknown lane: terminals/);
     assert.deepEqual(laneOrders(settings.appearance.lanes).pinned, ["files"]);
   });
 
@@ -813,9 +817,7 @@ describe("tet-ctl against the control server", () => {
       [["git", "git"], /lane named twice: git/],
       [[], /missing lanes/],
     ] as const) {
-      const refused = await tetCtl(["settings-set-lane-order", ...args]);
-      assert.equal(refused.status, EXIT_CODES.usage);
-      assert.match(refused.stderr, refusal);
+      assertUsage(await tetCtl(["settings-set-lane-order", ...args]), refusal);
     }
     assert.deepEqual(
       settings.appearance.lanes.map((entry) => entry.lane),
@@ -830,9 +832,7 @@ describe("tet-ctl against the control server", () => {
     const reset = await tetCtl(["settings-set-prompt", "commitMessage"]);
     assert.equal(reset.status, EXIT_CODES.ok);
     assert.equal(settings.prompts.texts.commitMessage, "");
-    const unknown = await tetCtl(["settings-set-prompt", "commands", "x"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown prompt: commands/);
+    assertUsage(await tetCtl(["settings-set-prompt", "commands", "x"]), /unknown prompt: commands/);
   });
 
   it("lists the keybinding presets", async () => {
@@ -845,9 +845,7 @@ describe("tet-ctl against the control server", () => {
     const set = await tetCtl(["settings-set-keybindings", "jetbrains"]);
     assert.deepEqual(set.result, { saved: true });
     assert.equal(settings.files.editorKeybindingPreset, "jetbrains");
-    const unknown = await tetCtl(["settings-set-keybindings", "emacs"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown keybinding preset: emacs/);
+    assertUsage(await tetCtl(["settings-set-keybindings", "emacs"]), /unknown keybinding preset: emacs/);
     assert.equal(settings.files.editorKeybindingPreset, "jetbrains");
   });
 
@@ -857,9 +855,7 @@ describe("tet-ctl against the control server", () => {
     const off = await tetCtl(["settings-set-notification", "finished", "off"]);
     assert.equal(off.status, EXIT_CODES.ok);
     assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: true });
-    const unknown = await tetCtl(["settings-set-notification", "errors", "on"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown notification: errors/);
+    assertUsage(await tetCtl(["settings-set-notification", "errors", "on"]), /unknown notification: errors/);
     const badValue = await tetCtl(["settings-set-notification", "waiting", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
     assert.equal(settings.notifications.waiting, true);
@@ -870,9 +866,7 @@ describe("tet-ctl against the control server", () => {
     const set = await tetCtl(["settings-set-git", "pushOnCommit", previous.pushOnCommit ? "off" : "on"]);
     assert.deepEqual(set.result, { saved: true });
     assert.deepEqual(settings.git, { ...previous, pushOnCommit: !previous.pushOnCommit });
-    const unknown = await tetCtl(["settings-set-git", "force", "on"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown git setting: force/);
+    assertUsage(await tetCtl(["settings-set-git", "force", "on"]), /unknown git setting: force/);
     const badValue = await tetCtl(["settings-set-git", "checkNewChanges", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
     assert.equal(settings.git.checkNewChanges, previous.checkNewChanges);
@@ -889,9 +883,7 @@ describe("tet-ctl against the control server", () => {
       compactFolders: true,
       sortOrder: "modified",
     });
-    const unknown = await tetCtl(["settings-set-explorer", "nesting", "on"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown explorer setting: nesting/);
+    assertUsage(await tetCtl(["settings-set-explorer", "nesting", "on"]), /unknown explorer setting: nesting/);
     const badOrder = await tetCtl(["settings-set-explorer", "sortOrder", "sideways"]);
     assert.equal(badOrder.status, EXIT_CODES.usage);
     const badValue = await tetCtl(["settings-set-explorer", "compactFolders", "yes"]);
@@ -907,15 +899,12 @@ describe("tet-ctl against the control server", () => {
     const byDefault = await tetCtl(["settings-set-commit-suggester", "claude"]);
     assert.equal(byDefault.status, EXIT_CODES.ok);
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
-    const model = await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]);
-    assert.equal(model.status, EXIT_CODES.usage);
-    assert.match(model.stderr, /unknown claude model: gpt \(known: fable, opus, sonnet, haiku\)/);
-    const shell = await tetCtl(["settings-set-commit-suggester", "shell"]);
-    assert.equal(shell.status, EXIT_CODES.usage);
-    assert.match(shell.stderr, /shell cannot suggest a commit message/);
-    const unknown = await tetCtl(["settings-set-commit-suggester", "gemini"]);
-    assert.equal(unknown.status, EXIT_CODES.usage);
-    assert.match(unknown.stderr, /unknown agent: gemini/);
+    assertUsage(
+      await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]),
+      /unknown claude model: gpt \(known: fable, opus, sonnet, haiku\)/,
+    );
+    assertUsage(await tetCtl(["settings-set-commit-suggester", "shell"]), /shell cannot suggest a commit message/);
+    assertUsage(await tetCtl(["settings-set-commit-suggester", "gemini"]), /unknown agent: gemini/);
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
   });
 
@@ -933,9 +922,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(await head(["--worktree", "k4"]), `main-of-${refKeyOf(WORKTREE)}`);
     assert.equal(await head(["--project", PROJECT.id]), "main-of-p1", "--project alone is the repository");
     assert.equal(await head([]), "main-of-p1");
-    const madeElsewhere = await tetCtl(["repository-state", "--worktree", "five"]);
-    assert.equal(madeElsewhere.status, EXIT_CODES.usage);
-    assert.match(madeElsewhere.stderr, /made elsewhere/);
+    assertUsage(await tetCtl(["repository-state", "--worktree", "five"]), /made elsewhere/);
     assert.match((await tetCtl(["repository-state", "--worktree", "nope"])).stderr, /has no worktree nope/);
   });
 
@@ -972,15 +959,11 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses an unknown project", async () => {
-    const run = await tetCtl(["tabs-list", "--project", "p9"]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /Project not found/);
+    assertUsage(await tetCtl(["tabs-list", "--project", "p9"]), /Project not found/);
   });
 
   it("needs a project when the caller has none", async () => {
-    const run = await tetCtl(["tabs-list"], { [CONTROL_ENV.projectId]: undefined });
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /pass --project/);
+    assertUsage(await tetCtl(["tabs-list"], { [CONTROL_ENV.projectId]: undefined }), /pass --project/);
   });
 
   it("opens a tab and brings it to the front", async () => {
@@ -1007,9 +990,7 @@ describe("tet-ctl against the control server", () => {
   it("opens an agent's tab starting on a prompt, and refuses one to a shell or an empty one", async () => {
     assert.equal((await tetCtl(["tabs-create", "--agent", "claude", "--prompt", "fix the build"])).status, EXIT_CODES.ok);
     assert.deepEqual(calls.created, ['claude starting on "fix the build"']);
-    const shell = await tetCtl(["tabs-create", "--agent", "shell", "--prompt", "ls"]);
-    assert.equal(shell.status, EXIT_CODES.usage);
-    assert.match(shell.stderr, /takes no prompt/);
+    assertUsage(await tetCtl(["tabs-create", "--agent", "shell", "--prompt", "ls"]), /takes no prompt/);
     assert.equal((await tetCtl(["tabs-create", "--agent", "claude", "--prompt", " "])).status, EXIT_CODES.usage, "an empty one");
     assert.equal(calls.created.length, 1);
   });
@@ -1037,9 +1018,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("reports a saved command that does not exist", async () => {
-    const missing = await tetCtl(["tabs-run-command", "deploy"]);
-    assert.equal(missing.status, EXIT_CODES.usage);
-    assert.match(missing.stderr, /no saved command named deploy/);
+    assertUsage(await tetCtl(["tabs-run-command", "deploy"]), /no saved command named deploy/);
   });
 
   it("closes another tab at once", async () => {
@@ -1097,12 +1076,8 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses to start or restart a tab with nothing to do", async () => {
-    const started = await tetCtl(["tabs-start", OWN_TAB]);
-    assert.equal(started.status, EXIT_CODES.usage);
-    assert.match(started.stderr, /not waiting for its first start/);
-    const restarted = await tetCtl(["tabs-restart", OWN_TAB]);
-    assert.equal(restarted.status, EXIT_CODES.usage);
-    assert.match(restarted.stderr, /nothing to restart/);
+    assertUsage(await tetCtl(["tabs-start", OWN_TAB]), /not waiting for its first start/);
+    assertUsage(await tetCtl(["tabs-restart", OWN_TAB]), /nothing to restart/);
   });
 
   it("waits until a tab has what was asked for", async () => {
@@ -1168,9 +1143,7 @@ describe("tet-ctl against the control server", () => {
 
   it("presses no key it does not know, and types no text", async () => {
     assert.equal((await tetCtl(["tabs-keys", "tab-2"])).status, EXIT_CODES.usage, "no key");
-    const text = await tetCtl(["tabs-keys", "tab-2", "enter", "hello"]);
-    assert.equal(text.status, EXIT_CODES.usage);
-    assert.match(text.stderr, /unknown key: hello/);
+    assertUsage(await tetCtl(["tabs-keys", "tab-2", "enter", "hello"]), /unknown key: hello/);
     assert.deepEqual(calls.written, [], "not even the keys before it");
   });
 
@@ -1217,7 +1190,6 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses a sandboxed tab every verb that acts on this machine", async () => {
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     const refused = [
       ["tabs-run-command", "build"],
       ["projects-add", workDir],
@@ -1239,9 +1211,9 @@ describe("tet-ctl against the control server", () => {
       ["sbx-set-hosts", "example.com"],
     ];
     for (const args of refused) {
-      assertRefused(await tetCtl(args, fromSandbox), /inside a sandbox/, args[0]);
+      assertRefused(await tetCtl(args, FROM_SANDBOX), /inside a sandbox/, args[0]);
     }
-    const shell = await tetCtl(["tabs-create", "--agent", "shell"], fromSandbox);
+    const shell = await tetCtl(["tabs-create", "--agent", "shell"], FROM_SANDBOX);
     assert.equal(shell.status, EXIT_CODES.unauthorized, "a shell tab runs on this machine");
     assert.deepEqual(
       [calls.commands, calls.added, calls.removed, calls.started, calls.restarted, calls.written, calls.shutdown, calls.created],
@@ -1362,57 +1334,50 @@ describe("tet-ctl against the control server", () => {
       ["sbx-set-enabled", "on"],
       ["sbx-set-hosts", "example.com"],
     ]) {
-      const run = await tetCtl([...args, "--worktree", "four"]);
-      assert.equal(run.status, EXIT_CODES.usage, args[0]);
-      assert.match(run.stderr, /takes its SBX Settings from its project one/, args[0]);
+      assertUsage(await tetCtl([...args, "--worktree", "four"]), /takes its SBX Settings from its project one/, args[0]);
     }
     assert.equal(calls.sbxSaved.length, 0);
   });
 
   it("answers a sandboxed tab for its own project only", async () => {
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     // editor-state: its own test below, since a sandbox reads only a file inside the repository.
-    assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], fromSandbox), /own repository or worktree/, "editor-state");
+    assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-state");
     for (const args of [["tabs-list"], ["tabs-close", "tab-2"]]) {
-      assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own project/, args[0]);
-      assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
+      assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own project/, args[0]);
+      assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
     for (const args of [["repository-state"], ["explorer-list"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
-      assertRefused(await tetCtl([...args, "--project", OTHER.id], fromSandbox), /own repository or worktree/, args[0]);
-      assert.equal((await tetCtl(args, fromSandbox)).status, EXIT_CODES.ok, `${args[0]} in its own`);
+      assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, args[0]);
+      assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
     assert.deepEqual(
-      (await tetCtl(["projects-list"], fromSandbox)).result,
+      (await tetCtl(["projects-list"], FROM_SANDBOX)).result,
       [{ ...PROJECT, worktrees: PROJECT.worktrees.filter((worktree) => worktree.key !== undefined) }],
       "its project, with the worktrees TET made",
     );
-    assert.deepEqual((await tetCtl(["tabs-create", "--agent", "claude"], fromSandbox)).result, tab("tab-new"));
+    assert.deepEqual((await tetCtl(["tabs-create", "--agent", "claude"], FROM_SANDBOX)).result, tab("tab-new"));
     assert.deepEqual(calls.created, ["claude (sandbox only)"]);
-    assert.equal((await tetCtl(["version"], fromSandbox)).status, EXIT_CODES.ok);
-    assert.equal((await tetCtl(["notices-list"], fromSandbox)).status, EXIT_CODES.ok);
-    assert.equal((await tetCtl(["hook", "stop"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["version"], FROM_SANDBOX)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["notices-list"], FROM_SANDBOX)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["hook", "stop"], FROM_SANDBOX)).status, EXIT_CODES.ok);
   });
 
   it("closes, renames and reads from a sandbox only a tab running there", async () => {
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     for (const args of [
       ["tabs-close", OWN_TAB],
       ["tabs-rename", OWN_TAB, "x"],
       ["tabs-output", OWN_TAB],
       ["tabs-hand-over", OWN_TAB, "--agent", "claude"],
     ]) {
-      const run = await tetCtl(args, fromSandbox);
-      assert.equal(run.status, EXIT_CODES.usage, args[0]);
-      assert.match(run.stderr, /runs on this machine/, args[0]);
+      assertUsage(await tetCtl(args, FROM_SANDBOX), /runs on this machine/, args[0]);
     }
-    assert.equal((await tetCtl(["tabs-rename", "tab-2", "x"], fromSandbox)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
-    assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], fromSandbox)).result, { output: "bold line\nnext" });
-    assert.equal((await tetCtl(["tabs-hand-over", "tab-2", "--agent", "claude"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["tabs-rename", "tab-2", "x"], FROM_SANDBOX)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
+    assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], FROM_SANDBOX)).result, { output: "bold line\nnext" });
+    assert.equal((await tetCtl(["tabs-hand-over", "tab-2", "--agent", "claude"], FROM_SANDBOX)).status, EXIT_CODES.ok);
     assert.deepEqual(calls.handedOff, [["tab-2", "claude", true]], "held to the sandbox");
   });
 
   it("starts, restarts, presses keys and types in and waits on a sandboxed tab of its project, never a host tab", async () => {
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     for (const args of [
       ["tabs-start", OWN_TAB],
       ["tabs-restart", OWN_TAB],
@@ -1420,33 +1385,30 @@ describe("tet-ctl against the control server", () => {
       ["tabs-text", OWN_TAB, "hello"],
       ["tabs-wait", OWN_TAB, "--stopped"],
     ]) {
-      const run = await tetCtl(args, fromSandbox);
-      assert.equal(run.status, EXIT_CODES.usage, args[0]);
-      assert.match(run.stderr, /runs on this machine/, args[0]);
+      assertUsage(await tetCtl(args, FROM_SANDBOX), /runs on this machine/, args[0]);
     }
     assert.deepEqual([calls.started, calls.restarted, calls.written], [[], [], []], "nothing done to a host tab");
     // A worktree's sandboxed tab, from the repository's sandbox.
     const inWorktree = ["--worktree", "four"];
-    assert.deepEqual((await tetCtl(["tabs-start", "tab-2", ...inWorktree], fromSandbox)).result, { started: "tab-2" });
-    assert.deepEqual((await tetCtl(["tabs-restart", "tab-2", ...inWorktree], fromSandbox)).result, { restarted: "tab-2" });
-    assert.equal((await tetCtl(["tabs-keys", "tab-2", "enter", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
-    assert.equal((await tetCtl(["tabs-text", "tab-2", "hello", ...inWorktree], fromSandbox)).status, EXIT_CODES.ok);
+    assert.deepEqual((await tetCtl(["tabs-start", "tab-2", ...inWorktree], FROM_SANDBOX)).result, { started: "tab-2" });
+    assert.deepEqual((await tetCtl(["tabs-restart", "tab-2", ...inWorktree], FROM_SANDBOX)).result, { restarted: "tab-2" });
+    assert.equal((await tetCtl(["tabs-keys", "tab-2", "enter", ...inWorktree], FROM_SANDBOX)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["tabs-text", "tab-2", "hello", ...inWorktree], FROM_SANDBOX)).status, EXIT_CODES.ok);
     assert.equal(calls.written.length, 2);
-    const listed = (await tetCtl(["tabs-list", ...inWorktree], fromSandbox)).result as TabDescriptor[];
+    const listed = (await tetCtl(["tabs-list", ...inWorktree], FROM_SANDBOX)).result as TabDescriptor[];
     assert.deepEqual(
       listed.map((entry) => entry.tabId),
       ["tab-2"],
       "no host tab listed",
     );
-    assertRefused(await tetCtl(["tabs-start", "tab-2", "--project", OTHER.id], fromSandbox), /own project/, "another project");
+    assertRefused(await tetCtl(["tabs-start", "tab-2", "--project", OTHER.id], FROM_SANDBOX), /own project/, "another project");
   });
 
   it("creates and deletes a sandboxed tab's worktrees of its own project only", async () => {
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], fromSandbox), /own project/, "worktree-add");
-    assertRefused(await tetCtl(["worktree-delete", "four", "--project", OTHER.id], fromSandbox), /own project/, "worktree-delete");
-    assert.equal((await tetCtl(["worktree-add", "x"], fromSandbox)).status, EXIT_CODES.ok);
-    const fromWorktreeSandbox = { ...fromSandbox, [CONTROL_ENV.worktree]: WORKTREE.worktree };
+    assertRefused(await tetCtl(["worktree-add", "x", "--project", OTHER.id], FROM_SANDBOX), /own project/, "worktree-add");
+    assertRefused(await tetCtl(["worktree-delete", "four", "--project", OTHER.id], FROM_SANDBOX), /own project/, "worktree-delete");
+    assert.equal((await tetCtl(["worktree-add", "x"], FROM_SANDBOX)).status, EXIT_CODES.ok);
+    const fromWorktreeSandbox = { ...FROM_SANDBOX, [CONTROL_ENV.worktree]: WORKTREE.worktree };
     assert.equal(
       (await tetCtl(["worktree-add", "y", "--project", PROJECT.id], fromWorktreeSandbox)).status,
       EXIT_CODES.ok,
@@ -1456,7 +1418,7 @@ describe("tet-ctl against the control server", () => {
       [PROJECT.id, "x"],
       [PROJECT.id, "y"],
     ]);
-    assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"], fromSandbox)).result, { deleted: "four" });
+    assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"], FROM_SANDBOX)).result, { deleted: "four" });
   });
 
   it("answers the latest events, as many as asked for", async () => {
@@ -1468,7 +1430,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("answers a sandbox only the events of tabs running there", async () => {
-    const run = await tetCtl(["events-tail", "--tail", "4"], { [CONTROL_ENV.tabId]: SANDBOX_TAB });
+    const run = await tetCtl(["events-tail", "--tail", "4"], FROM_SANDBOX);
     assert.deepEqual(
       (run.result as { at: number }[]).map((event) => event.at),
       [1, 2, 3],
@@ -1502,13 +1464,12 @@ describe("tet-ctl against the control server", () => {
       PROJECT.path = original.root;
       ACTIVE_EDITOR.path = original.editor;
     });
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
-    assert.equal((await tetCtl(["editor-state"], fromSandbox)).status, EXIT_CODES.ok, "a file inside");
-    assert.equal((await tetCtl(["editor-open", "a.txt"], fromSandbox)).status, EXIT_CODES.ok, "opened inside");
+    assert.equal((await tetCtl(["editor-state"], FROM_SANDBOX)).status, EXIT_CODES.ok, "a file inside");
+    assert.equal((await tetCtl(["editor-open", "a.txt"], FROM_SANDBOX)).status, EXIT_CODES.ok, "opened inside");
     for (const editor of ["leak/secret.txt", "gone.txt"]) {
       ACTIVE_EDITOR.path = editor;
-      assertRefused(await tetCtl(["editor-state"], fromSandbox), /missing or leads outside/, editor);
-      assertRefused(await tetCtl(["editor-open", editor], fromSandbox), /missing or leads outside/, `open ${editor}`);
+      assertRefused(await tetCtl(["editor-state"], FROM_SANDBOX), /missing or leads outside/, editor);
+      assertRefused(await tetCtl(["editor-open", editor], FROM_SANDBOX), /missing or leads outside/, `open ${editor}`);
       assert.equal((await tetCtl(["editor-state"])).status, EXIT_CODES.ok, `${editor} on this machine`);
     }
   });
@@ -1568,15 +1529,9 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("says why a browser verb could not act, in Playwright's or Chromium's words", async () => {
-    const none = await tetCtl(["browser-snapshot"]);
-    assert.equal(none.status, EXIT_CODES.usage);
-    assert.match(none.stderr, /no browser tab/);
-    const unreachable = await tetCtl(["browser-open", "localhost:9/unreachable"]);
-    assert.equal(unreachable.status, EXIT_CODES.usage);
-    assert.match(unreachable.stderr, /ERR_CONNECTION_REFUSED/);
-    const stale = await tetCtl(["browser-click", "e7"]);
-    assert.equal(stale.status, EXIT_CODES.usage);
-    assert.match(stale.stderr, /take a new snapshot/);
+    assertUsage(await tetCtl(["browser-snapshot"]), /no browser tab/);
+    assertUsage(await tetCtl(["browser-open", "localhost:9/unreachable"]), /ERR_CONNECTION_REFUSED/);
+    assertUsage(await tetCtl(["browser-click", "e7"]), /take a new snapshot/);
     assert.equal((await tetCtl(["browser-wait"])).status, EXIT_CODES.usage, "nothing to wait for");
     assert.match((await tetCtl(["browser-fill", "e1"])).stderr, /missing <text>/, "no text is no clearing");
     assert.match((await tetCtl(["browser-click", "e1", "--tab", "tet:browser:99"])).stderr, /unknown browser tab/);
@@ -1601,17 +1556,20 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("opens a sandbox's browser tab in its sandbox, and shows it none of this machine's", async () => {
-    const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
     const host = (await tetCtl(["browser-open", "localhost:3000"])).result as { tabId: string };
-    assert.deepEqual((await tetCtl(["browser-list"], fromSandbox)).result, { tabs: [], untrustedContent: true });
-    assert.match((await tetCtl(["browser-snapshot"], fromSandbox)).stderr, /no browser tab/);
-    assert.match((await tetCtl(["browser-click", "e1", "--tab", host.tabId], fromSandbox)).stderr, /unknown browser tab/, "this machine's");
+    assert.deepEqual((await tetCtl(["browser-list"], FROM_SANDBOX)).result, { tabs: [], untrustedContent: true });
+    assert.match((await tetCtl(["browser-snapshot"], FROM_SANDBOX)).stderr, /no browser tab/);
+    assert.match(
+      (await tetCtl(["browser-click", "e1", "--tab", host.tabId], FROM_SANDBOX)).stderr,
+      /unknown browser tab/,
+      "this machine's",
+    );
 
-    const opened = (await tetCtl(["browser-open", "localhost:3000"], fromSandbox)).result as { tabId: string };
+    const opened = (await tetCtl(["browser-open", "localhost:3000"], FROM_SANDBOX)).result as { tabId: string };
     assert.notEqual(opened.tabId, host.tabId, "a tab of its own, not this machine's");
     assert.equal(browserTabs.find((tab) => tab.tabId === opened.tabId)?.sandbox, BROWSER_SANDBOX.name, "loading through the sandbox");
     assert.deepEqual(
-      ((await tetCtl(["browser-list"], fromSandbox)).result as { tabs: { tabId: string }[] }).tabs.map((tab) => tab.tabId),
+      ((await tetCtl(["browser-list"], FROM_SANDBOX)).result as { tabs: { tabId: string }[] }).tabs.map((tab) => tab.tabId),
       [opened.tabId],
     );
     assert.deepEqual(
@@ -1619,21 +1577,23 @@ describe("tet-ctl against the control server", () => {
       [host.tabId],
       "nor this machine's a sandbox's",
     );
-    assert.equal((await tetCtl(["browser-click", "e1"], fromSandbox)).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["browser-click", "e1"], FROM_SANDBOX)).status, EXIT_CODES.ok);
     assert.deepEqual(calls.browser, [["click", opened.tabId, "e1"]]);
-    const shot = (await tetCtl(["browser-screenshot"], fromSandbox)).result as { path: string };
+    const shot = (await tetCtl(["browser-screenshot"], FROM_SANDBOX)).result as { path: string };
     assert.ok(shot.path.startsWith(`/sbx${path.join(workDir, "drops", PROJECT.id, SANDBOX_TAB)}`), "where the sandbox sees it");
     assert.deepEqual(
-      ((await tetCtl(["browser-downloads"], fromSandbox)).result as { downloads: { path: string }[] }).downloads.map((entry) => entry.path),
+      ((await tetCtl(["browser-downloads"], FROM_SANDBOX)).result as { downloads: { path: string }[] }).downloads.map(
+        (entry) => entry.path,
+      ),
       [`/sbx/downloads/${opened.tabId}.zip`],
     );
     assertRefused(
-      await tetCtl(["browser-list", "--worktree", WORKTREE.worktree ?? ""], fromSandbox),
+      await tetCtl(["browser-list", "--worktree", WORKTREE.worktree ?? ""], FROM_SANDBOX),
       /own repository or worktree/,
       "a worktree's",
     );
     assertRefused(
-      await tetCtl(["browser-open", "localhost:3000"], { ...fromSandbox, [CONTROL_ENV.worktree]: WORKTREE.worktree }),
+      await tetCtl(["browser-open", "localhost:3000"], { ...FROM_SANDBOX, [CONTROL_ENV.worktree]: WORKTREE.worktree }),
       /no sandbox/,
       "a sandboxed tab naming no sandbox loads nothing from this machine",
     );
@@ -1645,9 +1605,7 @@ describe("tet-ctl against the control server", () => {
       assert.deepEqual((await tetCtl(["editor-open", typed])).result, { opened: "src/a.ts", keep: false }, typed);
     }
     for (const typed of ["../a.ts", path.resolve("..", "a.ts"), "."]) {
-      const run = await tetCtl(["editor-open", typed]);
-      assert.equal(run.status, EXIT_CODES.usage, typed);
-      assert.match(run.stderr, /not inside the repository/, typed);
+      assertUsage(await tetCtl(["editor-open", typed]), /not inside the repository/, typed);
     }
     assert.equal(calls.editorsOpened.length, 4);
   });
@@ -1669,9 +1627,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("passes on what adding a project had to say", async () => {
-    const run = await tetCtl(["projects-add", "/nowhere"]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /not a folder/);
+    assertUsage(await tetCtl(["projects-add", "/nowhere"]), /not a folder/);
   });
 
   it("removes another project at once", async () => {
@@ -1681,18 +1637,15 @@ describe("tet-ctl against the control server", () => {
 
   it("removes a project with worktrees only once confirmed", async () => {
     editorListing = [];
-    try {
-      const refused = await tetCtl(["projects-remove", PROJECT.id], { [CONTROL_ENV.projectId]: OTHER.id });
-      assert.equal(refused.status, EXIT_CODES.usage);
-      assert.match(refused.stderr, /deletes its 1 worktree with their branches/);
-      assert.deepEqual(calls.removed, []);
-      assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id, "--confirm"], { [CONTROL_ENV.projectId]: OTHER.id })).result, {
-        removed: PROJECT.id,
-      });
-      assert.deepEqual(calls.removed, [PROJECT.id]);
-    } finally {
-      editorListing = EDITOR_LISTING;
-    }
+    assertUsage(
+      await tetCtl(["projects-remove", PROJECT.id], { [CONTROL_ENV.projectId]: OTHER.id }),
+      /deletes its 1 worktree with their branches/,
+    );
+    assert.deepEqual(calls.removed, []);
+    assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id, "--confirm"], { [CONTROL_ENV.projectId]: OTHER.id })).result, {
+      removed: PROJECT.id,
+    });
+    assert.deepEqual(calls.removed, [PROJECT.id]);
   });
 
   it("creates a worktree of the caller's project, named by its new branch", async () => {
@@ -1703,15 +1656,11 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("passes on what git said when a worktree could not be created", async () => {
-    const run = await tetCtl(["worktree-add", "taken"]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /already exists/);
+    assertUsage(await tetCtl(["worktree-add", "taken"]), /already exists/);
   });
 
   it("deletes a worktree named by its branch, forced only when asked", async () => {
-    const refused = await tetCtl(["worktree-delete", "four"]);
-    assert.equal(refused.status, EXIT_CODES.usage);
-    assert.match(refused.stderr, /uncommitted changes/);
+    assertUsage(await tetCtl(["worktree-delete", "four"]), /uncommitted changes/);
     assert.deepEqual((await tetCtl(["worktree-delete", "four", "--force"])).result, { deleted: "four" });
     assert.deepEqual(calls.worktreesDeleted, [
       [refKeyOf(WORKTREE), false],
@@ -1747,7 +1696,7 @@ describe("tet-ctl against the control server", () => {
 
     it("answers a conflict with its files and the worktree as the caller sees it, deleting nothing", async () => {
       merging.merge = "conflict";
-      const run = await tetCtl(["worktree-agent-merge", "four"], { [CONTROL_ENV.tabId]: SANDBOX_TAB });
+      const run = await tetCtl(["worktree-agent-merge", "four"], FROM_SANDBOX);
       assert.equal(run.status, EXIT_CODES.ok, run.stderr);
       const result = run.result as { status: string; path: string; files: string[]; next: string };
       assert.equal(result.status, "conflicts");
@@ -1763,10 +1712,8 @@ describe("tet-ctl against the control server", () => {
     });
 
     it("refuses a caller inside a worktree, saying where to run it from", async () => {
-      const run = await tetCtl(["worktree-agent-merge", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree });
-      assert.equal(run.status, EXIT_CODES.usage);
-      assert.match(
-        run.stderr,
+      assertUsage(
+        await tetCtl(["worktree-agent-merge", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree }),
         /only from the project's repository[^.]*close this tab\. Run "tet-ctl worktree-agent-merge four" from a tab of the repository/,
       );
       assert.deepEqual(calls.merges, []);
@@ -1830,30 +1777,23 @@ describe("tet-ctl against the control server", () => {
     });
 
     it("reaches only the worktrees of a sandboxed caller's own project", async () => {
-      const fromSandbox = { [CONTROL_ENV.tabId]: SANDBOX_TAB };
       assertRefused(
-        await tetCtl(["worktree-agent-merge", "four", "--project", OTHER.id], fromSandbox),
+        await tetCtl(["worktree-agent-merge", "four", "--project", OTHER.id], FROM_SANDBOX),
         /own project/,
         "worktree-agent-merge",
       );
-      assert.equal((await tetCtl(["worktree-agent-merge", "four"], fromSandbox)).status, EXIT_CODES.ok);
+      assert.equal((await tetCtl(["worktree-agent-merge", "four"], FROM_SANDBOX)).status, EXIT_CODES.ok);
     });
   });
 
   it("answers before removing the caller's own project", async () => {
     editorListing = [];
-    try {
-      assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id, "--confirm"])).result, { removed: PROJECT.id });
-      await eventually("what the answer was followed by", () => calls.removed.includes(PROJECT.id));
-    } finally {
-      editorListing = EDITOR_LISTING;
-    }
+    assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id, "--confirm"])).result, { removed: PROJECT.id });
+    await eventually("what the answer was followed by", () => calls.removed.includes(PROJECT.id));
   });
 
   it("refuses to remove a project while an editor tab of it has unsaved changes", async () => {
-    const run = await tetCtl(["projects-remove", PROJECT.id]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /unsaved changes in a\.txt/);
+    assertUsage(await tetCtl(["projects-remove", PROJECT.id]), /unsaved changes in a\.txt/);
     assert.deepEqual(calls.removed, []);
   });
 
@@ -1875,9 +1815,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("refuses to restart without --confirm", async () => {
-    const run = await tetCtl(["app-restart"]);
-    assert.equal(run.status, EXIT_CODES.usage);
-    assert.match(run.stderr, /Ask the user/);
+    assertUsage(await tetCtl(["app-restart"]), /Ask the user/);
     assert.deepEqual(calls.shutdown, []);
   });
 
@@ -1914,7 +1852,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("tells a sandboxed session start nothing of the environment variables, and of the browser alike", async () => {
-    const run = await tetCtl(["hook", "session-start"], { [CONTROL_ENV.tabId]: SANDBOX_TAB }, "{}");
+    const run = await tetCtl(["hook", "session-start"], FROM_SANDBOX, "{}");
     assert.equal(run.status, EXIT_CODES.ok);
     const context = (JSON.parse(run.stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     assert.equal(context, systemPrompt(SANDBOX_SIDE));
@@ -1946,9 +1884,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["env-request"])).status, EXIT_CODES.usage, "no name");
     assert.equal((await tetCtl(["env-request", "not a name"])).status, EXIT_CODES.usage, "no variable name");
     for (const reserved of ["PATH", "Path", "TET_TAB_ID"]) {
-      const refused = await tetCtl(["env-request", reserved]);
-      assert.equal(refused.status, EXIT_CODES.usage, reserved);
-      assert.match(refused.stderr, /TET's own to set/, reserved);
+      assertUsage(await tetCtl(["env-request", reserved]), /TET's own to set/, reserved);
     }
     // On win32 one variable, as the machine counts them.
     calls.envAsks.length = 0;
@@ -1958,10 +1894,7 @@ describe("tet-ctl against the control server", () => {
 
   it("takes the environment dialog down once the asking CLI is gone", async () => {
     dialogAnswer = DIALOG_STAYS_OPEN;
-    const body = JSON.stringify({ token: TOKEN, verb: "env-request", args: { names: ["GITHUB_TOKEN"] }, caller: {} });
-    const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } });
-    req.on("error", () => undefined);
-    req.end(body);
+    const req = send(JSON.stringify({ token: TOKEN, verb: "env-request", args: { names: ["GITHUB_TOKEN"] }, caller: {} }));
     await eventually("the dialog asked", () => calls.envAsks.length === 1, 5000);
     req.destroy();
     await eventually("the dialog withdrawn", () => calls.envWithdrawn.length === 1, 5000);
@@ -2037,38 +1970,37 @@ describe("tet-ctl against the control server", () => {
 });
 
 describe("the tet-ctl launcher", () => {
-  it("is found on PATH and runs the CLI", async () => {
-    const dir = tempDir("tet-launcher-");
+  /** Runs `command` with a new launcher's folder first on PATH; answers its exit and stdout. */
+  function withLauncher(
+    command: string,
+    args: string[],
+    shell: boolean,
+    env: Record<string, string | undefined> = {},
+  ): Promise<{ status: number | null; stdout: string }> {
     // Here `process.execPath` is node, which ignores ELECTRON_RUN_AS_NODE; the app writes electron.
-    const bin = writeLaunchers(dir, CLI);
-    const run = await new Promise<{ status: number | null; stdout: string }>((resolve) => {
-      // cmd.exe resolves a .cmd on PATH and takes the line whole; a POSIX script needs no shell.
-      const viaCmd = PLATFORM.cmdLauncher;
-      const child = spawn(viaCmd ? "tet-ctl help" : "tet-ctl", viaCmd ? [] : ["help"], {
-        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined },
-        shell: viaCmd,
+    const bin = writeLaunchers(tempDir("tet-launcher-"), CLI);
+    return new Promise((resolve) => {
+      const child = spawn(command, args, {
+        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined, ...env },
+        shell,
       });
       let stdout = "";
       child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
       child.on("close", (status) => resolve({ status, stdout }));
     });
+  }
+
+  it("is found on PATH and runs the CLI", async () => {
+    // cmd.exe resolves a .cmd on PATH and takes the line whole; a POSIX script needs no shell.
+    const viaCmd = PLATFORM.cmdLauncher;
+    const run = await withLauncher(viaCmd ? "tet-ctl help" : "tet-ctl", viaCmd ? [] : ["help"], viaCmd);
     assert.equal(run.status, 0);
     assert.match(run.stdout, /tet-ctl — control the TET app/);
   });
 
   it("leaves nothing set in the cmd.exe that ran it", { skip: !PLATFORM.cmdLauncher }, async () => {
-    const dir = tempDir("tet-launcher-");
-    const bin = writeLaunchers(dir, CLI);
-    const variables = await new Promise<string>((resolve) => {
-      // One cmd.exe session: the launcher, then a look at the variable.
-      const child = spawn(`call tet-ctl help >nul & set ELECTRON_RUN_AS_NODE`, [], {
-        env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}`, Path: undefined, ELECTRON_RUN_AS_NODE: undefined },
-        shell: true,
-      });
-      let stdout = "";
-      child.stdout.setEncoding("utf8").on("data", (chunk: string) => (stdout += chunk));
-      child.on("close", () => resolve(stdout));
-    });
-    assert.doesNotMatch(variables, /ELECTRON_RUN_AS_NODE=1/);
+    // One cmd.exe session: the launcher, then a look at the variable.
+    const run = await withLauncher(`call tet-ctl help >nul & set ELECTRON_RUN_AS_NODE`, [], true, { ELECTRON_RUN_AS_NODE: undefined });
+    assert.doesNotMatch(run.stdout, /ELECTRON_RUN_AS_NODE=1/);
   });
 });

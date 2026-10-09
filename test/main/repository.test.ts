@@ -12,6 +12,7 @@ import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
 import type { FileSearchQuery, FileSearchResult } from "../../src/shared/types/files";
 import {
+  commitFiles,
   fakeSafeStorage,
   forkUtilitiesInProcess,
   git,
@@ -164,12 +165,9 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
   let repository: Repository;
 
   before(async () => {
-    bare = tempDir("tet-repository-bare-");
-    git(bare, "init", "-q", "--bare", "--initial-branch=main");
+    bare = initBare("tet-repository-bare-");
     dir = initRepository("tet-repository-remote-");
-    fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
-    git(dir, "add", "b.txt");
-    git(dir, "commit", "-q", "-m", "second");
+    commitFiles(dir, "second", { "b.txt": "b\n" });
     git(dir, "remote", "add", "origin", bare);
     git(dir, "push", "-q", "--set-upstream", "origin", "main");
     git(dir, "remote", "set-head", "origin", "main");
@@ -190,9 +188,7 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
 
   it("moves a branch only behind its upstream on a fetch", async () => {
     git(dir, "branch", "--track", "behind", "origin/main");
-    fs.writeFileSync(path.join(other, "c.txt"), "c\n");
-    git(other, "add", "c.txt");
-    git(other, "commit", "-q", "-m", "third");
+    commitFiles(other, "third", { "c.txt": "c\n" });
     git(other, "push", "-q");
     await repository.refresh();
     assert.deepEqual(await repository.fetch(), { ok: true });
@@ -296,9 +292,7 @@ describe("worktrees, each with a branch of its own", () => {
     dir = initRepository("tet-repository-wt-");
     // A base behind HEAD, so a worktree's start is told from HEAD.
     git(dir, "branch", "base");
-    fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
-    git(dir, "add", "b.txt");
-    git(dir, "commit", "-q", "-m", "ahead of base");
+    commitFiles(dir, "ahead of base", { "b.txt": "b\n" });
     worktrees = tempDir("tet-repository-wts-");
     // "second" stands for one TET made, the others for ones made elsewhere.
     repository = await open(dir, undefined, (worktreePath) => (path.basename(worktreePath) === "second" ? "k2" : undefined));
@@ -417,8 +411,9 @@ describe("the Explorer's search, VS Code's search in files", () => {
   let dir: string;
   let repository: Repository;
 
-  const search = (query: Partial<FileSearchQuery>): Promise<FileSearchResult> =>
-    repository.searchFiles({
+  /** A search with every toggle off but those `query` sets, in this describe's repository unless `on`. */
+  const search = (query: Partial<FileSearchQuery>, on = repository): Promise<FileSearchResult> =>
+    on.searchFiles({
       text: "",
       matchCase: false,
       wholeWord: false,
@@ -484,14 +479,7 @@ describe("the Explorer's search, VS Code's search in files", () => {
     for (const name of ["a.txt", "b.txt", "c.txt"]) {
       fs.writeFileSync(path.join(capped, name), "needle\n".repeat(1500));
     }
-    const result = await (
-      await open(capped)
-    ).searchFiles({
-      text: "needle",
-      matchCase: false,
-      wholeWord: false,
-      regex: false,
-    });
+    const result = await search({ text: "needle" }, await open(capped));
     assert.equal(result.truncated, true);
     assert.equal(
       result.files.reduce((count, file) => count + file.matches.length, 0),
@@ -541,9 +529,7 @@ describe("a remote over http that wants a login", () => {
       assert.deepEqual(logins.get(remote.url), login, "no credential helper: TET keeps it");
       assert.equal(git(dir, "rev-parse", "origin/main"), git(dir, "rev-parse", "main"));
 
-      fs.writeFileSync(path.join(dir, "b.txt"), "b\n");
-      git(dir, "add", "b.txt");
-      git(dir, "commit", "-q", "-m", "b");
+      commitFiles(dir, "b", { "b.txt": "b\n" });
       await repository.refresh();
       assert.deepEqual(await repository.push(), { ok: true }, "the kept login, unasked");
       assert.deepEqual(await repository.fetch(), { ok: true });

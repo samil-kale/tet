@@ -333,18 +333,19 @@ export default tseslint.config(
   },
   // The process borders, as lint rules rather than prose (see "Where things live" in AGENTS.md):
   // each folder under src/ is one process, and `shared/` the only thing they may import from one
-  // another. main's and the renderer's are in each of their areas' configs below.
-  ...["preload", "cli", "shared"].map((folder) => ({
-    files: [`src/${folder}/**`],
+  // another. main's and the renderer's are in each of their areas' configs below, cli's and
+  // shared's in the config of what runs without electron, which refuses every other folder.
+  {
+    files: ["src/preload/**"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
-          patterns: [processBorder(folder)]
+          patterns: [processBorder("preload")]
         }
       ]
     }
-  })),
+  },
   // The layers of src/main and src/renderer, each area's config repeating the process border: a
   // later config's rule replaces an earlier one's for the same file.
   ...layerConfigs("main", MAIN_LAYERS, (area) => [agentFolder(area), NODE_HTTPS]),

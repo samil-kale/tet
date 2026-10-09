@@ -290,11 +290,6 @@ export function useSbxProblems(
   return problems;
 }
 
-/** Who refuses, in the dialog's blocked message. */
-export function policyName(governed: boolean): string {
-  return governed ? "Your organization's SBX policy" : "SBX's policy";
-}
-
 /** A port row's mark, or `undefined`: why Save refuses it before why it cannot be applied here. */
 function portMark(row: FieldsState["ports"][number], problems: SbxProblems): string | undefined {
   return portRefusal(row) ?? problems.ports?.[sbxPortKey({ host: row.host.trim(), container: row.container.trim() })];

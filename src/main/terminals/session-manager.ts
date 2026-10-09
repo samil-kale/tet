@@ -31,6 +31,7 @@ import {
   endLeavesQuestion,
   isSavedCommandTab,
   resumeArgsOf,
+  sessionFieldsOf,
   setTurn,
   titleUnsettled,
   toDescriptor,
@@ -371,17 +372,7 @@ export class TabSessionManager {
     const known = new Set([...this.tabs.flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]), ...this.deletingSessionIds]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
     for (const info of fresh) {
-      this.tabs.push({
-        tabId: info.id,
-        agentId: agent.id,
-        sessionId: info.id,
-        title: info.title,
-        updatedAt: info.updatedAt,
-        createdAt: info.createdAt,
-        provisionalTitle: info.provisionalTitle,
-        sandbox: info.sandbox,
-        status: "ready",
-      });
+      this.tabs.push({ tabId: info.id, agentId: agent.id, ...sessionFieldsOf(info), status: "ready" });
     }
     if (fresh.length > 0) {
       // Every agent brings its sessions up on its own: oldest first overall, a tab not listed yet last.
@@ -471,8 +462,7 @@ export class TabSessionManager {
     if (!tab) {
       return "The tab is closed";
     }
-    const runtime = this.runtimeFor(tab.agentId);
-    const { agent } = runtime;
+    const { agent } = this.runtimeFor(tab.agentId);
     if (!tab.sessionId || !agent.sessions) {
       return `This ${agent.displayName} tab has no session yet`;
     }
@@ -519,7 +509,7 @@ export class TabSessionManager {
       return [];
     }
     const { agent } = this.runtimeFor(tab.agentId);
-    return (await this.seenPaths(tabId, hostPaths)).map((handed) => agent.quotePath(handed));
+    return (await this.placeOf(tab).handPaths(hostPaths)).map((handed) => agent.quotePath(handed));
   }
 
   /** The first prompt's arguments, a handover's naming `files` as this start sees them. */
@@ -990,20 +980,17 @@ export class TabSessionManager {
     if (!tab) {
       return undefined;
     }
-    const runtime = this.runtimeFor(tab.agentId);
-    const { agent } = runtime;
+    const { agent } = this.runtimeFor(tab.agentId);
     if (!tab.sessionId || !agent.sessions) {
       this.postTabs();
       return undefined;
     }
-    const previousTitle = tab.title;
     try {
       await this.placeOf(tab).sessionActions()?.rename(tab.sessionId, title);
       tab.title = title.trim();
       // A name the user picked is final.
       tab.provisionalTitle = false;
     } catch (error) {
-      tab.title = previousTitle;
       this.postTabs();
       return `Could not rename ${agent.displayName} session: ${errorMessage(error)}`;
     }
@@ -1237,18 +1224,14 @@ export class TabSessionManager {
     this.onScreen = new Set(tabIds);
   }
 
-  /** Whether a tab of the agent still waits for its session or title. Not `tabsOf`, which
-   *  allocates per output chunk. */
+  /** Whether a tab of the agent still waits for its session or title. `some`, not a filter, which
+   *  would allocate per output chunk. */
   private titlesUnsettled(runtime: AgentRuntime): boolean {
     return this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab));
   }
 
   private tabOf(tabId: string): TabState | undefined {
     return this.tabs.find((candidate) => candidate.tabId === tabId);
-  }
-
-  private tabsOf(runtime: AgentRuntime): TabState[] {
-    return this.tabs.filter((tab) => tab.agentId === runtime.agent.id);
   }
 
   /** Re-lists one agent's sessions to claim reported sessions and refresh known tabs; run through
@@ -1259,7 +1242,7 @@ export class TabSessionManager {
       return;
     }
     const infos = await this.listSessions(runtime);
-    const ownTabs = this.tabsOf(runtime);
+    const ownTabs = this.tabs.filter((tab) => tab.agentId === agent.id);
     const claimed = new Set([...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined), ...this.deletingSessionIds]);
     let changed = false;
 
@@ -1274,12 +1257,7 @@ export class TabSessionManager {
       }
       claimed.add(match.id);
       this.record({ tabId: tab.tabId, kind: "claimed", sessionId: match.id });
-      tab.sessionId = match.id;
-      tab.title = match.title;
-      tab.updatedAt = match.updatedAt;
-      tab.createdAt = match.createdAt;
-      tab.provisionalTitle = match.provisionalTitle;
-      tab.sandbox = match.sandbox;
+      Object.assign(tab, sessionFieldsOf(match));
       // A detached tab is gone from the UI; claiming its id is all that's needed.
       changed ||= this.tabs.includes(tab);
     }

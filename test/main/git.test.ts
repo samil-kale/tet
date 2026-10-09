@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as os from "node:os";
@@ -29,7 +29,6 @@ import {
   readBlobAt,
   readCommitContext,
   readCommitFiles,
-  readHeadBlob,
   readHeadPaths,
   readLog,
   readState,
@@ -43,7 +42,7 @@ import {
   version,
 } from "../../src/main/git/git";
 import { worktreesSupported } from "../../src/shared/types/git";
-import { git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
+import { commitFiles, git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
 
 /**
  * git.ts against the real git, in a repository built up step by step. It imports nothing from
@@ -58,9 +57,9 @@ const run = (...args: string[]): string => git(cwd, ...args);
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
-/** The editor tab's read cap; `readHeadBlob` takes it per call. */
+/** The editor tab's read cap; `readBlobAt` takes it per call. */
 const MAX_BYTES = 4 * 1024 * 1024;
-const head = (name: string, origPath?: string) => readHeadBlob(cwd, name, { origPath, maxBytes: MAX_BYTES });
+const head = (name: string, origPath?: string) => readBlobAt(cwd, "HEAD", name, { origPath, maxBytes: MAX_BYTES });
 const changed = async (): Promise<string[]> => (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
 
 describe("git's version", () => {
@@ -139,7 +138,7 @@ describe("a repository, from init on", () => {
   it("calls a blob past the cap binary, the way node reports the overflow", async () => {
     // The cap is maxBuffer: node kills git mid-stream with a code of its own, which tells "too
     // large" apart from a path HEAD does not have.
-    assert.deepEqual(await readHeadBlob(cwd, "a.txt", { maxBytes: 4 }), {
+    assert.deepEqual(await readBlobAt(cwd, "HEAD", "a.txt", { maxBytes: 4 }), {
       content: "",
       binary: true,
       missing: false,
@@ -457,17 +456,11 @@ describe("a worktree's merge into its base", () => {
   before(() => {
     cwd = initRepository("tet-git-forward-", { "a.txt": "a\n" });
     run("switch", "-q", "-c", "ahead");
-    write("ahead.txt", "ahead\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "ahead");
+    commitFiles(cwd, "ahead", { "ahead.txt": "ahead\n" });
     run("switch", "-q", "-c", "diverged", "main");
-    write("diverged.txt", "diverged\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "diverged");
+    commitFiles(cwd, "diverged", { "diverged.txt": "diverged\n" });
     run("switch", "-q", "main");
-    write("main.txt", "main\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "main");
+    commitFiles(cwd, "main", { "main.txt": "main\n" });
   });
 
   it("fast-forwards only onto the branch named, and only while it is checked out", async () => {
@@ -485,10 +478,7 @@ describe("a worktree's merge into its base", () => {
 
   it("finds conflict markers left in what differs from the base, and a Markdown underline is none", async () => {
     run("switch", "-q", "-c", "markers");
-    write("left.txt", "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n");
-    write("doc.md", "Title\n=======\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "markers");
+    commitFiles(cwd, "markers", { "left.txt": "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n", "doc.md": "Title\n=======\n" });
     assert.deepEqual(await conflictMarkers(cwd, "main"), ["left.txt"]);
     run("switch", "-q", "main");
     assert.deepEqual(await conflictMarkers(cwd, "main"), [], "nothing differs");
@@ -520,15 +510,10 @@ describe("a merge stopped on conflicts, discarded file by file", () => {
   before(async () => {
     cwd = initRepository("tet-git-conflicts-", { "gone.txt": "gone\n", "m.txt": "m\n" });
     run("switch", "-q", "-c", "feature");
-    write("both.txt", "feature\n");
-    write("gone.txt", "gone on feature\n");
-    run("add", "--all");
-    run("commit", "-q", "--message", "feature");
+    commitFiles(cwd, "feature", { "both.txt": "feature\n", "gone.txt": "gone on feature\n" });
     run("switch", "-q", "main");
-    write("both.txt", "main\n");
     run("rm", "-q", "gone.txt");
-    run("add", "--all");
-    run("commit", "-q", "--message", "main");
+    commitFiles(cwd, "main", { "both.txt": "main\n" });
     assert.equal((await merge(cwd, "feature")).ok, false);
     write("m.txt", "m edited\n");
   });
@@ -677,9 +662,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
 
   /** A commit in the other clone, pushed. */
   const pushFromOther = (name: string): void => {
-    fs.writeFileSync(path.join(other, name), `${name}\n`);
-    git(other, "add", name);
-    git(other, "commit", "-q", "-m", name);
+    commitFiles(other, name, { [name]: `${name}\n` });
     git(other, "push", "-q");
   };
 
@@ -688,9 +671,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
     cwd = tempDir("tet-git-shared-");
     run("clone", "-q", bare, ".");
     run("symbolic-ref", "HEAD", "refs/heads/main");
-    write("a.txt", "a\n");
-    run("add", "a.txt");
-    run("commit", "-q", "-m", "base");
+    commitFiles(cwd, "base", { "a.txt": "a\n" });
     run("push", "-q", "--set-upstream", "origin", "main");
     other = tempDir("tet-git-other-");
     assert.equal(spawnSync("git", ["clone", "-q", bare, other]).status, 0);
@@ -784,7 +765,7 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
 
 describe("the askpass script handing git a login", () => {
   /** git asking the script for what no helper answers, as a command over https does. */
-  async function fill(question: string, origin: string, config: string[] = []): Promise<ReturnType<typeof spawnSync>> {
+  async function fill(question: string, origin: string, config: string[] = []): Promise<SpawnSyncReturns<string>> {
     const dir = path.join(tempDir("tet-askpass-test-"), "askpass");
     const askpass = await ensureAskpass(dir);
     assert.equal(path.dirname(askpass), dir);
@@ -805,26 +786,26 @@ describe("the askpass script handing git a login", () => {
 
   it("answers git's questions for the origin it is given", async () => {
     const answer = await fill("protocol=https\nhost=example.invalid\n\n", "https://example.invalid");
-    assert.equal(answer.status, 0, String(answer.stderr));
-    assert.match(String(answer.stdout), /^username=user$/m);
-    assert.match(String(answer.stdout), /^password=token$/m);
+    assert.equal(answer.status, 0, answer.stderr);
+    assert.match(answer.stdout, /^username=user$/m);
+    assert.match(answer.stdout, /^password=token$/m);
   });
 
   it("answers another host nothing: a submodule, a pushurl or a redirect gets no login", async () => {
     const answer = await fill("protocol=https\nhost=elsewhere.invalid\n\n", "https://example.invalid");
     assert.notEqual(answer.status, 0);
-    assert.doesNotMatch(String(answer.stdout), /token/);
+    assert.doesNotMatch(answer.stdout, /token/);
     const port = await fill("protocol=https\nhost=example.invalid:8443\n\n", "https://example.invalid");
     assert.notEqual(port.status, 0, "another port is another origin");
   });
 
   it("answers a host spelt in capitals, or with its default port, in the remote's url", async () => {
     const capitals = await fill("protocol=https\nhost=Example.Invalid\n\n", "https://example.invalid");
-    assert.equal(capitals.status, 0, String(capitals.stderr));
-    assert.match(String(capitals.stdout), /^username=user$/m);
+    assert.equal(capitals.status, 0, capitals.stderr);
+    assert.match(capitals.stdout, /^username=user$/m);
     const port = await fill("protocol=https\nhost=example.invalid:443\n\n", "https://example.invalid");
-    assert.equal(port.status, 0, String(port.stderr));
-    assert.match(String(port.stdout), /^username=user$/m);
+    assert.equal(port.status, 0, port.stderr);
+    assert.match(port.stdout, /^username=user$/m);
   });
 
   it("answers a question naming the path too, as credential.useHttpPath makes git ask", async () => {
@@ -832,15 +813,15 @@ describe("the askpass script handing git a login", () => {
       "-c",
       "credential.useHttpPath=true",
     ]);
-    assert.equal(answer.status, 0, String(answer.stderr));
-    assert.match(String(answer.stdout), /^username=user$/m);
+    assert.equal(answer.status, 0, answer.stderr);
+    assert.match(answer.stdout, /^username=user$/m);
   });
 
   it("hands the password to a password question, whatever the username holds", async () => {
     // git asks only for the password of a username it knows: "Password for 'https://jusername@...'".
     const answer = await fill("protocol=https\nhost=example.invalid\nusername=jusername\n\n", "https://example.invalid");
-    assert.equal(answer.status, 0, String(answer.stderr));
-    assert.match(String(answer.stdout), /^password=token$/m);
+    assert.equal(answer.status, 0, answer.stderr);
+    assert.match(answer.stdout, /^password=token$/m);
   });
 });
 
@@ -868,14 +849,19 @@ describe("a login for an http remote", () => {
     return repo;
   }
 
-  const askpassDir = (): string => path.join(tempDir("tet-askpass-test-"), "askpass");
+  /** The login TET hands git for `url`, through an askpass script of its own. */
+  const loginFor = (url: string) => ({
+    username: "user",
+    password: "token",
+    askpassDir: path.join(tempDir("tet-askpass-test-"), "askpass"),
+    origin: new URL(url).origin,
+  });
 
   it("hands git the login through askpass, and says a refused one wanted a login", async () => {
     const remote = await refusingRemote();
     try {
       const repo = repositoryWithRemote(remote.url);
-      const login = { username: "user", password: "token", askpassDir: askpassDir(), origin: new URL(remote.url).origin };
-      const fetched = await fetch(repo, "origin", login);
+      const fetched = await fetch(repo, "origin", loginFor(remote.url));
       assert.equal(fetched.ok, false);
       assert.equal(fetched.authRequired, true);
       assert.deepEqual(remote.offered, ["user:token"]);
@@ -889,8 +875,7 @@ describe("a login for an http remote", () => {
     try {
       const repo = repositoryWithRemote(remote.url);
       git(repo, "config", "credential.helper", "!f() { echo username=helper; echo password=kept; }; f");
-      const login = { username: "user", password: "token", askpassDir: askpassDir(), origin: new URL(remote.url).origin };
-      await fetch(repo, "origin", login);
+      await fetch(repo, "origin", loginFor(remote.url));
       assert.deepEqual(remote.offered, ["helper:kept"], "the helper answered, so askpass was never asked");
     } finally {
       remote.close();
@@ -918,23 +903,16 @@ describe("the commits the GRAPH shows", () => {
     repo = initRepository("tet-git-graph", { "a.txt": "one\n", "old.txt": "moved\n" });
     base = git(repo, "rev-parse", "HEAD");
     git(repo, "switch", "-q", "-c", "feature");
-    fs.writeFileSync(path.join(repo, "a.txt"), "two\n");
-    fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
     git(repo, "mv", "old.txt", "new.txt");
-    git(repo, "add", "-A");
-    git(repo, "commit", "-q", "-m", "work on feature");
+    commitFiles(repo, "work on feature", { "a.txt": "two\n", "b.txt": "new\n" });
     feature = git(repo, "rev-parse", "HEAD");
     git(repo, "switch", "-q", "main");
-    fs.writeFileSync(path.join(repo, "c.txt"), "main\n");
-    git(repo, "add", "-A");
-    git(repo, "commit", "-q", "-m", "work on main");
+    commitFiles(repo, "work on main", { "c.txt": "main\n" });
     git(repo, "merge", "-q", "--no-ff", "-m", "merge feature", "feature");
     merged = git(repo, "rev-parse", "HEAD");
     git(repo, "tag", "v1", base);
     git(repo, "switch", "-q", "-c", "side", base);
-    fs.writeFileSync(path.join(repo, "side.txt"), "side\n");
-    git(repo, "add", "-A");
-    git(repo, "commit", "-q", "-m", "side work");
+    commitFiles(repo, "side work", { "side.txt": "side\n" });
     git(repo, "switch", "-q", "main");
   });
 

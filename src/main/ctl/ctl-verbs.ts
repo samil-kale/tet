@@ -1,10 +1,9 @@
 import * as path from "node:path";
-import { type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/ctl";
-import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
+import { type ControlVerbName, type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/ctl";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
-import { projectRefsOf, sameProjectRef } from "../../shared/types/project";
+import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import {
   COLOR_SCHEMES,
   GIT_SETTING_IDS,
@@ -15,7 +14,6 @@ import {
   withLanePinned,
 } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
-import type { ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
@@ -69,31 +67,30 @@ export function verbs(deps: ControlDeps): Handlers {
 
   const repository = (ref: ProjectRef) => repositoryOf(deps, ref);
 
-  /** A tab id checked to exist, with its repository or worktree and terminals. */
-  const knownTab = (
+  /** Whether `tabId` of the repository or worktree is the tab the caller runs in. */
+  const isOwnTab = (caller: Caller, ref: ProjectRef, tabId: string): boolean =>
+    sameProjectRef(ref, callerRef(caller)) && tabId === caller.tabId;
+
+  /** A tab id checked to exist, with its repository or worktree and terminals, for a verb acting on
+   *  the tab: from a sandbox, only its own tab or one known to run in a sandbox — a host tab is this
+   *  machine's, which a sandbox never reaches, and its output may print the host's control token.
+   *  `own`: the caller's own tab. */
+  const ownedTab = (
     args: Record<string, unknown>,
-    caller: ControlRequest["caller"],
-  ): { tabs: ControlTerminals; tabId: string; ref: ProjectRef } => {
+    caller: Caller,
+  ): { tabs: ControlTerminals; tabId: string; ref: ProjectRef; own: boolean } => {
     const { ref } = refFrom(args, caller);
     const tabId = text(args, "tabId", "tab id");
     const tabs = terminals(ref);
-    if (!tabs.snapshot().some((tab) => tab.tabId === tabId)) {
+    const tab = tabs.inspect().find((entry) => entry.tabId === tabId);
+    if (!tab) {
       throw new ControlError("not_found", `unknown tab: ${tabId} (see tabs-list)`);
     }
-    return { tabs, tabId, ref };
-  };
-
-  /** `knownTab` for a verb acting on the tab: from a sandbox, only its own tab or one known to run in
-   *  a sandbox — a host tab is this machine's, which a sandbox never reaches, and its output may
-   *  print the host's control token. `own`: the caller's own tab. */
-  const ownedTab = (args: Record<string, unknown>, caller: Caller) => {
-    const known = knownTab(args, caller);
-    const own = sameProjectRef(known.ref, callerRef(caller)) && known.tabId === caller.tabId;
-    const tab = known.tabs.inspect().find((entry) => entry.tabId === known.tabId);
+    const own = isOwnTab(caller, ref, tabId);
     if (!caller.side.reachesTab(tab, own)) {
-      throw new ControlError("bad_args", `${known.tabId} runs on this machine, not in the sandbox`);
+      throw new ControlError("bad_args", `${tabId} runs on this machine, not in the sandbox`);
     }
-    return { ...known, own };
+    return { tabs, tabId, ref, own };
   };
 
   /** `--agent` (or the positional `hint` names), one TET knows. */
@@ -216,9 +213,8 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "settings-set-commit-suggester": async (args, caller) => {
       const agent = knownAgent(args, "agent id");
-      const id = agent.id;
       if (!agent.ask) {
-        throw new ControlError("bad_args", `${id} cannot suggest a commit message`);
+        throw new ControlError("bad_args", `${agent.id} cannot suggest a commit message`);
       }
       const model = optionalText(args, "model") ?? "";
       // Listed where the caller's commit prompt would list them, which also says a missing agent.
@@ -227,13 +223,11 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", error);
       }
       // Refused rather than stored: the commit prompt would put the default in its place.
-      if (model !== "") {
-        if (!models.some((candidate) => candidate.id === model)) {
-          const known = models.map((candidate) => candidate.id).join(", ");
-          throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
-        }
+      if (model !== "" && !models.some((candidate) => candidate.id === model)) {
+        const known = models.map((candidate) => candidate.id).join(", ");
+        throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
       }
-      settings.patch({ prompts: { commitSuggester: { agentId: id, model } } });
+      settings.patch({ prompts: { commitSuggester: { agentId: agent.id, model } } });
       return { result: { saved: true } };
     },
 
@@ -304,11 +298,10 @@ export function verbs(deps: ControlDeps): Handlers {
     // From a sandbox, only the tabs it reaches (ownedTab).
     "tabs-list": (args, caller) => {
       const { ref } = refFrom(args, caller);
-      const own = sameProjectRef(ref, callerRef(caller));
       return {
         result: terminals(ref)
           .inspect()
-          .filter((tab) => caller.side.reachesTab(tab, own && tab.tabId === caller.tabId)),
+          .filter((tab) => caller.side.reachesTab(tab, isOwnTab(caller, ref, tab.tabId))),
       };
     },
 
@@ -409,13 +402,12 @@ export function verbs(deps: ControlDeps): Handlers {
     // side is no longer known.
     "events-tail": (args, caller) => {
       const { ref } = refFrom(args, caller);
-      const own = sameProjectRef(ref, callerRef(caller));
       const tabs = terminals(ref);
       const inspected = tabs.inspect();
       const reached = tabs.events().filter((event) =>
         caller.side.reachesTab(
           inspected.find((tab) => tab.tabId === event.tabId),
-          own && event.tabId === caller.tabId,
+          isOwnTab(caller, ref, event.tabId),
         ),
       );
       return { result: reached.slice(-count(args, "tail", EVENTS_TAIL)) };

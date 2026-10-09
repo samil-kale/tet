@@ -151,16 +151,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   const opened = submenu && entries[submenu.index];
 
   return (
-    <div
-      ref={menu}
-      className={`context-menu${className ? ` ${className}` : ""}`}
-      style={{
-        left: x,
-        top: y,
-        ...(width !== undefined ? { width } : {}),
-        ...(maxHeight !== undefined ? { maxHeight } : {}),
-      }}
-    >
+    <div ref={menu} className={`context-menu${className ? ` ${className}` : ""}`} style={{ left: x, top: y, width, maxHeight }}>
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (
           <div key={index} className="context-menu-separator" />

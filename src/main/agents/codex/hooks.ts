@@ -51,11 +51,11 @@ function sessionFlagsSource(target: HookTarget): string {
 }
 
 /**
- * A hook's trust key: `handlerIndex` within the event's one matcher group (`group_index` always
- * `0`). Each handler is hashed as if alone; a second handler's key is `…:0:1`.
+ * A hook's trust key: the event's one matcher group and its one handler (`group_index` and the
+ * handler's index both `0`).
  */
-function trustKey(eventLabel: string, handlerIndex: number, target: HookTarget): string {
-  return `${sessionFlagsSource(target)}:${eventLabel}:0:${handlerIndex}`;
+function trustKey(eventLabel: string, target: HookTarget): string {
+  return `${sessionFlagsSource(target)}:${eventLabel}:0:0`;
 }
 
 /**
@@ -74,8 +74,7 @@ interface HookEntry {
   event: string;
   /** snake_case, as in a trust key. */
   label: string;
-  /** In registration order. */
-  commands: string[];
+  command: string;
   /** Only `PreToolUse` needs one. */
   matcher?: string;
 }
@@ -89,17 +88,14 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
   const hookGroups = entries
     .map((entry) => {
       const matcherPart = entry.matcher !== undefined ? `matcher=${tomlValue(entry.matcher)},` : "";
-      const handlers = entry.commands.map((command) => `{type='command',command=${tomlValue(command)}}`).join(",");
-      return `${entry.event}=[{${matcherPart}hooks=[${handlers}]}]`;
+      return `${entry.event}=[{${matcherPart}hooks=[{type='command',command=${tomlValue(entry.command)}}]}]`;
     })
     .join(",");
   const stateEntries = entries
-    .flatMap((entry) =>
-      entry.commands.map((command, handlerIndex) => {
-        const hash = hookTrustedHash(entry.label, command, entry.matcher);
-        return `${tomlValue(trustKey(entry.label, handlerIndex, target))}={trusted_hash=${tomlValue(hash)}}`;
-      }),
-    )
+    .map((entry) => {
+      const hash = hookTrustedHash(entry.label, entry.command, entry.matcher);
+      return `${tomlValue(trustKey(entry.label, target))}={trusted_hash=${tomlValue(hash)}}`;
+    })
     .join(",");
   return `hooks={${hookGroups},state={${stateEntries}}}`;
 }
@@ -120,12 +116,12 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  */
 export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
   const entries: HookEntry[] = [
-    { event: "SessionStart", label: "session_start", commands: [hookCommand("session-start")] },
-    { event: "UserPromptSubmit", label: "user_prompt_submit", commands: [hookCommand("prompt-submit")] },
-    { event: "Stop", label: "stop", commands: [hookCommand("stop")] },
+    { event: "SessionStart", label: "session_start", command: hookCommand("session-start") },
+    { event: "UserPromptSubmit", label: "user_prompt_submit", command: hookCommand("prompt-submit") },
+    { event: "Stop", label: "stop", command: hookCommand("stop") },
     // Waiting: an approval about to be asked, or the question tool about to run.
-    { event: "PermissionRequest", label: "permission_request", commands: [hookCommand("permission")] },
-    { event: "PreToolUse", label: "pre_tool_use", commands: [hookCommand("question")], matcher: "request_user_input" },
+    { event: "PermissionRequest", label: "permission_request", command: hookCommand("permission") },
+    { event: "PreToolUse", label: "pre_tool_use", command: hookCommand("question"), matcher: "request_user_input" },
   ];
 
   return ["-c", buildHooksArg(entries, target)];

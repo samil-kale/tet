@@ -225,7 +225,6 @@ export interface ControlDeps {
 
 /** The slice of TabSessionManager the verbs use. */
 export interface ControlTerminals {
-  snapshot(): TabDescriptor[];
   inspect(): InspectedTab[];
   /** At the last fitted size or a default; false unless the tab awaits its first start. */
   start(tabId: string): boolean;

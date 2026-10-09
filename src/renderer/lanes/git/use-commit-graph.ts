@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { CommitSearch, GraphCommit, RepositoryState } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 
@@ -36,7 +36,7 @@ export function useCommitGraph(resolved: ResolvedRef, state: RepositoryState, en
   const [typed, setTyped] = useState<{ refKey: string; search: CommitSearch } | undefined>();
   const [sent, setSent] = useState<{ refKey: string; search: CommitSearch } | undefined>();
   const limit = limits[refKey] ?? GRAPH_PAGE;
-  const version = useMemo(() => graphVersion(state), [state]);
+  const version = graphVersion(state);
   const search = typed?.refKey === refKey ? typed.search : NO_SEARCH;
   const asked = sent?.refKey === refKey ? sent.search : undefined;
 

@@ -1,6 +1,14 @@
 import type { ITheme } from "@xterm/xterm";
 
-const ANSI_CSS_VARS: Record<string, string> = {
+/** xterm's theme keys → --tet-* variable; every one is required of each theme (THEMES.md). */
+const XTERM_CSS_VARS: Record<string, string> = {
+  background: "--tet-terminal-background",
+  foreground: "--tet-terminal-foreground",
+  // xterm's default cursor and selection are white — invisible on a light background. xterm
+  // thins an opaque selection to 30% itself.
+  cursor: "--tet-terminalCursor-foreground",
+  selectionBackground: "--tet-terminal-selectionBackground",
+  selectionInactiveBackground: "--tet-terminal-inactiveSelectionBackground",
   black: "--tet-terminal-ansiBlack",
   red: "--tet-terminal-ansiRed",
   green: "--tet-terminal-ansiGreen",
@@ -26,20 +34,10 @@ export function editorFontFamily(): string {
 
 /** xterm draws on canvas and needs resolved colors, not var() references. */
 export function buildXtermTheme(): ITheme {
-  const styles = getComputedStyle(document.documentElement);
-  const read = (name: string): string | undefined => styles.getPropertyValue(name).trim() || undefined;
-
-  const background = read("--tet-terminal-background") ?? read("--tet-editor-background");
-  const foreground = read("--tet-terminal-foreground") ?? read("--tet-editor-foreground");
-  const theme: ITheme = {
-    background,
-    foreground,
-    // xterm's default cursor and selection are white — invisible on a light background. xterm
-    // thins an opaque selection to 30% itself.
-    cursor: read("--tet-terminalCursor-foreground") ?? foreground,
-    cursorAccent: background,
-    selectionBackground: read("--tet-terminal-selectionBackground") ?? read("--tet-editor-selectionBackground"),
-    selectionInactiveBackground: read("--tet-terminal-inactiveSelectionBackground") ?? read("--tet-editor-inactiveSelectionBackground"),
+  const colors = readCssVars(XTERM_CSS_VARS);
+  return {
+    ...colors,
+    cursorAccent: colors.background,
     // xterm's right-edge lane, invisible. A theme color, not CSS: xterm repaints its own elements
     // with it. `#00000000`, not `transparent`: it goes through xterm's color parser. The theme's
     // scrollbar variables are for the app's lists.
@@ -49,10 +47,7 @@ export function buildXtermTheme(): ITheme {
     // The ruler outlines itself every frame (`_renderRulerOutline`); xterm's default draws a
     // white line down the right of every terminal.
     overviewRulerBorder: "#00000000",
-    ...readCssVars(ANSI_CSS_VARS),
   };
-
-  return theme;
 }
 
 /** Resolves color id → --tet-* variable, skipping unset ones. */

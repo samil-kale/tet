@@ -8,7 +8,6 @@ import { hookSessionId } from "../hook-payload";
 import { codexHookReply, setupCodexHooks } from "./hooks";
 import { listModels } from "./app-server-client";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
-import { logError } from "../../util/error-log";
 
 /**
  * `-c` overrides need Codex's embedded app server, not its shared background one: asked for
@@ -45,26 +44,11 @@ export const codexAgent: SandboxedAgent = {
   // See AgentTurns.questionOutlivesTurn.
   turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true, hookReply: codexHookReply },
   host: {
-    prepare: () => {
-      let args: string[] = BASE_ARGS;
-      try {
-        args = [...BASE_ARGS, ...setupCodexHooks()];
-      } catch (error) {
-        // See AgentHost.prepare: swallow, never reject.
-        logError("could not set up Codex hooks", error);
-      }
-      return Promise.resolve({ args });
-    },
+    // Nothing is written (setupCodexHooks), so nothing can fail.
+    prepare: () => Promise.resolve({ args: [...BASE_ARGS, ...setupCodexHooks()] }),
   },
   sandbox: {
-    prepare: () => {
-      try {
-        return { args: [...BASE_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] };
-      } catch (error) {
-        logError("could not set up Codex sandbox hooks", error);
-        return { args: BASE_ARGS };
-      }
-    },
+    prepare: () => ({ args: [...BASE_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] }),
     // Skills in `~/.codex/skills` and `~/.agents/skills`; `~/.codex/AGENTS.md`, `AGENTS.override.md`
     // preferred. Under the config root the sessions are read from.
     knowledge: () => {

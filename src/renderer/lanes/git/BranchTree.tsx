@@ -34,11 +34,11 @@ type MenuTarget =
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
 const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or add a worktree";
 
-/** A branch merged into the default branch has its icon dimmed. */
 /** A row under its group's header, and a remote's branch under its remote: a column each. */
 const ROW_INDENT = INDENT_BASE + COLUMN_STEP;
 const NESTED_INDENT = ROW_INDENT + COLUMN_STEP;
 
+/** A branch merged into the default branch has its icon dimmed. */
 function branchIconClass(merged: boolean): string {
   return merged ? "tree-icon merged" : "tree-icon";
 }
@@ -119,9 +119,8 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** Makes the repository or a worktree TET made active; a worktree made elsewhere is never
    *  opened, so it is only told. */
   const openWorktree = (worktree: WorktreeInfo): void => {
-    if (worktree.isRepository) {
-      onActivateRef(refKeyOf(projectRef(projectId)));
-    } else if (worktree.key !== undefined) {
+    // The repository's has no key, which addresses the repository.
+    if (worktree.isRepository || worktree.key !== undefined) {
       onActivateRef(refKeyOf(projectRef(projectId, worktree.key)));
     } else {
       notify("info", `${worktreeName(worktree)} is checked out in ${worktree.path}, a worktree ${MADE_ELSEWHERE}`);
@@ -297,14 +296,14 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     return [{ label, run: () => branch.run(`${label}...`, () => repository.abort(at)) }, SEPARATOR];
   };
 
+  /** Merges `ref` into HEAD, on the lane's bar. */
+  const merge = (ref: string): void => branch.run(`Merging ${ref}...`, () => repository.merge(at, ref));
+
   /** Brings the default branch into HEAD; every fetch moves a local default branch up to its
    *  upstream. Nothing to bring in while standing on the default branch. */
   const updateFromDefault = (): ContextMenuEntry => ({
     label: `Update from ${defaultRef ?? "the default branch"}`,
-    run:
-      defaultRef && !state.detached && state.head !== defaultRef
-        ? () => branch.run(`Merging ${defaultRef}...`, () => repository.merge(at, defaultRef))
-        : undefined,
+    run: defaultRef && !state.detached && state.head !== defaultRef ? () => merge(defaultRef) : undefined,
   });
 
   const branchEntries = (target: Extract<MenuTarget, { kind: "branch" }>): ContextMenuEntry[] => {
@@ -334,7 +333,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         : [
             {
               label: `Merge ${ref} into ${state.head}`,
-              run: () => branch.run(`Merging ${ref}...`, () => repository.merge(at, ref)),
+              run: () => merge(ref),
             },
             {
               label: `Rebase ${state.head} onto ${ref}`,
@@ -393,7 +392,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         ? updateFromDefault()
         : {
             label: merged ? `Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
-            run: merged && !state.detached ? () => branch.run(`Merging ${merged}...`, () => repository.merge(at, merged)) : undefined,
+            run: merged && !state.detached ? () => merge(merged) : undefined,
           },
       SEPARATOR,
       worktreeEntry(

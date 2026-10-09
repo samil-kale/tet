@@ -90,11 +90,8 @@ const UNIX_EXECUTABLE_EXTENSIONS = [
 ];
 
 export function isOpenableUrl(url: string): boolean {
-  try {
-    return OPENABLE_URL_PROTOCOLS.includes(new URL(url).protocol);
-  } catch {
-    return false;
-  }
+  const parsed = URL.parse(url);
+  return parsed !== null && OPENABLE_URL_PROTOCOLS.includes(parsed.protocol);
 }
 
 /** `mode` is the file's `fs.Stats.mode`, unread where a file runs by its extension. */

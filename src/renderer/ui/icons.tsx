@@ -81,8 +81,9 @@ const GRID = 16;
  * The box is `--icon-size`, stated in CSS. A new icon comes from lucide-react first (`Lucide`); a
  * hand drawing (`Svg`, or `FillSvg` for a fill-only one) is for what Lucide has no match for.
  */
-function geometry(extent: number, cx: number, cy: number, grid: number, stroke: number) {
-  const side = (extent * grid) / ((TARGET_EXTENT / GRID) * grid);
+function geometry(extent: number, cx: number, cy: number, grid = GRID, stroke = 0) {
+  // The extent's share of the side is TARGET_EXTENT's of the 16 box, whatever the drawing's grid.
+  const side = (extent * GRID) / TARGET_EXTENT;
   return {
     viewBox: `${cx - side / 2} ${cy - side / 2} ${side} ${side}`,
     strokeWidth: (stroke * side) / grid,
@@ -96,14 +97,12 @@ export function FillSvg({
   extent,
   cx,
   cy,
-  grid,
   shapeRendering,
   children,
 }: IconProps & {
   extent: number;
   cx: number;
   cy: number;
-  grid: number;
   shapeRendering?: "crispEdges";
   children: React.ReactNode;
 }) {
@@ -113,7 +112,7 @@ export function FillSvg({
       // Fallback only, as `Svg`'s.
       width="14"
       height="14"
-      viewBox={geometry(extent, cx, cy, grid, 0).viewBox}
+      viewBox={geometry(extent, cx, cy).viewBox}
       shapeRendering={shapeRendering}
       aria-hidden="true"
     >
@@ -129,13 +128,13 @@ export function FillSvg({
 export function Svg({
   children,
   className,
-  extent = TARGET_EXTENT,
+  extent,
   cx = 8,
   cy = 8,
   stroke = 1.5,
 }: IconProps & {
   children: React.ReactNode;
-  extent?: number;
+  extent: number;
   cx?: number;
   cy?: number;
   /** The drawing's own stroke on the 16 grid, scaled by the crop like everything else. */
@@ -164,7 +163,7 @@ export function Svg({
 /**
  * A lucide-react icon as Lucide draws it: its whole 24-unit grid and its stroke of 2, filling the
  * box. One that must read otherwise — leading a row, or smaller beside its neighbours — is cropped
- * like `Svg` instead: an `extent`, centred where most of them are unless `cx`/`cy` say otherwise,
+ * like `Svg` instead: an `extent`, centred where most of them are unless `cx` says otherwise,
  * and a heavier `stroke` if it says so. The extents hold for the paths lucide-react ships.
  */
 function Lucide({
@@ -172,20 +171,18 @@ function Lucide({
   className,
   extent,
   cx = 12,
-  cy = 12,
   stroke = 2,
 }: IconProps & {
   icon: LucideIcon;
   extent?: number;
   cx?: number;
-  cy?: number;
   stroke?: number;
 }) {
   // `size` is the fallback only, as `Svg`'s width and height; a `viewBox` overrides lucide's own.
   if (extent === undefined) {
     return <Icon className={className} size={14} />;
   }
-  const { viewBox, strokeWidth } = geometry(extent, cx, cy, 24, stroke);
+  const { viewBox, strokeWidth } = geometry(extent, cx, 12, 24, stroke);
   return <Icon className={className} size={14} viewBox={viewBox} strokeWidth={strokeWidth} />;
 }
 
@@ -264,7 +261,7 @@ export function WorktreeIcon(props: IconProps) {
  */
 export function GitIcon(props: IconProps) {
   return (
-    <FillSvg className={props.className} extent={22.75} cx={16} cy={16} grid={32}>
+    <FillSvg className={props.className} extent={22.75} cx={16} cy={16}>
       <path
         fill="currentColor"
         d="M16 2c-.504 0-.996.184-1.375.563l-2.813 2.843c-.152.082-.28.2-.374.344l-8.876 8.875a1.947 1.947 0 0 0 0 2.75l12.063 12.063a1.955 1.955 0 0 0 2.75 0l12.063-12.063a1.947 1.947 0 0 0 0-2.75L17.374 2.562A1.92 1.92 0 0 0 16 2m0 2.031L27.969 16L16 27.969L4.031 16l8.282-8.281l1.75 1.75A2 2 0 0 0 14 10c0 .738.402 1.371 1 1.719v8.562c-.598.348-1 .98-1 1.719a1.999 1.999 0 1 0 4 0c0-.738-.402-1.371-1-1.719v-7.843l3.063 3.062A2 2 0 0 0 22 18a2 2 0 0 0 1.999-2a2 2 0 0 0-2.5-1.938L17.937 10.5A2 2 0 0 0 16 8a2 2 0 0 0-.53.063l-1.75-1.75z"

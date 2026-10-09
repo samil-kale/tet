@@ -1,7 +1,6 @@
 import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
-import { projectRef, sameProjectRef, worktreeOf } from "../../shared/types/project";
+import { projectRef, sameProjectRef, worktreeOf, type Project, type ProjectRef } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
-import type { Project, ProjectRef } from "../../shared/types/project";
 import {
   callerRef,
   ControlError,
@@ -20,7 +19,6 @@ import {
  * the repository or worktree a verb acts on (resolveCallerRef).
  */
 export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `worktree-${string}`>, Handler> {
-  const { tabManagers } = deps;
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   const repository = (ref: ProjectRef) => repositoryOf(deps, ref);
 
@@ -103,7 +101,7 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
           `${branch} has uncommitted changes, nothing was merged: have them committed or stashed there (by its agent or the user), then run this again`,
         );
       }
-      const working = tabManagers.get(ref)?.inspect().find(isWorking);
+      const working = deps.tabManagers.get(ref)?.inspect().find(isWorking);
       if (working) {
         throw new ControlError(
           "bad_args",

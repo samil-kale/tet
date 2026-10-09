@@ -1,8 +1,7 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
-import type { SbxKnowledgeSettings, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
-import { SBX_ACCESS } from "../../shared/types/sbx";
+import { SBX_ACCESS, type SbxKnowledgeSettings, type SbxProjectSettings, type SbxSecret, type SbxVariable } from "../../shared/types/sbx";
 import {
   SBX_KNOWLEDGE_KINDS,
   keptValues,
@@ -13,9 +12,19 @@ import {
   withoutProblems,
 } from "../../shared/sbx-rules";
 import { sbxBlocked, sbxNotReady } from "../sbx/sbx-policy";
-import type { ControlDeps } from "./ctl-verb";
 import type { SbxReading } from "../sbx/sbx-status";
-import { ControlError, list, onOff, oneOf, optionalText, text, type Answer, type Handler, type RefFrom } from "./ctl-verb";
+import {
+  ControlError,
+  list,
+  onOff,
+  oneOf,
+  optionalText,
+  text,
+  type Answer,
+  type ControlDeps,
+  type Handler,
+  type RefFrom,
+} from "./ctl-verb";
 import { PLATFORM } from "../util/host-platform";
 
 /**
@@ -24,7 +33,6 @@ import { PLATFORM } from "../util/host-platform";
  * (resolveCallerRef).
  */
 export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `sbx-${string}`>, Handler> {
-  const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. Returns what it read, for the Save to take the
    *  organization from. */
@@ -147,7 +155,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
     },
 
     "sbx-get": async (args, caller) => {
-      const found = project(args, caller);
+      const found = refFrom(args, caller).project;
       const stored = deps.sbx.stored(found.id);
       const [reading, settings] = await Promise.all([deps.sbx.status(found), deps.sbx.settings(found)]);
       const problems = await deps.sbx.problems(found, settings, stored.knowledge, stored, reading);

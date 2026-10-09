@@ -6,7 +6,6 @@ export const claudeIcon: AgentIcon = {
   extent: 19.01,
   cx: 12,
   cy: 11.67,
-  grid: 24,
   shapes: [
     {
       element: "path",

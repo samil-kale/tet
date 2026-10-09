@@ -345,14 +345,9 @@ describe("handOver", () => {
     const saved = path.join(root, "app.zip");
     fs.writeFileSync(saved, "zip");
     const agentDir = path.join(root, "agent");
-    assert.equal(
-      await handOver(saved, { agentDir, downloadsDir: sandboxDownloadsDir(agentDir) }),
-      path.join(agentDir, "downloads", "app.zip"),
-    );
-    assert.equal(
-      await handOver(saved, { agentDir, downloadsDir: sandboxDownloadsDir(agentDir) }),
-      path.join(agentDir, "downloads", "app (1).zip"),
-    );
+    const sandbox = { agentDir, downloadsDir: sandboxDownloadsDir(agentDir) };
+    assert.equal(await handOver(saved, sandbox), path.join(agentDir, "downloads", "app.zip"));
+    assert.equal(await handOver(saved, sandbox), path.join(agentDir, "downloads", "app (1).zip"));
     assert.equal(fs.readFileSync(path.join(agentDir, "downloads", "app (1).zip"), "utf8"), "zip");
   });
 

@@ -12,7 +12,6 @@ export const piIcon: AgentIcon = {
   extent: 469.43 / PIXEL_CELLS,
   cx: 400,
   cy: 400,
-  grid: 800,
   crisp: true,
   shapes: [
     {

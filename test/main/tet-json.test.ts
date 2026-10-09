@@ -24,7 +24,8 @@ import { tempDir } from "../helpers";
 let root: string;
 const file = (): string => path.join(root, "tet.json");
 const put = (content: string): void => fs.writeFileSync(file(), content);
-const stored = (): unknown => JSON.parse(fs.readFileSync(file(), "utf8"));
+const text = (): string => fs.readFileSync(file(), "utf8");
+const stored = (): unknown => JSON.parse(text());
 
 beforeEach(() => {
   root = tempDir("tet-json-");
@@ -81,7 +82,7 @@ describe("readCommands", () => {
     assert.deepEqual(await readCommands(root), [{ command: "npm test" }]);
     assert.equal((await readSbxSettings(root)).enabled, true, "SBX is never taken for disabled");
     await assert.rejects(writeCommands(root, [{ command: "x" }]), /not valid JSON/);
-    assert.equal(fs.readFileSync(file(), "utf8"), "{ not json", "untouched");
+    assert.equal(text(), "{ not json", "untouched");
     put(JSON.stringify({ commands: ["npm run lint"] }));
     assert.deepEqual(await readCommands(root), [{ command: "npm run lint" }], "fixed, it is read again");
   });
@@ -234,11 +235,11 @@ describe("a hand-written tet.json", () => {
     await writeCommands(root, [{ command: "npm run lint" }]);
     await addExclude(root, "out");
     await addFolder(root, "src");
-    const text = fs.readFileSync(file(), "utf8");
+    const edited = text();
     for (const kept of ["\t// Run from the tab strip.", "// build output"]) {
-      assert.ok(text.includes(kept), kept);
+      assert.ok(edited.includes(kept), kept);
     }
-    assert.equal(text.replace(/\r\n/g, "").includes("\n"), false, "CRLF stays CRLF");
+    assert.equal(edited.replace(/\r\n/g, "").includes("\n"), false, "CRLF stays CRLF");
     assert.deepEqual(await readCommands(root), [{ command: "npm run lint" }]);
     const view = await readExplorerView(root);
     assert.deepEqual(view.exclude, ["dist", "out"]);
@@ -248,13 +249,13 @@ describe("a hand-written tet.json", () => {
     );
     await removeFolder(root, "src");
     await removeFolder(root, "");
-    assert.equal(fs.readFileSync(file(), "utf8").includes('"folders"'), false, "the key goes with the last folder");
+    assert.equal(text().includes('"folders"'), false, "the key goes with the last folder");
   });
 
   it("creates a missing file as plain JSON, and replaces an exclude key that isn't a list", async () => {
     await addExclude(root, "dist");
     assert.deepEqual(stored(), { exclude: ["dist"] });
-    assert.ok(fs.readFileSync(file(), "utf8").endsWith("}\n"));
+    assert.ok(text().endsWith("}\n"));
     put(JSON.stringify({ exclude: "junk" }));
     await addExclude(root, "dist");
     assert.deepEqual(stored(), { exclude: ["dist"] });
@@ -263,7 +264,7 @@ describe("a hand-written tet.json", () => {
   it("refuses to edit a file whose top level isn't an object", async () => {
     put("[]");
     await assert.rejects(addFolder(root, "src"), /not valid JSON/);
-    assert.equal(fs.readFileSync(file(), "utf8"), "[]", "untouched");
+    assert.equal(text(), "[]", "untouched");
   });
 
   it("leaves no temporary file beside it", async () => {

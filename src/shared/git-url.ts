@@ -5,12 +5,8 @@
  *  ssh remote or a local path has no login to type, and neither has a url carrying its own
  *  password, which git uses in place of asking. askpass never answers for "". */
 export function urlOrigin(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.password === "" ? parsed.origin : "";
-  } catch {
-    return "";
-  }
+  const parsed = URL.parse(url);
+  return parsed && (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.password === "" ? parsed.origin : "";
 }
 
 /** The username written into a url (`https://saka@host/...`), "" where there is none: git then

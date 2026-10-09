@@ -14,12 +14,11 @@ import { ensureRunning, pathMountSpecs } from "../../src/main/sbx/sbx-mounts";
 import { parseFilesystemRules } from "../../src/main/sbx/sbx-policy";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { resolveCommand } from "../../src/main/util/process";
-import { UNCAUGHT_MARKER } from "../../src/main/uncaught";
 import type { ControlEvent } from "../../src/shared/ctl";
 import type { AgentId } from "../../src/shared/types/agents";
 import type { Project } from "../../src/shared/types/project";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { eventually, killApp, startApp, tempDir, tetCtl, type TestApp } from "../helpers";
+import { eventually, startApp, stopApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
  * The agents' CLIs and sbx as installed on this machine, driven the way TET drives them — what the
@@ -152,21 +151,7 @@ describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, 
     project = added.result as Project;
   });
 
-  after(async () => {
-    const pid = await app?.alive();
-    if (pid !== undefined) {
-      killApp(pid);
-    }
-    await eventually("TET gone", async () => (await app?.alive()) === undefined, 10_000).catch(() => undefined);
-    for (const dir of [userData, AGENT_REPO]) {
-      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
-    }
-    const stderr = app?.stderr() ?? "";
-    const uncaught = stderr.indexOf(UNCAUGHT_MARKER);
-    if (uncaught >= 0) {
-      assert.fail(`tet reported an uncaught exception:\n${stderr.slice(uncaught)}`);
-    }
-  });
+  after(async () => stopApp(app, await app?.alive(), [userData, AGENT_REPO]));
 
   for (const agent of SANDBOXED_AGENTS) {
     const agentId = agent.id;
@@ -533,7 +518,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
       // sandbox here, so the rule goes with it. The proxy rewrites host.docker.internal to localhost.
       const allowed = sbx("policy", "allow", "network", "--sandbox", NAME, `localhost:${port}`);
       assert.equal(allowed.status, 0, allowed.stderr);
-      // A tet-ctl's request, as hook-report.ts makes it; async, since the server answers on this loop.
+      // A tet-ctl's request, as pi's extension (pi/extension.ts) makes it; async, since the server answers on this loop.
       const script =
         `const r = require("http").request({ host: "host.docker.internal", port: ${port}, method: "POST", path: "/", headers: { Connection: "close" } },` +
         ` (s) => { console.log(s.statusCode); s.resume(); }); r.on("error", (e) => console.log(e.message)); r.end("hook report");`;

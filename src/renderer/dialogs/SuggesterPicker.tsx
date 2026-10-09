@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AgentId, AskModelsResult, Suggester } from "../../shared/types/agents";
 import { Dropdown } from "../ui/Dropdown";
 import { DialogError, FieldRow } from "../ui/Field";
+import { fetchHeld } from "../ui/fetch-held";
 import { agentName, useAgents } from "../ui/use-agents";
 
 /** No model argument: the agent's own configuration picks. */
@@ -51,29 +52,11 @@ export function SuggesterPicker({ value, onChange, onReplace, hold }: SuggesterP
     if (!agentIds?.includes(value.agentId)) {
       return;
     }
-    let cancelled = false;
-    let fetching = true;
-    hold(true);
-    void window.tet.agents
-      .askModels(value.agentId)
-      .then((result) => {
-        if (!cancelled) {
-          setListed({ agentId: value.agentId, result });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          fetching = false;
-          hold(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-      // Only a listing still running: one that ended has released the bar already.
-      if (fetching) {
-        hold(false);
-      }
-    };
+    return fetchHeld(
+      () => window.tet.agents.askModels(value.agentId),
+      hold,
+      (result) => setListed({ agentId: value.agentId, result }),
+    );
   }, [agentIds, value.agentId, hold]);
 
   useEffect(() => {

@@ -1,6 +1,5 @@
-import { refKeyOf } from "../../shared/types/project";
+import { refKeyOf, type ProjectRef } from "../../shared/types/project";
 import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
-import type { ProjectRef } from "../../shared/types/project";
 
 const MAX_NOTICES = 50;
 

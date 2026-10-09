@@ -209,22 +209,21 @@ export function truncateTitle(text: string): string {
 }
 
 /**
- * Hands `onLines` the file's lines from `size` down to `floor`, last chunk first, until it returns
- * true. Lines arrive whole: bytes before a chunk's first newline carry (as bytes, so a cut
- * character survives) into the next chunk — except at `floor`, where the partial line is handed
- * over as is; hence a resumed scan overlaps the earlier one by a chunk.
+ * Hands `onLines` the file's lines from `size` down to `floor`, last chunk (TRANSCRIPT_SCAN_BYTES)
+ * first, until it returns true. Lines arrive whole: bytes before a chunk's first newline carry (as
+ * bytes, so a cut character survives) into the next chunk — except at `floor`, where the partial
+ * line is handed over as is; hence a resumed scan overlaps the earlier one by a chunk.
  */
 async function readLinesBackwards(
   handle: fs.promises.FileHandle,
   size: number,
   floor: number,
-  chunkBytes: number,
   onLines: (lines: string[]) => boolean,
 ): Promise<void> {
   let end = size;
   let carry = Buffer.alloc(0);
   while (end > floor) {
-    const start = Math.max(floor, end - chunkBytes);
+    const start = Math.max(floor, end - TRANSCRIPT_SCAN_BYTES);
     const buffer = Buffer.alloc(end - start);
     await handle.read(buffer, 0, buffer.length, start);
     let chunk = Buffer.concat([buffer, carry]);
@@ -284,7 +283,7 @@ export async function scanTranscriptTail<T>(
     try {
       const previous = cached && cached.size < size ? cached : undefined;
       const floor = previous ? Math.max(0, previous.size - TRANSCRIPT_SCAN_BYTES) : 0;
-      await readLinesBackwards(handle, size, floor, TRANSCRIPT_SCAN_BYTES, (lines) => scan.read(lines, tail));
+      await readLinesBackwards(handle, size, floor, (lines) => scan.read(lines, tail));
       scan.finish?.(tail);
       if (previous) {
         scan.merge(tail, previous.tail);
