@@ -106,6 +106,10 @@ if (PLATFORM.windowsNotifications) {
 // per renderer Blink silently evicts the oldest to the DOM renderer; 128 leaves room, a leak shows.
 app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
 
+// Chromium's own log down to its fatal errors: a browser tab's DevTools frontend asks for Autofill,
+// which Electron lacks, on every attach, and each failure would reach stderr.
+app.commandLine.appendSwitch("log-level", "3");
+
 /**
  * GitHub's releases, except for the install test (test/e2e/install.test.ts) serving its own — read
  * from the environment only with a profile of its own, like the control token.

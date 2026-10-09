@@ -402,14 +402,14 @@ export function BrowserIcon(props: IconProps) {
   return <Lucide {...props} icon={Globe} />;
 }
 
-/** Lucide's `arrow-left` — a browser tab's back. */
+/** Lucide's `arrow-left` — a browser tab's back, drawn larger as `arrow-up`. */
 export function BackIcon(props: IconProps) {
-  return <Lucide {...props} icon={ArrowLeft} />;
+  return <Lucide {...props} icon={ArrowLeft} extent={16.7} />;
 }
 
-/** Lucide's `arrow-right` — a browser tab's forward. */
+/** Lucide's `arrow-right` — a browser tab's forward, drawn larger as `arrow-up`. */
 export function ForwardIcon(props: IconProps) {
-  return <Lucide {...props} icon={ArrowRight} />;
+  return <Lucide {...props} icon={ArrowRight} extent={16.7} />;
 }
 
 /** Lucide's `rotate-cw` — a browser tab's reload. */
