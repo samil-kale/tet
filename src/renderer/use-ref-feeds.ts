@@ -34,7 +34,10 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
   useEffect(() => {
     const unsubscribers = [
       window.tet.repository.onState(({ ref, state }) => setStates((current) => ({ ...current, [refKeyOf(ref)]: state }))),
-      window.tet.tabs.onTabs(({ ref, tabs: list }) => setTabs((current) => ({ ...current, [refKeyOf(ref)]: list }))),
+      window.tet.tabs.onTabs(({ ref, tabs: list }) => {
+        const refKey = refKeyOf(ref);
+        setTabs((current) => ({ ...current, [refKey]: stableItems(current[refKey], list, (tab) => tab.tabId) }));
+      }),
       window.tet.tabs.onStatus(({ ref, tabId, status }) => {
         const refKey = refKeyOf(ref);
         // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps

@@ -14,9 +14,13 @@ export interface TreeNode {
   root?: true;
 }
 
+/** Built once: `localeCompare` with options builds a collator per call, and a listing sorts the
+ *  whole repository. */
+const NAME_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base" });
+
 /** Case-insensitive, locale-aware. */
 export function compareNames(a: TreeNode, b: TreeNode): number {
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+  return NAME_COLLATOR.compare(a.name, b.name);
 }
 
 export function compareGrouped(a: TreeNode, b: TreeNode, foldersFirst: boolean): number {

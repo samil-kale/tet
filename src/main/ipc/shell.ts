@@ -46,6 +46,8 @@ export async function fetchHttpsImage(
     if (location === null) {
       return response;
     }
+    // Unread, a hop's body holds its request open until it is collected.
+    void response.body?.cancel();
     target = resolve(location, target);
   }
   return undefined;
@@ -100,6 +102,7 @@ export function registerShellIpc({ repositories, notice }: Pick<IpcDeps, "reposi
       }
       const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
       if (!response.ok || !type.startsWith("image/") || !response.body) {
+        void response.body?.cancel();
         return null;
       }
       // Read in chunks against the cap: a response without a content-length would otherwise be

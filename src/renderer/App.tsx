@@ -398,7 +398,12 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                 {...drag?.target}
                 className={["lane", slidingLanes.has(lane) && "sliding", ...(drag?.classes ?? [])].filter(Boolean).join(" ")}
                 style={{ width: shown ? width : 0 }}
-                onTransitionEnd={() => stopSliding(lane)}
+                // Its own width's alone: a child's transition (a sash's hover) bubbles here too.
+                onTransitionEnd={(event) => {
+                  if (event.target === event.currentTarget && event.propertyName === "width") {
+                    stopSliding(lane);
+                  }
+                }}
                 onContextMenu={(event) => {
                   if ((event.target as Element).closest(".section-header")) {
                     laneMenu.open(event, lane);

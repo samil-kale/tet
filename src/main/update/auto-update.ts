@@ -204,6 +204,9 @@ async function stage(
     throw new Error(`no ${path.basename(rootExecutable(".", PLATFORM))} in ${asset}`);
   }
   const prepared = preparedRoot(installed);
+  // The copy beside the install is about to change: no quit installs it until it is whole again.
+  // Not before: a download failing leaves the version staged earlier to install.
+  pending = undefined;
   try {
     await originalFs.promises.rm(prepared, { recursive: true, force: true });
     // original-fs, as in the sweep: electron's fs reads app.asar as a folder.
@@ -258,8 +261,6 @@ export function startAutoUpdate(
         notice("info", `Update ${latest} available, update with: ${PLATFORM.installCommand}`);
         return;
       }
-      // The copy beside the install is about to change: no quit installs it until it is whole again.
-      pending = undefined;
       const message = `Downloading update ${latest}`;
       let percent = 0;
       showProgress({ key: "update", message, fraction: 0 });

@@ -238,25 +238,35 @@ function readHead(headers: Map<string, string>): HeadState {
   };
 }
 
-/**
- * Ahead/behind per commit pair, cached: two hashes fix the count, and readRefs would otherwise spend
- * a process per diverged branch every refresh.
- */
-const trackCounts = new Map<string, { ahead: number; behind: number }>();
+type TrackCounts = Map<string, { ahead: number; behind: number }>;
 
-async function readTrackCount(cwd: string, head: string, upstreamHead: string): Promise<{ ahead: number; behind: number } | undefined> {
-  const key = `${cwd}\0${head}...${upstreamHead}`;
-  const cached = trackCounts.get(key);
+/**
+ * Ahead/behind per working directory and commit pair, cached: two hashes fix the count, and
+ * readRefs would otherwise spend a process per diverged branch every refresh. Each refresh keeps
+ * only the pairs it asked for, so a branch moving on does not grow the cache.
+ */
+const trackCounts = new Map<string, TrackCounts>();
+
+async function readTrackCount(
+  cwd: string,
+  previous: TrackCounts | undefined,
+  kept: TrackCounts,
+  head: string,
+  upstreamHead: string,
+): Promise<{ ahead: number; behind: number } | undefined> {
+  const key = `${head}...${upstreamHead}`;
+  const cached = previous?.get(key);
   if (cached) {
+    kept.set(key, cached);
     return cached;
   }
-  const result = await git(cwd, ["rev-list", "--left-right", "--count", `${head}...${upstreamHead}`]);
+  const result = await git(cwd, ["rev-list", "--left-right", "--count", key]);
   if (result.code !== 0) {
     return undefined;
   }
   const [ahead, behind] = result.stdout.trim().split(/\s+/).map(Number);
   const track = { ahead: ahead || 0, behind: behind || 0 };
-  trackCounts.set(key, track);
+  kept.set(key, track);
   return track;
 }
 
@@ -392,21 +402,24 @@ async function readRefs(
   }
 
   const branchTrack: Record<string, { ahead: number; behind: number }> = {};
+  const previousCounts = trackCounts.get(cwd);
+  const keptCounts: TrackCounts = new Map();
   await Promise.all(
     diverged
       .filter((entry) => remoteHeads.has(entry.upstream))
       .map(async (entry) => {
-        const track = await readTrackCount(cwd, entry.head, remoteHeads.get(entry.upstream)!);
+        const track = await readTrackCount(cwd, previousCounts, keptCounts, entry.head, remoteHeads.get(entry.upstream)!);
         if (track) {
           branchTrack[entry.name] = track;
         }
       }),
   );
+  trackCounts.set(cwd, keptCounts);
 
   const defaultBranch =
     findDefaultBranch(defaultBranches, localBranches, trackers, remotes) ??
     (fallbackDefault !== undefined && localBranches.includes(fallbackDefault) ? { name: fallbackDefault } : undefined);
-  const merged = defaultBranch ? await readDefaultMerged(result.stdout, defaultBranch) : undefined;
+  const merged = defaultBranch ? await readDefaultMerged(defaultBranch) : undefined;
   const isMerged = (refname: string): boolean => merged?.has(refname) ?? false;
 
   return {
@@ -426,7 +439,7 @@ async function readRefs(
 
   /** The default branch is never merged into itself, nor are the remote branches standing for it:
    *  its upstream and each remote's HEAD branch. */
-  function readDefaultMerged(refs: string, target: CheckoutTarget): Promise<Set<string> | undefined> {
+  function readDefaultMerged(target: CheckoutTarget): Promise<Set<string> | undefined> {
     const targetRef = target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
     const upstream = target.remote ? undefined : branchUpstreams[target.name];
     const excluded = new Set([
@@ -435,7 +448,10 @@ async function readRefs(
       ...[...defaultBranches].map(([remote, branch]) => `refs/remotes/${remote}/${branch}`),
     ]);
     const commit = target.remote ? remoteHeads.get(targetRef) : localHeads.get(target.name);
-    return commit ? readMerged(cwd, `${targetRef}\0${refs}`, commit, excluded) : Promise.resolve(undefined);
+    // The branch refs' commits and what is left out decide the answer; a checkout, a tag or a
+    // changed track count does not.
+    const refs = JSON.stringify([[...excluded], [...localHeads], [...remoteHeads]]);
+    return commit ? readMerged(cwd, refs, commit, excluded) : Promise.resolve(undefined);
   }
 }
 
@@ -768,11 +784,7 @@ const AUTH_FAILURES = [/could not read (?:Username|Password)/i, /Authentication 
  *  process outlives it. */
 export function forget(cwd: string): void {
   mergedBranches.delete(cwd);
-  for (const key of trackCounts.keys()) {
-    if (key.startsWith(`${cwd}\0`)) {
-      trackCounts.delete(key);
-    }
-  }
+  trackCounts.delete(cwd);
 }
 
 /**
@@ -848,8 +860,10 @@ export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeou
 
 /** `git pull`, so the user's configured merge or rebase applies — plus `--ff` where `pull.ff` is
  *  unset, as GitHub Desktop does: without it git refuses to pull into a diverged branch until told
- *  how to reconcile. `core.sshCommand` is read in the same process, for networkEnv. */
-export async function pull(cwd: string, login?: NetworkLogin): Promise<GitActionResult> {
+ *  how to reconcile. `core.sshCommand` is read in the same process, for networkEnv. Pulled, the
+ *  HEAD of `remote` is asked for again (updateRemoteHead) with the same login: on a host that wants
+ *  one, without it it always fails. */
+export async function pull(cwd: string, login?: NetworkLogin, remote?: string): Promise<GitActionResult> {
   // Exit 1 where neither is set; a broken config counts as neither, as a failed `--get` did.
   const result = await git(cwd, ["config", "--get-regexp", "^(pull\\.ff|core\\.sshcommand)$"]);
   let pullFF = false;
@@ -863,14 +877,18 @@ export async function pull(cwd: string, login?: NetworkLogin): Promise<GitAction
     }
   }
   const env = await loginEnv(cwd, login, sshCommand);
-  return runNetwork(cwd, pullFF ? ["pull"] : ["pull", "--ff"], { env });
+  const pulled = await runNetwork(cwd, pullFF ? ["pull"] : ["pull", "--ff"], { env });
+  if (pulled.ok && remote) {
+    await updateRemoteHead(cwd, remote, { env });
+  }
+  return pulled;
 }
 
 /** Asks the remote for its HEAD branch again after a pull, as GitHub Desktop does: a clone's
  *  `<remote>/HEAD` never follows a changed default, and a remote added by hand has none. A failure
  *  only leaves the old one. */
-export async function updateRemoteHead(cwd: string, remote: string, login?: NetworkLogin): Promise<void> {
-  await runNetwork(cwd, ["remote", "set-head", "--auto", remote], { login });
+export async function updateRemoteHead(cwd: string, remote: string, options?: NetworkOptions): Promise<void> {
+  await runNetwork(cwd, ["remote", "set-head", "--auto", remote], options);
 }
 
 /**

@@ -193,7 +193,10 @@ export function CommitGraph({
   onMore,
   onOpenDiff,
 }: CommitGraphProps) {
-  const rows = useMemo(() => (searched ? undefined : layoutGraph(commits, graphRefColors(state))), [searched, commits, state]);
+  // Keyed by the colors, not the state: a push for the working tree alone lays nothing out again.
+  const colorsKey = JSON.stringify([...graphRefColors(state)]);
+  const colors = useMemo(() => new Map<string, GraphColor>(JSON.parse(colorsKey) as [string, GraphColor][]), [colorsKey]);
+  const rows = useMemo(() => (searched ? undefined : layoutGraph(commits, colors)), [searched, commits, colors]);
   const [open, setOpen] = useState<string | undefined>();
   const [files, setFiles] = useState<Record<string, FileChange[]>>({});
 

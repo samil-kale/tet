@@ -468,14 +468,7 @@ export class Repository {
   pull(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(async () => {
       const remote = headRemote(this.state);
-      // The remote's HEAD with the same login: on a host that wants one, without it it always fails.
-      const pulled = await this.network(remote, login, async (networkLogin) => {
-        const result = await git.pull(this.at.path, networkLogin);
-        if (result.ok && remote) {
-          await git.updateRemoteHead(this.at.path, remote, networkLogin);
-        }
-        return result;
-      });
+      const pulled = await this.network(remote, login, (networkLogin) => git.pull(this.at.path, networkLogin, remote));
       await git.fastForwardBranches(this.at.path);
       return pulled;
     });

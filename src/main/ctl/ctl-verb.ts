@@ -304,15 +304,30 @@ export function resolveCallerRef(
   if (!projectId) {
     throw new ControlError("bad_args", "no project: pass --project <id> (see projects-list)");
   }
-  const project = store.get(projectId);
-  if (!project) {
-    throw new ControlError("not_found", PROJECT_NOT_FOUND);
-  }
+  const project = projectById(store, projectId);
   const asked = optionalText(args, "worktree");
   if (asked === undefined) {
     return { project, ref: projectRef(projectId, askedProject === undefined ? caller.worktree : undefined) };
   }
   return { project, ref: tetWorktree(project, asked).ref };
+}
+
+/** The project of `id`, one TET has. */
+export function projectById(store: ProjectLookup, id: string): Project {
+  const project = store.get(id);
+  if (!project) {
+    throw new ControlError("not_found", PROJECT_NOT_FOUND);
+  }
+  return project;
+}
+
+/** The repository's or worktree's terminals; one closed meanwhile is an internal error. */
+export function terminalsOf(deps: Pick<ControlDeps, "tabManagers" | "store">, ref: ProjectRef): ControlTerminals {
+  const terminals = deps.tabManagers.get(ref);
+  if (!terminals) {
+    throw new ControlError("internal", notOpenMessage(deps.store, ref));
+  }
+  return terminals;
 }
 
 /** The repository's or worktree's git state; one closed meanwhile is an internal error. */

@@ -7,16 +7,31 @@ const MAX_LOG_BYTES = 512 * 1024;
 /** Set by openErrorLog. */
 let errorLog: string | undefined;
 
-/** Where logError writes from now on; one of `MAX_LOG_BYTES` or more is first moved to
- *  `<file>.1`, replacing the one there. */
+/** errors.log's size as this process counts it: read at open, then what it appended. */
+let logBytes = 0;
+
+/** Where logError writes from now on; one of `MAX_LOG_BYTES` or more is moved to `<file>.1`,
+ *  replacing the one there — first, and again whenever the appends reach it. */
 export function openErrorLog(file: string): void {
   errorLog = file;
   try {
-    if (fs.statSync(file).size >= MAX_LOG_BYTES) {
-      fs.renameSync(file, `${file}.1`);
-    }
+    logBytes = fs.statSync(file).size;
   } catch {
-    // No log yet, or not rotatable.
+    // No log yet.
+    logBytes = 0;
+  }
+  rotateFull(file);
+}
+
+function rotateFull(file: string): void {
+  if (logBytes < MAX_LOG_BYTES) {
+    return;
+  }
+  try {
+    fs.renameSync(file, `${file}.1`);
+    logBytes = 0;
+  } catch {
+    // Not rotatable.
   }
 }
 
@@ -39,6 +54,8 @@ export function appendLog(entry: string): void {
   }
   try {
     fs.appendFileSync(errorLog, entry);
+    logBytes += Buffer.byteLength(entry);
+    rotateFull(errorLog);
   } catch {
     // Console copy only.
   }

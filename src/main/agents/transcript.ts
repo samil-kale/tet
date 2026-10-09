@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
+import { mapLimited } from "../util/async";
 import { isRecord } from "../util/json-file";
 import type { AgentSessionInfo, SessionWatch } from "./agent";
 import { PLATFORM } from "../util/host-platform";
@@ -18,6 +19,10 @@ import { watchedDirectoryGone } from "../util/watch-dir";
  * whole base instructions).
  */
 export const TRANSCRIPT_SCAN_BYTES = 256 * 1024;
+
+/** Transcripts read at once: a listing opens every transcript of a repository (Codex's: of the
+ *  machine), and all at once exceeds a low `ulimit -n`. */
+export const READ_CONCURRENCY = 32;
 
 /**
  * The directory `root/<encoded>` of an agent keeping one per repository (Claude Code, pi), or
@@ -81,7 +86,7 @@ export function listTranscriptDir(
       files.map((file) => path.join(dir, file)),
       caches,
     );
-    return Promise.all(files.map((file) => readOne(path.join(dir, file), file)));
+    return mapLimited(files, READ_CONCURRENCY, (file) => readOne(path.join(dir, file), file));
   });
 }
 

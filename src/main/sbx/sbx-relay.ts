@@ -15,6 +15,10 @@ export interface RelayDialled {
 /** How long a dial is waited for: sbx's proxy answers a refused host at once. */
 const DIAL_TIMEOUT_MS = 30_000;
 
+/** How long the relay's hello is waited for: a hung `sbx exec` would otherwise hold every tab of
+ *  the sandbox, which wait on it before loading (BrowserTabs.routeOf). */
+const HELLO_TIMEOUT_MS = 30_000;
+
 /** How much of what the relay or sbx said on stderr is kept, from its end, for why it ended. */
 const MAX_STDERR = 2000;
 
@@ -163,11 +167,17 @@ export class SandboxRelay {
     this.client = client;
     let stderr = "";
     return new Promise((resolve, reject) => {
+      // Rejected first, so the close it brings does not say "ended" instead.
+      const timer = setTimeout(() => {
+        reject(new Error(`the browser relay of ${this.name} did not start within ${HELLO_TIMEOUT_MS / 1000} s`));
+        killProcessTree(child);
+      }, HELLO_TIMEOUT_MS);
       child.stdout.setEncoding("utf8").on(
         "data",
         lineReader((line) => {
           const frame = parseRelayFrame(line);
           if (frame?.op === "hello") {
+            clearTimeout(timer);
             resolve({ ca: frame.ca });
           } else if (frame) {
             client.receive(frame);
@@ -182,6 +192,7 @@ export class SandboxRelay {
       child.stdin.on("error", () => undefined);
       child.once("error", (error) => reject(error));
       child.once("close", (code) => {
+        clearTimeout(timer);
         const ended = { ok: false, code, stdout: "", stderr };
         reject(new Error(`the browser relay of ${this.name} ended: ${sbxError(ended) || `exit ${code ?? "none"}`}`));
         client.end();

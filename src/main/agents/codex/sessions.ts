@@ -7,6 +7,7 @@ import {
   forgetMissing,
   nonEmptyString,
   parseLine,
+  READ_CONCURRENCY,
   readHeadLines,
   requireTitle,
   scanTranscriptHead,
@@ -208,10 +209,6 @@ async function listRolloutFiles(home: string): Promise<string[]> {
   const dayDirs = await subdirs(await subdirs(await subdirs([sessionsRoot(home)])));
   return (await subdirs(dayDirs)).filter((file) => file.endsWith(".jsonl"));
 }
-
-/** Rollouts read at once: a listing opens every rollout on the machine, and all at once exceeds a
- *  low `ulimit -n`. */
-const READ_CONCURRENCY = 32;
 
 async function safeReaddir(dir: string): Promise<string[]> {
   try {

@@ -15,7 +15,7 @@ import {
   withLanePinned,
 } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
-import type { Project, ProjectRef } from "../../shared/types/project";
+import type { ProjectRef } from "../../shared/types/project";
 import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
@@ -33,9 +33,11 @@ import {
   onOff,
   oneOf,
   optionalText,
+  projectById,
   refuseUnsaved,
   repositoryOf,
   resolveCallerRef,
+  terminalsOf,
   text,
   type Caller,
   type ControlDeps,
@@ -43,7 +45,7 @@ import {
   type Handler,
   type RefFrom,
 } from "./ctl-verb";
-import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
+import { notOpenMessage } from "../store/resolved-ref";
 
 /** `tabs-wait` default timeout and poll interval. */
 const WAIT_TIMEOUT_S = 30;
@@ -59,25 +61,11 @@ const KEY_NAMES = Object.keys(TAB_KEYS).join(", ");
 type Handlers = Record<Exclude<ControlVerbName, typeof HELP_VERB>, Handler>;
 
 export function verbs(deps: ControlDeps): Handlers {
-  const { store, settings, tabManagers } = deps;
-
-  const projectById = (id: string): Project => {
-    const found = store.get(id);
-    if (!found) {
-      throw new ControlError("not_found", PROJECT_NOT_FOUND);
-    }
-    return found;
-  };
+  const { store, settings } = deps;
 
   const refFrom: RefFrom = (args, caller) => resolveCallerRef(store, args, caller);
 
-  const terminals = (ref: ProjectRef): ControlTerminals => {
-    const manager = tabManagers.get(ref);
-    if (!manager) {
-      throw new ControlError("internal", notOpenMessage(store, ref));
-    }
-    return manager;
-  };
+  const terminals = (ref: ProjectRef) => terminalsOf(deps, ref);
 
   const repository = (ref: ProjectRef) => repositoryOf(deps, ref);
 
@@ -263,7 +251,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "projects-remove": async (args, caller) => {
       const id = text(args, "projectId", "project id");
-      const found = projectById(id);
+      const found = projectById(store, id);
       refuseUnsaved(deps, projectRefsOf(found), "nothing was removed");
       // What the window's question says (ProjectList's remove), here as a flag.
       const worktrees = found.worktrees.filter((worktree) => worktree.key !== undefined).length;
