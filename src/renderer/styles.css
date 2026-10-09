@@ -729,10 +729,10 @@ textarea:focus,
 }
 
 /* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH and GRAPH sections' box,
-   which adds to it below. */
+   which adds its toggles below. */
 .filter-field {
   position: relative;
-  padding: 8px 6px;
+  padding: 7px 6px 7px 7px;
 }
 
 /* Room for the search icon. */
@@ -750,33 +750,25 @@ textarea:focus,
   pointer-events: none;
 }
 
-/* The SEARCH and GRAPH sections' box, VS Code's: the three toggles stand inside the field, which leaves its own
-   padding to the row. */
-.filter-row {
-  padding: 8px 6px;
-}
-
-/* The row's padding, or the remote tab's column gap, spaces the field. */
-.filter-row .filter-field,
+/* The remote tab's column gap spaces the field. */
 .remote-main .filter-field {
   padding: 0;
 }
 
-/* Room for the three toggles ending the field (`.filter-toggles`: 20px each, --action-gap apart,
-   4px off the edge), and 4px before the text. */
-.filter-row .filter-field input {
+/* The SEARCH and GRAPH sections' box, VS Code's: room for the three toggles standing inside the field
+   (`.filter-toggles`: 20px each, --action-gap apart, 4px off the edge), and 4px before the text. */
+.filter-field.with-toggles input {
   padding-right: calc(3 * 20px + 2 * var(--action-gap) + 8px);
 }
 
 /* Here the field lacks the 6px the branch tree's icon is placed against. */
-.filter-row .filter-icon,
 .remote-main .filter-icon {
   left: 7px;
 }
 
 /* `.icon-button` in every other respect, `active` included: only the box shrinks, since VS Code's
    input actions are 20px and three of the section's own would take a narrow section's whole row. */
-.filter-row .icon-button {
+.filter-toggles .icon-button {
   width: 20px;
   height: 20px;
 }
@@ -786,7 +778,8 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: var(--action-gap);
-  right: 4px;
+  /* 4px off the input's edge, inside the field's right padding. */
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
 }
@@ -1610,10 +1603,10 @@ textarea:focus,
 .editor-bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   flex: none;
   height: var(--bar-height);
-  padding: 0 12px 0 0;
+  padding: 0 2px 0 0;
   background: var(--tet-panel-background);
   border-bottom: 1px solid var(--tet-panel-border);
 }

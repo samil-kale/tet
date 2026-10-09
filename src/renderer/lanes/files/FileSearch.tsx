@@ -82,17 +82,15 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
 
   return (
     <div className="explorer-tree">
-      <div className="filter-row">
-        <FilterField placeholder="Search" value={search.text} onChange={(text) => setSearch({ ...search, text })}>
-          <span className="filter-toggles">
-            {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
-              <IconButton key={key} active={search[key]} title={title} onClick={() => setSearch({ ...search, [key]: !search[key] })}>
-                <Icon />
-              </IconButton>
-            ))}
-          </span>
-        </FilterField>
-      </div>
+      <FilterField placeholder="Search" value={search.text} onChange={(text) => setSearch({ ...search, text })}>
+        <span className="filter-toggles">
+          {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
+            <IconButton key={key} active={search[key]} title={title} onClick={() => setSearch({ ...search, [key]: !search[key] })}>
+              <Icon />
+            </IconButton>
+          ))}
+        </span>
+      </FilterField>
       <div className="tree">
         {files.map((file) => {
           const expanded = expandedFiles[file.path] ?? false;

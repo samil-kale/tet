@@ -219,17 +219,15 @@ export function CommitGraph({
 
   return (
     <div className="commit-graph">
-      <div className="filter-row">
-        <FilterField placeholder="Search commits..." value={search.text} onChange={(text) => onSearch({ ...search, text })}>
-          <span className="filter-toggles">
-            {SEARCH_FIELDS.map(({ field, title, Icon }) => (
-              <IconButton key={field} active={search.field === field} title={title} onClick={() => onSearch({ ...search, field })}>
-                <Icon />
-              </IconButton>
-            ))}
-          </span>
-        </FilterField>
-      </div>
+      <FilterField placeholder="Search commits..." value={search.text} onChange={(text) => onSearch({ ...search, text })}>
+        <span className="filter-toggles">
+          {SEARCH_FIELDS.map(({ field, title, Icon }) => (
+            <IconButton key={field} active={search.field === field} title={title} onClick={() => onSearch({ ...search, field })}>
+              <Icon />
+            </IconButton>
+          ))}
+        </span>
+      </FilterField>
       <div className="graph-tree tree" onScroll={scrolled}>
         {commits.map((commit, index) => {
           const row = rows?.[index];

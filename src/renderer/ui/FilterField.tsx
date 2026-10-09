@@ -12,7 +12,7 @@ interface FilterFieldProps {
 /** The box a section filters its rows with: a search icon, then the text the rows are matched against. */
 export function FilterField({ placeholder, value, onChange, children }: FilterFieldProps) {
   return (
-    <div className="filter-field">
+    <div className={children ? "filter-field with-toggles" : "filter-field"}>
       <SearchIcon className="filter-icon" />
       <input type="text" placeholder={placeholder} value={value} onChange={(event) => onChange(event.target.value)} />
       {children}
