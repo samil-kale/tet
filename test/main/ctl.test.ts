@@ -1106,8 +1106,11 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("waits until a tab has what was asked for", async () => {
-    setTimeout(() => (tab2Session = "s-2"), 300);
-    const run = await tetCtl(["tabs-wait", "tab-2", "--session", "--status", "running"]);
+    const waiting = tetCtl(["tabs-wait", "tab-2", "--session", "--status", "running"]);
+    // Bound only once the wait polls: earlier, the CLI's start could outlast it and nothing would wait.
+    await eventually("the wait polling", () => calls.inspected.length > 2, 5000);
+    tab2Session = "s-2";
+    const run = await waiting;
     assert.equal(run.status, EXIT_CODES.ok);
     assert.equal((run.result as TabDescriptor).sessionId, "s-2");
   });
@@ -1131,8 +1134,18 @@ describe("tet-ctl against the control server", () => {
     await eventually("the wait polling", () => calls.inspected.length > 2, 5000);
     // What Ctrl+C on the CLI leaves the server: a closed connection.
     req.destroy();
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const polled = calls.inspected.length;
+    // However long the server takes to see the close: settled once two looks, two polls apart,
+    // find no new one.
+    let polled = -1;
+    await eventually(
+      "the wait stopping",
+      () => {
+        const settled = calls.inspected.length === polled;
+        polled = calls.inspected.length;
+        return settled;
+      },
+      5000,
+    );
     await new Promise((resolve) => setTimeout(resolve, 500));
     assert.equal(calls.inspected.length, polled, "no polling for a caller that is gone");
   });
