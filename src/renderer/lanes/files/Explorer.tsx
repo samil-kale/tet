@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { refKeyOf } from "../../../shared/types/project";
-import type { ExplorerListing } from "../../../shared/types/files";
+import type { ExplorerListing, ExplorerRoot } from "../../../shared/types/files";
 import type { GitActionResult } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
 import type { ResolvedRef } from "../../resolved-ref";
@@ -379,7 +379,7 @@ export function useExplorerListing(
       if (!cancelled) {
         setHeld((previous) => ({
           refKey: resolved.refKey,
-          listing: keepRoots(previous?.refKey === resolved.refKey ? previous.listing : undefined, result),
+          listing: keepListing(previous?.refKey === resolved.refKey ? previous.listing : undefined, result),
         }));
         setListing(false);
       }
@@ -391,6 +391,31 @@ export function useExplorerListing(
   return { explorerListing: held?.refKey === resolved.refKey ? held.listing : undefined, listing, refreshExplorer };
 }
 
+/** The previous listing where nothing in it changed: most re-reads (window focus) find the same
+ *  tree, which would otherwise be built and drawn again row by row. */
+function keepListing(previous: ExplorerListing | undefined, next: ExplorerListing): ExplorerListing {
+  if (previous && sameListing(previous, next)) {
+    return previous;
+  }
+  return keepRoots(previous, next);
+}
+
+function sameListing(a: ExplorerListing, b: ExplorerListing): boolean {
+  const sameStrings = (x: string[], y: string[]): boolean => x.length === y.length && x.every((item, index) => item === y[index]);
+  const sameMtimes = (x: Record<string, number> | undefined, y: Record<string, number> | undefined): boolean =>
+    x === undefined || y === undefined
+      ? x === y
+      : Object.keys(x).length === Object.keys(y).length && Object.entries(x).every(([key, mtime]) => y[key] === mtime);
+  return (
+    a.compactFolders === b.compactFolders &&
+    a.sortOrder === b.sortOrder &&
+    sameStrings(a.files, b.files) &&
+    sameStrings(a.emptyDirs, b.emptyDirs) &&
+    (a.roots === undefined || b.roots === undefined ? a.roots === b.roots : sameRoots(a.roots, b.roots)) &&
+    sameMtimes(a.mtimes, b.mtimes)
+  );
+}
+
 /** The listing with the previous `roots` where unchanged: the reveal effect depends on it, and a
  *  new array per re-read would scroll back to the selection on every change of the tree. */
 function keepRoots(previous: ExplorerListing | undefined, next: ExplorerListing): ExplorerListing {
@@ -399,7 +424,11 @@ function keepRoots(previous: ExplorerListing | undefined, next: ExplorerListing)
   if (before === undefined || after === undefined) {
     return next;
   }
-  const same =
-    before.length === after.length && before.every((root, index) => root.name === after[index].name && root.path === after[index].path);
-  return same ? { ...next, roots: before } : next;
+  return sameRoots(before, after) ? { ...next, roots: before } : next;
+}
+
+function sameRoots(before: ExplorerRoot[], after: ExplorerRoot[]): boolean {
+  return (
+    before.length === after.length && before.every((root, index) => root.name === after[index].name && root.path === after[index].path)
+  );
 }

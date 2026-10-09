@@ -213,7 +213,29 @@ export async function readHostAllowed(host: string): Promise<boolean> {
  * Governance words a blocker and hides the dialog's Allowed hosts; what is allowed is asked of the
  * policy (readSbxBlockers).
  */
-async function probeSbx(refreshPath: boolean): Promise<{ status: SbxStatus; sandboxes?: SandboxList; policy?: SbxPolicy }> {
+async function probeSbx(refreshPath: boolean): Promise<SbxProbe> {
+  if (refreshPath) {
+    return readProbe(true);
+  }
+  probing ??= readProbe(false).finally(() => {
+    probing = undefined;
+  });
+  const { status, ...read } = await probing;
+  // Each caller's own status: readSbxReading sets the blockers of its repository on it.
+  return { ...read, status: { ...status, blockers: [...status.blockers] } };
+}
+
+interface SbxProbe {
+  status: SbxStatus;
+  sandboxes?: SandboxList;
+  policy?: SbxPolicy;
+}
+
+/** The probe underway without a PATH re-read, joined by every caller meanwhile: a project's
+ *  sandboxed tabs start together. Let go of once answered, so nothing is cached. */
+let probing: Promise<SbxProbe> | undefined;
+
+async function readProbe(refreshPath: boolean): Promise<SbxProbe> {
   const status: SbxStatus = { installed: false, signedIn: false, policyInitialized: false, blockers: [] };
   if (refreshPath) {
     await augmentAgentPath();
