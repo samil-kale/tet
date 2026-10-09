@@ -23,7 +23,11 @@
     "paths": [],
     "hosts": [],
     "secrets": [],
-    "variables": [],
+    "variables": [
+      {
+        "env": "CLAUDE_CODE_SCROLL_SPEED"
+      }
+    ],
     "setup": []
   }
 }
