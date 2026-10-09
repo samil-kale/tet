@@ -100,7 +100,9 @@ export interface Run {
  */
 export function tetCtl(args: string[], env: Record<string, string | undefined>, input = ""): Promise<Run> {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, ...env } });
+    // Never the host a sandboxed shell dials (TET_CONTROL_HOST): the CLI would reach the TET it
+    // runs in, not the test's. A test asking for one passes it.
+    const child = spawn(process.execPath, [CLI, ...args], { env: { ...process.env, [CONTROL_ENV.host]: undefined, ...env } });
     // Always closed: a hook reads its payload here, and would wait forever on an open stdin.
     child.stdin.end(input);
     let stdout = "";
@@ -164,6 +166,7 @@ export async function startApp(userData: string, token: string, startupMs: numbe
     [CONTROL_ENV.projectId]: undefined,
     [CONTROL_ENV.worktree]: undefined,
     [CONTROL_ENV.tabId]: undefined,
+    [CONTROL_ENV.host]: undefined,
   };
   const args = [ROOT, `--user-data-dir=${userData}`, "--allow-shell-only"];
   if (PLATFORM.startsWithoutChromeSandbox) {

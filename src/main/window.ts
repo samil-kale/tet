@@ -47,6 +47,8 @@ export class AppWindow {
   /** TET's own page, filling the window. */
   private page: WebContentsView | undefined;
   private rendererRebuiltAt = 0;
+  /** A rebuild held back by RENDERER_REBUILD_GAP_MS, run once the gap has passed. */
+  private rendererRebuildTimer: NodeJS.Timeout | undefined;
   /**
    * Notices sent before the window listens are held: `App` subscribes only after the requirements
    * check, and a fast sender (the update's "Updated to") would otherwise be lost. The renderer
@@ -303,6 +305,8 @@ export class AppWindow {
         this.window = undefined;
         this.page = undefined;
       }
+      clearTimeout(this.rendererRebuildTimer);
+      this.rendererRebuildTimer = undefined;
       // A view's page outlives its window unless closed.
       page.webContents.close();
       this.deps.onClosed();
@@ -316,20 +320,29 @@ export class AppWindow {
       logError(`renderer gone (${details.reason}); rebuilding the window`);
       // Every pty lives in this process and keeps running, so reloading brings the sessions back;
       // only the renderer-held scrollback is lost. Rate-limited, or a renderer failing on load
-      // would reload forever.
-      const now = Date.now();
-      if (now - this.rendererRebuiltAt < RENDERER_REBUILD_GAP_MS) {
-        return;
+      // would reload forever — but held back, not dropped: a dead page has no way to reload itself,
+      // and closing the window would end every session.
+      const rebuild = (): void => {
+        this.rendererRebuildTimer = undefined;
+        if (window.isDestroyed()) {
+          return;
+        }
+        this.rendererRebuiltAt = Date.now();
+        // Only once the new renderer has loaded; earlier sends reach the dead process.
+        page.webContents.once("did-finish-load", () =>
+          this.notice(
+            "warning",
+            "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.",
+          ),
+        );
+        page.webContents.reload();
+      };
+      const wait = this.rendererRebuiltAt + RENDERER_REBUILD_GAP_MS - Date.now();
+      if (wait <= 0) {
+        rebuild();
+      } else {
+        this.rendererRebuildTimer ??= setTimeout(rebuild, wait);
       }
-      this.rendererRebuiltAt = now;
-      // Only once the new renderer has loaded; earlier sends reach the dead process.
-      page.webContents.once("did-finish-load", () =>
-        this.notice(
-          "warning",
-          "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.",
-        ),
-      );
-      page.webContents.reload();
     });
 
     // No application menu (the title bar is our own), so wire the devtools shortcuts by hand.

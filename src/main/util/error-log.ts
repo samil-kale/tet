@@ -29,10 +29,15 @@ function rotateFull(file: string): void {
   }
   try {
     fs.renameSync(file, `${file}.1`);
-    logBytes = 0;
   } catch {
-    // Not rotatable.
+    // `.1` locked or a folder: emptied instead, or every entry would try again and the log grow on.
+    try {
+      fs.truncateSync(file);
+    } catch {
+      return;
+    }
   }
+  logBytes = 0;
 }
 
 /** Logs a failure that would go unseen — a caught exception with its stack, or none (e.g. a refused

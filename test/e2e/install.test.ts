@@ -113,6 +113,7 @@ async function ask(args: string[]): Promise<unknown> {
     [CONTROL_ENV.port]: String(port),
     [CONTROL_ENV.token]: TOKEN,
     [CONTROL_ENV.projectId]: undefined,
+    [CONTROL_ENV.worktree]: undefined,
     [CONTROL_ENV.tabId]: undefined,
   });
   return answer.status === 0 ? answer.result : undefined;

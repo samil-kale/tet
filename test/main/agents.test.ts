@@ -55,6 +55,9 @@ async function controlChannel(): Promise<{ reports: ControlRequest[]; close: () 
   process.env[CONTROL_ENV.token] = "test-token";
   process.env[CONTROL_ENV.projectId] = "p1";
   process.env[CONTROL_ENV.tabId] = "tab-1";
+  // Not a worktree's tab, nor a sandbox's, whatever tab the tests run in.
+  delete process.env[CONTROL_ENV.worktree];
+  delete process.env[CONTROL_ENV.host];
   return {
     reports,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
@@ -327,6 +330,11 @@ describe("a background agent question", () => {
       "process.stdin.on('end', () => process.stdout.write('  ' + input.toUpperCase() + '  '));",
     ].join(" ");
     assert.equal(await askAgent(os.tmpdir(), process.execPath, ["-e", script], "first\nsecond"), "FIRST\nSECOND");
+  });
+
+  it("refuses what a failing CLI printed, as a usage limit says it on stdout", async () => {
+    const script = 'process.stdout.write("You\'ve hit your limit"); process.exitCode = 1;';
+    await assert.rejects(askAgent(os.tmpdir(), process.execPath, ["-e", script], "question"), /You've hit your limit/);
   });
 });
 

@@ -44,6 +44,7 @@ import { MAX_EDIT_BYTES } from "./explorer-read";
 import { git } from "./git-client";
 import type { GitLoginStore } from "./git-logins";
 import { readLinkedGitDir } from "../util/linked-git-dir";
+import { openInside } from "../util/path-inside";
 import { watchedDirectoryGone } from "../util/watch-dir";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
@@ -838,7 +839,15 @@ export class Repository {
       if (stat.size > MAX_EDIT_BYTES) {
         return { ...base, mtimeMs: stat.mtimeMs, tooLarge: true };
       }
-      const buffer = await fs.promises.readFile(absolute);
+      // Only a file inside, links resolved: a sandboxed agent writes into this folder, and a link it
+      // leaves would show, and save into, any file of this machine.
+      const handle = await openInside(this.at.path, absolute, "r");
+      let buffer: Buffer;
+      try {
+        buffer = await handle.readFile();
+      } finally {
+        await handle.close();
+      }
       const extracted = odfText(filePath, buffer, MAX_EDIT_BYTES);
       const binary = extracted === undefined && buffer.includes(0);
       const image = isImage(filePath) ? toDataUrl(filePath, buffer) : undefined;
@@ -914,13 +923,20 @@ export class Repository {
       return OUTSIDE_REPOSITORY;
     }
     try {
-      const before = await fs.promises.stat(absolute);
-      if (before.mtimeMs !== expectedMtimeMs) {
-        return { ok: false, error: "The file changed on disk since it was opened", diskMtimeMs: before.mtimeMs };
+      // Inside only, as readFile reads.
+      const handle = await openInside(this.at.path, absolute, "r+");
+      try {
+        const before = await handle.stat();
+        if (before.mtimeMs !== expectedMtimeMs) {
+          return { ok: false, error: "The file changed on disk since it was opened", diskMtimeMs: before.mtimeMs };
+        }
+        await handle.truncate(0);
+        await handle.writeFile(content, "utf8");
+        const after = await handle.stat();
+        return { ok: true, mtimeMs: after.mtimeMs };
+      } finally {
+        await handle.close();
       }
-      await fs.promises.writeFile(absolute, content, "utf8");
-      const after = await fs.promises.stat(absolute);
-      return { ok: true, mtimeMs: after.mtimeMs };
     } catch (error) {
       return { ok: false, error: errorMessage(error) };
     }

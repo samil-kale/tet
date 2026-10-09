@@ -389,6 +389,30 @@ describe("where a worktree starts without a remote HEAD", () => {
   });
 });
 
+describe("an editor tab's file", () => {
+  it("reads and saves a file inside, and neither through a link out of the repository", async () => {
+    const dir = initRepository("tet-repository-editor-");
+    const outside = tempDir("tet-repository-outside-");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "host\n");
+    // A junction on win32, where a file symlink needs developer mode; ignored elsewhere.
+    fs.symlinkSync(outside, path.join(dir, "leak"), "junction");
+    const repository = await open(dir);
+
+    const inside = await repository.readFile("a.txt");
+    assert.equal(inside.content, "committed\n");
+    assert.equal((await repository.writeFile("a.txt", "saved\n", inside.mtimeMs)).ok, true);
+    assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "saved\n");
+
+    const leaked = await repository.readFile("leak/secret.txt");
+    assert.match(leaked.error ?? "", /leads outside/);
+    assert.equal(leaked.content, "");
+    const mtimeMs = fs.statSync(path.join(outside, "secret.txt")).mtimeMs;
+    const written = await repository.writeFile("leak/secret.txt", "overwritten\n", mtimeMs);
+    assert.equal(written.ok, false);
+    assert.equal(fs.readFileSync(path.join(outside, "secret.txt"), "utf8"), "host\n");
+  });
+});
+
 describe("the Explorer's search, VS Code's search in files", () => {
   let dir: string;
   let repository: Repository;

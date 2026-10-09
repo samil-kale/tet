@@ -37,10 +37,57 @@ const WINDOWS_EXECUTABLE_EXTENSIONS = [
   ".jar",
   ".appref-ms",
   ".url",
+  ".application",
+  ".xbap",
+  ".chm",
+  ".hlp",
+  ".msc",
+  ".inf",
+  ".ins",
+  ".isp",
+  ".scf",
+  ".vb",
+  ".ws",
+  ".ps1xml",
+  ".ps2",
+  ".ps2xml",
+  ".psc1",
+  ".psc2",
+  ".msh",
+  ".msh1",
+  ".msh2",
+  ".mshxml",
+  ".msh1xml",
+  ".msh2xml",
+  ".gadget",
+  ".diagcab",
+  ".xll",
+  ".website",
+  ".library-ms",
+  ".search-ms",
+  ".settingcontent-ms",
+  ".appx",
+  ".appxbundle",
+  ".msix",
+  ".msixbundle",
 ];
 
-/** Run by Finder or a Linux desktop, beside anything with an executable bit. */
-const UNIX_EXECUTABLE_EXTENSIONS = [".sh", ".command", ".tool", ".app", ".desktop"];
+/** Run by Finder or a Linux desktop, beside anything with an executable bit: a `.terminal` carries a
+ *  command, a `.fileloc` or `.inetloc` starts what it points at. */
+const UNIX_EXECUTABLE_EXTENSIONS = [
+  ".sh",
+  ".command",
+  ".tool",
+  ".app",
+  ".desktop",
+  ".terminal",
+  ".workflow",
+  ".action",
+  ".fileloc",
+  ".inetloc",
+  ".pkg",
+  ".mpkg",
+];
 
 export function isOpenableUrl(url: string): boolean {
   try {

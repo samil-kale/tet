@@ -18,11 +18,12 @@ export async function askAgent(
 ): Promise<string> {
   const result = await runProcess(executable, args, { cwd: root, stdin: question, timeoutMs: ASK_TIMEOUT_MS, onSpawn });
   const reply = result.stdout.trim();
-  // A CLI can print a usable answer and still exit non-zero; reject only an empty failure.
-  if (result.code !== 0 && reply.length === 0) {
+  // The exit code, not the text: a CLI refusing (a usage limit) or cut off says so on stdout too,
+  // and that is no answer.
+  if (result.code !== 0) {
     const reason = result.timedOut
       ? "The agent did not answer in time"
-      : result.stderr.trim() || (result.error?.message ?? `${executable} exited with code ${result.code}`);
+      : result.stderr.trim() || reply || (result.error?.message ?? `${executable} exited with code ${result.code}`);
     throw new Error(reason.slice(0, MAX_ERROR));
   }
   return reply;

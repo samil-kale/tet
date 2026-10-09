@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "../shared/errors";
 import type { Requirements } from "../shared/types/agents";
 import type { LaneSettings } from "../shared/types/settings";
 import { App } from "./App";
@@ -12,10 +13,23 @@ import { useBusy } from "./ui/use-busy";
  */
 export function Startup() {
   const [requirements, setRequirements] = useState<Requirements | null>(null);
+  /** Why the last check failed (opening the stored projects threw): "Check again" runs it anew. */
+  const [failure, setFailure] = useState<string | undefined>();
   const [lanes, setLanes] = useState<LaneSettings | null>(null);
   const { busy, run } = useBusy(true);
 
-  const check = useCallback(() => run(async () => setRequirements(await window.tet.startup.check())), [run]);
+  const check = useCallback(
+    () =>
+      run(async () => {
+        try {
+          setRequirements(await window.tet.startup.check());
+          setFailure(undefined);
+        } catch (error) {
+          setFailure(errorMessage(error));
+        }
+      }),
+    [run],
+  );
 
   useEffect(() => {
     void check();
@@ -24,6 +38,13 @@ export function Startup() {
     void window.tet.settings.get().then((settings) => setLanes(settings.appearance.lanes));
   }, []);
 
+  if (lanes && failure !== undefined) {
+    return (
+      <div className="app">
+        <RequirementsDialog failure={failure} busy={busy} onRecheck={() => void check()} />
+      </div>
+    );
+  }
   // The window's background while the version checks run.
   if (!requirements || !lanes) {
     return null;
