@@ -30,18 +30,6 @@ export function layoutFlag(key: string): { get(): boolean; set(value: boolean): 
   };
 }
 
-/** `layoutFlag` for one of `choices`; anything stored outside them is `initial`. */
-export function layoutChoice<T extends string>(key: string, choices: readonly T[], initial: T): { get(): T; set(value: T): void } {
-  let value = storedChoice(key, choices, initial);
-  return {
-    get: () => value,
-    set: (next) => {
-      value = next;
-      localStorage.setItem(layoutKey(key), next);
-    },
-  };
-}
-
 /** How long after the last resize a stored size is written to storage. */
 const PERSIST_MS = 300;
 

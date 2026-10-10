@@ -2,14 +2,13 @@ import { useCallback, useEffect, useState, type RefObject } from "react";
 import { refKeyOf, projectRefsOf } from "../shared/types/project";
 import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
-import type { BrowserTabInfo } from "../shared/types/browser";
 import type { TabDescriptor } from "../shared/types/terminals";
 import { forget, stableItems } from "./identity";
 import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
 import { useLatest } from "./ui/use-latest";
 
 /**
- * Every repository's and worktree's git state, tabs, browser tabs and whether something starts there, by
+ * Every repository's and worktree's git state, tabs and whether something starts there, by
  * `refKey`: loaded once with the stored projects (`onProjects`), then kept by main's pushes.
  * `projectsRef` is the list after an await: the control channel can add a project meanwhile.
  */
@@ -28,8 +27,6 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
    * the progress bar and the layout persistence.
    */
   const [starting, setStarting] = useState<Record<string, boolean>>({});
-  /** The browser tabs, whose pages main holds (browser/browser-tabs.ts); none is no entry. */
-  const [browserTabs, setBrowserTabs] = useState<Record<string, BrowserTabInfo[]>>({});
 
   useEffect(() => {
     const unsubscribers = [
@@ -52,12 +49,6 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
           return list ? { ...current, [refKey]: list.map((tab) => (tab.tabId === tabId ? { ...tab, status } : tab)) } : current;
         });
       }),
-      window.tet.browser.onTabs(({ ref, tabs: list }) => {
-        const refKey = refKeyOf(ref);
-        setBrowserTabs((current) =>
-          list.length > 0 ? { ...current, [refKey]: stableItems(current[refKey], list, (tab) => tab.tabId) } : forget(current, refKey),
-        );
-      }),
       window.tet.tabs.onStartupProgress(({ ref, show }) => {
         const refKey = refKeyOf(ref);
         setStarting((current) => (current[refKey] === show ? current : { ...current, [refKey]: show }));
@@ -69,14 +60,12 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
       onProjects(stored);
       const fetched = await Promise.all(
         stored.flatMap(projectRefsOf).map(async (ref) => {
-          const [state, list, isStarting, browsers] = await Promise.all([
+          const [state, list, isStarting] = await Promise.all([
             window.tet.repository.state(ref),
             window.tet.tabs.list(ref),
             window.tet.tabs.starting(ref),
-            // Only a window loaded again finds any: they outlive it in main, never a restart.
-            window.tet.browser.list(ref),
           ]);
-          return [refKeyOf(ref), state, list, isStarting, browsers] as const;
+          return [refKeyOf(ref), state, list, isStarting] as const;
         }),
       );
       // A repository or worktree closed meanwhile was forgotten already: merging its entries would
@@ -93,10 +82,6 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         ...Object.fromEntries(loaded.map(([id, , , isStarting]) => [id, isStarting])),
         ...current,
       }));
-      setBrowserTabs((current) => ({
-        ...Object.fromEntries(loaded.filter(([, , , , browsers]) => browsers.length > 0).map(([id, , , , browsers]) => [id, browsers])),
-        ...current,
-      }));
     })();
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -107,8 +92,7 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
     setStates((current) => forget(current, refKey));
     setTabs((current) => forget(current, refKey));
     setStarting((current) => forget(current, refKey));
-    setBrowserTabs((current) => forget(current, refKey));
   }, []);
 
-  return { states, tabs, starting, browserTabs, forgetRef };
+  return { states, tabs, starting, forgetRef };
 }

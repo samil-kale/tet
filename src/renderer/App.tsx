@@ -70,32 +70,23 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   }, []);
   /** Each repository's or worktree's git state, tabs and starting flag (use-ref-feeds.ts);
    *  everything below is by `refKey` too, but `sandboxed`. */
-  const { states, tabs, starting, browserTabs, forgetRef: forgetFeeds } = useRefFeeds(projectsRef, loadedProjects);
+  const { states, tabs, starting, forgetRef: forgetFeeds } = useRefFeeds(projectsRef, loadedProjects);
   /**
    * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
    * tabs keep their instance across updates: `stripTabs` compares items.
    */
   const [editorTabs, setEditorTabs] = useState<Record<string, EditorTab[]>>({});
   const editorTabsRef = useLatest(editorTabs);
-  /**
-   * Each repository's or worktree's tab strip: its terminals, its browser tabs, then its editor
-   * tabs. The layout reconciles against it, panes draw it, next/previous step through it; marks and
-   * `seen` stay on `tabs` (neither has turns). Identity: `tabs`' own list with neither open, else the
-   * previous list while unchanged.
-   */
+  /** The tab strip lists terminals and editors; unchanged items retain their identity for panes. */
   const stripTabsRef = useRef<Record<string, PaneTab[]>>({});
   const stripTabs = useMemo(() => {
     const next: Record<string, PaneTab[]> = { ...tabs };
-    for (const refKey of new Set([...Object.keys(browserTabs), ...Object.keys(editorTabs)])) {
-      next[refKey] = sameList(
-        stripTabsRef.current[refKey],
-        [...(tabs[refKey] ?? []), ...(browserTabs[refKey] ?? []), ...(editorTabs[refKey] ?? [])],
-        NO_TABS,
-      );
+    for (const [refKey, editors] of Object.entries(editorTabs)) {
+      next[refKey] = sameList(stripTabsRef.current[refKey], [...(tabs[refKey] ?? []), ...editors], NO_TABS);
     }
     stripTabsRef.current = next;
     return next;
-  }, [tabs, browserTabs, editorTabs]);
+  }, [tabs, editorTabs]);
   /**
    * Split state lives here, not in `TabArea`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change

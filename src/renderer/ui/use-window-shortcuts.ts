@@ -4,9 +4,8 @@ import { useLatest } from "./use-latest";
 
 /**
  * The window's shortcuts, on `document` in the capture phase to beat xterm's textarea listener.
- * xterm never encodes any of them — see `shortcuts.ts`. A browser tab's page takes its keys before
- * the window sees them, so main matches them there and hands them on (`browser.onShortcut`). The
- * actions are read on the key, so the listener is registered once however often they are remade.
+ * xterm never encodes any of them; the actions are read on the key, so the listener is registered
+ * once however often they are remade.
  */
 export function useWindowShortcuts(actions: Record<ShortcutId, () => void>): void {
   const latest = useLatest(actions);
@@ -20,10 +19,6 @@ export function useWindowShortcuts(actions: Record<ShortcutId, () => void>): voi
       }
     };
     document.addEventListener("keydown", onKeyDown, true);
-    const offPage = window.tet.browser.onShortcut((shortcut) => latest.current[shortcut]());
-    return () => {
-      document.removeEventListener("keydown", onKeyDown, true);
-      offPage();
-    };
+    return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [latest]);
 }

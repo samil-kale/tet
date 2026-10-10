@@ -6,7 +6,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
 import { resolveProjectRef } from "../../src/main/store/resolved-ref";
-import type { BrowserTabs } from "../../src/main/browser/browser-tabs";
 import type { ControlRecords } from "../../src/main/ctl/ctl-records";
 import { GitLoginStore } from "../../src/main/git/git-logins";
 import { RepositoryManager } from "../../src/main/git/repository";
@@ -92,7 +91,6 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
       close: async (ref: ProjectRef) => onClose(ref),
       open: () => undefined,
     } as unknown as SessionManagerRegistry,
-    browserTabs: { closeAll: () => undefined, clearProfile: async () => undefined } as unknown as BrowserTabs,
     records: { forget: () => undefined } as unknown as ControlRecords,
     sbxLocal: new SbxLocalStore(dataRoot),
     openProjectRef: (ref) => void repositories.open(resolveProjectRef(dataRoot, store, ref)),

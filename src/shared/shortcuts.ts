@@ -2,8 +2,7 @@ import { isModifierHeld, type Platform } from "./platform";
 
 /**
  * The window's shortcuts, all on combinations xterm never turns into bytes. See "The keyboard
- * belongs to the terminal" in AGENTS.md. Here for both processes: the window matches them on its
- * own keys, main on a browser tab's page (browser/browser-tabs.ts), whose keys the window never sees.
+ * belongs to the terminal" in AGENTS.md.
  *
  * For the next shortcut: `Ctrl+<letter>` is a control byte, `Ctrl+Shift+<letter>` sends nothing.
  * `Alt+1…9` is taken (readline's digit argument). `Ctrl+Tab`/`Ctrl+Shift+Tab` equal Tab/Shift+Tab —

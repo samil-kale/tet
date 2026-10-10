@@ -15,12 +15,11 @@ import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
 import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
-import { BrowserHost } from "./BrowserHost";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
 import { useDragReorder } from "../ui/drag-reorder";
-import { BrowserIcon, CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
+import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -141,7 +140,7 @@ interface TabFace {
   label: React.ReactNode;
   tooltip: string;
   icon: React.ReactNode;
-  /** Runs in, or loads through, an sbx sandbox: the shield badge. */
+  /** Runs in an sbx sandbox: the shield badge. */
   sandboxed: boolean;
   /** A stopped terminal, drawn dimmed. */
   inactive: boolean;
@@ -183,6 +182,7 @@ export const Pane = memo(function Pane({
   const closeTabMenu = tabMenu.close;
   const strip = useRef<HTMLDivElement>(null);
   const tabElements = useRef(new Map<string, HTMLDivElement>());
+  const focusHere = useCallback(() => onFocus(paneId), [onFocus, paneId]);
 
   // The wheel scrolls the strip horizontally. By hand: preventDefault needs a non-passive listener.
   useEffect(() => {
@@ -211,13 +211,6 @@ export const Pane = memo(function Pane({
   }, [activeTabId]);
 
   const editorBusy = useEditorBusy(at, tabs);
-  /** A browser tab's page takes its clicks before this pane's mousedown sees them. */
-  const focusHere = useCallback(() => onFocus(paneId), [onFocus, paneId]);
-  const browserBusy = tabs.some((tab) => {
-    const kinded = kindOf(tab);
-    return kinded.kind === "browser" && kinded.tab.loading;
-  });
-
   const createTab = useCallback(
     async (agentId: AgentId) => {
       const descriptor = await window.tet.tabs.create(at, agentId);
@@ -226,23 +219,13 @@ export const Pane = memo(function Pane({
     [at, paneId, onActivate],
   );
 
-  /** A blank page, its address bar focused to type into (BrowserHost); or a page's link. */
-  const createBrowserTab = useCallback(
-    async (url = "about:blank") => {
-      const tab = await window.tet.browser.create(at, url);
-      onActivate(tab.tabId, paneId);
-    },
-    [at, paneId, onActivate],
-  );
-  const openBrowserTab = useCallback((url: string) => void createBrowserTab(url), [createBrowserTab]);
-
   /**
-   * Editor tabs close in the renderer, the rest in main. Their unsaved-edit question may keep them
-   * open while the same "Close All"'s terminals and browser tabs go.
+   * Editor tabs close in the renderer, terminals in main. Their unsaved-edit question may keep them
+   * open while the same "Close All"'s terminals go.
    */
   const closeTabs = useCallback(
     (tabIds: string[]) => {
-      const byKind: Record<PaneTabKind, string[]> = { terminal: [], browser: [], editor: [] };
+      const byKind: Record<PaneTabKind, string[]> = { terminal: [], editor: [] };
       for (const tabId of tabIds) {
         byKind[paneTabKind(tabId)].push(tabId);
       }
@@ -251,9 +234,6 @@ export const Pane = memo(function Pane({
       }
       if (byKind.terminal.length > 0) {
         void window.tet.tabs.close(at, byKind.terminal);
-      }
-      for (const tabId of byKind.browser) {
-        void window.tet.browser.close(at, tabId);
       }
     },
     [at, onCloseEditors],
@@ -316,18 +296,6 @@ export const Pane = memo(function Pane({
           closeTitle: "Close file",
         };
       }
-      case "browser": {
-        const { title, url, sandboxed } = kinded.tab;
-        const lines = title ? [title, url] : [url];
-        return {
-          label: <span className="tab-label">{title || (url === "about:blank" ? "New tab" : url)}</span>,
-          tooltip: [...lines, ...(sandboxed ? ["Loads through its agent's SBX sandbox"] : [])].join("\n"),
-          icon: <BrowserIcon className="tab-icon" />,
-          sandboxed: sandboxed === true,
-          inactive: false,
-          closeTitle: "Close tab",
-        };
-      }
       case "terminal": {
         const terminal = kinded.tab;
         const name = agentName(agents, terminal.agentId);
@@ -376,7 +344,7 @@ export const Pane = memo(function Pane({
   /**
    * Restart, Clear for the shell, the close actions, rename and hand-over for an agent with sessions, and the moves
    * to sibling panes. A close with nothing to close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
-   * moves; a browser tab the close actions and the moves.
+   * moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
@@ -464,11 +432,7 @@ export const Pane = memo(function Pane({
   };
 
   // Built only while the menu is open: a pane re-renders on every tab push, and icons are elements.
-  const newTabEntries = (): ContextMenuEntry[] => [
-    ...agents.map((agent) => agentEntry(agent, () => void createTab(agent.id))),
-    SEPARATOR,
-    { label: "browser", icon: <BrowserIcon className="tab-icon" />, run: () => void createBrowserTab() },
-  ];
+  const newTabEntries = (): ContextMenuEntry[] => agents.map((agent) => agentEntry(agent, () => void createTab(agent.id)));
 
   return (
     <div
@@ -568,9 +532,9 @@ export const Pane = memo(function Pane({
             );
           })}
         </div>
-        {/* This pane's one progress bar: a tab starting, an editor tab busy, a page loading, or in
+        {/* This pane's one progress bar: a tab starting, an editor tab busy, or in
             pane "a" the bootstrap session listing. */}
-        {(busy || editorBusy || browserBusy) && <ProgressBar />}
+        {(busy || editorBusy) && <ProgressBar />}
         <div className="new-tab">
           <button className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
             <PlusIcon />
@@ -585,19 +549,6 @@ export const Pane = memo(function Pane({
           switch (kinded.kind) {
             case "editor":
               return <EditorHost key={tab.tabId} tabId={tab.tabId} active={active} visible={visible} focused={focused} />;
-            case "browser":
-              return (
-                <BrowserHost
-                  key={tab.tabId}
-                  at={at}
-                  tab={kinded.tab}
-                  active={active}
-                  visible={visible}
-                  focused={focused}
-                  onFocused={focusHere}
-                  onOpenTab={openBrowserTab}
-                />
-              );
             case "terminal":
               return (
                 <TerminalHost

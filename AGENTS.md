@@ -42,10 +42,7 @@ project's tabs.
      (`sbx-local.ts`, `providers/accounts.ts`).
   2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
      everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
-     the install check, asking), `sbx/` (the `sbx` CLI, and the relay a sandbox's browser tabs dial
-     through), `providers/`, `update/` (the auto-update), `browser/` (the browser tabs' pages, the
-     CDP proxy onto each, Playwright driving them in a `utilityProcess` of its own, and the proxy a
-     sandbox's tabs load through).
+     the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
   3. `terminals/`: pty, sessions, where a tab runs and the side it runs on (`TabSide`), its
      control token.
   4. `ctl/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
@@ -68,7 +65,7 @@ project's tabs.
      tree it lists, icons.
   2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
   3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
-     editor and browser tabs beside them (`pane-tab.ts` tells the three apart).
+     editor tabs beside them (`pane-tab.ts` tells terminals and editors apart).
   4. `git/`: running a git action from the views above it (`run-action.ts`), and the questions and
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
@@ -114,10 +111,7 @@ project's tabs.
 Everything TET keeps lives here (`data-root.ts`, `project-dirs.ts`). The layout is fixed: every
 change, and every agent added, fits it. The one file TET writes elsewhere is sbx's first-run
 marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of a tab. Chromium's
-own profile stays in Electron's `userData` (`data-root.ts`), the browser tabs' with it: a
-worktree's tabs share a partition of their own, cleared when the worktree goes and its folder
-deleted at the next start; the repository's share the global one; a sandbox's, one of its own,
-deleted at the next start once its agent folder is gone.
+own profile stays in Electron's `userData` (`data-root.ts`).
 
 ```
 ~/.tet/
@@ -129,12 +123,10 @@ deleted at the next start once its agent folder is gone.
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
     drops/                         pasted or dropped content without a path, for host tabs
-    downloads/                     what the host's browser tabs' pages downloaded
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
       handovers/                   another agent's session a tab here takes over, copied
       drops/                       pasted or dropped content without a path, for its tabs
-      downloads/                   what its browser tabs' pages downloaded, handed over once complete
     sandboxes/<key>/<agent>/       a worktree's
     worktrees/<key>/               a worktree TET made
 ```
@@ -288,17 +280,9 @@ or a per-line decision is for an agent.
   lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
   by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
   the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
-  layout storage. The tab strip is the agent, shell, browser and editor
+  layout storage. The tab strip is the agent, shell and editor
   tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
   (`editor-tab.ts`).
-- **A browser tab's page is main's view, drawn above TET's own page** (`browser-tabs.ts`), which
-  is itself a transparent view filling the window (`window.ts`): the tab's box only says where
-  (`BrowserHost`). Under a dialog, and wherever something floats over a page — a menu, the notices,
-  a tab or a sash dragged — the page is hidden and a still of it shown in its box, taken anew every
-  second, as VS Code's browser does: what floats says so (`useFloatsOver`, `window-covered.ts`), or
-  the page hides it; its right-click menu is the window's, floating as any. A page takes its own
-  keys and clicks; the window's shortcuts it left alone come from its preload
-  (`page-preload.ts`), its focus from `webContents`' own, which main hands on. Never persisted.
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`), LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
   EXPLORER `Explorer`; each title heads a `Section`, drawn by `ProjectList` and `CommandList`
@@ -316,9 +300,8 @@ or a per-line decision is for an agent.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
-  unasked. Card dialogs are drawn in `DialogFrame`. The two exceptions: an agent's
-  `env-request`, answered in `EnvDialog`, one at a time (`env-requests.ts`), and a browser tab's
-  page asking for an HTTP login, asked by its tab (`BrowserHost`).
+  unasked. Card dialogs are drawn in `DialogFrame`. The exception: an agent's
+  `env-request`, answered in `EnvDialog`, one at a time (`env-requests.ts`).
 - **`DialogFrame` draws every dialog's button row**: Cancel with × and Escape (`onCancel`; a wall
   has none), the `actions`, and the `primary` button, which Enter runs from anywhere in the dialog
   unless it cannot go. One that cannot says why as its tooltip (`blocked`), unless an empty field
@@ -424,12 +407,6 @@ and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`Contr
 
 - `app-restart` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
   user, never acted on.
-- **The browser verbs** (`ctl-browser-verbs.ts`) drive a browser tab's page through Playwright
-  (`browser-automation.ts`), connected over the CDP proxy (`cdp-proxy.ts`) that makes that one page
-  a whole browser to it: the agent sees neither the window nor another tab. A page's content is
-  someone else's, said in every answer carrying it. **A tab opened from a sandbox is that
-  sandbox's** (`BrowserSandbox`, `CallerSide.browsesInSandbox`): it loads through it, and the
-  sandbox's verbs see its own tabs alone, a host tab's verbs none of them (`BrowserScope`).
 - Agents learn of `tet-ctl` once per session: `systemPrompt`
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
   `SessionStart` hook's added context), never replacing the user's instructions.
@@ -488,13 +465,6 @@ the `sbx` CLI.
   knowledge) and a path the user drops (data model) are theirs, not TET's; so is a worktree
   `worktree-agent-merge` hands over, taken as a drop.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
-- **A sandbox's browser tabs load through it, never from this machine**: their profile's proxy
-  (`sandbox-proxy.ts`, on the loopback) dials every connection inside the sandbox over a relay
-  piped into its own filesystem and run by `sbx exec -i` (`sbx-relay.ts`, `src/cli/browser-relay.ts`)
-  — localhost is the sandbox's,
-  anything else goes through its proxy and its policy, whose certificate the profile alone trusts
-  (`issuedBy`). A sandbox it cannot reach loads nothing; WebRTC's UDP, which takes no proxy, is
-  off.
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
   evaluates) and against this machine (a path exists, a port is free, a value is stored). A row

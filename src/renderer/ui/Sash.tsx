@@ -1,5 +1,4 @@
 import { useRef, useState, type PointerEvent } from "react";
-import { useFloatsOver } from "./window-covered";
 
 /**
  * The floor every lane and section shares, one per direction: a section header (35px) plus three 28px rows
@@ -34,10 +33,6 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize }: Sa
   const vertical = orientation === "vertical";
   const drag = useRef<{ origin: number; size: number; total: number } | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
-  /** Dragged, it floats over a browser tab's page beside it, which follows its box a frame or more
-   *  late and would cover the line meanwhile: the page gives way, the line drawn over it. */
-  const element = useRef<HTMLDivElement>(null);
-  useFloatsOver(element, dragging);
   /** The size the next frame reports, and that frame's handle while scheduled. */
   const pending = useRef<number | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
@@ -94,7 +89,6 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize }: Sa
 
   return (
     <div
-      ref={element}
       className={`sash ${orientation}${dragging ? " dragging" : ""}`}
       onPointerDown={begin}
       onPointerMove={move}

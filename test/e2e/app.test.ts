@@ -1,8 +1,6 @@
 import * as assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
-import * as http from "node:http";
-import type { AddressInfo } from "node:net";
 import * as path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { PLATFORM } from "../../src/main/util/host-platform";
@@ -125,44 +123,6 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     }
   });
 
-  // The whole way of a browser verb: the tab's page in main, the CDP proxy, Playwright in its own
-  // process. Asked as a tab of the project, as an agent asks: the verbs answer only there.
-  it("opens a page in a browser tab and acts on it through Playwright", async () => {
-    const [project] = await projects();
-    const shell = (await ctl("tabs-create", "--agent", "shell", "--project", project.id)).result as TabDescriptor;
-    const server = http.createServer((_request, response) => {
-      response.setHeader("Content-Type", "text/html");
-      response.end(
-        "<title>Probe</title><label>Name <input></label>" +
-          "<button onclick=\"document.body.append('Saved ' + document.querySelector('input').value)\">Save</button>",
-      );
-    });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    try {
-      const browser = (...args: string[]) => tetCtl(args, started().asTab(project.id, shell.tabId));
-      const opened = await browser("browser-open", `127.0.0.1:${(server.address() as AddressInfo).port}`);
-      assert.equal(opened.status, 0, opened.stderr);
-      assert.equal((opened.result as { title: string }).title, "Probe");
-      const { snapshot } = (await browser("browser-snapshot")).result as { snapshot: string };
-      const ref = (role: string): string => {
-        const found = new RegExp(`${role}[^\\n]*\\[ref=(e\\d+)\\]`).exec(snapshot)?.[1];
-        assert.ok(found, `${role} in ${snapshot}`);
-        return found;
-      };
-      assert.equal((await browser("browser-fill", ref('textbox "Name"'), "Ada")).status, 0);
-      assert.equal((await browser("browser-click", ref('button "Save"'))).status, 0);
-      const waited = await browser("browser-wait", "--text", "Saved Ada");
-      assert.equal(waited.status, 0, waited.stderr);
-      const shot = (await browser("browser-screenshot")).result as { path: string };
-      assert.equal(fs.readFileSync(shot.path).subarray(1, 4).toString(), "PNG");
-      assert.equal((await browser("browser-close")).status, 0);
-      assert.deepEqual(((await browser("browser-list")).result as { tabs: unknown[] }).tabs, []);
-    } finally {
-      server.close();
-      await ctl("tabs-close", shell.tabId, "--project", project.id);
-    }
-  });
-
   // The pty's size as its program sees it, the only size tet-ctl can reach: the window's fit is
   // what sets it, so a tab fitted while hidden, or never, shows here as a size of its own.
   it("fits every tab of a pane to the same size, whether shown new, again or for the first time", async () => {
@@ -259,7 +219,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     const relative = path.join("bin", PLATFORM.executableByExtension ? "tool.exe" : "tool");
     fs.mkdirSync(path.join(repo, "bin"), { recursive: true });
     if (PLATFORM.executableByExtension) {
-      // A native program: node-pty takes it directly.
+      // A native program available on every Windows machine, run through the platform's shell.
       fs.copyFileSync(path.join(process.env.SystemRoot ?? "C:\\Windows", "System32", "whoami.exe"), path.join(repo, relative));
     } else {
       fs.writeFileSync(path.join(repo, relative), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
@@ -268,10 +228,10 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
       path.join(repo, "tet.json"),
       JSON.stringify({
         commands: [
-          { command: "node -e process.exit(3)", name: "fails" },
+          { command: 'node -e "process.exit(3)"', name: "fails" },
           { command: "node -e 0", name: "passes" },
-          { command: "node -e 0 && node -e 0", name: "chained" },
-          { command: relative, name: "relative" },
+          { command: "node -e 0; node -e 0", name: "chained" },
+          { command: `.${path.sep}${relative}`, name: "relative" },
         ],
       }),
     );
@@ -285,8 +245,10 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     const byPath = (await ctl("tabs-run-command", "relative", "--project", project.id)).result as TabDescriptor;
     await eventually("the command by a relative path stopped", async () => (await statusOf(byPath.tabId)) === "stopped", STARTUP_MS);
     const chained = await ctl("tabs-run-command", "chained", "--project", project.id);
-    assert.equal(chained.status, 3, "a shell operator is refused");
-    assert.match(chained.stderr, /cannot be run without a shell/);
+    assert.equal(chained.status, 0, chained.stderr);
+    const chainedTab = chained.result as TabDescriptor;
+    assert.equal(chainedTab.savedCommand, true);
+    await eventually("the chained command's tab stopped", async () => (await statusOf(chainedTab.tabId)) === "stopped", STARTUP_MS);
     assert.equal((await ctl("tabs-run-command", "missing", "--project", project.id)).status, 3);
   });
 

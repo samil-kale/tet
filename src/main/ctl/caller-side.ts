@@ -20,9 +20,6 @@ export interface CallerSide extends TabSide {
   opens(agent: AgentDefinition): boolean;
   /** Whether a tab the caller opens runs in the sandbox or not at all (TabState.sandboxOnly). */
   readonly holdsTabs: boolean;
-  /** Whether its browser tabs are its sandbox's: opened in it, loading through it, and the only ones
-   *  its browser verbs see (browser-tabs.ts's BrowserScope). */
-  readonly browsesInSandbox: boolean;
   /** Whether the caller may reach into this tab (its output, its session); `own` is its own tab. */
   reachesTab(tab: InspectedTab | undefined, own: boolean): boolean;
   /** The projects `projects-list` shows it. */
@@ -36,7 +33,6 @@ export const HOST_CALLER: CallerSide = {
   ...HOST_TAB,
   opens: () => true,
   holdsTabs: false,
-  browsesInSandbox: false,
   reachesTab: () => true,
   projects: (list) => list,
   checkAnswer: () => Promise.resolve(),
@@ -53,7 +49,6 @@ export const SANDBOX_CALLER: CallerSide = {
   ...SANDBOX_TAB,
   opens: hasSandbox,
   holdsTabs: true,
-  browsesInSandbox: true,
   reachesTab: (tab, own) => own || tab?.sandbox !== undefined || tab?.sandboxOnly === true,
   projects: (list, own) =>
     list

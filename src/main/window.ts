@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { app, BaseWindow, shell, WebContentsView } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import { WINDOW_ARGS } from "../shared/api";
 import type { EventChannels, WindowReply } from "../shared/ipc";
 import type { ThemeDefinition } from "../shared/themes";
@@ -28,24 +28,15 @@ export interface AppWindowDeps {
   hasTab(ref: ProjectRef, tabId: string): boolean;
   /** A page load began, reloads included: what the page showed is gone with it. */
   onPageLoad(): void;
-  /** The window closed, and the browser tabs' pages drawn into it with it. */
-  onClosed(): void;
 }
 
 /**
  * The window and everything that talks to it: what main sends it, the notices held until it
  * listens, the terminals' batched output, its theme, and asking it for an editor's text. One
  * window at a time; before it exists and after it closed, what is sent to it is dropped.
- *
- * The window draws nothing itself: TET's own page is a view filling it (`page`), transparent where
- * it paints nothing, and the browser tabs' pages are views of their own beside it
- * (browser/browser-tabs.ts), always above TET's page. Where something of TET's page must lie over
- * one — a dialog, a menu — the page is hidden and a still of it shown in its place (BrowserHost).
  */
 export class AppWindow {
-  private window: BaseWindow | undefined;
-  /** TET's own page, filling the window. */
-  private page: WebContentsView | undefined;
+  private window: BrowserWindow | undefined;
   private rendererRebuiltAt = 0;
   /** A rebuild held back by RENDERER_REBUILD_GAP_MS, run once the gap has passed. */
   private rendererRebuildTimer: NodeJS.Timeout | undefined;
@@ -74,13 +65,8 @@ export class AppWindow {
   }
 
   /** The window while it stands; undefined before it exists, once closed, or while destroyed. */
-  private liveWindow(): BaseWindow | undefined {
+  private liveWindow(): BrowserWindow | undefined {
     return this.window?.isDestroyed() === false ? this.window : undefined;
-  }
-
-  /** TET's page while it stands, as `liveWindow`. */
-  private livePage(): WebContentsView | undefined {
-    return this.page?.webContents.isDestroyed() === false ? this.page : undefined;
   }
 
   send = <C extends keyof EventChannels>(channel: C, payload: EventChannels[C]): void => {
@@ -95,7 +81,7 @@ export class AppWindow {
       }
       return;
     }
-    this.livePage()?.webContents.send(channel, payload);
+    this.liveWindow()?.webContents.send(channel, payload);
   };
 
   /** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
@@ -219,20 +205,6 @@ export class AppWindow {
     this.send("app:theme", theme.id);
   }
 
-  /** A browser tab's page, drawn above TET's own where its tab lies (browser/browser-tabs.ts);
-   *  dropped when no window stands. */
-  addView = (view: WebContentsView): void => {
-    this.liveWindow()?.contentView.addChildView(view);
-  };
-
-  removeView = (view: WebContentsView): void => {
-    this.liveWindow()?.contentView.removeChildView(view);
-  };
-
-  focusPage = (): void => {
-    this.livePage()?.webContents.focus();
-  };
-
   /** Hands the window the lanes as stored; a window still loading reads them at its start. */
   showLanes(lanes: LaneSettings): void {
     this.send("app:lanes", lanes);
@@ -241,7 +213,7 @@ export class AppWindow {
   /** Per window: a theme the running window could not take (showTheme) reaches later windows. */
   create(theme: ThemeDefinition): void {
     this.theme = theme;
-    const window = new BaseWindow({
+    const window = new BrowserWindow({
       width: 1400,
       height: 900,
       // The areas' floors summed (--area-min-width twice, --content-min-width, the stacked sections,
@@ -260,8 +232,6 @@ export class AppWindow {
       titleBarOverlay:
         // Height must match the renderer's .titlebar rule, or controls and drag region disagree.
         PLATFORM.titleBarOverlay ? { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 35 } : undefined,
-    });
-    const page = new WebContentsView({
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,
@@ -272,52 +242,35 @@ export class AppWindow {
         additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])],
       },
     });
-    // Transparent where the page paints nothing: before its first frame, the window's theme color.
-    page.setBackgroundColor("#00000000");
-    window.contentView.addChildView(page, 0);
-    const fill = (): void => {
-      const { width, height } = window.contentView.getBounds();
-      page.setBounds({ x: 0, y: 0, width, height });
-    };
-    fill();
-    window.contentView.on("bounds-changed", fill);
     this.window = window;
-    this.page = page;
 
     // Every load, reloads included, has no listener until App subscribes.
-    page.webContents.on("did-start-loading", () => {
+    window.webContents.on("did-start-loading", () => {
       this.noticesHeard = false;
       this.deps.onPageLoad();
     });
     // A reload reads the theme off the window's original arguments, possibly stale since showTheme.
     // The renderer ignores its own theme id.
-    page.webContents.on("did-finish-load", () => {
+    window.webContents.on("did-finish-load", () => {
       if (this.theme) {
         this.send("app:theme", this.theme.id);
       }
     });
     // Shown once the page has drawn, so no empty window shows first.
     if (!this.deps.hidden) {
-      page.webContents.once("did-finish-load", () => {
-        window.show();
-        page.webContents.focus();
-      });
+      window.once("ready-to-show", () => window.show());
     }
     // Ends attractAttention's flash.
     window.on("focus", () => window.flashFrame(false));
     window.on("closed", () => {
       if (this.window === window) {
         this.window = undefined;
-        this.page = undefined;
       }
       clearTimeout(this.rendererRebuildTimer);
       this.rendererRebuildTimer = undefined;
-      // A view's page outlives its window unless closed.
-      page.webContents.close();
-      this.deps.onClosed();
     });
 
-    page.webContents.on("render-process-gone", (_event, details) => {
+    window.webContents.on("render-process-gone", (_event, details) => {
       // `clean-exit` is a window on its way out, not a fault.
       if (details.reason === "clean-exit" || window.isDestroyed()) {
         return;
@@ -334,13 +287,13 @@ export class AppWindow {
         }
         this.rendererRebuiltAt = Date.now();
         // Only once the new renderer has loaded; earlier sends reach the dead process.
-        page.webContents.once("did-finish-load", () =>
+        window.webContents.once("did-finish-load", () =>
           this.notice(
             "warning",
             "The window stopped responding and was loaded again. Your sessions kept running; what they printed before is gone.",
           ),
         );
-        page.webContents.reload();
+        window.webContents.reload();
       };
       const wait = this.rendererRebuiltAt + RENDERER_REBUILD_GAP_MS - Date.now();
       if (wait <= 0) {
@@ -351,9 +304,9 @@ export class AppWindow {
     });
 
     // No application menu (the title bar is our own), so wire the devtools shortcuts by hand.
-    page.webContents.on("before-input-event", (_event, input) => {
+    window.webContents.on("before-input-event", (_event, input) => {
       if (isDevToolsKey(input)) {
-        page.webContents.toggleDevTools();
+        window.webContents.toggleDevTools();
       }
     });
 
@@ -362,15 +315,15 @@ export class AppWindow {
     // its web and mail links reach the browser as `shell:open-url`'s do; nothing else leaves. A
     // navigation to `about:blank` reaches neither event, so only the page's own script could blank
     // the window, and there is none but TET's.
-    page.webContents.on("will-navigate", (event) => event.preventDefault());
-    page.webContents.setWindowOpenHandler(({ url }) => {
+    window.webContents.on("will-navigate", (event) => event.preventDefault());
+    window.webContents.setWindowOpenHandler(({ url }) => {
       if (isOpenableUrl(url)) {
         shell.openExternal(url).catch((error: unknown) => logError(`could not open ${url}`, error));
       }
       return { action: "deny" };
     });
 
-    void page.webContents.loadFile(path.join(__dirname, "index.html"));
+    void window.loadFile(path.join(__dirname, "index.html"));
   }
 }
 

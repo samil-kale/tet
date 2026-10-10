@@ -12,13 +12,11 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * ```
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   drops/                         pasted or dropped content without a path, for host tabs
- *   downloads/                     what the host's browser tabs downloaded
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
  *       handovers/                 another agent's session a tab takes over, copied (handOver)
  *       drops/                     pasted or dropped content without a path, for its tabs
- *       downloads/                 what its agent's browser tabs downloaded
  *     <key>/<agent>/               a worktree's
  *   worktrees/<key>/               a git worktree TET made; the key never changes
  * ```
@@ -36,11 +34,6 @@ export function projectsDir(dataRoot: string): string {
 
 export function projectDir(dataRoot: string, projectId: string): string {
   return path.join(projectsDir(dataRoot), projectId);
-}
-
-/** Where the project's browser tabs save what their pages download, kept until the project goes. */
-export function downloadsDir(dataRoot: string, projectId: string): string {
-  return path.join(projectDir(dataRoot, projectId), "downloads");
 }
 
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs
@@ -92,12 +85,6 @@ export function sandboxHandoverDir(agentDir: string, from: string, sessionId: st
  *  folder; a host tab's goes to dropsDir. */
 export function sandboxDropsDir(agentDir: string): string {
   return path.join(agentDir, "drops");
-}
-
-/** Where a sandboxed agent's browser tabs save what their pages download, in the same mounted
- *  folder; this machine's tabs save into downloadsDir. */
-export function sandboxDownloadsDir(agentDir: string): string {
-  return path.join(agentDir, "downloads");
 }
 
 /** Every agent folder (sandboxDir) the project's sandboxes have, the repository's and its

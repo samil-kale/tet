@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNo
 import { ChevronIcon } from "./icons";
 import { useEscape } from "./use-escape";
 import { useLatest } from "./use-latest";
-import { useFloatsOver } from "./window-covered";
 
 /** One entry of a context menu; an action with neither `run` nor `entries` renders disabled. */
 interface ContextMenuAction {
@@ -85,8 +84,6 @@ export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
 
 export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, anchor }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
-  // Over a browser tab's page, which gives way.
-  useFloatsOver(menu);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 

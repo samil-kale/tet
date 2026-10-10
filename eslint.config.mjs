@@ -21,8 +21,8 @@ const LANE_FOLDERS = fs
 
 /** Every file of src/, for the rules that hold all of it. */
 const SRC_FILES = ["src/**/*.{ts,tsx}"];
-/** The files where IPC's channels are wired: main's wrappers and the preloads, the window's and a browser tab's page's. */
-const IPC_SITES = ["src/main/ipc/channels.ts", "src/preload/preload.ts", "src/preload/page-preload.ts"];
+/** The files where IPC's channels are wired: main's wrappers and the window's preload. */
+const IPC_SITES = ["src/main/ipc/channels.ts", "src/preload/preload.ts"];
 
 const IPC_MESSAGE = "Only through the typed wrappers: handle/on/once (ipc/channels.ts), invoke/send/subscribe (preload).";
 /** By its name, or off electron's namespace; an alias is refused at its import (IPC_IMPORT). */
@@ -131,8 +131,6 @@ const SPAWN_SITES = [
   "src/main/agents/agent-path.ts",
   // Codex's app server, from resolveCommand, held open over stdio.
   "src/main/agents/codex/app-server-client.ts",
-  // A sandbox's browser relay, from resolveCommand, held open over stdio like the app server.
-  "src/main/sbx/sbx-relay.ts",
   // The updater: the new binary by its absolute path, detached to outlive tet.
   "src/main/update/auto-update.ts"
 ];
@@ -203,7 +201,7 @@ const processBorder = (folder) => ({
 const MAIN_LAYERS = [
   { util: [] },
   { store: ["*"] },
-  { git: [], agents: [], sbx: ["agents"], providers: [], update: [], browser: [] },
+  { git: [], agents: [], sbx: ["agents"], providers: [], update: [] },
   { terminals: [] },
   { ctl: [] },
   { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], uncaught: ["*"] }
@@ -356,7 +354,7 @@ export default tseslint.config(
   },
   ...layerConfigs("renderer", RENDERER_LAYERS, (area) => [NODE_BUILTIN, ...(area === "lanes" ? [LANE_FOLDER] : [])]),
   {
-    // The utility processes (git-host.ts, explorer-host.ts, browser-host.ts) and the CLI run without electron;
+    // The utility processes (git-host.ts, explorer-host.ts) and the CLI run without electron;
     // `shared/` runs in every process. None of them may import it, and the utility processes may
     // import nothing from the rest of main either but the util/ files listed here, each held to the
     // same — util/utility-client.ts is the main-process side of that boundary.
@@ -365,8 +363,6 @@ export default tseslint.config(
       "src/main/git/git-host.ts",
       "src/main/git/explorer-read.ts",
       "src/main/git/explorer-host.ts",
-      "src/main/browser/browser-automation.ts",
-      "src/main/browser/browser-host.ts",
       "src/main/util/linked-git-dir.ts",
       "src/main/util/host-platform.ts",
       "src/main/util/utility-host.ts",

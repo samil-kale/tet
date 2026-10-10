@@ -1443,12 +1443,8 @@ textarea:focus,
   color: var(--tet-gitDecoration-conflictingResourceForeground);
 }
 
-/* The editor tab's slot in `.pane-body`, over its padding: monaco has its own gutter. Hidden
-   by visibility, like `.terminal-host`, so monaco keeps a laid-out box. A browser tab: the editor
-   tab's bar (`.editor-bar`) with its address field, then the box its page is drawn over — main's
-   own view, above TET's page (BrowserHost). */
-.editor-tab,
-.browser-tab {
+/* The editor tab overlays the pane padding; visibility keeps monaco's measured box laid out. */
+.editor-tab {
   position: absolute;
   inset: 0;
   display: flex;
@@ -1467,80 +1463,6 @@ textarea:focus,
 .editor-host.hidden,
 .editor-host.hidden * {
   visibility: hidden !important;
-}
-
-.browser-tab.hidden {
-  visibility: hidden;
-}
-
-.browser-address {
-  flex: 1;
-  min-width: 0;
-}
-
-/* The page's box and its DevTools', beside or below it (BrowserHost). */
-.browser-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-.browser-body.bottom {
-  flex-direction: column;
-}
-
-/* A box a view of main's is drawn over (BrowserView): the page's, or its docked DevTools'. */
-.browser-view {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  /* A still keeps the size it was taken at: a box shrinking under it cuts it off. */
-  overflow: hidden;
-}
-
-/* Sized by its sash (BrowserHost), the page taking the rest. */
-.browser-devtools {
-  flex: none;
-}
-
-/* The page's still while something of the window lies over it (BrowserHost), the page hidden. */
-.browser-still {
-  position: absolute;
-  pointer-events: none;
-}
-
-/* A notice over a page holds it, shown as its still, until dismissed: VS Code's pause, its page
-   dimmed and the reason said in the middle, framed as a dialog is. */
-.browser-paused {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  color: var(--tet-foreground);
-  background: color-mix(in srgb, var(--tet-editor-background) 60%, transparent);
-}
-
-.browser-paused-message {
-  max-width: 80%;
-  padding: 20px 40px;
-  border: 1px solid var(--tet-editorWidget-border);
-  border-radius: 5px;
-  background: var(--tet-editor-background);
-  box-shadow: 0 4px 12px var(--tet-widget-shadow);
-  text-align: center;
-}
-
-.browser-paused-heading {
-  margin-bottom: 8px;
-  font-weight: 600;
-}
-
-.browser-paused-detail {
-  font-size: var(--small-font-size);
-  color: var(--tet-descriptionForeground);
 }
 
 /* Below the bar: a placeholder or the image view in flow, the editor's split over them. */

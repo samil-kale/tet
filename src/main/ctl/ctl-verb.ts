@@ -1,7 +1,7 @@
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
-import type { EditorListing, EditorReport, NoticeReport, NoticeSeverity } from "../../shared/types/app";
+import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
@@ -18,8 +18,6 @@ import type {
 } from "../../shared/types/sbx";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { BrowserAutomation } from "../browser/browser-client";
-import type { BrowserSandbox, BrowserTabs } from "../browser/browser-tabs";
 import type { NotificationTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -178,18 +176,10 @@ export interface ControlDeps {
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
   showTab(ref: ProjectRef, tabId: string): void;
-  /** A notice in the window, for what the caller's answer alone would not tell the user. */
-  notice(severity: NoticeSeverity, message: string): void;
   /** A desktop notification from this process, which holds the desktop session (a sandboxed hook has
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front. */
   showDesktopNotification(title: string, body: string, target?: NotificationTarget): void;
-  /** The browser tabs (browser/browser-tabs.ts) and Playwright driving their pages
-   *  (browser/browser-client.ts). */
-  browser: {
-    tabs: Pick<BrowserTabs, "list" | "page" | "create" | "navigate" | "answers" | "close" | "capture" | "downloads">;
-    automation: BrowserAutomation["api"];
-  };
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;
@@ -240,10 +230,6 @@ export interface ControlTerminals {
   handOver(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
   createCommandTab(command: ProjectCommand): TabDescriptor;
   closeTabs(tabIds: string[]): Promise<void>;
-  /** Where content without a path of its own lands for the tab (store/drops.ts). */
-  dropsDir(tabId: string): string;
-  /** The sandbox the tab's browser tabs load through; none on this machine (TabPlace.browserSandbox). */
-  browserSandbox(tabId: string): BrowserSandbox | undefined;
   /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */

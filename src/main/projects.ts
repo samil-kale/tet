@@ -8,7 +8,6 @@ import { projectRef, projectRefsOf, worktreeOf } from "../shared/types/project";
 import type { NoticeSeverity } from "../shared/types/app";
 import type { GitActionResult, RepositoryState } from "../shared/types/git";
 import type { AddRepositoryResult, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
-import type { BrowserTabs } from "./browser/browser-tabs";
 import type { ControlRecords } from "./ctl/ctl-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readRepositoryPath } from "./util/linked-git-dir";
@@ -31,7 +30,6 @@ export interface ProjectDeps {
   store: ProjectStore;
   repositories: RepositoryManager;
   tabManagers: SessionManagerRegistry;
-  browserTabs: BrowserTabs;
   records: ControlRecords;
   sbxLocal: SbxLocalStore;
   /** Starts the git and terminals of the repository or a worktree; its project is the store's. */
@@ -191,16 +189,10 @@ export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
   }
 }
 
-/** What a worktree gone leaves outside its folder: its agents' sessions, its browser profile. */
-function forgetWorktree(deps: ProjectDeps, ref: ProjectRef, folder: string): Promise<void> {
-  return Promise.all([removeAllSessions(folder), deps.browserTabs.clearProfile(ref)]).then(() => undefined);
-}
-
 /** Stops a repository's or worktree's tabs and git; resolves once its tabs and git
  *  commands have ended, so a worktree's folder is removed only then. Its records go once the
  *  tabs have ended: a stopping tab still prints. */
-function closeProjectRef({ repositories, tabManagers, browserTabs, records }: ProjectDeps, ref: ProjectRef): Promise<void> {
-  browserTabs.closeAll(ref);
+function closeProjectRef({ repositories, tabManagers, records }: ProjectDeps, ref: ProjectRef): Promise<void> {
   const tabsEnded = tabManagers.close(ref).finally(() => records.forget(ref));
   return Promise.all([tabsEnded, repositories.close(ref)]).then(() => undefined);
 }
@@ -266,7 +258,7 @@ export function removeProject(deps: ProjectDeps, projectId: string): Promise<Git
     if (!there) {
       // Their folders went with TET's; with the repository there, deleteWorktree took them.
       for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {
-        void forgetWorktree(deps, projectRef(projectId, worktree.key), worktree.path);
+        void removeAllSessions(worktree.path);
       }
     }
     return { ok: true };
@@ -368,7 +360,7 @@ export async function deleteWorktree(
     await deleteWorktreeData(deps.dataRoot, [], ref.projectId, ref.worktree!);
     // Only once it is gone: a worktree that stays keeps its sessions. Not waited on — each may
     // start its agent's CLI, and nothing here needs them gone.
-    void forgetWorktree(deps, ref, worktree.path);
+    void removeAllSessions(worktree.path);
     const left = deps.store.get(ref.projectId)?.worktrees.filter((entry) => entry.key !== ref.worktree) ?? [];
     deps.store.setWorktrees(ref.projectId, left);
     deps.projectsChanged({ removed: [ref] });
@@ -404,7 +396,7 @@ export function syncWorktrees(deps: ProjectDeps, projectId: string, state: Repos
     const ref = projectRef(projectId, worktree.key);
     void closeProjectRef(deps, ref)
       .then(() => deleteWorktreeData(deps.dataRoot, [ref], projectId, worktree.key!))
-      .then(() => forgetWorktree(deps, ref, worktree.path))
+      .then(() => removeAllSessions(worktree.path))
       .catch((error: unknown) => logError(`could not clean up after the worktree ${worktree.path}`, error));
   }
   deps.projectsChanged({ removed: gone.map((worktree) => projectRef(projectId, worktree.key)) });

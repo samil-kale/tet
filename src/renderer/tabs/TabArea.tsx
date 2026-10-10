@@ -8,7 +8,6 @@ import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
-import { useFloatsOver } from "../ui/window-covered";
 import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
 import type { Lane } from "../../shared/types/settings";
@@ -121,8 +120,7 @@ export const TabArea = memo(function TabArea({
     knownTabs.current = tabs;
     const ids = new Set(tabs.map((tab) => tab.tabId));
     for (const tab of previous) {
-      // An editor tab's editor is disposed where it closes (use-editor-opening.ts's closeEditors), a
-      // browser tab's page in main.
+      // An editor is disposed where its tab closes (use-editor-opening.ts's closeEditors).
       if (!ids.has(tab.tabId) && paneTabKind(tab.tabId) === "terminal") {
         disposeTerminal(resolved.ref, tab.tabId);
       }
@@ -175,14 +173,8 @@ export const TabArea = memo(function TabArea({
   /** A ref so the drag callbacks stay stable. */
   const presetRef = useLatest(layout.preset);
 
-  /** A tab is dragged: every browser tab's page in the panes gives way, or it would take the
-   *  drag's events from the panes and their snap zones. */
-  const [dragging, setDragging] = useState(false);
-  useFloatsOver(gridRef, dragging);
-
   const onDragStart = useCallback((paneId: PaneId) => {
     dragSource.current = paneId;
-    setDragging(true);
   }, []);
 
   /**
@@ -224,7 +216,6 @@ export const TabArea = memo(function TabArea({
   const onDragEnd = useCallback(() => {
     setDragTarget(null);
     dragSource.current = null;
-    setDragging(false);
   }, [setDragTarget]);
 
   // `dragover` never sees the tab id, so the drop joins it with the zone.

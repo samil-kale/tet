@@ -1,5 +1,4 @@
 import type { TETApi, Unsubscribe } from "./api";
-import type { ShortcutKey } from "./shortcuts";
 import type { ProjectRef } from "./types/project";
 
 /**
@@ -106,10 +105,6 @@ export interface InvokeChannels {
   "tabs:handover": TETApi["tabs"]["handOver"];
   "tabs:restart": TETApi["tabs"]["restart"];
   "tabs:starting": TETApi["tabs"]["starting"];
-  "browser:list": TETApi["browser"]["list"];
-  "browser:create": TETApi["browser"]["create"];
-  "browser:close": TETApi["browser"]["close"];
-  "browser:still": TETApi["browser"]["still"];
   "agents:list": TETApi["agents"]["list"];
   "agents:askable": TETApi["agents"]["askable"];
   "agents:ask-models": TETApi["agents"]["askModels"];
@@ -139,17 +134,6 @@ export interface SendChannels {
   "tabs:on-screen": TETApi["tabs"]["reportOnScreen"];
   "tabs:input": TETApi["tabs"]["input"];
   "tabs:resize": TETApi["tabs"]["resize"];
-  "browser:navigate": TETApi["browser"]["navigate"];
-  "browser:go": TETApi["browser"]["go"];
-  "browser:edit": TETApi["browser"]["edit"];
-  "browser:inspect": TETApi["browser"]["inspect"];
-  "browser:toggle-devtools": TETApi["browser"]["toggleDevTools"];
-  "browser:dock": TETApi["browser"]["dock"];
-  "browser:answer-login": TETApi["browser"]["answerLogin"];
-  "browser:place": TETApi["browser"]["place"];
-  "browser:active": TETApi["browser"]["reportActive"];
-  /** From a browser tab's page (page-preload.ts), not the window: a key press the page left alone. */
-  "browser:page-key": (key: ShortcutKey) => void;
   [reply: WindowReply]: (answer: string | undefined) => void;
 }
 
@@ -176,9 +160,4 @@ export interface EventChannels {
   "tabs:show": Payload<TETApi["tabs"]["onShow"]>;
   /** `onTextRequest`'s question; the answer goes back on `reply`. */
   "tabs:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
-  "browser:changed": Payload<TETApi["browser"]["onTabs"]>;
-  "browser:shortcut": Payload<TETApi["browser"]["onShortcut"]>;
-  "browser:focused": Payload<TETApi["browser"]["onFocused"]>;
-  "browser:menu": Payload<TETApi["browser"]["onMenu"]>;
-  "browser:login": Payload<TETApi["browser"]["onLogin"]>;
 }

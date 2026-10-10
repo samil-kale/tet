@@ -36,26 +36,21 @@ const mainConfig = {
   external: ["electron", "original-fs", "node-pty"]
 };
 
-/** `<name>-host`, a module the main process runs in a utilityProcess of its own
- *  (util/utility-client.ts), from its area's folder: `git`, the git CLI wrapper — see AGENTS.md —,
- *  `explorer`, the Explorer's walk and search, and `browser`, Playwright driving the browser tabs.
- *  Nothing from electron in any (eslint.config.mjs). playwright-core reads its own files at run
- *  time, so it stays a package of its own (package.json's dependencies), as node-pty does. */
+/** A module for a utilityProcess: git's CLI wrapper or the Explorer's walk and search.
+ *  These modules run without electron (eslint.config.mjs). */
 /** @returns {import('esbuild').BuildOptions} */
 function hostConfig(folder, name) {
   return {
     ...node,
     entryPoints: [path.join(__dirname, "src", "main", folder, `${name}-host.ts`)],
-    outfile: path.join(dist, `${name}-host.js`),
-    external: ["playwright-core"]
+    outfile: path.join(dist, `${name}-host.js`)
   };
 }
 
 /** The scripts under src/cli, each bundled on its own for plain node, nothing from electron in
  *  them: `tet-ctl`, which an agent runs from a terminal (see src/main/ctl/ctl-launcher.ts), and
  *  `tet-update`, which a new version's binary runs once tet has quit
- *  (src/main/update/auto-update.ts), each under tet's own electron as node; `tet-browser-relay`,
- *  which a sandbox's own node runs for its agent's browser tabs (src/main/sbx/sbx-relay.ts). */
+ *  (src/main/update/auto-update.ts), each under tet's own electron as node. */
 /** @returns {import('esbuild').BuildOptions} */
 function cliConfig(name) {
   return {
@@ -65,7 +60,7 @@ function cliConfig(name) {
   };
 }
 
-/** A preload under src/preload: `preload`, the window's, and `page-preload`, a browser tab's page's. */
+/** The window's preload under src/preload. */
 /** @returns {import('esbuild').BuildOptions} */
 function preloadConfig(name) {
   return {
@@ -143,12 +138,9 @@ async function build() {
     mainConfig,
     hostConfig("git", "git"),
     hostConfig("git", "explorer"),
-    hostConfig("browser", "browser"),
     cliConfig("tet-ctl"),
     cliConfig("tet-update"),
-    cliConfig("tet-browser-relay"),
     preloadConfig("preload"),
-    preloadConfig("page-preload"),
     rendererConfig,
     editorWorkerConfig,
     ...(tests ? [testConfig] : [])

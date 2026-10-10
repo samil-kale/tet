@@ -16,7 +16,7 @@ directories:
   output: release
 
 # Everything the app needs at runtime. node_modules is not listed: electron-builder takes the
-# production dependencies by itself, node-pty and playwright-core.
+# production dependencies by itself, node-pty.
 files:
   - dist/**
   - package.json

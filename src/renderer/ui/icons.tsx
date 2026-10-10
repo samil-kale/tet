@@ -1,8 +1,5 @@
 import {
-  AppWindow,
   ArrowDown,
-  ArrowLeft,
-  ArrowRight,
   ArrowUp,
   CaseSensitive,
   Check,
@@ -10,7 +7,6 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
-  CodeXml,
   CircleAlert,
   CircleX,
   Columns2,
@@ -37,13 +33,10 @@ import {
   MessageCircleX,
   MessageSquareText,
   Package,
-  PanelBottom,
-  PanelRight,
   Play,
   Plus,
   RefreshCw,
   Regex,
-  RotateCw,
   Save,
   Search,
   Settings,
@@ -58,7 +51,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { BrowserDock } from "../../shared/types/browser";
 
 export interface IconProps {
   className?: string;
@@ -392,43 +384,6 @@ export function CommentIcon(props: IconProps) {
 /** Lucide's `globe` — a remote. */
 export function RemoteIcon(props: IconProps) {
   return <Lucide {...props} icon={Globe} />;
-}
-
-/** Lucide's `globe` — a browser tab. */
-export function BrowserIcon(props: IconProps) {
-  return <Lucide {...props} icon={Globe} />;
-}
-
-/** Lucide's `arrow-left` — a browser tab's back, drawn larger as `arrow-up`. */
-export function BackIcon(props: IconProps) {
-  return <Lucide {...props} icon={ArrowLeft} extent={16.7} />;
-}
-
-/** Lucide's `arrow-right` — a browser tab's forward, drawn larger as `arrow-up`. */
-export function ForwardIcon(props: IconProps) {
-  return <Lucide {...props} icon={ArrowRight} extent={16.7} />;
-}
-
-/** Lucide's `rotate-cw` — a browser tab's reload. */
-export function ReloadIcon(props: IconProps) {
-  return <Lucide {...props} icon={RotateCw} />;
-}
-
-/** Lucide's `code-xml` — a browser tab's DevTools. */
-export function DevToolsIcon(props: IconProps) {
-  return <Lucide {...props} icon={CodeXml} />;
-}
-
-const DOCK_ICONS: Record<BrowserDock, LucideIcon> = {
-  right: PanelRight,
-  bottom: PanelBottom,
-  window: AppWindow,
-};
-
-/** Where a browser tab's DevTools go — Lucide's `panel-right`, `panel-bottom`, `app-window` — as
- *  Chrome's dock side. */
-export function DockIcon({ dock, ...props }: IconProps & { dock: BrowserDock }) {
-  return <Lucide {...props} icon={DOCK_ICONS[dock]} />;
 }
 
 /** Lucide's `settings`. */

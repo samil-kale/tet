@@ -24,8 +24,7 @@
     "dist": "npm run compile -- --production --tests && electron-builder --publish never"
   },
   "dependencies": {
-    "node-pty": "1.2.0-beta.14",
-    "playwright-core": "1.64.0"
+    "node-pty": "1.2.0-beta.14"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

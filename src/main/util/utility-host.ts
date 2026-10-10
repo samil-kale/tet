@@ -62,19 +62,8 @@ export function serving(module: object, respond: (response: UtilityResponse) => 
   };
 }
 
-/**
- * Serves `module` to the process that forked this one. A message carrying a port is no call: it is
- * the channel a module streams over beside its calls (utility-client.ts's `onStart`), handed to
- * `onPort`.
- */
-export function serveModule(module: object, onPort?: (port: Electron.MessagePortMain) => void): void {
+/** Serves `module` to the process that forked this one. */
+export function serveModule(module: object): void {
   const handle = serving(module, (response) => process.parentPort.postMessage(response));
-  process.parentPort.on("message", (event) => {
-    const [port] = event.ports;
-    if (port) {
-      onPort?.(port);
-    } else {
-      handle(event.data as UtilityMessage);
-    }
-  });
+  process.parentPort.on("message", (event) => handle(event.data as UtilityMessage));
 }

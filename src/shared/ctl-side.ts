@@ -64,10 +64,8 @@ export const SANDBOX_SIDE: ControlSide = {
     "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",
     "restarting TET, a saved command, any tab running on the host — is refused there and is not listed",
     "above. The tab verbs reach every tab running in a sandbox of this project, its repository's and",
-    "every worktree's; a tab they open runs in a sandbox too. The browser verbs reach only the browser",
-    "tabs opened from this sandbox, which load through it: localhost is the sandbox's own, and its",
-    "network policy applies. The rest answers for this repository or worktree only (exit 2, the reason",
-    "on stderr).",
+    "every worktree's; a tab they open runs in a sandbox too. The rest answers for this repository or",
+    "worktree only (exit 2, the reason on stderr).",
   ],
   // The sandbox holds of this machine only what TET brings in: a question about something missing
   // names neither TET nor the sandbox, and tet-ctl help there lists no verb that brings it in, so the

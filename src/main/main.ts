@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { app, BaseWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
 import { GitLoginStore } from "./git/git-logins";
@@ -19,9 +19,6 @@ import { EnvRequests } from "./ctl/env-requests";
 import { EnvStore } from "./store/environment";
 import { startGitProcess, stopGitProcess } from "./git/git-client";
 import { stopExplorerProcess } from "./git/explorer-client";
-import { browserAutomation } from "./browser/browser-client";
-import { BrowserTabs, sweepBrowserProfiles, type BrowserSandbox, type SandboxRoute } from "./browser/browser-tabs";
-import { SandboxProxy } from "./browser/sandbox-proxy";
 import { registerIpc } from "./ipc";
 import { sweepDropFiles } from "./store/drops";
 import { resolveProjectRef } from "./store/resolved-ref";
@@ -38,7 +35,6 @@ import {
 } from "./projects";
 import { ProjectStore } from "./store/project-store";
 import { readSbxUser } from "./sbx/sbx-cli";
-import { SandboxRelay } from "./sbx/sbx-relay";
 import { readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
 import { SbxAccountStore, signInToSbx } from "./sbx/sbx-accounts";
 import { SbxLocalStore } from "./sbx/sbx-local";
@@ -106,10 +102,6 @@ if (PLATFORM.windowsNotifications) {
 // per renderer Blink silently evicts the oldest to the DOM renderer; 128 leaves room, a leak shows.
 app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
 
-// Chromium's own log down to its fatal errors: a browser tab's DevTools frontend asks for Autofill,
-// which Electron lacks, on every attach, and each failure would reach stderr.
-app.commandLine.appendSwitch("log-level", "3");
-
 /**
  * GitHub's releases, except for the install test (test/e2e/install.test.ts) serving its own — read
  * from the environment only with a profile of its own, like the control token.
@@ -121,7 +113,6 @@ const appWindow: AppWindow = new AppWindow({
   hasTab: (ref, tabId): boolean => tabManagers.get(ref)?.hasTab(tabId) === true,
   // The environment dialog went with the page.
   onPageLoad: (): void => envRequests.drop(),
-  onClosed: (): void => browserTabs.closeEverything(),
 });
 const { send, notice } = appWindow;
 
@@ -225,44 +216,6 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onNotice: notice,
 });
 
-/** The browser tabs' pages, and Playwright driving them for the browser verbs. */
-const browserTabs = new BrowserTabs({
-  host: appWindow,
-  dataRoot,
-  onTabs: (ref, tabs) => send("browser:changed", { ref, tabs }),
-  onOpened: (ref, tabId) => send("tabs:show", { ref, tabId }),
-  onFocused: (ref, tabId) => send("browser:focused", { ref, tabId }),
-  onClosed: (tabId) => browser.tabClosed(tabId),
-  onShortcut: (shortcut) => send("browser:shortcut", shortcut),
-  onMenu: (ref, tabId, menu) => send("browser:menu", { ref, tabId, menu }),
-  onLogin: (ref, tabId, login) => send("browser:login", { ref, tabId, login }),
-  route: sandboxRoute,
-  notice,
-});
-const browser = browserAutomation((tabId) => browserTabs.pageById(tabId));
-
-/** A sandbox's way out for its agent's browser tabs: its relay (sbx-relay.ts), and the proxy on
- *  this machine's loopback dialling through it (sandbox-proxy.ts). */
-async function sandboxRoute(sandbox: BrowserSandbox): Promise<SandboxRoute> {
-  const relay = new SandboxRelay(sandbox.name, path.join(__dirname, "tet-browser-relay.js"));
-  try {
-    const { ca } = await relay.hello();
-    const proxy = await SandboxProxy.start(relay);
-    return {
-      port: proxy.port,
-      ca,
-      refusal: (host) => proxy.refusal(host),
-      close: () => {
-        proxy.close();
-        relay.stop();
-      },
-    };
-  } catch (error) {
-    relay.stop();
-    throw error;
-  }
-}
-
 function openProjectRef(ref: ProjectRef): void {
   const resolved = resolveProjectRef(dataRoot, store, ref);
   repositories.open(resolved);
@@ -274,7 +227,6 @@ const projectDeps: ProjectDeps = {
   store,
   repositories,
   tabManagers,
-  browserTabs,
   records,
   sbxLocal,
   openProjectRef,
@@ -368,8 +320,6 @@ async function startControl(): Promise<void> {
         editorContent: appWindow.editorContent,
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
-        notice,
-        browser: { tabs: browserTabs, automation: browser.api },
         showDesktopNotification,
         environment,
         envRequests,
@@ -462,7 +412,6 @@ if (!app.requestSingleInstanceLock()) {
     // second. The requirements re-check (ipc/app.ts) joins the same run.
     const pathReady = augmentAgentPath();
     sweepDropFiles(dataRoot);
-    sweepBrowserProfiles(dataRoot);
     try {
       controlChannel = await prepareControl(dataRoot, __dirname, installed, (userDataArg && process.env[CONTROL_ENV.token]) || undefined);
     } catch (error) {
@@ -480,7 +429,6 @@ if (!app.requestSingleInstanceLock()) {
       envRequests,
       repositories,
       tabManagers,
-      browserTabs,
       records,
       projectDeps,
       notice,
@@ -495,7 +443,7 @@ if (!app.requestSingleInstanceLock()) {
     startAutoUpdate(installed, releasesUrl, dataRoot, notice, appWindow.noticeProgress);
 
     app.on("activate", () => {
-      if (BaseWindow.getAllWindows().length === 0) {
+      if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
       }
     });
@@ -538,7 +486,6 @@ function shutdown(relaunch: boolean): void {
       repositories.disposeAll();
       stopGitProcess();
       stopExplorerProcess();
-      browser.stop();
       await controlServer?.close();
       if (relaunch) {
         app.relaunch();
