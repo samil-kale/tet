@@ -28,6 +28,7 @@ import {
   addWorktree,
   deleteWorktree,
   openStoredProjects,
+  removeMissingProject,
   removeProject,
   resolveStoredIds,
   syncWorktrees,
@@ -197,6 +198,9 @@ const repositories = new RepositoryManager(
   (ref) => send("repository:files-changed", { ref }),
   (ref, filePath) => send("repository:file-changed", { ref, path: filePath }),
   logins,
+  (projectId) => {
+    void removeMissingProject(projectDeps, projectId).catch((error: unknown) => logError("could not remove a missing project", error));
+  },
 );
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (ref, tabs) => {

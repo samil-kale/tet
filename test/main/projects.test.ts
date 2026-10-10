@@ -15,6 +15,7 @@ import {
   addWorktree,
   deleteWorktree,
   openStoredProjects,
+  removeMissingProject,
   removeProject,
   resolveStoredIds,
   syncWorktrees,
@@ -25,6 +26,7 @@ import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import type { SessionManagerRegistry } from "../../src/main/terminals/session-registry";
 import { readCommands, readSbxSettings, writeCommands } from "../../src/main/store/tet-json";
 import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project";
+import type { NoticeSeverity } from "../../src/shared/types/app";
 import { eventually, forkUtilitiesInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
 
 /**
@@ -73,14 +75,19 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
   const dataRoot = tempDir("tet-projects-data-");
   const store = new ProjectStore(dataRoot);
   const told: string[] = [];
+  const notices: { severity: NoticeSeverity; message: string }[] = [];
+  const notice = (severity: NoticeSeverity, message: string): void => {
+    notices.push({ severity, message });
+  };
   const repositories = new RepositoryManager(
     dataRoot,
     () => undefined,
-    () => undefined,
+    notice,
     (projectId) => told.push(projectId),
     () => undefined,
     () => undefined,
     new GitLoginStore(dataRoot),
+    (projectId) => void removeMissingProject(deps, projectId),
   );
   managers.push(repositories);
   const changes: ProjectsChange[] = [];
@@ -96,7 +103,7 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
     openProjectRef: (ref) => void repositories.open(resolveProjectRef(dataRoot, store, ref)),
     dataRoot,
     projectsChanged: (change) => changes.push(change),
-    notice: () => undefined,
+    notice,
   };
   /** Adds the repository and waits for its repository's first read. */
   const add = async (folder: string): Promise<string> => {
@@ -105,7 +112,7 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
     await repositories.get({ projectId: added.project.id })!.refresh();
     return added.project.id;
   };
-  return { deps, store, repositories, changes, told, dataRoot, add };
+  return { deps, store, repositories, changes, told, notices, dataRoot, add };
 }
 
 const remoteHas = (bare: string, branch: string): boolean => git(bare, "branch", "--list", branch) !== "";
@@ -335,6 +342,86 @@ describe("a worktree TET makes", () => {
 });
 
 describe("a project removed", () => {
+  it("leaves PROJECTS when its repository is deleted outside TET, with one notice and its data cleaned up", async () => {
+    const repo = repository();
+    const closed: ProjectRef[] = [];
+    const { deps, store, repositories, changes, notices, dataRoot, add } = open((ref) => closed.push(ref));
+    const id = await add(repo.main);
+    const key = (await addWorktree(deps, id, "own")).worktree!;
+    const ref = { projectId: id, worktree: key };
+    await repositories.get(ref)!.refresh();
+    deps.sbxLocal.restore(id, { secrets: { TOKEN: "encrypted" }, variables: {} });
+    fs.rmSync(repo.main, { recursive: true, force: true });
+
+    await eventually("the missing project cleaned up", () => notices.some((notice) => notice.severity === "info"), 5000);
+    assert.deepEqual(store.list(), []);
+    assert.deepEqual(new ProjectStore(dataRoot).all(), [], "removed from the saved list too");
+    assert.deepEqual(changes.at(-1), { removed: [{ projectId: id }, ref] });
+    assert.deepEqual(closed, [{ projectId: id }, ref]);
+    assert.equal(repositories.get({ projectId: id }), undefined);
+    assert.equal(repositories.get(ref), undefined);
+    assert.equal(fs.existsSync(projectDir(dataRoot, id)), false);
+    assert.deepEqual(deps.sbxLocal.encrypted(id), { secrets: {}, variables: {} });
+    assert.deepEqual(notices, [
+      {
+        severity: "info",
+        message: `${path.basename(repo.main)} was removed. Repository folder no longer exists`,
+      },
+    ]);
+    await removeMissingProject(deps, id);
+    assert.equal(notices.length, 1, "a later report does not announce it again");
+  });
+
+  it("drops a repository deleted while TET was closed before opening its tabs", async () => {
+    const repo = repository();
+    const { deps, store, repositories, notices, dataRoot, add } = open();
+    const id = await add(repo.main);
+    fs.mkdirSync(path.join(projectDir(dataRoot, id), "drops"), { recursive: true });
+    await repositories.close({ projectId: id });
+    fs.rmSync(repo.main, { recursive: true, force: true });
+    const opened: ProjectRef[] = [];
+
+    await openStoredProjects({ ...deps, openProjectRef: (ref) => opened.push(ref) });
+    assert.deepEqual(opened, []);
+    assert.deepEqual(store.list(), []);
+    assert.deepEqual(new ProjectStore(dataRoot).all(), []);
+    assert.equal(fs.existsSync(projectDir(dataRoot, id)), false);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].severity, "info");
+    assert.match(notices[0].message, /Repository folder no longer exists$/);
+  });
+
+  it("keeps an existing folder when git fails", async () => {
+    const repo = repository();
+    const { deps, store, repositories, notices, dataRoot, add } = open();
+    const id = await add(repo.main);
+    fs.rmSync(path.join(repo.main, ".git"), { recursive: true, force: true });
+    await repositories.get({ projectId: id })!.refresh();
+    await removeMissingProject(deps, id);
+    assert.ok(store.get(id));
+    assert.equal(new ProjectStore(dataRoot).all().length, 1);
+    assert.ok(notices.some((notice) => notice.severity === "error"));
+    assert.ok(notices.every((notice) => notice.severity !== "info"));
+  });
+
+  it("keeps its data and reports the failure when removing it from the saved list fails", async () => {
+    const repo = repository();
+    const { deps, store, repositories, notices, dataRoot, add } = open();
+    const id = await add(repo.main);
+    await repositories.close({ projectId: id });
+    const data = path.join(projectDir(dataRoot, id), "drops");
+    fs.mkdirSync(data, { recursive: true });
+    fs.unlinkSync(path.join(dataRoot, "projects.json"));
+    fs.mkdirSync(path.join(dataRoot, "projects.json"));
+    fs.rmSync(repo.main, { recursive: true, force: true });
+    await removeMissingProject(deps, id);
+    assert.ok(store.get(id));
+    assert.ok(fs.existsSync(data));
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0].severity, "error");
+    assert.match(notices[0].message, /could not be removed/);
+  });
+
   it("takes its worktrees with their branches, TET's folder of it and its id; the rest stays", async () => {
     const repo = repository(["foreign"]);
     const { deps, store, changes, dataRoot, add } = open();

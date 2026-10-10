@@ -45,7 +45,7 @@ import { git } from "./git-client";
 import type { GitLoginStore } from "./git-logins";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { openInside } from "../util/path-inside";
-import { watchedDirectoryGone } from "../util/watch-dir";
+import { directoryMissing, watchedDirectoryGone } from "../util/watch-dir";
 import type { DiscardTargets, NetworkLogin } from "./git";
 import { isImage, toDataUrl } from "./image-type";
 import { odfText } from "./odf-text";
@@ -221,6 +221,8 @@ export class Repository {
     private readonly onFileChanged: (filePath: string) => void,
     /** The logins for the remotes, typed or kept (`network`). */
     private readonly logins: GitLoginStore,
+    /** The repository's folder disappeared; closing its project belongs to the wiring. */
+    private readonly onMissing: () => void,
     /** The project's other open repository and worktrees: one git directory, so the periodic fetch
      *  skips a turn while a command runs in any of them, and a command in any waits for it. */
     private readonly siblings: () => Repository[] = () => [],
@@ -249,6 +251,9 @@ export class Repository {
   }
 
   private async startReading(): Promise<void> {
+    if (this.reportMissing()) {
+      return;
+    }
     // The check and the config at once, each a git start; the state after them, read once with the
     // remote names and the default branch the config gives.
     const [isGit] = await Promise.all([git.isRepository(this.at.path).catch(() => false), this.loadConfig()]);
@@ -365,6 +370,9 @@ export class Repository {
    *  (`for-each-ref` can't name it, leaving nothing to push to). `origin` first: commands use the
    *  first remote. */
   private emit(read: RepositoryState): void {
+    if (this.disposed || (read.error !== undefined && this.reportMissing())) {
+      return;
+    }
     const names = new Set([...read.remotes.map((remote) => remote.name), ...Object.keys(this.remoteUrls)]);
     const remotes = [...names]
       .sort((a, b) => Number(b === "origin") - Number(a === "origin"))
@@ -950,9 +958,7 @@ export class Repository {
     } catch (error) {
       // A filesystem that can't watch recursively throws here instead of emitting an error. The
       // root's watcher may already stand when the git directory's threw.
-      logError(`could not watch ${this.at.path}`, error);
-      this.closeWatchers();
-      this.retryWatching();
+      this.onWatchError(this.at.path, error);
     }
   }
 
@@ -985,7 +991,6 @@ export class Repository {
       return;
     }
     if (rootEvent !== undefined) {
-      // The retry loop picks the directory back up when it reappears.
       if (watchedDirectoryGone(this.at.path, name)) {
         this.onWatchError(this.at.path);
         return;
@@ -1024,9 +1029,21 @@ export class Repository {
     this.scheduleRefresh();
   }
 
+  /** Only a missing repository folder closes the project; a worktree belongs to syncWorktrees. */
+  private reportMissing(): boolean {
+    if (this.at.ref.worktree !== undefined || !directoryMissing(this.at.path)) {
+      return false;
+    }
+    if (!this.disposed) {
+      this.onMissing();
+    }
+    return true;
+  }
+
   /** A watcher failed, logged, or (no `error`) its directory went: both watchers are put back. */
   private onWatchError(dir: string, error?: unknown): void {
-    if (error !== undefined) {
+    const missing = this.reportMissing();
+    if (!missing && error !== undefined) {
       logError(`watcher failed for ${dir}`, error);
     }
     this.closeWatchers();
@@ -1101,6 +1118,7 @@ export class RepositoryManager {
     private readonly onFilesChanged: (ref: ProjectRef) => void,
     private readonly onFileChanged: (ref: ProjectRef, filePath: string) => void,
     private readonly logins: GitLoginStore,
+    private readonly onMissing: (projectId: string) => void,
   ) {}
 
   open(resolved: ResolvedRef): Repository {
@@ -1123,6 +1141,7 @@ export class RepositoryManager {
       () => this.onFilesChanged(ref),
       (filePath) => this.onFileChanged(ref, filePath),
       this.logins,
+      () => this.onMissing(ref.projectId),
       () => [...this.repositories.values()].filter((other) => other !== repository && other.at.ref.projectId === ref.projectId),
     );
     this.repositories.set(refKeyOf(ref), repository);

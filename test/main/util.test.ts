@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
@@ -13,8 +14,32 @@ import { killProcessTree, resolveCommand } from "../../src/main/util/process";
 import { eventually, processAlive, tempDir } from "../helpers";
 import { isExecutableFile, isOpenableUrl } from "../../src/main/util/shell-open";
 import { serving, type UtilityResponse } from "../../src/main/util/utility-host";
+import { directoryMissing } from "../../src/main/util/watch-dir";
 
 /** util/: spawning, quoting, paths, what the shell may open, a module served to another process. */
+
+describe("a directory removed outside TET", () => {
+  it("detects an absent folder and a parent replaced by a file", () => {
+    const root = tempDir("tet-directory-");
+    assert.equal(directoryMissing(root), false);
+    const folder = path.join(root, "repository");
+    assert.equal(directoryMissing(folder), true);
+    fs.writeFileSync(folder, "a file");
+    assert.equal(directoryMissing(folder), true);
+    assert.equal(directoryMissing(path.join(folder, "repository")), true);
+  });
+
+  it("keeps a directory when the filesystem cannot answer", (t) => {
+    const nodeFs = createRequire(__filename)("node:fs") as typeof fs;
+    for (const code of ["EACCES", "EPERM", "EIO"]) {
+      const stat = t.mock.method(nodeFs, "statSync", () => {
+        throw Object.assign(new Error("The directory cannot be read"), { code });
+      });
+      assert.equal(directoryMissing("repository"), false);
+      stat.mock.restore();
+    }
+  });
+});
 
 describe("resolveCommand", () => {
   /** Runs `program` as TET spawns it: resolved, no shell. */

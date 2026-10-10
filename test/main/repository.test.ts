@@ -77,6 +77,7 @@ async function open(
     () => undefined,
     () => undefined,
     logins,
+    () => undefined,
   );
   opened.push(repository);
   await repository.start();

@@ -24,6 +24,7 @@ import type { SessionManagerRegistry } from "./terminals/session-registry";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
 import { tetJsonProblem } from "./store/tet-json";
 import { logError } from "./util/error-log";
+import { directoryMissing } from "./util/watch-dir";
 
 /** What opening and closing projects and their worktrees takes — the same singletons ipc/ holds. */
 export interface ProjectDeps {
@@ -38,7 +39,7 @@ export interface ProjectDeps {
   dataRoot: string;
   /** Tells the window, as the control channel does. */
   projectsChanged: (change: ProjectsChange) => void;
-  /** What went wrong with nobody asking — a project id that could not be kept. */
+  /** What changed or went wrong with nobody asking. */
   notice: (severity: NoticeSeverity, message: string) => void;
 }
 
@@ -177,6 +178,10 @@ export async function openStoredProjects(deps: ProjectDeps): Promise<void> {
   const projects = deps.store.list();
   const problems = await Promise.all(projects.map((project) => tetJsonProblem(project.path)));
   for (const [index, project] of projects.entries()) {
+    if (directoryMissing(project.path)) {
+      await removeMissingProject(deps, project.id);
+      continue;
+    }
     const problem = problems[index];
     if (problem !== undefined) {
       deps.store.hold(project.id);
@@ -226,43 +231,61 @@ async function deleteWorktreeData(dataRoot: string, refs: ProjectRef[], projectI
  * to ask: its worktrees are only closed, their folders going with TET's.
  */
 export function removeProject(deps: ProjectDeps, projectId: string): Promise<GitActionResult> {
+  return inTurn(changes, CHANGE, () => removeNow(deps, projectId));
+}
+
+/** A repository deleted outside TET leaves the projects list through the same cleanup as Remove. */
+export function removeMissingProject(deps: ProjectDeps, projectId: string): Promise<void> {
   return inTurn(changes, CHANGE, async () => {
     const project = deps.store.get(projectId);
-    if (!project) {
-      return { ok: false, error: PROJECT_NOT_FOUND };
+    if (!project || !directoryMissing(project.path)) {
+      return;
     }
-    const there = fs.existsSync(project.path);
-    const [main, ...worktrees] = projectRefsOf(project);
-    for (const ref of worktrees) {
-      const deleted = there ? await deleteWorktree(deps, ref, { force: true, onRemote: false }) : undefined;
-      if (deleted && !deleted.ok) {
-        return deleted;
-      }
+    const result = await removeNow(deps, projectId).catch(failure);
+    if (result.ok) {
+      deps.notice("info", `${project.name} was removed. Repository folder no longer exists`);
+    } else {
+      deps.notice("error", result.error ?? `${project.name} could not be removed`);
     }
-    const closing = there ? [main] : [main, ...worktrees];
-    try {
-      deps.store.remove(projectId);
-    } catch (error) {
-      return { ok: false, error: `${project.name} could not be removed: ${errorMessage(error)}` };
-    }
-    deps.projectsChanged({ removed: closing });
-    await Promise.all(closing.map((ref) => closeProjectRef(deps, ref)));
-    deps.sbxLocal.forgetProject(projectId);
-    if (there) {
-      const unset = await git.unsetProjectId(project.path);
-      if (!unset.ok) {
-        logError(`could not unset tet.id in ${project.path}: ${unset.error}`);
-      }
-    }
-    await deleteRefData(closing, [projectDir(deps.dataRoot, projectId)]);
-    if (!there) {
-      // Their folders went with TET's; with the repository there, deleteWorktree took them.
-      for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {
-        void removeAllSessions(worktree.path);
-      }
-    }
-    return { ok: true };
   });
+}
+
+async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitActionResult> {
+  const project = deps.store.get(projectId);
+  if (!project) {
+    return { ok: false, error: PROJECT_NOT_FOUND };
+  }
+  const there = !directoryMissing(project.path);
+  const [main, ...worktrees] = projectRefsOf(project);
+  for (const ref of worktrees) {
+    const deleted = there ? await deleteWorktree(deps, ref, { force: true, onRemote: false }) : undefined;
+    if (deleted && !deleted.ok) {
+      return deleted;
+    }
+  }
+  const closing = there ? [main] : [main, ...worktrees];
+  try {
+    deps.store.remove(projectId);
+  } catch (error) {
+    return { ok: false, error: `${project.name} could not be removed: ${errorMessage(error)}` };
+  }
+  deps.projectsChanged({ removed: closing });
+  await Promise.all(closing.map((ref) => closeProjectRef(deps, ref)));
+  deps.sbxLocal.forgetProject(projectId);
+  if (there) {
+    const unset = await git.unsetProjectId(project.path);
+    if (!unset.ok) {
+      logError(`could not unset tet.id in ${project.path}: ${unset.error}`);
+    }
+  }
+  await deleteRefData(closing, [projectDir(deps.dataRoot, projectId)]);
+  if (!there) {
+    // Their folders went with TET's; with the repository there, deleteWorktree took them.
+    for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {
+      void removeAllSessions(worktree.path);
+    }
+  }
+  return { ok: true };
 }
 
 /**
