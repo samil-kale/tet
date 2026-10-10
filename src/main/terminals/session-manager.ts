@@ -28,6 +28,7 @@ import {
   answersQuestion,
   awaitsClaim,
   endLeavesQuestion,
+  endTurnQuietly,
   isSavedCommandTab,
   resumeArgsOf,
   sessionFieldsOf,
@@ -1116,6 +1117,14 @@ export class TabSessionManager {
         if (agent.turns?.workOutlivesStop?.(payload)) {
           return {};
         }
+        // Only pi's extension reports a turn the user cut short (its `aborted`): it ends as
+        // reconcile ends one, no mark and no notification.
+        if (agent.turns?.stopCutShort?.(payload)) {
+          endTurnQuietly(tab);
+          tab.turnReportAt = at;
+          this.postTabs();
+          return {};
+        }
         // Read before setTurn, which may clear it.
         const asked = endLeavesQuestion(tab, agent);
         setTurn(tab, false, at, asked);
@@ -1264,12 +1273,11 @@ export class TabSessionManager {
       }
       // Even with an unchanged label: a name equal to the stand-in still ends polling.
       tab.provisionalTitle = info.provisionalTitle;
-      // No Stop hook fires for a turn the user cut short; the transcript has the end. Only a
-      // later end than the turn's start counts, and it leaves no mark — the user was in that tab.
+      // A turn the user cut short that no hook reported (pi's extension reports its own,
+      // AgentTurns.stopCutShort): only the session record has the end. Only a later end than the
+      // turn's start counts, and it leaves no mark — the user was in that tab.
       if (tab.inTurn && info.turnEndedAt !== undefined && info.turnEndedAt > (tab.turnStartedAt ?? 0)) {
-        tab.inTurn = false;
-        // A question can only stand within a turn, as in setTurn.
-        tab.waitingAt = undefined;
+        endTurnQuietly(tab);
         changed = true;
       }
       if (info.title !== tab.title || info.updatedAt !== tab.updatedAt) {

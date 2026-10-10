@@ -188,6 +188,12 @@ export interface AgentTurns {
    */
   workOutlivesStop?(payload: string): boolean;
   /**
+   * Whether this `stop` report ends a turn the user cut short (an Escape, a Ctrl+C). It ends as
+   * reconcile ends one — no mark, no notification, the user was in that tab. Omitted: `stop`
+   * finishes the turn.
+   */
+  stopCutShort?(payload: string): boolean;
+  /**
    * What its hook command prints back into the CLI for a report (`tet-ctl hook <event>`) — the
    * CLI's own contract, per event. Omitted: nothing, for an agent that reports without a hook
    * command (pi's extension).

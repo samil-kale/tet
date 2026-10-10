@@ -88,6 +88,18 @@ export function setTurn(tab: TabState, inTurn: boolean, at: number, keepQuestion
   tab.finishedAt = at;
 }
 
+/**
+ * Ends a turn that leaves no mark: `setTurn` would set `finishedAt`, the bubble for a turn that
+ * finished out of sight, and the user was in that tab. Both callers are a turn the user cut
+ * short — reconcile, reading the end off the session record, and a `stop` reporting one
+ * (AgentTurns.stopCutShort).
+ */
+export function endTurnQuietly(tab: TabState): void {
+  tab.inTurn = false;
+  // A question can only stand within a turn, as in setTurn.
+  tab.waitingAt = undefined;
+}
+
 /** Whether a question left standing already said this turn's end — see setTurn. */
 export function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolean {
   return agent.turns?.questionOutlivesTurn === true && tab.waitingAt !== undefined;

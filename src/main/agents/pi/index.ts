@@ -5,7 +5,7 @@ import { createByteThresholdCheck } from "../cli-ready";
 import { piIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
 import { hookSessionId } from "../hook-payload";
-import { writePiExtension } from "./extension";
+import { piStopCutShort, writePiExtension } from "./extension";
 import { listPiModels } from "./models";
 import { piAgentDir, piSandboxSessions, piSessionProvider } from "./sessions";
 import { systemPrompt } from "../system-prompt";
@@ -54,7 +54,8 @@ export const piAgent: SandboxedAgent = {
   ask: { args: ["-p", "--no-session"], models: listPiModels, modelArgs: (model) => ["--model", model] },
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
-  turns: { sessionIdOf: hookSessionId },
+  // See AgentTurns.stopCutShort.
+  turns: { sessionIdOf: hookSessionId, stopCutShort: piStopCutShort },
   host: {
     prepare: (_executable, paths) => {
       const args: string[] = [];

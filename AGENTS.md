@@ -387,9 +387,10 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
 
 - **Nothing is read off the terminal or a file.** Every agent reports its turn over the control
   channel as `tet-ctl hook <event>`, addressed by `TET_TAB_ID`: Claude Code and Codex as a hook
-  command, pi's extension by posting the same request. The one exception: no
-  agent's hook fires for a turn the user cut short, so reconcile ends a turn by the agent's own
-  session record (`AgentSessionInfo.turnEndedAt`) — never starts one, never marks.
+  command, pi's extension by posting the same request. The one exception: pi's extension is the
+  only hook that reports a turn the user cut short (`AgentTurns.stopCutShort`, its `aborted`);
+  for the rest reconcile ends one by the agent's own session record (`AgentSessionInfo.turnEndedAt`)
+  — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
   shown (`useTabMarks`) and clears what was seen (`terminals.seen`).
 - A tab is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a

@@ -44,13 +44,17 @@ import * as http from "node:http";
 const CONTROL = ${JSON.stringify(CONTROL_ENV)};
 
 // This tab's own turn, reported to TET over its control channel, from inside this process.
-function report(event: string, sessionId: string | undefined): void {
+// \`aborted\` goes with the end of a turn the user cut short — pi's own word for it.
+function report(event: string, sessionId: string | undefined, aborted = false): void {
   const port = process.env[CONTROL.port];
   const token = process.env[CONTROL.token];
   if (!port || !token) {
     return;
   }
-  const payload = JSON.stringify(sessionId ? { session_id: sessionId } : {});
+  const payload = JSON.stringify({
+    ...(sessionId ? { session_id: sessionId } : {}),
+    ...(aborted ? { aborted: true } : {})
+  });
   const body = JSON.stringify({
     token,
     verb: "hook",
@@ -95,13 +99,14 @@ function sessionOf(ctx: any): string | undefined {
 export default function (pi: { on(event: string, handler: (event: any, ctx: any) => unknown): void }): void {
   // agent_start fires per low-level run — a retry or a compaction is another one, and the mark
   // is simply set again. agent_settled fires once nothing is left to run automatically, the end
-  // of the turn as the tab sees it; an Escape-abort settles too. pi has no subagents, no guard.
+  // of the turn as the tab sees it; an Escape-abort settles too, and says so. pi has no
+  // subagents, no guard.
   // \`prompt-submit\` is what a turn starting is called on the channel; its answer carries nothing.
   pi.on("agent_start", (_event, ctx) => {
     report("prompt-submit", sessionOf(ctx));
   });
-  pi.on("agent_settled", (_event, ctx) => {
-    report("stop", sessionOf(ctx));
+  pi.on("agent_settled", (event, ctx) => {
+    report("stop", sessionOf(ctx), event?.aborted === true);
   });
   // pi has no permission prompts; ui_prompt_start is an extension's own dialog, a progress view
   // (\`ui.custom\`) included, so its end clears the mark however it closed. The project-trust
@@ -114,4 +119,17 @@ export default function (pi: { on(event: string, handler: (event: any, ctx: any)
   });
 }
 `;
+}
+
+/**
+ * AgentTurns.stopCutShort: pi's extension sends `aborted` with the end of a turn the user cut
+ * short (an Escape, a Ctrl+C) — the end no other agent's hook reports at all. False for every
+ * other end, and for a payload that is not JSON.
+ */
+export function piStopCutShort(payload: string): boolean {
+  try {
+    return (JSON.parse(payload) as { aborted?: unknown } | null)?.aborted === true;
+  } catch {
+    return false;
+  }
 }

@@ -10,7 +10,7 @@ import * as esbuild from "esbuild";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { hookTrustedHash, setupCodexHooks } from "../../src/main/agents/codex/hooks";
 import { hookSessionId } from "../../src/main/agents/hook-payload";
-import { renderPiExtension, writePiExtension } from "../../src/main/agents/pi/extension";
+import { piStopCutShort, renderPiExtension, writePiExtension } from "../../src/main/agents/pi/extension";
 import { systemPrompt } from "../../src/main/agents/system-prompt";
 import { createByteThresholdCheck } from "../../src/main/agents/cli-ready";
 import { HOST_TARGET, SANDBOX_TARGET } from "../../src/main/agents/hook-target";
@@ -190,12 +190,16 @@ describe("pi's extension", () => {
       handlers.agent_settled({}, ctx);
       handlers.ui_prompt_start({}, {});
       handlers.ui_prompt_end({}, {});
-      await eventually("all four reported", () => channel.reports.length === 4, 3000);
-      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission", "answered"]);
+      // Escape: the same end of a turn, reported as the one the user cut short.
+      handlers.agent_settled({ aborted: true }, ctx);
+      await eventually("all five reported", () => channel.reports.length === 5, 3000);
+      assert.deepEqual(reported(channel.reports), ["prompt-submit", "stop", "permission", "answered", "stop"]);
       // The tab is the address; the session goes along to bind the tab to it.
       assert.deepEqual(channel.reports[0].caller, { projectId: "p1", tabId: "tab-1" });
       assert.equal(hookSessionId(String(channel.reports[0].args.payload)), "019eba31-566c-7911-bf09-14afe53d7c36");
       assert.equal(hookSessionId(String(channel.reports[2].args.payload)), undefined, "a context without a session");
+      assert.equal(piStopCutShort(String(channel.reports[1].args.payload)), false, "a run that settled on its own");
+      assert.equal(piStopCutShort(String(channel.reports[4].args.payload)), true, "the one the user cut short");
       assert.equal(channel.reports[0].verb, "hook");
       // Reports are not awaited and race; TET orders them by the time each carries.
       assert.ok(
@@ -205,8 +209,8 @@ describe("pi's extension", () => {
       // A worktree's tab: its token is made with the key, so a report without it is refused.
       process.env[CONTROL_ENV.worktree] = "k1";
       handlers.agent_start({}, ctx);
-      await eventually("the worktree's report", () => channel.reports.length === 5, 3000);
-      assert.deepEqual(channel.reports[4].caller, { projectId: "p1", worktree: "k1", tabId: "tab-1" });
+      await eventually("the worktree's report", () => channel.reports.length === 6, 3000);
+      assert.deepEqual(channel.reports[5].caller, { projectId: "p1", worktree: "k1", tabId: "tab-1" });
     } finally {
       delete process.env[CONTROL_ENV.worktree];
       await channel.close();

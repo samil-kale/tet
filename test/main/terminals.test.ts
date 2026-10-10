@@ -141,6 +141,24 @@ describe("a question reported answered", () => {
   });
 });
 
+describe("a pi turn the user cut short", () => {
+  it("ends the turn without a mark and without a notification", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("pi");
+      const inspected = () => manager.inspect().find((tab) => tab.tabId === tabId);
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at, HOST_CALLER);
+      assert.equal(inspected()?.inTurn, true);
+      // Escape: pi settles the run as aborted (its extension sends `aborted`).
+      const outcome = manager.hookEvent(tabId, "stop", '{"session_id":"s1","aborted":true}', at + 1000, HOST_CALLER);
+      assert.equal(outcome.notification, undefined, "the user was in that tab");
+      assert.equal(inspected()?.inTurn, false, "the turn ends");
+      assert.equal(inspected()?.finishedAt, undefined, "no bubble for it");
+      assert.notEqual(manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 2000, HOST_CALLER).notification, undefined);
+    });
+  });
+});
+
 describe("a Claude Code turn leaving a background agent running", () => {
   it("keeps the tab working, without a notification, until the stop naming none", async () => {
     await withEmptyPath({}, (manager) => {
