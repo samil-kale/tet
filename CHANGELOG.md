@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.4 (2026-10-11)
+
+- **Saved commands by platform.** A saved command always runs through the platform's shell, and an
+  optional `os` field limits it to one platform, replacing the `"shell": true` flag.
+- **Safer updates.** An install keeps the old app until the new one is in place.
+- **Removed repositories.** A notice tells when a project's repository is gone from disk.
+- **Fixes.** Git refs sharing a name with a tag, file access and `tet.json` writes hold up in edge
+  cases; pi, the SBX start and the `tet-ctl help` headings are improved.
+
 ## 0.18.3 (2026-10-08)
 
 - **SBX setup script.** The SBX settings take a shell script, highlighted as one, that runs as root
