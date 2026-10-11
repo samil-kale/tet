@@ -352,7 +352,7 @@ or a per-line decision is for an agent.
   the one spinner is a session's working mark. The one determinate bar is the update download's,
   in its notice (`showProgress`), which runs the indeterminate one while the update is prepared.
 - **The keyboard belongs to the terminal**: TET's key handler runs before xterm and takes nothing
-  an agent could have received. Check every new shortcut against `src/shared/shortcuts.ts`. No
+  an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.
 - **The renderer**: terminal output never goes through React state — xterms and editors live
   outside React (`terminal-views.ts`, `editor-views.ts`). The views under `App` are memoized: hand

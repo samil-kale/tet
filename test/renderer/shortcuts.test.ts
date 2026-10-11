@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MAC, WINDOWS } from "../../src/shared/platform";
-import { shortcutOf, type ShortcutKey } from "../../src/shared/shortcuts";
+import { shortcutOf, type ShortcutKey } from "../../src/renderer/shortcuts";
 
 /** A key pressed with the platform's modifier, as a DOM event and electron's input both say it. */
 const press = (key: string, code: string, held: Partial<ShortcutKey> = {}): ShortcutKey => ({

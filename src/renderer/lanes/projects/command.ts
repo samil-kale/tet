@@ -1,4 +1,4 @@
-import type { ProjectCommand } from "./types/project";
+import type { ProjectCommand } from "../../../shared/types/project";
 
 /**
  * The words of the dialog's environment field. Deliberately not a shell: quotes group a word and
