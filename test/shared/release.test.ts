@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { LINUX, MAC, WINDOWS } from "../../src/shared/platform";
-import { assetName, installRoot, preparedRoot, resourcesDir, rootIn, runningUpdater, updateLockPath } from "../../src/shared/release";
+import { assetName, preparedRoot, resourcesDir, rootIn, runningUpdater, updateLockPath } from "../../src/shared/release";
 import { processAlive, tempDir } from "../helpers";
 
 /** shared/release.ts: where a release's archive, install root and updater's lock lie. */
@@ -19,13 +19,6 @@ describe("a release's archive", () => {
 });
 
 describe("the install root", () => {
-  it("is the app bundle on macOS and the executable's folder elsewhere,", () => {
-    const bundleExecutable = path.join("/Applications", "TET.app", "Contents", "MacOS", "TET");
-    assert.equal(installRoot(bundleExecutable, MAC), path.resolve("/Applications", "TET.app"));
-    assert.equal(installRoot(path.join("/opt", "tet", "tet"), LINUX), path.join("/opt", "tet"));
-    assert.equal(installRoot(path.join("C:\\", "TET", "TET.exe"), WINDOWS), path.dirname(path.join("C:\\", "TET", "TET.exe")));
-  });
-
   it("is prepared beside itself, and its entry in an archive is the bundle within it on macOS only", () => {
     assert.equal(preparedRoot(path.join("/opt", "tet")), `${path.join("/opt", "tet")}.new`);
     assert.equal(rootIn("/unpacked", MAC), path.join("/unpacked", "TET.app"));

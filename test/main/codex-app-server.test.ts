@@ -3,8 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { listModels, renameThread } from "../../src/main/agents/codex/app-server-client";
-import { PLATFORM } from "../../src/main/util/host-platform";
-import { eventually, processAlive, tempDir } from "../helpers";
+import { eventually, fakeCommand, processAlive, tempDir, withCommandOn } from "../helpers";
 
 /** agents/codex/app-server-client.ts: the JSON-RPC conversation with `codex app-server`, against a stand-in. */
 
@@ -19,9 +18,10 @@ interface Behavior {
 async function withCodex<T>(behavior: Behavior, action: (executable: string) => Promise<T>): Promise<{ result: T; log: string[] }> {
   const dir = tempDir("tet-codex-app-server-");
   const log = path.join(dir, "log.jsonl");
-  const script = path.join(dir, "codex-stub.js");
-  fs.writeFileSync(
-    script,
+  const name = "codex-stub";
+  fakeCommand(
+    dir,
+    name,
     `const fs = require("node:fs");
 const readline = require("node:readline");
 const behavior = ${JSON.stringify(behavior)};
@@ -58,20 +58,8 @@ readline.createInterface({ input: process.stdin }).on("line", (line) => {
 });
 `,
   );
-  const name = "codex-stub";
-  if (PLATFORM.executableByExtension) {
-    fs.writeFileSync(path.join(dir, `${name}.cmd`), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
-  } else {
-    fs.writeFileSync(path.join(dir, name), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
-  }
-  const originalPath = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
-  try {
-    const result = await action(name);
-    return { result, log: await settledLog(log) };
-  } finally {
-    process.env.PATH = originalPath;
-  }
+  const result = await withCommandOn(dir, () => action(name));
+  return { result, log: await settledLog(log) };
 }
 
 /** The stand-in's log once every server it started is gone: the kill is asked for before it is done. */

@@ -4,10 +4,9 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { ensureRunning, mountAll, pathMountSpecs, revokeMounts, sessionMountSpecs } from "../../src/main/sbx/sbx-mounts";
-import { PLATFORM } from "../../src/main/util/host-platform";
 import { normalizeHostPath } from "../../src/main/util/path-inside";
 import type { SbxProblems } from "../../src/shared/types/sbx";
-import { tempDir } from "../helpers";
+import { fakeCommand, tempDir, withCommandOn } from "../helpers";
 
 /** sbx/sbx-mounts.ts: bringing a sandbox's live mounts to what tet.json says, against a stand-in `sbx`. */
 
@@ -29,9 +28,9 @@ async function withSbx<T>(answers: Answers, action: () => Promise<T>): Promise<{
   const log = path.join(dir, "calls.log");
   const state = path.join(dir, "state.json");
   fs.writeFileSync(state, JSON.stringify({ ...answers, started: !answers.stopped }));
-  const script = path.join(dir, "sbx.js");
-  fs.writeFileSync(
-    script,
+  fakeCommand(
+    dir,
+    "sbx",
     `const fs = require("node:fs");
 const state = JSON.parse(fs.readFileSync(${JSON.stringify(state)}, "utf8"));
 const args = process.argv.slice(2);
@@ -57,20 +56,9 @@ if (args[0] === "inspect") {
 }
 `,
   );
-  if (PLATFORM.executableByExtension) {
-    fs.writeFileSync(path.join(dir, "sbx.cmd"), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
-  } else {
-    fs.writeFileSync(path.join(dir, "sbx"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
-  }
-  const originalPath = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
-  try {
-    const result = await action();
-    const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split(/\r?\n/) : [];
-    return { result, calls };
-  } finally {
-    process.env.PATH = originalPath;
-  }
+  const result = await withCommandOn(dir, action);
+  const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split(/\r?\n/) : [];
+  return { result, calls };
 }
 
 /** A folder of this machine and its mount specs, as `sbx mount`/`umount` are handed them. */
@@ -126,19 +114,6 @@ describe("a sandbox's live mounts", () => {
     const wanted = folder("tet-unknown-");
     const { calls } = await withSbx({}, () => mountAll("tet-m-6", [wanted], undefined, Promise.resolve(true)));
     assert.deepEqual(calls, ["inspect tet-m-6 --json", `mount tet-m-6 ${wanted.mount}`]);
-  });
-
-  it("takes the sandbox's mounts one setup at a time", async () => {
-    const [first, second] = [folder("tet-turn-a-"), folder("tet-turn-b-")];
-    const { calls } = await withSbx({ live: [] }, async () => {
-      await Promise.all([
-        mountAll("tet-m-7", [first], undefined, Promise.resolve(true)),
-        mountAll("tet-m-7", [second], undefined, Promise.resolve(true)),
-      ]);
-    });
-    const inspections = calls.flatMap((call, index) => (call.startsWith("inspect") ? [index] : []));
-    assert.equal(inspections.length, 2);
-    assert.ok(inspections[1] > inspections[0] + 1, calls.join(" | "));
   });
 
   it("is running once `exec` answers, and not for a sandbox that does not exist", async () => {

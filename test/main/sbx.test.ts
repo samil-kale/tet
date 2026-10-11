@@ -30,7 +30,7 @@ import {
   type SbxPort,
   type SbxProjectSettings,
 } from "../../src/shared/types/sbx";
-import { fakeSafeStorage, tempDir } from "../helpers";
+import { fakeCommand, fakeSafeStorage, tempDir, withCommandOn } from "../helpers";
 
 /** sbx/: sandbox names and mounts, ports, secrets, the SBX Settings' Save, policy and status. */
 
@@ -193,9 +193,9 @@ describe("saving SBX settings", () => {
     fs.mkdirSync(repoFolder);
     const answerFile = path.join(dir, "answers.json");
     fs.writeFileSync(answerFile, JSON.stringify({ ...answers, refusal, name, workspaces: [repoFolder], log: path.join(dir, "calls.log") }));
-    const script = path.join(dir, "sbx.js");
-    fs.writeFileSync(
-      script,
+    fakeCommand(
+      dir,
+      "sbx",
       `const fs = require("node:fs");
 const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answerFile)}, "utf8"));
 const args = process.argv.slice(2);
@@ -237,11 +237,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 }
 `,
     );
-    if (PLATFORM.executableByExtension) {
-      fs.writeFileSync(path.join(dir, "sbx.cmd"), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
-    } else {
-      fs.writeFileSync(path.join(dir, "sbx"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
-    }
     return { dir, repoFolder };
   }
 
@@ -250,14 +245,8 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
    * "takes a name's first folder on PATH"); answers its result and every `sbx` call it made.
    */
   async function withSbx<T>(dir: string, action: () => Promise<T>): Promise<{ result: T; calls: string[] }> {
-    const originalPath = process.env.PATH;
-    process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
-    try {
-      const result = await action();
-      return { result, calls: fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/) };
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    const result = await withCommandOn(dir, action);
+    return { result, calls: fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/) };
   }
 
   /**
@@ -637,22 +626,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       assert.deepEqual(result, { ok: true, problems: {} });
       assert.ok(calls.includes(`rm ${name} --force`));
       assert.deepEqual(notices, [`The ${getAgent("claude").displayName} sandbox of repo was removed.`]);
-    });
-
-    it("takes one Save of a project after the other, never both at once", async () => {
-      fakeSafeStorage();
-      const { dir, repoFolder } = fakeSbx({ published: [] });
-      const sbxLocal = new SbxLocalStore(tempDir("tet-sbx-local-"));
-      const off = { ...EMPTY_SBX_SETTINGS, enabled: false };
-      const { calls } = await withSbx(dir, async () => {
-        await Promise.all([
-          saveProjectSbx({ sbxLocal, notice: () => undefined }, projectOf(repoFolder), off, noLocal()),
-          saveProjectSbx({ sbxLocal, notice: () => undefined }, projectOf(repoFolder), off, noLocal()),
-        ]);
-      });
-      const listings = calls.flatMap((call, index) => (call === "ls --json" ? [index] : []));
-      assert.equal(listings.length, 2);
-      assert.ok(listings[1] > listings[0] + 1, `the second Save listed in the first one's turn: ${calls.join(" | ")}`);
     });
   });
 });

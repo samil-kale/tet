@@ -3,8 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { checkSbxReady, listSandboxes, readSbxReading, readSbxSignedIn } from "../../src/main/sbx/sbx-status";
-import { PLATFORM } from "../../src/main/util/host-platform";
-import { tempDir } from "../helpers";
+import { fakeCommand, tempDir, withCommandOn } from "../helpers";
 
 /** sbx/sbx-status.ts: whether sbx is ready for a sandboxed tab, as its probe reads it. */
 
@@ -27,9 +26,9 @@ async function withSbx<T>(answers: Answers, action: (folder: string) => Promise<
   const dir = tempDir("tet-sbx-status-");
   const folder = path.join(dir, "repo");
   fs.mkdirSync(folder);
-  const script = path.join(dir, "sbx.js");
-  fs.writeFileSync(
-    script,
+  fakeCommand(
+    dir,
+    "sbx",
     `const answers = ${JSON.stringify(answers)};
 const args = process.argv.slice(2).join(" ");
 const out = (value) => process.stdout.write(typeof value === "string" ? value : JSON.stringify(value));
@@ -45,18 +44,7 @@ if (args.startsWith("version")) {
 }
 `,
   );
-  if (PLATFORM.executableByExtension) {
-    fs.writeFileSync(path.join(dir, "sbx.cmd"), `@ECHO off\r\n"${process.execPath}" "${script}" %*\r\n`);
-  } else {
-    fs.writeFileSync(path.join(dir, "sbx"), `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
-  }
-  const originalPath = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
-  try {
-    return await action(folder);
-  } finally {
-    process.env.PATH = originalPath;
-  }
+  return withCommandOn(dir, () => action(folder));
 }
 
 const REF = { projectId: "p" };

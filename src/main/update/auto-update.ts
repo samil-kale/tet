@@ -68,7 +68,7 @@ async function updaterDone(): Promise<void> {
 }
 
 /** The last update's result, reported once and deleted. */
-export function reportLastUpdate(notice: Notice): void {
+function reportLastUpdate(notice: Notice): void {
   const file = resultPath();
   const result = readJson(file) as UpdateResult | undefined;
   if (result === undefined) {
@@ -93,7 +93,7 @@ export function reportLastUpdate(notice: Notice): void {
  * folders. Removed with original-fs: electron's fs opens `app.asar` as an archive and fails its rm
  * with EBUSY. A download cut short stays for `stage` to continue.
  */
-export async function sweepUpdateDir(asset: string, root: string): Promise<void> {
+async function sweepUpdateDir(asset: string, root: string): Promise<void> {
   await originalFs.promises.rm(preparedRoot(root), { recursive: true, force: true }).catch(() => undefined);
   let entries: string[];
   try {
@@ -122,7 +122,7 @@ function isWritable(dir: string): boolean {
  * `net.fetch`: the latter throws on `redirect: "manual"` and leaves a followed response's `url`
  * empty.
  */
-export function latestVersion(releasesUrl: string): Promise<string | undefined> {
+function latestVersion(releasesUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     const request = net.request({ url: `${releasesUrl}/latest`, redirect: "manual" });
     const timer = setTimeout(() => request.abort(), CHECK_TIMEOUT_MS);

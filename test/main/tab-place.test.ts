@@ -2,11 +2,12 @@ import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import type { AgentDefinition, AgentSessionInfo, SandboxedAgent, SessionProvider, SpawnPreparation } from "../../src/main/agents/agent";
+import { claudeAgent } from "../../src/main/agents/claude";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { sandboxName } from "../../src/main/sbx/sbx";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxSessionDir } from "../../src/main/store/project-dirs";
 import type { ResolvedRef } from "../../src/main/store/resolved-ref";
-import { CommandPlace, HostPlace, SandboxPlace, type PlaceContext } from "../../src/main/terminals/tab-place";
+import { CommandPlace, HostPlace, SandboxPlace, type PlaceContext, type TabPlace } from "../../src/main/terminals/tab-place";
 import { HOST_TAB, SANDBOX_TAB } from "../../src/main/terminals/tab-side";
 import { tempDir } from "../helpers";
 
@@ -43,7 +44,8 @@ function recordingProvider(calls: string[], overrides: Partial<SessionProvider> 
 }
 
 function hostContext(root: string, sessions?: SessionProvider): PlaceContext {
-  const agent = { id: "claude", sessions } as unknown as AgentDefinition;
+  // Sessions and turns come together or not at all (AgentDefinition).
+  const agent: AgentDefinition = sessions ? { ...claudeAgent, sessions } : { ...claudeAgent, sessions: undefined, turns: undefined };
   return { at: resolvedRef(path.join(root, "repo")), dataRoot: root, agent, executable: "claude-bin", onNotice: () => undefined };
 }
 
@@ -154,31 +156,34 @@ describe("a saved command's place", () => {
 });
 
 describe("a sandbox place", () => {
-  function sandboxContext(root: string, onNotice: PlaceContext["onNotice"] = () => undefined, worktree?: string) {
+  function sandboxContext(root: string, onNotice: PlaceContext["onNotice"] = () => undefined, worktree?: string, withSessions = true) {
     const calls: string[] = [];
-    const agent = {
-      id: "claude",
+    const agent: SandboxedAgent = {
+      ...claudeAgent,
       sandbox: {
-        sessions: {
-          mounts: [{ sub: "projects", target: "/home/agent/.claude/projects", file: false }],
-          at: (sessionRoot: string, cwd: string, within: string): ReturnType<NonNullable<SandboxedAgent["sandbox"]["sessions"]>["at"]> => ({
-            list: () => {
-              calls.push(`list:${sessionRoot}:${cwd}:${within}`);
-              return Promise.resolve([SESSION]);
-            },
-            remove: (id) => {
-              calls.push(`remove:${id}`);
-              return Promise.resolve();
-            },
-            rename: (id, title) => {
-              calls.push(`rename:${id}:${title}`);
-              return Promise.resolve();
-            },
-            files: (id) => Promise.resolve([`${sessionRoot}/${id}.jsonl`]),
-          }),
-        },
+        ...claudeAgent.sandbox,
+        sessions: withSessions
+          ? {
+              mounts: [{ sub: "projects", target: "/home/agent/.claude/projects", file: false }],
+              at: (sessionRoot, cwd, within) => ({
+                list: () => {
+                  calls.push(`list:${sessionRoot}:${cwd}:${within}`);
+                  return Promise.resolve([SESSION]);
+                },
+                remove: (id) => {
+                  calls.push(`remove:${id}`);
+                  return Promise.resolve();
+                },
+                rename: (id, title) => {
+                  calls.push(`rename:${id}:${title}`);
+                  return Promise.resolve();
+                },
+                files: (id) => Promise.resolve([`${sessionRoot}/${id}.jsonl`]),
+              }),
+            }
+          : undefined,
       },
-    } as unknown as SandboxedAgent;
+    };
     const context: PlaceContext<SandboxedAgent> = {
       at: resolvedRef(path.join(root, "repo"), worktree),
       dataRoot: root,
@@ -211,8 +216,7 @@ describe("a sandbox place", () => {
 
   it("keeps no sessions and no session operations for an agent without them in a sandbox", async () => {
     const root = tempDir("tet-place-");
-    const { context } = sandboxContext(root);
-    delete (context.agent.sandbox as { sessions?: unknown }).sessions;
+    const { context } = sandboxContext(root, undefined, undefined, false);
     const place = new SandboxPlace(context);
     assert.deepEqual(await place.listSessions(), []);
     assert.equal(place.sessionActions(), undefined);
@@ -230,9 +234,11 @@ describe("a sandbox place", () => {
   });
 
   it("watches nothing: a sandboxed tab's own output schedules the listing", () => {
-    const place = new SandboxPlace(sandboxContext(tempDir("tet-place-")).context);
-    const watched = (): unknown => place.watchSessions();
-    assert.equal(watched(), undefined);
+    const place: TabPlace = new SandboxPlace(sandboxContext(tempDir("tet-place-")).context);
+    assert.equal(
+      place.watchSessions(() => undefined),
+      undefined,
+    );
     assert.equal(place.sessionsWatched(), false);
   });
 

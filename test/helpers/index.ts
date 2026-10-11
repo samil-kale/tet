@@ -81,6 +81,32 @@ after(() => {
   }
 });
 
+/**
+ * A stand-in for the command `name` in `dir`: `script` (node source) run by this node, behind a
+ * `.cmd` on win32 and an `sh` script elsewhere. Reached through `withCommandOn`.
+ */
+export function fakeCommand(dir: string, name: string, script: string): void {
+  const source = path.join(dir, `${name}.js`);
+  fs.writeFileSync(source, script);
+  if (PLATFORM.executableByExtension) {
+    fs.writeFileSync(path.join(dir, `${name}.cmd`), `@ECHO off\r\n"${process.execPath}" "${source}" %*\r\n`);
+  } else {
+    fs.writeFileSync(path.join(dir, name), `#!/bin/sh\nexec "${process.execPath}" "${source}" "$@"\n`, { mode: 0o755 });
+  }
+}
+
+/** Runs `action` with `dir` first on PATH, which is enough on win32 too (resolveCommand takes a
+ *  name's first folder on PATH). */
+export async function withCommandOn<T>(dir: string, action: () => Promise<T>): Promise<T> {
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
+  try {
+    return await action();
+  } finally {
+    process.env.PATH = originalPath;
+  }
+}
+
 /** The repository: a test runs bundled from dist-test/, as deep as its file lies in test/. */
 export const ROOT = (() => {
   let dir = __dirname;

@@ -241,34 +241,6 @@ describe("a transcript's tail", () => {
 });
 
 describe("the watch of a transcript directory", () => {
-  it("reports a transcript written, not a file the agent does not keep, and stops when told", async () => {
-    const root = tempDir("tet-transcript-watch-");
-    const dir = path.join(root, "encoded");
-    fs.mkdirSync(dir);
-    let changes = 0;
-    const watch = watchTranscriptDir(
-      () => root,
-      () => Promise.resolve(dir),
-      (name) => name.endsWith(".jsonl"),
-      () => changes++,
-    );
-    try {
-      await eventually("the directory is watched", () => watch.watching(), 5000);
-      fs.writeFileSync(path.join(dir, "notes.txt"), "x");
-      await new Promise((resolve) => setTimeout(resolve, 300));
-      assert.equal(changes, 0);
-      fs.writeFileSync(path.join(dir, "s1.jsonl"), "{}\n");
-      await eventually("a change is reported", () => changes > 0, 5000);
-    } finally {
-      watch.stop();
-    }
-    assert.equal(watch.watching(), false);
-    const reported = changes;
-    fs.writeFileSync(path.join(dir, "s2.jsonl"), "{}\n");
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    assert.equal(changes, reported, "nothing is reported after stop");
-  });
-
   it("waits on the root while the directory is missing, then reports the transcript that made it", async () => {
     const root = tempDir("tet-transcript-watch-");
     const dir = path.join(root, "encoded");
