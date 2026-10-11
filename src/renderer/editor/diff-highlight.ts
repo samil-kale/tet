@@ -14,6 +14,9 @@ export function highlightTheme(): ThemeDefinition["shikiTheme"] {
   return theme;
 }
 
+/** A JSON import is typed literally, and one color there is an array ThemeRegistration rejects: cast once, here. */
+const jsonTheme = (load: () => Promise<unknown>) => () => load() as Promise<{ default: ThemeRegistration }>;
+
 /** Spelled out: esbuild bundles only an import whose path it can read off the call (as GRAMMARS). */
 const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ default: ThemeRegistration }>> = {
   "dark-plus": () => import("@shikijs/themes/dark-plus"),
@@ -21,13 +24,12 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "github-dark-default": () => import("@shikijs/themes/github-dark-default"),
   "github-light-default": () => import("@shikijs/themes/github-light-default"),
   dracula: () => import("@shikijs/themes/dracula"),
-  // A JSON import is typed literally, and one color here is an array ThemeRegistration rejects.
-  "dark-slate": () => import("../themes/dark-slate.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "dark-intellij": () => import("../themes/dark-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "light-intellij": () => import("../themes/light-intellij.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "light-gameboy": () => import("../themes/light-gameboy.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "dark-claude": () => import("../themes/dark-claude.json") as unknown as Promise<{ default: ThemeRegistration }>,
-  "light-claude": () => import("../themes/light-claude.json") as unknown as Promise<{ default: ThemeRegistration }>,
+  "dark-slate": jsonTheme(() => import("../themes/dark-slate.json")),
+  "dark-intellij": jsonTheme(() => import("../themes/dark-intellij.json")),
+  "light-intellij": jsonTheme(() => import("../themes/light-intellij.json")),
+  "light-gameboy": jsonTheme(() => import("../themes/light-gameboy.json")),
+  "dark-claude": jsonTheme(() => import("../themes/dark-claude.json")),
+  "light-claude": jsonTheme(() => import("../themes/light-claude.json")),
 };
 
 /** Shiki theme `name` with its editor surface patched from TET's --tet-* values, for shiki and
