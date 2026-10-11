@@ -6,7 +6,8 @@ import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
-import { EMPTY_REPOSITORY_STATE, fullRefName, refName } from "../../shared/types/git";
+import { ownValue } from "../../shared/own-value";
+import { EMPTY_REPOSITORY_STATE, fullRefName, localBranchRef, remoteBranchRef, tagRef } from "../../shared/types/git";
 import { isImage, toDataUrl } from "./image-type";
 import { odfText } from "./odf-text";
 import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
@@ -217,11 +218,12 @@ export async function unsetProjectId(cwd: string): Promise<GitActionResult> {
 }
 
 /** What the status header says about HEAD. */
-type HeadState = Pick<RepositoryState, "head" | "detached" | "upstream" | "ahead" | "behind">;
+type HeadState = Pick<RepositoryState, "head" | "detached" | "ahead" | "behind">;
 
 /**
- * The `--branch` status headers, by key: branch, commit, upstream and drift — one process instead of
- * a `rev-parse` plus a `rev-list`, a detached HEAD included.
+ * The `--branch` status headers, by key: branch, commit and drift — one process instead of a
+ * `rev-parse` plus a `rev-list`, a detached HEAD included. Not the upstream, which they shorten
+ * to `remotes/origin/main` beside a tag `origin/main`: `readRefs` has it.
  */
 function readHead(headers: Map<string, string>): HeadState {
   const oid = headers.get("branch.oid") ?? "";
@@ -229,17 +231,14 @@ function readHead(headers: Map<string, string>): HeadState {
   if (branch === "(detached)") {
     // A fixed abbreviation: `rev-parse --short` would cost a process to lengthen an ambiguous one.
     const head = /^[0-9a-f]+$/.test(oid) ? oid.slice(0, 7) : "HEAD";
-    return { head, detached: true, upstream: undefined, ahead: 0, behind: 0 };
+    return { head, detached: true, ahead: 0, behind: 0 };
   }
-  // "+<ahead> -<behind>", only where the upstream ref exists: one the remote no longer has counts as
-  // none.
-  const drift = headers.get("branch.ab");
-  const counts = /^\+(\d+) -(\d+)$/.exec(drift ?? "");
+  // "+<ahead> -<behind>", only where the upstream ref exists.
+  const counts = /^\+(\d+) -(\d+)$/.exec(headers.get("branch.ab") ?? "");
   return {
     // An unborn branch has its name here, and "(initial)" as its commit.
     head: branch || "HEAD",
     detached: false,
-    upstream: drift !== undefined ? headers.get("branch.upstream") : undefined,
     ahead: Number(counts?.[1] ?? 0),
     behind: Number(counts?.[2] ?? 0),
   };
@@ -324,6 +323,7 @@ async function readRefs(
   branchTrack: Record<string, { ahead: number; behind: number }>;
   branchUpstreams: Record<string, BranchUpstream>;
   headCommit?: string;
+  upstream?: CheckoutTarget;
 }> {
   // Full ref names, not %(refname:short): that shortens "refs/remotes/origin/HEAD" to "origin", like
   // a branch of that name. %(symref) is set only on "<remote>/HEAD", naming the default branch.
@@ -351,6 +351,10 @@ async function readRefs(
   /** The local branches tracking each full upstream ref, for the default branch. */
   const trackers = new Map<string, string[]>();
   let headCommit: string | undefined;
+  /** The checked-out branch's upstream: its full ref, and the branch once that ref is met — one
+   *  the remote no longer has counts as none. */
+  let headUpstreamRef = "";
+  let headUpstream: CheckoutTarget | undefined;
 
   for (const line of result.stdout.split("\n")) {
     const [refname, symref = "", objectname = "", isHead = "", upstream = "", trackshort = "", upstreamRemote = "", upstreamRef = ""] = line
@@ -372,6 +376,7 @@ async function readRefs(
       }
       if (isHead === "*") {
         headCommit = objectname;
+        headUpstreamRef = upstream;
       }
       if (isHead !== "*" && upstream && trackshort && trackshort !== "=") {
         diverged.push({ name, head: objectname, upstream });
@@ -400,12 +405,21 @@ async function readRefs(
     }
     const remote = remoteRef.slice(0, separator);
     const branch = remoteRef.slice(separator + 1);
+    if (refname === headUpstreamRef) {
+      headUpstream = { name: branch, remote };
+    }
     const branches = remotes.get(remote);
     if (branches) {
       branches.push(branch);
     } else {
       remotes.set(remote, [branch]);
     }
+  }
+
+  // A local upstream: every local branch is read by now.
+  const tracked = localBranches.find((name) => localBranchRef(name) === headUpstreamRef);
+  if (tracked !== undefined) {
+    headUpstream = { name: tracked };
   }
 
   const branchTrack: Record<string, { ahead: number; behind: number }> = {};
@@ -433,26 +447,27 @@ async function readRefs(
     localBranches,
     tags,
     defaultBranch,
-    mergedBranches: localBranches.filter((name) => isMerged(`refs/heads/${name}`)),
+    mergedBranches: localBranches.filter((name) => isMerged(localBranchRef(name))),
     branchTrack,
     branchUpstreams,
     headCommit,
+    upstream: headUpstream,
     remotes: [...remotes].map(([name, branches]) => ({
       name,
       branches,
-      mergedBranches: branches.filter((branch) => isMerged(`refs/remotes/${name}/${branch}`)),
+      mergedBranches: branches.filter((branch) => isMerged(remoteBranchRef(name, branch))),
     })),
   };
 
   /** The default branch is never merged into itself, nor are the remote branches standing for it:
    *  its upstream and each remote's HEAD branch. */
   function readDefaultMerged(target: CheckoutTarget): Promise<Set<string> | undefined> {
-    const targetRef = target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
-    const upstream = target.remote || !Object.hasOwn(branchUpstreams, target.name) ? undefined : branchUpstreams[target.name];
+    const targetRef = fullRefName(target);
+    const upstream = target.remote ? undefined : ownValue(branchUpstreams, target.name);
     const excluded = new Set([
       targetRef,
-      ...(upstream ? [`refs/remotes/${upstream.remote}/${upstream.branch}`] : []),
-      ...[...defaultBranches].map(([remote, branch]) => `refs/remotes/${remote}/${branch}`),
+      ...(upstream ? [remoteBranchRef(upstream.remote, upstream.branch)] : []),
+      ...[...defaultBranches].map(([remote, branch]) => remoteBranchRef(remote, branch)),
     ]);
     const commit = target.remote ? remoteHeads.get(targetRef) : localHeads.get(target.name);
     // The branch refs' commits and what is left out decide the answer; a checkout, a tag or a
@@ -479,7 +494,7 @@ function findDefaultBranch(
     return undefined;
   }
   const name = defaultBranches.get(remote)!;
-  const tracking = trackers.get(`refs/remotes/${remote}/${name}`) ?? [];
+  const tracking = trackers.get(remoteBranchRef(remote, name)) ?? [];
   const local = tracking.includes(name) ? name : (tracking[0] ?? (localBranches.includes(name) ? name : undefined));
   if (local !== undefined) {
     return { name: local };
@@ -940,7 +955,7 @@ export function push(
       ...(upstreamBranch === undefined ? ["--set-upstream"] : []),
       "--",
       remote,
-      `refs/heads/${branch}:refs/heads/${upstreamBranch ?? branch}`,
+      `${localBranchRef(branch)}:${localBranchRef(upstreamBranch ?? branch)}`,
     ],
     { login },
   );
@@ -1052,7 +1067,7 @@ export async function renameBranch(cwd: string, from: string, to: string): Promi
     return moved;
   }
   const names = await git(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads"]);
-  const taken = names.stdout.split("\n").some((line) => line.trim() === `refs/heads/${to}`);
+  const taken = names.stdout.split("\n").some((line) => line.trim() === localBranchRef(to));
   return names.code !== 0 || taken ? moved : run(cwd, ["branch", "-M", "--", from, to]);
 }
 
@@ -1066,15 +1081,15 @@ export function deleteBranch(cwd: string, name: string): Promise<GitActionResult
  *  the push's exit code is 1 for any refusal. */
 export async function deleteRemoteBranch(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
   const env = await loginEnv(cwd, login);
-  const deleted = await runNetwork(cwd, ["push", remote, "--delete", `refs/heads/${name}`], { env });
+  const deleted = await runNetwork(cwd, ["push", remote, "--delete", localBranchRef(name)], { env });
   if (deleted.ok || deleted.authRequired) {
     return deleted;
   }
-  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, `refs/heads/${name}`], { env, unqueued: true });
+  const listed = await git(cwd, ["ls-remote", "--exit-code", remote, localBranchRef(name)], { env, unqueued: true });
   if (listed.code !== 2) {
     return deleted;
   }
-  return run(cwd, ["update-ref", "-d", `refs/remotes/${remote}/${name}`]);
+  return run(cwd, ["update-ref", "-d", remoteBranchRef(remote, name)]);
 }
 
 /** `fastForwardOnto`: only a fast-forward, and only while that branch is checked out here — read
@@ -1084,7 +1099,8 @@ export async function merge(cwd: string, target: CheckoutTarget, fastForwardOnto
   if (fastForwardOnto === undefined) {
     return run(cwd, ["merge", ref]);
   }
-  const head = (await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"])).stdout.trim();
+  // The full name: `--short` gives `heads/<name>` beside a tag of the branch's name.
+  const head = (await git(cwd, ["symbolic-ref", "--quiet", "HEAD"])).stdout.trim().replace(/^refs\/heads\//, "");
   if (head !== fastForwardOnto) {
     return { ok: false, error: `${head || "a detached HEAD"} is checked out, not ${fastForwardOnto}` };
   }
@@ -1167,7 +1183,7 @@ export function createTag(cwd: string, name: string, target: CheckoutTarget, mes
 }
 
 export function pushTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
-  return runNetwork(cwd, ["push", remote, `refs/tags/${name}`], { login });
+  return runNetwork(cwd, ["push", remote, tagRef(name)], { login });
 }
 
 export function deleteTag(cwd: string, name: string): Promise<GitActionResult> {
@@ -1175,11 +1191,11 @@ export function deleteTag(cwd: string, name: string): Promise<GitActionResult> {
 }
 
 export function deleteRemoteTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
-  return runNetwork(cwd, ["push", remote, "--delete", `refs/tags/${name}`], { login });
+  return runNetwork(cwd, ["push", remote, "--delete", tagRef(name)], { login });
 }
 
 export function checkoutTag(cwd: string, name: string): Promise<GitActionResult> {
-  return run(cwd, ["switch", "--detach", `refs/tags/${name}`]);
+  return run(cwd, ["switch", "--detach", tagRef(name)]);
 }
 
 /** `add --all` first: `commit --all` alone leaves out the untracked files the list shows. */
@@ -1331,13 +1347,13 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
   if (target.remote === undefined || localBranches.includes(target.name)) {
     return run(cwd, ["switch", target.name]);
   }
-  const tracked = await run(cwd, ["switch", "--track", refName(target)]);
+  const tracked = await run(cwd, ["switch", "--track", fullRefName(target)]);
   if (tracked.ok) {
     return tracked;
   }
   // The local branch may have appeared since the last refresh. Any other failure is the switch's
   // own — local changes in the way — and said as git said it.
-  const local = await git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${target.name}`]);
+  const local = await git(cwd, ["show-ref", "--verify", "--quiet", localBranchRef(target.name)]);
   return local.code === 0 ? run(cwd, ["switch", target.name]) : tracked;
 }
 
@@ -1352,7 +1368,7 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
  * `branch -m` carries the key along and `branch -D` drops it. A failed write loses only that.
  */
 export async function worktreeAdd(cwd: string, target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
-  const added = await run(cwd, ["worktree", "add", "--relative-paths", "--no-track", "-b", branch, "--", target, refName(base)]);
+  const added = await run(cwd, ["worktree", "add", "--relative-paths", "--no-track", "-b", branch, "--", target, fullRefName(base)]);
   if (added.ok) {
     await git(cwd, ["config", `branch.${branch}.base`, base.name]).catch(() => undefined);
   }

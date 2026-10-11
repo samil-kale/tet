@@ -19,7 +19,7 @@ export function useRefHeads(states: Record<string, RepositoryState>): Record<str
       next[refKey] = {
         head: state.head,
         detached: state.detached,
-        upstream: state.upstream,
+        upstream: state.upstream && refName(state.upstream),
         base,
         baseAt: base === undefined ? undefined : state.worktrees.find((worktree) => worktree.branch === base)?.path,
         defaultBranch: target && refName(target),

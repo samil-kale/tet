@@ -3,7 +3,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote, refName, upstreamOf } from "../../shared/types/git";
+import { ownValue } from "../../shared/own-value";
+import { defaultRemote, EMPTY_REPOSITORY_STATE, fullRefName, headRemote, upstreamOf } from "../../shared/types/git";
 import { refKeyOf } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
 import { MISSING_MTIME_MS } from "../../shared/types/files";
@@ -84,30 +85,14 @@ export const MISSING_BLOB: HeadBlob = { content: "", binary: false, missing: tru
  * deleted since the last fetch.
  */
 function graphRevisions(state: RepositoryState): string[] {
-  const revisions = new Set(["HEAD"]);
-  const remoteBranch = (name: string): string | undefined => {
-    const remote = state.remotes.find((candidate) => name.startsWith(`${candidate.name}/`));
-    return remote?.branches.includes(name.slice(remote.name.length + 1)) ? `refs/remotes/${name}` : undefined;
-  };
-  if (state.upstream) {
-    const ref = state.localBranches.includes(state.upstream) ? `refs/heads/${state.upstream}` : remoteBranch(state.upstream);
-    if (ref) {
-      revisions.add(ref);
-    }
-  }
-  const base = state.defaultBranch;
-  if (base) {
-    const ref =
-      base.remote === undefined
-        ? state.localBranches.includes(base.name)
-          ? `refs/heads/${base.name}`
-          : undefined
-        : remoteBranch(refName(base));
-    if (ref) {
-      revisions.add(ref);
-    }
-  }
-  return [...revisions];
+  const listed = (target: CheckoutTarget): boolean =>
+    target.remote === undefined
+      ? state.localBranches.includes(target.name)
+      : state.remotes.some((remote) => remote.name === target.remote && remote.branches.includes(target.name));
+  const targets = [state.upstream, state.defaultBranch].filter(
+    (target): target is CheckoutTarget => target !== undefined && listed(target),
+  );
+  return [...new Set(["HEAD", ...targets.map(fullRefName)])];
 }
 
 /** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
@@ -389,10 +374,7 @@ export class Repository {
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
       // Only a linked worktree carries a base and a key; the repository has neither.
-      base:
-        worktree.isRepository || worktree.branch === undefined || !Object.hasOwn(this.worktreeBases, worktree.branch)
-          ? undefined
-          : this.worktreeBases[worktree.branch],
+      base: worktree.isRepository || worktree.branch === undefined ? undefined : ownValue(this.worktreeBases, worktree.branch),
       key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path),
     }));
     const next: RepositoryState = { ...read, remotes, worktrees };

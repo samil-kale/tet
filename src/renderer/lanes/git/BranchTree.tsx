@@ -1,5 +1,6 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
+import { ownValue } from "../../../shared/own-value";
 import { defaultRemote, refName, upstreamName, upstreamOf } from "../../../shared/types/git";
 import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../../shared/types/git";
@@ -102,11 +103,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** The current branch's from the status header; others' from `state.branchTrack`, which holds
    *  only branches differing from their upstream. */
   const track = (name: string): { ahead: number; behind: number } | undefined =>
-    isCurrent(name)
-      ? { ahead: state.ahead, behind: state.behind }
-      : Object.hasOwn(state.branchTrack, name)
-        ? state.branchTrack[name]
-        : undefined;
+    isCurrent(name) ? { ahead: state.ahead, behind: state.behind } : ownValue(state.branchTrack, name);
 
   const repository = window.tet.repository;
   /** The remote tags go to (`defaultRemote`). */
@@ -213,7 +210,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** Asks first only when the main process answers `rewrites-pushed`, as GitHub Desktop warns. */
   const rebaseOnto = (target: CheckoutTarget): void => {
     const ref = refName(target);
-    const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`;
+    const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream && refName(state.upstream)}.`;
     runWithFollowUp(
       (action) => branch.run(`Rebasing onto ${ref}...`, action),
       () => repository.rebase(at, target, false),

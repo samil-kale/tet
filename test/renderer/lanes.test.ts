@@ -104,7 +104,7 @@ describe("the GRAPH's lanes", () => {
     const state = {
       ...EMPTY_REPOSITORY_STATE,
       head: "feature",
-      upstream: "origin/feature",
+      upstream: { name: "feature", remote: "origin" },
       defaultBranch: { name: "develop", remote: "origin" },
     };
     assert.deepEqual(

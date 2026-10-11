@@ -5,6 +5,7 @@
  */
 
 import { envNameKey, isEnvName, isReservedName } from "./env-rules";
+import { ownValue } from "./own-value";
 import type {
   SbxKnowledgeSettings,
   SbxKnowledgeKind,
@@ -149,11 +150,9 @@ export function sbxProblemNotices(problems: SbxProblems): string[] {
   });
 }
 
-/** What is wrong with `row` of `option`, by the row alone: one named as a property every object
- *  has (`constructor`) would read that property off the record. */
+/** What is wrong with `row` of `option`, undefined where nothing is. */
 export function problemOf(problems: SbxProblems, option: SbxOption, row: string): string | undefined {
-  const rows = problems[option];
-  return rows && Object.hasOwn(rows, row) ? rows[row] : undefined;
+  return ownValue(problems[option] ?? {}, row);
 }
 
 /** Adds `rows` (by row, with their reason) to `problems` under `option`. */

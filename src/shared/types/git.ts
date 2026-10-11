@@ -1,3 +1,5 @@
+import { ownValue } from "../own-value";
+
 /** A username and password (or token) typed into TET for a git host. */
 export interface GitLogin {
   username: string;
@@ -71,8 +73,9 @@ export interface RepositoryState {
   /** The branch's commit; absent while detached (`head` is the id then) or unborn. Tells a pull or
    *  reset apart from the branch standing still. */
   headCommit?: string;
-  /** e.g. "origin/main"; absent without one. */
-  upstream?: string;
+  /** The checked-out branch's upstream, a local branch where it tracks one; absent without one,
+   *  and where its ref is gone. */
+  upstream?: CheckoutTarget;
   /** Relative to the upstream; both 0 without one. */
   ahead: number;
   behind: number;
@@ -205,10 +208,9 @@ export function headRemote(state: RepositoryState): string | undefined {
   return upstreamOf(state, state.head)?.remote ?? defaultRemote(state);
 }
 
-/** A local branch's upstream, by the branch's name alone: one named as a property every object has
- *  (`constructor`) would read that property off the record. */
+/** A local branch's upstream. */
 export function upstreamOf(state: RepositoryState, branch: string): BranchUpstream | undefined {
-  return Object.hasOwn(state.branchUpstreams, branch) ? state.branchUpstreams[branch] : undefined;
+  return ownValue(state.branchUpstreams, branch);
 }
 
 /** `headRemote`, and whether fetch, pull and push can go: not without a remote, nor from a
@@ -223,12 +225,27 @@ export function refName(target: CheckoutTarget): string {
   return target.remote ? `${target.remote}/${target.name}` : target.name;
 }
 
+/** A local branch's full ref name. */
+export function localBranchRef(name: string): string {
+  return `refs/heads/${name}`;
+}
+
+/** A remote branch's full ref name. */
+export function remoteBranchRef(remote: string, name: string): string {
+  return `refs/remotes/${remote}/${name}`;
+}
+
+/** A tag's full ref name. */
+export function tagRef(name: string): string {
+  return `refs/tags/${name}`;
+}
+
 /**
  * The target's full ref name, which is what a command reading a commit is given: `refName` is
  * ambiguous beside a tag of the same name, and git then takes the tag.
  */
 export function fullRefName(target: CheckoutTarget): string {
-  return target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
+  return target.remote ? remoteBranchRef(target.remote, target.name) : localBranchRef(target.name);
 }
 
 /** A local branch's upstream on a remote, e.g. `{ remote: "origin", branch: "main" }`. */

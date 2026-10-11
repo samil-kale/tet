@@ -12,6 +12,7 @@ import {
 } from "../shared/ctl";
 import type { ControlRequest, ControlResponse, ControlVerb } from "../shared/ctl";
 import { admitsVerb, HOST_SIDE, SANDBOX_SIDE, type ControlSide } from "../shared/ctl-side";
+import { ownValue } from "../shared/own-value";
 
 /**
  * `tet-ctl`: how an agent in a TET terminal asks the app. No electron; bundled on its own
@@ -96,18 +97,13 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown>; e
   }
   const args: Record<string, unknown> = {};
   const positionals: string[] = [];
-  let literal = false;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
-    if (literal) {
-      positionals.push(arg);
-      continue;
-    }
     if (arg === "--") {
-      literal = true;
-      continue;
+      positionals.push(...rest.slice(i + 1));
+      break;
     }
-    const flag = arg.startsWith("--") && Object.hasOwn(CONTROL_FLAGS, arg.slice(2)) ? CONTROL_FLAGS[arg.slice(2)] : undefined;
+    const flag = arg.startsWith("--") ? ownValue(CONTROL_FLAGS, arg.slice(2)) : undefined;
     if (flag === "switch") {
       args[arg.slice(2)] = true;
     } else if (flag === "value") {

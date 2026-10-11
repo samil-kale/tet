@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from "react";
-import { syncRemote, upstreamOf } from "../../../shared/types/git";
+import { refName, syncRemote, upstreamOf } from "../../../shared/types/git";
 import type { RepositoryState } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { OpenEditor } from "../../editor/editor-tab";
@@ -78,7 +78,7 @@ export const GitLane = memo(function GitLane({
   const locked = branch.locked || acting;
   // Named as GitHub Desktop names them: by the remote, not the branch. A local upstream is pulled
   // from, named by its branch, but pushed to the remote like any other.
-  const pullFrom = upstreamOf(state, state.head)?.remote ?? state.upstream;
+  const pullFrom = upstreamOf(state, state.head)?.remote ?? (state.upstream && refName(state.upstream));
 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>

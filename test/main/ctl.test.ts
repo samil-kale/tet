@@ -318,8 +318,8 @@ function deps(): ControlDeps {
                     : WORKTREES.map((worktree) => (worktree.isRepository ? { ...worktree, branch: merging.checkedOut } : worktree)),
                 ...(ref.worktree !== undefined && { operation: merging.operation, changes: merging.changes }),
               }),
-              merge: async (gitRef, fastForwardOnto) => {
-                calls.merges.push([refKeyOf(ref), refName(gitRef), fastForwardOnto]);
+              merge: async (target, fastForwardOnto) => {
+                calls.merges.push([refKeyOf(ref), refName(target), fastForwardOnto]);
                 if (fastForwardOnto !== undefined) {
                   return merging.forwardError === undefined ? { ok: true } : { ok: false, error: merging.forwardError };
                 }

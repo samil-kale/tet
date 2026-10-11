@@ -40,6 +40,7 @@ import {
   unresolvedConflicts,
   updateRemoteHead,
   version,
+  worktreeAdd,
 } from "../../src/main/git/git";
 import { worktreesSupported } from "../../src/shared/types/git";
 import { commitFiles, git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
@@ -245,7 +246,7 @@ describe("a repository, from init on", () => {
     assert.deepEqual(await push(cwd, "origin", "main", undefined), { ok: true });
     run("remote", "set-head", "origin", "main");
     let state = await readState(cwd);
-    assert.equal(state.upstream, "origin/main");
+    assert.deepEqual(state.upstream, { name: "main", remote: "origin" });
     assert.deepEqual(state.branchUpstreams, { main: { remote: "origin", branch: "main" } });
     assert.deepEqual([state.ahead, state.behind], [0, 0]);
     assert.deepEqual(state.remotes, [{ name: "origin", branches: ["main"], mergedBranches: [] }]);
@@ -273,7 +274,7 @@ describe("a repository, from init on", () => {
     run("switch", "-q", "-c", "behind", "origin/main~1");
     run("branch", "-q", "--set-upstream-to=origin/main");
     let state = await readState(cwd);
-    assert.deepEqual([state.head, state.upstream, state.ahead, state.behind], ["behind", "origin/main", 0, 1]);
+    assert.deepEqual([state.head, state.upstream, state.ahead, state.behind], ["behind", { name: "main", remote: "origin" }, 0, 1]);
     run("update-ref", "refs/remotes/origin/doomed", "HEAD");
     run("branch", "-q", "--set-upstream-to=origin/doomed");
     run("update-ref", "-d", "refs/remotes/origin/doomed");
@@ -515,11 +516,15 @@ describe("a branch beside a tag of its name", () => {
     run("switch", "-q", "main");
   });
 
-  it("merges the branch and starts a new one at it, never at the tag", async () => {
+  it("merges and tags the branch and starts a new one and a worktree at it, never at the tag", async () => {
     const branch = run("rev-parse", "refs/heads/twin");
     assert.deepEqual(await createBranch(cwd, "from-twin", { name: "twin" }), { ok: true });
     assert.equal(run("rev-parse", "HEAD"), branch);
     run("switch", "-q", "main");
+    assert.deepEqual(await worktreeAdd(cwd, path.join(tempDir("tet-git-twin-worktree-"), "beside"), "beside", { name: "twin" }), {
+      ok: true,
+    });
+    assert.equal(run("rev-parse", "refs/heads/beside"), branch);
     assert.equal(await rebaseRewritesPushed(cwd, { name: "twin" }), false, "no upstream, and no ambiguity to fail on");
     assert.deepEqual(await createTag(cwd, "at-twin", { name: "twin" }, ""), { ok: true });
     assert.equal(run("rev-parse", "at-twin^{commit}"), branch);
@@ -535,6 +540,21 @@ describe("a branch beside a tag of its name", () => {
     assert.equal(git(bare, "rev-parse", "refs/heads/twin"), run("rev-parse", "refs/heads/twin"));
     assert.deepEqual(await deleteRemoteBranch(cwd, "origin", "twin"), { ok: true });
     assert.equal(git(bare, "for-each-ref", "--format=%(refname)"), "refs/tags/twin");
+  });
+
+  it("checks out a remote branch beside a tag named as it is with its remote", async () => {
+    run("push", "-q", "origin", "refs/heads/main:refs/heads/far");
+    run("fetch", "-q", "origin");
+    run("tag", "origin/far", "refs/tags/twin");
+    assert.deepEqual(await checkout(cwd, { name: "far", remote: "origin" }, ["main", "twin"]), { ok: true });
+    assert.equal(run("rev-parse", "HEAD"), run("rev-parse", "refs/remotes/origin/far"));
+    assert.equal(run("config", "branch.far.merge"), "refs/heads/far");
+  });
+
+  it("names the upstream and the checked-out branch as without the tags", async () => {
+    run("tag", "far", "refs/tags/twin");
+    assert.deepEqual((await readState(cwd)).upstream, { name: "far", remote: "origin" });
+    assert.deepEqual(await merge(cwd, { name: "main" }, "far"), { ok: true });
   });
 });
 
@@ -691,7 +711,7 @@ describe("remotes the tree has to read carefully", () => {
     const state = await readState(cwd, ["team/fork"]);
     assert.deepEqual(state.remotes, [{ name: "team/fork", branches: ["main"], mergedBranches: [] }]);
     assert.deepEqual(state.defaultBranch, { name: "main" });
-    assert.equal(state.upstream, "team/fork/main");
+    assert.deepEqual(state.upstream, { name: "main", remote: "team/fork" });
     assert.deepEqual(state.branchUpstreams, { main: { remote: "team/fork", branch: "main" } });
   });
 });

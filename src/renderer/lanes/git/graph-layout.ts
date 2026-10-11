@@ -1,5 +1,5 @@
 import { refName } from "../../../shared/types/git";
-import type { GraphCommit, GraphRef, RepositoryState } from "../../../shared/types/git";
+import type { CheckoutTarget, GraphCommit, GraphRef, RepositoryState } from "../../../shared/types/git";
 
 /** A lane's color: a name of the `--tet-scmGraph-*` variables, VS Code's `scmGraph.*` colors. */
 export type GraphColor =
@@ -37,14 +37,13 @@ const refKey = (ref: Pick<GraphRef, "kind" | "name">): string => `${ref.kind}:${
  */
 export function graphRefColors(state: RepositoryState): Map<string, GraphColor> {
   const colors = new Map<string, GraphColor>();
+  const targetKey = (target: CheckoutTarget): string =>
+    refKey({ kind: target.remote === undefined ? "local" : "remote", name: refName(target) });
   if (state.defaultBranch) {
-    colors.set(
-      refKey({ kind: state.defaultBranch.remote === undefined ? "local" : "remote", name: refName(state.defaultBranch) }),
-      "historyItemBaseRefColor",
-    );
+    colors.set(targetKey(state.defaultBranch), "historyItemBaseRefColor");
   }
   if (state.upstream) {
-    colors.set(refKey({ kind: "remote", name: state.upstream }), "historyItemRemoteRefColor");
+    colors.set(targetKey(state.upstream), "historyItemRemoteRefColor");
   }
   if (!state.detached) {
     colors.set(refKey({ kind: "local", name: state.head }), "historyItemRefColor");
