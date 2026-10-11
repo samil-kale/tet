@@ -202,7 +202,13 @@ export function defaultRemote(state: RepositoryState): string | undefined {
 /** The remote a fetch, pull or push of the checked-out branch reaches: its upstream's, else
  *  `defaultRemote`. */
 export function headRemote(state: RepositoryState): string | undefined {
-  return state.branchUpstreams[state.head]?.remote ?? defaultRemote(state);
+  return upstreamOf(state, state.head)?.remote ?? defaultRemote(state);
+}
+
+/** A local branch's upstream, by the branch's name alone: one named as a property every object has
+ *  (`constructor`) would read that property off the record. */
+export function upstreamOf(state: RepositoryState, branch: string): BranchUpstream | undefined {
+  return Object.hasOwn(state.branchUpstreams, branch) ? state.branchUpstreams[branch] : undefined;
 }
 
 /** `headRemote`, and whether fetch, pull and push can go: not without a remote, nor from a
@@ -215,6 +221,14 @@ export function syncRemote(state: RepositoryState): { remote: string | undefined
 /** The ref git and the UI name a target by: `remote/name` for a remote branch. */
 export function refName(target: CheckoutTarget): string {
   return target.remote ? `${target.remote}/${target.name}` : target.name;
+}
+
+/**
+ * The target's full ref name, which is what a command reading a commit is given: `refName` is
+ * ambiguous beside a tag of the same name, and git then takes the tag.
+ */
+export function fullRefName(target: CheckoutTarget): string {
+  return target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
 }
 
 /** A local branch's upstream on a remote, e.g. `{ remote: "origin", branch: "main" }`. */

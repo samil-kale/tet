@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import type { ReactNode } from "react";
-import { defaultRemote, refName, upstreamName } from "../../../shared/types/git";
+import { defaultRemote, refName, upstreamName, upstreamOf } from "../../../shared/types/git";
 import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
@@ -102,13 +102,18 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** The current branch's from the status header; others' from `state.branchTrack`, which holds
    *  only branches differing from their upstream. */
   const track = (name: string): { ahead: number; behind: number } | undefined =>
-    isCurrent(name) ? { ahead: state.ahead, behind: state.behind } : state.branchTrack[name];
+    isCurrent(name)
+      ? { ahead: state.ahead, behind: state.behind }
+      : Object.hasOwn(state.branchTrack, name)
+        ? state.branchTrack[name]
+        : undefined;
 
   const repository = window.tet.repository;
   /** The remote tags go to (`defaultRemote`). */
   const remote = defaultRemote(state);
   /** What "Update from" merges, prefixed by its remote where it is a remote branch. */
-  const defaultRef = state.defaultBranch && refName(state.defaultBranch);
+  const { defaultBranch } = state;
+  const defaultRef = defaultBranch && refName(defaultBranch);
 
   /** Where the local branch a checkout would switch to is checked out in another worktree. */
   const worktreeOf = (target: CheckoutTarget): WorktreeInfo | undefined =>
@@ -151,10 +156,10 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     branch.run(`Switching to ${name}...`, () => repository.checkoutTag(at, name));
   };
 
-  const askCreateBranch = async (startPoint: string): Promise<void> => {
+  const askCreateBranch = async (startPoint: CheckoutTarget): Promise<void> => {
     await askName({
       title: "Create branch",
-      detail: `The new branch starts at ${startPoint} and is checked out.`,
+      detail: `The new branch starts at ${refName(startPoint)} and is checked out.`,
       confirmLabel: "Create branch",
       // git's own words for a name it will not take, at the field (`prompt`'s `submit`).
       submit: (name) => branch.ask(`Creating ${name}...`, () => repository.createBranch(at, name, startPoint)),
@@ -173,7 +178,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** `git branch -D`: unmerged work goes too, as the question says. The checked-out branch gives way
    *  to the default branch first. Its upstream is a checkbox where it has one. */
   const askDeleteBranch = async (name: string): Promise<void> => {
-    const upstream = state.branchUpstreams[name];
+    const upstream = upstreamOf(state, name);
     const answer = await confirm({
       title: "Delete branch",
       message: `Are you sure you want to delete ${name}?`,
@@ -206,11 +211,12 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   };
 
   /** Asks first only when the main process answers `rewrites-pushed`, as GitHub Desktop warns. */
-  const rebaseOnto = (ref: string): void => {
+  const rebaseOnto = (target: CheckoutTarget): void => {
+    const ref = refName(target);
     const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream}.`;
     runWithFollowUp(
       (action) => branch.run(`Rebasing onto ${ref}...`, action),
-      () => repository.rebase(at, ref, false),
+      () => repository.rebase(at, target, false),
       "rewrites-pushed",
       // Not asked while another question is up (`askLogin`): the rebase's refusal is told instead.
       () =>
@@ -223,14 +229,14 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
           },
           message,
         ),
-      () => repository.rebase(at, ref, true),
+      () => repository.rebase(at, target, true),
     );
   };
 
-  const askCreateTag = async (target: string): Promise<void> => {
+  const askCreateTag = async (target: CheckoutTarget): Promise<void> => {
     await prompt({
       title: "Create tag",
-      detail: `The tag points at ${target}.`,
+      detail: `The tag points at ${refName(target)}.`,
       value: { name: "", message: "" },
       confirmLabel: "Create tag",
       ready: ({ name }) => filled(name),
@@ -296,20 +302,21 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     return [{ label, run: () => branch.run(`${label}...`, () => repository.abort(at)) }, SEPARATOR];
   };
 
-  /** Merges `ref` into HEAD, on the lane's bar. */
-  const merge = (ref: string): void => branch.run(`Merging ${ref}...`, () => repository.merge(at, ref));
+  /** Merges `target` into HEAD, on the lane's bar. */
+  const merge = (target: CheckoutTarget): void => branch.run(`Merging ${refName(target)}...`, () => repository.merge(at, target));
 
   /** Brings the default branch into HEAD; every fetch moves a local default branch up to its
    *  upstream. Nothing to bring in while standing on the default branch. */
   const updateFromDefault = (): ContextMenuEntry => ({
     label: `Update from ${defaultRef ?? "the default branch"}`,
-    run: defaultRef && !state.detached && state.head !== defaultRef ? () => merge(defaultRef) : undefined,
+    run: defaultBranch && !state.detached && state.head !== defaultRef ? () => merge(defaultBranch) : undefined,
   });
 
   const branchEntries = (target: Extract<MenuTarget, { kind: "branch" }>): ContextMenuEntry[] => {
     const { name, remote: from } = target;
     // Prefixed by its remote everywhere but the checkout, which creates the tracking branch.
-    const ref = from ? `${from}/${name}` : name;
+    const branchTarget: CheckoutTarget = { name, remote: from };
+    const ref = refName(branchTarget);
     const current = from === undefined && isCurrent(name);
     const onHead = current || state.detached;
     // The checked-out branch gives way to the default branch, unless it is that branch.
@@ -317,9 +324,9 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
 
     return [
       ...abortEntries(),
-      { label: "Check out", run: current || inWorktree ? undefined : () => checkout({ name, remote: from }) },
+      { label: "Check out", run: current || inWorktree ? undefined : () => checkout(branchTarget) },
       // It checks the new branch out, which a worktree's own branch never gives way to.
-      { label: `Create branch from ${ref}...`, run: inWorktree ? undefined : () => void askCreateBranch(ref) },
+      { label: `Create branch from ${ref}...`, run: inWorktree ? undefined : () => void askCreateBranch(branchTarget) },
       ...(from
         ? [{ label: "Delete...", run: () => void askDeleteRemoteBranch(from, name) }]
         : [
@@ -333,15 +340,15 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         : [
             {
               label: `Merge ${ref} into ${state.head}`,
-              run: () => merge(ref),
+              run: () => merge(branchTarget),
             },
             {
               label: `Rebase ${state.head} onto ${ref}`,
-              run: () => rebaseOnto(ref),
+              run: () => rebaseOnto(branchTarget),
             },
           ]),
       SEPARATOR,
-      { label: "Create tag...", run: () => void askCreateTag(ref) },
+      { label: "Create tag...", run: () => void askCreateTag(branchTarget) },
       { label: "Copy branch name", run: () => void navigator.clipboard.writeText(ref) },
     ];
   };
@@ -381,7 +388,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     const merged = worktree.branch;
     // Only one TET made is renamed or deleted here; one made elsewhere is git's to change.
     const own = worktree.key === undefined ? undefined : projectRef(projectId, worktree.key);
-    const upstream = merged ? state.branchUpstreams[merged] : undefined;
+    const upstream = merged ? upstreamOf(state, merged) : undefined;
     const mergedUpstream = upstream ? upstreamName(upstream) : undefined;
     return [
       ...abortEntries(),
@@ -392,7 +399,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         ? updateFromDefault()
         : {
             label: merged ? `Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
-            run: merged && !state.detached ? () => merge(merged) : undefined,
+            run: merged && !state.detached ? () => merge({ name: merged }) : undefined,
           },
       SEPARATOR,
       worktreeEntry(

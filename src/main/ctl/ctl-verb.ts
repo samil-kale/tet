@@ -3,7 +3,7 @@ import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
 import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
-import type { GitActionResult, RepositoryState } from "../../shared/types/git";
+import type { CheckoutTarget, GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type {
   SbxAccount,
@@ -137,8 +137,8 @@ export interface ControlDeps {
           at: { path: string };
           getState(): RepositoryState;
           listExplorer(settings: ExplorerSettings): Promise<ExplorerListing>;
-          merge(ref: string, fastForwardOnto?: string): Promise<GitActionResult>;
-          conflictMarkers(base: string): Promise<string[]>;
+          merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitActionResult>;
+          conflictMarkers(base: CheckoutTarget): Promise<string[]>;
         }
       | undefined;
   };

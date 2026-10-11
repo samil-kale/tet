@@ -173,7 +173,7 @@ export interface TETApi {
     /** The new url shows in the next state. */
     setRemoteUrl: (ref: ProjectRef, remote: string, url: string) => Promise<GitActionResult>;
     /** Creates the branch off `startPoint` and switches to it. */
-    createBranch: (ref: ProjectRef, name: string, startPoint: string) => Promise<GitActionResult>;
+    createBranch: (ref: ProjectRef, name: string, startPoint: CheckoutTarget) => Promise<GitActionResult>;
     renameBranch: (ref: ProjectRef, from: string, to: string) => Promise<GitActionResult>;
     /** The caller confirms first. The checked-out branch gives way to the default branch; `onRemote`
      *  deletes its upstream. */
@@ -181,14 +181,14 @@ export interface TETApi {
     /** A branch on a remote alone. The caller confirms first. */
     deleteRemoteBranch: (ref: ProjectRef, remote: string, name: string, login?: GitLogin) => Promise<GitActionResult>;
     /** Into the current branch. A conflict is reported and left in the tree. */
-    merge: (ref: ProjectRef, gitRef: string) => Promise<GitActionResult>;
+    merge: (ref: ProjectRef, target: CheckoutTarget) => Promise<GitActionResult>;
     /** Unless `confirmed`, answers `rewrites-pushed` instead where commits on the upstream would be
      *  rewritten; the caller asks and calls again. */
-    rebase: (ref: ProjectRef, gitRef: string, confirmed: boolean) => Promise<GitActionResult>;
+    rebase: (ref: ProjectRef, target: CheckoutTarget, confirmed: boolean) => Promise<GitActionResult>;
     /** Aborts `RepositoryState.operation`. */
     abort: (ref: ProjectRef) => Promise<GitActionResult>;
     /** Always annotated, as in GitHub Desktop. */
-    createTag: (ref: ProjectRef, name: string, target: string, message: string) => Promise<GitActionResult>;
+    createTag: (ref: ProjectRef, name: string, target: CheckoutTarget, message: string) => Promise<GitActionResult>;
     pushTag: (ref: ProjectRef, name: string, login?: GitLogin) => Promise<GitActionResult>;
     deleteTag: (ref: ProjectRef, name: string, onRemote: boolean) => Promise<GitActionResult>;
     /** The tag on the remote alone: a `deleteTag` whose remote half wanted a login, again. */

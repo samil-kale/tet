@@ -3,9 +3,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
-import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote, refName } from "../../shared/types/git";
+import { defaultRemote, EMPTY_REPOSITORY_STATE, headRemote, refName, upstreamOf } from "../../shared/types/git";
 import { refKeyOf } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
+import { MISSING_MTIME_MS } from "../../shared/types/files";
 import type {
   CommitFileContent,
   ExplorerListing,
@@ -388,7 +389,10 @@ export class Repository {
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
       // Only a linked worktree carries a base and a key; the repository has neither.
-      base: worktree.isRepository || worktree.branch === undefined ? undefined : this.worktreeBases[worktree.branch],
+      base:
+        worktree.isRepository || worktree.branch === undefined || !Object.hasOwn(this.worktreeBases, worktree.branch)
+          ? undefined
+          : this.worktreeBases[worktree.branch],
       key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path),
     }));
     const next: RepositoryState = { ...read, remotes, worktrees };
@@ -490,7 +494,7 @@ export class Repository {
   /** Pushes the current branch to its upstream, or publishes it to `remote` when it has none. */
   push(login?: GitLogin): Promise<GitActionResult> {
     return this.runAction(() => {
-      const upstream = this.state.branchUpstreams[this.state.head];
+      const upstream = upstreamOf(this.state, this.state.head);
       const remote = headRemote(this.state);
       if (!remote) {
         return Promise.resolve({ ok: false, error: "This repository has no remote to push to" });
@@ -527,7 +531,7 @@ export class Repository {
     });
   }
 
-  createBranch(name: string, startPoint: string): Promise<GitActionResult> {
+  createBranch(name: string, startPoint: CheckoutTarget): Promise<GitActionResult> {
     return this.runAction(() => git.createBranch(this.at.path, name, startPoint));
   }
 
@@ -555,7 +559,7 @@ export class Repository {
    *  machine. The checked-out branch gives way to the default branch first, as in GitHub Desktop. */
   deleteBranch(name: string, onRemote: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
-      const upstream = this.state.branchUpstreams[name];
+      const upstream = upstreamOf(this.state, name);
       if (!this.state.detached && name === this.state.head) {
         const fallback = this.state.defaultBranch;
         if (!fallback || (fallback.remote === undefined && fallback.name === name)) {
@@ -585,23 +589,23 @@ export class Repository {
   }
 
   /** `fastForwardOnto`: see git.ts's merge. */
-  merge(ref: string, fastForwardOnto?: string): Promise<GitActionResult> {
-    return this.runAction(() => git.merge(this.at.path, ref, fastForwardOnto));
+  merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitActionResult> {
+    return this.runAction(() => git.merge(this.at.path, target, fastForwardOnto));
   }
 
   /** A read beside the actions, never on the refresh path. */
-  conflictMarkers(base: string): Promise<string[]> {
+  conflictMarkers(base: CheckoutTarget): Promise<string[]> {
     return git.conflictMarkers(this.at.path, base);
   }
 
   /** Unless `confirmed`, refused with `rewrites-pushed` where it would rewrite commits the upstream
    *  has: the caller asks, since pushing them afterwards takes a force push. */
-  rebase(ref: string, confirmed: boolean): Promise<GitActionResult> {
+  rebase(target: CheckoutTarget, confirmed: boolean): Promise<GitActionResult> {
     return this.runAction(async () => {
-      if (!confirmed && (await git.rebaseRewritesPushed(this.at.path, ref))) {
+      if (!confirmed && (await git.rebaseRewritesPushed(this.at.path, target))) {
         return { ok: false, needsConfirmation: "rewrites-pushed" };
       }
-      return git.rebase(this.at.path, ref);
+      return git.rebase(this.at.path, target);
     });
   }
 
@@ -612,7 +616,7 @@ export class Repository {
     });
   }
 
-  createTag(name: string, target: string, message: string): Promise<GitActionResult> {
+  createTag(name: string, target: CheckoutTarget, message: string): Promise<GitActionResult> {
     return this.runAction(() => git.createTag(this.at.path, name, target, message));
   }
 
@@ -924,21 +928,38 @@ export class Repository {
 
   /** Refuses when the mtime changed since the read, so a save never silently overwrites another
    *  edit. Written in place: the user's source file, not one other processes read, and in place
-   *  keeps mode and links. */
+   *  keeps mode and links. One deleted meanwhile is refused the same way, and made anew only when
+   *  expected missing (`MISSING_MTIME_MS`) — never over one that came back. */
   async writeFile(filePath: string, content: string, expectedMtimeMs: number): Promise<FileWriteResult> {
     const absolute = resolveInside(this.at.path, filePath);
     if (!absolute) {
       return OUTSIDE_REPOSITORY;
     }
+    const changed = "The file changed on disk since it was opened";
+    const missing = expectedMtimeMs === MISSING_MTIME_MS;
     try {
       // Inside only, as readFile reads.
-      const handle = await openInside(this.at.path, absolute, "r+");
-      try {
-        const before = await handle.stat();
-        if (before.mtimeMs !== expectedMtimeMs) {
-          return { ok: false, error: "The file changed on disk since it was opened", diskMtimeMs: before.mtimeMs };
+      const handle = await openInside(this.at.path, absolute, missing ? "wx" : "r+").catch(async (error: unknown) => {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (!missing && code === "ENOENT") {
+          return { ok: false, error: "The file was deleted on disk since it was opened", diskMtimeMs: MISSING_MTIME_MS };
         }
-        await handle.truncate(0);
+        if (missing && code === "EEXIST") {
+          return { ok: false, error: changed, diskMtimeMs: (await fs.promises.stat(absolute)).mtimeMs };
+        }
+        throw error;
+      });
+      if ("ok" in handle) {
+        return handle;
+      }
+      try {
+        if (!missing) {
+          const before = await handle.stat();
+          if (before.mtimeMs !== expectedMtimeMs) {
+            return { ok: false, error: changed, diskMtimeMs: before.mtimeMs };
+          }
+          await handle.truncate(0);
+        }
         await handle.writeFile(content, "utf8");
         const after = await handle.stat();
         return { ok: true, mtimeMs: after.mtimeMs };

@@ -1,4 +1,12 @@
-import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, mergeProblems, sbxPortKey, sbxProblemNotices } from "../../shared/sbx-rules";
+import {
+  SBX_KNOWLEDGE_KINDS,
+  SBX_PROBLEM,
+  addProblems,
+  mergeProblems,
+  problemOf,
+  sbxPortKey,
+  sbxProblemNotices,
+} from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { SbxKnowledgeSettings, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
@@ -351,15 +359,15 @@ export async function saveSbxSettings(
     return refused;
   };
   const refused = await apply(settings, reads);
-  const refusedPort = (port: SbxPort): boolean => refused.ports?.[sbxPortKey(port)] !== undefined;
+  const refusedPort = (port: SbxPort): boolean => problemOf(refused, "ports", sbxPortKey(port)) !== undefined;
   const applied: SbxProjectSettings = {
     ...settings,
     ports: [
       ...settings.ports.filter((port) => !refusedPort(port)),
       ...previous.ports.filter((port) => refusedPort(port) && !settings.ports.some((next) => sbxPortKey(next) === sbxPortKey(port))),
     ],
-    hosts: settings.hosts.filter((host) => refused.hosts?.[host] === undefined),
-    secrets: settings.secrets.filter((secret) => refused.secrets?.[secret.env] === undefined),
+    hosts: settings.hosts.filter((host) => problemOf(refused, "hosts", host) === undefined),
+    secrets: settings.secrets.filter((secret) => problemOf(refused, "secrets", secret.env) === undefined),
   };
   const failures =
     Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];

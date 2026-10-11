@@ -219,7 +219,7 @@ export const ProjectList = memo(function ProjectList({
               base && baseResolved && branch && !detached
                 ? () =>
                     runIn(baseResolved.refKey).run(`Merging ${branch} into ${base}...`, () =>
-                      window.tet.repository.merge(baseResolved.ref, branch),
+                      window.tet.repository.merge(baseResolved.ref, { name: branch }),
                     )
                 : undefined,
           },

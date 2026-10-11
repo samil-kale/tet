@@ -16,7 +16,7 @@ import type { NotificationTarget } from "../../src/main/util/notifications";
 import type { EnvAsk } from "../../src/main/ctl/env-requests";
 import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/ctl";
-import { EMPTY_REPOSITORY_STATE, type FileChange, type GitActionResult, type WorktreeInfo } from "../../src/shared/types/git";
+import { EMPTY_REPOSITORY_STATE, refName, type FileChange, type GitActionResult, type WorktreeInfo } from "../../src/shared/types/git";
 import { type Project, type ProjectCommand, type ProjectRef, refKeyOf } from "../../src/shared/types/project";
 import {
   EMPTY_SBX_SETTINGS,
@@ -319,7 +319,7 @@ function deps(): ControlDeps {
                 ...(ref.worktree !== undefined && { operation: merging.operation, changes: merging.changes }),
               }),
               merge: async (gitRef, fastForwardOnto) => {
-                calls.merges.push([refKeyOf(ref), gitRef, fastForwardOnto]);
+                calls.merges.push([refKeyOf(ref), refName(gitRef), fastForwardOnto]);
                 if (fastForwardOnto !== undefined) {
                   return merging.forwardError === undefined ? { ok: true } : { ok: false, error: merging.forwardError };
                 }
@@ -1389,6 +1389,12 @@ describe("tet-ctl against the control server", () => {
 
   it("refuses too many arguments", async () => {
     assert.equal((await tetCtl(["tabs-rename", "tab-2", "a", "b"])).status, EXIT_CODES.usage);
+  });
+
+  it("takes an argument starting with -- as it is after a bare --", async () => {
+    assertUsage(await tetCtl(["tabs-rename", "tab-2", "--wip"]), /unknown option: --wip/);
+    assert.deepEqual((await tetCtl(["tabs-rename", "tab-2", "--", "--wip"])).result, { renamed: "tab-2" });
+    assert.deepEqual(calls.renamed.at(-1), ["tab-2", "--wip"]);
   });
 
   // Telling the window is projects.ts's own doing (projects.test.ts), the same for both transports.

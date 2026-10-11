@@ -125,7 +125,7 @@ const SPAWN_SITES = [
   "src/main/util/process.ts",
   // A tab's pty, from resolveCommand.
   "src/main/terminals/pty.ts",
-  // git in its utility process, which reaches nothing of util/ but linked-git-dir.
+  // git in its utility process, which reaches nothing of util/ but linked-git-dir and path-inside.
   "src/main/git/git.ts",
   // The login shell asked for the PATH that resolveCommand looks up in, by its absolute path.
   "src/main/agents/agent-path.ts",
@@ -365,6 +365,7 @@ export default tseslint.config(
       "src/main/git/explorer-host.ts",
       "src/main/util/linked-git-dir.ts",
       "src/main/util/host-platform.ts",
+      "src/main/util/path-inside.ts",
       "src/main/util/utility-host.ts",
       "src/cli/**",
       "src/shared/**"
@@ -378,8 +379,8 @@ export default tseslint.config(
             // A regex, since glob negation does not take a `..` segment: anything one or two
             // levels up that is not `shared`, or one of the util/ files above.
             {
-              regex: "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/(linked-git-dir|host-platform|utility-host)$)",
-              message: "Only src/shared, this folder and util/'s linked-git-dir, host-platform and utility-host."
+              regex: "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/(linked-git-dir|host-platform|path-inside|utility-host)$)",
+              message: "Only src/shared, this folder and util/'s linked-git-dir, host-platform, path-inside and utility-host."
             }
           ]
         }

@@ -1,7 +1,17 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 // The ESM build: esbuild can't follow the UMD build's `require("./impl/format")`.
-import { applyEdits, modify, parse as parseJsonc, type JSONPath, type ParseError } from "jsonc-parser/lib/esm/main.js";
+import {
+  applyEdits,
+  createScanner,
+  findNodeAtLocation,
+  modify,
+  parse as parseJsonc,
+  parseTree,
+  type Edit,
+  type JSONPath,
+  type ParseError,
+} from "jsonc-parser/lib/esm/main.js";
 import writeFileAtomic from "write-file-atomic";
 import { isEnvName, isReservedName } from "../../shared/env-rules";
 import { errorMessage } from "../../shared/errors";
@@ -148,6 +158,40 @@ function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<
   return inTurn(patches, key, () => patchNow(root, own, key, edit));
 }
 
+/**
+ * Takes an array's last element out, where one stands before it: `modify` cuts that removal a
+ * character short where nothing separates the elements, leaving a file that no longer parses. The
+ * comma before it goes, and the element with the blank start of its line. Undefined for any other
+ * path, which `modify` removes.
+ *
+ * A workaround for jsonc-parser 3: its 4.0 removes the element right, so once that is the version
+ * in package.json this function and its call in `patchNow` go.
+ */
+function lastElementRemoval(text: string, jsonPath: JSONPath): Edit[] | undefined {
+  const tree = parseTree(text, [], { allowTrailingComma: true });
+  const node = tree && findNodeAtLocation(tree, jsonPath);
+  const siblings = node?.parent?.type === "array" ? (node.parent.children ?? []) : [];
+  const at = node ? siblings.indexOf(node) : -1;
+  if (!node || at < 1 || at !== siblings.length - 1) {
+    return undefined;
+  }
+  const previous = siblings[at - 1];
+  // Past comments and blanks, to the comma itself.
+  const scanner = createScanner(text, true);
+  scanner.setPosition(previous.offset + previous.length);
+  scanner.scan();
+  const comma = scanner.getTokenOffset();
+  if (text[comma] !== ",") {
+    return undefined;
+  }
+  const lineBreak = text.slice(0, node.offset).search(/\r?\n[ \t]*$/);
+  const from = lineBreak === -1 ? node.offset : lineBreak;
+  return [
+    { offset: comma, length: 1, content: "" },
+    { offset: from, length: node.offset + node.length - from, content: "" },
+  ];
+}
+
 /** Throws for a worktree (`own`, its config root, is another folder): everything that changes its
  *  settings changes its repository's, there. */
 async function patchNow(root: string, own: string, filePath: string, edit: (content: ProjectFile) => Change[]): Promise<void> {
@@ -166,7 +210,8 @@ async function patchNow(root: string, own: string, filePath: string, edit: (cont
   const formattingOptions = { insertSpaces: true, tabSize: 2, eol: text?.includes("\r\n") ? "\r\n" : "\n" };
   let next = text ?? "";
   for (const [jsonPath, value, insert] of changes) {
-    next = applyEdits(next, modify(next, jsonPath, value, { formattingOptions, isArrayInsertion: insert }));
+    const removal = value === undefined ? lastElementRemoval(next, jsonPath) : undefined;
+    next = applyEdits(next, removal ?? modify(next, jsonPath, value, { formattingOptions, isArrayInsertion: insert }));
   }
   await writeFileAtomic(filePath, text === null ? `${next}\n` : next, "utf8");
 }
@@ -229,15 +274,39 @@ function toCommands(content: ProjectFile | null): ProjectCommand[] {
   return allCommands(content).filter(appliesHere);
 }
 
-/** Replaces only the commands that apply here — see StoredCommand. */
+/**
+ * Replaces only the commands that apply here — see StoredCommand — entry by entry: another
+ * platform's, one not understood and an unchanged one stay where and as they are written, comments
+ * included. A new one beyond those there follows the last of them.
+ */
 export function writeCommands(root: string, commands: ProjectCommand[]): Promise<void> {
   return patch(root, (content) => {
-    const others = allCommands(content).filter((command) => !appliesHere(command));
     // The short form wherever the command line alone says it all.
-    const stored = [...others, ...commands].map((command) =>
+    const stored = commands.map((command) =>
       command.name || command.color || command.cwd || command.env || command.os ? command : command.command,
     );
-    return [[["commands"], stored]];
+    const entries: unknown[] | undefined = Array.isArray(content.commands) ? content.commands : undefined;
+    if (!entries) {
+      return [[["commands"], stored]];
+    }
+    /** Where this platform's commands stand in the file, in its order, which is theirs. */
+    const mine = entries.flatMap((entry, index) => {
+      const command = toCommand(entry as StoredCommand);
+      return command && appliesHere(command) ? [index] : [];
+    });
+    const changes: Change[] = [];
+    mine.slice(0, stored.length).forEach((index, at) => {
+      if (JSON.stringify(entries[index]) !== JSON.stringify(stored[at])) {
+        changes.push([["commands", index], stored[at]]);
+      }
+    });
+    // From the end, so no removal moves one still to go.
+    for (const index of mine.slice(stored.length).reverse()) {
+      changes.push([["commands", index], undefined]);
+    }
+    const after = mine.length > 0 ? mine[mine.length - 1] + 1 : entries.length;
+    stored.slice(mine.length).forEach((command, at) => changes.push([["commands", after + at], command, true]));
+    return changes;
   });
 }
 

@@ -83,7 +83,8 @@ function fail(message: string, code: number): never {
   process.exit(code);
 }
 
-/** `verb [positionals...] [--<flag> [value]...]` — see CONTROL_FLAGS. */
+/** `verb [positionals...] [--<flag> [value]...]` — see CONTROL_FLAGS. After a bare `--` every
+ *  argument is a positional, one starting with `--` too. */
 function parse(argv: string[]): { verb: string; args: Record<string, unknown>; entry?: ControlVerb } {
   const [verb, ...rest] = argv;
   if (!verb || verb === HELP_VERB || verb === "--help" || verb === "-h") {
@@ -95,9 +96,18 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown>; e
   }
   const args: Record<string, unknown> = {};
   const positionals: string[] = [];
+  let literal = false;
   for (let i = 0; i < rest.length; i += 1) {
     const arg = rest[i];
-    const flag = arg.startsWith("--") ? CONTROL_FLAGS[arg.slice(2)] : undefined;
+    if (literal) {
+      positionals.push(arg);
+      continue;
+    }
+    if (arg === "--") {
+      literal = true;
+      continue;
+    }
+    const flag = arg.startsWith("--") && Object.hasOwn(CONTROL_FLAGS, arg.slice(2)) ? CONTROL_FLAGS[arg.slice(2)] : undefined;
     if (flag === "switch") {
       args[arg.slice(2)] = true;
     } else if (flag === "value") {
@@ -108,7 +118,7 @@ function parse(argv: string[]): { verb: string; args: Record<string, unknown>; e
       args[arg.slice(2)] = value;
       i += 1;
     } else if (arg.startsWith("--")) {
-      fail(`unknown option: ${arg}`, EXIT_CODES.usage);
+      fail(`unknown option: ${arg} (after --, an argument starting with -- is taken as it is)`, EXIT_CODES.usage);
     } else {
       positionals.push(arg);
     }

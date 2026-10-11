@@ -139,6 +139,24 @@ describe("writeCommands", () => {
   });
 });
 
+describe("writeCommands, entry by entry", () => {
+  /** The file's contents, its line comments left out. */
+  const commands = (): unknown => (JSON.parse(text().replace(/\/\/.*$/gm, "")) as { commands: unknown }).commands;
+  const theirs = { command: "./run.sh", os: "aix" };
+
+  it("leaves comments, another platform's entries and one it does not understand where they are", async () => {
+    put(`{\n  "commands": [\n    // theirs\n    ${JSON.stringify(theirs)},\n    "keep", // stays\n    42,\n    "old"\n  ]\n}\n`);
+    await writeCommands(root, [{ command: "keep" }, { command: "new" }, { command: "added" }]);
+    assert.match(text(), /\/\/ theirs/);
+    assert.match(text(), /"keep", \/\/ stays/);
+    assert.deepEqual(commands(), [theirs, "keep", 42, "new", "added"]);
+    await writeCommands(root, []);
+    assert.deepEqual(commands(), [theirs, 42]);
+    await writeCommands(root, [{ command: "first" }]);
+    assert.deepEqual(commands(), [theirs, 42, "first"]);
+  });
+});
+
 describe("readExplorerView", () => {
   it("is the whole repository with defaults when there is nothing to read", async () => {
     assert.deepEqual(await readExplorerView(root), { folders: [], exclude: [] });

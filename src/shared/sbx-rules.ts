@@ -149,6 +149,13 @@ export function sbxProblemNotices(problems: SbxProblems): string[] {
   });
 }
 
+/** What is wrong with `row` of `option`, by the row alone: one named as a property every object
+ *  has (`constructor`) would read that property off the record. */
+export function problemOf(problems: SbxProblems, option: SbxOption, row: string): string | undefined {
+  const rows = problems[option];
+  return rows && Object.hasOwn(rows, row) ? rows[row] : undefined;
+}
+
 /** Adds `rows` (by row, with their reason) to `problems` under `option`. */
 export function addProblems(problems: SbxProblems, option: SbxOption, rows: Record<string, string>): void {
   if (Object.keys(rows).length > 0) {
@@ -181,7 +188,7 @@ export function withoutProblems(
   knowledge: SbxKnowledgeSettings,
   problems: SbxProblems,
 ): { settings: SbxProjectSettings; knowledge: SbxKnowledgeSettings } {
-  const fine = (option: SbxOption, row: string): boolean => problems[option]?.[row] === undefined;
+  const fine = (option: SbxOption, row: string): boolean => problemOf(problems, option, row) === undefined;
   const next = { ...knowledge };
   for (const kind of SBX_KNOWLEDGE_KINDS.filter((candidate) => !fine("knowledge", candidate))) {
     next[kind] = false;

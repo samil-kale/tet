@@ -13,7 +13,15 @@ import type {
   SbxProjectSettings,
   SbxStoredLocal,
 } from "../../shared/types/sbx";
-import { sbxNeedsRestart, sbxPortKey, sbxPortRefusal, sbxSecretRefusal, sbxVariableRefusal, setupLines } from "../../shared/sbx-rules";
+import {
+  problemOf,
+  sbxNeedsRestart,
+  sbxPortKey,
+  sbxPortRefusal,
+  sbxSecretRefusal,
+  sbxVariableRefusal,
+  setupLines,
+} from "../../shared/sbx-rules";
 import { CodeField } from "../editor/CodeField";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
@@ -292,26 +300,26 @@ export function useSbxProblems(
 
 /** A port row's mark, or `undefined`: why Save refuses it before why it cannot be applied here. */
 function portMark(row: FieldsState["ports"][number], problems: SbxProblems): string | undefined {
-  return portRefusal(row) ?? problems.ports?.[sbxPortKey({ host: row.host.trim(), container: row.container.trim() })];
+  return portRefusal(row) ?? problemOf(problems, "ports", sbxPortKey({ host: row.host.trim(), container: row.container.trim() }));
 }
 
 /** A secret row's mark, or `undefined`, likewise. */
 function secretMark(row: SecretRow, rows: SecretRow[], problems: SbxProblems): string | undefined {
-  return secretRefusal(row, rows) ?? problems.secrets?.[row.env.trim()];
+  return secretRefusal(row, rows) ?? problemOf(problems, "secrets", row.env.trim());
 }
 
 /** A variable row's mark, or `undefined`, likewise. */
 function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblems): string | undefined {
-  return variableRefusal(row, state) ?? problems.variables?.[row.env.trim()];
+  return variableRefusal(row, state) ?? problemOf(problems, "variables", row.env.trim());
 }
 
 /** Each tab's mark: its first marked row's, repeated on the tab so it shows from any tab. */
 export function tabMarks(state: FieldsState, problems: SbxProblems): Partial<Record<keyof FieldsState, string>> {
   return {
-    knowledge: firstMark(KNOWLEDGE_LABELS.map(({ kind }) => problems.knowledge?.[kind])),
+    knowledge: firstMark(KNOWLEDGE_LABELS.map(({ kind }) => problemOf(problems, "knowledge", kind))),
     ports: firstMark(state.ports.map((row) => portMark(row, problems))),
-    paths: firstMark(state.paths.map((row) => problems.paths?.[row.path])),
-    hosts: firstMark(state.hosts.map((row) => problems.hosts?.[row.host.trim()])),
+    paths: firstMark(state.paths.map((row) => problemOf(problems, "paths", row.path))),
+    hosts: firstMark(state.hosts.map((row) => problemOf(problems, "hosts", row.host.trim()))),
     secrets: firstMark(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
     variables: firstMark(state.variables.map((row) => variableMark(row, state, problems))),
   };
@@ -370,7 +378,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
                 {/* Only skills have a source; the other labels take its column too. */}
                 <div className={skills ? "sbx-knowledge-cell" : "sbx-knowledge-cell sbx-knowledge-wide"}>
                   <Checkbox label={label} checked={access !== false} onChange={(next) => setKnowledge(kind, next ? "ro" : false)} />
-                  <RowMark title={problems.knowledge?.[kind]} />
+                  <RowMark title={problemOf(problems, "knowledge", kind)} />
                 </div>
                 {skills && (
                   <div className="sbx-knowledge-cell">
@@ -452,7 +460,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
         renderRow={(row) => (
           <EditRow
             key={row.id}
-            mark={problems.paths?.[row.path]}
+            mark={problemOf(problems, "paths", row.path)}
             remove="Remove path"
             onRemove={() => update("paths", (paths) => without(paths, row.id))}
           >
@@ -575,7 +583,7 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
       label="Allowed hosts"
       rows={state.hosts}
       renderRow={(row) => (
-        <EditRow key={row.id} mark={problems.hosts?.[row.host.trim()]} {...hosts.remove(row.id)}>
+        <EditRow key={row.id} mark={problemOf(problems, "hosts", row.host.trim())} {...hosts.remove(row.id)}>
           <RowInput
             placeholder="api.example.com"
             title="Exact host, *.example.com, or host:443"

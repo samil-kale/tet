@@ -1,6 +1,6 @@
 import type { editor as MonacoEditor } from "monaco-editor";
 import { refKeyOf } from "../../shared/types/project";
-import type { FileContent } from "../../shared/types/files";
+import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ProjectRef } from "../../shared/types/project";
 import { confirmed, confirmedFollowUp } from "../ui/Dialog";
 import { layoutFlag } from "../ui/layout-storage";
@@ -639,16 +639,24 @@ export async function saveEditorFile(tabId: string): Promise<void> {
     return;
   }
   // Changed on disk meanwhile (an agent wrote it): overwritten only once asked — the other version
-  // is gone then. With another question up, told instead. Not saving while asked: the bar shows
-  // TET working, never TET waiting on the user (AGENTS.md).
+  // is gone then — and one deleted there made anew only once asked. With another question up, told
+  // instead. Not saving while asked: the bar shows TET working, never TET waiting on the user
+  // (AGENTS.md).
   if (!result.ok && result.diskMtimeMs !== undefined) {
     publish(view, { saving: false });
+    const deleted = result.diskMtimeMs === MISSING_MTIME_MS;
     const overwrite = await confirmedFollowUp(
-      {
-        title: "File changed on disk",
-        message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
-        confirmLabel: "Overwrite",
-      },
+      deleted
+        ? {
+            title: "File deleted on disk",
+            message: `${path} was deleted on disk since it was opened. Save it again with your changes?`,
+            confirmLabel: "Save",
+          }
+        : {
+            title: "File changed on disk",
+            message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
+            confirmLabel: "Overwrite",
+          },
       result.error ?? "Could not save the file",
     );
     if (stale(view, seq)) {

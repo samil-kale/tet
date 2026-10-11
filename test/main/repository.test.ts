@@ -10,7 +10,7 @@ import * as git_ from "../../src/main/git/git";
 import { Repository } from "../../src/main/git/repository";
 import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
-import type { FileSearchQuery, FileSearchResult } from "../../src/shared/types/files";
+import { MISSING_MTIME_MS, type FileSearchQuery, type FileSearchResult } from "../../src/shared/types/files";
 import {
   commitFiles,
   fakeSafeStorage,
@@ -181,9 +181,9 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
     git(dir, "branch", "older", "HEAD~1");
     await repository.refresh();
     const head = git(dir, "rev-parse", "HEAD");
-    assert.deepEqual(await repository.rebase("older", false), { ok: false, needsConfirmation: "rewrites-pushed" });
+    assert.deepEqual(await repository.rebase({ name: "older" }, false), { ok: false, needsConfirmation: "rewrites-pushed" });
     assert.equal(git(dir, "rev-parse", "HEAD"), head, "nothing was rebased");
-    assert.deepEqual(await repository.rebase("older", true), { ok: true });
+    assert.deepEqual(await repository.rebase({ name: "older" }, true), { ok: true });
     git(dir, "branch", "-D", "older");
   });
 
@@ -230,7 +230,7 @@ describe("a command clicked during the periodic fetch", () => {
     let fetched = (): void => undefined;
     // The fetch underway, held and cleared as autoFetch does.
     Object.assign(repository, { autoFetching: new Promise<void>((resolve) => (fetched = resolve)) });
-    const clicked = repository.createBranch("late", "main");
+    const clicked = repository.createBranch("late", { name: "main" });
     const closed = repository.dispose();
     fetched();
     Object.assign(repository, { autoFetching: undefined });
@@ -408,6 +408,24 @@ describe("an editor tab's file", () => {
   });
 });
 
+describe("an editor tab's file deleted on disk", () => {
+  it("is saved again only once expected missing, never over one that came back", async () => {
+    const dir = initRepository("tet-repository-deleted-");
+    const file = path.join(dir, "a.txt");
+    const repository = await open(dir);
+    const { mtimeMs } = await repository.readFile("a.txt");
+    fs.rmSync(file);
+    const refused = await repository.writeFile("a.txt", "edited\n", mtimeMs);
+    assert.deepEqual([refused.ok, refused.diskMtimeMs], [false, MISSING_MTIME_MS]);
+    assert.equal(fs.existsSync(file), false, "nothing is made unasked");
+    assert.equal((await repository.writeFile("a.txt", "edited\n", MISSING_MTIME_MS)).ok, true);
+    assert.equal(fs.readFileSync(file, "utf8"), "edited\n");
+    const back = await repository.writeFile("a.txt", "again\n", MISSING_MTIME_MS);
+    assert.deepEqual([back.ok, back.diskMtimeMs], [false, fs.statSync(file).mtimeMs]);
+    assert.equal(fs.readFileSync(file, "utf8"), "edited\n");
+  });
+});
+
 describe("the Explorer's search, VS Code's search in files", () => {
   let dir: string;
   let repository: Repository;
@@ -443,6 +461,19 @@ describe("the Explorer's search, VS Code's search in files", () => {
     assert.deepEqual(found(result), ["src/a.ts:1:7", "src/a.ts:2:3", "src/b.txt:1:1", "src/b.txt:2:1"]);
     assert.equal(result.truncated, false);
     assert.deepEqual(result.files[0].matches[1], { line: 2, column: 3, length: 6, text: "needle();", textColumn: 0 });
+  });
+
+  it("reads no file through a link, which may lead out of the repository", async (t) => {
+    const linked = initRepository("tet-repository-search-link-");
+    const outside = tempDir("tet-repository-search-outside-");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "needle outside\n");
+    try {
+      fs.symlinkSync(path.join(outside, "secret.txt"), path.join(linked, "leak.txt"), "file");
+    } catch {
+      t.skip("this account may not make a file symlink");
+      return;
+    }
+    assert.deepEqual(found(await search({ text: "needle outside" }, await open(linked))), []);
   });
 
   it("keeps the indent in the row where the match reaches into it", async () => {
@@ -582,7 +613,7 @@ describe("a remote over http that wants a login", () => {
     try {
       logins.set(remote.url, login);
       git(dir, "tag", "-a", "-m", "v", "v1");
-      assert.deepEqual(await repository.createBranch("gone", "main"), { ok: true });
+      assert.deepEqual(await repository.createBranch("gone", { name: "main" }), { ok: true });
       assert.deepEqual(await repository.push(), { ok: true }, "publishes gone, tracking it");
       assert.deepEqual(await repository.checkout({ name: "main" }), { ok: true });
       assert.deepEqual(await repository.pushTag("v1"), { ok: true });

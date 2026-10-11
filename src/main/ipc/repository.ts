@@ -81,7 +81,7 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
   );
   handle(
     "repository:create-branch",
-    inRepository((repository, name: string, startPoint: string) => repository.createBranch(name, startPoint)),
+    inRepository((repository, name: string, startPoint: CheckoutTarget) => repository.createBranch(name, startPoint)),
   );
   handle(
     "repository:rename-branch",
@@ -97,11 +97,11 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
   );
   handle(
     "repository:merge",
-    inRepository((repository, ref: string) => repository.merge(ref)),
+    inRepository((repository, target: CheckoutTarget) => repository.merge(target)),
   );
   handle(
     "repository:rebase",
-    inRepository((repository, ref: string, confirmed: boolean) => repository.rebase(ref, confirmed)),
+    inRepository((repository, target: CheckoutTarget, confirmed: boolean) => repository.rebase(target, confirmed)),
   );
   handle(
     "repository:abort",
@@ -109,7 +109,7 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
   );
   handle(
     "repository:create-tag",
-    inRepository((repository, name: string, target: string, message: string) => repository.createTag(name, target, message)),
+    inRepository((repository, name: string, target: CheckoutTarget, message: string) => repository.createTag(name, target, message)),
   );
   handle(
     "repository:push-tag",

@@ -110,7 +110,7 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
       }
       refuseUnsaved(deps, [ref], "nothing was merged");
 
-      const merged = await own.merge(base);
+      const merged = await own.merge({ name: base });
       if (!merged.ok) {
         const conflicts = own.getState();
         if (conflicts.operation !== "merge") {
@@ -127,14 +127,14 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
           },
         };
       }
-      const markers = await own.conflictMarkers(base);
+      const markers = await own.conflictMarkers({ name: base });
       if (markers.length > 0) {
         throw new ControlError(
           "bad_args",
           `conflict markers are left in ${markers.join(", ")} of ${branch}, ${base} is unchanged: remove them, commit, then run this again`,
         );
       }
-      const forwarded = await main.merge(branch, base);
+      const forwarded = await main.merge({ name: branch }, base);
       if (!forwarded.ok) {
         throw new ControlError(
           "bad_args",

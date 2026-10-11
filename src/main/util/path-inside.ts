@@ -61,6 +61,16 @@ export async function openInside(root: string, file: string, flags: string | num
   }
 }
 
+/** Reads `file`, opened as openInside opens it. */
+export async function readInside(root: string, file: string): Promise<Buffer> {
+  const handle = await openInside(root, file, "r");
+  try {
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
+}
+
 /** Appends `text` to `file`, opened as openInside opens it; never creates it. */
 export async function appendInside(root: string, file: string, text: string): Promise<void> {
   const handle = await openInside(root, file, fs.constants.O_WRONLY | fs.constants.O_APPEND);

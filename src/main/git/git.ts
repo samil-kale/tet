@@ -1,14 +1,16 @@
 import { execFile } from "node:child_process";
+import { constants as fsConstants } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { errorMessage, failure } from "../../shared/errors";
 import { urlOrigin } from "../../shared/git-url";
-import { EMPTY_REPOSITORY_STATE, refName } from "../../shared/types/git";
+import { EMPTY_REPOSITORY_STATE, fullRefName, refName } from "../../shared/types/git";
 import { isImage, toDataUrl } from "./image-type";
 import { odfText } from "./odf-text";
 import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
+import { openInside, readInside } from "../util/path-inside";
 import type { HeadBlob } from "../../shared/types/files";
 import type {
   BranchUpstream,
@@ -113,6 +115,11 @@ function spawnGit(
         // Git ran but exceeded maxBuffer: a failed command, not one that never started.
         if (error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER") {
           resolve({ stdout: empty, stderr: `git's output exceeded ${maxBuffer / (1024 * 1024)} MB`, code: 1, overflowed: true });
+          return;
+        }
+        // Ended by a signal: git ran, so a failed command like any other.
+        if (error?.signal) {
+          resolve({ stdout: empty, stderr: `git was stopped by ${error.signal}`, code: 1 });
           return;
         }
         if (error && typeof error.code !== "number") {
@@ -441,7 +448,7 @@ async function readRefs(
    *  its upstream and each remote's HEAD branch. */
   function readDefaultMerged(target: CheckoutTarget): Promise<Set<string> | undefined> {
     const targetRef = target.remote ? `refs/remotes/${target.remote}/${target.name}` : `refs/heads/${target.name}`;
-    const upstream = target.remote ? undefined : branchUpstreams[target.name];
+    const upstream = target.remote || !Object.hasOwn(branchUpstreams, target.name) ? undefined : branchUpstreams[target.name];
     const excluded = new Set([
       targetRef,
       ...(upstream ? [`refs/remotes/${upstream.remote}/${upstream.branch}`] : []),
@@ -927,7 +934,14 @@ export function push(
 ): Promise<GitActionResult> {
   return runNetwork(
     cwd,
-    upstreamBranch === undefined ? ["push", "--set-upstream", "--", remote, branch] : ["push", "--", remote, `${branch}:${upstreamBranch}`],
+    // Full ref names: a tag of the branch's name makes the short one ambiguous on either side.
+    [
+      "push",
+      ...(upstreamBranch === undefined ? ["--set-upstream"] : []),
+      "--",
+      remote,
+      `refs/heads/${branch}:refs/heads/${upstreamBranch ?? branch}`,
+    ],
     { login },
   );
 }
@@ -1025,8 +1039,8 @@ export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<
 
 /** Creates the branch and switches to it, as GitHub Desktop does: tracking nothing, since git would
  *  track a remote start point and a push would then go to that branch — the first push publishes. */
-export function createBranch(cwd: string, name: string, startPoint: string): Promise<GitActionResult> {
-  return run(cwd, ["switch", "--create", name, "--no-track", startPoint]);
+export function createBranch(cwd: string, name: string, startPoint: CheckoutTarget): Promise<GitActionResult> {
+  return run(cwd, ["switch", "--create", name, "--no-track", fullRefName(startPoint)]);
 }
 
 /** A rename changing only case fails where refs are files on a case-insensitive filesystem: the old
@@ -1052,7 +1066,7 @@ export function deleteBranch(cwd: string, name: string): Promise<GitActionResult
  *  the push's exit code is 1 for any refusal. */
 export async function deleteRemoteBranch(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
   const env = await loginEnv(cwd, login);
-  const deleted = await runNetwork(cwd, ["push", remote, "--delete", name], { env });
+  const deleted = await runNetwork(cwd, ["push", remote, "--delete", `refs/heads/${name}`], { env });
   if (deleted.ok || deleted.authRequired) {
     return deleted;
   }
@@ -1065,7 +1079,8 @@ export async function deleteRemoteBranch(cwd: string, remote: string, name: stri
 
 /** `fastForwardOnto`: only a fast-forward, and only while that branch is checked out here — read
  *  now, not off the last refresh, so a switch since cannot take the merge onto another branch. */
-export async function merge(cwd: string, ref: string, fastForwardOnto?: string): Promise<GitActionResult> {
+export async function merge(cwd: string, target: CheckoutTarget, fastForwardOnto?: string): Promise<GitActionResult> {
+  const ref = fullRefName(target);
   if (fastForwardOnto === undefined) {
     return run(cwd, ["merge", ref]);
   }
@@ -1081,8 +1096,8 @@ const CONFLICT_MARKER = "^(<<<<<<<|>>>>>>>) ";
 
 /** The files differing between `base` and HEAD that still hold a conflict marker line, text files
  *  only. Thrown when git fails: its empty output would read as no markers. */
-export async function conflictMarkers(cwd: string, base: string): Promise<string[]> {
-  const diff = await git(cwd, ["diff", "--name-only", "-z", `${base}...HEAD`]);
+export async function conflictMarkers(cwd: string, base: CheckoutTarget): Promise<string[]> {
+  const diff = await git(cwd, ["diff", "--name-only", "-z", `${fullRefName(base)}...HEAD`]);
   if (diff.code !== 0) {
     throw new Error(diff.stderr.trim() || `git diff exited with ${diff.code}`);
   }
@@ -1131,14 +1146,14 @@ export async function unresolvedConflicts(cwd: string, paths?: string[]): Promis
   return conflicted.filter((filePath) => !resolved.has(filePath));
 }
 
-export function rebase(cwd: string, ref: string): Promise<GitActionResult> {
-  return run(cwd, ["rebase", ref]);
+export function rebase(cwd: string, target: CheckoutTarget): Promise<GitActionResult> {
+  return run(cwd, ["rebase", fullRefName(target)]);
 }
 
 /** Whether rebasing HEAD onto `ref` rewrites commits its upstream already has, by GitHub Desktop's
  *  measure: the upstream holds commits `ref` lacks. False without an upstream. */
-export async function rebaseRewritesPushed(cwd: string, ref: string): Promise<boolean> {
-  const result = await git(cwd, ["rev-list", "--count", `${ref}..HEAD@{upstream}`]);
+export async function rebaseRewritesPushed(cwd: string, target: CheckoutTarget): Promise<boolean> {
+  const result = await git(cwd, ["rev-list", "--count", `${fullRefName(target)}..HEAD@{upstream}`]);
   return result.code === 0 && Number(result.stdout.trim()) > 0;
 }
 
@@ -1147,8 +1162,8 @@ export function abortOperation(cwd: string, operation: GitOperation): Promise<Gi
 }
 
 /** Always annotated, with an empty message too, as in GitHub Desktop. */
-export function createTag(cwd: string, name: string, target: string, message: string): Promise<GitActionResult> {
-  return run(cwd, ["tag", "--annotate", "--message", message, "--", name, target]);
+export function createTag(cwd: string, name: string, target: CheckoutTarget, message: string): Promise<GitActionResult> {
+  return run(cwd, ["tag", "--annotate", "--message", message, "--", name, fullRefName(target)]);
 }
 
 export function pushTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
@@ -1280,8 +1295,9 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
       continue;
     }
     // A buffer, so a NUL byte marks a binary, which is only named: as text it is noise the agent
-    // pays for.
-    const content = await fs.readFile(path.join(cwd, relative)).catch(() => undefined);
+    // pays for. Inside only, as the editor reads: a link an agent left would hand the asked agent
+    // any file of this machine.
+    const content = await readInside(cwd, path.join(cwd, relative)).catch(() => undefined);
     if (!content) {
       sections.push(`=== untracked: ${relative} ===\n[could not be read]`);
       continue;
@@ -1419,7 +1435,9 @@ function escapeIgnorePattern(pattern: string): string {
 }
 
 /** Adds the file, or its extension, to .gitignore unless the rule is already there. Written in
- *  place: a temp file beside it would show up in the changes list this was started from. */
+ *  place: a temp file beside it would show up in the changes list this was started from. Inside
+ *  only, as the editor writes: the rule is a file's name, and a link in `.gitignore`'s place would
+ *  take it as a line of any file of this machine. */
 export async function ignorePath(cwd: string, filePath: string, scope: "file" | "extension"): Promise<GitActionResult> {
   const extension = path.extname(filePath);
   if (scope === "extension" && !extension) {
@@ -1429,19 +1447,25 @@ export async function ignorePath(cwd: string, filePath: string, scope: "file" | 
 
   const file = path.join(cwd, ".gitignore");
   try {
-    const existing = await fs.readFile(file, "utf8").catch((error: unknown) => {
+    // Never created through what lies at its path: `wx` refuses a link there.
+    const handle = await openInside(cwd, file, fsConstants.O_RDWR | fsConstants.O_APPEND).catch((error: unknown) => {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return "";
+        return openInside(cwd, file, "wx+");
       }
       throw error;
     });
-    if (existing.split(/\r?\n/).some((line) => line.trim() === rule)) {
+    try {
+      const existing = await handle.readFile("utf8");
+      if (existing.split(/\r?\n/).some((line) => line.trim() === rule)) {
+        return { ok: true };
+      }
+      const newline = existing.includes("\r\n") ? "\r\n" : "\n";
+      const separator = existing.length === 0 || existing.endsWith("\n") ? "" : newline;
+      await handle.appendFile(`${separator}${rule}${newline}`, "utf8");
       return { ok: true };
+    } finally {
+      await handle.close();
     }
-    const newline = existing.includes("\r\n") ? "\r\n" : "\n";
-    const separator = existing.length === 0 || existing.endsWith("\n") ? "" : newline;
-    await fs.appendFile(file, `${separator}${rule}${newline}`, "utf8");
-    return { ok: true };
   } catch (error) {
     return failure(error);
   }

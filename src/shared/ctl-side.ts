@@ -34,6 +34,7 @@ const OWN_LIMITS = [
   "one of its worktrees. --project <id> alone means that project's repository,",
   "--worktree <key or branch> one of its worktrees. A worktree listed without a key (projects-list) was",
   "made outside TET, with plain git: TET shows it greyed and cannot open it.",
+  "After a bare --, every argument is taken as it is, one starting with -- too.",
 ];
 
 /** A tab on this machine: every verb, across its project where a verb says so

@@ -183,10 +183,10 @@ describe("a repository, from init on", () => {
   });
 
   it("lists tags and branches, and switches to a created branch", async () => {
-    assert.deepEqual(await createTag(cwd, "v1", "HEAD", ""), { ok: true });
+    assert.deepEqual(await createTag(cwd, "v1", { name: "main" }, ""), { ok: true });
     // Without a message too, as in GitHub Desktop.
     assert.equal(run("cat-file", "-t", "refs/tags/v1"), "tag");
-    assert.deepEqual(await createBranch(cwd, "feature", "main"), { ok: true });
+    assert.deepEqual(await createBranch(cwd, "feature", { name: "main" }), { ok: true });
     const state = await readState(cwd);
     assert.equal(state.head, "feature");
     assert.deepEqual(state.localBranches, ["feature", "main"]);
@@ -227,7 +227,7 @@ describe("a repository, from init on", () => {
     run("switch", "-q", "main");
     write("b.txt", "main line\n");
     assert.deepEqual(await commitAll(cwd, "on main"), { ok: true });
-    const merged = await merge(cwd, "feature");
+    const merged = await merge(cwd, { name: "feature" });
     assert.equal(merged.ok, false);
     assert.doesNotMatch(merged.error ?? "", /^hint:/m, "the advice block is left out");
     const conflicted = await readState(cwd);
@@ -263,7 +263,7 @@ describe("a repository, from init on", () => {
   });
 
   it("creates a branch from a remote branch without tracking it", async () => {
-    assert.deepEqual(await createBranch(cwd, "from-remote", "origin/main"), { ok: true });
+    assert.deepEqual(await createBranch(cwd, "from-remote", { name: "main", remote: "origin" }), { ok: true });
     assert.equal((await readState(cwd)).upstream, undefined);
     run("switch", "-q", "main");
     run("branch", "-q", "-D", "from-remote");
@@ -295,7 +295,7 @@ describe("a repository, from init on", () => {
     assert.deepEqual(state.mergedBranches, ["done"]);
     assert.deepEqual(state.remotes, [{ name: "origin", branches: ["done", "main", "open"], mergedBranches: ["done"] }]);
     // Merged since: the refs moved, so the read is not the one cached.
-    assert.deepEqual(await merge(cwd, "open"), { ok: true });
+    assert.deepEqual(await merge(cwd, { name: "open" }), { ok: true });
     assert.deepEqual((await readState(cwd)).mergedBranches, ["done", "open"]);
     run("reset", "-q", "--hard", "HEAD@{1}");
     run("branch", "-q", "-D", "done", "open");
@@ -464,24 +464,24 @@ describe("a worktree's merge into its base", () => {
   });
 
   it("fast-forwards only onto the branch named, and only while it is checked out", async () => {
-    assert.deepEqual(await merge(cwd, "ahead", "develop"), { ok: false, error: "main is checked out, not develop" });
-    const refused = await merge(cwd, "diverged", "main");
+    assert.deepEqual(await merge(cwd, { name: "ahead" }, "develop"), { ok: false, error: "main is checked out, not develop" });
+    const refused = await merge(cwd, { name: "diverged" }, "main");
     assert.equal(refused.ok, false, "a diverged branch is no fast-forward");
     assert.equal((await readState(cwd)).operation, undefined, "and nothing is left mid-merge");
     run("merge", "-q", "--no-edit", "diverged");
     run("switch", "-q", "ahead");
     run("merge", "-q", "--no-edit", "main");
     run("switch", "-q", "main");
-    assert.deepEqual(await merge(cwd, "ahead", "main"), { ok: true });
+    assert.deepEqual(await merge(cwd, { name: "ahead" }, "main"), { ok: true });
     assert.equal(run("rev-parse", "main"), run("rev-parse", "ahead"));
   });
 
   it("finds conflict markers left in what differs from the base, and a Markdown underline is none", async () => {
     run("switch", "-q", "-c", "markers");
     commitFiles(cwd, "markers", { "left.txt": "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n", "doc.md": "Title\n=======\n" });
-    assert.deepEqual(await conflictMarkers(cwd, "main"), ["left.txt"]);
+    assert.deepEqual(await conflictMarkers(cwd, { name: "main" }), ["left.txt"]);
     run("switch", "-q", "main");
-    assert.deepEqual(await conflictMarkers(cwd, "main"), [], "nothing differs");
+    assert.deepEqual(await conflictMarkers(cwd, { name: "main" }), [], "nothing differs");
   });
 
   it("finds them among more changed files than one command line holds", async () => {
@@ -494,15 +494,69 @@ describe("a worktree's merge into its base", () => {
     write(names[names.length - 1], "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> main\n");
     run("add", "--all");
     run("commit", "-q", "--message", "many");
-    assert.deepEqual(await conflictMarkers(cwd, "main"), [names[names.length - 1]]);
+    assert.deepEqual(await conflictMarkers(cwd, { name: "main" }), [names[names.length - 1]]);
     write(names[names.length - 1], "resolved\n");
     run("commit", "-q", "--all", "--message", "resolved");
-    assert.deepEqual(await conflictMarkers(cwd, "main"), [], "no batch matching is no failure");
+    assert.deepEqual(await conflictMarkers(cwd, { name: "main" }), [], "no batch matching is no failure");
     run("switch", "-q", "main");
   });
 
   it("throws when git fails rather than reading its silence as no markers", async () => {
-    await assert.rejects(conflictMarkers(cwd, "no-such-base"));
+    await assert.rejects(conflictMarkers(cwd, { name: "no-such-base" }));
+  });
+});
+
+describe("a branch beside a tag of its name", () => {
+  before(() => {
+    cwd = initRepository("tet-git-twin-", { "a.txt": "a\n" });
+    run("tag", "twin");
+    run("switch", "-q", "-c", "twin");
+    commitFiles(cwd, "on twin", { "twin.txt": "twin\n" });
+    run("switch", "-q", "main");
+  });
+
+  it("merges the branch and starts a new one at it, never at the tag", async () => {
+    const branch = run("rev-parse", "refs/heads/twin");
+    assert.deepEqual(await createBranch(cwd, "from-twin", { name: "twin" }), { ok: true });
+    assert.equal(run("rev-parse", "HEAD"), branch);
+    run("switch", "-q", "main");
+    assert.equal(await rebaseRewritesPushed(cwd, { name: "twin" }), false, "no upstream, and no ambiguity to fail on");
+    assert.deepEqual(await createTag(cwd, "at-twin", { name: "twin" }, ""), { ok: true });
+    assert.equal(run("rev-parse", "at-twin^{commit}"), branch);
+    assert.deepEqual(await merge(cwd, { name: "twin" }), { ok: true });
+    assert.equal(run("rev-parse", "HEAD"), branch);
+  });
+
+  it("pushes the branch to a remote holding the tag too, and deletes it there", async () => {
+    const bare = initBare("tet-bare-twin-");
+    run("remote", "add", "origin", bare);
+    run("push", "-q", "origin", "refs/tags/twin");
+    assert.deepEqual(await push(cwd, "origin", "twin", undefined), { ok: true });
+    assert.equal(git(bare, "rev-parse", "refs/heads/twin"), run("rev-parse", "refs/heads/twin"));
+    assert.deepEqual(await deleteRemoteBranch(cwd, "origin", "twin"), { ok: true });
+    assert.equal(git(bare, "for-each-ref", "--format=%(refname)"), "refs/tags/twin");
+  });
+});
+
+describe("a link left in the repository", () => {
+  it("is neither read into the commit context nor written through by an ignore", async (t) => {
+    cwd = initRepository("tet-git-link-", { "a.txt": "a\n" });
+    const outside = tempDir("tet-git-outside-");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "host secret\n");
+    fs.writeFileSync(path.join(outside, "rules.txt"), "host rules\n");
+    try {
+      fs.symlinkSync(path.join(outside, "secret.txt"), path.join(cwd, "leak.txt"), "file");
+      fs.symlinkSync(path.join(outside, "rules.txt"), path.join(cwd, ".gitignore"), "file");
+    } catch {
+      t.skip("this account may not make a file symlink");
+      return;
+    }
+    write("new.txt", "new\n");
+    const context = await readCommitContext(cwd);
+    assert.match(context, /=== untracked: new\.txt ===\nnew/);
+    assert.doesNotMatch(context, /host secret/);
+    assert.equal((await ignorePath(cwd, "new.txt", "file")).ok, false);
+    assert.equal(fs.readFileSync(path.join(outside, "rules.txt"), "utf8"), "host rules\n");
   });
 });
 
@@ -514,7 +568,7 @@ describe("a merge stopped on conflicts, discarded file by file", () => {
     run("switch", "-q", "main");
     run("rm", "-q", "gone.txt");
     commitFiles(cwd, "main", { "both.txt": "main\n" });
-    assert.equal((await merge(cwd, "feature")).ok, false);
+    assert.equal((await merge(cwd, { name: "feature" })).ok, false);
     write("m.txt", "m edited\n");
   });
 
@@ -561,7 +615,7 @@ describe("unresolved conflicts, before a commit", () => {
     write("image.bin", "\0main");
     run("rm", "-q", "gone.txt");
     run("commit", "-q", "--all", "--message", "main");
-    assert.equal((await merge(cwd, "feature")).ok, false);
+    assert.equal((await merge(cwd, { name: "feature" })).ok, false);
     write("fixed.txt", "resolved\n");
     write("clean.txt", "clean\n");
   });
@@ -742,8 +796,8 @@ describe("a remote shared with another clone, as GitHub Desktop handles it", () 
     run("push", "-q", "origin", "main");
     run("switch", "-q", "--create", "older", "HEAD~2");
     run("switch", "-q", "main");
-    assert.equal(await rebaseRewritesPushed(cwd, "older"), true);
-    assert.equal(await rebaseRewritesPushed(cwd, "origin/main"), false);
+    assert.equal(await rebaseRewritesPushed(cwd, { name: "older" }), true);
+    assert.equal(await rebaseRewritesPushed(cwd, { name: "main", remote: "origin" }), false);
     run("branch", "-q", "-D", "older");
   });
 

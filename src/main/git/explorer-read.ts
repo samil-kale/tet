@@ -205,7 +205,9 @@ async function matchesIn(root: string, filePath: string, matcher: RegExp): Promi
   const absolute = path.join(root, filePath);
   let content: string;
   try {
-    const stat = await fs.promises.stat(absolute);
+    // Not through a link, which the walk lists as a file: it may lead out of the repository, where
+    // the editor would not open it either, and one leading inside is read at its own path.
+    const stat = await fs.promises.lstat(absolute);
     if (!stat.isFile() || stat.size > MAX_EDIT_BYTES) {
       return [];
     }
