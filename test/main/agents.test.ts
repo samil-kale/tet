@@ -28,6 +28,7 @@ import {
 import { listAskModels } from "../../src/main/agents";
 import type { AgentDefinition } from "../../src/main/agents/agent";
 import { askAgent } from "../../src/main/agents/ask";
+import { claudeAgent } from "../../src/main/agents/claude";
 import type { AskModel } from "../../src/shared/types/agents";
 import { commitMessageFrom } from "../../src/main/agents/commit-message";
 import { piModelsFrom } from "../../src/main/agents/pi/models";
@@ -377,14 +378,12 @@ describe("a suggested commit message", () => {
 
 describe("the models the commit prompt offers", () => {
   /** An agent asking through `executable`, whose model listing is `models`. */
-  const asking = (executable: string, models?: () => Promise<AskModel[]>): AgentDefinition =>
-    ({
-      id: "fake",
-      displayName: "Fake",
-      executable: () => executable,
-      install: { versionArgs: ["--version"] },
-      ask: models && { args: [], modelArgs: () => [], models },
-    }) as unknown as AgentDefinition;
+  const asking = (executable: string, models?: () => Promise<AskModel[]>): AgentDefinition => ({
+    ...claudeAgent,
+    displayName: "Fake",
+    executable: () => executable,
+    ask: models ? { args: [], modelArgs: () => [], models } : undefined,
+  });
 
   it("are the agent's own where it is installed", async () => {
     const models = [{ id: "m1", label: "M1" }];
