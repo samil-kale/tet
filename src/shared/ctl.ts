@@ -264,12 +264,13 @@ const VERBS = [
     positionals: ["id", "value"],
   },
   {
-    verb: "settings-set-commit-suggester",
+    verb: "settings-set-commit-suggesters",
     group: "Settings",
-    usage: "settings-set-commit-suggester <agent-id> [model]",
+    usage: "settings-set-commit-suggesters <agent-id[=model]>...",
     summary:
-      "Set who suggests commit messages: an agent (see agents-list) and one of its models; no model leaves it to the agent's own configuration.",
-    positionals: ["agent", "model"],
+      "Set who suggests commit messages, in the order they are asked until one answers: agents (see agents-list), each with one of its models; no model leaves it to the agent's own configuration. Agents left out are switched off.",
+    positionals: ["suggesters"],
+    variadic: true,
   },
   {
     verb: "projects-list",

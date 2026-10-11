@@ -237,7 +237,17 @@ describe("the stores", () => {
         notifications: { finished: false, waiting: "yes" },
         files: { editorKeybindingPreset: "", excludeGitIgnore: true, compactFolders: "no", sortOrder: "sideways" },
         git: { pushOnCommit: true, checkNewChanges: "yes" },
-        prompts: { texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" }, commitSuggester: "claude" },
+        prompts: {
+          texts: { commitMessage: DEFAULT_PROMPTS.commitMessage, commands: "removed setting" },
+          commitSuggesters: [
+            { agentId: "claude", model: "sonnet" },
+            { agentId: "claude", model: "" },
+            { agentId: "", model: "x" },
+            { agentId: "codex", model: "", enabled: false },
+            { agentId: "pi" },
+            "junk",
+          ],
+        },
       }),
     );
     const settings = new SettingsStore(dir).get();
@@ -268,7 +278,14 @@ describe("the stores", () => {
       sortOrder: "default",
     });
     assert.deepEqual(settings.prompts.texts, { commitMessage: "", handover: "" }, "TET's own text spelled out is stored as none");
-    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "", model: "" });
+    assert.deepEqual(
+      settings.prompts.commitSuggesters,
+      [
+        { agentId: "claude", model: "sonnet", enabled: true },
+        { agentId: "codex", model: "", enabled: false },
+      ],
+      "an entry without a model, an agent or a place of its own is none; a missing switch is on",
+    );
     assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
     assert.equal(effectivePrompt({ commitMessage: "write a subject", handover: "" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
@@ -341,14 +358,14 @@ describe("a settings write", () => {
   it("changes the keys it names and no others, down to one prompt", () => {
     const stored = {
       appearance: { colorScheme: "light", darkTheme: "dark-modern" },
-      prompts: { texts: { a: "", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
+      prompts: { texts: { a: "", b: "theirs" }, commitSuggesters: [{ agentId: "claude", model: "", enabled: true }] },
       notifications: { finished: false, waiting: true },
     };
     assert.deepEqual(
       withSettings(stored as never, { appearance: { darkTheme: "dark-slate" }, prompts: { texts: { a: "mine" } as never } }),
       {
         appearance: { colorScheme: "light", darkTheme: "dark-slate" },
-        prompts: { texts: { a: "mine", b: "theirs" }, commitSuggester: { agentId: "claude", model: "" } },
+        prompts: { texts: { a: "mine", b: "theirs" }, commitSuggesters: [{ agentId: "claude", model: "", enabled: true }] },
         notifications: { finished: false, waiting: true },
       },
     );

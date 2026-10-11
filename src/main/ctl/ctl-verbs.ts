@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { type ControlVerbName, type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/ctl";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
+import type { SuggesterEntry } from "../../shared/types/agents";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import {
@@ -29,7 +30,6 @@ import {
   list,
   onOff,
   oneOf,
-  optionalText,
   projectById,
   refuseUnsaved,
   repositoryOf,
@@ -210,23 +210,42 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { saved: true, restartRequired: false } };
     },
 
-    "settings-set-commit-suggester": async (args, caller) => {
-      const agent = knownAgent(args, "agent id");
-      if (!agent.ask) {
-        throw new ControlError("bad_args", `${agent.id} cannot suggest a commit message`);
+    "settings-set-commit-suggesters": async (args, caller) => {
+      const picked = list(args, "suggesters");
+      if (picked.length === 0) {
+        throw new ControlError("bad_args", "missing suggesters");
       }
-      const model = optionalText(args, "model") ?? "";
-      // Listed where the caller's commit prompt would list them, which also says a missing agent.
-      const { models, error } = await deps.askModels(agent, repository(refFrom(args, caller).ref).at.path);
-      if (error !== undefined) {
-        throw new ControlError("bad_args", error);
+      const cwd = repository(refFrom(args, caller).ref).at.path;
+      const entries: SuggesterEntry[] = [];
+      for (const pick of picked) {
+        // An agent id has no "=": the first one parts it from the model, which may hold any.
+        const at = pick.indexOf("=");
+        const agent = knownAgent({ agent: at < 0 ? pick : pick.slice(0, at) }, "agent id");
+        const model = at < 0 ? "" : pick.slice(at + 1);
+        if (!agent.ask) {
+          throw new ControlError("bad_args", `${agent.id} cannot suggest a commit message`);
+        }
+        if (entries.some((entry) => entry.agentId === agent.id)) {
+          throw new ControlError("bad_args", `agent named twice: ${agent.id}`);
+        }
+        // Listed where the caller's commit prompt would list them, which also says a missing agent.
+        const { models, error } = await deps.askModels(agent, cwd);
+        if (error !== undefined) {
+          throw new ControlError("bad_args", error);
+        }
+        // Refused rather than stored: the settings' dialog would put the default in its place.
+        if (model !== "" && !models.some((candidate) => candidate.id === model)) {
+          const known = models.map((candidate) => candidate.id).join(", ");
+          throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
+        }
+        entries.push({ agentId: agent.id, model, enabled: true });
       }
-      // Refused rather than stored: the commit prompt would put the default in its place.
-      if (model !== "" && !models.some((candidate) => candidate.id === model)) {
-        const known = models.map((candidate) => candidate.id).join(", ");
-        throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
-      }
-      settings.patch({ prompts: { commitSuggester: { agentId: agent.id, model } } });
+      // The agents left out stay after them, switched off, with the model they had.
+      const saved = settings.get().prompts.commitSuggesters;
+      const others = deps.agents
+        .filter((agent) => agent.ask && agent.install && !entries.some((entry) => entry.agentId === agent.id))
+        .map((agent) => ({ agentId: agent.id, model: saved.find((entry) => entry.agentId === agent.id)?.model ?? "", enabled: false }));
+      settings.patch({ prompts: { commitSuggesters: [...entries, ...others] } });
       return { result: { saved: true, restartRequired: false } };
     },
 

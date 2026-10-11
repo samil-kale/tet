@@ -2,6 +2,7 @@ import type { IpcMainInvokeEvent } from "electron";
 import { handle, on } from "./channels";
 import { listAskableAgents } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
+import { suggestersFor } from "../../shared/suggesters";
 import { failure } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
 import type {
@@ -145,14 +146,14 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
       return {};
     }
     const cwd = repository.at.path;
-    // A pick not installed here gives way to the first agent that is, with its default model, as
-    // the settings' picker shows it.
-    const picked = settings.get().prompts.commitSuggester;
-    const askable = await listAskableAgents(cwd);
-    const suggester = askable.includes(picked.agentId) ? picked : { agentId: askable[0] ?? "", model: "" };
+    // The list as the settings' dialog shows it: what is not installed here is left out, a new agent
+    // comes last, and the ones switched off are not asked.
+    const suggesters = suggestersFor(settings.get().prompts.commitSuggesters, await listAskableAgents(cwd)).filter(
+      (entry) => entry.enabled,
+    );
     const prompt = effectivePrompt(settings.get().prompts.texts, "commitMessage");
     // The commit's own paths, a rename's old one included.
-    return suggestCommitMessage(suggester, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
+    return suggestCommitMessage(suggesters, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
   });
   on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
   handle(

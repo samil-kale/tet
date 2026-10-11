@@ -515,7 +515,7 @@ describe("tet-ctl against the control server", () => {
         deleteTagOnRemote: false,
         deleteWorktreeOnRemote: false,
       },
-      prompts: { texts: { commitMessage: "", handover: "" }, commitSuggester: { agentId: "", model: "" } },
+      prompts: { texts: { commitMessage: "", handover: "" }, commitSuggesters: [] },
     };
     for (const list of Object.values(calls) as unknown[][]) {
       list.length = 0;
@@ -796,19 +796,20 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("sets who suggests a commit message and refuses an agent or model that cannot", async () => {
-    const set = await tetCtl(["settings-set-commit-suggester", "claude", "sonnet"]);
+    const set = await tetCtl(["settings-set-commit-suggesters", "claude=sonnet"]);
     assert.deepEqual(set.result, { saved: true, restartRequired: false });
-    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "sonnet" });
-    const byDefault = await tetCtl(["settings-set-commit-suggester", "claude"]);
+    assert.deepEqual(settings.prompts.commitSuggesters, [{ agentId: "claude", model: "sonnet", enabled: true }]);
+    const byDefault = await tetCtl(["settings-set-commit-suggesters", "claude"]);
     assert.equal(byDefault.status, EXIT_CODES.ok);
-    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
+    assert.deepEqual(settings.prompts.commitSuggesters, [{ agentId: "claude", model: "", enabled: true }]);
     assertUsage(
-      await tetCtl(["settings-set-commit-suggester", "claude", "gpt"]),
+      await tetCtl(["settings-set-commit-suggesters", "claude=gpt"]),
       /unknown claude model: gpt \(known: fable, opus, sonnet, haiku\)/,
     );
-    assertUsage(await tetCtl(["settings-set-commit-suggester", "shell"]), /shell cannot suggest a commit message/);
-    assertUsage(await tetCtl(["settings-set-commit-suggester", "gemini"]), /unknown agent: gemini/);
-    assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "" });
+    assertUsage(await tetCtl(["settings-set-commit-suggesters", "shell"]), /shell cannot suggest a commit message/);
+    assertUsage(await tetCtl(["settings-set-commit-suggesters", "gemini"]), /unknown agent: gemini/);
+    assertUsage(await tetCtl(["settings-set-commit-suggesters", "claude", "claude=sonnet"]), /agent named twice: claude/);
+    assert.deepEqual(settings.prompts.commitSuggesters, [{ agentId: "claude", model: "", enabled: true }]);
   });
 
   it("acts on the caller's own repository or worktree when none is given", async () => {
@@ -1094,7 +1095,7 @@ describe("tet-ctl against the control server", () => {
       ["settings-set-notification", "finished", "off"],
       ["settings-set-explorer", "sortOrder", "type"],
       ["settings-set-git", "pushOnCommit", "on"],
-      ["settings-set-commit-suggester", "claude"],
+      ["settings-set-commit-suggesters", "claude"],
       ["app-restart", "--confirm"],
       ["env-request", "GITLAB_TOKEN"],
       ["env-list"],

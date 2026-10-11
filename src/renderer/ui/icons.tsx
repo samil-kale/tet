@@ -21,6 +21,7 @@ import {
   GitCommitHorizontal,
   GitCompare,
   Globe,
+  GripVertical,
   Info,
   Landmark,
   List,
@@ -35,6 +36,8 @@ import {
   Package,
   Play,
   Plus,
+  Power,
+  PowerOff,
   RefreshCw,
   Regex,
   Save,
@@ -186,6 +189,21 @@ export function PlusIcon(props: IconProps) {
 /** Lucide's `x`, drawn two pixels under the shared size. */
 export function CloseIcon(props: IconProps) {
   return <Lucide {...props} icon={X} extent={16.9} />;
+}
+
+/** Lucide's `grip-vertical` — what shows a row can be dragged to another place. */
+export function GripIcon(props: IconProps) {
+  return <Lucide {...props} icon={GripVertical} />;
+}
+
+/** Lucide's `power` — a row's switch while the row is on. */
+export function PowerIcon(props: IconProps) {
+  return <Lucide {...props} icon={Power} />;
+}
+
+/** Lucide's `power-off` — a row's switch while the row is off. */
+export function PowerOffIcon(props: IconProps) {
+  return <Lucide {...props} icon={PowerOff} />;
 }
 
 /** Lucide's `log-in` — sign in with an SBX access token. */

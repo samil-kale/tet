@@ -5,7 +5,7 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
-import type { Suggester } from "../../shared/types/agents";
+import type { AgentId } from "../../shared/types/agents";
 import type { AppInfo } from "../../shared/types/app";
 import type { EnvEdit } from "../../shared/types/environment";
 import type { ExplorerSortOrder } from "../../shared/types/files";
@@ -32,7 +32,7 @@ import {
   type Row,
 } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
-import { SuggesterPicker } from "./SuggesterPicker";
+import { SuggesterList } from "./SuggesterList";
 
 interface SettingsDialogProps {
   onClose: () => void;
@@ -160,8 +160,10 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   const variablesEdited = useRef(false);
   /** The stored variables' names as opened, for `envChanged`. */
   const [loadedVariables, setLoadedVariables] = useState<readonly string[]>([]);
-  /** The Prompts tab's model listing underway, on the header's bar (`SuggesterPicker`'s `hold`). */
-  const [listingModels, setListingModels] = useState(false);
+  /** How many of the Prompts tab's model listings are underway, on the header's bar
+   *  (`SuggesterList`'s `hold`): one per agent. */
+  const [listingModels, setListingModels] = useState(0);
+  const holdListing = useCallback((held: boolean): void => setListingModels((count) => count + (held ? 1 : -1)), []);
 
   /** The settings as opened, on the header's bar; what could not be read stands in their place
    *  (`DialogError`), as the SBX Settings's does. */
@@ -243,10 +245,23 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { texts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } } });
 
-  /** A pick not offered on this machine is shown replaced, not saved: another machine may offer it. */
-  const replaceSuggester = useCallback(
-    (suggester: Suggester): void =>
-      setSettings((current) => (current ? { ...current, prompts: { ...current.prompts, commitSuggester: suggester } } : current)),
+  /** A model not offered any more is shown replaced by the default, not saved: another machine may
+   *  offer it. */
+  const replaceModel = useCallback(
+    (agentId: AgentId): void =>
+      setSettings((current) =>
+        current
+          ? {
+              ...current,
+              prompts: {
+                ...current.prompts,
+                commitSuggesters: current.prompts.commitSuggesters.map((entry) =>
+                  entry.agentId === agentId ? { ...entry, model: "" } : entry,
+                ),
+              },
+            }
+          : current,
+      ),
     [],
   );
 
@@ -270,7 +285,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   return (
     <DialogFrame
       header={{ tabs, active: tab, onSelect: setTab }}
-      busy={saving || loading || listingModels}
+      busy={saving || loading || listingModels > 0}
       // Loading and listing the models only read: Cancel stays open meanwhile.
       locked={saving}
       error={refused}
@@ -389,14 +404,12 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
           </FieldGroup>
           {/* Only for a prompt TET asks in the background; a handover's goes to the tab taking over. */}
           {promptId === "commitMessage" && (
-            <FieldGroup label="Suggested by">
-              <SuggesterPicker
-                value={settings.prompts.commitSuggester}
-                onChange={(suggester) => edit({ prompts: { commitSuggester: suggester } })}
-                onReplace={replaceSuggester}
-                hold={setListingModels}
-              />
-            </FieldGroup>
+            <SuggesterList
+              value={settings.prompts.commitSuggesters}
+              onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
+              onReplaceModel={replaceModel}
+              hold={holdListing}
+            />
           )}
           {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
               asked for, so it applies on Save. */}

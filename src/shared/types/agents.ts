@@ -79,3 +79,8 @@ export interface Suggester {
   agentId: AgentId;
   model: string;
 }
+
+/** A suggester as the settings keep it: switched off, it keeps its place and is not asked. */
+export interface SuggesterEntry extends Suggester {
+  enabled: boolean;
+}

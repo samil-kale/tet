@@ -3,7 +3,7 @@ import { DEFAULT_THEME_IDS, type ThemeKind } from "../../shared/themes";
 import { DEFAULT_PROMPTS } from "../../shared/prompts";
 import { EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, LANES, PROMPT_IDS, withSettings } from "../../shared/types/settings";
-import type { Suggester } from "../../shared/types/agents";
+import type { SuggesterEntry } from "../../shared/types/agents";
 import type {
   AppearanceSettings,
   AppSettings,
@@ -43,7 +43,7 @@ const DEFAULTS: AppSettings = {
   },
   prompts: {
     texts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptTexts,
-    commitSuggester: { agentId: "", model: "" },
+    commitSuggesters: [],
   },
 };
 
@@ -167,16 +167,25 @@ function themeId(value: unknown, kind: ThemeKind): string {
 }
 
 function prompts(value: Record<string, unknown>): PromptSettings {
-  return { texts: promptTexts(recordOf(value.texts)), commitSuggester: suggester(value.commitSuggester) };
+  return { texts: promptTexts(recordOf(value.texts)), commitSuggesters: suggesters(value.commitSuggesters) };
 }
 
-/** Anything but two strings is no pick; an agent or model no longer offered is replaced where it
- *  is used (`SuggesterPicker`, `repository:suggest-commit-message`). */
-function suggester(value: unknown): Suggester {
-  if (isRecord(value) && typeof value.agentId === "string" && typeof value.model === "string") {
-    return { agentId: value.agentId, model: value.model };
+/** An entry without an agent and a model, or naming an agent twice, is none; an agent or model no
+ *  longer offered is left out or replaced where it is used (`suggestersFor`, `SuggesterList`). */
+function suggesters(value: unknown): SuggesterEntry[] {
+  const entries: SuggesterEntry[] = [];
+  for (const entry of Array.isArray(value) ? value : []) {
+    if (
+      isRecord(entry) &&
+      typeof entry.agentId === "string" &&
+      entry.agentId !== "" &&
+      typeof entry.model === "string" &&
+      !entries.some((kept) => kept.agentId === entry.agentId)
+    ) {
+      entries.push({ agentId: entry.agentId, model: entry.model, enabled: entry.enabled !== false });
+    }
   }
-  return DEFAULTS.prompts.commitSuggester;
+  return entries;
 }
 
 /**

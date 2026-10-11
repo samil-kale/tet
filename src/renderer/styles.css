@@ -600,17 +600,20 @@ textarea:focus,
    lane by its headers. */
 .project-group.dragging,
 .command-row.dragging,
+.edit-row.dragging,
 .lane.dragging,
 .lane-toggle.dragging {
   opacity: 0.5;
 }
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
-.command-row.drop-before {
+.command-row.drop-before,
+.edit-row.drop-before {
   box-shadow: inset 0 1px 0 var(--tet-focusBorder);
 }
 
-.command-row.drop-after {
+.command-row.drop-after,
+.edit-row.drop-after {
   box-shadow: inset 0 -1px 0 var(--tet-focusBorder);
 }
 
@@ -1837,7 +1840,7 @@ textarea:focus,
 .row-section-rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
   max-height: 245px;
   overflow-y: auto;
 }
@@ -1908,6 +1911,21 @@ textarea:focus,
   margin-left: auto;
 }
 
+/* A reorderable row's handle: the row is dragged whole, this only says so. */
+.row-grip {
+  flex: none;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  color: var(--tet-descriptionForeground);
+  cursor: grab;
+}
+
+/* A row switched off: its fields dimmed as a disabled control is, its buttons not, which switch it
+   on again. */
+.edit-row.off > :not(.icon-button) {
+  opacity: 0.4;
+}
+
 .sbx-port-input {
   --field-width: 70px;
   width: var(--field-width);
@@ -1925,6 +1943,12 @@ textarea:focus,
 .edit-row > .select-field {
   --field-width: 120px;
   width: var(--field-width);
+}
+
+/* The suggesters' model takes the row's free room, beside the agent's name at a width of its own. */
+.suggester-row > .select-field {
+  flex: 1;
+  min-width: 0;
 }
 
 /* A name or value beside a field filling the row (.row-fill-input): a secret's either side of its

@@ -1,4 +1,4 @@
-import type { Suggester } from "./agents";
+import type { SuggesterEntry } from "./agents";
 import type { ExplorerSettings } from "./files";
 
 export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
@@ -105,8 +105,9 @@ export type PromptTexts = Record<PromptId, string>;
 /** The Prompts tab. */
 export interface PromptSettings {
   texts: PromptTexts;
-  /** Who suggests a commit message; an agent of "" until picked. */
-  commitSuggester: Suggester;
+  /** Who suggests a commit message, in the order they are asked; an agent not listed comes after,
+   *  switched on (`suggestersFor`). */
+  commitSuggesters: SuggesterEntry[];
 }
 
 /** What TET keeps about itself, not about a repository; written whole, one object per tab of the

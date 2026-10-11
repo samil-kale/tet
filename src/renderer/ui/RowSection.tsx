@@ -1,9 +1,10 @@
-import type { ReactNode } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 import { overridesMachineNote } from "../../shared/types/environment";
 import { ActionLink } from "./ActionLink";
+import { useDragReorder } from "./drag-reorder";
 import { FieldGroup } from "./Field";
 import { IconButton } from "./IconButton";
-import { CircleAlertIcon, CloseIcon } from "./icons";
+import { CircleAlertIcon, CloseIcon, GripIcon } from "./icons";
 
 /** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
 export type Row<T> = T & { id: string };
@@ -46,22 +47,42 @@ export function typedRows<T>(
   };
 }
 
+/** What a section that can be reordered (`RowSection`'s `reorder`) hands each row to spread onto it:
+ *  the row's drag handlers and its drag classes (drag-reorder.ts). */
+export interface RowReorder {
+  props: HTMLAttributes<HTMLElement> & { draggable: true };
+  classes: string[];
+}
+
 /**
  * A section's row: its fields, then the mark saying what is wrong with it, then its remove button —
  * none for a row that is asked for rather than kept (EnvDialog). The mark takes its room from the
- * field before it (styles.css), so nothing else in the row moves.
+ * field before it (styles.css), so nothing else in the row moves. A row of a reorderable section
+ * (`reorder`) leads with a grip and is dragged whole; one switched off (`off`) is dimmed, but for
+ * its buttons, which still switch it on.
  */
 export function EditRow({
   mark,
   remove,
   onRemove,
+  reorder,
+  off,
+  className,
   children,
 }: {
   mark?: string;
+  reorder?: RowReorder;
+  off?: boolean;
+  /** Beside `edit-row`, for a section's own placement of its fields. */
+  className?: string;
   children: ReactNode;
 } & ({ remove: string; onRemove: () => void } | { remove?: undefined; onRemove?: undefined })) {
   return (
-    <div className="edit-row">
+    <div
+      className={["edit-row", ...(className ? [className] : []), ...(reorder?.classes ?? []), ...(off ? ["off"] : [])].join(" ")}
+      {...reorder?.props}
+    >
+      {reorder && <GripIcon className="row-grip" />}
       {children}
       <RowMark title={mark} />
       {onRemove && (
@@ -166,7 +187,8 @@ export function firstMark(marks: Iterable<string | undefined>): string | undefin
 /**
  * The box a section's rows sit in: its label, the rows, and what adds one underneath — nothing for
  * rows that come from elsewhere. A section has rows to type into or none (`atLeastOne`); only one
- * whose rows a picker adds says when there are none.
+ * whose rows a picker adds says when there are none. With `reorder`, its rows are dragged into
+ * another order: `renderRow` hands each to its `EditRow`.
  */
 export function RowSection<T extends { id: string }>({
   label,
@@ -174,20 +196,31 @@ export function RowSection<T extends { id: string }>({
   rows,
   renderRow,
   add,
+  reorder,
 }: {
   label: string;
   /** Said where there are no rows, for a section a picker adds them to (the SBX paths); left out
    *  where a blank row stands in for none (`atLeastOne`), or rows always are. */
   empty?: string;
   rows: T[];
-  renderRow: (row: T) => ReactNode;
+  renderRow: (row: T, reorder: RowReorder | undefined) => ReactNode;
   add?: ReactNode;
+  /** The section's own drag type (drag-reorder.ts) and the move of the row at `from` to the
+   *  insertion index `to` (`reorder()` there). */
+  reorder?: { dragType: string; onMove: (from: number, to: number) => void };
 }) {
+  const drag = useDragReorder({
+    dragType: reorder?.dragType ?? "",
+    count: rows.length,
+    payloadOf: (index) => rows[index].id,
+    indexOf: (id) => rows.findIndex((row) => row.id === id),
+    onMove: (from, to) => reorder?.onMove(from, to),
+  });
   return (
     <FieldGroup label={label}>
-      <div className="row-section-rows">
+      <div className="row-section-rows" {...(reorder ? drag.listProps : {})}>
         {rows.length === 0 && empty !== undefined && <p className="dialog-detail">{empty}</p>}
-        {rows.map(renderRow)}
+        {rows.map((row, index) => renderRow(row, reorder && { props: drag.rowProps(index), classes: drag.rowClasses(index) }))}
       </div>
       {add}
     </FieldGroup>
