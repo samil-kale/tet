@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it, mock } from "node:test";
 import { notifying, runWithFollowUp } from "../../src/renderer/git/run-action";
+import { fakeWindow, keepGlobals } from "../helpers";
 import type { GitActionResult } from "../../src/shared/types/git";
 
 /** git/run-action.ts: how an action's follow-up question and failure are handled. */
@@ -89,18 +90,18 @@ describe("an action with a follow-up question", () => {
 
 describe("a runner whose failure is notified", () => {
   const reported: { severity: string; message: string }[] = [];
+  keepGlobals("window");
 
   beforeEach(() => {
     mock.timers.enable({ apis: ["setTimeout"] });
     reported.length = 0;
-    (globalThis as { window?: unknown }).window = {
+    fakeWindow({
       tet: { app: { reportNotice: (notice: (typeof reported)[number]) => reported.push(notice) } },
-    };
+    });
   });
 
   afterEach(() => {
     mock.timers.reset();
-    delete (globalThis as { window?: unknown }).window;
   });
 
   it("tells a refusal as an error notice, once", async () => {

@@ -10,8 +10,10 @@ import { codexHookReply } from "../../src/main/agents/codex/hooks";
 import { shellAgent } from "../../src/main/agents/shell";
 import { systemPrompt } from "../../src/main/agents/system-prompt";
 import { findControlPort } from "../../src/main/ctl/ctl-port";
+import { HOST_CALLER } from "../../src/main/ctl/caller-side";
 import { startControlServer } from "../../src/main/ctl/ctl-server";
-import type { ControlDeps, ControlTerminals } from "../../src/main/ctl/ctl-verb";
+import { verbs } from "../../src/main/ctl/ctl-verbs";
+import { ControlError, type ControlDeps, type ControlTerminals } from "../../src/main/ctl/ctl-verb";
 import type { NotificationTarget } from "../../src/main/util/notifications";
 import type { EnvAsk } from "../../src/main/ctl/env-requests";
 import { tabControlToken } from "../../src/main/terminals/ctl-token";
@@ -994,31 +996,30 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("stops waiting once the CLI is gone", async () => {
-    const body = JSON.stringify({
-      token: TOKEN,
-      verb: "tabs-wait",
-      args: { tabId: "tab-2", session: true, timeout: 3600, project: PROJECT.id },
-      caller: {},
-    });
-    const req = http.request({ host: "127.0.0.1", port, method: "POST", path: "/", headers: { "Content-Type": "application/json" } });
-    req.on("error", () => undefined);
-    req.end(body);
-    await eventually("the wait polling", () => calls.inspected.length > 2, 5000);
-    // What Ctrl+C on the CLI leaves the server: a closed connection.
-    req.destroy();
-    // However long the server takes to see the close: settled once two looks, two polls apart,
-    // find no new one.
-    let polled = -1;
-    await eventually(
-      "the wait stopping",
-      () => {
-        const settled = calls.inspected.length === polled;
-        polled = calls.inspected.length;
-        return settled;
-      },
-      5000,
+    // The verb itself, handed what the server hands it once a closed connection is seen (the wiring
+    // is held by the env-request that is withdrawn when its caller leaves).
+    const gone = new AbortController();
+    const waiting = Promise.resolve(
+      verbs(deps())["tabs-wait"](
+        { tabId: "tab-2", session: true, timeout: 3600, project: PROJECT.id },
+        { side: HOST_CALLER },
+        undefined,
+        gone.signal,
+      ),
     );
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    const refused = waiting.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await eventually("the wait polling", () => calls.inspected.length > 2, 5000);
+    gone.abort();
+    const error = await refused;
+    assert.ok(error instanceof ControlError);
+    assert.equal(error.code, "timeout");
+    assert.ok(error.message.includes("the caller is gone"), error.message);
+    const polled = calls.inspected.length;
+    // An await later, nothing is left that could look again.
+    await new Promise((resolve) => setImmediate(resolve));
     assert.equal(calls.inspected.length, polled, "no polling for a caller that is gone");
   });
 

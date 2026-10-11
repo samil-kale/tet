@@ -1,7 +1,8 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
+import type { ILink, ILinkProvider } from "@xterm/xterm";
 import { createFileLinkProvider } from "../../src/renderer/tabs/links/file-links";
+import type { LinkCell, LinkLine, LinkTerminal } from "../../src/renderer/tabs/links/link-provider";
 import { createUrlLinkProvider } from "../../src/renderer/tabs/links/url-links";
 import { PLATFORM } from "../../src/renderer/platform";
 
@@ -13,31 +14,44 @@ interface FakeRow {
   wrapped?: boolean;
 }
 
+/** A cell the fake rows fill, as xterm fills the one it is handed. */
+class FakeCell implements LinkCell {
+  chars = "";
+  width = 1;
+  getChars(): string {
+    return this.chars;
+  }
+  getWidth(): number {
+    return this.width;
+  }
+}
+
 /** The part of xterm's buffer the providers read: rows of single-width cells, `cols` wide. */
-function fakeTerminal(rows: FakeRow[], cols = 40): Terminal {
-  const line = (row: FakeRow) => ({
+function fakeTerminal(rows: FakeRow[], cols = 40): LinkTerminal {
+  const line = (row: FakeRow): LinkLine => ({
     isWrapped: row.wrapped === true,
     length: cols,
     translateToString: (trimRight?: boolean) => (trimRight ? row.text.trimEnd() : row.text.padEnd(cols)),
-    getCell: (index: number, cell: { chars: string; width: number }) => {
-      cell.chars = row.text[index] ?? "";
-      cell.width = 1;
+    getCell: (index, cell) => {
+      if (cell instanceof FakeCell) {
+        cell.chars = row.text[index] ?? "";
+        cell.width = 1;
+      }
+      return cell;
     },
   });
-  const active = {
-    getLine: (index: number) => (rows[index] ? line(rows[index]) : undefined),
-    getNullCell: () => ({
-      chars: "",
-      width: 1,
-      getChars() {
-        return this.chars;
+  return {
+    cols,
+    rows: rows.length,
+    element: undefined,
+    buffer: {
+      active: {
+        viewportY: 0,
+        getLine: (index) => (rows[index] ? line(rows[index]) : undefined),
+        getNullCell: () => new FakeCell(),
       },
-      getWidth() {
-        return this.width;
-      },
-    }),
+    },
   };
-  return { buffer: { active } } as unknown as Terminal;
 }
 
 function linksAt(provider: ILinkProvider, row: number): ILink[] {

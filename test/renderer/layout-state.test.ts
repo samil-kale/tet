@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import {
   activateIn,
   forgetPersistence,
@@ -11,7 +11,7 @@ import {
 } from "../../src/renderer/tabs/layout-state";
 import { defaultLayout, layoutStorageKey } from "../../src/renderer/tabs/pane-layout";
 import type { LayoutTab, ProjectLayout } from "../../src/renderer/tabs/pane-layout";
-import { fakeLocalStorage } from "../helpers";
+import { fakeLocalStorage, keepGlobals } from "../helpers";
 
 /** tabs/layout-state.ts: when a project's split layout is loaded, reconciled and written. */
 
@@ -40,9 +40,7 @@ beforeEach(() => {
   storage = fakeLocalStorage();
 });
 
-afterEach(() => {
-  delete (globalThis as { localStorage?: unknown }).localStorage;
-});
+keepGlobals("localStorage");
 
 const KEY = layoutStorageKey("p", "layout");
 

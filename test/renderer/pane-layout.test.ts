@@ -1,5 +1,5 @@
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import {
   SNAP_TRANSITIONS,
   activateTab,
@@ -21,7 +21,7 @@ import {
 import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { nextEditorTabId, type EditorTab } from "../../src/renderer/editor/editor-tab";
-import { fakeLocalStorage } from "../helpers";
+import { fakeLocalStorage, keepGlobals } from "../helpers";
 
 /** The split view's rules — pure functions, needing no window. */
 
@@ -418,7 +418,11 @@ describe("snapZoneAt", () => {
 });
 
 describe("what is persisted", () => {
-  const storage = fakeLocalStorage();
+  keepGlobals("localStorage");
+  let storage: Map<string, string>;
+  beforeEach(() => {
+    storage = fakeLocalStorage();
+  });
 
   it("is keyed by session id, without tabs that have no session", () => {
     const layout: ProjectLayout = {

@@ -21,7 +21,7 @@ import {
 import { SettingsStore } from "../../src/main/store/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../src/shared/prompts";
 import { DEFAULT_KEYBINDING_PRESET_ID, laneSettings, withLanePinned, withSettings } from "../../src/shared/types/settings";
-import { tempDir } from "../helpers";
+import { tempDir, withEnv } from "../helpers";
 
 /** store/: the data folder's layout, the stores, the environment variables kept in TET. */
 
@@ -73,13 +73,10 @@ describe("the environment variables kept in TET", () => {
       { name: "STRIPE_KEY", overridesMachine: false },
     ]);
     // Its own name: the first one in process.env may be one a TET this runs in kept (TET_KEPT_ENV).
-    process.env.TET_TEST_MACHINE = "machine";
-    try {
+    withEnv({ TET_TEST_MACHINE: "machine" }, () => {
       store.set([row("TET_TEST_MACHINE", "x")]);
       assert.equal(store.info("TET_TEST_MACHINE")?.overridesMachine, true, "one this machine sets too");
-    } finally {
-      delete process.env.TET_TEST_MACHINE;
-    }
+    });
     store.remove("TET_TEST_MACHINE");
     assert.deepEqual(store.values(), { GITLAB_TOKEN: "new", STRIPE_KEY: "sk" });
     const other = new EnvStore(root);
@@ -99,22 +96,10 @@ describe("the environment variables kept in TET", () => {
   });
 
   it("tell the machine's variables from those a TET it was started from set", () => {
-    const inherited = process.env.TET_KEPT_ENV;
-    process.env.TET_TEST_FROM_OUTER = "outer";
-    process.env.TET_TEST_OWN_MACHINE = "machine";
-    process.env.TET_KEPT_ENV = "TET_TEST_FROM_OUTER";
-    try {
+    withEnv({ TET_TEST_FROM_OUTER: "outer", TET_TEST_OWN_MACHINE: "machine", TET_KEPT_ENV: "TET_TEST_FROM_OUTER" }, () => {
       assert.equal(machineSets("TET_TEST_FROM_OUTER"), false, "an outer TET's, not the machine's");
       assert.equal(machineSets("TET_TEST_OWN_MACHINE"), true);
-    } finally {
-      delete process.env.TET_TEST_FROM_OUTER;
-      delete process.env.TET_TEST_OWN_MACHINE;
-      if (inherited === undefined) {
-        delete process.env.TET_KEPT_ENV;
-      } else {
-        process.env.TET_KEPT_ENV = inherited;
-      }
-    }
+    });
   });
 
   it("write nothing over a file they cannot read, and drop no row they do not understand", () => {

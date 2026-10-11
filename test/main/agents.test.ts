@@ -16,7 +16,7 @@ import { createByteThresholdCheck } from "../../src/main/agents/cli-ready";
 import { HOST_TARGET, SANDBOX_TARGET } from "../../src/main/agents/hook-target";
 import { checkAgentInstalled } from "../../src/main/agents/install-check";
 import { CONTROL_ENV, type ControlRequest } from "../../src/shared/ctl";
-import { eventually, tempDir } from "../helpers";
+import { eventually, tempDir, withEnvAsync } from "../helpers";
 import {
   augmentAgentPath,
   mergePath,
@@ -306,19 +306,9 @@ describe("the agent PATH", () => {
       const shell = path.join(dir, "hanging-shell");
       // Ignores SIGTERM and blocks in the shell itself, with no child to kill in its place.
       fs.writeFileSync(shell, ["#!/bin/sh", 'trap "" TERM', "read ignored", ""].join("\n"), { mode: 0o755 });
-      const shellBefore = process.env.SHELL;
       const pathBefore = process.env.PATH;
-      process.env.SHELL = shell;
       const started = Date.now();
-      try {
-        await augmentAgentPath();
-      } finally {
-        if (shellBefore === undefined) {
-          delete process.env.SHELL;
-        } else {
-          process.env.SHELL = shellBefore;
-        }
-      }
+      await withEnvAsync({ SHELL: shell }, () => augmentAgentPath());
       const took = Date.now() - started;
       assert.ok(took < 20_000, `it waited ${took}ms on a shell it had given up on`);
       assert.equal(process.env.PATH, pathBefore, "a shell that answered nothing changes nothing");

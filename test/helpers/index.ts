@@ -6,7 +6,7 @@ import * as http from "node:http";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
-import { after } from "node:test";
+import { after, afterEach } from "node:test";
 import { safeStorage, utilityProcess } from "electron";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { findControlPort } from "../../src/main/ctl/ctl-port";
@@ -41,11 +41,37 @@ export function fakeSafeStorage(available = true): void {
 /** Stands in for the renderer's `localStorage`, answering the map it keeps its items in. */
 export function fakeLocalStorage(): Map<string, string> {
   const storage = new Map<string, string>();
-  (globalThis as { localStorage?: unknown }).localStorage = {
+  setGlobal("localStorage", {
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => void storage.set(key, value),
-  };
+  });
   return storage;
+}
+
+/** Stands in for the renderer's `window`, which its code reads off the global object. */
+export function fakeWindow(fake: object): void {
+  setGlobal("window", fake);
+}
+
+function setGlobal(name: string, value: unknown): void {
+  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+}
+
+/**
+ * Puts the globals `names` (`fakeLocalStorage`, `fakeWindow`) back to what they are now after each
+ * test of the describe, or of the file, it is called in: gone where there was none.
+ */
+export function keepGlobals(...names: string[]): void {
+  const before = names.map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const);
+  afterEach(() => {
+    for (const [name, descriptor] of before) {
+      if (descriptor) {
+        Object.defineProperty(globalThis, name, descriptor);
+      } else {
+        Reflect.deleteProperty(globalThis, name);
+      }
+    }
+  });
 }
 
 /** Whether a process is still there. */
@@ -95,16 +121,62 @@ export function fakeCommand(dir: string, name: string, script: string): void {
   }
 }
 
-/** Runs `action` with `dir` first on PATH, which is enough on win32 too (resolveCommand takes a
- *  name's first folder on PATH). */
-export async function withCommandOn<T>(dir: string, action: () => Promise<T>): Promise<T> {
-  const originalPath = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
+/** Sets `vars` in the environment (undefined: unset), and answers what puts them back. */
+function setEnv(vars: Record<string, string | undefined>): () => void {
+  const before = Object.keys(vars).map((name) => [name, process.env[name]] as const);
+  const apply = (name: string, value: string | undefined): void => {
+    if (value === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = value;
+    }
+  };
+  for (const [name, value] of Object.entries(vars)) {
+    apply(name, value);
+  }
+  return () => {
+    for (const [name, value] of before) {
+      apply(name, value);
+    }
+  };
+}
+
+/** Runs `action` with `vars` set in the environment (undefined: unset), and puts back each one's
+ *  value as it was, whatever `action` did to it meanwhile and however it ended. */
+export function withEnv<T>(vars: Record<string, string | undefined>, action: () => T): T {
+  const restore = setEnv(vars);
+  try {
+    return action();
+  } finally {
+    restore();
+  }
+}
+
+/** `withEnv` for an action that waits: the values stay until its promise settles. */
+export async function withEnvAsync<T>(vars: Record<string, string | undefined>, action: () => Promise<T>): Promise<T> {
+  const restore = setEnv(vars);
   try {
     return await action();
   } finally {
-    process.env.PATH = originalPath;
+    restore();
   }
+}
+
+/**
+ * Puts the environment variables `names` back to their value now after each test of the describe
+ * it is called in, for tests that set them as part of their setup.
+ */
+export function keepEnv(...names: string[]): void {
+  const before = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  afterEach(() => {
+    setEnv(before);
+  });
+}
+
+/** Runs `action` with `dir` first on PATH, which is enough on win32 too (resolveCommand takes a
+ *  name's first folder on PATH). */
+export function withCommandOn<T>(dir: string, action: () => Promise<T>): Promise<T> {
+  return withEnvAsync({ PATH: `${dir}${path.delimiter}${process.env.PATH}` }, action);
 }
 
 /** The repository: a test runs bundled from dist-test/, as deep as its file lies in test/. */

@@ -1,11 +1,11 @@
 import * as assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import { activeAfterChange, activeAtStart, rememberActive } from "../../src/renderer/lanes/projects/active-ref";
 import { graphRefColors, layoutGraph, nodeLane, type GraphColor } from "../../src/renderer/lanes/git/graph-layout";
 import { EMPTY_REPOSITORY_STATE } from "../../src/shared/types/git";
 import type { GraphCommit } from "../../src/shared/types/git";
 import type { Project } from "../../src/shared/types/project";
-import { fakeLocalStorage } from "../helpers";
+import { fakeLocalStorage, keepGlobals } from "../helpers";
 
 const main: Project = { id: "main", path: "/repo", name: "repo", worktrees: [{ path: "/wt/feature", branch: "feature", key: "k1" }] };
 const other: Project = { id: "other", path: "/other", name: "other", worktrees: [] };
@@ -34,7 +34,10 @@ describe("the active repository or worktree after the list changed", () => {
 });
 
 describe("the active repository or worktree at startup", () => {
-  fakeLocalStorage();
+  keepGlobals("localStorage");
+  beforeEach(() => {
+    fakeLocalStorage();
+  });
 
   it("is the one active when TET last closed, while it is still open", () => {
     assert.equal(activeAtStart([other, main]), "other", "none remembered: the first");

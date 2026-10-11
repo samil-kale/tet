@@ -1,5 +1,5 @@
-import type { ILinkProvider, Terminal } from "@xterm/xterm";
-import { createModifierGatedLinkProvider } from "./link-provider";
+import type { ILinkProvider } from "@xterm/xterm";
+import { createModifierGatedLinkProvider, type LinkTerminal } from "./link-provider";
 
 /**
  * A url: `<scheme>://` up to whitespace, `"` or `'`. Adapted from @xterm/addon-web-links with a
@@ -8,6 +8,6 @@ import { createModifierGatedLinkProvider } from "./link-provider";
 const URL_REGEX = /[A-Za-z][A-Za-z0-9+.-]*:[/]{2}[^\s"'!*(){}|\\^<>`]*[^\s"':,.!?{}|\\^~[\]`()<>]/;
 
 // Not @xterm/addon-web-links: it underlines on hover regardless of modifier.
-export function createUrlLinkProvider(terminal: Terminal, onOpenUrl: (url: string) => void): ILinkProvider {
+export function createUrlLinkProvider(terminal: LinkTerminal, onOpenUrl: (url: string) => void): ILinkProvider {
   return createModifierGatedLinkProvider(terminal, URL_REGEX, "://", onOpenUrl);
 }

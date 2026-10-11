@@ -11,7 +11,7 @@ import { shellSingleQuote } from "../../src/main/util/generated-file";
 import { onDisk, openInside, relativeInside, removeInside } from "../../src/main/util/path-inside";
 import { sameSet } from "../../src/main/util/same-set";
 import { killProcessTree, resolveCommand } from "../../src/main/util/process";
-import { eventually, processAlive, tempDir } from "../helpers";
+import { eventually, processAlive, tempDir, withEnv } from "../helpers";
 import { isExecutableFile, isOpenableUrl } from "../../src/main/util/shell-open";
 import { serving, type UtilityResponse } from "../../src/main/util/utility-host";
 import { directoryMissing } from "../../src/main/util/watch-dir";
@@ -103,17 +103,13 @@ describe("resolveCommand", () => {
       "x\\\\\\",
       'a\\\\\\"b',
     ];
-    const originalPath = process.env.PATH;
-    process.env.PATH = `${dir}${path.delimiter}${originalPath}`;
-    try {
-      // The shim by its path, and by a bare name found on PATH, with its extension or without.
+    // The shim by its path, and by a bare name found on PATH, with its extension or without.
+    withEnv({ PATH: `${dir}${path.delimiter}${process.env.PATH}` }, () => {
       for (const program of [shim, "echo-args", "echo-args.cmd"]) {
         const run = runResolved(program, args, dir);
         assert.deepEqual(JSON.parse(run.stdout), args, `${program}: ${run.stdout} ${run.stderr}`);
       }
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    });
     assert.deepEqual(fs.readdirSync(dir).sort(), ["argv.js", "echo-args.cmd"], "nothing redirected into a file");
   });
 
@@ -172,15 +168,12 @@ describe("resolveCommand", () => {
     fs.mkdirSync(second);
     fs.writeFileSync(path.join(first, "tool.cmd"), "@ECHO off\r\n");
     fs.writeFileSync(path.join(second, "tool.exe"), "");
-    const originalPath = process.env.PATH;
-    process.env.PATH = [first, second].join(path.delimiter);
-    try {
+    withEnv({ PATH: [first, second].join(path.delimiter) }, () => {
       assert.equal(resolveCommand("tool", []).command, "cmd.exe", "the .cmd in the first folder");
-      process.env.PATH = [second, first].join(path.delimiter);
+    });
+    withEnv({ PATH: [second, first].join(path.delimiter) }, () => {
       assert.equal(resolveCommand("tool", []).command, path.join(second, "tool.exe"), "the .exe where its folder comes first");
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    });
   });
 
   it("changes nothing elsewhere", { skip: PLATFORM.spawnsThroughCmd && "not win32" }, () => {

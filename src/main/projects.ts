@@ -30,8 +30,9 @@ import { directoryMissing } from "./util/watch-dir";
 export interface ProjectDeps {
   store: ProjectStore;
   repositories: RepositoryManager;
-  tabManagers: SessionManagerRegistry;
-  records: ControlRecords;
+  /** What closing a repository or worktree takes of them. */
+  tabManagers: Pick<SessionManagerRegistry, "close">;
+  records: Pick<ControlRecords, "forget">;
   sbxLocal: SbxLocalStore;
   /** Starts the git and terminals of the repository or a worktree; its project is the store's. */
   openProjectRef: (ref: ProjectRef) => void;

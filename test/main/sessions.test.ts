@@ -8,7 +8,7 @@ import { claudeSandboxSessions, claudeSessionProvider } from "../../src/main/age
 import { codexSandboxSessions, codexSessionProvider } from "../../src/main/agents/codex/sessions";
 import { encodeCwd, piSandboxSessions, piSessionProvider } from "../../src/main/agents/pi/sessions";
 import { watchTranscriptDir } from "../../src/main/agents/transcript";
-import { eventually, tempDir } from "../helpers";
+import { eventually, keepEnv, tempDir } from "../helpers";
 
 /**
  * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a
@@ -21,6 +21,7 @@ const ms = (iso: string): number => Date.parse(iso);
 const line = (entry: unknown): string => (typeof entry === "string" ? entry : JSON.stringify(entry)) + "\n";
 
 describe("Claude Code's transcripts", () => {
+  keepEnv("CLAUDE_CONFIG_DIR");
   const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo One" : "/work/repo one";
   const encoded = cwd.replace(/[^a-zA-Z0-9]/g, "-");
 
@@ -184,6 +185,7 @@ describe("Claude Code's transcripts", () => {
 });
 
 describe("Codex's rollouts", () => {
+  keepEnv("CODEX_HOME");
   const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo" : "/work/repo";
 
   function rollouts(files: Record<string, unknown[]>, index: unknown[] = []): void {
@@ -259,6 +261,7 @@ describe("Codex's rollouts", () => {
 });
 
 describe("pi's transcripts", () => {
+  keepEnv("PI_CODING_AGENT_DIR");
   const cwd = PLATFORM.driveLetters ? "C:\\work\\Repo One" : "/work/repo one";
   const fileName = (id: string, at = AT): string => `${at.replace(/[:.]/g, "-")}_${id}.jsonl`;
 

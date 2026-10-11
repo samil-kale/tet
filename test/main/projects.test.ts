@@ -6,7 +6,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, describe, it } from "node:test";
 import { resolveProjectRef } from "../../src/main/store/resolved-ref";
-import type { ControlRecords } from "../../src/main/ctl/ctl-records";
 import { GitLoginStore } from "../../src/main/git/git-logins";
 import { RepositoryManager } from "../../src/main/git/repository";
 import { projectDir, worktreeDir, worktreeFolders } from "../../src/main/store/project-dirs";
@@ -23,7 +22,6 @@ import {
 } from "../../src/main/projects";
 import { ProjectStore } from "../../src/main/store/project-store";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
-import type { SessionManagerRegistry } from "../../src/main/terminals/session-registry";
 import { readCommands, readSbxSettings, writeCommands } from "../../src/main/store/tet-json";
 import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project";
 import type { NoticeSeverity } from "../../src/shared/types/app";
@@ -94,11 +92,8 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
   const deps: ProjectDeps = {
     store,
     repositories,
-    tabManagers: {
-      close: async (ref: ProjectRef) => onClose(ref),
-      open: () => undefined,
-    } as unknown as SessionManagerRegistry,
-    records: { forget: () => undefined } as unknown as ControlRecords,
+    tabManagers: { close: async (ref) => onClose(ref) },
+    records: { forget: () => undefined },
     sbxLocal: new SbxLocalStore(dataRoot),
     openProjectRef: (ref) => void repositories.open(resolveProjectRef(dataRoot, store, ref)),
     dataRoot,

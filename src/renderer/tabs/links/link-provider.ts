@@ -1,5 +1,37 @@
-import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
+import type { ILink, ILinkProvider } from "@xterm/xterm";
 import { isModifierHeld, isModifierKey } from "../../platform";
+
+/** One cell of a row, as xterm's `IBufferCell` gives it. */
+export interface LinkCell {
+  getChars(): string;
+  getWidth(): number;
+}
+
+/** One row of the buffer: what the providers read of xterm's `IBufferLine`. */
+export interface LinkLine {
+  readonly isWrapped: boolean;
+  readonly length: number;
+  translateToString(trimRight?: boolean): string;
+  /** Fills `cell` with the cell at `x`. */
+  getCell(x: number, cell?: LinkCell): LinkCell | undefined;
+}
+
+/**
+ * What the providers read of a terminal: its size, element and active buffer. xterm's `Terminal` is
+ * one; a test builds the rest without a terminal.
+ */
+export interface LinkTerminal {
+  readonly cols: number;
+  readonly rows: number;
+  readonly element: HTMLElement | undefined;
+  readonly buffer: {
+    readonly active: {
+      readonly viewportY: number;
+      getLine(y: number): LinkLine | undefined;
+      getNullCell(): LinkCell;
+    };
+  };
+}
 
 /**
  * Rows the search for a wrapped token may walk each way. The character budget alone cannot bound
@@ -23,7 +55,7 @@ interface LinkSegment {
  * (Cmd on macOS) is held, so the click is not taken from CLIs with their own mouse tracking.
  */
 export function createModifierGatedLinkProvider(
-  terminal: Terminal,
+  terminal: LinkTerminal,
   regex: RegExp,
   /**
    * A substring every match contains. Both regexes backtrack quadratically through a long
@@ -42,7 +74,7 @@ export function createModifierGatedLinkProvider(
   };
 }
 
-function computeLinks(y: number, terminal: Terminal, rex: RegExp, anchor: string, onActivate: (text: string) => void): ILink[] {
+function computeLinks(y: number, terminal: LinkTerminal, rex: RegExp, anchor: string, onActivate: (text: string) => void): ILink[] {
   const [lines, startLineIndex, offsets] = getWindowedLineStrings(y - 1, terminal);
   const line = lines.join("");
   if (!line.includes(anchor)) {
@@ -94,19 +126,19 @@ function computeLinks(y: number, terminal: Terminal, rex: RegExp, anchor: string
 }
 
 /** Per terminal, the `leave` of the link under the pointer — see endLinkHover. */
-const hovered = new WeakMap<Terminal, () => void>();
+const hovered = new WeakMap<LinkTerminal, () => void>();
 
 /**
  * Ends the hover of a terminal about to be disposed: xterm's dispose calls no link's `leave`, so a
  * tab closed under the pointer (`tet-ctl tabs-close`) would keep its window key listeners, and with
  * them the disposed terminal.
  */
-export function endLinkHover(terminal: Terminal): void {
+export function endLinkHover(terminal: LinkTerminal): void {
   hovered.get(terminal)?.();
 }
 
 function buildLink(
-  terminal: Terminal,
+  terminal: LinkTerminal,
   range: ILink["range"],
   segments: LinkSegment[],
   text: string,
@@ -228,7 +260,7 @@ function buildLink(
 // predecessor filled the last column, and `readLine()` drops such a CLI's continuation indent.
 
 /** Whether the row at `lineIndex` continues the text of the row above it. */
-function isContinuation(terminal: Terminal, lineIndex: number): boolean {
+function isContinuation(terminal: LinkTerminal, lineIndex: number): boolean {
   const line = terminal.buffer.active.getLine(lineIndex);
   if (!line) {
     return false;
@@ -242,13 +274,13 @@ function isContinuation(terminal: Terminal, lineIndex: number): boolean {
 }
 
 /** Cell index one past the row's last non-blank cell. */
-function rowTextEnd(terminal: Terminal, lineIndex: number): number {
+function rowTextEnd(terminal: LinkTerminal, lineIndex: number): number {
   const line = terminal.buffer.active.getLine(lineIndex);
   return line ? line.translateToString(true).length : 0;
 }
 
 /** The row's text plus the cell offset that text starts at (non-zero if an indent was dropped). */
-function readLine(terminal: Terminal, lineIndex: number): [string, number] {
+function readLine(terminal: LinkTerminal, lineIndex: number): [string, number] {
   const line = terminal.buffer.active.getLine(lineIndex);
   if (!line) {
     return ["", 0];
@@ -262,7 +294,7 @@ function readLine(terminal: Terminal, lineIndex: number): [string, number] {
   return [unindented, content.length - unindented.length];
 }
 
-function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[], number, number[]] {
+function getWindowedLineStrings(lineIndex: number, terminal: LinkTerminal): [string[], number, number[]] {
   let topIdx = lineIndex;
   let bottomIdx = lineIndex;
   let length: number;
@@ -320,7 +352,7 @@ function getWindowedLineStrings(lineIndex: number, terminal: Terminal): [string[
 }
 
 function mapStrIdx(
-  terminal: Terminal,
+  terminal: LinkTerminal,
   lineIndex: number,
   rowIndex: number,
   stringIndex: number,

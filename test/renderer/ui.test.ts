@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { fakeLocalStorage } from "../helpers";
+import { fakeLocalStorage, keepGlobals } from "../helpers";
 import { reorder } from "../../src/renderer/ui/drag-reorder";
 import { layoutFlag, layoutKey } from "../../src/renderer/ui/layout-storage";
 import { holdEscape } from "../../src/renderer/ui/use-escape";
@@ -117,25 +117,23 @@ describe("reordering a list", () => {
 });
 
 describe("the layout kept in the window's storage", () => {
+  keepGlobals("localStorage");
+
   it("names a key under the layout prefix", () => {
     assert.equal(layoutKey("lane.git"), "tet.layout.lane.git");
   });
 
   it("reads a flag once, false unless stored as true, and writes through", () => {
     const storage = fakeLocalStorage();
-    try {
-      assert.equal(layoutFlag("alsoPush").get(), false);
-      storage.set(layoutKey("alsoPush"), "true");
-      const flag = layoutFlag("alsoPush");
-      assert.equal(flag.get(), true);
-      flag.set(false);
-      assert.equal(flag.get(), false);
-      assert.equal(storage.get(layoutKey("alsoPush")), "false");
-      assert.equal(layoutFlag("alsoPush").get(), false, "what the next one opens with");
-      storage.set(layoutKey("alsoPush"), "yes");
-      assert.equal(layoutFlag("alsoPush").get(), false, "only `true` counts");
-    } finally {
-      delete (globalThis as { localStorage?: unknown }).localStorage;
-    }
+    assert.equal(layoutFlag("alsoPush").get(), false);
+    storage.set(layoutKey("alsoPush"), "true");
+    const flag = layoutFlag("alsoPush");
+    assert.equal(flag.get(), true);
+    flag.set(false);
+    assert.equal(flag.get(), false);
+    assert.equal(storage.get(layoutKey("alsoPush")), "false");
+    assert.equal(layoutFlag("alsoPush").get(), false, "what the next one opens with");
+    storage.set(layoutKey("alsoPush"), "yes");
+    assert.equal(layoutFlag("alsoPush").get(), false, "only `true` counts");
   });
 });

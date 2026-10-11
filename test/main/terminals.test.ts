@@ -14,7 +14,7 @@ import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { CONTROL_ENV, type HookEvent } from "../../src/shared/ctl";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { eventually, tempDir } from "../helpers";
+import { eventually, tempDir, withEnv, withEnvAsync } from "../helpers";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 
 /** terminals/: a tab's turns and marks, its token and environment, when sessions are listed. */
@@ -38,26 +38,25 @@ async function withEmptyPath(
   const root = tempDir("tet-empty-path-");
   const project = path.join(root, "repo");
   fs.mkdirSync(project);
-  const originalPath = process.env.PATH;
-  process.env.PATH = path.join(root, "empty");
   const settings = new SettingsStore(root);
-  const manager = new TabSessionManager(
-    { ref: { projectId: "p" }, path: project, name: () => "repo" },
-    root,
-    settings,
-    new SbxLocalStore(root),
-    new HostSetups(root, settings, () => undefined),
-    {
-      ...NO_CALLBACKS,
-      ...callbacks,
-    },
-  );
-  try {
-    await use(manager, project);
-  } finally {
-    await manager.dispose();
-    process.env.PATH = originalPath;
-  }
+  await withEnvAsync({ PATH: path.join(root, "empty") }, async () => {
+    const manager = new TabSessionManager(
+      { ref: { projectId: "p" }, path: project, name: () => "repo" },
+      root,
+      settings,
+      new SbxLocalStore(root),
+      new HostSetups(root, settings, () => undefined),
+      {
+        ...NO_CALLBACKS,
+        ...callbacks,
+      },
+    );
+    try {
+      await use(manager, project);
+    } finally {
+      await manager.dispose();
+    }
+  });
 }
 
 /** Pieces of the main process needing no app and no server: the session manager's turns and
@@ -244,14 +243,14 @@ describe("a sandboxed tab's control token", () => {
 
 describe("a terminal's environment", () => {
   it("puts TET's own above the machine's, and a saved command's above all", () => {
-    process.env.TET_TEST_MACHINE = "machine";
-    process.env.TET_TEST_OUTER = "outer";
     setControlEnv({ TET_TEST_OUTER: "inner", TET_TEST_CONTROL: "control" }, "");
-    const env = buildEnv({
-      env: { TET_TEST_MACHINE: "default", TET_TEST_AGENT: "agent" },
-      own: { TET_TEST_OWN: "own", TET_TEST_CONTROL: "own" },
-      envOverride: { TET_TEST_OWN: "command" },
-    });
+    const env = withEnv({ TET_TEST_MACHINE: "machine", TET_TEST_OUTER: "outer" }, () =>
+      buildEnv({
+        env: { TET_TEST_MACHINE: "default", TET_TEST_AGENT: "agent" },
+        own: { TET_TEST_OWN: "own", TET_TEST_CONTROL: "own" },
+        envOverride: { TET_TEST_OWN: "command" },
+      }),
+    );
     assert.equal(env.TET_TEST_MACHINE, "machine", "the machine's beats the agent's default");
     assert.equal(env.TET_TEST_AGENT, "agent", "the agent's default stands where the machine has none");
     // A TET started from its own shell tab has the outer app's value in process.env.
@@ -261,33 +260,34 @@ describe("a terminal's environment", () => {
   });
 
   it("sets the variables kept in TET over the machine's own, and none in a sandbox", () => {
-    process.env.TET_TEST_MACHINE = "machine";
     let stored: Record<string, string> = { TET_TEST_STORED: "first", TET_TEST_MACHINE: "stored" };
     setStoredEnv(() => stored);
     try {
-      const env = buildEnv({ env: { TET_TEST_STORED: "agent" } });
-      assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
-      assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
-      assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
-      assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
-      stored = { TET_TEST_STORED: "second" };
-      assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
-      // A TET started from a tab of another inherits that one's list; its own tabs get their own.
-      process.env.TET_KEPT_ENV = "OUTER";
-      stored = {};
-      assert.equal(buildEnv({}).TET_KEPT_ENV, undefined, "none kept, none named");
-      delete process.env.TET_KEPT_ENV;
-      assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_STORED, undefined, "a sandbox gets none");
+      // TET_KEPT_ENV is set and unset below, and an outer TET leaves its own in process.env.
+      withEnv({ TET_TEST_MACHINE: "machine", TET_KEPT_ENV: process.env.TET_KEPT_ENV }, () => {
+        const env = buildEnv({ env: { TET_TEST_STORED: "agent" } });
+        assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
+        assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
+        assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
+        assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
+        stored = { TET_TEST_STORED: "second" };
+        assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
+        // A TET started from a tab of another inherits that one's list; its own tabs get their own.
+        process.env.TET_KEPT_ENV = "OUTER";
+        stored = {};
+        assert.equal(buildEnv({}).TET_KEPT_ENV, undefined, "none kept, none named");
+        delete process.env.TET_KEPT_ENV;
+        assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_STORED, undefined, "a sandbox gets none");
+      });
     } finally {
       setStoredEnv(() => ({}));
     }
   });
 
   it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
-    process.env.TET_TEST_CASE = "machine";
     setStoredEnv(() => ({ tet_test_case: "stored" }));
     try {
-      const env = buildEnv({});
+      const env = withEnv({ TET_TEST_CASE: "machine" }, () => buildEnv({}));
       const names = Object.keys(env).filter((name) => name.toUpperCase() === "TET_TEST_CASE");
       assert.deepEqual(
         names.map((name) => env[name]),
