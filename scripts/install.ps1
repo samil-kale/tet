@@ -60,11 +60,27 @@
     if (-not $found) {
       throw "tet: no TET.exe in $asset"
     }
-    if (Test-Path $dest) {
-      Remove-Item -Path $dest -Recurse -Force
+    # The installed one steps aside until the new one stands in its place, and comes back if the
+    # move fails: nothing is left without a TET.
+    $old = "$dest.old"
+    if (Test-Path $old) {
+      Remove-Item -Path $old -Recurse -Force
     }
     New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
-    Move-Item -Path $found.DirectoryName -Destination $dest
+    if (Test-Path $dest) {
+      Move-Item -Path $dest -Destination $old
+    }
+    try {
+      Move-Item -Path $found.DirectoryName -Destination $dest
+    } catch {
+      if (Test-Path $old) {
+        Remove-Item -Path $dest -Recurse -Force -ErrorAction SilentlyContinue
+        Move-Item -Path $old -Destination $dest
+      }
+      throw
+    }
+    # Left behind, it is only in the way of nothing: the next install removes it first.
+    Remove-Item -Path $old -Recurse -Force -ErrorAction SilentlyContinue
   } finally {
     Remove-Item -Path $tmp -Recurse -Force -ErrorAction SilentlyContinue
   }

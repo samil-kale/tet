@@ -1,3 +1,4 @@
+import { ownValue } from "../../shared/own-value";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { sameRecord } from "../identity";
 import { layoutKey } from "../ui/layout-storage";
@@ -172,7 +173,7 @@ export function normalizeLayout(layout: ProjectLayout, tabs: LayoutTab[], previo
       continue;
     }
     const place: CommandPlace = { preset: layout.preset, pane: paneOf(layout, tab.tabId) };
-    const known = commandPane[tab.command];
+    const known = ownValue(commandPane, tab.command);
     if (known?.preset !== place.preset || known.pane !== place.pane) {
       commandPane = { ...commandPane, [tab.command]: place };
     }
@@ -477,7 +478,7 @@ function paneAt(preset: SplitPreset, position: PanePosition | undefined): PaneId
  */
 export function placeCommandTab(layout: ProjectLayout, tabId: string, command: string, tabs: LayoutTab[]): ProjectLayout {
   const open = tabs.find((tab) => tab.command === command && tab.tabId !== tabId);
-  const place = open ? { preset: layout.preset, pane: paneOf(layout, open.tabId) } : layout.commandPane[command];
+  const place = open ? { preset: layout.preset, pane: paneOf(layout, open.tabId) } : ownValue(layout.commandPane, command);
   if (!place) {
     return moveTab(layout, tabId, paneOf(layout, tabId), tabs);
   }

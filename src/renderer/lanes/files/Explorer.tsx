@@ -1,4 +1,5 @@
 import { memo, useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ownValue } from "../../../shared/own-value";
 import { refKeyOf } from "../../../shared/types/project";
 import type { ExplorerListing, ExplorerRoot } from "../../../shared/types/files";
 import type { GitActionResult } from "../../../shared/types/git";
@@ -154,7 +155,7 @@ export const Explorer = memo(function Explorer({
       const next = { ...current };
       let changed = false;
       for (const id of ids) {
-        if (!next[id]) {
+        if (ownValue(next, id) !== true) {
           next[id] = true;
           changed = true;
         }

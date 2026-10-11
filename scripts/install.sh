@@ -22,6 +22,20 @@ fail() {
   exit 1
 }
 
+# Puts the unpacked app `$1` in the installed one's place `$2`. The installed one steps aside until
+# the new one stands there, and comes back if the move fails: the temporary folder is often another
+# filesystem, where a move is a copy that can stop halfway.
+replace() {
+  rm -rf "$2.old"
+  [ ! -e "$2" ] || mv "$2" "$2.old" || fail "could not replace $2"
+  if ! mv "$1" "$2"; then
+    rm -rf "$2"
+    [ ! -e "$2.old" ] || mv "$2.old" "$2"
+    fail "could not install into $2"
+  fi
+  rm -rf "$2.old"
+}
+
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v tar >/dev/null 2>&1 || fail "tar is required"
 
@@ -67,8 +81,7 @@ if [ "$os" = mac ]; then
   [ -n "$app" ] || fail "no TET.app in $asset"
   dest="$HOME/Applications/TET.app"
   mkdir -p "$HOME/Applications"
-  rm -rf "$dest"
-  mv "$app" "$dest"
+  replace "$app" "$dest"
   # `open` rather than the binary: the app starts as its own, not as a child of this shell.
   cat >"$bin_dir/tet" <<'EOF'
 #!/bin/sh
@@ -79,8 +92,7 @@ else
   [ -n "$binary" ] || fail "no tet executable in $asset"
   dest="$HOME/.local/share/tet"
   mkdir -p "$HOME/.local/share"
-  rm -rf "$dest"
-  mv "$(dirname "$binary")" "$dest"
+  replace "$(dirname "$binary")" "$dest"
   # --no-sandbox: nothing unpacked without root can give electron's chrome-sandbox the setuid root
   # bit it wants, and AppArmor on Ubuntu 24.04+ blocks the unprivileged fallback, so electron would
   # abort at launch. What the renderer then runs without is Chromium's own process sandbox.

@@ -1,3 +1,4 @@
+import { ownValue } from "../../../shared/own-value";
 import type { ExplorerListing, ExplorerRoot, ExplorerSortOrder } from "../../../shared/types/files";
 import { extensionOf } from "../../paths";
 import { buildTree, compareGrouped, compareNames, isExpanded, sortTree, type TreeNode } from "../../ui/tree";
@@ -19,7 +20,7 @@ function comparatorFor(order: ExplorerSortOrder, mtimes: Record<string, number>)
         return type(a).localeCompare(type(b)) || compareNames(a, b);
       };
     case "modified":
-      return (a, b) => (mtimes[b.path] ?? 0) - (mtimes[a.path] ?? 0) || compareNames(a, b);
+      return (a, b) => (ownValue(mtimes, b.path) ?? 0) - (ownValue(mtimes, a.path) ?? 0) || compareNames(a, b);
     case "default":
     case "foldersNestsFiles":
       return (a, b) => compareGrouped(a, b, true);
@@ -44,7 +45,7 @@ export function buildForest(files: ExplorerListing): TreeNode[] {
 /** A root with an open child folder? */
 export function hasExpandedRootChild(roots: TreeNode[], expanded: Record<string, boolean>): boolean {
   return roots.some(
-    (root) => isExpanded(root, expanded) && root.children!.some((child) => child.children && (expanded[child.id] ?? false)),
+    (root) => isExpanded(root, expanded) && root.children!.some((child) => child.children && (ownValue(expanded, child.id) ?? false)),
   );
 }
 

@@ -1,4 +1,5 @@
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { ownValue } from "../../../shared/own-value";
 import { syncRemote } from "../../../shared/types/git";
 import type { ChangeStatus, GitActionResult, RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
@@ -244,14 +245,17 @@ export const ChangesList = memo(function ChangesList({
     return asTree ? compactTree([top])[0] : top;
   }, [changes, query, asTree]);
 
-  const rows = useMemo(() => visibleRows([root], (node) => filtering || (expanded[node.id] ?? true)), [root, expanded, filtering]);
+  const rows = useMemo(
+    () => visibleRows([root], (node) => filtering || (ownValue(expanded, node.id) ?? true)),
+    [root, expanded, filtering],
+  );
   /** What each row's checkbox stands for, read once per tree rather than per row and render. */
   const filesOf = useMemo(() => filesByNode([root]), [root]);
   const shownFiles = filesOf.get(ROOT_ID)!;
 
   const shownChecked = useMemo(() => shownFiles.filter((path) => checked.has(path)), [shownFiles, checked]);
   useEffect(() => onChecked(shownChecked), [shownChecked, onChecked]);
-  const anyExpanded = root.children!.some((node) => node.children !== undefined && (expanded[node.id] ?? true));
+  const anyExpanded = root.children!.some((node) => node.children !== undefined && (ownValue(expanded, node.id) ?? true));
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   useImperativeHandle(ref, () => ({

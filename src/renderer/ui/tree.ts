@@ -1,3 +1,5 @@
+import { ownValue } from "../../shared/own-value";
+
 /** A tree of repository paths, for the Explorer and LOCAL CHANGES alike. */
 export interface TreeNode {
   /** Key for `expanded`, the row map and React. The path; in the Explorer with `folders`, prefixed
@@ -124,7 +126,7 @@ export function filterTree(nodes: TreeNode[], query: string): TreeNode[] {
 
 /** Whether a folder is expanded: a root starts expanded, everything else collapsed. */
 export function isExpanded(node: TreeNode, expanded: Record<string, boolean>): boolean {
-  return expanded[node.id] ?? node.root === true;
+  return ownValue(expanded, node.id) ?? node.root === true;
 }
 
 /** Every folder's id under `nodes`, at any depth. */
