@@ -13,7 +13,7 @@ import { Section } from "../../ui/Section";
 import { TabMark } from "../../ui/TabMark";
 import { IconButton } from "../../ui/IconButton";
 import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../../ui/icons";
-import type { RefMarks } from "../../tabs/use-tab-marks";
+import type { RefMarks } from "../../tabs/tab-marks";
 
 /** Our own type, so a project dragged over a terminal is not pasted into it. */
 const DRAG_TYPE = "application/x-tet-project";

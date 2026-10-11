@@ -12,7 +12,7 @@ import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition, type PaneChrome } from "./Pane";
 import type { Lane } from "../../shared/types/settings";
 import { paneTabKind, type PaneTab } from "./pane-tab";
-import { NO_TABS } from "./use-project-layouts";
+import { NO_TABS } from "./layout-state";
 
 /**
  * A sash's position as a *share* of its room (`usePersistedShare`): `pixelsFor` multiplies it

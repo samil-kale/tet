@@ -23,16 +23,14 @@ import type { SettingsStore } from "../store/settings";
 import { TerminalSession } from "./terminal-session";
 import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
 import type { HandoverFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
-import { reportApplies } from "./turn-order";
+import { applyTurnReport, bindReportedSession, notificationFor, type HookNotification, type NotificationKind } from "./turn-reports";
 import {
   answersQuestion,
   awaitsClaim,
-  endLeavesQuestion,
   endTurnQuietly,
   isSavedCommandTab,
   resumeArgsOf,
   sessionFieldsOf,
-  setTurn,
   titleUnsettled,
   toDescriptor,
   type TabState,
@@ -104,12 +102,6 @@ function singleLine(text: string): string {
     .map((line) => line.trim())
     .filter((line) => line !== "")
     .join(" ");
-}
-
-/** What a hook shows the user (ctl-verb.ts's ControlTerminals.hookEvent). */
-export interface HookNotification {
-  title: string;
-  body: string;
 }
 
 export interface HookOutcome {
@@ -1085,126 +1077,28 @@ export class TabSessionManager {
     // When the hook *fired*, not arrived: two hooks of a turn race, and arrival order leaves a tab
     // finished and working. One tab, one clock.
     const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
-    if (bound && sessionId) {
-      this.bindReportedSession(bound, sessionId, at);
+    if (bound && sessionId && bindReportedSession(bound, sessionId, at)) {
+      this.reportWaiters.get(bound.tabId)?.();
+      if (awaitsClaim(bound)) {
+        this.runtimeFor(bound.agentId).reconciler?.schedule();
+      }
     }
     if (!tab) {
       return {};
     }
-    // A stale report gets no mark and no notification, which would contradict the marks — "Finished" over
-    // a tab working again (turn-order.ts).
-    const fresh = reportApplies(tab.turnReportAt, at);
-    // A report sent before the exit can arrive after it (Codex's aborted hook, an extension's post, a
-    // sandbox's latency) and would mark a tab whose process is gone until the next stop.
-    const exited = tab.status === "stopped" || tab.status === "error";
-    switch (event) {
-      case "session-start":
-        // Only names the session (above). Codex fires it with the first prompt, whose turn
-        // prompt-submit marks.
-        return {};
-      case "prompt-submit":
-        if (fresh && !exited) {
-          setTurn(tab, true, at);
-          this.postTabs();
-        }
-        // No context for the model: TET's system prompt went in once per session (system-prompt.ts).
-        return {};
-      case "stop": {
-        if (!fresh) {
-          return {};
-        }
-        const agent = getAgent(tab.agentId);
-        if (agent.turns?.workOutlivesStop?.(payload)) {
-          return {};
-        }
-        // Only pi's extension reports a turn the user cut short (its `aborted`): it ends as
-        // reconcile ends one, no mark and no notification.
-        if (agent.turns?.stopCutShort?.(payload)) {
-          endTurnQuietly(tab);
-          tab.turnReportAt = at;
-          this.postTabs();
-          return {};
-        }
-        // Read before setTurn, which may clear it.
-        const asked = endLeavesQuestion(tab, agent);
-        setTurn(tab, false, at, asked);
-        this.postTabs();
-        // The question already notified this moment (see setTurn).
-        return asked ? {} : { notification: this.notification(tab, "finished") };
-      }
-      case "permission":
-      case "question":
-        if (!fresh || exited) {
-          return {};
-        }
-        // Not through setTurn: the turn is still open, `inTurn` is untouched.
-        tab.waitingAt = at;
-        tab.turnReportAt = at;
-        this.postTabs();
-        return { notification: this.notification(tab, event) };
-      case "answered":
-        // The dialog closed, whatever closed it; the turn, if any, runs on.
-        if (!fresh || exited || tab.waitingAt === undefined) {
-          return {};
-        }
-        tab.waitingAt = undefined;
-        tab.turnReportAt = at;
-        this.postTabs();
-        return {};
-      case "idle":
-        // About a turn already ended — nothing to mark. Its hook exists only while the switch is on
-        // (AgentPaths.idleReminder), rather than a process per idle prompt answered with nothing.
-        return fresh ? { notification: this.notification(tab, "idle") } : {};
+    const { changed, notify } = applyTurnReport(tab, event, payload, at);
+    if (changed) {
+      this.postTabs();
     }
+    return notify ? { notification: this.notification(tab, notify) } : {};
   }
 
-  /**
-   * Records the session a report names, for a tab with none or one that moved on (`/clear`, `/new`,
-   * `/resume`). Whatever the turn marks' age (`turnReportAt`), but
-   * ordered against the reports naming sessions (turn-order.ts): a late hook of the session left
-   * behind would take it back. Reconcile claims it once listed; the session left behind becomes its
-   * own tab next start.
-   */
-  private bindReportedSession(tab: TabState, reported: string, at: number): void {
-    if (!reportApplies(tab.sessionReportAt, at)) {
-      return;
-    }
-    tab.sessionReportAt = at;
-    if (reported === tab.reportedSessionId) {
-      return;
-    }
-    tab.reportedSessionId = reported;
-    this.reportWaiters.get(tab.tabId)?.();
-    if (awaitsClaim(tab)) {
-      this.runtimeFor(tab.agentId).reconciler?.schedule();
-    }
-  }
-
-  /** Settings read now, so a switch applies to the next turn of every open project. */
-  private notification(tab: TabState, kind: "finished" | "permission" | "question" | "idle"): HookNotification | undefined {
-    // As with the marks: a tab on screen was never out of sight.
+  /** No notification for a tab on screen, as with the marks: it was never out of sight. */
+  private notification(tab: TabState, kind: NotificationKind): HookNotification | undefined {
     if (this.onScreen.has(tab.tabId)) {
       return undefined;
     }
-    const { notifications } = this.settings.get();
-    const wanted = kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.waiting;
-    if (!wanted) {
-      return undefined;
-    }
-    const name = getAgent(tab.agentId).displayName;
-    // The tab's title too, or two tabs of one agent would notification identically.
-    const placeName = this.at.name();
-    const where = tab.title ? `${placeName} - ${tab.title}` : placeName;
-    switch (kind) {
-      case "finished":
-        return { title: `${name}: Finished`, body: `Finished in ${where}` };
-      case "permission":
-        return { title: `${name}: Waiting for an answer`, body: `Waiting for an answer in ${where}` };
-      case "question":
-        return { title: `${name}: Question`, body: `Waiting for an answer in ${where}` };
-      case "idle":
-        return { title: `${name}: Still waiting`, body: `No response yet in ${where}` };
-    }
+    return notificationFor(tab, kind, this.at.name(), this.settings.get().notifications);
   }
 
   /**

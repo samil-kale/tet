@@ -1,24 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useLatest } from "../ui/use-latest";
 import { refKeyOf } from "../../shared/types/project";
-import { isWorking } from "../../shared/types/terminals";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { forget, sameList, stableRecord } from "../identity";
-
-/** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
- *  waiting on an answer, and starting (so the pane a new agent opens in shows the bar,
- *  `TabArea`'s `startingHere`). `working` excludes a session stopped on a question. Decided in
- *  `useTabMarks`, against what is on screen. */
-export interface RefMarks {
-  finished: string[];
-  waiting: string[];
-  starting: string[];
-  working: boolean;
-}
-
-/** Shared instance, so a pane's props stay identical for a project with none. */
-export const NO_IDS: string[] = [];
+import { forget, stableRecord } from "../identity";
+import { jumpTarget, nextWorking, NO_IDS, refMarks, type RefMarks } from "./tab-marks";
 
 /** Every repository's and worktree's tab marks, and the project row's ways to them. */
 interface TabMarks {
@@ -44,56 +30,20 @@ export function useTabMarks(
 ): TabMarks {
   const tabsRef = useLatest(tabs);
 
-  /**
-   * Finished or waiting sessions not on screen, oldest first — the tab strip's marks and
-   * what the project row steps through. Tabs on screen are left out: nothing there was out of sight.
-   * Decided here, once: main holds the mark but cannot see the screen, and two views must not each
-   * decide.
-   */
-  const markedTabs = useCallback(
-    (refKey: string, field: "finishedAt" | "waitingAt"): TabDescriptor[] => {
-      const onScreen = refKey === activeRefKey ? onScreenTabIds : NO_IDS;
-      return (tabs[refKey] ?? [])
-        .filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId))
-        .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
-    },
-    [tabs, onScreenTabIds, activeRefKey],
+  /** The tabs of a repository or worktree on screen: the active one's. */
+  const onScreenOf = useCallback(
+    (refKey: string): readonly string[] => (refKey === activeRefKey ? onScreenTabIds : NO_IDS),
+    [activeRefKey, onScreenTabIds],
   );
 
-  /**
-   * The above as tab ids plus `working` (`RefMarks`), per repository or worktree, identity-stable
-   * where unchanged: panes and the project list take them as props, and most pushes change nothing
-   * here. `working` includes the tab on screen (a spinner is about now) but not one waiting on a
-   * question: that session is not working, and both marks would stand side by side.
-   */
   const marksRef = useRef<Record<string, RefMarks>>({});
   const marks = useMemo(() => {
     const next: Record<string, RefMarks> = {};
     for (const refKey of Object.keys(tabs)) {
-      const previous = marksRef.current[refKey];
-      next[refKey] = {
-        finished: sameList(
-          previous?.finished,
-          markedTabs(refKey, "finishedAt").map((tab) => tab.tabId),
-          NO_IDS,
-        ),
-        waiting: sameList(
-          previous?.waiting,
-          markedTabs(refKey, "waitingAt").map((tab) => tab.tabId),
-          NO_IDS,
-        ),
-        // The tabs the progress bar is about — runtime being prepared, CLI before its first frame.
-        // Tabs on screen included: the bar is about the pane's own tabs.
-        starting: sameList(
-          previous?.starting,
-          tabs[refKey].filter((tab) => tab.starting === true).map((tab) => tab.tabId),
-          NO_IDS,
-        ),
-        working: tabs[refKey].some(isWorking),
-      };
+      next[refKey] = refMarks(tabs[refKey], onScreenOf(refKey), marksRef.current[refKey]);
     }
     return stableRecord(marksRef, next);
-  }, [tabs, markedTabs]);
+  }, [tabs, onScreenOf]);
 
   /**
    * The project row's spinner steps through working sessions, one per press. Viewing one does not
@@ -105,15 +55,11 @@ export function useTabMarks(
   const workingCursor = useRef<Record<string, string>>({});
   const showWorking = useCallback(
     (refKey: string) => {
-      const working = (tabsRef.current[refKey] ?? []).filter(isWorking);
-      if (working.length === 0) {
-        return;
+      const next = nextWorking(tabsRef.current[refKey] ?? [], workingCursor.current[refKey]);
+      if (next) {
+        workingCursor.current[refKey] = next.tabId;
+        showTab(refKey, next.tabId);
       }
-      // -1 when the last shown tab stopped or is gone; the index wraps.
-      const at = working.findIndex((tab) => tab.tabId === workingCursor.current[refKey]);
-      const next = working[(at + 1) % working.length];
-      workingCursor.current[refKey] = next.tabId;
-      showTab(refKey, next.tabId);
     },
     [showTab, tabsRef],
   );
@@ -146,21 +92,13 @@ export function useTabMarks(
     }
   }, [activeRef, onScreenTabIds, tabs]);
 
-  /**
-   * Ctrl/Cmd+Shift+U, across all projects: the longest-waiting question, else the oldest finished
-   * turn out of sight — so an unvisited project is not missed.
-   */
+  /** Ctrl/Cmd+Shift+U (`jumpTarget`). */
   const jumpToWaiting = useCallback(() => {
-    // Through `markedTabs`, so the "not on screen" rule stays in one place.
-    const collect = (field: "waitingAt" | "finishedAt"): { refKey: string; tab: TabDescriptor }[] =>
-      Object.keys(tabs)
-        .flatMap((refKey) => markedTabs(refKey, field).map((tab) => ({ refKey, tab })))
-        .sort((a, b) => (a.tab[field] ?? 0) - (b.tab[field] ?? 0));
-    const next = collect("waitingAt")[0] ?? collect("finishedAt")[0];
+    const next = jumpTarget(tabs, onScreenOf);
     if (next) {
       showTab(next.refKey, next.tab.tabId);
     }
-  }, [tabs, markedTabs, showTab]);
+  }, [tabs, onScreenOf, showTab]);
 
   const forgetProjectRef = useCallback((refKey: string) => {
     workingCursor.current = forget(workingCursor.current, refKey);

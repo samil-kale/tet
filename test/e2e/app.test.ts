@@ -44,6 +44,13 @@ async function projects(): Promise<Project[]> {
   return (await ctl("projects-list")).result as Project[];
 }
 
+/** The tab once `tabs-wait` holds for every condition (`--working`, `--status error`, ...); it answers the tab. */
+async function tabWaited(projectId: string, tabId: string, ...conditions: string[]): Promise<TabDescriptor> {
+  const waited = await ctl("tabs-wait", tabId, ...conditions, "--timeout", String(STARTUP_MS / 1000), "--project", projectId);
+  assert.equal(waited.status, 0, waited.stderr);
+  return waited.result as TabDescriptor;
+}
+
 /** A project's tabs as `tabs-list` answers them. */
 async function tabsOf(projectId: string): Promise<TabDescriptor[]> {
   return (await ctl("tabs-list", "--project", projectId)).result as TabDescriptor[];
@@ -113,10 +120,10 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     const start = await hook("prompt-submit");
     assert.equal(start.status, 0);
     assert.equal(start.stdout, "", "nothing for the prompt: TET's system prompt went in at spawn");
-    await eventually("the tab working", async () => (await state())?.inTurn === true, 10_000);
+    await tabWaited(project.id, tab, "--working");
 
     assert.equal((await hook("stop")).status, 0);
-    await eventually("the turn ended", async () => (await state())?.inTurn === false, 10_000);
+    await tabWaited(project.id, tab, "--stopped");
     assert.notEqual((await state())?.finishedAt, undefined, "and left the mark that outlives it");
     for (const id of [tab, activeTab]) {
       assert.equal((await ctl("tabs-close", id, "--project", project.id)).status, 0);
@@ -235,20 +242,18 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
         ],
       }),
     );
-    const statusOf = async (tabId: string): Promise<string | undefined> =>
-      (await tabsOf(project.id)).find((entry) => entry.tabId === tabId)?.status;
     const failing = (await ctl("tabs-run-command", "fails", "--project", project.id)).result as TabDescriptor;
     assert.equal(failing.savedCommand, true);
-    await eventually("the failing command's tab in error", async () => (await statusOf(failing.tabId)) === "error", STARTUP_MS);
+    await tabWaited(project.id, failing.tabId, "--status", "error");
     const passing = (await ctl("tabs-run-command", "passes", "--project", project.id)).result as TabDescriptor;
-    await eventually("the passing command's tab stopped", async () => (await statusOf(passing.tabId)) === "stopped", STARTUP_MS);
+    await tabWaited(project.id, passing.tabId, "--status", "stopped");
     const byPath = (await ctl("tabs-run-command", "relative", "--project", project.id)).result as TabDescriptor;
-    await eventually("the command by a relative path stopped", async () => (await statusOf(byPath.tabId)) === "stopped", STARTUP_MS);
+    await tabWaited(project.id, byPath.tabId, "--status", "stopped");
     const chained = await ctl("tabs-run-command", "chained", "--project", project.id);
     assert.equal(chained.status, 0, chained.stderr);
     const chainedTab = chained.result as TabDescriptor;
     assert.equal(chainedTab.savedCommand, true);
-    await eventually("the chained command's tab stopped", async () => (await statusOf(chainedTab.tabId)) === "stopped", STARTUP_MS);
+    await tabWaited(project.id, chainedTab.tabId, "--status", "stopped");
     assert.equal((await ctl("tabs-run-command", "missing", "--project", project.id)).status, 3);
   });
 

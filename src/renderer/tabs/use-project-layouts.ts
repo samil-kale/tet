@@ -1,33 +1,17 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
-import {
-  activateTab as activateTabLayout,
-  collapseClosed,
-  collapseEmpty,
-  dropStoredLayout,
-  loadLayout,
-  paneOf,
-  placeCommandTab,
-  PRESET_PANES,
-  saveLayout,
-  serializeLayout,
-  snapTab as snapTabLayout,
-} from "./pane-layout";
+import { dropStoredLayout, placeCommandTab, snapTab as snapTabLayout } from "./pane-layout";
 import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-layout";
-import type { PaneTab } from "./pane-tab";
+import {
+  activateIn,
+  forgetPersistence,
+  layoutOf,
+  newLayoutPersistence,
+  persistLayouts,
+  reconcileLayouts,
+  settleLayout,
+} from "./layout-state";
 import { forget } from "../identity";
-
-/** Shared instance, so a pane's props stay identical for a repository or worktree that has none. */
-export const NO_TABS: PaneTab[] = [];
-
-/**
- * A repository's or worktree's layout (by its refKey): what is held, else what the last run saved.
- * Loaded at first sight, not up front: tabs can arrive before the open projects, and a layout
- * written then would overwrite the restore. `localStorage` is synchronous, so safe in an updater.
- */
-function layoutOf(layouts: Record<string, ProjectLayout>, refKey: string): ProjectLayout {
-  return layouts[refKey] ?? loadLayout(refKey);
-}
 
 /** Every repository's and worktree's split state, and the callbacks `App` hands the panes. */
 interface ProjectLayouts {
@@ -70,90 +54,28 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     const previousTabs = previousTabsRef.current;
     previousTabsRef.current = tabs;
     const reconciled = reconciledRef.current;
-    setLayouts((current) => {
-      let next: Record<string, ProjectLayout> | undefined;
-      for (const refKey of Object.keys(tabs)) {
-        const list = tabs[refKey];
-        const held = current[refKey];
-        if (held && list === previousTabs[refKey] && reconciled.get(held) === list) {
-          continue;
-        }
-        // The close trigger of the collapse; the move trigger is `activateTab` below.
-        const layout = collapseClosed(layoutOf(current, refKey), list, previousTabs[refKey] ?? NO_TABS);
-        reconciled.set(layout, list);
-        if (layout !== current[refKey]) {
-          next ??= { ...current };
-          next[refKey] = layout;
-        }
-      }
-      return next ?? current;
-    });
+    setLayouts((current) => reconcileLayouts(current, tabs, previousTabs, reconciled));
   }, [tabs]);
 
-  /**
-   * The last written layout per repository or worktree. Saved on `tabs` too: output is keyed by
-   * session id, so a push giving a tab one changes it. Compared as the string — spinner ticks
-   * change `tabs` often.
-   */
-  const savedLayoutsRef = useRef<Record<string, string>>({});
-  /** The layout and tab list last serialized per repository or worktree: the same pair serializes
-   *  the same, so a push for another one skips it. */
-  const serializedRef = useRef<Record<string, { layout: ProjectLayout; tabs: LayoutTab[] }>>({});
-  /**
-   * Projects whose bootstrap has once finished. Before that, `serializeLayout` would drop every
-   * pane whose sessions were not listed yet. From then on written regardless: a CLI booting is not
-   * a listing in flight.
-   */
-  const settledProjects = useRef(new Set<string>());
+  /** What was last written, and whose bootstrap has finished (`LayoutPersistence`). */
+  const persistence = useRef(newLayoutPersistence());
   useEffect(() => {
     for (const [refKey, isStarting] of Object.entries(starting)) {
-      if (isStarting || settledProjects.current.has(refKey)) {
+      if (isStarting || persistence.current.settled.has(refKey)) {
         continue;
       }
-      settledProjects.current.add(refKey);
-      // Every restored pane now has its sessions or never will: collapse the empty ones first.
-      setLayouts((current) => {
-        const layout = layoutOf(current, refKey);
-        const collapsed = collapseEmpty(layout, tabsRef.current[refKey] ?? NO_TABS);
-        return collapsed === layout ? current : { ...current, [refKey]: collapsed };
-      });
+      persistence.current.settled.add(refKey);
+      setLayouts((current) => settleLayout(current, refKey, tabsRef.current[refKey]));
     }
   }, [starting, tabsRef]);
   useEffect(() => {
-    for (const [refKey, layout] of Object.entries(layouts)) {
-      if (!settledProjects.current.has(refKey)) {
-        continue;
-      }
-      const list = tabs[refKey] ?? NO_TABS;
-      const last = serializedRef.current[refKey];
-      if (last?.layout === layout && last.tabs === list) {
-        continue;
-      }
-      serializedRef.current[refKey] = { layout, tabs: list };
-      const serialized = serializeLayout(layout, list);
-      if (savedLayoutsRef.current[refKey] !== serialized) {
-        savedLayoutsRef.current[refKey] = serialized;
-        saveLayout(refKey, serialized);
-      }
-    }
+    persistLayouts(layouts, tabs, persistence.current);
   }, [layouts, tabs, starting]);
 
-  /**
-   * Makes a tab a pane's active one. Without `paneId` it resolves through `paneOf` (a project row's
-   * mark, `placeTab`): where it lives, else the focused pane. Collapses on emptying a pane; the
-   * other collapse trigger is a close, in the reconcile effect. A `paneId` the preset no longer has
-   * (collapsed while a new tab was being created) resolves the same way, or the tab is drawn nowhere.
-   */
+  /** Makes a tab a pane's active one (`activateIn`). */
   const activateTab = useCallback(
     (refKey: string, tabId: string, paneId?: PaneId) => {
-      setLayouts((current) => {
-        const layout = layoutOf(current, refKey);
-        const target = paneId && PRESET_PANES[layout.preset].includes(paneId) ? paneId : paneOf(layout, tabId);
-        return {
-          ...current,
-          [refKey]: activateTabLayout(layout, tabId, target, tabsRef.current[refKey] ?? []),
-        };
-      });
+      setLayouts((current) => activateIn(current, refKey, tabId, paneId, tabsRef.current[refKey]));
     },
     [tabsRef],
   );
@@ -202,9 +124,7 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     setLayouts((current) => forget(current, refKey));
     dropStoredLayout(refKey);
     delete previousTabsRef.current[refKey];
-    delete savedLayoutsRef.current[refKey];
-    delete serializedRef.current[refKey];
-    settledProjects.current.delete(refKey);
+    forgetPersistence(persistence.current, refKey);
   }, []);
 
   return { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout };
