@@ -12,6 +12,9 @@ import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandbo
 import { parseSignedInUser, sbxError, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
 import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../../src/main/sbx/sbx-mounts";
 import { saveSbxSettings, type SbxSaveTarget } from "../../src/main/sbx/sbx-save";
+import { saveProjectSbx } from "../../src/main/sbx/sbx-settings";
+import { getAgent } from "../../src/main/agents";
+import type { Project } from "../../src/shared/types/project";
 import { listSandboxes, readHostAllowed } from "../../src/main/sbx/sbx-status";
 import { contractHome } from "../../src/main/util/path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../../src/main/sbx/sbx-policy";
@@ -19,7 +22,14 @@ import { SbxAccountStore } from "../../src/main/sbx/sbx-accounts";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { sandboxDir } from "../../src/main/store/project-dirs";
 import { SBX_PROBLEM, sbxNeedsRestart, sbxProblemNotices, sbxSecretRefusal, setupLines, withoutProblems } from "../../src/shared/sbx-rules";
-import { EMPTY_SBX_SETTINGS, EMPTY_SBX_KNOWLEDGE, type SbxPath, type SbxPort, type SbxProjectSettings } from "../../src/shared/types/sbx";
+import {
+  EMPTY_SBX_SETTINGS,
+  EMPTY_SBX_KNOWLEDGE,
+  type SbxPath,
+  type SbxLocalSave,
+  type SbxPort,
+  type SbxProjectSettings,
+} from "../../src/shared/types/sbx";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
 /** sbx/: sandbox names and mounts, ports, secrets, the SBX Settings' Save, policy and status. */
@@ -588,6 +598,63 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       );
     });
   }
+
+  describe("through the project's Save", () => {
+    const noLocal = (variables: Record<string, string> = {}): SbxLocalSave => ({
+      secrets: { values: {}, from: {} },
+      variables: { values: variables, from: {} },
+      knowledge: EMPTY_SBX_KNOWLEDGE,
+    });
+    const projectOf = (repoFolder: string): Project => ({ id: projectId, path: repoFolder, name: "repo", worktrees: [] });
+    const saveProject = (dir: string, repoFolder: string, request: SbxProjectSettings, local: SbxLocalSave, sbxLocal: SbxLocalStore) =>
+      withSbx(dir, () => saveProjectSbx({ sbxLocal, notice: () => undefined }, projectOf(repoFolder), request, local));
+
+    it("stops before changing anything when sbx cannot list the sandboxes, and keeps the values it had", async () => {
+      fakeSafeStorage();
+      const { dir, repoFolder } = fakeSbx({ published: [], fail: ["ls"] });
+      const sbxLocal = new SbxLocalStore(tempDir("tet-sbx-local-"));
+      sbxLocal.update(projectId, noLocal({ OLD: "kept" }));
+      const { result } = await saveProject(dir, repoFolder, settings([]), noLocal({ NEW: "typed" }), sbxLocal).catch(() => ({
+        result: undefined,
+      }));
+      assert.ok(result && !result.ok);
+      assert.match(result.error ?? "", /could not list the sandboxes\. Nothing was saved/);
+      assert.deepEqual(sbxLocal.stored(projectId).variables, ["OLD"], "the typed value is not kept for a Save that did not happen");
+    });
+
+    it("tells the user of a sandbox it removed when SBX is switched off", async () => {
+      fakeSafeStorage();
+      const { dir, repoFolder } = fakeSbx({ published: [] });
+      const notices: string[] = [];
+      const { result, calls } = await withSbx(dir, () =>
+        saveProjectSbx(
+          { sbxLocal: new SbxLocalStore(tempDir("tet-sbx-local-")), notice: (_severity, message) => notices.push(message) },
+          projectOf(repoFolder),
+          { ...EMPTY_SBX_SETTINGS, enabled: false },
+          noLocal(),
+        ),
+      );
+      assert.deepEqual(result, { ok: true, problems: {} });
+      assert.ok(calls.includes(`rm ${name} --force`));
+      assert.deepEqual(notices, [`The ${getAgent("claude").displayName} sandbox of repo was removed.`]);
+    });
+
+    it("takes one Save of a project after the other, never both at once", async () => {
+      fakeSafeStorage();
+      const { dir, repoFolder } = fakeSbx({ published: [] });
+      const sbxLocal = new SbxLocalStore(tempDir("tet-sbx-local-"));
+      const off = { ...EMPTY_SBX_SETTINGS, enabled: false };
+      const { calls } = await withSbx(dir, async () => {
+        await Promise.all([
+          saveProjectSbx({ sbxLocal, notice: () => undefined }, projectOf(repoFolder), off, noLocal()),
+          saveProjectSbx({ sbxLocal, notice: () => undefined }, projectOf(repoFolder), off, noLocal()),
+        ]);
+      });
+      const listings = calls.flatMap((call, index) => (call === "ls --json" ? [index] : []));
+      assert.equal(listings.length, 2);
+      assert.ok(listings[1] > listings[0] + 1, `the second Save listed in the first one's turn: ${calls.join(" | ")}`);
+    });
+  });
 });
 
 describe("what of the SBX Settings could not be applied", () => {

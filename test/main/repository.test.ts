@@ -716,3 +716,276 @@ describe("the git logins kept in TET", () => {
     assert.deepEqual(result, { ok: true, authRequired: true }, "no login offered, and none asked for");
   });
 });
+
+describe("tags, as GitHub Desktop offers them", () => {
+  let dir: string;
+  let repository: Repository;
+
+  before(async () => {
+    dir = initRepository("tet-repository-tags-");
+    commitFiles(dir, "second", { "b.txt": "b\n" });
+    repository = await open(dir);
+  });
+
+  it("creates an annotated tag at a commit, and refuses one that exists", async () => {
+    git(dir, "branch", "older", "HEAD~1");
+    await repository.refresh();
+    assert.deepEqual(await repository.createTag("v1", { name: "older" }, "first release"), { ok: true });
+    assert.equal(git(dir, "cat-file", "-t", "v1"), "tag");
+    assert.equal(git(dir, "rev-parse", "v1^{commit}"), git(dir, "rev-parse", "HEAD~1"));
+    assert.deepEqual((await repository.refresh()).tags, ["v1"]);
+    assert.equal((await repository.createTag("v1", { name: "main" }, "again")).ok, false);
+  });
+
+  it("checks a tag out, detached at its commit", async () => {
+    assert.deepEqual(await repository.checkoutTag("v1"), { ok: true });
+    assert.equal(git(dir, "rev-parse", "HEAD"), git(dir, "rev-parse", "v1^{commit}"));
+    assert.equal(git(dir, "branch", "--show-current"), "");
+    git(dir, "switch", "-q", "main");
+  });
+
+  it("has no remote to push a tag to, nor to delete one from, and says so", async () => {
+    const pushed = await repository.pushTag("v1");
+    assert.equal(pushed.ok, false);
+    assert.match(pushed.error ?? "", /no remote to push the tag to/);
+    git(dir, "tag", "local-only");
+    await repository.refresh();
+    const deleted = await repository.deleteTag("local-only", true);
+    assert.equal(deleted.ok, false);
+    assert.match(deleted.error ?? "", /no remote to delete the tag from/);
+  });
+
+  it("deletes a tag that is only local", async () => {
+    git(dir, "tag", "scratch");
+    await repository.refresh();
+    assert.deepEqual(await repository.deleteTag("scratch", false), { ok: true });
+    assert.equal(git(dir, "tag", "--list", "scratch"), "");
+  });
+});
+
+describe("a stash of all changes", () => {
+  let dir: string;
+  let repository: Repository;
+
+  before(async () => {
+    dir = initRepository("tet-repository-stash-");
+    repository = await open(dir);
+  });
+
+  const dirty = (): void => {
+    fs.writeFileSync(path.join(dir, "a.txt"), "edited\n");
+    fs.writeFileSync(path.join(dir, "new.txt"), "untracked\n");
+  };
+
+  it("takes the untracked files along, and leaves a clean tree", async () => {
+    dirty();
+    await repository.refresh();
+    assert.deepEqual(await repository.stashPush("wip"), { ok: true });
+    const state = await repository.refresh();
+    assert.deepEqual(state.changes, []);
+    assert.equal(state.stashes.length, 1);
+    assert.match(state.stashes[0].message, /wip/);
+    assert.equal(fs.existsSync(path.join(dir, "new.txt")), false);
+  });
+
+  it("applies it and keeps it, then pops it, each by the stash's commit", async () => {
+    const [{ sha }] = repository.getState().stashes;
+    assert.deepEqual(await repository.stash("apply", sha), { ok: true });
+    assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "edited\n");
+    assert.equal((await repository.refresh()).stashes.length, 1, "apply keeps it");
+
+    git(dir, "reset", "-q", "--hard");
+    git(dir, "clean", "-fdq");
+    // A stash made meanwhile renumbers the refs, never moves the commit.
+    fs.writeFileSync(path.join(dir, "a.txt"), "newer\n");
+    git(dir, "stash", "push", "-q", "-m", "newer");
+    await repository.refresh();
+    assert.deepEqual(await repository.stash("pop", sha), { ok: true });
+    const state = await repository.refresh();
+    assert.equal(state.stashes.length, 1, "only the one popped is gone");
+    assert.match(state.stashes[0].message, /newer/);
+    assert.equal(fs.readFileSync(path.join(dir, "a.txt"), "utf8"), "edited\n");
+    git(dir, "reset", "-q", "--hard");
+    git(dir, "clean", "-fdq");
+  });
+
+  it("drops one without touching the working tree", async () => {
+    const [{ sha }] = (await repository.refresh()).stashes;
+    assert.deepEqual(await repository.stash("drop", sha), { ok: true });
+    const state = await repository.refresh();
+    assert.deepEqual([state.stashes.length, state.changes.length], [0, 0]);
+  });
+});
+
+describe("a commit of the checked changes", () => {
+  let dir: string;
+  let repository: Repository;
+
+  before(async () => {
+    dir = initRepository("tet-repository-commit-", {
+      "old.txt": "content that is long enough to be recognized as a rename\n",
+      "keep.txt": "keep\n",
+    });
+    repository = await open(dir);
+  });
+
+  it("takes a rename whole, its old path with the new one, and leaves the unchecked changes", async () => {
+    git(dir, "mv", "old.txt", "new.txt");
+    fs.writeFileSync(path.join(dir, "keep.txt"), "edited\n");
+    fs.writeFileSync(path.join(dir, "fresh.txt"), "untracked\n");
+    await repository.refresh();
+    assert.deepEqual(repository.pathspec(["new.txt"]), ["new.txt", "old.txt"]);
+    assert.deepEqual(await repository.commitPaths("rename", ["new.txt", "fresh.txt"]), { ok: true });
+    assert.match(git(dir, "show", "--name-status", "--format=", "-M", "HEAD"), /R\d*\s+old\.txt\s+new\.txt/);
+    assert.match(git(dir, "show", "--name-status", "--format=", "HEAD"), /A\s+fresh\.txt/);
+    assert.deepEqual(
+      (await repository.refresh()).changes.map((change) => change.path),
+      ["keep.txt"],
+    );
+  });
+
+  it("commits everything, untracked files included", async () => {
+    fs.writeFileSync(path.join(dir, "another.txt"), "x\n");
+    await repository.refresh();
+    assert.deepEqual(await repository.commitAll("all"), { ok: true });
+    assert.deepEqual((await repository.refresh()).changes, []);
+    const committed = git(dir, "show", "--name-only", "--format=", "HEAD");
+    assert.match(committed, /another\.txt/);
+    assert.match(committed, /keep\.txt/);
+  });
+});
+
+describe("what git is told to ignore", () => {
+  it("writes a file's own line, or its extension's, into .gitignore", async () => {
+    const dir = initRepository("tet-repository-ignore-");
+    const repository = await open(dir);
+    assert.deepEqual(await repository.ignore("debug.log", "file"), { ok: true });
+    assert.deepEqual(await repository.ignore("sub/trace.tmp", "extension"), { ok: true });
+    const lines = fs.readFileSync(path.join(dir, ".gitignore"), "utf8").split(/\r?\n/);
+    assert.ok(lines.includes("debug.log"), lines.join("|"));
+    assert.ok(
+      lines.some((line) => line.includes("*.tmp")),
+      lines.join("|"),
+    );
+  });
+});
+
+describe("a remote's url", () => {
+  it("is changed in the config and read again by the refresh after", async () => {
+    const dir = initRepository("tet-repository-url-");
+    const [first, second] = [initBare("tet-repository-url-a-"), initBare("tet-repository-url-b-")];
+    git(dir, "remote", "add", "origin", first);
+    const repository = await open(dir);
+    assert.equal(repository.getState().remotes[0].url, first);
+    assert.deepEqual(await repository.setRemoteUrl("origin", second), { ok: true });
+    assert.equal((await repository.refresh()).remotes[0].url, second);
+  });
+});
+
+describe("the GRAPH's commits and their files", () => {
+  let dir: string;
+  let repository: Repository;
+  let first: string;
+  let second: string;
+
+  before(async () => {
+    dir = initRepository("tet-repository-graph-", { "a.txt": "one\n" });
+    first = git(dir, "rev-parse", "HEAD");
+    commitFiles(dir, "second", { "a.txt": "two\n", "b.txt": "b\n" });
+    second = git(dir, "rev-parse", "HEAD");
+    repository = await open(dir);
+  });
+
+  it("lists the commits newest first with their parents, and clamps a nonsense limit", async () => {
+    const commits = await repository.log(10);
+    assert.deepEqual(
+      commits.map((commit) => commit.sha),
+      [second, first],
+    );
+    assert.deepEqual(commits[0].parents, [first]);
+    assert.deepEqual(commits[1].parents, []);
+    assert.equal((await repository.log(Number.NaN)).length, 1, "a limit that is no number is one commit");
+    assert.deepEqual(
+      (await repository.log(10, { text: "second", field: "message" })).map((commit) => commit.sha),
+      [second],
+    );
+  });
+
+  it("lists what a commit changed against its first parent, and answers nothing for what is no commit id", async () => {
+    const files = await repository.commitFiles(second, first);
+    assert.deepEqual(files.map((file) => `${file.status}:${file.path}`).sort(), ["added:b.txt", "modified:a.txt"]);
+    assert.deepEqual(await repository.commitFiles("not-a-sha", first), []);
+    assert.deepEqual(await repository.commitFiles(second, "--option"), []);
+  });
+
+  it("reads both sides of a commit's file, a missing one as missing", async () => {
+    const changed = await repository.readCommitFile(second, first, "a.txt", undefined);
+    assert.deepEqual([changed.original.content, changed.modified.content], ["one\n", "two\n"]);
+    const added = await repository.readCommitFile(second, first, "b.txt", undefined);
+    assert.equal(added.original.missing, true);
+    assert.equal(added.modified.content, "b\n");
+    const root = await repository.readCommitFile(first, undefined, "a.txt", undefined);
+    assert.equal(root.original.missing, true);
+    const invalid = await repository.readCommitFile("nope", first, "a.txt", undefined);
+    assert.deepEqual([invalid.original.missing, invalid.modified.missing], [true, true]);
+  });
+});
+
+describe("the Explorer's own edits", () => {
+  let dir: string;
+  let repository: Repository;
+
+  before(async () => {
+    dir = initRepository("tet-repository-edits-");
+    repository = await open(dir);
+  });
+
+  it("creates a file with its folders, and a folder, never over what is there", async () => {
+    assert.deepEqual(await repository.createFile("src/deep/new.txt"), { ok: true });
+    assert.equal(fs.readFileSync(path.join(dir, "src", "deep", "new.txt"), "utf8"), "");
+    const again = await repository.createFile("src/deep/new.txt");
+    assert.equal(again.ok, false);
+    assert.match(again.error ?? "", /already exists/);
+    assert.deepEqual(await repository.createDirectory("empty/inner"), { ok: true });
+    assert.ok(fs.statSync(path.join(dir, "empty", "inner")).isDirectory());
+    assert.equal((await repository.createDirectory("a.txt")).ok, false);
+  });
+
+  it("refuses a path that leads out of the repository, whatever it is asked to do", async () => {
+    const outside = "../escaped.txt";
+    for (const result of [
+      await repository.createFile(outside),
+      await repository.createDirectory(outside),
+      await repository.deletePath(outside),
+      await repository.renamePath(outside, "x.txt"),
+      await repository.renamePath("a.txt", outside),
+    ]) {
+      assert.deepEqual(result, { ok: false, error: "Path is outside the repository" });
+    }
+    assert.equal(fs.existsSync(path.join(dir, "..", "escaped.txt")), false);
+  });
+
+  it("renames and moves, creating the folders the target needs, but not into itself", async () => {
+    fs.mkdirSync(path.join(dir, "folder"));
+    fs.writeFileSync(path.join(dir, "folder", "f.txt"), "f\n");
+    assert.deepEqual(await repository.renamePath("folder", "moved/to/here"), { ok: true });
+    assert.equal(fs.readFileSync(path.join(dir, "moved", "to", "here", "f.txt"), "utf8"), "f\n");
+    const into = await repository.renamePath("moved", "moved/inner");
+    assert.equal(into.ok, false);
+    assert.match(into.error ?? "", /into itself/);
+    const taken = await repository.renamePath("moved", "a.txt");
+    assert.match(taken.error ?? "", /already exists/);
+  });
+
+  it("deletes through the trash, so an edit can be had back", async () => {
+    fs.writeFileSync(path.join(dir, "gone.txt"), "precious\n");
+    const trashed = (): string[] => fs.readdirSync(trash).sort((a, b) => parseInt(a) - parseInt(b));
+    const before = trashed().length;
+    assert.deepEqual(await repository.deletePath("gone.txt"), { ok: true });
+    assert.equal(fs.existsSync(path.join(dir, "gone.txt")), false);
+    // Earlier tests may have trashed folders, which trashContents would not read as text.
+    const added = trashed().slice(before);
+    assert.equal(added.length, 1);
+    assert.equal(fs.readFileSync(path.join(trash, added[0]), "utf8"), "precious\n");
+  });
+});

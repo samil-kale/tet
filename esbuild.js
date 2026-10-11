@@ -105,7 +105,7 @@ const testConfig = {
   // node-pty (native) cannot be bundled; esbuild finds its own binary relative to its package, and
   // main/agents.test.ts compiles pi's generated extension with it. electron is a stub: node's runner
   // has none (helpers/ finds the binary through its own require).
-  alias: { electron: "./test/helpers/electron-stub.js" },
+  alias: { electron: "./test/helpers/electron-stub.js", "original-fs": "node:fs" },
   external: ["node-pty", "esbuild"]
 };
 

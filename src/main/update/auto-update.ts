@@ -68,7 +68,7 @@ async function updaterDone(): Promise<void> {
 }
 
 /** The last update's result, reported once and deleted. */
-function reportLastUpdate(notice: Notice): void {
+export function reportLastUpdate(notice: Notice): void {
   const file = resultPath();
   const result = readJson(file) as UpdateResult | undefined;
   if (result === undefined) {
@@ -93,7 +93,7 @@ function reportLastUpdate(notice: Notice): void {
  * folders. Removed with original-fs: electron's fs opens `app.asar` as an archive and fails its rm
  * with EBUSY. A download cut short stays for `stage` to continue.
  */
-async function sweepUpdateDir(asset: string, root: string): Promise<void> {
+export async function sweepUpdateDir(asset: string, root: string): Promise<void> {
   await originalFs.promises.rm(preparedRoot(root), { recursive: true, force: true }).catch(() => undefined);
   let entries: string[];
   try {
@@ -122,7 +122,7 @@ function isWritable(dir: string): boolean {
  * `net.fetch`: the latter throws on `redirect: "manual"` and leaves a followed response's `url`
  * empty.
  */
-function latestVersion(releasesUrl: string): Promise<string | undefined> {
+export function latestVersion(releasesUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     const request = net.request({ url: `${releasesUrl}/latest`, redirect: "manual" });
     const timer = setTimeout(() => request.abort(), CHECK_TIMEOUT_MS);
@@ -155,7 +155,7 @@ async function unpack(archive: string, into: string): Promise<void> {
 }
 
 /** The install root inside an unpacked archive: at its top, or one folder down. */
-function findRoot(dir: string): string | undefined {
+export function findRoot(dir: string): string | undefined {
   const candidates = [dir, ...fs.readdirSync(dir).map((entry) => path.join(dir, entry))];
   for (const candidate of candidates) {
     const root = rootIn(candidate, PLATFORM);
