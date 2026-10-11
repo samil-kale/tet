@@ -30,11 +30,12 @@ export interface ControlSide {
 }
 
 const OWN_LIMITS = [
-  "Without flags, a verb acts on where the tab it is run from runs: its project's repository or",
-  "one of its worktrees. --project <id> alone means that project's repository,",
-  "--worktree <key or branch> one of its worktrees. A worktree listed without a key (projects-list) was",
-  "made outside TET, with plain git: TET shows it greyed and cannot open it.",
+  "[TARGET] is [--project <id>] [--worktree <key or branch>]. Without it a verb acts on where the tab it",
+  "is run from runs: its project's repository or one of its worktrees; --project <id> alone means that",
+  "project's repository, --worktree one of its worktrees. A worktree listed without a key",
+  "(projects-list) was made outside TET, with plain git: TET shows it greyed and cannot open it.",
   "After a bare --, every argument is taken as it is, one starting with -- too.",
+  "--background leaves what a verb opens or starts behind, instead of bringing it to the front.",
   `Exit codes: ${EXIT_CODES.ok} ok, ${EXIT_CODES.internal} TET failed, ${EXIT_CODES.unauthorized} refused, ${EXIT_CODES.usage} wrong call (the reason on stderr), ${EXIT_CODES.timeout} tabs-wait gave up.`,
 ];
 

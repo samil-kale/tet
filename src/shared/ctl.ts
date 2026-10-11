@@ -199,7 +199,7 @@ const VERBS = [
     verb: "settings-set-theme",
     group: "Settings",
     usage: "settings-set-theme <theme-id>",
-    summary: "Set the theme for its kind (light or dark, see themes-list). Shown at once while TET is drawn in that kind.",
+    summary: "Set the theme of its kind (light or dark, see themes-list). Shown at once while TET is drawn in that kind.",
     positionals: ["theme"],
   },
   {
@@ -213,15 +213,14 @@ const VERBS = [
     verb: "settings-set-lane-pin",
     group: "Settings",
     usage: `settings-set-lane-pin <${LANES.join("|")}> <on|off>`,
-    summary:
-      "Pin a lane, which then stays out beside the tab area after the other pinned ones, or unpin it back behind its toggle. Shown at once.",
+    summary: "Pin a lane beside the tab area, after the other pinned ones, or unpin it back behind its toggle. Shown at once.",
     positionals: ["lane", "value"],
   },
   {
     verb: "settings-set-lane-order",
     group: "Settings",
     usage: `settings-set-lane-order <${LANES.join("|")}>...`,
-    summary: "Set the lanes' order, left to right; one left out goes to the end. The pinned ones stand first, in it. Shown at once.",
+    summary: "Set the lanes' order, left to right; one left out goes to the end, the pinned ones stand first. Shown at once.",
     positionals: ["lanes"],
     variadic: true,
   },
@@ -230,7 +229,7 @@ const VERBS = [
     group: "Settings",
     usage: `settings-set-prompt <${PROMPT_IDS.join("|")}> [text]`,
     summary:
-      "Set the text of what TET asks of an agent: a background question, or a handover's first prompt. No text puts TET's own back. Applies from the next use.",
+      "Set the text of a prompt TET sends an agent: a background question or a handover's first prompt. No text restores TET's own. Applies from the next use.",
     positionals: ["id", "text"],
   },
   {
@@ -245,7 +244,7 @@ const VERBS = [
     group: "Settings",
     usage: `settings-set-notification <${NOTIFICATION_IDS.join("|")}> <on|off>`,
     summary:
-      "Switch a desktop notification on or off: a finished turn, an agent waiting for an answer, or an idle reminder (Claude Code only, applies to tabs started afterwards).",
+      "Switch a desktop notification: a finished turn, an agent waiting for an answer, or an idle reminder (Claude Code only; applies to tabs started afterwards).",
     positionals: ["id", "value"],
   },
   {
@@ -261,7 +260,7 @@ const VERBS = [
     group: "Settings",
     usage: `settings-set-git <${GIT_SETTING_IDS.join("|")}> <on|off>`,
     summary:
-      'Set how git\'s checkboxes start: new changes checked for commit, "Also push" on commit, and deleting a branch, tag or worktree on the remote too.',
+      'Set how git\'s checkboxes start: new changes checked, "Also push" on commit, and deleting a branch, tag or worktree on the remote too.',
     positionals: ["id", "value"],
   },
   {
@@ -269,7 +268,7 @@ const VERBS = [
     group: "Settings",
     usage: "settings-set-commit-suggester <agent-id> [model]",
     summary:
-      "Set who suggests a commit message: an agent (see agents-list) and one of its models. No model leaves it to the agent's own configuration.",
+      "Set who suggests commit messages: an agent (see agents-list) and one of its models; no model leaves it to the agent's own configuration.",
     positionals: ["agent", "model"],
   },
   {
@@ -277,7 +276,7 @@ const VERBS = [
     group: "Projects",
     usage: "projects-list",
     summary:
-      "The open projects (id, name, path) with their worktrees (path, branch, key). One without a key was made elsewhere and cannot be opened.",
+      "The open projects (id, name, path) with their worktrees (path, branch, key; one without a key was made elsewhere and cannot be opened).",
     positionals: [],
     sandbox: "ownProject",
   },
@@ -293,15 +292,14 @@ const VERBS = [
     group: "Projects",
     usage: "projects-remove --project <id> [--confirm]",
     summary:
-      "Remove a project: deletes the worktrees TET made with their branches and TET's data of it; the repository's folder stays. With worktrees, needs --confirm. Refused while one of its editor tabs has unsaved changes.",
+      "Remove a project: deletes the worktrees TET made with their branches and TET's data of it; the repository's folder stays. With worktrees needs --confirm; refused while an editor tab of it has unsaved changes.",
     positionals: [],
   },
   {
     verb: "worktree-add",
     group: "Worktrees",
     usage: "worktree-add <branch> [--project <id>]",
-    summary:
-      "Add a git worktree of the project under ~/.tet/projects with a new branch <branch> at the default branch, and open it with the project.",
+    summary: "Add a worktree with a new branch <branch> at the default branch, under ~/.tet/projects, and open it with the project.",
     positionals: ["branch"],
     sandbox: "ownProject",
   },
@@ -310,7 +308,7 @@ const VERBS = [
     group: "Worktrees",
     usage: "worktree-delete <branch|key> [--project <id>] [--force]",
     summary:
-      "Close the project's worktree of branch <branch> (or key) and delete it with the branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
+      "Close the worktree of branch <branch> (or key) and delete it with its branch. --force also deletes uncommitted changes. Never the caller's own worktree.",
     positionals: ["branch"],
     sandbox: "ownProject",
   },
@@ -319,14 +317,14 @@ const VERBS = [
     group: "Worktrees",
     usage: "worktree-agent-merge <branch|key> [--project <id>]",
     summary:
-      "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, and run it again. Only from the repository, since deleting a worktree closes its tabs.",
+      "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, run it again. Only from the repository, since deleting a worktree closes its tabs.",
     positionals: ["branch"],
     sandbox: "ownProject",
   },
   {
     verb: "repository-get",
     group: "Repository",
-    usage: "repository-get [--project <id>] [--worktree <key or branch>]",
+    usage: "repository-get [TARGET]",
     summary: "What the git lane shows for the repository or a worktree: branch, upstream, changed files, stashes.",
     positionals: [],
     sandbox: "ownRef",
@@ -336,7 +334,7 @@ const VERBS = [
     group: "SBX",
     usage: "sbx-get [--project <id>]",
     summary:
-      "A project's SBX Settings: sbx's status, the configuration, which secrets and variables hold a value here (never the values), and the problems: what cannot be applied here, per option. Every sbx-set-* saves only what can be applied here and answers notApplied (what was left out, and why) and restartRequired.",
+      "A project's SBX Settings: sbx's status, the configuration, which secrets and variables hold a value (never the values), and the problems per option (what cannot be applied here). Every sbx-set-* saves only what can be applied and answers notApplied (what was left out, and why) and restartRequired.",
     positionals: [],
     sandbox: "ownProject",
   },
@@ -352,7 +350,7 @@ const VERBS = [
     group: "SBX",
     usage: "sbx-sign-in <user>",
     summary:
-      "Sign sbx in to Docker with the access token TET keeps for that user; running sandboxes keep running, and the account's policy applies at once; notKept says why the token could not be kept afterwards. The user adds tokens in TET's SBX Settings, never you.",
+      "Sign sbx in to Docker with the access token TET keeps for that user (running sandboxes keep running, the account's policy applies at once); notKept says why the token could not be kept afterwards. The user adds tokens in TET's SBX Settings, never you.",
     positionals: ["user"],
   },
   {
@@ -400,7 +398,7 @@ const VERBS = [
     group: "SBX",
     usage: "sbx-set-variables [<NAME>[=<value>]...] [--project <id>]",
     summary:
-      "Replace the variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the one stored. A token or password is a secret instead, whose value the user types in TET's SBX Settings, never you.",
+      "Replace the variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the stored one. A token or password is a secret, not a variable.",
     positionals: ["variables"],
     variadic: true,
     sandbox: "ownProject",
@@ -423,15 +421,14 @@ const VERBS = [
     verb: "app-restart",
     group: "App",
     usage: "app-restart --confirm",
-    summary: "Restart TET. Ends every tab in every project, this one included — only when the user asked for it.",
+    summary: "Restart TET, ending every tab in every project, this one included. Only when the user asked.",
     positionals: [],
   },
   {
     verb: "env-request",
     group: "Environment",
     usage: "env-request <NAME> [NAME...]",
-    summary:
-      "Open TET's dialog for the user to type environment variables into, never into the chat; waits for the answer. Every missing one in one request. TET keeps them and sets them in every tab it starts; its Save restarts this tab, its session resumed, to see them.",
+    summary: "Open TET's dialog for the user to type environment variables into; waits for the answer. Every missing one in one request.",
     positionals: ["names"],
     variadic: true,
   },
@@ -440,7 +437,7 @@ const VERBS = [
     group: "Environment",
     usage: "env-list",
     summary:
-      "The environment variables TET sets, never their values; overridesMachine: the machine sets it too, and TET's value replaces it.",
+      "The environment variables TET sets (never their values); overridesMachine: the machine sets it too, and TET's value replaces it.",
     positionals: [],
   },
   {
@@ -453,8 +450,8 @@ const VERBS = [
   {
     verb: "tabs-list",
     group: "Tabs",
-    usage: "tabs-list [--project <id>] [--worktree <key or branch>]",
-    summary: "The tabs of the repository or a worktree and their state, with the session each tab's hooks named and its sandbox.",
+    usage: "tabs-list [TARGET]",
+    summary: "The tabs of the repository or a worktree with their state, the session each tab's hooks named and its sandbox.",
     positionals: [],
     sandbox: "ownProject",
   },
@@ -462,34 +459,33 @@ const VERBS = [
     verb: "tabs-output",
     group: "Tabs",
     usage: "tabs-output <tab-id> [--kb <n>]",
-    summary: "The last n KB (16) of what a tab's terminal shows, as text: its scrollback and screen, or a fullscreen TUI's screen.",
+    summary: "The last n KB (16) of what a tab's terminal shows, as text: scrollback and screen, or a fullscreen TUI's screen.",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
   {
     verb: "events-tail",
     group: "Tabs",
-    usage: "events-tail [--tail <count>] [--project <id>] [--worktree <key or branch>]",
-    summary:
-      "The latest hook reports, session claims and closed tabs, with when each arrived. Use it to see why a tab shows what it shows.",
+    usage: "events-tail [--tail <count>] [TARGET]",
+    summary: "The latest hook reports, session claims and closed tabs, with when each arrived; shows why a tab shows what it shows.",
     positionals: [],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-wait",
     group: "Tabs",
-    usage: `tabs-wait <tab-id> [--session] [--working] [--stopped] [--status <${TERMINAL_STATUSES.join("|")}>] [--timeout <seconds>] [--project <id>] [--worktree <key or branch>]`,
+    usage: `tabs-wait <tab-id> [--session] [--working] [--stopped] [--status <${TERMINAL_STATUSES.join("|")}>] [--timeout <seconds>] [TARGET]`,
     summary:
-      "Wait until every condition given holds: a session (--session), working a turn (--working), not working one (--stopped; waiting on a question counts as that, as the spinner shows it), a status. Exits 4 after the timeout (30 s).",
+      "Wait until every condition given holds: a session (--session), working a turn (--working), not working one (--stopped; a pending question counts), a status. Exits 4 after the timeout (30 s).",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-keys",
     group: "Tabs",
-    usage: `tabs-keys <tab-id> <${Object.keys(TAB_KEYS).join("|")}>... [--project <id>] [--worktree <key or branch>]`,
+    usage: `tabs-keys <tab-id> <${Object.keys(TAB_KEYS).join("|")}>... [TARGET]`,
     summary:
-      "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows on its screen, or Enter to submit what tabs-text typed.",
+      "Press keys in a tab, one after another, e.g. to answer a question tabs-output shows, or Enter to submit what tabs-text typed.",
     positionals: ["tabId", "keys"],
     variadic: true,
     sandbox: "ownProject",
@@ -497,27 +493,27 @@ const VERBS = [
   {
     verb: "tabs-text",
     group: "Tabs",
-    usage: "tabs-text <tab-id> <text> [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-text <tab-id> <text> [TARGET]",
     summary:
-      "Type text into a tab, as one paste and without Enter: an agent's TUI takes a newline in it as a new line. Submit it with tabs-keys <tab-id> enter.",
+      "Type text into a tab as one paste, without Enter (a TUI takes a newline in it as a new line); submit it with tabs-keys <tab-id> enter.",
     positionals: ["tabId", "text"],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-create",
     group: "Tabs",
-    usage: "tabs-create --agent <id> [--prompt <text>] [--background] [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-create --agent <id> [--prompt <text>] [--background] [TARGET]",
     summary:
-      "Open a new terminal tab for that agent (an id from agents-list) and bring it to the front (not with --background). With --prompt the agent starts on that task, as if it were the first thing typed there: the way to give another agent work.",
+      "Open a terminal tab for an agent (an id from agents-list) and bring it to the front. With --prompt the agent starts on that task: the way to give another agent work.",
     positionals: [],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-hand-over",
     group: "Tabs",
-    usage: "tabs-hand-over <tab-id> --agent <id> [--background] [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-hand-over <tab-id> --agent <id> [--background] [TARGET]",
     summary:
-      "Open a tab of another agent (an id from agents-list) that takes over the tab's session, and bring it to the front (not with --background): it reads the session's transcript and carries on, e.g. when the first agent reached its usage limit. The first tab stays.",
+      "Open a tab of another agent (see agents-list) that takes over the tab's session by reading its transcript, e.g. after a usage limit, and bring it to the front. The first tab stays.",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
@@ -531,32 +527,30 @@ const VERBS = [
   {
     verb: "tabs-run-command",
     group: "Tabs",
-    usage: "tabs-run-command <name> [--background] [--project <id>] [--worktree <key or branch>]",
-    summary:
-      "Run one of the project's saved commands (tet.json) in a new tab of the repository or a worktree and bring it to the front (not with --background).",
+    usage: "tabs-run-command <name> [--background] [TARGET]",
+    summary: "Run a saved command (tet.json) in a new tab of the repository or a worktree and bring it to the front.",
     positionals: ["name"],
   },
   {
     verb: "tabs-start",
     group: "Tabs",
-    usage: "tabs-start <tab-id> [--background] [--project <id>] [--worktree <key or branch>]",
-    summary: "Start a tab's process and bring it to the front (not with --background).",
+    usage: "tabs-start <tab-id> [--background] [TARGET]",
+    summary: "Start a tab's process and bring it to the front.",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-restart",
     group: "Tabs",
-    usage: "tabs-restart <tab-id> [--background] [--project <id>] [--worktree <key or branch>]",
-    summary:
-      "Restart a tab that stopped or could not start, as its menu's Restart does, and bring it to the front (not with --background).",
+    usage: "tabs-restart <tab-id> [--background] [TARGET]",
+    summary: "Restart a tab that stopped or could not start, as its menu's Restart does, and bring it to the front.",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },
   {
     verb: "tabs-rename",
     group: "Tabs",
-    usage: "tabs-rename <tab-id> <title> [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-rename <tab-id> <title> [TARGET]",
     summary: "Rename a tab.",
     positionals: ["tabId", "title"],
     sandbox: "ownProject",
@@ -564,7 +558,7 @@ const VERBS = [
   {
     verb: "tabs-close",
     group: "Tabs",
-    usage: "tabs-close <tab-id> [--project <id>] [--worktree <key or branch>]",
+    usage: "tabs-close <tab-id> [TARGET]",
     summary: "Close a tab and delete its session.",
     positionals: ["tabId"],
     sandbox: "ownProject",
@@ -572,9 +566,9 @@ const VERBS = [
   {
     verb: "editor-open",
     group: "Editor",
-    usage: "editor-open <path> [--keep] [--background] [--project <id>] [--worktree <key or branch>]",
+    usage: "editor-open <path> [--keep] [--background] [TARGET]",
     summary:
-      "Open a repository-relative file in the repository's or worktree's preview tab and bring it to the front (not with --background); the next file replaces it, --keep gives it a tab of its own.",
+      "Open a repository-relative file in the preview tab of the repository or a worktree and bring it to the front; the next file replaces it, --keep gives it a tab of its own.",
     positionals: ["path"],
     sandbox: "ownRef",
     sandboxFile: "opened",
@@ -582,9 +576,9 @@ const VERBS = [
   {
     verb: "editor-get",
     group: "Editor",
-    usage: "editor-get [--project <id>] [--worktree <key or branch>]",
+    usage: "editor-get [TARGET]",
     summary:
-      "What the active editor tab of the repository or a worktree shows: the file, its text, whether it is edited, read-only or a preview. Use it to see what the user has open and is editing.",
+      "What the active editor tab shows: file, text, edited, read-only or preview. Use it to see what the user has open and is editing.",
     positionals: [],
     sandbox: "ownRef",
     sandboxFile: "path",
@@ -592,18 +586,17 @@ const VERBS = [
   {
     verb: "editor-list",
     group: "Editor",
-    usage: "editor-list [--project <id>] [--worktree <key or branch>]",
-    summary:
-      "The open editor tabs of the repository or a worktree: file, preview, edited, read-only, and which one is active. Use it to see what the user has open.",
+    usage: "editor-list [TARGET]",
+    summary: "The open editor tabs: file, preview, edited, read-only, and which is active. Use it to see what the user has open.",
     positionals: [],
     sandbox: "ownRef",
   },
   {
     verb: "explorer-list",
     group: "Repository",
-    usage: "explorer-list [--project <id>] [--worktree <key or branch>]",
+    usage: "explorer-list [TARGET]",
     summary:
-      "What the Explorer lists for the repository or a worktree, with tet.json's folders and excludes applied: what the user sees there, which ls does not show.",
+      "What the Explorer lists for the repository or a worktree, tet.json's folders and excludes applied: what the user sees, which ls does not show.",
     positionals: [],
     sandbox: "ownRef",
   },
@@ -623,7 +616,7 @@ const VERBS = [
     group: "Notices",
     usage: "notify <title> [body]",
     summary:
-      "Show a desktop notification from TET's own process — the one with a desktop session. Use it to call the user back: a long task is done, or you need an answer.",
+      "Show a desktop notification from TET's own process, the one with a desktop session, to call the user back: a long task is done or you need an answer.",
     positionals: ["title", "body"],
     sandbox: "any",
   },
