@@ -197,8 +197,8 @@ export async function readHostAllowed(host: string): Promise<boolean> {
 }
 
 /**
- * Behind both. Three processes, always, started together since each sbx invocation pays its CLI
- * startup: `version` says installed and whether old enough to be reported as a failure
+ * Behind both. Three processes, always, `ls` first (it starts the daemon) and the others together
+ * since each sbx invocation pays its CLI startup: `version` says installed and whether old enough to be reported as a failure
  * (sbxVersionSupported), `policy ls`'s exit code says initialized, its output governed. The answers
  * are read in order, so the first "no" is the one reported — `sbx policy ls` fails when signed out
  * too.
@@ -239,9 +239,11 @@ async function readProbe(refreshPath: boolean): Promise<SbxProbe> {
   if (refreshPath) {
     await augmentAgentPath();
   }
-  const [version, list, listedPolicy] = await Promise.all([
+  // `ls` alone first: it starts the daemon, and two sbx processes starting it at once fail on its
+  // state lock ("another daemon is already running").
+  const list = await runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS });
+  const [version, listedPolicy] = await Promise.all([
     readSbxVersion(),
-    runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),
     runSbx(["policy", "ls", "--type", "filesystem", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),
   ]);
   const policy = policyOf(listedPolicy);
