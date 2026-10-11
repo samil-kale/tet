@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.5 (2026-10-12)
+
+- **`tet-ctl` for agents.** `tet-ctl help` groups worktrees and the repository under their own
+  headings and describes typical flows (handing work to another agent, answering its question,
+  working in parallel). `repository-state` is now `repository-get`, `projects-remove` takes
+  `--project`, and `tabs-keys` sends `shift-tab`, `backspace` and `ctrl-c`.
+- **Fixes.** Sandboxed agents reach their project's SBX settings and variables through `tet-ctl`.
+
 ## 0.18.4 (2026-10-11)
 
 - **Saved commands by platform.** A saved command always runs through the platform's shell, and an
