@@ -9,7 +9,6 @@ import type { Notice, NoticeProgress, NoticeSeverity } from "../shared/types/app
 import type { ProjectRef } from "../shared/types/project";
 import type { TerminalOutput } from "../shared/types/terminals";
 import { on, once } from "./ipc/channels";
-import { isDevToolsKey } from "./util/devtools-key";
 import { logError } from "./util/error-log";
 import { PLATFORM } from "./util/host-platform";
 import { isOpenableUrl } from "./util/shell-open";
@@ -305,7 +304,8 @@ export class AppWindow {
 
     // No application menu (the title bar is our own), so wire the devtools shortcuts by hand.
     window.webContents.on("before-input-event", (_event, input) => {
-      if (isDevToolsKey(input)) {
+      const toggle = input.key === "F12" || (input.control && input.shift && input.key.toLowerCase() === "i");
+      if (input.type === "keyDown" && toggle) {
         window.webContents.toggleDevTools();
       }
     });

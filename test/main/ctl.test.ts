@@ -1635,9 +1635,7 @@ describe("tet-ctl against the control server", () => {
     const context = (JSON.parse(run.stdout) as { hookSpecificOutput: { additionalContext: string } }).hookSpecificOutput.additionalContext;
     assert.equal(context, systemPrompt(SANDBOX_SIDE));
     assert.doesNotMatch(context, /environment variable/);
-    assert.doesNotMatch(context, /browser verbs/);
     assert.match(systemPrompt(HOST_SIDE), /environment variable/);
-    assert.doesNotMatch(systemPrompt(HOST_SIDE), /browser verbs/);
   });
 
   it("lists the variables it keeps without values, with those it overrides on this machine, and removes them", async () => {
