@@ -1,4 +1,4 @@
-import { CONTROL_VERBS } from "./ctl";
+import { CONTROL_VERBS, EXIT_CODES } from "./ctl";
 import type { ControlVerb } from "./ctl";
 
 /** How far a verb reaches from a caller: any repository or worktree it names, the caller's own
@@ -35,21 +35,17 @@ const OWN_LIMITS = [
   "--worktree <key or branch> one of its worktrees. A worktree listed without a key (projects-list) was",
   "made outside TET, with plain git: TET shows it greyed and cannot open it.",
   "After a bare --, every argument is taken as it is, one starting with -- too.",
+  `Exit codes: ${EXIT_CODES.ok} ok, ${EXIT_CODES.internal} TET failed, ${EXIT_CODES.unauthorized} refused, ${EXIT_CODES.usage} wrong call (the reason on stderr), ${EXIT_CODES.timeout} tabs-wait gave up.`,
 ];
 
-/** A tab on this machine: every verb, across its project where a verb says so
- *  (ControlVerb.ownProjectOnly). A sandbox is no concern of it, which cannot end up in one. */
+/** A tab on this machine: every verb, across every project. A sandbox is no concern of it, which
+ *  cannot end up in one. */
 export const HOST_SIDE: ControlSide = {
   key: "host",
   admits: () => true,
   refusal: "does not answer here",
-  reach: (entry) => (entry.ownProjectOnly ? "ownProject" : "any"),
-  limits: [
-    ...OWN_LIMITS,
-    "restartRequired in an answer means the change waits for a restart — tell the user, never",
-    "restart for them. A terminal of another project is refused, exit 2 with the reason on stderr",
-    "(tabs-output, tabs-keys, tabs-text).",
-  ],
+  reach: () => "any",
+  limits: [...OWN_LIMITS, "restartRequired in an answer means the change waits for a restart — tell the user, never", "restart for them."],
   promptNote: "",
 };
 
@@ -59,7 +55,7 @@ export const SANDBOX_SIDE: ControlSide = {
   key: "sandbox",
   admits: (entry) => entry.sandbox !== undefined,
   refusal: "does not answer from inside a sandbox",
-  reach: (entry) => (entry.sandbox === "any" ? HOST_SIDE.reach(entry) : (entry.sandbox ?? "ownRef")),
+  reach: (entry) => (entry.sandbox === "any" ? "any" : (entry.sandbox ?? "ownRef")),
   limits: [
     ...OWN_LIMITS,
     "This tab runs in an sbx sandbox: what acts on the host machine — its settings and projects,",

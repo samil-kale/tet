@@ -19,7 +19,7 @@ export interface NoticeReport extends Notice {
 }
 
 /** An editor tab's state, reported by the renderer (where the editor alone lives) on every
- *  snapshot change, for `tet-ctl editor-state` and `editor-list`. Without the text, which may be
+ *  snapshot change, for `tet-ctl editor-get` and `editor-list`. Without the text, which may be
  *  large and changes several times per write on disk. Which tab is active is reported apart, by
  *  the window's layout. */
 export interface EditorReport {

@@ -19,7 +19,7 @@ function diffVersion(state: RepositoryState | undefined, filePath: string, write
 /**
  * What App keeps the editors and main in step with, derived from the editor tabs, the layouts and
  * the repository states, each by `refKey`: each repository's or worktree's active editor tab
- * — reported to main for `tet-ctl editor-state`, and answering its content request — the open paths
+ * — reported to main for `tet-ctl editor-get`, and answering its content request — the open paths
  * main watches for writes, and each tab's `diffVersion`, which decides a reload. `forgetProjectRef`
  * drops a closed repository's or worktree's write counts; the tabs themselves are App's.
  */
@@ -34,7 +34,7 @@ export function useEditorSync(
 
   /**
    * Each repository's or worktree's active editor tab (`activeEditorTab`) — the file the Explorer
-   * reveals and `tet-ctl editor-state` answers. Derived, not tracked: a tab is activated from many
+   * reveals and `tet-ctl editor-get` answers. Derived, not tracked: a tab is activated from many
    * places (a click, next/previous, a drop, a snap). Identity-stable where unchanged.
    */
   const activeEditorsRef = useRef<Record<string, string>>({});

@@ -27,6 +27,15 @@ import { ownValue } from "../shared/own-value";
 function whenToUse(side: ControlSide): string[] {
   return [
     "Leave it alone for files and git, worktrees aside: read the repository and run git yourself.",
+    "",
+    "Typical flows",
+    "  Give work to another agent: tabs-create --agent <id> --prompt <text> answers the tab (its",
+    "  tabId); tabs-wait <tab-id> --working, then --stopped, waits for its turn; tabs-output",
+    "  <tab-id> reads what it did.",
+    "  Answer an agent's question: tabs-output <tab-id> shows it, tabs-keys answers it, or",
+    "  tabs-text then tabs-keys <tab-id> enter.",
+    "  Work in parallel: worktree-add <branch>, tabs-create --worktree <key> there, and",
+    "  worktree-agent-merge <branch> from the repository when it is done.",
     // Mentioned only where the env verbs answer (ControlSide.admits).
     ...(admitsVerb(side, "env-request")
       ? [

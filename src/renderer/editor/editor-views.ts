@@ -389,7 +389,7 @@ function publish(view: EditorView, patch: Partial<EditorSnapshot>): void {
   }
 }
 
-/** The snapshot for `tet-ctl editor-state` and `editor-list` — see EditorReport. */
+/** The snapshot for `tet-ctl editor-get` and `editor-list` — see EditorReport. */
 function report(view: EditorView): void {
   const { path, file, loading, dirty, preview } = view.snapshot;
   window.tet.repository.reportEditor(view.ref, view.tabId, {
@@ -410,7 +410,7 @@ export function keepEditor(tabId: string): void {
   }
 }
 
-/** The tab's edited side, for `tet-ctl editor-state`. Undefined unless a text file is open. */
+/** The tab's edited side, for `tet-ctl editor-get`. Undefined unless a text file is open. */
 export function editorContent(tabId: string): string | undefined {
   const view = views.get(tabId);
   if (!view || editorKind(view.snapshot.file) !== "text") {

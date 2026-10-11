@@ -10,7 +10,7 @@ const MAX_NOTICES = 50;
 export class ControlRecords {
   /** Per `refKey`, per editor tab, in the order first reported. */
   private readonly editorTabs = new Map<string, Map<string, EditorReport>>();
-  /** Per `refKey`: the tab `editor-state` answers for. Kept past that tab's close — no
+  /** Per `refKey`: the tab `editor-get` answers for. Kept past that tab's close — no
    *  report under it then, and the next activation replaces it. */
   private readonly activeEditors = new Map<string, string>();
   private readonly shownNotices: NoticeReport[] = [];
@@ -31,7 +31,7 @@ export class ControlRecords {
     this.activeEditors.set(refKeyOf(ref), tabId);
   }
 
-  /** The repository's or worktree's active editor tab — `editor-state`. */
+  /** The repository's or worktree's active editor tab — `editor-get`. */
   editor(ref: ProjectRef): EditorReport | undefined {
     const refKey = refKeyOf(ref);
     const active = this.activeEditors.get(refKey);

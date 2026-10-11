@@ -427,8 +427,7 @@ and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`Contr
   new difference extends the side.
   Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
   project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
-- `tabs-keys` and `tabs-output` answer only for a tab of the caller's own project, its repository or
-  any worktree (`ownProjectOnly`). **From a sandbox, whatever runs in a sandbox of its project**:
+- A host caller reaches every project and every one of its tabs. **From a sandbox, whatever runs in a sandbox of its project**:
   the worktree verbs and every tab verb reach its repository and every worktree (`ownProject`), a
   tab verb only a tab running in a sandbox (`CallerSide.reachesTab`) — a host tab is the machine's,
   and its output may print the host's control token — and a tab it opens runs in one too; what acts

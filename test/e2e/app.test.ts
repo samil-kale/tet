@@ -259,7 +259,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
 
   it("reflects a commit made in a terminal, as the git lane would", async () => {
     const [project] = await projects();
-    const state = async (): Promise<RepositoryState> => (await ctl("repository-state", "--project", project.id)).result as RepositoryState;
+    const state = async (): Promise<RepositoryState> => (await ctl("repository-get", "--project", project.id)).result as RepositoryState;
     await eventually("the first read", async () => (await state()).error === undefined && (await state()).head !== "", STARTUP_MS);
     fs.writeFileSync(path.join(repo, "README.md"), "hello\n");
     await eventually(
@@ -297,7 +297,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     const { worktree, path: files } = added.result as { worktree: string; path: string };
     // By its key: the branch that names it is what changes.
     const head = async (): Promise<string | undefined> =>
-      ((await ctl("repository-state", "--project", main.id, "--worktree", worktree)).result as RepositoryState).head;
+      ((await ctl("repository-get", "--project", main.id, "--worktree", worktree)).result as RepositoryState).head;
     try {
       await eventually("the first read", async () => (await head()) === "in-worktree", STARTUP_MS);
       assert.equal(spawnSync("git", ["switch", "-q", "-c", "switched"], { cwd: files }).status, 0);
@@ -330,7 +330,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
             ?.worktrees.some((entry) => entry.branch === "elsewhere" && entry.key === undefined) === true,
         STARTUP_MS,
       );
-      const refused = await ctl("repository-state", "--project", main.id, "--worktree", "elsewhere");
+      const refused = await ctl("repository-get", "--project", main.id, "--worktree", "elsewhere");
       assert.notEqual(refused.status, 0);
       assert.match(refused.stderr, /made elsewhere/);
     } finally {
@@ -350,7 +350,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     await eventually(
       "the new branch read",
       async () =>
-        ((await ctl("repository-state", "--project", main.id, "--worktree", "from/ctl")).result as RepositoryState).head === "from/ctl",
+        ((await ctl("repository-get", "--project", main.id, "--worktree", "from/ctl")).result as RepositoryState).head === "from/ctl",
       STARTUP_MS,
     );
     const deleted = await ctl("worktree-delete", "from/ctl", "--project", main.id);
@@ -358,7 +358,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
     assert.ok(!fs.existsSync(worktree.path));
     const listed = (await projects()).find((project) => project.id === main.id);
     assert.ok(!listed?.worktrees.some((entry) => entry.key === worktree.worktree));
-    const branches = ((await ctl("repository-state", "--project", main.id)).result as RepositoryState).localBranches;
+    const branches = ((await ctl("repository-get", "--project", main.id)).result as RepositoryState).localBranches;
     assert.ok(!branches.includes("from/ctl"), "its branch went with it");
   });
 
@@ -402,7 +402,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
       async () => (await tabsOf(project.id)).some((entry) => entry.tabId === tab.tabId && entry.status === "running"),
       STARTUP_MS,
     );
-    assert.deepEqual((await ctl("projects-remove", project.id)).result, { removed: project.id });
+    assert.deepEqual((await ctl("projects-remove", "--project", project.id)).result, { removed: project.id });
     assert.deepEqual((await ctl("projects-list")).result, []);
     assert.equal((await ctl("tabs-list", "--project", project.id)).status, 3, "not found");
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(userData, "projects.json"), "utf8")), [], "persisted");

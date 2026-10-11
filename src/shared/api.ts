@@ -256,11 +256,11 @@ export interface TETApi {
     watchFiles: (ref: ProjectRef, paths: string[]) => Promise<void>;
     /** A `watchFiles` file was written, by anyone. */
     onFileChanged: (listener: (payload: { ref: ProjectRef; path: string }) => void) => Unsubscribe;
-    /** For `tet-ctl editor-state` and `editor-list`; null once the tab is closed. */
+    /** For `tet-ctl editor-get` and `editor-list`; null once the tab is closed. */
     reportEditor: (ref: ProjectRef, tabId: string, report: EditorReport | null) => void;
-    /** The project's active editor tab, which `editor-state` answers for — the window's layout knows. */
+    /** The project's active editor tab, which `editor-get` answers for — the window's layout knows. */
     reportActiveEditor: (ref: ProjectRef, tabId: string) => void;
-    /** `tet-ctl editor-state` asks for the active editor tab's text; the listener answers. */
+    /** `tet-ctl editor-get` asks for the active editor tab's text; the listener answers. */
     onEditorContentRequest: (listener: (ref: ProjectRef) => string | undefined) => Unsubscribe;
     /** `tet-ctl editor-open`: in the preview tab, or kept with `--keep`; left behind the active tab
      *  with `--background`. */

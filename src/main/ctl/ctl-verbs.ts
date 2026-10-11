@@ -149,7 +149,7 @@ export function verbs(deps: ControlDeps): Handlers {
       const lanes = withLanePinned(settings.get().appearance.lanes, lane, onOff(args, "value"));
       // Shown at once (main.ts hands the window what the store then holds).
       settings.patch({ appearance: { lanes } });
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: false } };
     },
 
     "settings-set-lane-order": (args) => {
@@ -164,7 +164,7 @@ export function verbs(deps: ControlDeps): Handlers {
       // One left out joins at the end (settings.ts's normalize).
       const pinned = laneOrders(settings.get().appearance.lanes).pinned;
       settings.patch({ appearance: { lanes: order.map((lane) => ({ lane, pinned: pinned.includes(lane) })) } });
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: false } };
     },
 
     "settings-set-prompt": (args) => {
@@ -172,7 +172,7 @@ export function verbs(deps: ControlDeps): Handlers {
       // No text resets: "" means TET's own prompt, read by ipc/repository.ts when asking.
       const value = args.text;
       settings.patch({ prompts: { texts: { [id]: typeof value === "string" ? value : "" } } });
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: false } };
     },
 
     "settings-set-keybindings": (args) => {
@@ -183,13 +183,14 @@ export function verbs(deps: ControlDeps): Handlers {
       }
       // An editor reads its keybindings once, when it is made (editor-views.ts's editorSetup).
       settings.patch({ files: { editorKeybindingPreset: id } });
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: true } };
     },
 
     "settings-set-notification": (args) => {
       const id = oneOf(args, "id", "notification", NOTIFICATION_IDS);
       settings.patch({ notifications: { [id]: onOff(args, "value") } });
-      return { result: { saved: true } };
+      // Only the idle reminder is set up with a tab (AgentPaths); the others act on the next report.
+      return { result: { saved: true, restartRequired: id === "idleReminder" } };
     },
 
     "settings-set-explorer": (args) => {
@@ -200,13 +201,13 @@ export function verbs(deps: ControlDeps): Handlers {
       } else {
         settings.patch({ files: { [id]: onOff(args, "value") } });
       }
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: false } };
     },
 
     "settings-set-git": (args) => {
       const id = oneOf(args, "id", "git setting", GIT_SETTING_IDS);
       settings.patch({ git: { [id]: onOff(args, "value") } });
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: false } };
     },
 
     "settings-set-commit-suggester": async (args, caller) => {
@@ -226,12 +227,12 @@ export function verbs(deps: ControlDeps): Handlers {
         throw new ControlError("bad_args", `unknown ${agent.displayName} model: ${model} (known: ${known})`);
       }
       settings.patch({ prompts: { commitSuggester: { agentId: agent.id, model } } });
-      return { result: { saved: true } };
+      return { result: { saved: true, restartRequired: false } };
     },
 
     "projects-list": (_args, caller) => ({ result: caller.side.projects(store.list(), caller) }),
 
-    "repository-state": (args, caller) => ({ result: repository(refFrom(args, caller).ref).getState() }),
+    "repository-get": (args, caller) => ({ result: repository(refFrom(args, caller).ref).getState() }),
 
     "projects-add": async (args) => {
       const added = await deps.addProject(text(args, "path", "path"));
@@ -242,7 +243,8 @@ export function verbs(deps: ControlDeps): Handlers {
     },
 
     "projects-remove": async (args, caller) => {
-      const id = text(args, "projectId", "project id");
+      // Never defaulted to the caller's own project: removing it ends the caller's tab.
+      const id = text(args, "project", "project: pass --project <id> (see projects-list)");
       const found = projectById(store, id);
       refuseUnsaved(deps, projectRefsOf(found), "nothing was removed");
       // What the window's question says (ProjectList's remove), here as a flag.
@@ -428,7 +430,7 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { opened: filePath, keep }, after: () => deps.openEditor(ref, filePath, keep, background) };
     },
 
-    "editor-state": async (args, caller) => {
+    "editor-get": async (args, caller) => {
       const { ref } = refFrom(args, caller);
       const report = deps.records.editor(ref);
       return { result: report ? { ...report, content: await deps.editorContent(ref) } : null };
@@ -464,6 +466,13 @@ export function verbs(deps: ControlDeps): Handlers {
       }
       bringToFront(deps, args, ref, handed.tabId);
       return { result: handed };
+    },
+
+    "commands-list": async (args, caller) => {
+      const { project: found } = refFrom(args, caller);
+      // Without `env` and `color`: what a caller needs to pick a command and know where it runs.
+      const commands = await deps.readCommands(found.path);
+      return { result: commands.map(({ name, command, cwd, os }) => ({ name, command, cwd, os })) };
     },
 
     "tabs-run-command": async (args, caller) => {

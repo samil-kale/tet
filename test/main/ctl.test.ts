@@ -697,7 +697,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("pins and unpins a lane as the window does, and refuses an unknown one", async () => {
-    assert.deepEqual((await tetCtl(["settings-set-lane-pin", "files", "on"])).result, { saved: true });
+    assert.deepEqual((await tetCtl(["settings-set-lane-pin", "files", "on"])).result, { saved: true, restartRequired: false });
     assert.deepEqual(settings.appearance.lanes, laneSettings(["projects", "files"], ["git"]));
     await tetCtl(["settings-set-lane-pin", "projects", "off"]);
     assert.deepEqual(settings.appearance.lanes, laneSettings(["files"], ["projects", "git"]));
@@ -706,7 +706,10 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("sets the lanes' order, keeps the pins, and refuses an unknown, a doubled or no lane", async () => {
-    assert.deepEqual((await tetCtl(["settings-set-lane-order", "files", "git", "projects"])).result, { saved: true });
+    assert.deepEqual((await tetCtl(["settings-set-lane-order", "files", "git", "projects"])).result, {
+      saved: true,
+      restartRequired: false,
+    });
     assert.deepEqual(settings.appearance.lanes, [
       { lane: "files", pinned: false },
       { lane: "git", pinned: false },
@@ -727,7 +730,7 @@ describe("tet-ctl against the control server", () => {
 
   it("sets a prompt's text, puts TET's own back without one, and refuses an unknown id", async () => {
     const set = await tetCtl(["settings-set-prompt", "commitMessage", "write a subject"]);
-    assert.deepEqual(set.result, { saved: true });
+    assert.deepEqual(set.result, { saved: true, restartRequired: false });
     assert.equal(settings.prompts.texts.commitMessage, "write a subject");
     const reset = await tetCtl(["settings-set-prompt", "commitMessage"]);
     assert.equal(reset.status, EXIT_CODES.ok);
@@ -743,7 +746,7 @@ describe("tet-ctl against the control server", () => {
 
   it("sets a known keybinding preset and refuses an unknown one rather than storing it", async () => {
     const set = await tetCtl(["settings-set-keybindings", "jetbrains"]);
-    assert.deepEqual(set.result, { saved: true });
+    assert.deepEqual(set.result, { saved: true, restartRequired: true });
     assert.equal(settings.files.editorKeybindingPreset, "jetbrains");
     assertUsage(await tetCtl(["settings-set-keybindings", "emacs"]), /unknown keybinding preset: emacs/);
     assert.equal(settings.files.editorKeybindingPreset, "jetbrains");
@@ -751,7 +754,7 @@ describe("tet-ctl against the control server", () => {
 
   it("switches one notification, leaves the others alone, and refuses an unknown one", async () => {
     const on = await tetCtl(["settings-set-notification", "idleReminder", "on"]);
-    assert.deepEqual(on.result, { saved: true });
+    assert.deepEqual(on.result, { saved: true, restartRequired: true });
     const off = await tetCtl(["settings-set-notification", "finished", "off"]);
     assert.equal(off.status, EXIT_CODES.ok);
     assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: true });
@@ -764,7 +767,7 @@ describe("tet-ctl against the control server", () => {
   it("sets one Git setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
     const previous = { ...settings.git };
     const set = await tetCtl(["settings-set-git", "pushOnCommit", previous.pushOnCommit ? "off" : "on"]);
-    assert.deepEqual(set.result, { saved: true });
+    assert.deepEqual(set.result, { saved: true, restartRequired: false });
     assert.deepEqual(settings.git, { ...previous, pushOnCommit: !previous.pushOnCommit });
     assertUsage(await tetCtl(["settings-set-git", "force", "on"]), /unknown git setting: force/);
     const badValue = await tetCtl(["settings-set-git", "checkNewChanges", "yes"]);
@@ -774,7 +777,7 @@ describe("tet-ctl against the control server", () => {
 
   it("sets one Explorer setting, leaves the others alone, and refuses an unknown one or a bad value", async () => {
     const hide = await tetCtl(["settings-set-explorer", "excludeGitIgnore", "on"]);
-    assert.deepEqual(hide.result, { saved: true });
+    assert.deepEqual(hide.result, { saved: true, restartRequired: false });
     const sort = await tetCtl(["settings-set-explorer", "sortOrder", "modified"]);
     assert.equal(sort.status, EXIT_CODES.ok);
     assert.deepEqual(settings.files, {
@@ -794,7 +797,7 @@ describe("tet-ctl against the control server", () => {
 
   it("sets who suggests a commit message and refuses an agent or model that cannot", async () => {
     const set = await tetCtl(["settings-set-commit-suggester", "claude", "sonnet"]);
-    assert.deepEqual(set.result, { saved: true });
+    assert.deepEqual(set.result, { saved: true, restartRequired: false });
     assert.deepEqual(settings.prompts.commitSuggester, { agentId: "claude", model: "sonnet" });
     const byDefault = await tetCtl(["settings-set-commit-suggester", "claude"]);
     assert.equal(byDefault.status, EXIT_CODES.ok);
@@ -817,13 +820,13 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("finds a worktree TET made by its branch or key, never one made elsewhere", async () => {
-    const head = async (args: string[]): Promise<string> => ((await tetCtl(["repository-state", ...args])).result as { head: string }).head;
+    const head = async (args: string[]): Promise<string> => ((await tetCtl(["repository-get", ...args])).result as { head: string }).head;
     assert.equal(await head(["--worktree", "four"]), `main-of-${refKeyOf(WORKTREE)}`);
     assert.equal(await head(["--worktree", "k4"]), `main-of-${refKeyOf(WORKTREE)}`);
     assert.equal(await head(["--project", PROJECT.id]), "main-of-p1", "--project alone is the repository");
     assert.equal(await head([]), "main-of-p1");
-    assertUsage(await tetCtl(["repository-state", "--worktree", "five"]), /made elsewhere/);
-    assert.match((await tetCtl(["repository-state", "--worktree", "nope"])).stderr, /has no worktree nope/);
+    assertUsage(await tetCtl(["repository-get", "--worktree", "five"]), /made elsewhere/);
+    assert.match((await tetCtl(["repository-get", "--worktree", "nope"])).stderr, /has no worktree nope/);
   });
 
   it("takes a worktree tab's ids only with its own token", async () => {
@@ -841,16 +844,16 @@ describe("tet-ctl against the control server", () => {
     );
     const sandboxed = { ...fromWorktree, [CONTROL_ENV.tabId]: SANDBOX_TAB };
     assertRefused(
-      await tetCtl(["repository-state", "--project", PROJECT.id], sandboxed),
+      await tetCtl(["repository-get", "--project", PROJECT.id], sandboxed),
       /own repository or worktree/,
       "the repository from a worktree's sandbox",
     );
-    assert.equal((await tetCtl(["repository-state"], sandboxed)).status, EXIT_CODES.ok, "its own");
+    assert.equal((await tetCtl(["repository-get"], sandboxed)).status, EXIT_CODES.ok, "its own");
   });
 
   it("answers the repository's state for the caller's project, or the one given", async () => {
-    assert.equal(((await tetCtl(["repository-state"])).result as { head: string }).head, "main-of-p1");
-    assert.equal(((await tetCtl(["repository-state", "--project", OTHER.id])).result as { head: string }).head, "main-of-p2");
+    assert.equal(((await tetCtl(["repository-get"])).result as { head: string }).head, "main-of-p1");
+    assert.equal(((await tetCtl(["repository-get", "--project", OTHER.id])).result as { head: string }).head, "main-of-p2");
   });
 
   it("takes --project over the caller's own", async () => {
@@ -914,6 +917,10 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["tabs-run-command", "npm run build"])).status, EXIT_CODES.ok);
     assert.deepEqual(calls.commands, ["npm run build", "npm run build"]);
     assert.equal(calls.shown.length, 2);
+  });
+
+  it("lists the saved commands by the names tabs-run-command takes", async () => {
+    assert.deepEqual((await tetCtl(["commands-list"])).result, [{ name: "build", command: "npm run build" }]);
   });
 
   it("reports a saved command that does not exist", async () => {
@@ -1039,30 +1046,25 @@ describe("tet-ctl against the control server", () => {
     ]);
   });
 
+  it("presses the keys that interrupt and correct", async () => {
+    await tetCtl(["tabs-keys", "tab-2", "ctrl-c", "backspace", "shift-tab"]);
+    assert.deepEqual(calls.written, [
+      ["tab-2", ""],
+      ["tab-2", ""],
+      ["tab-2", "[Z"],
+    ]);
+  });
+
   it("presses no key it does not know, and types no text", async () => {
     assert.equal((await tetCtl(["tabs-keys", "tab-2"])).status, EXIT_CODES.usage, "no key");
     assertUsage(await tetCtl(["tabs-keys", "tab-2", "enter", "hello"]), /unknown key: hello/);
     assert.deepEqual(calls.written, [], "not even the keys before it");
   });
 
-  it("presses keys in no tab of another project, nor from outside a project", async () => {
-    assertRefused(await tetCtl(["tabs-keys", OWN_TAB, "enter", "--project", OTHER.id]), /own project/, "another project");
-    const outside = await tetCtl(["tabs-keys", "tab-2", "enter", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
-    assertRefused(outside, /own project/, "no project of its own");
-    assert.deepEqual(calls.written, []);
-  });
-
   it("types text into a tab as one write, without Enter", async () => {
     assert.deepEqual((await tetCtl(["tabs-text", "tab-2", "fix the build\nthen test"])).result, { typed: "tab-2" });
     assert.deepEqual(calls.written, [["tab-2", "fix the build\nthen test"]]);
     assert.equal((await tetCtl(["tabs-text", "tab-2"])).status, EXIT_CODES.usage, "no text");
-  });
-
-  it("types text into no tab of another project, nor from outside a project", async () => {
-    assertRefused(await tetCtl(["tabs-text", OWN_TAB, "hello", "--project", OTHER.id]), /own project/, "another project");
-    const outside = await tetCtl(["tabs-text", "tab-2", "hello", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
-    assertRefused(outside, /own project/, "no project of its own");
-    assert.deepEqual(calls.written, []);
   });
 
   it("answers what a tab's terminal shows, its last n KB", async () => {
@@ -1080,18 +1082,12 @@ describe("tet-ctl against the control server", () => {
     assert.match(run.stderr, /window did not answer/);
   });
 
-  it("reads no tab of another project, nor from outside a project", async () => {
-    assertRefused(await tetCtl(["tabs-output", OWN_TAB, "--project", OTHER.id]), /own project/, "another project");
-    const outside = await tetCtl(["tabs-output", "tab-2", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: undefined });
-    assertRefused(outside, /own project/, "no project of its own");
-    assert.equal((await tetCtl(["tabs-output", OWN_TAB, "--project", PROJECT.id])).status, EXIT_CODES.ok, "its own, named");
-  });
-
   it("refuses a sandboxed tab every verb that acts on this machine", async () => {
     const refused = [
       ["tabs-run-command", "build"],
+      ["commands-list"],
       ["projects-add", workDir],
-      ["projects-remove", OTHER.id],
+      ["projects-remove", "--project", OTHER.id],
       ["settings-set-theme", "dark-modern"],
       ["settings-set-prompt", "commitMessage", "x"],
       ["settings-set-keybindings", "jetbrains"],
@@ -1238,13 +1234,13 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("answers a sandboxed tab for its own project only", async () => {
-    // editor-state: its own test below, since a sandbox reads only a file inside the repository.
-    assertRefused(await tetCtl(["editor-state", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-state");
-    for (const args of [["tabs-list"], ["tabs-close", "tab-2"]]) {
+    // editor-get: its own test below, since a sandbox reads only a file inside the repository.
+    assertRefused(await tetCtl(["editor-get", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-get");
+    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own project/, args[0]);
       assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
-    for (const args of [["repository-state"], ["explorer-list"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
+    for (const args of [["repository-get"], ["explorer-list"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, args[0]);
       assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }
@@ -1336,6 +1332,11 @@ describe("tet-ctl against the control server", () => {
     );
   });
 
+  it("answers a sandbox the events of its project's worktrees, and of no other project", async () => {
+    assert.equal((await tetCtl(["events-tail", "--worktree", "four"], FROM_SANDBOX)).status, EXIT_CODES.ok);
+    assertRefused(await tetCtl(["events-tail", "--project", OTHER.id], FROM_SANDBOX), /own project/, "events-tail");
+  });
+
   it("opens a file in the preview tab, or kept, and answers what the active tab shows", async () => {
     assert.deepEqual((await tetCtl(["editor-open", "src/a.ts"])).result, { opened: "src/a.ts", keep: false });
     assert.deepEqual((await tetCtl(["editor-open", "src/b.ts", "--keep"])).result, { opened: "src/b.ts", keep: true });
@@ -1343,8 +1344,8 @@ describe("tet-ctl against the control server", () => {
       [PROJECT.id, "src/a.ts", false],
       [PROJECT.id, "src/b.ts", true],
     ]);
-    assert.deepEqual((await tetCtl(["editor-state"])).result, { ...ACTIVE_EDITOR, content: "edited" });
-    assert.equal((await tetCtl(["editor-state", "--project", OTHER.id])).result, null, "no editor tab there");
+    assert.deepEqual((await tetCtl(["editor-get"])).result, { ...ACTIVE_EDITOR, content: "edited" });
+    assert.equal((await tetCtl(["editor-get", "--project", OTHER.id])).result, null, "no editor tab there");
     assert.deepEqual((await tetCtl(["editor-list"])).result, EDITOR_LISTING);
     assert.deepEqual((await tetCtl(["editor-list", "--project", OTHER.id])).result, []);
   });
@@ -1362,13 +1363,13 @@ describe("tet-ctl against the control server", () => {
       PROJECT.path = original.root;
       ACTIVE_EDITOR.path = original.editor;
     });
-    assert.equal((await tetCtl(["editor-state"], FROM_SANDBOX)).status, EXIT_CODES.ok, "a file inside");
+    assert.equal((await tetCtl(["editor-get"], FROM_SANDBOX)).status, EXIT_CODES.ok, "a file inside");
     assert.equal((await tetCtl(["editor-open", "a.txt"], FROM_SANDBOX)).status, EXIT_CODES.ok, "opened inside");
     for (const editor of ["leak/secret.txt", "gone.txt"]) {
       ACTIVE_EDITOR.path = editor;
-      assertRefused(await tetCtl(["editor-state"], FROM_SANDBOX), /missing or leads outside/, editor);
+      assertRefused(await tetCtl(["editor-get"], FROM_SANDBOX), /missing or leads outside/, editor);
       assertRefused(await tetCtl(["editor-open", editor], FROM_SANDBOX), /missing or leads outside/, `open ${editor}`);
-      assert.equal((await tetCtl(["editor-state"])).status, EXIT_CODES.ok, `${editor} on this machine`);
+      assert.equal((await tetCtl(["editor-get"])).status, EXIT_CODES.ok, `${editor} on this machine`);
     }
   });
 
@@ -1410,20 +1411,23 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("removes another project at once", async () => {
-    assert.deepEqual((await tetCtl(["projects-remove", OTHER.id])).result, { removed: OTHER.id });
+    assert.deepEqual((await tetCtl(["projects-remove", "--project", OTHER.id])).result, { removed: OTHER.id });
     assert.deepEqual(calls.removed, [OTHER.id]);
   });
 
   it("removes a project with worktrees only once confirmed", async () => {
     editorListing = [];
     assertUsage(
-      await tetCtl(["projects-remove", PROJECT.id], { [CONTROL_ENV.projectId]: OTHER.id }),
+      await tetCtl(["projects-remove", "--project", PROJECT.id], { [CONTROL_ENV.projectId]: OTHER.id }),
       /deletes its 1 worktree with their branches/,
     );
     assert.deepEqual(calls.removed, []);
-    assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id, "--confirm"], { [CONTROL_ENV.projectId]: OTHER.id })).result, {
-      removed: PROJECT.id,
-    });
+    assert.deepEqual(
+      (await tetCtl(["projects-remove", "--project", PROJECT.id, "--confirm"], { [CONTROL_ENV.projectId]: OTHER.id })).result,
+      {
+        removed: PROJECT.id,
+      },
+    );
     assert.deepEqual(calls.removed, [PROJECT.id]);
   });
 
@@ -1567,12 +1571,12 @@ describe("tet-ctl against the control server", () => {
 
   it("answers before removing the caller's own project", async () => {
     editorListing = [];
-    assert.deepEqual((await tetCtl(["projects-remove", PROJECT.id, "--confirm"])).result, { removed: PROJECT.id });
+    assert.deepEqual((await tetCtl(["projects-remove", "--project", PROJECT.id, "--confirm"])).result, { removed: PROJECT.id });
     await eventually("what the answer was followed by", () => calls.removed.includes(PROJECT.id));
   });
 
   it("refuses to remove a project while an editor tab of it has unsaved changes", async () => {
-    assertUsage(await tetCtl(["projects-remove", PROJECT.id]), /unsaved changes in a\.txt/);
+    assertUsage(await tetCtl(["projects-remove", "--project", PROJECT.id]), /unsaved changes in a\.txt/);
     assert.deepEqual(calls.removed, []);
   });
 
