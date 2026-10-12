@@ -1309,6 +1309,18 @@ textarea:focus,
   color: var(--tet-menu-selectionForeground);
 }
 
+.context-menu-name {
+  margin: 0 2px;
+  font-size: var(--small-font-size);
+  color: var(--tet-textLink-foreground);
+}
+
+/* Keeps the name readable on the selection blue, where its usual blue is not. */
+.context-menu-item:not(.disabled):hover .context-menu-name {
+  color: inherit;
+  opacity: 0.8;
+}
+
 /* A submenu's chevron, at the entry's right edge as in VS Code's menus. */
 .context-menu-chevron {
   flex: none;

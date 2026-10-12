@@ -5,7 +5,8 @@ import { useLatest } from "./use-latest";
 
 /** One entry of a context menu; an action with neither `run` nor `entries` renders disabled. */
 interface ContextMenuAction {
-  label: string;
+  /** What the entry does; a name it acts on goes in a `MenuName`. */
+  label: ReactNode;
   /** Leads the label, e.g. an agent's icon in the new-tab menu. */
   icon?: ReactNode;
   run?: () => void;
@@ -17,6 +18,11 @@ interface ContextMenuAction {
 export const SEPARATOR = "separator";
 
 export type ContextMenuEntry = ContextMenuAction | typeof SEPARATOR;
+
+/** A name inside an entry's label — a branch, a remote — set apart from the words around it. */
+export function MenuName({ children }: { children: string }) {
+  return <span className="context-menu-name">{children}</span>;
+}
 
 /** How long the pointer rests on an entry before its submenu opens or another one closes, so a
  *  pointer crossing entries on its way into an open submenu leaves it open (VS Code's delay). */
@@ -171,7 +177,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
             }}
           >
             {entry.icon}
-            {entry.label}
+            {/* One flex item, so a label's words and names keep their spaces. */}
+            <span>{entry.label}</span>
             {entry.entries?.length ? <ChevronIcon expanded={false} className="context-menu-chevron" /> : null}
           </div>
         ),

@@ -372,6 +372,9 @@ or a per-line decision is for an agent.
   marks or points. Exceptions: git status letters,
   the error mark, a notice's severity icon, an editor tab's unsaved dot, the file icons. A theme
   whose own mark colour differs sets it in place of the accent (`THEMES.md`).
+- A git name in a label of the branch tree's menus — a branch, a remote — is a `MenuName`
+  (`ContextMenu.tsx`), set apart from the words saying what the entry does. Ask the user before
+  setting a name apart in any other menu.
 - Row hover is `--tet-list-hoverBackground`, action button hover
   `--tet-toolbar-hoverBackground`.
 - A disabled control is dimmed, never recolored (opacity 0.4, the default cursor): every new

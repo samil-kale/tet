@@ -7,7 +7,7 @@ import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "
 import type { ResolvedRef } from "../../resolved-ref";
 import { runWithFollowUp, type BranchActions } from "../../git/run-action";
 import { COLUMN_STEP, INDENT_BASE, TreeRow } from "../../ui/tree-row";
-import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { MenuName, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
 import { TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
@@ -305,7 +305,13 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** Brings the default branch into HEAD; every fetch moves a local default branch up to its
    *  upstream. Nothing to bring in while standing on the default branch. */
   const updateFromDefault = (): ContextMenuEntry => ({
-    label: `Update from ${defaultRef ?? "the default branch"}`,
+    label: defaultRef ? (
+      <>
+        Update from <MenuName>{defaultRef}</MenuName>
+      </>
+    ) : (
+      "Update from the default branch"
+    ),
     run: defaultBranch && !state.detached && state.head !== defaultRef ? () => merge(defaultBranch) : undefined,
   });
 
@@ -323,7 +329,14 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       ...abortEntries(),
       { label: "Check out", run: current || inWorktree ? undefined : () => checkout(branchTarget) },
       // It checks the new branch out, which a worktree's own branch never gives way to.
-      { label: `Create branch from ${ref}...`, run: inWorktree ? undefined : () => void askCreateBranch(branchTarget) },
+      {
+        label: (
+          <>
+            Create branch from <MenuName>{ref}</MenuName>...
+          </>
+        ),
+        run: inWorktree ? undefined : () => void askCreateBranch(branchTarget),
+      },
       ...(from
         ? [{ label: "Delete...", run: () => void askDeleteRemoteBranch(from, name) }]
         : [
@@ -336,11 +349,19 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         ? [updateFromDefault()]
         : [
             {
-              label: `Merge ${ref} into ${state.head}`,
+              label: (
+                <>
+                  Merge <MenuName>{ref}</MenuName> into <MenuName>{state.head}</MenuName>
+                </>
+              ),
               run: () => merge(branchTarget),
             },
             {
-              label: `Rebase ${state.head} onto ${ref}`,
+              label: (
+                <>
+                  Rebase <MenuName>{state.head}</MenuName> onto <MenuName>{ref}</MenuName>
+                </>
+              ),
               run: () => rebaseOnto(branchTarget),
             },
           ]),
@@ -354,7 +375,13 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     ...abortEntries(),
     { label: "Check out", run: inWorktree ? undefined : () => checkoutTag(name) },
     {
-      label: remote ? `Push to ${remote}` : "Push",
+      label: remote ? (
+        <>
+          Push to <MenuName>{remote}</MenuName>
+        </>
+      ) : (
+        "Push"
+      ),
       run: remote ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(at, name, login)) : undefined,
     },
     { label: "Delete...", run: () => void askDeleteTag(name) },
@@ -395,7 +422,13 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       worktree.current
         ? updateFromDefault()
         : {
-            label: merged ? `Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
+            label: merged ? (
+              <>
+                Merge <MenuName>{merged}</MenuName> into <MenuName>{state.head}</MenuName>
+              </>
+            ) : (
+              "Merge (no branch checked out)"
+            ),
             run: merged && !state.detached ? () => merge({ name: merged }) : undefined,
           },
       SEPARATOR,
