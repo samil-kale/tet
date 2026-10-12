@@ -3,6 +3,16 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.7 (2026-10-13)
+
+- **Drag into terminals.** Rows of the lanes drag onto a terminal, which types what was dropped: a
+  file's or folder's path, else what the row names — a branch, a commit's hash, a project, a saved
+  command's line.
+- **Smaller downloads.** The archives ship only the en-US Chromium locale.
+- **Fixes.** New repositories start on `init.defaultBranch`, else `main`; commit suggesters run
+  without tools and read the diff as data; the command dialog is as wide as the settings and SBX
+  dialogs.
+
 ## 0.18.6 (2026-10-12)
 
 - **Commit suggesters.** The agents that suggest a commit message are a list you can reorder and
