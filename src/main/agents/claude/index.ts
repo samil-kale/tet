@@ -47,7 +47,7 @@ export const claudeAgent: SandboxedAgent = {
   },
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   ask: {
-    args: ["-p", "--no-session-persistence"],
+    args: ["-p", "--no-session-persistence", "--tools", ""],
     // Its aliases, each the latest model of its line: the CLI lists none without a session.
     models: () => Promise.resolve(MODEL_ALIASES),
     modelArgs: (model) => ["--model", model],

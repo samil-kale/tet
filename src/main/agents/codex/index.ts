@@ -36,7 +36,7 @@ export const codexAgent: SandboxedAgent = {
   },
   // `--ephemeral` writes no rollout, so no session is left behind.
   ask: {
-    args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never"],
+    args: ["exec", "--ephemeral", "--skip-git-repo-check", "--color", "never", "--sandbox", "read-only"],
     models: listModels,
     modelArgs: (model) => ["--model", model],
   },

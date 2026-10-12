@@ -51,7 +51,7 @@ export const piAgent: SandboxedAgent = {
   },
   // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript
   // behind.
-  ask: { args: ["-p", "--no-session"], models: listPiModels, modelArgs: (model) => ["--model", model] },
+  ask: { args: ["-p", "--no-session", "--no-tools"], models: listPiModels, modelArgs: (model) => ["--model", model] },
   sessions: piSessionProvider,
   // The extension sends the session manager's id with every report.
   // See AgentTurns.stopCutShort.

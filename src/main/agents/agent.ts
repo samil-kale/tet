@@ -163,7 +163,8 @@ export interface AgentTerminal {
 /** One question without a terminal, answered on stdout (`askAgent`). */
 export interface AgentAsk {
   /** The question arrives on stdin, so these only name the mode — one that leaves no session
-   *  behind: a background question must not come back as a tab. */
+   *  behind: a background question must not come back as a tab — and one in which the agent can
+   *  act on nothing: the question carries text it must not obey (a diff). */
   args: string[];
   /** The models it can be asked with, as its CLI offers them in `cwd`, in its own order. */
   models(executable: string, cwd: string): Promise<AskModel[]>;
