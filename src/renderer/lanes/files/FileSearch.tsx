@@ -1,6 +1,8 @@
 import { memo, useEffect, useImperativeHandle, useState } from "react";
 import type { FileSearchMatch, FileSearchQuery, FileSearchResult } from "../../../shared/types/files";
+import type { ResolvedRef } from "../../resolved-ref";
 import { baseName, parentOf } from "../../paths";
+import { absolutePath } from "../../platform";
 import { FileIconView } from "./file-icon";
 import { INDENT_BASE, MATCH_INDENT, TreeRow, ChevronBox } from "../../ui/tree-row";
 import { FilterField } from "../../ui/FilterField";
@@ -39,6 +41,8 @@ export interface FileSearchHandle extends CollapseExpandAll {
 }
 
 interface FileSearchProps {
+  /** Whose files are searched: a row dragged onto a terminal carries its path under that folder. */
+  resolved: ResolvedRef;
   /** What the field last asked for, undefined while it is empty (`useFileSearch`). */
   result: FileSearchResult | undefined;
   /** The field asks for a search here, or for none; the section runs it and shows it running. */
@@ -56,7 +60,7 @@ interface FileSearchProps {
  * and under it a row per match with the match marked; the summary is the section's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
-export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMatch, onExpanded, ref }: FileSearchProps) {
+export const FileSearch = memo(function FileSearch({ resolved, result, runSearch, onOpenMatch, onExpanded, ref }: FileSearchProps) {
   const [search, setSearch] = useState<FileSearchQuery>(EMPTY_SEARCH);
   // Nothing but whitespace asks for nothing.
   const asked = search.text.trim() ? search : null;
@@ -96,11 +100,14 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
           const expanded = expandedFiles[file.path] ?? false;
           const name = baseName(file.path);
           const dir = parentOf(file.path);
+          // A match row carries its file's path too.
+          const dragPath = absolutePath(resolved.path, file.path);
           return (
             <div key={file.path}>
               <TreeRow
                 indent={INDENT_BASE}
                 title={file.path}
+                dragPath={dragPath}
                 onClick={() => setExpandedFiles((current) => ({ ...current, [file.path]: !expanded }))}
                 icon={
                   <>
@@ -120,6 +127,7 @@ export const FileSearch = memo(function FileSearch({ result, runSearch, onOpenMa
                     className="search-match"
                     indent={MATCH_INDENT}
                     title={`${file.path}:${match.line}`}
+                    dragPath={dragPath}
                     onClick={() => onOpenMatch(file.path, match)}
                     label={
                       <>

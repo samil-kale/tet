@@ -139,6 +139,7 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
         <FileSearch
           key={resolved.refKey}
           ref={searchRef}
+          resolved={resolved}
           result={searchResult}
           runSearch={search}
           onOpenMatch={onOpenMatch}

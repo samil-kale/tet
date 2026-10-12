@@ -9,11 +9,12 @@ import type { OpenEditor } from "../../editor/editor-tab";
 import type { FileAct, FileAsk } from "../../git/run-action";
 import { openEntries, pathEntries } from "../../editor/file-menu";
 import { ancestorsOf, buildForest, hasExpandedRootChild, rootIndexFor } from "./explorer-tree";
-import { baseName, parentOf } from "../../paths";
+import { baseName, isInside, parentOf } from "../../paths";
+import { absolutePath } from "../../platform";
 import { sameRecord } from "../../identity";
 import { FileIconView } from "./file-icon";
 import { compactTree, filterTree, foldersIn, isExpanded, visibleRows, type TreeNode, type VisibleRow } from "../../ui/tree";
-import { INDENT_BASE, INDENT_STEP, TreeRow, ChevronBox } from "../../ui/tree-row";
+import { INDENT_BASE, INDENT_STEP, PATH_DRAG_TYPE, TreeRow, ChevronBox } from "../../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirmed } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
@@ -21,6 +22,13 @@ import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 
 interface ExplorerRowProps extends VisibleRow {
   selected: boolean;
+  /** The repository's or worktree's folder, which the row's path lies under. */
+  folder: string;
+  /** Inside the folder a drop would move the dragged row into. */
+  dropInto: boolean;
+  onDragStart: (node: TreeNode) => void;
+  /** Held over this row: `dir` is the folder a drop here moves into. */
+  onDragOver: (event: React.DragEvent, dir: string) => void;
   toggle: (node: TreeNode) => void;
   onOpen: (path: string, how?: OpenEditor) => void;
   onContextMenu: (event: React.MouseEvent, node: TreeNode) => void;
@@ -29,7 +37,20 @@ interface ExplorerRowProps extends VisibleRow {
 
 /** Memoized with stable handlers: a collapse, a selection or a menu re-renders only the rows it
  *  changes, not the whole expanded tree. */
-const ExplorerRow = memo(function ExplorerRow({ node, depth, expanded, selected, toggle, onOpen, onContextMenu, rows }: ExplorerRowProps) {
+const ExplorerRow = memo(function ExplorerRow({
+  node,
+  depth,
+  expanded,
+  selected,
+  folder,
+  dropInto,
+  onDragStart,
+  onDragOver,
+  toggle,
+  onOpen,
+  onContextMenu,
+  rows,
+}: ExplorerRowProps) {
   const isFolder = node.children !== undefined;
   const register = useCallback(
     (element: HTMLButtonElement | null) => {
@@ -44,9 +65,13 @@ const ExplorerRow = memo(function ExplorerRow({ node, depth, expanded, selected,
   return (
     <TreeRow
       ref={register}
-      className={!isFolder && selected ? "selected" : undefined}
+      className={[!isFolder && selected && "selected", dropInto && "drop-target"].filter(Boolean).join(" ")}
       indent={INDENT_BASE + depth * INDENT_STEP}
       title={node.path || "."}
+      dragPath={absolutePath(folder, node.path)}
+      onDragStart={() => onDragStart(node)}
+      // VS Code: held over a file, a drop goes into the folder the file lies in.
+      onDragOver={(event) => onDragOver(event, isFolder ? node.path : parentOf(node.path))}
       onClick={() => (isFolder ? toggle(node) : onOpen(node.path))}
       // VS Code: a single click previews, a double click keeps. The clicks before it
       // already opened the file, so this only keeps.
@@ -176,6 +201,40 @@ export const Explorer = memo(function Explorer({
     }
   }, [selected, expanded, shown, visible]);
 
+  /** The path of the row being dragged, while a drag that began in this tree lasts: what a drop
+   *  moves. A root is a view onto a folder and is never moved. */
+  const dragged = useRef<string | null>(null);
+  /** The folder a drop would move it into now; its rows are marked. */
+  const [dropDir, setDropDir] = useState<string | null>(null);
+  const onDragStart = useCallback((node: TreeNode): void => {
+    dragged.current = node.root ? null : node.path;
+  }, []);
+  /** `dir` null where a drop moves nothing. Nor does one into the folder it lies in, or a folder's
+   *  into itself. */
+  const onDragOver = useCallback((event: React.DragEvent, dir: string | null): void => {
+    const from = dragged.current;
+    // Read off the drag too: a row gone mid-drag never ends it here, and what it left behind must
+    // not take a file dragged in from outside.
+    if (
+      from === null ||
+      !event.dataTransfer.types.includes(PATH_DRAG_TYPE) ||
+      dir === null ||
+      dir === parentOf(from) ||
+      isInside(from, dir)
+    ) {
+      setDropDir(null);
+      return;
+    }
+    // Only a prevented dragover makes this a drop target.
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropDir(dir);
+  }, []);
+  const endDrag = (): void => {
+    dragged.current = null;
+    setDropDir(null);
+  };
+
   const toggle = useCallback(
     (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isExpanded(node, current) })),
     [],
@@ -252,6 +311,19 @@ export const Explorer = memo(function Explorer({
     clearFilter: () => setFilter(""),
   }));
 
+  /** Unasked, as a move is taken back by moving again; what refuses it is told in a notice. */
+  const drop = (event: React.DragEvent): void => {
+    const from = dragged.current;
+    endDrag();
+    // The drop carries the row's own path, or it is another view's row, or a file's (main.tsx lets
+    // every file's drop land).
+    if (from === null || dropDir === null || event.dataTransfer.getData(PATH_DRAG_TYPE) !== absolutePath(resolved.path, from)) {
+      return;
+    }
+    event.preventDefault();
+    run(() => window.tet.repository.renamePath(resolved.ref, from, under(dropDir, baseName(from))));
+  };
+
   /** `ChangesList`'s menu minus the change-only entries, plus new/rename/delete and the Explorer view's
    *  entries writing tet.json. A root is a view onto a folder, so it is never renamed or deleted. */
   const menuEntries = (node: TreeNode | null): ContextMenuEntry[] => {
@@ -314,12 +386,30 @@ export const Explorer = memo(function Explorer({
             menu.open(event, null);
           }
         }}
+        onDragOver={(event) => {
+          // The empty space below the rows is the repository's root, where no roots stand for it.
+          if (event.target === event.currentTarget) {
+            onDragOver(event, roots ? null : "");
+          }
+        }}
+        onDragLeave={(event) => {
+          // Also fires between the rows; only leaving the tree (or the window: null) counts.
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+            setDropDir(null);
+          }
+        }}
+        onDrop={drop}
+        onDragEnd={endDrag}
       >
         {flat.map((row) => (
           <ExplorerRow
             key={row.node.id}
             {...row}
             selected={selected === row.node.path}
+            folder={resolved.path}
+            dropInto={dropDir !== null && isInside(dropDir, row.node.path)}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
             toggle={toggle}
             onOpen={onOpen}
             onContextMenu={menu.open}

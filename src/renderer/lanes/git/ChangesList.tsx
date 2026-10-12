@@ -7,6 +7,7 @@ import type { ResolvedRef } from "../../resolved-ref";
 import type { OpenEditor } from "../../editor/editor-tab";
 import { runWithFollowUp, type FileAct, type FileAsk } from "../../git/run-action";
 import { baseName, extensionOf, parentOf } from "../../paths";
+import { absolutePath } from "../../platform";
 import { openEntries, pathEntries } from "../../editor/file-menu";
 import {
   buildTree,
@@ -323,6 +324,8 @@ export const ChangesList = memo(function ChangesList({
                 key={node.id}
                 indent={INDENT_BASE + depth * CHECK_INDENT_STEP}
                 title={change ? (change.origPath ? `${change.origPath} → ${change.path}` : change.path) : node.path || undefined}
+                // Not the top row, which is no folder, nor a deleted file, whose path is gone.
+                dragPath={node.id === ROOT_ID || change?.status === "deleted" ? undefined : absolutePath(resolved.path, node.path)}
                 onClick={change ? () => onOpenDiff(change.path) : () => setExpanded((current) => ({ ...current, [node.id]: !isExpanded }))}
                 // As the Explorer: a single click previews, a double click keeps.
                 onDoubleClick={change ? () => onOpenDiff(change.path, { keep: true }) : undefined}
