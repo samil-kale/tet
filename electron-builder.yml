@@ -10,6 +10,10 @@ appId: com.samilkale.tet
 productName: TET
 artifactName: "TET-${os}-${arch}.${ext}"
 
+# Chromium's own UI texts (its menus, dialogs, error pages) — TET draws its own and shows none of
+# them. Chromium falls back to en-US, which it needs to start.
+electronLanguages: [en-US]
+
 directories:
   # esbuild already owns dist/, and electron-builder would write its archives into the same
   # folder it is packaging.
