@@ -44,6 +44,7 @@ export const claudeAgent: SandboxedAgent = {
     quitPresses: 2,
     // ESC+CR, which its input reads as a newline rather than a submit.
     shiftEnter: "\x1b\r",
+    commitPrefix: "commit ",
   },
   // Print mode; `--no-session-persistence` leaves no transcript behind (it would become a tab).
   ask: {

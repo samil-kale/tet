@@ -13,7 +13,7 @@ import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isModifierHeld, PLATFORM } from "../platform";
 import { notify } from "../ui/Notices";
-import { PATH_DRAG_TYPE } from "../ui/tree-row";
+import { COMMIT_DRAG_TYPE, PATH_DRAG_TYPE } from "../ui/tree-row";
 import { buildXtermTheme, editorFontFamily } from "../themes/theme-colors";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -25,6 +25,9 @@ interface TerminalView {
   fit: FitAddon;
   /** What Shift+Enter sends, its agent's (AgentInfo.shiftEnter); unset: xterm's own. */
   shiftEnter?: string;
+  /** What is typed before a dropped commit's hash, its agent's (AgentInfo.commitPrefix); unset: the
+   *  hash alone. */
+  commitPrefix?: string;
   /** The size last reported to the pty, so an unchanged fit does not report again. */
   sent?: { cols: number; rows: number };
   /** Set while it holds a WebGL context; otherwise xterm draws through the DOM. */
@@ -396,11 +399,18 @@ export function hasTerminal(ref: ProjectRef, tabId: string): boolean {
   return views.get(viewKey(ref, tabId))?.term.element !== undefined;
 }
 
-export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLElement, shiftEnter: string | undefined): void {
+export function attachTerminal(
+  ref: ProjectRef,
+  tabId: string,
+  container: HTMLElement,
+  shiftEnter: string | undefined,
+  commitPrefix: string | undefined,
+): void {
   // The view outlives every mount.
   const view = views.get(viewKey(ref, tabId)) ?? createView(ref, tabId);
   // Set on every attach: the agents' list may land after the first.
   view.shiftEnter = shiftEnter;
+  view.commitPrefix = commitPrefix;
   if (view.term.element?.parentElement === container) {
     return;
   }
@@ -416,15 +426,15 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
   }
 
   // On the container, not the document: a drop belongs to the terminal it lands on. Files, and a
-  // row of a lane carrying its path, only.
-  const holdsPaths = (event: DragEvent): boolean =>
-    event.dataTransfer?.types.some((type) => type === "Files" || type === PATH_DRAG_TYPE) === true;
+  // row of a lane carrying its path or its commit, only.
+  const holdsDrop = (event: DragEvent): boolean =>
+    event.dataTransfer?.types.some((type) => type === "Files" || type === PATH_DRAG_TYPE || type === COMMIT_DRAG_TYPE) === true;
   const frame = (shown: boolean): void => {
     container.classList.toggle("drag-over", shown);
   };
 
   container.addEventListener("dragover", (event) => {
-    if (!holdsPaths(event)) {
+    if (!holdsDrop(event)) {
       return;
     }
     // Only a prevented dragover makes this a drop target.
@@ -446,6 +456,12 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
     frame(false);
     // What was dropped is typed here, so the next key goes here too.
     view.term.focus();
+    const commit = event.dataTransfer?.getData(COMMIT_DRAG_TYPE);
+    if (commit) {
+      // Through term.paste, as a path (handPaths).
+      view.term.paste(`${view.commitPrefix ?? ""}${commit} `);
+      return;
+    }
     // Empty for a drop from outside the window.
     const rowPath = event.dataTransfer?.getData(PATH_DRAG_TYPE);
     (rowPath ? handPaths(view, [rowPath]) : pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? []))).catch((error: unknown) =>

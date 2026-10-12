@@ -24,6 +24,8 @@ export const CHECK_INDENT_STEP = 17;
 
 /** What a row dragged onto a terminal carries: its path on this machine (`TreeRow`'s `dragPath`). */
 export const PATH_DRAG_TYPE = "application/x-tet-path";
+/** What a commit's row dragged onto a terminal carries: its full hash (`TreeRow`'s `dragCommit`). */
+export const COMMIT_DRAG_TYPE = "application/x-tet-commit";
 
 /**
  * A row of a tree or list (`.tree-row`), in the branch tree, the Explorer, SEARCH and LOCAL
@@ -38,6 +40,7 @@ export function TreeRow({
   indent,
   title,
   dragPath,
+  dragCommit,
   onDragStart,
   onDragOver,
   onClick,
@@ -55,6 +58,9 @@ export function TreeRow({
   /** The row's absolute path, where it can be dragged onto a terminal, which types it as it does a
    *  dropped file's. Path alone, no text: a field or an editor takes nothing of it. */
   dragPath?: string;
+  /** The row's commit, its full hash, where it can be dragged onto a terminal, which types it as
+   *  its agent reads one. */
+  dragCommit?: string;
   /** For a view that moves its rows by dragging them within it: a drag of this row began, and one
    *  is held over it. */
   onDragStart?: () => void;
@@ -64,6 +70,13 @@ export function TreeRow({
   onContextMenu?: (event: MouseEvent) => void;
   ref?: Ref<HTMLButtonElement>;
 }) {
+  // A path is copied into a terminal and moved within its own view, a commit only copied.
+  const drag =
+    dragPath !== undefined
+      ? ({ type: PATH_DRAG_TYPE, data: dragPath, effect: "copyMove" } as const)
+      : dragCommit !== undefined
+        ? ({ type: COMMIT_DRAG_TYPE, data: dragCommit, effect: "copy" } as const)
+        : undefined;
   return (
     <button
       ref={ref}
@@ -71,14 +84,13 @@ export function TreeRow({
       className={className ? `tree-row ${className}` : "tree-row"}
       style={indent === undefined ? undefined : { paddingLeft: indent }}
       title={title}
-      draggable={dragPath !== undefined}
+      draggable={drag !== undefined}
       onDragStart={
-        dragPath === undefined
+        drag === undefined
           ? undefined
           : (event) => {
-              event.dataTransfer.setData(PATH_DRAG_TYPE, dragPath);
-              // Copied into a terminal, moved within its own view.
-              event.dataTransfer.effectAllowed = "copyMove";
+              event.dataTransfer.setData(drag.type, drag.data);
+              event.dataTransfer.effectAllowed = drag.effect;
               onDragStart?.();
             }
       }

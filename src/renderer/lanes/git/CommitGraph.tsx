@@ -236,6 +236,7 @@ export function CommitGraph({
               <TreeRow
                 className={open === commit.sha ? "selected" : undefined}
                 title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
+                dragCommit={commit.sha}
                 onClick={() => toggle(commit)}
                 icon={row ? <Lanes row={row} expanded={open === commit.sha} /> : <CommitIcon className="tree-icon" />}
                 label={

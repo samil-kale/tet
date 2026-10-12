@@ -158,6 +158,11 @@ export interface AgentTerminal {
    * sends it as plain "\r", a submit. Omitted: the terminal's own, as in the shell.
    */
   shiftEnter?: string;
+  /**
+   * What is typed before the hash of a commit dropped into its tab, saying what the hash is: its
+   * input is prose. The shell, without this group, gets the hash alone, to stand behind a command.
+   */
+  commitPrefix: string;
 }
 
 /** One question without a terminal, answered on stdout (`askAgent`). */

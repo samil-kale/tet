@@ -10,6 +10,9 @@ interface TerminalHostProps {
   tabId: string;
   /** What Shift+Enter sends, its agent's (AgentInfo.shiftEnter); unset: the terminal's own. */
   shiftEnter: string | undefined;
+  /** What is typed before a dropped commit's hash, its agent's (AgentInfo.commitPrefix); unset: the
+   *  hash alone. */
+  commitPrefix: string | undefined;
   /** The one on screen in its pane; the others keep their layout but stay hidden. */
   active: boolean;
   /** Whether the pane itself is on screen — the repository or worktree is the active one. */
@@ -29,7 +32,7 @@ interface TerminalHostProps {
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
  * follows at once, active or not: an unmounted container has no layout to take output into.
  */
-export function TerminalHost({ at, tabId, shiftEnter, active, visible, focused }: TerminalHostProps) {
+export function TerminalHost({ at, tabId, shiftEnter, commitPrefix, active, visible, focused }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
   const shown = active && visible;
 
@@ -40,14 +43,14 @@ export function TerminalHost({ at, tabId, shiftEnter, active, visible, focused }
     if (!container.current || (!shown && !hasTerminal(at, tabId))) {
       return;
     }
-    attachTerminal(at, tabId, container.current, shiftEnter);
+    attachTerminal(at, tabId, container.current, shiftEnter, commitPrefix);
     if (!shown) {
       return;
     }
     showTerminal(at, tabId);
     fitTerminal(at, tabId);
     return () => hideTerminal(at, tabId);
-  }, [at, tabId, shiftEnter, shown]);
+  }, [at, tabId, shiftEnter, commitPrefix, shown]);
 
   // Keyboard focus follows the focused pane's active tab — only that one, or the last effect wins.
   // Apart from the refit: a focus change alone must not resize the pty (repaints the CLI).
