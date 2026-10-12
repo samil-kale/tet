@@ -132,6 +132,7 @@ export function RowInput({
  * (the title says so).
  */
 export function SecretInput({
+  width = "fixed",
   stored,
   storedTitle = "Stored on this machine; typing replaces it.",
   emptyTitle = "Stored on this machine.",
@@ -139,6 +140,8 @@ export function SecretInput({
   value,
   onChange,
 }: {
+  /** Taking the row's free room (`fill`), or a fixed width. */
+  width?: "fill" | "fixed";
   stored: boolean;
   storedTitle?: string;
   emptyTitle?: string;
@@ -149,7 +152,7 @@ export function SecretInput({
 }) {
   return (
     <input
-      className="row-fixed-input"
+      className={`row-${width}-input`}
       type="password"
       autoComplete="off"
       placeholder={stored ? "••••••••" : placeholder}

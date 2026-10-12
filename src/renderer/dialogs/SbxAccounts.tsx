@@ -124,6 +124,7 @@ export function SbxAccounts({
                 onChange={(value) => setRow(row, { user: value })}
               />
               <SecretInput
+                width="fill"
                 stored={row.account !== undefined}
                 emptyTitle="A Docker personal access token, stored on this machine."
                 placeholder="Token"

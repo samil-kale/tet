@@ -228,7 +228,7 @@ export function CommitGraph({
           ))}
         </span>
       </FilterField>
-      <div className="graph-tree tree" onScroll={scrolled}>
+      <div className={state.head === "" ? "graph-tree tree pending" : "graph-tree tree"} onScroll={scrolled}>
         {commits.map((commit, index) => {
           const row = rows?.[index];
           return (

@@ -478,6 +478,23 @@ textarea:focus,
   margin-right: 10px;
 }
 
+/* Until the state has landed (its `head` is "") the lanes know no ref colors, which they take from
+   it: they stay muted rather than show colors that change once it arrives. */
+.graph-tree.pending {
+  --tet-scmGraph-foreground1: var(--tet-descriptionForeground);
+  --tet-scmGraph-foreground2: var(--tet-descriptionForeground);
+  --tet-scmGraph-foreground3: var(--tet-descriptionForeground);
+  --tet-scmGraph-foreground4: var(--tet-descriptionForeground);
+  --tet-scmGraph-foreground5: var(--tet-descriptionForeground);
+  --tet-scmGraph-historyItemRefColor: var(--tet-descriptionForeground);
+  --tet-scmGraph-historyItemRemoteRefColor: var(--tet-descriptionForeground);
+  --tet-scmGraph-historyItemBaseRefColor: var(--tet-descriptionForeground);
+}
+
+.graph-tree.pending .graph-lanes {
+  opacity: 0.5;
+}
+
 /* A node's circles are stroked in what lies behind them, which cuts a gap round each from the lines
    it crosses; the row's own background while it has one. HEAD's inner circle is a hole in its ring. */
 .graph-lanes circle {
@@ -2272,6 +2289,15 @@ textarea:focus,
   flex: 0 1 auto;
   min-height: 0;
   max-height: none;
+}
+
+/* A token's row: the username and the token share the room 60 to 40. */
+.sbx-account .edit-row > input:nth-of-type(1) {
+  flex: 3;
+}
+
+.sbx-account .edit-row > input:nth-of-type(2) {
+  flex: 2;
 }
 
 .settings-prompt,
