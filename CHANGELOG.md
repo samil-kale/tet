@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.6 (2026-10-12)
+
+- **Commit suggesters.** The agents that suggest a commit message are a list you can reorder and
+  switch on or off; they are asked in order until one answers, and Cancel ends the chain.
+- **Filterable dropdowns.** Long dropdowns have a filter field that stays above the scrolling
+  options.
+- **Fixes.** The commit graph is muted until its state lands, open menus close on a click over the
+  titlebar, and the SBX token field uses the row's free room.
+
 ## 0.18.5 (2026-10-12)
 
 - **`tet-ctl` for agents.** `tet-ctl help` groups worktrees and the repository under their own
