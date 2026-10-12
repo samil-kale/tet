@@ -13,7 +13,7 @@ import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isModifierHeld, PLATFORM } from "../platform";
 import { notify } from "../ui/Notices";
-import { COMMIT_DRAG_TYPE, PATH_DRAG_TYPE } from "../ui/tree-row";
+import { NAME_DRAG_TYPE, PATH_DRAG_TYPE, type DragName } from "../ui/row-drag";
 import { buildXtermTheme, editorFontFamily } from "../themes/theme-colors";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -25,9 +25,8 @@ interface TerminalView {
   fit: FitAddon;
   /** What Shift+Enter sends, its agent's (AgentInfo.shiftEnter); unset: xterm's own. */
   shiftEnter?: string;
-  /** What is typed before a dropped commit's hash, its agent's (AgentInfo.commitPrefix); unset: the
-   *  hash alone. */
-  commitPrefix?: string;
+  /** A dropped name is typed with what it names before it, its agent's (AgentInfo.labelsDrops). */
+  labelsDrops?: boolean;
   /** The size last reported to the pty, so an unchanged fit does not report again. */
   sent?: { cols: number; rows: number };
   /** Set while it holds a WebGL context; otherwise xterm draws through the DOM. */
@@ -404,13 +403,13 @@ export function attachTerminal(
   tabId: string,
   container: HTMLElement,
   shiftEnter: string | undefined,
-  commitPrefix: string | undefined,
+  labelsDrops: boolean,
 ): void {
   // The view outlives every mount.
   const view = views.get(viewKey(ref, tabId)) ?? createView(ref, tabId);
   // Set on every attach: the agents' list may land after the first.
   view.shiftEnter = shiftEnter;
-  view.commitPrefix = commitPrefix;
+  view.labelsDrops = labelsDrops;
   if (view.term.element?.parentElement === container) {
     return;
   }
@@ -426,22 +425,23 @@ export function attachTerminal(
   }
 
   // On the container, not the document: a drop belongs to the terminal it lands on. Files, and a
-  // row of a lane carrying its path or its commit, only.
-  const holdsDrop = (event: DragEvent): boolean =>
-    event.dataTransfer?.types.some((type) => type === "Files" || type === PATH_DRAG_TYPE || type === COMMIT_DRAG_TYPE) === true;
+  // row of a lane carrying its path or what it names, only.
+  const holdsRow = (event: DragEvent): boolean =>
+    event.dataTransfer?.types.some((type) => type === PATH_DRAG_TYPE || type === NAME_DRAG_TYPE) === true;
   const frame = (shown: boolean): void => {
     container.classList.toggle("drag-over", shown);
   };
 
   container.addEventListener("dragover", (event) => {
-    if (!holdsDrop(event)) {
+    if (!holdsRow(event) && !event.dataTransfer?.types.includes("Files")) {
       return;
     }
     // Only a prevented dragover makes this a drop target.
     event.preventDefault();
-    // A row allows a move too, within its own view. A file's effect stays what its source allows.
-    if (event.dataTransfer?.types.includes(PATH_DRAG_TYPE)) {
-      event.dataTransfer.dropEffect = "copy";
+    // A row is copied here, unless its list allows only the move it is reordered by. A file's
+    // effect stays what its source allows.
+    if (event.dataTransfer && holdsRow(event)) {
+      event.dataTransfer.dropEffect = event.dataTransfer.effectAllowed === "move" ? "move" : "copy";
     }
     frame(true);
   });
@@ -456,10 +456,12 @@ export function attachTerminal(
     frame(false);
     // What was dropped is typed here, so the next key goes here too.
     view.term.focus();
-    const commit = event.dataTransfer?.getData(COMMIT_DRAG_TYPE);
-    if (commit) {
-      // Through term.paste, as a path (handPaths).
-      view.term.paste(`${view.commitPrefix ?? ""}${commit} `);
+    const named = event.dataTransfer?.getData(NAME_DRAG_TYPE);
+    if (named) {
+      const { kind, name } = JSON.parse(named) as DragName;
+      // One word, as a path is: quoted where it holds a space. Through term.paste (handPaths).
+      const word = /\s/.test(name) ? `"${name}"` : name;
+      view.term.paste(`${view.labelsDrops ? `${kind} ` : ""}${word} `);
       return;
     }
     // Empty for a drop from outside the window.

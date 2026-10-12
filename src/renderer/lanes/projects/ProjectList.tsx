@@ -9,13 +9,14 @@ import { PLATFORM } from "../../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed, filled, prompt, singleField } from "../../ui/Dialog";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { setDragName } from "../../ui/row-drag";
 import { Section } from "../../ui/Section";
 import { TabMark } from "../../ui/TabMark";
 import { IconButton } from "../../ui/IconButton";
 import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../../ui/icons";
 import type { RefMarks } from "../../tabs/tab-marks";
 
-/** Our own type, so a project dragged over a terminal is not pasted into it. */
+/** This list's own type: no other list takes the drop. */
 const DRAG_TYPE = "application/x-tet-project";
 
 /** One action in a row; its click must not reach the row, which makes its repository or
@@ -284,6 +285,14 @@ export const ProjectList = memo(function ProjectList({
         className={classes.join(" ")}
         onClick={() => onActivateRef(refKey)}
         title={resolved.path}
+        // Names the row to a terminal; its group's drag, which starts with it, reorders the project.
+        draggable
+        onDragStart={(event) =>
+          setDragName(
+            event.dataTransfer,
+            worktree ? { kind: "worktree", name: worktreeName(worktree) } : { kind: "tet project", name: resolved.name },
+          )
+        }
         onContextMenu={(event) => menu.open(event, { kind: "ref", resolved })}
       >
         <span className="project-main">
@@ -322,6 +331,8 @@ export const ProjectList = memo(function ProjectList({
       key={worktree.path}
       className="worktree-row made-elsewhere"
       title={`${worktree.path}\nA worktree ${MADE_ELSEWHERE}`}
+      draggable
+      onDragStart={(event) => setDragName(event.dataTransfer, { kind: "worktree", name: worktreeName(worktree) })}
       onContextMenu={(event) => menu.open(event, { kind: "madeElsewhere", worktree })}
     >
       <span className="project-main">

@@ -7,12 +7,13 @@ import { notifying } from "../../git/run-action";
 import { confirmed, filled, prompt, refusal, type PromptOptions } from "../../ui/Dialog";
 import { ColorField, TextField } from "../../ui/Field";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { setDragName } from "../../ui/row-drag";
 import { IconButton } from "../../ui/IconButton";
 import { PlayIcon, PlusIcon } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import type { ResolvedRef } from "../../resolved-ref";
 
-/** Our own type, so a row dragged over a terminal is not pasted into it. */
+/** This list's own type: no other list takes the drop. */
 const DRAG_TYPE = "application/x-tet-command";
 
 const COMMAND_DETAIL = "Saved to tet.json in the project.";
@@ -337,6 +338,14 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
             className={["command-row", ...rowClasses(index)].join(" ")}
             title={describe(command)}
             {...(editable ? rowProps(index) : {})}
+            // Names the row to a terminal, in a worktree too, where nothing reorders it.
+            draggable
+            onDragStart={(event) => {
+              if (editable) {
+                rowProps(index).onDragStart?.(event);
+              }
+              setDragName(event.dataTransfer, { kind: "tet command", name: command.name ?? command.command });
+            }}
             onContextMenu={(event) => menu.open(event, command)}
           >
             {/* Its name if any; the line is in the tooltip. */}

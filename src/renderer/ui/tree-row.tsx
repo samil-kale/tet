@@ -1,5 +1,6 @@
 import type { DragEvent, MouseEvent, ReactNode, Ref } from "react";
 import { ChevronIcon } from "./icons";
+import { PATH_DRAG_TYPE, setDragName, type DragName } from "./row-drag";
 
 /* VS Code's indent: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8). The chevron
  * sits as in the branch tree's headers (`.tree-header` in styles.css: 9px in, 4px before the label),
@@ -22,11 +23,6 @@ export const COLUMN_STEP = CHEVRON_WIDTH + CHEVRON_GAP;
  *  checkbox stands just past its parent's (`.tree-checkbox`'s 16px and 1px more). */
 export const CHECK_INDENT_STEP = 17;
 
-/** What a row dragged onto a terminal carries: its path on this machine (`TreeRow`'s `dragPath`). */
-export const PATH_DRAG_TYPE = "application/x-tet-path";
-/** What a commit's row dragged onto a terminal carries: its full hash (`TreeRow`'s `dragCommit`). */
-export const COMMIT_DRAG_TYPE = "application/x-tet-commit";
-
 /**
  * A row of a tree or list (`.tree-row`), in the branch tree, the Explorer, SEARCH and LOCAL
  * CHANGES alike: what leads it (`icon`: an icon, a chevron, a checkbox), its label, then what
@@ -40,7 +36,7 @@ export function TreeRow({
   indent,
   title,
   dragPath,
-  dragCommit,
+  dragName,
   onDragStart,
   onDragOver,
   onClick,
@@ -56,11 +52,10 @@ export function TreeRow({
   indent?: number;
   title?: string;
   /** The row's absolute path, where it can be dragged onto a terminal, which types it as it does a
-   *  dropped file's. Path alone, no text: a field or an editor takes nothing of it. */
+   *  dropped file's. */
   dragPath?: string;
-  /** The row's commit, its full hash, where it can be dragged onto a terminal, which types it as
-   *  its agent reads one. */
-  dragCommit?: string;
+  /** What the row names, where it can be dragged onto a terminal, which types the name. */
+  dragName?: DragName;
   /** For a view that moves its rows by dragging them within it: a drag of this row began, and one
    *  is held over it. */
   onDragStart?: () => void;
@@ -70,13 +65,7 @@ export function TreeRow({
   onContextMenu?: (event: MouseEvent) => void;
   ref?: Ref<HTMLButtonElement>;
 }) {
-  // A path is copied into a terminal and moved within its own view, a commit only copied.
-  const drag =
-    dragPath !== undefined
-      ? ({ type: PATH_DRAG_TYPE, data: dragPath, effect: "copyMove" } as const)
-      : dragCommit !== undefined
-        ? ({ type: COMMIT_DRAG_TYPE, data: dragCommit, effect: "copy" } as const)
-        : undefined;
+  const draggable = dragPath !== undefined || dragName !== undefined;
   return (
     <button
       ref={ref}
@@ -84,15 +73,21 @@ export function TreeRow({
       className={className ? `tree-row ${className}` : "tree-row"}
       style={indent === undefined ? undefined : { paddingLeft: indent }}
       title={title}
-      draggable={drag !== undefined}
+      draggable={draggable}
       onDragStart={
-        drag === undefined
-          ? undefined
-          : (event) => {
-              event.dataTransfer.setData(drag.type, drag.data);
-              event.dataTransfer.effectAllowed = drag.effect;
+        draggable
+          ? (event) => {
+              if (dragPath !== undefined) {
+                event.dataTransfer.setData(PATH_DRAG_TYPE, dragPath);
+                // Copied into a terminal, moved within its own view.
+                event.dataTransfer.effectAllowed = "copyMove";
+              }
+              if (dragName !== undefined) {
+                setDragName(event.dataTransfer, dragName);
+              }
               onDragStart?.();
             }
+          : undefined
       }
       onDragOver={onDragOver}
       onClick={onClick}

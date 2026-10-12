@@ -159,10 +159,11 @@ export interface AgentTerminal {
    */
   shiftEnter?: string;
   /**
-   * What is typed before the hash of a commit dropped into its tab, saying what the hash is: its
-   * input is prose. The shell, without this group, gets the hash alone, to stand behind a command.
+   * A name dropped into its tab (a branch, a commit, a project) is typed with what it names before
+   * it, "branch main": its input is prose. The shell, without this group, gets the name alone, to
+   * stand behind a command.
    */
-  commitPrefix: string;
+  labelsDrops: boolean;
 }
 
 /** One question without a terminal, answered on stdout (`askAgent`). */

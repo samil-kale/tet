@@ -2,9 +2,8 @@ import { useCallback, useMemo, useState, type DragEvent, type HTMLAttributes } f
 import { useLatest } from "./use-latest";
 
 /** Drag-reordering, shared by the projects lane's lists, the lanes and the strip's toggles.
- *  Each supplies its own drag type (a row dragged over a terminal must not be pasted into it, and
- *  no other list may take the drop), its payload (an id, or the position where an entry can appear
- *  twice), and the move itself. */
+ *  Each supplies its own drag type (nothing else may take the drop: no other list, no terminal),
+ *  its payload (an id, or the position where an entry can appear twice), and the move itself. */
 interface DragReorderOptions {
   /** This list's own MIME type, e.g. "application/x-tet-project". */
   dragType: string;

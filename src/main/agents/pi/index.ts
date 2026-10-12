@@ -48,7 +48,7 @@ export const piAgent: SandboxedAgent = {
     quitPresses: 2,
     // ESC+CR, which its input reads as a newline rather than a submit.
     shiftEnter: "\x1b\r",
-    commitPrefix: "commit ",
+    labelsDrops: true,
   },
   // Print mode: the prompt on stdin, the answer on stdout. `--no-session` leaves no transcript
   // behind.

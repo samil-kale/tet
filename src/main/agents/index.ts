@@ -93,7 +93,7 @@ export function listAgents(): AgentInfo[] {
     hasSessions: agent.sessions !== undefined,
     takesPrompt: agent.terminal !== undefined,
     shiftEnter: agent.terminal?.shiftEnter,
-    commitPrefix: agent.terminal?.commitPrefix,
+    labelsDrops: agent.terminal?.labelsDrops === true,
     clearable: agent.clearable === true,
     sandboxed: hasSandbox(agent),
   }));

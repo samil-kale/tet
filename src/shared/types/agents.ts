@@ -27,9 +27,8 @@ export interface AgentInfo {
   takesPrompt: boolean;
   /** What its tabs send for Shift+Enter (AgentTerminal.shiftEnter); unset: the terminal's own. */
   shiftEnter?: string;
-  /** What its tabs type before a dropped commit's hash (AgentTerminal.commitPrefix); unset: the hash
-   *  alone. */
-  commitPrefix?: string;
+  /** Its tabs type what a dropped name names before it (AgentTerminal.labelsDrops). */
+  labelsDrops: boolean;
   /** Its tabs offer Clear (AgentBase.clearable). */
   clearable: boolean;
   /** Can run in an sbx sandbox (the agent's `sandbox` group). */

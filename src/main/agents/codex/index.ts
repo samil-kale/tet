@@ -33,7 +33,7 @@ export const codexAgent: SandboxedAgent = {
     quitPresses: 1,
     // ESC+CR, which its input reads as a newline rather than a submit.
     shiftEnter: "\x1b\r",
-    commitPrefix: "commit ",
+    labelsDrops: true,
   },
   // `--ephemeral` writes no rollout, so no session is left behind.
   ask: {

@@ -560,7 +560,7 @@ export const Pane = memo(function Pane({
                   at={at}
                   tabId={tab.tabId}
                   shiftEnter={agentInfo(agents, kinded.tab.agentId)?.shiftEnter}
-                  commitPrefix={agentInfo(agents, kinded.tab.agentId)?.commitPrefix}
+                  labelsDrops={agentInfo(agents, kinded.tab.agentId)?.labelsDrops === true}
                   active={active}
                   visible={visible}
                   focused={focused}
