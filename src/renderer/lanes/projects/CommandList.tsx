@@ -94,7 +94,16 @@ async function askCommand(
   value: CommandAnswer,
   submit: (answer: CommandAnswer) => Promise<string | undefined>,
 ): Promise<void> {
-  await prompt({ title, detail: COMMAND_DETAIL, value, confirmLabel: "Save", ready: commandReady, render: renderCommandFields, submit });
+  await prompt({
+    title,
+    detail: COMMAND_DETAIL,
+    value,
+    confirmLabel: "Save",
+    ready: commandReady,
+    render: renderCommandFields,
+    submit,
+    className: "command-dialog",
+  });
 }
 
 /** The dialog's answer as an entry with only what was filled in, so a bare command stays a plain

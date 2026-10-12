@@ -68,6 +68,8 @@ export interface PromptOptions<T> {
   /** Cuts short what a field runs (`hold`), so Cancel is not held back by it: a suggestion changes
    *  nothing. Left out, Cancel waits for it like for `submit` (`DialogFrame`'s `abort`). */
   abort?: () => void;
+  /** The dialog's own class (`DialogFrame`'s `className`), for a look of its own. */
+  className?: string;
 }
 
 type Question =
@@ -240,6 +242,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
   return (
     <DialogFrame
       header={{ title: dialog.title }}
+      className={dialog.className}
       busy={busy || held}
       locked={busy || (held && !dialog.abort)}
       onCancel={dialog.cancel}

@@ -324,11 +324,12 @@ textarea:focus,
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
   --small-font-size: 12px;
   --tiny-font-size: 11px;
-  /* The tabbed dialogs (settings, sbx): their tabs need more than `.dialog`'s width. */
+  /* The tabbed dialogs (settings, sbx), and the command's: their tabs and fields need more than
+     `.dialog`'s width. */
   --dialog-wide-width: 620px;
   /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
      not resize them. Capped to the window. */
-  --dialog-tall-height: 420px;
+  --dialog-tall-height: 450px;
   --dialog-max-height: calc(100vh - 32px);
 }
 
@@ -2089,8 +2090,9 @@ textarea:focus,
   max-height: var(--dialog-max-height);
 }
 
-.sbx-settings-dialog {
-  min-width: var(--dialog-wide-width);
+.sbx-settings-dialog,
+.command-dialog {
+  width: var(--dialog-wide-width);
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
