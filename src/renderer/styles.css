@@ -363,6 +363,11 @@ textarea:focus,
   -webkit-app-region: drag;
 }
 
+/* A drag region swallows the press, so an open menu would never see a click outside on it. */
+:root:has(.context-menu) .titlebar {
+  -webkit-app-region: no-drag;
+}
+
 /* The name in the middle (Platform.centersTitle); no padding, so the middle is the window's. */
 .titlebar-centered {
   justify-content: center;
