@@ -22,21 +22,29 @@ export function commitMessageFrom(reply: string): string {
  *  time. */
 const suggestion = stoppable();
 
-/** Whether the Cancel came: the agent it killed failed like any other, and the next must not be
- *  asked in its place. */
-let cancelled = false;
+const NO_MESSAGE = "The agent did not suggest a commit message";
 
 /** The commit prompt's suggest button, asked of the suggesters picked in the settings (`suggestersFor`,
  *  switched-on ones in order): the first to answer wins, and the last one's failure is the one told.
- *  `prompt` (`effectivePrompt`) and `context` (`readCommitContext`, read only once an agent can
- *  answer) are handed in: the git process and the settings are not this layer's. */
+ *  A Cancel (`cancelCommitSuggestion`) ends the chain: the agent it killed failed like any other, and
+ *  the next must not be asked in its place. `prompt` (`effectivePrompt`) and `context`
+ *  (`readCommitContext`, read only once an agent can answer) are handed in: the git process and the
+ *  settings are not this layer's. */
 export async function suggestCommitMessage(
   suggesters: Suggester[],
   root: string,
   prompt: string,
   context: () => Promise<string>,
 ): Promise<SuggestionResult> {
-  cancelled = false;
+  const started = suggestion.stops;
+  // None where no installed agent can, or all are switched off.
+  const askers = suggesters.flatMap((suggester) => {
+    const agent = AGENTS.find((candidate) => candidate.id === suggester.agentId);
+    return agent?.ask ? [{ agent, ask: agent.ask, model: suggester.model }] : [];
+  });
+  if (askers.length === 0) {
+    return { error: "No agent that can suggest a commit message is installed." };
+  }
   let read: string;
   try {
     read = await context();
@@ -44,36 +52,30 @@ export async function suggestCommitMessage(
     return { error: `Could not suggest a commit message: ${errorMessage(error)}` };
   }
   if (read.trim() === "") {
-    return { error: "The agent did not suggest a commit message" };
+    return { error: NO_MESSAGE };
   }
-  // None where no installed agent can.
-  let error = "No agent that can suggest a commit message is installed.";
-  for (const suggester of suggesters) {
-    const agent = AGENTS.find((candidate) => candidate.id === suggester.agentId);
-    if (!agent?.ask) {
-      continue;
+  let error = NO_MESSAGE;
+  for (const { agent, ask, model } of askers) {
+    if (suggestion.stops !== started) {
+      return {};
     }
     // "" leaves the model to the agent's own configuration.
-    const args = [...agent.ask.args, ...(suggester.model === "" ? [] : agent.ask.modelArgs(suggester.model))];
+    const args = [...ask.args, ...(model === "" ? [] : ask.modelArgs(model))];
     try {
       const reply = await suggestion.run((onSpawn) => askAgent(root, agent.executable(), args, `${prompt}\n\n${read}`, onSpawn));
       const message = commitMessageFrom(reply);
       if (message.length > 0) {
         return { value: message };
       }
-      error = "The agent did not suggest a commit message";
+      error = NO_MESSAGE;
     } catch (failure) {
       error = `Could not suggest a commit message: ${errorMessage(failure)}`;
     }
-    if (cancelled) {
-      return {};
-    }
   }
-  return { error };
+  return suggestion.stops === started ? { error } : {};
 }
 
 /** For the commit prompt's Cancel. */
 export function cancelCommitSuggestion(): void {
-  cancelled = true;
   suggestion.stop();
 }

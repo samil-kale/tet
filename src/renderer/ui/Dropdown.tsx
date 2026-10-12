@@ -12,7 +12,7 @@ const FILTER_FROM = 10;
 /** Gap between the open list and the window's bottom edge. */
 const WINDOW_MARGIN = 8;
 
-interface DropdownOption<T extends string> {
+export interface DropdownOption<T extends string> {
   value: T;
   label: string;
   /** A line under it, setting it apart from the options that follow. */
@@ -44,7 +44,7 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
 
   const [query, setQuery] = useState("");
   const filterable = options.length >= FILTER_FROM;
-  const needle = filterable ? query.trim().toLowerCase() : "";
+  const needle = query.trim().toLowerCase();
   const matching = needle === "" ? options : options.filter((option) => option.label.toLowerCase().includes(needle));
 
   // The separators set groups apart; a filtered list has none to set apart.

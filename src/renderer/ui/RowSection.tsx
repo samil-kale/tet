@@ -78,10 +78,7 @@ export function EditRow({
   children: ReactNode;
 } & ({ remove: string; onRemove: () => void } | { remove?: undefined; onRemove?: undefined })) {
   return (
-    <div
-      className={["edit-row", ...(className ? [className] : []), ...(reorder?.classes ?? []), ...(off ? ["off"] : [])].join(" ")}
-      {...reorder?.props}
-    >
+    <div className={["edit-row", className, ...(reorder?.classes ?? []), off && "off"].filter(Boolean).join(" ")} {...reorder?.props}>
       {reorder && <GripIcon className="row-grip" />}
       {children}
       <RowMark title={mark} />

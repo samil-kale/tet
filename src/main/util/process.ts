@@ -146,11 +146,17 @@ export interface Stoppable {
   run<T>(start: (onSpawn: (child: ChildProcess) => void) => Promise<T>): Promise<T>;
   /** Kills the running one with its children (killProcessTree); a no-op when none runs. */
   stop(): void;
+  /** How often `stop` was called: a chain of runs that began at n was stopped once it is not n. */
+  readonly stops: number;
 }
 
 export function stoppable(): Stoppable {
   let current: ChildProcess | undefined;
+  let stops = 0;
   return {
+    get stops() {
+      return stops;
+    },
     async run(start) {
       let own: ChildProcess | undefined;
       try {
@@ -165,6 +171,7 @@ export function stoppable(): Stoppable {
       }
     },
     stop() {
+      stops += 1;
       if (current) {
         killProcessTree(current);
         current = undefined;

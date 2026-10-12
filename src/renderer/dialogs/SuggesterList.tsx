@@ -14,14 +14,14 @@ const DRAG_TYPE = "application/x-tet-suggester";
 interface SuggesterRowProps {
   entry: SuggesterEntry;
   name: string;
-  reorder: RowReorder | undefined;
+  drag: RowReorder | undefined;
   onChange: (entry: SuggesterEntry) => void;
   onReplaceModel: (agentId: AgentId) => void;
   hold: (held: boolean) => void;
 }
 
 /** One agent: its name, the model it is asked with, and whether it is asked at all. */
-function SuggesterRow({ entry, name, reorder: drag, onChange, onReplaceModel, hold }: SuggesterRowProps) {
+function SuggesterRow({ entry, name, drag, onChange, onReplaceModel, hold }: SuggesterRowProps) {
   const { options, error, offered } = useAskModels(entry.agentId, entry.model, hold);
 
   useEffect(() => {
@@ -87,7 +87,7 @@ export function SuggesterList({ value, onChange, onReplaceModel, hold }: Suggest
           key={id}
           entry={entry}
           name={agentName(agents, id)}
-          reorder={drag}
+          drag={drag}
           onChange={change}
           onReplaceModel={onReplaceModel}
           hold={hold}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
+import type { DropdownOption } from "./Dropdown";
 import { fetchHeld } from "./fetch-held";
 
 /** No model argument: the agent's own configuration picks. */
@@ -15,7 +16,7 @@ export function useAskModels(
   agentId: AgentId,
   model: string,
   hold: (held: boolean) => void,
-): { options: { value: string; label: string; separatorAfter?: boolean }[]; error: string | undefined; offered: boolean } {
+): { options: DropdownOption<string>[]; error: string | undefined; offered: boolean } {
   const [listed, setListed] = useState<{ agentId: AgentId; result: AskModelsResult }>();
   const result = listed?.agentId === agentId ? listed.result : undefined;
 

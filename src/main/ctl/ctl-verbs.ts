@@ -93,8 +93,9 @@ export function verbs(deps: ControlDeps): Handlers {
   };
 
   /** `--agent` (or the positional `hint` names), one TET knows. */
-  const knownAgent = (args: Record<string, unknown>, hint: string): AgentDefinition => {
-    const id = text(args, "agent", hint);
+  const knownAgent = (args: Record<string, unknown>, hint: string): AgentDefinition => agentNamed(text(args, "agent", hint));
+
+  const agentNamed = (id: string): AgentDefinition => {
     const agent = deps.agents.find((candidate) => candidate.id === id);
     if (!agent) {
       throw new ControlError("bad_args", `unknown agent: ${id} (see agents-list)`);
@@ -220,7 +221,7 @@ export function verbs(deps: ControlDeps): Handlers {
       for (const pick of picked) {
         // An agent id has no "=": the first one parts it from the model, which may hold any.
         const at = pick.indexOf("=");
-        const agent = knownAgent({ agent: at < 0 ? pick : pick.slice(0, at) }, "agent id");
+        const agent = agentNamed(at < 0 ? pick : pick.slice(0, at));
         const model = at < 0 ? "" : pick.slice(at + 1);
         if (!agent.ask) {
           throw new ControlError("bad_args", `${agent.id} cannot suggest a commit message`);
