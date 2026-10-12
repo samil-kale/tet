@@ -460,6 +460,10 @@ export const Pane = memo(function Pane({
       }}
       onDrop={(event) => {
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {
+          // A terminal took it and has the focus now (terminal-views.ts); its pane follows, as on a click.
+          if ((event.target as Element).closest(".terminal-host") !== null) {
+            focusHere();
+          }
           return;
         }
         event.preventDefault();

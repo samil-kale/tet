@@ -13,6 +13,7 @@ import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isModifierHeld, PLATFORM } from "../platform";
 import { notify } from "../ui/Notices";
+import { PATH_DRAG_TYPE } from "../ui/tree-row";
 import { buildXtermTheme, editorFontFamily } from "../themes/theme-colors";
 import { isSoftwareRenderer, WebglPool } from "./webgl-pool";
 
@@ -414,18 +415,24 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
     acquireWebgl(view);
   }
 
-  // On the container, not the document: a drop belongs to the terminal it lands on. Files only.
-  const holdsFiles = (event: DragEvent): boolean => event.dataTransfer?.types.includes("Files") === true;
+  // On the container, not the document: a drop belongs to the terminal it lands on. Files, and a
+  // row of a lane carrying its path, only.
+  const holdsPaths = (event: DragEvent): boolean =>
+    event.dataTransfer?.types.some((type) => type === "Files" || type === PATH_DRAG_TYPE) === true;
   const frame = (shown: boolean): void => {
     container.classList.toggle("drag-over", shown);
   };
 
   container.addEventListener("dragover", (event) => {
-    if (!holdsFiles(event)) {
+    if (!holdsPaths(event)) {
       return;
     }
     // Only a prevented dragover makes this a drop target.
     event.preventDefault();
+    // A row allows a move too, within its own view. A file's effect stays what its source allows.
+    if (event.dataTransfer?.types.includes(PATH_DRAG_TYPE)) {
+      event.dataTransfer.dropEffect = "copy";
+    }
     frame(true);
   });
   container.addEventListener("dragleave", (event) => {
@@ -437,7 +444,11 @@ export function attachTerminal(ref: ProjectRef, tabId: string, container: HTMLEl
   container.addEventListener("drop", (event) => {
     event.preventDefault();
     frame(false);
-    pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? [])).catch((error: unknown) =>
+    // What was dropped is typed here, so the next key goes here too.
+    view.term.focus();
+    // Empty for a drop from outside the window.
+    const rowPath = event.dataTransfer?.getData(PATH_DRAG_TYPE);
+    (rowPath ? handPaths(view, [rowPath]) : pasteDroppedFiles(view, Array.from(event.dataTransfer?.files ?? []))).catch((error: unknown) =>
       notify("error", `Could not paste the dropped files: ${errorMessage(error)}`),
     );
   });

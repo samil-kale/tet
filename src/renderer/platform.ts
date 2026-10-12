@@ -23,7 +23,8 @@ export function isModifierKey(event: KeyboardEvent): boolean {
   return event.key === PLATFORM.modifierKey;
 }
 
-/** A `/`-separated relative path as a native absolute one, for the clipboard. */
+/** A `/`-separated relative path as a native absolute one, for the clipboard or a terminal; "" is
+ *  the folder itself, without a trailing separator, which would escape a quote closing it. */
 export function absolutePath(folder: string, relative: string): string {
-  return [folder, ...relative.split("/")].join(PLATFORM.pathSeparator);
+  return relative === "" ? folder : [folder, ...relative.split("/")].join(PLATFORM.pathSeparator);
 }

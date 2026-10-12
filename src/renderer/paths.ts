@@ -11,6 +11,11 @@ export function parentOf(entryPath: string): string {
   return index === -1 ? "" : entryPath.slice(0, index);
 }
 
+/** Whether the path is the folder or lies in it; "", the root, holds every path. */
+export function isInside(folder: string, entryPath: string): boolean {
+  return folder === "" || entryPath === folder || entryPath.startsWith(`${folder}/`);
+}
+
 /** A file name's extension with its dot, "" for none: path.extname's rule, which git.ts's
  *  ignorePath applies, so a dotfile has none. */
 export function extensionOf(name: string): string {

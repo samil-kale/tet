@@ -863,6 +863,8 @@ textarea:focus,
 .worktree-row:not(.made-elsewhere):hover,
 .tree-header:hover,
 .tree-row:hover,
+/* The Explorer's rows inside the folder a dragged row would be moved into. */
+.tree-row.drop-target,
 .account-row:not(.disabled):hover,
 .repository-row:hover {
   background: var(--tet-list-hoverBackground);

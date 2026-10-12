@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode, Ref } from "react";
+import type { DragEvent, MouseEvent, ReactNode, Ref } from "react";
 import { ChevronIcon } from "./icons";
 
 /* VS Code's indent: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8). The chevron
@@ -22,6 +22,9 @@ export const COLUMN_STEP = CHEVRON_WIDTH + CHEVRON_GAP;
  *  checkbox stands just past its parent's (`.tree-checkbox`'s 16px and 1px more). */
 export const CHECK_INDENT_STEP = 17;
 
+/** What a row dragged onto a terminal carries: its path on this machine (`TreeRow`'s `dragPath`). */
+export const PATH_DRAG_TYPE = "application/x-tet-path";
+
 /**
  * A row of a tree or list (`.tree-row`), in the branch tree, the Explorer, SEARCH and LOCAL
  * CHANGES alike: what leads it (`icon`: an icon, a chevron, a checkbox), its label, then what
@@ -34,6 +37,9 @@ export function TreeRow({
   className,
   indent,
   title,
+  dragPath,
+  onDragStart,
+  onDragOver,
   onClick,
   onDoubleClick,
   onContextMenu,
@@ -46,6 +52,13 @@ export function TreeRow({
   className?: string;
   indent?: number;
   title?: string;
+  /** The row's absolute path, where it can be dragged onto a terminal, which types it as it does a
+   *  dropped file's. Path alone, no text: a field or an editor takes nothing of it. */
+  dragPath?: string;
+  /** For a view that moves its rows by dragging them within it: a drag of this row began, and one
+   *  is held over it. */
+  onDragStart?: () => void;
+  onDragOver?: (event: DragEvent) => void;
   onClick?: (event: MouseEvent) => void;
   onDoubleClick?: () => void;
   onContextMenu?: (event: MouseEvent) => void;
@@ -58,6 +71,18 @@ export function TreeRow({
       className={className ? `tree-row ${className}` : "tree-row"}
       style={indent === undefined ? undefined : { paddingLeft: indent }}
       title={title}
+      draggable={dragPath !== undefined}
+      onDragStart={
+        dragPath === undefined
+          ? undefined
+          : (event) => {
+              event.dataTransfer.setData(PATH_DRAG_TYPE, dragPath);
+              // Copied into a terminal, moved within its own view.
+              event.dataTransfer.effectAllowed = "copyMove";
+              onDragStart?.();
+            }
+      }
+      onDragOver={onDragOver}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
