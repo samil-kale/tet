@@ -459,9 +459,10 @@ export function attachTerminal(
     const named = event.dataTransfer?.getData(NAME_DRAG_TYPE);
     if (named) {
       const { kind, name } = JSON.parse(named) as DragName;
-      // One word, as a path is: quoted where it holds a space. Through term.paste (handPaths).
-      const word = /\s/.test(name) ? `"${name}"` : name;
-      view.term.paste(`${view.labelsDrops ? `${kind} ` : ""}${word} `);
+      // In prose one word after its kind, quoted where it holds a space; else as it is, a saved
+      // command's line to run. Through term.paste (handPaths).
+      const labelled = `${kind} ${/\s/.test(name) ? `"${name}"` : name}`;
+      view.term.paste(`${view.labelsDrops ? labelled : name} `);
       return;
     }
     // Empty for a drop from outside the window.
