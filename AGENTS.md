@@ -17,7 +17,8 @@ was measured, history, dates, version numbers or links. An agent's tested versio
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI —
 classic layout, Dark Modern's palette, tab semantics, theme names; **IntelliJ** where VS Code has
 no answer or the git lane's tree is concerned — the commit view's checkboxes, tree headers,
-toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor); **Monaco** for the editor tab.
+toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor); **Monaco** for
+the editor tab.
 
 ## Do not restart the app yourself
 
@@ -51,9 +52,8 @@ project's tabs.
      singletons it touches) and, flat, the startup (`main.ts`, `uncaught.ts`), the window
      (`window.ts`), `projects.ts` and `requirements.ts`.
 
-  Files that belong together are a folder; one that stands alone stays flat in its layer. No
-  folder for its own sake. A new folder or flat file joins a layer in `eslint.config.mjs`, or lint
-  refuses to run.
+  Files that belong together are a folder; one that stands alone stays flat in its layer. A new
+  folder or flat file joins a layer in `eslint.config.mjs`, or lint refuses to run.
 - Every IPC channel is typed in `src/shared/ipc.ts`, off `TETApi`, and used only through its
   wrappers — `handle`/`on`/`once` (`src/main/ipc/channels.ts`) and `window.ts`'s `send` in main,
   `invoke`/`send`/`subscribe` in the preload — never a bare `ipcMain`, `ipcRenderer` or
@@ -73,19 +73,19 @@ project's tabs.
      Explorer tree, the SEARCH section, Seti's file icons) — and imports no other lane; beside them,
      their state (`use-lanes.ts`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
-     (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the fonts the app ships
-     with their licenses (`fonts/`).
+     (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the
+     fonts the app ships with their licenses (`fonts/`).
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
   documents every field), grouped by what it can do — `install`, `terminal`, `run`, `ask`,
   `sessions`, `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent
   can do something is whether it has the group (`hasSandbox`), never a list of ids. Shared code
   never imports an agent's own folder: only the registry (`agents/index.ts`), `agent.ts`'s types
   and `hasSandbox`, and the agent-neutral files beside them (`ask.ts`, `system-prompt.ts`,
-  `agent-path.ts`, …). A new agent must fit the data model (below) and is
-  a new folder and one registry entry, nothing else: its icon is data in its definition (`icon`),
-  which the window draws, and no code outside `agents/` names an agent (user-facing text may) but
-  the shell, which TET itself runs saved commands and plain terminals in. What a new agent needs
-  that no group covers extends the groups, never a branch on its id.
+  `agent-path.ts`, …). A new agent must fit the data model (below) and is a new folder and one
+  registry entry, nothing else: its icon is data in its definition (`icon`), which the window
+  draws, and no code outside `agents/` names an agent (user-facing text may) but the shell, which
+  TET itself runs saved commands and plain terminals in. What a new agent needs that no group
+  covers extends the groups, never a branch on its id.
 - **A project is its repository and its worktrees** — the words for them, in code, texts and
   comments alike. The repository is the folder the user opened, holding `.git`; never call it a
   worktree (nor "main worktree"), and there is no noun for both: where one of them is meant — where
@@ -95,16 +95,15 @@ project's tabs.
   (`refKeyOf`, a `refKey` where held) only where a single key is unavoidable. A bare `key` is a
   worktree's folder key alone. The one whose tabs are shown is the active one (`activeRef`).
 - A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
-  git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees; what TET keeps of it is
-  laid out in the data model below.
+  git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer's `folders` and excludes and `sbx`. Read defensively (`src/main/store/tet-json.ts`): missing means
-  nothing configured, broken never does — a project whose file is broken is neither added nor
-  opened at start (kept, with all TET has of it, until added again), and one broken while open
-  counts as its last readable version, said in a notice. Nothing writes over a broken file. A
-  worktree has none of its own: it takes its project's (`configRoot`) and its SBX settings, forwards
-  none of the ports, and changes nothing of it — its row, Explorer and COMMANDS offer no settings,
-  `tet-ctl` refuses them.
+  the Explorer's `folders` and excludes and `sbx`. Read defensively (`src/main/store/tet-json.ts`):
+  missing means nothing configured, broken never does — a project whose file is broken is neither
+  added nor opened at start (kept, with all TET has of it, until added again), and one broken
+  while open counts as its last readable version, said in a notice. Nothing writes over a broken
+  file. A worktree has none of its own: it takes its project's (`configRoot`) and its SBX
+  settings, forwards none of the ports, and changes nothing of it — its row, Explorer and COMMANDS
+  offer no settings, `tet-ctl` refuses them.
 
 ## Data model: `~/.tet`
 
@@ -188,11 +187,9 @@ mode (`terminal-views.ts`), not per agent.
 ## Never touch the user's agent configuration
 
 Everything TET generates for an agent lives under `~/.tet` (the data model above) and is pointed
-at from outside, each side — host and sandbox — handed only its own folder, pasted or dropped
-content without a path included (`drops/`).
-`host.prepare` and `sandbox.prepare` are the only places an agent writes configuration;
-beyond them it touches only its own sessions: when the user renames or deletes one, and every one
-of a worktree it deleted, once its folder is gone (`removeAllSessions`).
+at from outside. `host.prepare` and `sandbox.prepare` are the only places an agent writes
+configuration; beyond them it touches only its own sessions: when the user renames or deletes one,
+and every one of a worktree it deleted, once its folder is gone (`removeAllSessions`).
 
 - Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
 - Codex: `-c key=value` for that one process; never `~/.codex/config.toml` or `hooks.json`.
@@ -251,27 +248,28 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
   given once and never changes, and every worktree TET made opens with its project, listed under
   its row (`Project.worktrees`) and in the branch tree's WORKTREES (`RepositoryState.worktrees`,
   `WorktreeInfo.key`), both read off the disk. One made elsewhere (plain `git worktree add`) has
-  no key: shown greyed, never opened, never renamed or deleted by TET. A worktree
-  and its branch are one: made together at the default branch (`worktreeBase`), named by the
-  branch, deleted together, and never switched; renaming it renames the branch alone, its folder
-  and tabs stay. Its base is TET's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`).
-  Removing a project deletes the worktrees TET made, with their branches.
+  no key: shown greyed, never opened, never renamed or deleted by TET. A worktree and its branch
+  are one: made together at the default branch (`worktreeBase`), named by the branch, deleted
+  together, and never switched; renaming it renames the branch alone, its folder and tabs stay.
+  Its base is TET's own `branch.<name>.base` (`git.ts`'s `worktreeAdd`). Removing a project
+  deletes the worktrees TET made, with their branches.
 
 **Scope.** Everything the git lane does fits in a context menu, an icon button or a question. Of
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, branch
-create/rename/delete, tag create/delete, merge and rebase onto a branch, abort, per-file diff, discard,
-`.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
-staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and the default branch — read-only,
-a commit's files and their diffs against its first parent, searched by message, author or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
+create/rename/delete, tag create/delete, merge and rebase onto a branch, abort, per-file diff,
+discard, `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
+staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and the default branch —
+read-only, a commit's files and their diffs against its first parent, searched by message, author
+or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), and a commit message suggested by an installed agent.
-Where Desktop differs from git's defaults, follow Desktop. The project row's entries are 
-repository-wide and never touch the working tree — a worktree's own row excepted, which is that 
+Where Desktop differs from git's defaults, follow Desktop. The project row's entries are
+repository-wide and never touch the working tree — a worktree's own row excepted, which is that
 tree, and its merge into the base, run where the base is checked out.
 
-Don't add without being asked: staging or per-line staging, history beyond the graph, cherry-pick, revert,
-squash, reorder, bisect, submodules, conflict resolution beyond aborting,
-discarding single lines, pull with rebase, force push. A command needing a list, a message field
-or a per-line decision is for an agent.
+Don't add without being asked: staging or per-line staging, history beyond the graph, cherry-pick,
+revert, squash, reorder, bisect, submodules, conflict resolution beyond aborting, discarding
+single lines, pull with rebase, force push. A command needing a list, a message field or a
+per-line decision is for an agent.
 
 ## UI rules
 
@@ -280,13 +278,17 @@ or a per-line decision is for an agent.
   lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
   by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
   the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
-  layout storage. The tab strip is the agent, shell and editor
-  tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
-  (`editor-tab.ts`).
+  layout storage. The tab strip is the agent, shell and editor tabs of the repository or a
+  worktree — VS Code's preview rule, one preview tab each (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
-  `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`), LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`,
-  EXPLORER `Explorer`; each title heads a `Section`, drawn by `ProjectList` and `CommandList`
-  themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
+  `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`),
+  LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`; each title heads a
+  `Section`, drawn by `ProjectList` and `CommandList` themselves and by `GitLane` and `FilesLane`
+  around the others, never a "pane".
+- **A section's rows drag onto a terminal**, which types what was dropped: a file's or folder's
+  path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
+  before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
+  new kind of row in one, comes with an *offer* to add its drag — the user decides.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.
@@ -300,8 +302,8 @@ or a per-line decision is for an agent.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
-  unasked. Card dialogs are drawn in `DialogFrame`. The exception: an agent's
-  `env-request`, answered in `EnvDialog`, one at a time (`env-requests.ts`).
+  unasked. Card dialogs are drawn in `DialogFrame`. The exception: an agent's `env-request`,
+  answered in `EnvDialog`, one at a time (`env-requests.ts`).
 - **`DialogFrame` draws every dialog's button row**: Cancel with × and Escape (`onCancel`; a wall
   has none), the `actions`, and the `primary` button, which Enter runs from anywhere in the dialog
   unless it cannot go. One that cannot says why as its tooltip (`blocked`), unless an empty field
@@ -314,11 +316,9 @@ or a per-line decision is for an agent.
   buttons (`DialogFrame`'s `error`) where the fields are several or across tabs — what was typed
   is held so it can be corrected, and it is git's own words for a name it will not take, never
   TET's guess at them. A list that could not be loaded shows its failure in its place
-  (`DialogError`).
-  What the unsaved edits as a whole lead to goes in the same place (`DialogFrame`'s `message`),
-  e.g. `RestartNote` while they reach running tabs only once restarted. A notice is for what has
-  no dialog up to carry it; a `confirm`
-  has no field, so it notifies.
+  (`DialogError`). What the unsaved edits as a whole lead to goes in the same place
+  (`DialogFrame`'s `message`), e.g. `RestartNote` while they reach running tabs only once
+  restarted. A `confirm` has no field, so it notifies.
 - To get this, **a question runs its own answer** (`useSubmit`; a prompt's `PromptOptions.submit`):
   the dialog stays up while the action runs, so what runs it hands the failure back instead of
   notifying it (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than
@@ -369,9 +369,9 @@ or a per-line decision is for an agent.
 - Icons come from Lucide first (`icons.tsx`). The file icons are generated by
   `scripts/file-icons.js` — re-run, never edit.
 - Icons and marks are monochrome. The one accent is `--tet-focusBorder`, 1px for anything that
-  marks or points. Exceptions: git status letters,
-  the error mark, a notice's severity icon, an editor tab's unsaved dot, the file icons. A theme
-  whose own mark colour differs sets it in place of the accent (`THEMES.md`).
+  marks or points. Exceptions: git status letters, the error mark, a notice's severity icon,
+  an editor tab's unsaved dot, the file icons. A theme whose own mark colour differs sets it in
+  place of the accent (`THEMES.md`).
 - A git name in a label of the branch tree's menus — a branch, a remote — is a `MenuName`
   (`ContextMenu.tsx`), set apart from the words saying what the entry does. Ask the user before
   setting a name apart in any other menu.
@@ -405,8 +405,8 @@ Lets an agent ask the app for what the filesystem and git can't give (theme, pro
 second transport onto the same singletons `ipc/` is handed (`Repository`, the session managers,
 `projects.ts`), never a second implementation of what they do; a verb may combine them where the
 window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and verbs:
-`src/shared/ctl.ts`; server: `src/main/ctl/ctl-server.ts`; handlers: `ctl-verbs.ts`
-and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`ControlDeps`,
+`src/shared/ctl.ts`; server: `src/main/ctl/ctl-server.ts`; handlers: `ctl-verbs.ts` and the
+`ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`ControlDeps`,
 `ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
 
 - `app-restart` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
@@ -424,14 +424,15 @@ and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`Contr
   the token made for them (`ctl-token.ts`): a terminal gets its tab's token, never the run's.
 - **Where a caller runs is its side** (`ControlSide`, `src/shared/ctl-side.ts`; in the main
   process the tab's `TabSide`, `terminals/tab-side.ts`, and the caller's `CallerSide` extending it,
-  `ctl/caller-side.ts`), set by its tab's place and read back off its token: which verbs
-  answer and how far, what `tet-ctl help` and the system prompt mention, the variables its tab
-  gets, the tabs, projects and files it reaches. Nothing else asks whether a caller is sandboxed; a
-  new difference extends the side.
-  Without flags a verb acts on the caller's repository or worktree, `--project` alone on a
-  project's repository, `--worktree` on one of its worktrees (`resolveCallerRef`).
-- A host caller reaches every project and every one of its tabs. **From a sandbox, whatever runs in a sandbox of its project**:
-  the worktree verbs and every tab verb reach its repository and every worktree (`ownProject`), a
+  `ctl/caller-side.ts`), set by its tab's place and read back off its token: which verbs answer
+  and how far, what `tet-ctl help` and the system prompt mention, the variables its tab gets, the
+  tabs, projects and files it reaches. Nothing else asks whether a caller is sandboxed; a new
+  difference extends the side. Without flags a verb acts on the caller's repository or worktree,
+  `--project` alone on a project's repository, `--worktree` on one of its worktrees
+  (`resolveCallerRef`).
+- A host caller reaches every project and every one of its tabs. **From a sandbox, whatever runs
+  in a sandbox of its project**: the worktree verbs and every tab verb reach its repository and
+  every worktree (`ownProject`), a
   tab verb only a tab running in a sandbox (`CallerSide.reachesTab`) — a host tab is the machine's,
   and its output may print the host's control token — and a tab it opens runs in one too; what acts
   on this machine (its settings, projects, environment, the SBX settings but `sbx-get` and the
@@ -458,15 +459,13 @@ the `sbx` CLI.
   host would bypass an organization's policy.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
   (`AgentRuntime.sbxOnly`).
-- The sandbox never sees the agent's own config directory; sessions are read through host mounts, so
-  the same listing code serves both. Of `~/.tet` it sees only the `sandboxes/…/<agent>` folder of
-  its repository or worktree and what the data model excepts, and a worktree's sandbox is its own
-  (its workspace, the worktree's folder, is fixed at `sbx create`); under governance one rule,
-  `~/.tet/projects/**`, allows TET's folders and its worktrees. TET's own live mounts are folders of
-  that `sandboxes/…/<agent>` folder alone; the one exception is a worktree's repository `.git`
-  (`worktreeMountSpecs`), without which git fails there. The user's grants (Allowed paths,
-  knowledge) and a path the user drops (data model) are theirs, not TET's; so is a worktree
-  `worktree-agent-merge` hands over, taken as a drop.
+- The sandbox never sees the agent's own config directory, and of `~/.tet` only what the data
+  model grants it. A worktree's sandbox is its own (its workspace, the worktree's folder, is fixed
+  at `sbx create`); under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
+  worktrees. TET's own live mounts are folders of the `sandboxes/…/<agent>` folder alone; the one
+  exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails
+  there. The user's grants (Allowed paths, knowledge) and what is handed over as a drop are
+  theirs, not TET's.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
   `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
@@ -491,7 +490,8 @@ is a wall and **installs nothing**. `process.env.PATH` is rewritten before that 
 
 ## npm scripts
 
-- `npm run compile`, `npm run typecheck`, `npm run lint`, `npm run format` (Prettier; `format:check` in CI)
+- `npm run compile`, `npm run typecheck`, `npm run lint`, `npm run format` (Prettier;
+  `format:check` in CI)
 - `npm test` — compile, then node's test runner over `dist-test/`. `test/` mirrors `src/`: one
   file per area or per seam within one, a new test going beside what it tests; `e2e/` runs the
   real thing, `helpers/` serves them all, and `lint.test.ts` holds `eslint.config.mjs`'s rules to
