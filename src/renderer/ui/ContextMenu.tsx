@@ -42,6 +42,8 @@ interface ContextMenuProps {
   /** The button a menu was opened from: a press on it is no press outside, its own handler closes
    *  the menu. */
   anchor?: HTMLElement;
+  /** Stays at the top while the entries scroll, e.g. `Dropdown`'s filter field. */
+  header?: ReactNode;
 }
 
 /**
@@ -77,12 +79,12 @@ export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
     setMenu((current) => (current ? null : { ...place(anchor.getBoundingClientRect()), anchor }));
   };
   const close = useCallback(() => setMenu(null), []);
-  const render = (entries: () => ContextMenuEntry[], className: string): ReactNode =>
-    menu && <ContextMenu {...menu} entries={entries()} onClose={close} className={className} />;
-  return { open, render, isOpen: menu !== null };
+  const render = (entries: () => ContextMenuEntry[], className: string, header?: ReactNode): ReactNode =>
+    menu && <ContextMenu {...menu} entries={entries()} onClose={close} className={className} header={header} />;
+  return { open, close, render, isOpen: menu !== null };
 }
 
-export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, anchor }: ContextMenuProps) {
+export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, anchor, header }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -149,6 +151,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
 
   return (
     <div ref={menu} className={`context-menu${className ? ` ${className}` : ""}`} style={{ left: x, top: y, width, maxHeight }}>
+      {header && <div className="context-menu-header">{header}</div>}
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (
           <div key={index} className="context-menu-separator" />

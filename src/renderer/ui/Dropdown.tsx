@@ -1,8 +1,13 @@
+import { useState } from "react";
 import { SEPARATOR, useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
+import { FilterField } from "./FilterField";
 import { ChevronIcon } from "./icons";
 
 /** Taller lists scroll. */
 const MAX_LIST_HEIGHT = 300;
+
+/** From this many options a list has a filter field above it, which Enter takes the first match of. */
+const FILTER_FROM = 10;
 
 /** Gap between the open list and the window's bottom edge. */
 const WINDOW_MARGIN = 8;
@@ -37,10 +42,19 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
   }));
   const selected = options.find((option) => option.value === value);
 
-  const entries: ContextMenuEntry[] = options.flatMap((option, index) => {
-    const entry: ContextMenuEntry = { label: option.label, run: () => onChange(option.value) };
-    return option.separatorAfter && index < options.length - 1 ? [entry, SEPARATOR] : [entry];
-  });
+  const [query, setQuery] = useState("");
+  const filterable = options.length >= FILTER_FROM;
+  const needle = filterable ? query.trim().toLowerCase() : "";
+  const matching = needle === "" ? options : options.filter((option) => option.label.toLowerCase().includes(needle));
+
+  // The separators set groups apart; a filtered list has none to set apart.
+  const entries: ContextMenuEntry[] =
+    matching.length === 0
+      ? [{ label: "No matches" }]
+      : matching.flatMap((option, index) => {
+          const entry: ContextMenuEntry = { label: option.label, run: () => onChange(option.value) };
+          return needle === "" && option.separatorAfter && index < matching.length - 1 ? [entry, SEPARATOR] : [entry];
+        });
 
   return (
     <div className={fit ? "select-field fit" : "select-field"}>
@@ -48,7 +62,10 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
         type="button"
         className={menu.isOpen ? "dropdown-trigger open" : "dropdown-trigger"}
         disabled={disabled}
-        onMouseDown={menu.open}
+        onMouseDown={(event) => {
+          setQuery("");
+          menu.open(event);
+        }}
       >
         {fit ? (
           // Every label in one cell, the others hidden: the widest sets the width.
@@ -64,7 +81,24 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
         )}
       </button>
       <ChevronIcon expanded className="select-chevron" />
-      {menu.render(() => entries, "dropdown-menu")}
+      {menu.render(
+        () => entries,
+        "dropdown-menu",
+        filterable && (
+          <FilterField
+            placeholder="Filter"
+            value={query}
+            onChange={setQuery}
+            autoFocus
+            onEnter={() => {
+              if (matching.length > 0) {
+                menu.close();
+                onChange(matching[0].value);
+              }
+            }}
+          />
+        ),
+      )}
     </div>
   );
 }

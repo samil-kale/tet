@@ -734,7 +734,7 @@ textarea:focus,
    which adds its toggles below. */
 .filter-field {
   position: relative;
-  padding: 7px 6px 7px 7px;
+  padding: 7px;
 }
 
 /* Room for the search icon. */
@@ -1316,6 +1316,19 @@ textarea:focus,
 
 .new-tab-menu .context-menu-item {
   padding-right: 16px;
+}
+
+/* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it. The menu has no
+   top padding then, or the entries would show in it above the header. */
+.context-menu:has(> .context-menu-header) {
+  padding-top: 0;
+}
+
+.context-menu-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--tet-menu-background);
 }
 
 .context-menu-separator {
