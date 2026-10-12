@@ -495,6 +495,20 @@ textarea:focus,
   opacity: 0.5;
 }
 
+/* The lanes fade into their colors once the state lands. Only the lines' stroke and the nodes' fill:
+   a node's stroke is the hover's cut-out, which follows the row's background at once. */
+.graph-lanes {
+  transition: opacity 0.3s;
+}
+
+.graph-lanes path {
+  transition: stroke 0.3s;
+}
+
+.graph-lanes circle {
+  transition: fill 0.3s;
+}
+
 /* A node's circles are stroked in what lies behind them, which cuts a gap round each from the lines
    it crosses; the row's own background while it has one. HEAD's inner circle is a hole in its ring. */
 .graph-lanes circle {
