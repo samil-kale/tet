@@ -974,9 +974,12 @@ export async function hasCredentialHelper(cwd: string, url: string): Promise<boo
   return helper.code === 0 && helper.stdout.trim() !== "";
 }
 
-/** `git init`, which creates the folder with its parents, like clone. */
-export function init(directory: string): Promise<GitActionResult> {
-  return run(os.homedir(), ["init", "--", directory]);
+/** `git init`, which creates the folder with its parents, like clone. Its first branch is
+ *  `init.defaultBranch`'s, else "main" (readBranchConfig), as GitHub Desktop has it: git's own
+ *  "master" would not be the default branch TET takes it for. */
+export async function init(directory: string): Promise<GitActionResult> {
+  const { defaultBranchName } = await readBranchConfig(os.homedir());
+  return run(os.homedir(), ["init", `--initial-branch=${defaultBranchName}`, "--", directory]);
 }
 
 /**

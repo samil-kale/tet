@@ -21,6 +21,7 @@ import {
   fetch,
   hasCredentialHelper,
   ignorePath,
+  init,
   isRepository,
   listIgnored,
   merge,
@@ -713,6 +714,24 @@ describe("remotes the tree has to read carefully", () => {
     assert.deepEqual(state.defaultBranch, { name: "main" });
     assert.deepEqual(state.upstream, { name: "main", remote: "team/fork" });
     assert.deepEqual(state.branchUpstreams, { main: { remote: "team/fork", branch: "main" } });
+  });
+});
+
+describe("a folder initialized", () => {
+  it("starts on init.defaultBranch, and on main where none is set", async () => {
+    const parent = tempDir("tet-git-init-");
+    const unset = path.join(parent, "unset");
+    assert.deepEqual(await init(unset), { ok: true });
+    assert.equal(git(unset, "symbolic-ref", "--short", "HEAD"), "main");
+
+    git(parent, "config", "--global", "init.defaultBranch", "trunk");
+    try {
+      const configured = path.join(parent, "configured");
+      assert.deepEqual(await init(configured), { ok: true });
+      assert.equal(git(configured, "symbolic-ref", "--short", "HEAD"), "trunk");
+    } finally {
+      git(parent, "config", "--global", "--unset", "init.defaultBranch");
+    }
   });
 });
 
