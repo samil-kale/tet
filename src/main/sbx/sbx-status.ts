@@ -214,14 +214,21 @@ export async function readHostAllowed(host: string): Promise<boolean> {
  */
 async function probeSbx(refreshPath: boolean): Promise<SbxProbe> {
   if (refreshPath) {
-    return readProbe(true);
+    await augmentAgentPath();
+    return readProbe(listForProbe());
   }
-  probing ??= readProbe(false).finally(() => {
-    probing = undefined;
-  });
-  const { status, ...read } = await probing;
+  const { status, ...read } = await sharedProbe().probe;
   // Each caller's own status: readSbxReading sets the blockers of its repository on it.
   return { ...read, status: { ...status, blockers: [...status.blockers] } };
+}
+
+/**
+ * Once the `sbx ls` of the probe underway (one begun if none is) has answered, whatever it said:
+ * the daemon is started by then, so an sbx process begun beside the readiness check waits on this
+ * instead of starting the daemon against it (a spawn's `ensureRunning`).
+ */
+export async function sbxListed(): Promise<void> {
+  await sharedProbe().listed;
 }
 
 interface SbxProbe {
@@ -230,18 +237,31 @@ interface SbxProbe {
   policy?: SbxPolicy;
 }
 
-/** The probe underway without a PATH re-read, joined by every caller meanwhile: a project's
- *  sandboxed tabs start together. Let go of once answered, so nothing is cached. */
-let probing: Promise<SbxProbe> | undefined;
+/** The probe underway without a PATH re-read, with its `sbx ls` (sbxListed), joined by every
+ *  caller meanwhile: a project's sandboxed tabs start together. Let go of once answered, so
+ *  nothing is cached. */
+let probing: { listed: Promise<RunResult>; probe: Promise<SbxProbe> } | undefined;
 
-async function readProbe(refreshPath: boolean): Promise<SbxProbe> {
-  const status: SbxStatus = { installed: false, signedIn: false, policyInitialized: false, blockers: [] };
-  if (refreshPath) {
-    await augmentAgentPath();
+function sharedProbe(): { listed: Promise<RunResult>; probe: Promise<SbxProbe> } {
+  if (!probing) {
+    const listed = listForProbe();
+    const probe = readProbe(listed).finally(() => {
+      probing = undefined;
+    });
+    probing = { listed, probe };
   }
+  return probing;
+}
+
+function listForProbe(): Promise<RunResult> {
+  return runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS });
+}
+
+async function readProbe(listed: Promise<RunResult>): Promise<SbxProbe> {
+  const status: SbxStatus = { installed: false, signedIn: false, policyInitialized: false, blockers: [] };
   // `ls` alone first: it starts the daemon, and two sbx processes starting it at once fail on its
   // state lock ("another daemon is already running").
-  const list = await runSbx(["ls", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS });
+  const list = await listed;
   const [version, listedPolicy] = await Promise.all([
     readSbxVersion(),
     runSbx(["policy", "ls", "--type", "filesystem", "--json"], { timeoutMs: SBX_PROBE_TIMEOUT_MS }),

@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { checkSbxReady, listSandboxes, readSbxReading, readSbxSignedIn } from "../../src/main/sbx/sbx-status";
+import { checkSbxReady, listSandboxes, readSbxReading, readSbxSignedIn, sbxListed } from "../../src/main/sbx/sbx-status";
 import { fakeCommand, tempDir, withCommandOn } from "../helpers";
 
 /** sbx/sbx-status.ts: whether sbx is ready for a sandboxed tab, as its probe reads it. */
@@ -21,6 +21,9 @@ interface Answers {
 
 const ALLOW_ALL = [{ resource_type: "filesystem", decision: "allow", resources: ["**"] }];
 
+/** Beside the repository's folder: the stand-in's invocations, one line of arguments each. */
+const CALLS = "calls.log";
+
 /** A stand-in `sbx` answering the probe's commands from `answers`, run with it first on PATH. */
 async function withSbx<T>(answers: Answers, action: (folder: string) => Promise<T>): Promise<T> {
   const dir = tempDir("tet-sbx-status-");
@@ -31,6 +34,7 @@ async function withSbx<T>(answers: Answers, action: (folder: string) => Promise<
     "sbx",
     `const answers = ${JSON.stringify(answers)};
 const args = process.argv.slice(2).join(" ");
+require("node:fs").appendFileSync(${JSON.stringify(path.join(dir, CALLS))}, args + "\\n");
 const out = (value) => process.stdout.write(typeof value === "string" ? value : JSON.stringify(value));
 const fail = (message) => { process.stderr.write(message + "\\n"); process.exit(1); };
 if (args.startsWith("version")) {
@@ -78,6 +82,22 @@ describe("whether sbx is ready for a sandboxed tab", () => {
     assert.ok(!("notReady" in ready), JSON.stringify(ready));
     assert.deepEqual([...ready.sandboxes], [["tet-claude-abc", ["/work"]]]);
     assert.equal(ready.rules?.length, 1);
+  });
+
+  it("lets what starts beside the check wait on the check's own listing, which starts the daemon", async () => {
+    const answers: Answers = { version: "0.45.1", sandboxes: {}, filesystemRules: ALLOW_ALL };
+    const atListed = await withSbx(answers, async (folder) => {
+      const calls = () =>
+        fs
+          .readFileSync(path.join(folder, "..", CALLS), "utf8")
+          .trim()
+          .split("\n");
+      const listed = sbxListed().then(calls);
+      await checkSbxReady(folder, REF);
+      assert.equal(calls().filter((call) => call.startsWith("ls")).length, 1, "the check joins the listing begun for it");
+      return listed;
+    });
+    assert.deepEqual(atListed, ["ls --json"]);
   });
 });
 

@@ -17,7 +17,7 @@ import type { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";
-import { checkSbxReady } from "../sbx/sbx-status";
+import { checkSbxReady, sbxListed } from "../sbx/sbx-status";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../store/settings";
 import { TerminalSession } from "./terminal-session";
@@ -648,9 +648,10 @@ export class TabSessionManager {
       return this.sbxStranded(tab, "SBX is disabled for the project") ? "stranded" : onHost;
     }
     // Started before it is known whether it may be used, since it is the slowest step and the
-    // readiness check answers nothing it depends on (why that is safe: ensureRunning). Not for a
-    // tab about to run on this machine, which would start a sandbox nobody asked for.
-    const warm = tab.sessionId && !tab.sandbox ? undefined : ensureRunning(sandbox.name);
+    // readiness check answers nothing it depends on (why that is safe: ensureRunning) — but once
+    // the check's `sbx ls` has answered, as the two would start the daemon against each other. Not
+    // for a tab about to run on this machine, which would start a sandbox nobody asked for.
+    const warm = tab.sessionId && !tab.sandbox ? undefined : sbxListed().then(() => ensureRunning(sandbox.name));
     const ready = await checkSbxReady(this.at.path, this.at.ref);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, ready.notReady)) {
