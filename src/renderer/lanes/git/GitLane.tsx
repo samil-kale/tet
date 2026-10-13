@@ -93,21 +93,21 @@ export const GitLane = memo(function GitLane({
               {showGraph ? <BranchIcon /> : <GraphIcon />}
             </IconButton>
             <IconButton
-              title={remote ? `Fetch ${remote}` : "This repository has no remote"}
+              title={remote ? `Fetch from ${remote}` : "This repository has no remote"}
               disabled={locked || !canSync}
               onClick={() => branch.run("Fetching...", (login) => window.tet.repository.fetch(resolved.ref, login))}
             >
               <SyncIcon />
             </IconButton>
             <IconButton
-              title={pullFrom ? `Pull ${pullFrom}` : "No upstream to pull from"}
+              title={pullFrom ? `Pull from ${pullFrom}` : "No upstream to pull from"}
               disabled={locked || !canSync || state.upstream === undefined}
               onClick={() => branch.run("Pulling...", (login) => window.tet.repository.pull(resolved.ref, login))}
             >
               <ArrowDownIcon />
             </IconButton>
             <IconButton
-              title={state.upstream === undefined ? "Publish branch" : `Push ${remote}`}
+              title={state.upstream === undefined ? "Publish branch" : `Push to ${remote}`}
               disabled={locked || !canSync}
               onClick={() =>
                 branch.run(state.upstream === undefined ? "Publishing..." : "Pushing...", (login) =>

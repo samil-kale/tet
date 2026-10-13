@@ -122,7 +122,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
   }
   const { remote, canSync } = syncRemote(state);
   // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitLane).
-  const pushLabel = canSync && remote ? (state.upstream === undefined ? "Also publish branch" : named`Also push ${remote}`) : undefined;
+  const pushLabel = canSync && remote ? (state.upstream === undefined ? "Also publish branch" : named`Also push to ${remote}`) : undefined;
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
    *  question is gone — only one question is up at a time. */
   const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};

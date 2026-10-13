@@ -1309,19 +1309,15 @@ textarea:focus,
   color: var(--tet-menu-selectionForeground);
 }
 
-/* A name inside a sentence (`named`), in a menu entry and in a question alike. Also scoped to
-   `.dialog-field` to outrank `.dialog-field span`, which would grey it in a field's label. */
+/* A name inside a sentence (`named`), in a menu entry and in a question alike: set apart by the
+   editor's font, in the colour of the words around it. Also scoped to `.dialog-field` to outrank
+   `.dialog-field span`, which would grey it in a checkbox's label. */
 .inline-name,
 .dialog-field .inline-name {
   margin: 0 2px;
-  font-size: var(--small-font-size);
-  color: var(--tet-textLink-foreground);
-}
-
-/* Keeps the name readable on the selection blue, where its usual blue is not. */
-.context-menu-item:not(.disabled):hover .inline-name {
+  font-family: var(--tet-editor-font-family);
+  font-size: var(--tet-font-size);
   color: inherit;
-  opacity: 0.8;
 }
 
 /* A submenu's chevron, at the entry's right edge as in VS Code's menus. */
