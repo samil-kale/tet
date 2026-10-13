@@ -5,7 +5,6 @@ import type { NoticeSeverity } from "../../shared/types/app";
 import type { Project, ProjectRef } from "../../shared/types/project";
 import type { SbxSkillsSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxStatus } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
-import { logError } from "../util/error-log";
 import { logFailure } from "../util/json-file";
 import { inTurn } from "../util/async";
 import { readSbxProblems } from "./sbx";
@@ -76,9 +75,6 @@ export async function readProjectSbxProblems(
   return checkProject(project, settings, skills, values, await organizationOf(known), known?.sandboxes, known?.rules);
 }
 
-/** A Save at least this slow is logged, with the `sbx` calls in it that were slow (sbx-cli.ts). */
-const SLOW_SAVE_MS = 5000;
-
 /** The Save underway per project (saveProjectSbx). */
 const saves = new Map<string, Promise<unknown>>();
 
@@ -100,17 +96,7 @@ export function saveProjectSbx(
   local: SbxLocalSave,
   known?: KnownOrganization,
 ): Promise<SbxSaveResult> {
-  return inTurn(saves, project.id, async () => {
-    const started = Date.now();
-    try {
-      return await saveNow(deps, project, request, local, known);
-    } finally {
-      const ms = Date.now() - started;
-      if (ms >= SLOW_SAVE_MS) {
-        logError(`slow SBX Settings Save (${(ms / 1000).toFixed(1)}s)`);
-      }
-    }
-  });
+  return inTurn(saves, project.id, () => saveNow(deps, project, request, local, known));
 }
 
 async function saveNow(

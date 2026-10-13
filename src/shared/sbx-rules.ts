@@ -6,6 +6,7 @@
 
 import { envNameKey, isEnvName, isReservedName } from "./env-rules";
 import { ownValue } from "./own-value";
+import { isHttpUrl } from "./url";
 import type {
   SbxSkillsSettings,
   SbxSkillsKind,
@@ -69,9 +70,22 @@ export function sbxVariableRefusal(
     : undefined;
 }
 
-/** A server's row: one per name, as sbx has one server per name. */
-export function sbxMcpRefusal({ name }: SbxMcpServer, others: SbxMcpServer[]): string | undefined {
-  return others.some((other) => other.name.trim() === name.trim()) ? "Needs a name no other server holds" : undefined;
+/** sbx's own image references, the one form `sbx mcp add --url` takes without a scheme. */
+const MCP_IMAGE_PREFIX = "dhi.io/";
+
+/**
+ * A server's row: one per name, as sbx has one server per name, and a URL sbx can register it from
+ * — an http(s) one or an image of sbx's own registry; none for a server it has registered already.
+ * What sbx then makes of the URL is its own answer at Save.
+ */
+export function sbxMcpRefusal({ name, url }: SbxMcpServer, others: SbxMcpServer[]): string | undefined {
+  if (others.some((other) => other.name.trim() === name.trim())) {
+    return "Needs a name no other server holds";
+  }
+  const source = url.trim();
+  return source === "" || isHttpUrl(source) || (source.startsWith(MCP_IMAGE_PREFIX) && !/\s/.test(source))
+    ? undefined
+    : "Needs a URL starting with https:// or http://";
 }
 
 /** Whether two URLs are one server's, as sbx stores a registration: apart from a trailing slash. */

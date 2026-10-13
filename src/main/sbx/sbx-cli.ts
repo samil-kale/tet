@@ -79,17 +79,6 @@ export function sbxRefusal(result: RunResult): string {
   return sbxError(result) || SBX_PROBLEM.refused;
 }
 
-/** A call at least this slow is logged (`logIfSlow`). */
-const SLOW_SBX_CALL_MS = 1000;
-
-/** What a slow `sbx` call was, to errors.log: its first three words, never the rest, which may hold a
- *  host or a name a user typed. A hung daemon or a slow registration shows there. */
-function logIfSlow(args: string[], ms: number): void {
-  if (ms >= SLOW_SBX_CALL_MS) {
-    logError(`slow sbx call (${(ms / 1000).toFixed(1)}s): sbx ${args.slice(0, 3).join(" ")}`);
-  }
-}
-
 /** Every `sbx` invocation: a plain spawn through `resolveCommand` (runProcess), no shell, from the
  *  temp directory so the working directory never reads as a workspace. */
 export async function runSbx(args: string[], options: RunOptions = {}): Promise<RunResult> {
@@ -101,12 +90,7 @@ export async function runSbx(args: string[], options: RunOptions = {}): Promise<
       onData: options.onData && ((chunk) => options.onData?.(chunk.replace(/\n/g, "\r\n"))),
       onSpawn,
     });
-  const started = Date.now();
   const result = options.cancellable ? await setup.run(run) : await run();
-  // Not one that waits on the user (a sign-in).
-  if (!options.cancellable) {
-    logIfSlow(args, Date.now() - started);
-  }
   return { ok: result.code === 0, code: result.code, stdout: result.stdout, stderr: result.stderr };
 }
 

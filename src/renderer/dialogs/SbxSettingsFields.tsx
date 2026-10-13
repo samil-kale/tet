@@ -212,7 +212,7 @@ export function saveBlocked(state: FieldsState): string | undefined {
     return "A variable on the Variables tab needs a name no secret or other variable holds, not PATH or TET_*";
   }
   if (state.mcp.some((row) => mcpRefusal(row, state.mcp) !== undefined)) {
-    return "A server on the MCP tab needs a name no other server holds";
+    return "A server on the MCP tab needs a name no other server holds and a URL starting with https:// or http://";
   }
   if (state.skills.skills !== false && state.skills.skillsFolder === "") {
     return "The skills on the Skills tab need a folder";

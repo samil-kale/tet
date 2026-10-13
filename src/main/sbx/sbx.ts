@@ -24,10 +24,11 @@ import type { SandboxedAgent } from "../agents/agent";
 import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
 import { runSbx, sbxError, sbxFailure, sbxJson, sbxRefusal, suppressSbxFirstRunWizard, writeIntoSandbox, type OnData } from "./sbx-cli";
-import { loadMcp, planMcp, readMcpNames, readRegisteredMcp, unloadMcp, type McpPlan } from "./sbx-mcp";
+import { listMcp, loadMcp, mcpNamesOf, planMcp, readMcpNames, readRegisteredMcp, unloadMcp, type ListedMcp, type McpPlan } from "./sbx-mcp";
 import { listSandboxes, mountableBy, readHostAllowed, readPolicy, sandboxControl, type SandboxList } from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
+import { readSbxSettings } from "../store/tet-json";
 import {
   droppedMountSpecs,
   fixedMountSpecs,
@@ -93,6 +94,16 @@ export function markAligned(name: string, settings: Aligned | undefined): void {
   } else {
     aligned.delete(name);
   }
+}
+
+/**
+ * Runs `action` holding the turn of every sandbox named (`sandboxSetups`), which a tab's start
+ * takes to bring its own in line: a Save's rows and a start's never reach one sandbox interleaved.
+ * Taken in one order, so two holders of several never wait on each other.
+ */
+export function inSandboxTurns<T>(names: readonly string[], action: () => Promise<T>): Promise<T> {
+  const held = [...names].sort().reduceRight((inner, name) => () => inTurn(sandboxSetups, name, inner), action);
+  return held();
 }
 
 export async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
@@ -533,9 +544,9 @@ interface SandboxAlignment {
   /** The env names whose value was just replaced (applySecrets). */
   changedSecrets: ReadonlySet<string>;
   live: SandboxReads;
-  /** Only for a running sandbox (loadMcp). A server in `told` sbx would not unload is refused; any
-   *  other was never a row of the project's. */
-  mcp?: Pick<McpPlan, "load" | "unload"> & { told: ReadonlySet<string> };
+  /** Only for a running sandbox (loadMcp). With `told`, only a server in it that sbx would not
+   *  unload is refused: a Save leaves a refused row out of tet.json, and any other never was one. */
+  mcp?: Pick<McpPlan, "load" | "unload"> & { told?: ReadonlySet<string> };
 }
 
 /**
@@ -569,10 +580,12 @@ export async function alignSandbox(name: string, to: SandboxAlignment, onData?: 
   );
   if (mcp) {
     const loaded = await loadMcp(name, mcp.load, onData);
-    const unloaded = await unloadMcp(name, mcp.unload, onData);
+    // Silent: a server that was never loaded answers an error, which is no news to the tab; what
+    // sbx would not unload comes back as refused instead.
+    const unloaded = await unloadMcp(name, mcp.unload);
     addProblems(refused, "mcp", {
       ...loaded,
-      ...Object.fromEntries(Object.entries(unloaded).filter(([server]) => mcp.told.has(server))),
+      ...Object.fromEntries(Object.entries(unloaded).filter(([server]) => mcp.told?.has(server) ?? true)),
     });
   }
   return refused;
@@ -662,22 +675,24 @@ export function sandboxEnv({
  * MCP servers unless it holds these rows already (`aligned`).
  * Applies tet.json as it stands and never writes it: what cannot be applied here
  * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
- * tell (sbxProblemNotices) — how a user learns that governance took over. Rejects when creating
- * fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's own cannot be mounted.
+ * tell (sbxProblemNotices) — how a user learns that governance took over. `savedOver` says a Save
+ * replaced tet.json's rows while this start ran, which then applied none of its own. Rejects when
+ * creating fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's own cannot be
+ * mounted.
  */
 export async function prepareSbxRun(
   request: SbxRunRequest,
-): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems }> {
+): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems; savedOver: boolean }> {
   const { agent, name, onData, secretValues, variableValues } = request;
   const { projectId } = request.ref;
   const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
   const align = aligned.get(name) !== alignedStamp(request.settings);
-  if (align && !created) {
-    // The start underway decides what the sandbox lists as published (readSandboxPorts).
-    await request.warm;
-  }
-  // A port a sandbox of the project forwards is in place already (applyProjectPorts).
-  const forwarded = align && request.settings.ports.length > 0 ? await readProjectPorts(projectId, request.sandboxes) : new Set<string>();
+  // The start underway decides what the sandbox lists as published (readSandboxPorts): only once
+  // it ran is the listing below the one alignAtStart works against.
+  const warmed = created || (align && (await request.warm) === true);
+  // Read once for the check and the alignment after it: each is an sbx process.
+  const published = align && request.settings.ports.length > 0 ? await readProjectPorts(projectId, request.sandboxes) : undefined;
+  const listedMcp = align && request.settings.mcp.length > 0 ? await listMcp() : undefined;
   const problems = await readSbxProblems({
     projectId,
     settings: request.settings,
@@ -687,7 +702,9 @@ export async function prepareSbxRun(
     organization: request.organization,
     rules: request.rules,
     ports: align,
-    published: forwarded,
+    // A port a sandbox of the project forwards is in place already (applyProjectPorts).
+    published: portKeys(published),
+    listedMcp,
   });
   const { settings, skills } = withoutProblems(request.settings, request.skills, problems);
   const { env, passed } = sandboxEnv({ ...request, settings });
@@ -714,16 +731,31 @@ export async function prepareSbxRun(
       addProblems(problems, grant.option, { [grant.row]: reason });
     }
   }
-  if (align) {
-    // One turn per sandbox: two tabs starting together would both apply, and the second finds it done.
-    const stamp = alignedStamp(settings);
-    const refusedRows = await inTurn(sandboxSetups, name, async (): Promise<SbxProblems> =>
-      aligned.get(name) === stamp ? {} : alignAtStart(request, settings),
-    );
-    mergeProblems(problems, refusedRows);
-    // In line only with every row applied: one left out, or refused, is tried at the next start.
-    markAligned(name, Object.keys(refusedRows).length === 0 && stamp === alignedStamp(request.settings) ? settings : undefined);
-  }
+  // One turn per sandbox, which a Save holds too (inSandboxTurns): two tabs starting together would
+  // both apply, and a Save meanwhile may have left this sandbox to its next start, so the mark is
+  // read within the turn whatever it was above.
+  const stamp = alignedStamp(request.settings);
+  let savedOver = false;
+  const refusedRows = await inTurn(sandboxSetups, name, async (): Promise<SbxProblems> => {
+    if (aligned.get(name) === stamp) {
+      return {};
+    }
+    // Saved over since this start read it: its rows are tet.json's no more, and applying them would
+    // take back what that Save set. Left to the next start, and told.
+    if (alignedStamp(await readSbxSettings(request.projectRefPath)) !== stamp) {
+      markAligned(name, undefined);
+      savedOver = true;
+      return {};
+    }
+    const rows = await alignAtStart(request, settings, { ports: warmed ? published : undefined, mcp: listedMcp });
+    // In line unless sbx refused a row, or a port or server was left out, which the next start
+    // tries again; a host, secret or variable left out waits for a Save, which brings it to every
+    // sandbox itself.
+    const left = settings.ports.length < request.settings.ports.length || settings.mcp.length < request.settings.mcp.length;
+    markAligned(name, Object.keys(rows).length === 0 && !left ? request.settings : undefined);
+    return rows;
+  });
+  mergeProblems(problems, refusedRows);
   addProblems(problems, "setup", await runSetup(name, settings.setup, onData));
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged. No agent positional either: sbx
@@ -746,22 +778,27 @@ export async function prepareSbxRun(
   }
   args.push("--", ...request.agentArgs);
   await suppressSbxFirstRunWizard();
-  return { args, env: passed, problems };
+  return { args, env: passed, problems, savedOver };
 }
 
 /**
  * A start's share of bringing its sandbox in line, the sandbox running by now (mountAll): hosts,
  * secrets and MCP servers (alignSandbox), and from the repository's sandbox the project's ports
  * (applyProjectPorts), this one first to take a missing one. Each listing is one sbx process for all
- * sandboxes. Not `sbx run -p` for the ports: `run --name` drops `-p` on an existing sandbox.
+ * sandboxes, and `read` holds what the start listed for its check already. Not `sbx run -p` for
+ * the ports: `run --name` drops `-p` on an existing sandbox.
  */
-async function alignAtStart(request: SbxRunRequest, settings: SbxProjectSettings): Promise<SbxProblems> {
+async function alignAtStart(
+  request: SbxRunRequest,
+  settings: SbxProjectSettings,
+  read: { ports?: Map<string, SbxPort[]>; mcp?: ListedMcp[] },
+): Promise<SbxProblems> {
   const { name, onData, organization } = request;
   const { projectId } = request.ref;
   const [hosts, secrets, registered] = await Promise.all([
     organization ? undefined : readSandboxHosts(),
     readSandboxSecrets(),
-    readMcpNames(),
+    read.mcp ? mcpNamesOf(read.mcp) : readMcpNames(),
   ]);
   const plan = await planMcp(settings.mcp, registered, onData);
   const refused = await alignSandbox(
@@ -773,7 +810,7 @@ async function alignAtStart(request: SbxRunRequest, settings: SbxProjectSettings
       secretValues: request.secretValues,
       changedSecrets: new Set(),
       live: { hosts, secrets },
-      mcp: { load: plan.load, unload: plan.unload, told: new Set() },
+      mcp: { load: plan.load, unload: plan.unload },
     },
     onData,
   );
@@ -785,14 +822,19 @@ async function alignAtStart(request: SbxRunRequest, settings: SbxProjectSettings
     );
     const running = [name, ...others.filter((other) => request.sandboxes.get(other)?.running)];
     const stopped = others.filter((other) => !running.includes(other));
-    addProblems(refused, "ports", await applyProjectPorts({ running, stopped }, settings.ports, { onData }));
+    addProblems(refused, "ports", await applyProjectPorts({ running, stopped }, settings.ports, { read: read.ports, onData }));
   }
   return refused;
 }
 
-/** The ports the project's sandboxes publish — a stopped one lists none, and binds none. Rejects
- *  when sbx cannot say: read as none, a port a sandbox holds would read as in use here. */
-async function readProjectPorts(projectId: string, listed?: SandboxList): Promise<Set<string>> {
+/** readProjectPorts' as the keys readSbxProblems checks against; none where it was not read. */
+function portKeys(published: Map<string, SbxPort[]> | undefined): Set<string> {
+  return new Set([...(published?.values() ?? [])].flat().map(sbxPortKey));
+}
+
+/** The ports the project's sandboxes publish, by sandbox — a stopped one lists none, and binds
+ *  none. Rejects when sbx cannot say: read as none, a port a sandbox holds would read as in use here. */
+async function readProjectPorts(projectId: string, listed?: SandboxList): Promise<Map<string, SbxPort[]>> {
   const sandboxes = listed ?? (await listSandboxes());
   if (!sandboxes) {
     throw new Error("SBX could not list the sandboxes.");
@@ -803,7 +845,7 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
   if (published.includes(undefined)) {
     throw new Error("SBX could not list the sandboxes' ports.");
   }
-  return new Set(published.flatMap((ports) => ports ?? []).map(sbxPortKey));
+  return new Map(names.map((name, index) => [name, published[index] ?? []]));
 }
 
 /** What readSbxProblems checks: the rows, and what this machine holds for them. */
@@ -824,6 +866,8 @@ interface SbxCheck {
   ports: boolean;
   /** readProjectPorts', when the caller has it already. */
   published?: ReadonlySet<string>;
+  /** listMcp's, when the caller has it already. */
+  listedMcp?: ListedMcp[];
   /** listSandboxes', when the caller has it already. */
   sandboxes?: SandboxList;
 }
@@ -864,7 +908,8 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     settings.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readPolicy().then((policy) => policy?.rules)) : Promise.resolve([]),
     organization ? Promise.all(settings.hosts.map(allowed)) : Promise.resolve(settings.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
-    check.published ?? (check.ports && settings.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),
+    check.published ??
+      (check.ports && settings.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes).then(portKeys) : new Set<string>()),
     Promise.all(check.agents.map((agent) => sandboxSkillsFor(agent, skills.skillsFolder))),
   ]);
   if (rules === undefined) {
@@ -907,7 +952,10 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     }
   }
   if (check.ports && settings.mcp.length > 0) {
-    const registered = await readRegisteredMcp(settings.mcp.map((server) => server.name));
+    const registered = await readRegisteredMcp(
+      settings.mcp.map((server) => server.name),
+      check.listedMcp,
+    );
     if (registered === undefined) {
       throw new Error("SBX could not list its registered MCP servers.");
     }

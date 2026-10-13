@@ -3,7 +3,7 @@ import type { SbxMcpServer, SbxRegisteredMcp } from "../../shared/types/sbx";
 import { runSbx, sbxFailure, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
 
 /** One entry of `sbx mcp ls --json`. */
-interface ListedMcp {
+export interface ListedMcp {
   name?: string;
   transport?: string;
   status?: string;
@@ -14,25 +14,31 @@ interface InspectedMcp {
   url?: string;
 }
 
-/** The names sbx has registered, from one `mcp ls --json` (`[]` when none). Undefined when sbx does
- *  not answer: read as none, every server would be registered a second time. */
-async function listMcp(): Promise<ListedMcp[] | undefined> {
+/** What sbx has registered, from one `mcp ls --json` (`[]` when none). Undefined when sbx does not
+ *  answer: read as none, every server would be registered a second time. */
+export async function listMcp(): Promise<ListedMcp[] | undefined> {
   const listed = await sbxJson<ListedMcp[]>(["mcp", "ls", "--json"]);
   return Array.isArray(listed) ? listed : undefined;
 }
 
+/** listMcp's names. */
+export function mcpNamesOf(listed: readonly ListedMcp[]): Set<string> {
+  return new Set(listed.flatMap((entry) => (entry.name ? [entry.name] : [])));
+}
+
 export async function readMcpNames(): Promise<Set<string> | undefined> {
   const listed = await listMcp();
-  return listed && new Set(listed.flatMap((entry) => (entry.name ? [entry.name] : [])));
+  return listed && mcpNamesOf(listed);
 }
 
 /**
  * The servers sbx has registered, each with the URL it was registered under (empty for a local
  * command), for the MCP tab's picker and the check of a typed row against its registration. Only
- * `only`'s when given, as each is an `inspect`. Undefined when sbx does not answer.
+ * `only`'s when given, as each is an `inspect`; `known` is listMcp's where the caller has it.
+ * Undefined when sbx does not answer.
  */
-export async function readRegisteredMcp(only?: readonly string[]): Promise<SbxRegisteredMcp[] | undefined> {
-  const listed = await listMcp();
+export async function readRegisteredMcp(only?: readonly string[], known?: ListedMcp[]): Promise<SbxRegisteredMcp[] | undefined> {
+  const listed = known ?? (await listMcp());
   if (!listed) {
     return undefined;
   }

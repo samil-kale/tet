@@ -316,12 +316,14 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   // Asked from the moment the rows are loaded, not when their tab is opened; not while SBX is disabled,
   // which applies none of them.
   const problems = useSbxProblems(project.id, state, stored, phase.kind === "ready" && enabled, organization);
-  // Asked once ready, not when the MCP tab is opened: its mark is on the tab.
+  // Asked once ready, not when the MCP tab is opened: its mark is on the tab. Only for a project
+  // with servers, as each registered one is an sbx process; the picker asks on opening.
+  const asksMcp = phase.kind === "ready" && enabled && loaded.mcp.length > 0;
   useEffect(() => {
-    if (phase.kind === "ready") {
+    if (asksMcp) {
       askMcp();
     }
-  }, [phase.kind]);
+  }, [asksMcp]);
   const marks = useMemo(() => tabMarks(state, problems, mcpRegistered), [state, problems, mcpRegistered]);
   const tabs = useMemo(
     () =>

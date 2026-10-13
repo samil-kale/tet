@@ -337,11 +337,13 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
     const hooks = agent.sandbox.prepare(paths);
     const handoverDir = input.handover && sandboxHandoverDir(this.agentDir, input.handover.from, input.handover.sessionId);
     try {
+      // Said first: sbx prints nothing of its own until its first step answers.
+      input.onData("Preparing sandbox\r\n");
       const files =
         input.handover && handoverDir !== undefined
           ? (await copyInto(input.handover, handoverDir, this.agentDir)).map(toContainerPath)
           : undefined;
-      const { args, env, problems } = await prepareSbxRun({
+      const { args, env, problems, savedOver } = await prepareSbxRun({
         agent,
         name: this.name,
         ref: at.ref,
@@ -362,6 +364,9 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
       });
       for (const notice of sbxProblemNotices(problems)) {
         onNotice("warning", notice);
+      }
+      if (savedOver) {
+        onNotice("warning", "The SBX Settings were saved while this tab started. Restart it to take them up.");
       }
       return { executable: "sbx", args, envOverride: env, handoverDir };
     } catch (error) {

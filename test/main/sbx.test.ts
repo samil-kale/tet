@@ -307,8 +307,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   it("publishes a port tet.json already listed, because the sandbox never published it", async () => {
     const { result, calls } = await save({ has: [], before: [3000], now: [3000] });
-    // Listed before anything changes (assertReadable), then worked against.
+    // Listed again within the sandbox's turn, for which runs now, and read before anything changes
+    // (assertReadable), then worked against.
     assert.deepEqual(calls, [
+      "ls --json",
       "ls --json",
       "policy ls --type network --include-inactive --json",
       `ports ${name} --json`,
@@ -716,6 +718,9 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const [wanted, stale] = [47813, 47814];
       const { dir, repoFolder } = fakeSbx({ published: [listed(stale)], filesystemRules: ALLOW_ALL, registered: [{ name: "stale" }] });
       const rows = { ports: [port(wanted)], hosts: ["example.com"], mcp: [notion] };
+      const onDisk = (saved: Partial<SbxProjectSettings>) =>
+        writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...saved });
+      await onDisk(rows);
       const first = await withSbx(dir, () => start(dir, repoFolder, rows));
       assert.deepEqual(first.result.problems, {});
       assert.deepEqual(
@@ -733,8 +738,30 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const second = await withSbx(dir, () => start(dir, repoFolder, rows));
       assert.deepEqual(aligning(second.calls), [], "a second tab of the sandbox");
       fs.rmSync(path.join(dir, "calls.log"));
+      await onDisk({ ...rows, hosts: [] });
       const changed = await withSbx(dir, () => start(dir, repoFolder, { ...rows, hosts: [] }));
       assert.ok(aligning(changed.calls).length > 0, "a tet.json changed without a Save");
+      fs.rmSync(path.join(dir, "calls.log"));
+      await onDisk({ ...rows, hosts: ["saved.example.com"] });
+      const savedOver = await withSbx(dir, () => start(dir, repoFolder, rows));
+      assert.deepEqual(
+        aligning(savedOver.calls).filter((call) => !/ ls |--json$/.test(call) && !call.startsWith("mcp inspect")),
+        [],
+        "rows a Save replaced while the tab started are not applied",
+      );
+      assert.deepEqual([first.result.savedOver, savedOver.result.savedOver], [false, true], "and the tab is told so");
+    });
+
+    it("asks nothing again for a sandbox whose one row left out waits for a Save", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
+      const rows = { secrets: [{ env: "TOKEN", hosts: ["api.example.com"] }] };
+      await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
+      const first = await withSbx(dir, () => start(dir, repoFolder, rows));
+      assert.deepEqual(first.result.problems, { secrets: { TOKEN: SBX_PROBLEM.noValue } });
+      fs.rmSync(path.join(dir, "calls.log"));
+      const second = await withSbx(dir, () => start(dir, repoFolder, rows));
+      assert.deepEqual(aligning(second.calls), []);
+      assert.deepEqual(second.result.problems, first.result.problems, "told at every start all the same");
     });
   });
 
@@ -858,6 +885,16 @@ describe("an SBX Settings MCP row", () => {
     const notion = { name: "notion", url: "https://mcp.notion.com/mcp" };
     assert.equal(sbxMcpRefusal(notion, []), undefined);
     assert.ok(sbxMcpRefusal(notion, [{ name: " notion ", url: "" }]));
+  });
+
+  it("takes an http(s) URL, an image of sbx's own registry or none, and nothing else", () => {
+    const refusal = (url: string) => sbxMcpRefusal({ name: "notion", url }, []);
+    for (const url of ["", " https://mcp.notion.com/mcp ", "http://localhost:3000/mcp", "dhi.io/notion:1"]) {
+      assert.equal(refusal(url), undefined, url);
+    }
+    for (const url of ["mcp.notion.com/mcp", "https://", "ftp://mcp.notion.com", "https://mcp notion.com", "dhi.io/a b"]) {
+      assert.ok(refusal(url), url);
+    }
   });
 
   it("reads a URL as the one it was registered under, apart from a trailing slash", () => {

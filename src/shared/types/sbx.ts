@@ -71,8 +71,8 @@ export interface SbxVariable {
 }
 
 /**
- * An "MCP" row: an MCP server by its sbx name, registered with sbx when it is not yet (sbx.ts's
- * registerMcp) and loaded into every sandbox of the project. `url` is what a missing registration
+ * An "MCP" row: an MCP server by its sbx name, registered with sbx when it is not yet (sbx-mcp.ts's
+ * planMcp) and loaded into every sandbox of the project. `url` is what a missing registration
  * is made from; empty for a registered server without one (a local command), which is only loaded.
  */
 export interface SbxMcpServer {
@@ -83,7 +83,7 @@ export interface SbxMcpServer {
 /** sbx's status word for a registered server that wants a sign-in (`sbx mcp ls --json`). */
 export const SBX_MCP_NEEDS_AUTH = "needs-auth";
 
-/** A server sbx has registered, for the MCP tab's picker (sbx.ts's readRegisteredMcp). */
+/** A server sbx has registered, for the MCP tab's picker (sbx-mcp.ts's readRegisteredMcp). */
 export interface SbxRegisteredMcp extends SbxMcpServer {
   /** sbx's own words for how it is reached, e.g. `remote http`. */
   transport: string;
@@ -102,8 +102,8 @@ export interface SbxProjectSettings {
   hosts: string[];
   secrets: SbxSecret[];
   variables: SbxVariable[];
-  /** Loaded into every sandbox of the project at Save and into a new one at its first start; a row removed is
-   *  unloaded at Save. The registration stays (sbx.ts's registerMcp). */
+  /** Loaded into every running sandbox of the project at Save and into any other at its next tab's
+   *  start, where a row removed is unloaded too (sbx.ts's alignSandbox). The registration stays. */
   mcp: SbxMcpServer[];
   /** A script, by its lines (sbx-rules.ts's setupLines), run by `sh -e` as root in each sandbox at a
    *  tab's start: once per sandbox, and again once its text changes (sbx.ts's runSetup). What an
