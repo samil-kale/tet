@@ -1314,7 +1314,6 @@ textarea:focus,
    `.dialog-field span`, which would grey it in a checkbox's label. */
 .inline-name,
 .dialog-field .inline-name {
-  margin: 0 2px;
   font-family: var(--tet-editor-font-family);
   font-size: var(--tet-font-size);
   color: inherit;
