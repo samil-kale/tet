@@ -9,14 +9,20 @@ import { after, before, describe, it } from "node:test";
 import { SANDBOXED_AGENTS } from "../../src/main/agents";
 import type { AgentDefinition, AgentSessionInfo } from "../../src/main/agents/agent";
 import { askAgent } from "../../src/main/agents/ask";
-import { readSbxVersion, SBX_VERIFIED_VERSION } from "../../src/main/sbx/sbx-cli";
+import { claudeAgent } from "../../src/main/agents/claude";
+import { prepareSbxRun, readSandboxHosts, readSandboxPorts, sandboxName } from "../../src/main/sbx/sbx";
+import { readSbxVersion, runSbx, SBX_VERIFIED_VERSION } from "../../src/main/sbx/sbx-cli";
 import { ensureRunning, pathMountSpecs } from "../../src/main/sbx/sbx-mounts";
 import { parseFilesystemRules } from "../../src/main/sbx/sbx-policy";
+import { saveSbxSettings } from "../../src/main/sbx/sbx-save";
+import { listSandboxes } from "../../src/main/sbx/sbx-status";
+import { readSbxSettings, writeSbxSettings } from "../../src/main/store/tet-json";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { resolveCommand } from "../../src/main/util/process";
 import type { ControlEvent } from "../../src/shared/ctl";
 import type { AgentId } from "../../src/shared/types/agents";
 import type { Project } from "../../src/shared/types/project";
+import { EMPTY_SBX_SETTINGS, EMPTY_SBX_SKILLS, type SbxPort, type SbxProjectSettings } from "../../src/shared/types/sbx";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, startApp, stopApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
@@ -27,14 +33,16 @@ import { eventually, startApp, stopApp, tempDir, tetCtl, type TestApp } from "..
  * Only on a machine where they are installed and signed in, each part on its own switch:
  * - TET_AGENT_TEST=1: every agent in a tab of the real app, driven through tet-ctl. Spends model
  *   tokens, one short prompt and one background question per agent.
- * - TET_SBX_TEST=1: sbx's own commands on one throwaway sandbox, no agent run in it — the agents
- *   are the other switch's.
+ * - TET_SBX_TEST=1: sbx's own commands on one throwaway sandbox, then a tab's start and a Save
+ *   bringing a throwaway project's sandboxes in line with its tet.json; no agent run in any — the
+ *   agents are the other switch's.
  *
  * A version other than `install.verifiedVersion` (SBX_VERIFIED_VERSION) is reported, not failed; once a run
  * passes on it, it goes there.
  *
  * Leaves behind what the CLIs record themselves: AGENT_REPO as a folder the user trusts (Claude
- * Code, Codex). Sessions go with their tabs, the sandbox and its rules with `sbx rm`.
+ * Code, Codex). Sessions go with their tabs, the sandboxes and their rules with `sbx rm`, the MCP
+ * servers registered here with `sbx mcp rm`.
  */
 
 const HOST = process.env.TET_AGENT_TEST === "1";
@@ -340,6 +348,16 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     return sbx("exec", "-i", NAME, "sh", "-c", script);
   }
 
+  /** `sbx ls --json`'s sandboxes: a bare array, or under `sandboxes` as an older sbx prints them. */
+  function listedSandboxes(): { name?: string; workspaces?: string[] }[] {
+    const listed = sbx("ls", "--json");
+    assert.equal(listed.status, 0, `signed in: ${listed.stderr}`);
+    const parsed = JSON.parse(listed.stdout) as { name?: string }[] | { sandboxes?: { name?: string }[] };
+    const sandboxes = Array.isArray(parsed) ? parsed : parsed.sandboxes;
+    assert.ok(Array.isArray(sandboxes), `sandboxes in ${listed.stdout}`);
+    return sandboxes;
+  }
+
   before(() => {
     sbx("rm", NAME, "--force");
     for (const dir of [WORKSPACE, MOUNTS]) {
@@ -368,9 +386,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
   });
 
   it("answers the questions before a spawn in the shapes TET reads", () => {
-    const listed = sbx("ls", "--json");
-    assert.equal(listed.status, 0, `signed in: ${listed.stderr}`);
-    assert.ok(Array.isArray((JSON.parse(listed.stdout) as { sandboxes?: unknown }).sandboxes), `sandboxes[] in ${listed.stdout}`);
+    listedSandboxes();
 
     assert.equal(sbx("policy", "ls").status, 0, "a network policy set up");
 
@@ -385,8 +401,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     // As ensureSandboxExists creates one.
     const created = sbx("create", "claude", WORKSPACE, "--name", NAME, "--skills=off");
     assert.equal(created.status, 0, created.stdout + created.stderr);
-    const listed = JSON.parse(sbx("ls", "--json").stdout) as { sandboxes: { name?: string; workspaces?: string[] }[] };
-    assert.deepEqual(listed.sandboxes.find((sandbox) => sandbox.name === NAME)?.workspaces, [WORKSPACE]);
+    assert.deepEqual(listedSandboxes().find((sandbox) => sandbox.name === NAME)?.workspaces, [WORKSPACE]);
     const again = sbx("create", "claude", WORKSPACE, "--name", NAME, "--skills=off");
     assert.notEqual(again.status, 0, "a second create fails");
     assert.match(again.stderr, /already exists/);
@@ -540,7 +555,141 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
   it("removes the sandbox", { timeout: 120_000 }, () => {
     const removed = sbx("rm", NAME, "--force");
     assert.equal(removed.status, 0, removed.stderr);
-    const listed = JSON.parse(sbx("ls", "--json").stdout) as { sandboxes: { name?: string }[] };
-    assert.ok(!listed.sandboxes.some((sandbox) => sandbox.name === NAME));
+    assert.ok(!listedSandboxes().some((sandbox) => sandbox.name === NAME));
+  });
+
+  describe("brought in line with tet.json", () => {
+    /** Only ever this test's: its sandboxes and MCP servers are removed before and after. */
+    const ref = { projectId: "tet-sbx-test-project" };
+    const PROJECT = path.join(os.tmpdir(), "tet-sbx-test-project");
+    const AGENT_DIR = path.join(os.tmpdir(), "tet-sbx-test-agent");
+    /** The sandbox a Claude tab of the project runs in, and another agent's of the same project. */
+    const tabs = sandboxName(ref, "claude");
+    const other = sandboxName(ref, "codex");
+    /** A server tet.json names, and one sbx has registered that it does not. */
+    const [row, stray] = ["tet-sbx-test-row", "tet-sbx-test-stray"];
+    const NO_SKILLS = { previous: EMPTY_SBX_SKILLS, current: EMPTY_SBX_SKILLS };
+    const port = (host: number, container: number): SbxPort => ({ host: String(host), container: String(container) });
+    const rows = (over: Partial<SbxProjectSettings>): SbxProjectSettings => ({ ...EMPTY_SBX_SETTINGS, enabled: true, ...over });
+    /** What a Claude tab of the project starts with. */
+    const first = (url: string): SbxProjectSettings =>
+      rows({ hosts: ["example.com"], ports: [port(58124, 8080)], mcp: [{ name: row, url }] });
+    let server: http.Server;
+    let url = "";
+
+    /** Never `sbx` above: that blocks this loop, and the MCP server on it answers sbx. */
+    const ask = (...args: string[]) => runSbx(args);
+    const publishedBy = async (name: string): Promise<string[]> =>
+      ((await readSandboxPorts(name)) ?? []).map((entry) => `${entry.host}:${entry.container}`).sort();
+    const allowedIn = async (name: string): Promise<string[]> => ((await readSandboxHosts())?.get(name) ?? []).sort();
+
+    async function clear(): Promise<void> {
+      for (const name of [tabs, other]) {
+        await ask("rm", name, "--force");
+      }
+      for (const name of [row, stray]) {
+        await ask("mcp", "rm", "--force", name);
+      }
+      for (const dir of [PROJECT, AGENT_DIR]) {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+      }
+    }
+
+    before(async () => {
+      await clear();
+      fs.mkdirSync(PROJECT, { recursive: true });
+      fs.mkdirSync(AGENT_DIR, { recursive: true });
+      // An MCP server over HTTP that asks for no sign-in: as much as sbx needs to register and load it.
+      server = http.createServer((request, response) => {
+        let body = "";
+        request.on("data", (chunk: Buffer) => (body += chunk.toString()));
+        request.on("end", () => {
+          if (request.method !== "POST") {
+            response.writeHead(request.url?.includes(".well-known") ? 404 : 405).end();
+            return;
+          }
+          const message = JSON.parse(body) as { id?: number; method?: string; params?: { protocolVersion?: string } };
+          if (message.id === undefined) {
+            response.writeHead(202).end();
+            return;
+          }
+          const result =
+            message.method === "initialize"
+              ? {
+                  protocolVersion: message.params?.protocolVersion,
+                  capabilities: { tools: {} },
+                  serverInfo: { name: "tet-test", version: "1" },
+                }
+              : message.method === "tools/list"
+                ? { tools: [] }
+                : {};
+          response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }));
+        });
+      });
+      await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+      url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`;
+      const registered = await ask("mcp", "add", stray, "--url", url, "--skip-auth");
+      assert.equal(registered.ok, true, registered.stderr);
+    });
+
+    after(async () => {
+      await clear();
+      server.close();
+    });
+
+    it(
+      "at a tab's start: hosts, ports and MCP servers, a server never loaded unloaded without a word",
+      { timeout: CREATE_MS },
+      async () => {
+        const settings = first(url);
+        await writeSbxSettings(PROJECT, settings);
+        const sandboxes = await listSandboxes();
+        assert.ok(sandboxes, "sbx lists the sandboxes");
+        let output = "";
+        const started = await prepareSbxRun({
+          agent: claudeAgent,
+          name: tabs,
+          ref,
+          projectRefPath: PROJECT,
+          settings,
+          skills: EMPTY_SBX_SKILLS,
+          sandboxes,
+          paths: { agentDir: AGENT_DIR },
+          agentArgs: [],
+          secretValues: new Map(),
+          variableValues: new Map(),
+          onData: (data) => (output += data),
+        });
+        assert.deepEqual([started.problems, started.savedOver], [{}, false], output);
+        assert.doesNotMatch(output, /is not loaded/, "sbx's answer for the server that was never loaded stays out of the tab");
+        assert.deepEqual([await publishedBy(tabs), await allowedIn(tabs)], [["58124:8080"], ["example.com"]]);
+        // Loaded: sbx lists no sandbox's servers, but unloads only one it holds.
+        const unloaded = await ask("mcp", "unload", row, "--sandbox", tabs);
+        assert.equal(unloaded.ok, true, unloaded.stderr);
+        assert.equal((await ask("mcp", "load", row, "--sandbox", tabs)).ok, true);
+      },
+    );
+
+    it("at a Save: a running sandbox at once, a stopped one never started and its ports taken back", { timeout: CREATE_MS }, async () => {
+      // Another agent's sandbox of the project, stopped while it holds a port of tet.json.
+      assert.equal((await ask("create", "shell", PROJECT, "--name", other)).ok, true);
+      assert.equal((await ask("ports", other, "--publish", "58125:8081")).ok, true);
+      assert.equal((await ask("stop", other)).ok, true);
+      const sandboxes = await listSandboxes();
+      assert.ok(sandboxes, "sbx lists the sandboxes");
+      const next = rows({ hosts: ["example.org"], ports: [port(58125, 8081), port(58126, 8082)], mcp: [{ name: stray, url: "" }] });
+      const saved = await saveSbxSettings({ ref, path: PROJECT }, [], next, NO_SKILLS, new Map(), new Set(), undefined, sandboxes);
+      assert.deepEqual([saved.refused, saved.failures], [{}, []]);
+      assert.deepEqual(await readSbxSettings(PROJECT), next);
+      assert.equal((await listSandboxes())?.get(other)?.running, false, "the stopped sandbox is left stopped");
+      assert.deepEqual(await publishedBy(tabs), ["58125:8081", "58126:8082"], "the running one forwards them all");
+      assert.deepEqual([await allowedIn(tabs), await allowedIn(other)], [["example.org"], ["example.org"]]);
+      // What tet.json dropped is unloaded, what it names loaded.
+      assert.match((await ask("mcp", "unload", row, "--sandbox", tabs)).stderr, /is not loaded/);
+      assert.equal((await ask("mcp", "unload", stray, "--sandbox", tabs)).ok, true);
+      // Its port went unseen, so it starts while the running one holds that port.
+      assert.equal(await ensureRunning(other), true);
+      assert.deepEqual(await publishedBy(other), []);
+    });
   });
 });

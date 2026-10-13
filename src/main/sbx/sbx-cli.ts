@@ -134,7 +134,7 @@ export function cancelSbxSetup(): void {
 
 /** The sbx version test/e2e/agents.test.ts last passed against (TET_SBX_TEST=1); read by nothing in
  *  the app. */
-export const SBX_VERIFIED_VERSION = "0.45.1";
+export const SBX_VERIFIED_VERSION = "0.48.0";
 
 /** As long as an agent's version check, for `sbx version` and probeSbx's reads beside it: a hung
  *  daemon must hold neither the startup, the SBX Settings nor a tab's start. */
