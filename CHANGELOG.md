@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.8 (2026-10-13)
+
+- **Names set apart.** A branch, remote, tag, stash or file path in a menu entry or a question
+  stands apart from the words around it, in the editor's font.
+- **Fixes.** A sandbox's start shares the readiness check's sbx listing, so the sbx daemon starts
+  once.
+
 ## 0.18.7 (2026-10-13)
 
 - **Drag into terminals.** Rows of the lanes drag onto a terminal, which types what was dropped: a
