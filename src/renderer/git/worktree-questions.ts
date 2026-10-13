@@ -61,7 +61,7 @@ export async function askDeleteWorktree(worktree: ProjectRef, branch: string, up
     message: named`Are you sure you want to delete ${branch}?`,
     detail: "The worktree and its folder are deleted, and its terminals closed. Commits that exist only in this worktree are lost.",
     confirmLabel: "Delete worktree",
-    checkboxLabel: upstream ? named`Also delete ${upstream} on the remote` : undefined,
+    checkboxLabel: upstream ? "Also delete on remote" : undefined,
     checkboxChecked: (await window.tet.settings.get()).git.deleteWorktreeOnRemote,
   });
   if (!answer.confirmed || !(await canDiscardRefEdits(worktree))) {

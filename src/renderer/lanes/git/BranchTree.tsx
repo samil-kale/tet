@@ -189,7 +189,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
           COMMITS_LOST
         ),
       confirmLabel: "Delete branch",
-      checkboxLabel: upstream ? named`Also delete ${upstreamName(upstream)} on the remote` : undefined,
+      checkboxLabel: upstream ? "Also delete on remote" : undefined,
       checkboxChecked: (await window.tet.settings.get()).git.deleteBranchOnRemote,
     });
     if (answer.confirmed) {
@@ -275,7 +275,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       title: "Delete tag",
       message: named`Are you sure you want to delete the tag ${name}?`,
       confirmLabel: "Delete tag",
-      checkboxLabel: remote ? named`Also delete it on ${remote}` : undefined,
+      checkboxLabel: remote ? "Also delete on remote" : undefined,
       checkboxChecked: (await window.tet.settings.get()).git.deleteTagOnRemote,
     });
     if (answer.confirmed) {
