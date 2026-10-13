@@ -91,7 +91,7 @@ export const piAgent: SandboxedAgent = {
     },
     // Skills in `~/.pi/agent/skills` and `~/.agents/skills`, `~/.pi/agent/AGENTS.md`
     // (`AGENTS.override.md` preferred) — under the agent dir the sessions are read from.
-    knowledge: () => {
+    skills: () => {
       const agentDir = piAgentDir();
       const instructionsHost = [path.join(agentDir, "AGENTS.override.md"), path.join(agentDir, "AGENTS.md")].find((file) =>
         fs.existsSync(file),

@@ -18,10 +18,10 @@ export interface SbxPath {
   access: SbxAccess;
 }
 
-/** Which non-identity host knowledge to mount into the sandbox, with which access; `false` is off.
- *  Agent-agnostic — the paths per agent are `AgentSandbox.knowledge`. Kept on this
+/** Which non-identity host skills to mount into the sandbox, with which access; `false` is off.
+ *  Agent-agnostic — the paths per agent are `AgentSandbox.skills`. Kept on this
  *  machine per project, never in tet.json (sbx-local.ts): it names this machine's folders. */
-export interface SbxKnowledgeSettings {
+export interface SbxSkillsSettings {
   skills: SbxAccess | false;
   /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */
   instructions: SbxAccess | false;
@@ -30,23 +30,23 @@ export interface SbxKnowledgeSettings {
   skillsFolder?: string;
 }
 
-/** The kinds of knowledge, each switched on with an access. */
-export type SbxKnowledgeKind = Exclude<keyof SbxKnowledgeSettings, "skillsFolder">;
+/** The kinds of skills, each switched on with an access. */
+export type SbxSkillsKind = Exclude<keyof SbxSkillsSettings, "skillsFolder">;
 
-/** One piece of host knowledge, and where the sandboxed CLI reads it. */
-export interface SbxKnowledgeEntry {
+/** One piece of host skills, and where the sandboxed CLI reads it. */
+export interface SbxSkillsEntry {
   host: string;
   /** Absolute container path, under the sandbox's home. */
   target: string;
 }
 
-/** An agent installed on this machine, and what the Knowledge tab's rows mount for it
- *  (sbx-mounts.ts's readKnowledgeSources). */
-export interface SbxKnowledgeSource {
+/** An agent installed on this machine, and what the Skills tab's rows mount for it
+ *  (sbx-mounts.ts's readSkillsSources). */
+export interface SbxSkillsSource {
   agentId: AgentId;
   displayName: string;
   /** Per kind, what exists here of the agent's own. */
-  own: Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
+  own: Record<SbxSkillsKind, SbxSkillsEntry[]>;
   /** Where a chosen `skillsFolder` goes in its sandbox. */
   skillsTargets: string[];
 }
@@ -91,9 +91,9 @@ export interface SbxProjectSettings {
 export type SbxValueKind = "secrets" | "variables";
 
 /** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets and
- *  Variables rows hold a value here — never a value — and the knowledge. */
+ *  Variables rows hold a value here — never a value — and the skills. */
 export interface SbxStoredLocal extends Record<SbxValueKind, string[]> {
-  knowledge: SbxKnowledgeSettings;
+  skills: SbxSkillsSettings;
 }
 
 /**
@@ -107,11 +107,11 @@ export interface SbxLocalEdits {
 }
 
 export interface SbxLocalSave extends Record<SbxValueKind, SbxLocalEdits> {
-  knowledge: SbxKnowledgeSettings;
+  skills: SbxSkillsSettings;
 }
 
-/** Every kind off, each agent's own skills: no knowledge stored for a project. */
-export const EMPTY_SBX_KNOWLEDGE: SbxKnowledgeSettings = { skills: false, instructions: false };
+/** Every kind off, each agent's own skills: no skills stored for a project. */
+export const EMPTY_SBX_SKILLS: SbxSkillsSettings = { skills: false, instructions: false };
 
 /** A rule sbx's policy must allow before TET can sandbox a project (sbx-status.ts's
  *  readSbxBlockers). */
@@ -164,11 +164,11 @@ export interface SbxSignInResult {
 }
 
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
-export type SbxOption = "hosts" | "paths" | "knowledge" | "ports" | "secrets" | "variables" | "setup";
+export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "secrets" | "variables" | "setup";
 
 /**
  * What of the SBX Settings cannot be applied here, per option: each row's key (the host, the path
- * as configured, the knowledge kind, `host:container`, the env name, the setup script's last error
+ * as configured, the skills kind, `host:container`, the env name, the setup script's last error
  * line) with what is wrong with it (sbx.ts's readSbxProblems). Such a row is neither saved nor
  * applied — the setup script, known to fail only once run, is saved and tried again at the next
  * start.

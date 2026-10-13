@@ -7,7 +7,7 @@ import type { CheckoutTarget, GitActionResult, RepositoryState } from "../../sha
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type {
   SbxAccount,
-  SbxKnowledgeSettings,
+  SbxSkillsSettings,
   SbxLocalSave,
   SbxProblems,
   SbxProjectSettings,
@@ -195,7 +195,7 @@ export interface ControlDeps {
     problems(
       project: Project,
       settings: SbxProjectSettings,
-      knowledge: SbxKnowledgeSettings,
+      skills: SbxSkillsSettings,
       values: Record<SbxValueKind, string[]>,
       reading?: SbxReading,
     ): Promise<SbxProblems>;

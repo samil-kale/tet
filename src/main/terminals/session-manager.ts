@@ -693,7 +693,7 @@ export class TabSessionManager {
       warm,
       idleReminder: this.settings.get().notifications.idleReminder,
       theme: currentTheme(this.settings),
-      knowledge: this.sbxLocal.knowledge(projectId),
+      skills: this.sbxLocal.skills(projectId),
       secretValues: this.sbxLocal.values(projectId, "secrets"),
       variableValues: this.sbxLocal.values(projectId, "variables"),
     });

@@ -2,19 +2,11 @@ import * as crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import { CONTROL_ENV } from "../../shared/ctl";
-import { SBX_KNOWLEDGE_KINDS, SBX_PROBLEM, addProblems, forbiddenBy, isPort, sbxPortKey, withoutProblems } from "../../shared/sbx-rules";
+import { SBX_SKILLS_KINDS, SBX_PROBLEM, addProblems, forbiddenBy, isPort, sbxPortKey, withoutProblems } from "../../shared/sbx-rules";
 import { refKeyOf } from "../../shared/types/project";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type {
-  SbxAccess,
-  SbxKnowledgeSettings,
-  SbxOption,
-  SbxPort,
-  SbxProblems,
-  SbxProjectSettings,
-  SbxSecret,
-} from "../../shared/types/sbx";
+import type { SbxAccess, SbxSkillsSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings, SbxSecret } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/async";
@@ -30,7 +22,7 @@ import {
   fixedMountSpecs,
   grantsOf,
   mountAll,
-  sandboxKnowledgeFor,
+  sandboxSkillsFor,
   sessionMountSpecs,
   worktreeMountSpecs,
   type SandboxPaths,
@@ -88,7 +80,7 @@ export async function removeRefSandboxes(refs: ProjectRef[]): Promise<void> {
  * Returns whether it created one, which needs seeding from tet.json (prepareSbxRun's allowHosts).
  *
  * `--skills=off`: sbx otherwise binds its own skills store read-only at the agent's skills
- * directory (`~/.claude/skills`), the very target of TET's knowledge mount, which would stack over
+ * directory (`~/.claude/skills`), the very target of TET's skills mount, which would stack over
  * the store and leave it showing once unmounted. Create-time, so a sandbox keeps what it was made
  * with.
  *
@@ -361,8 +353,8 @@ interface SbxRunRequest {
   ref: ProjectRef;
   projectRefPath: string;
   settings: SbxProjectSettings;
-  /** This machine's knowledge for the project (SbxLocalStore.knowledge). */
-  knowledge: SbxKnowledgeSettings;
+  /** This machine's skills for the project (SbxLocalStore.skills). */
+  skills: SbxSkillsSettings;
   /** What `checkSbxReady` just listed, so it is not listed again. */
   sandboxes: SandboxList;
   /** The organization managing sbx's policy, as `checkSbxReady` read it (readSbxProblems). */
@@ -427,7 +419,7 @@ export function sandboxEnv({
 }
 
 /**
- * Readies a tab's sandbox and returns the `sbx run` arguments: TET's mounts, knowledge and Allowed
+ * Readies a tab's sandbox and returns the `sbx run` arguments: TET's mounts, skills and Allowed
  * paths, ports, secrets and variables (sandboxEnv: `env` for the caller to spawn `sbx run` with),
  * and with a control channel its env and the `tet-ctl` launcher. Creates the sandbox itself
  * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent.
@@ -468,7 +460,7 @@ async function readySandboxRun(
   const problems = await readSbxProblems({
     projectId,
     settings: request.settings,
-    knowledge: request.knowledge,
+    skills: request.skills,
     values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
     agents: [agent],
     organization: request.organization,
@@ -476,7 +468,7 @@ async function readySandboxRun(
     ports: created,
     published: forwarded,
   });
-  const { settings, knowledge } = withoutProblems(request.settings, request.knowledge, problems);
+  const { settings, skills } = withoutProblems(request.settings, request.skills, problems);
   const { env, passed } = sandboxEnv({ ...request, settings });
   // TET's own folders are not skipped: without them the agent has no hook settings or listable
   // sessions, silently. Everything else is in place by here, so a refusal is sbx's policy, and the
@@ -486,7 +478,7 @@ async function readySandboxRun(
     ...worktreeMountSpecs(request.projectRefPath),
     ...(await sessionMountSpecs(request.sessionMounts ?? [])),
   ];
-  const grants = await grantsOf(agent, knowledge, settings.paths);
+  const grants = await grantsOf(agent, skills, settings.paths);
   // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
   const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
   const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
@@ -558,10 +550,10 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
 interface SbxCheck {
   projectId: string;
   settings: SbxProjectSettings;
-  knowledge: SbxKnowledgeSettings;
+  skills: SbxSkillsSettings;
   /** The env names holding a value here: stored, or typed at this Save. */
   values: { secrets: ReadonlySet<string>; variables: ReadonlySet<string> };
-  /** Whose knowledge is mounted: every agent at Save, the starting one at its spawn. */
+  /** Whose skills is mounted: every agent at Save, the starting one at its spawn. */
   agents: readonly SandboxedAgent[];
   /** readPolicy's. */
   organization: string | undefined;
@@ -582,7 +574,7 @@ interface SbxCheck {
  * applying; what sbx refuses then is a problem too.
  * - hosts: only under governance, asked of the organization's policy (readHostAllowed), as no
  *   local rule applies there (allowHosts). Without it TET adds the rule.
- * - paths and knowledge: must exist, and sbx's filesystem rules allow the mount with its access
+ * - paths and skills: must exist, and sbx's filesystem rules allow the mount with its access
  *   (sbx-policy.ts's prediction: sbx has no `policy check` for them).
  * - ports: the host port is free, unless one of the project's sandboxes holds it.
  * - secrets: a value here, and every host reachable; an Allowed host counts without governance.
@@ -591,11 +583,11 @@ interface SbxCheck {
  * could not be asked about is no refusal.
  */
 export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
-  const { settings, knowledge, values, organization } = check;
+  const { settings, skills, values, organization } = check;
   const forbidden = forbiddenBy(organization);
   const problems: SbxProblems = {};
   const add = (option: SbxOption, row: string, reason: string): void => addProblems(problems, option, { [row]: reason });
-  const kinds = SBX_KNOWLEDGE_KINDS.filter((kind) => knowledge[kind] !== false);
+  const kinds = SBX_SKILLS_KINDS.filter((kind) => skills[kind] !== false);
   const secretHosts = [...new Set(settings.secrets.flatMap((secret) => secret.hosts))];
   // A host both allowed and a secret's is asked once.
   const asked = new Map<string, Promise<boolean>>();
@@ -610,7 +602,7 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     organization ? Promise.all(settings.hosts.map(allowed)) : Promise.resolve(settings.hosts.map(() => true)),
     Promise.all(secretHosts.map(reachable)),
     check.published ?? (check.ports && settings.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes) : new Set<string>()),
-    Promise.all(check.agents.map((agent) => sandboxKnowledgeFor(agent, knowledge.skillsFolder))),
+    Promise.all(check.agents.map((agent) => sandboxSkillsFor(agent, skills.skillsFolder))),
   ]);
   if (rules === undefined) {
     throw new Error("SBX could not list its filesystem rules.");
@@ -618,11 +610,11 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   const mountable = mountableBy(rules);
 
   for (const kind of kinds) {
-    const access = knowledge[kind] as SbxAccess;
-    if (kind === "skills" && knowledge.skillsFolder !== undefined && !existsSync(knowledge.skillsFolder)) {
-      add("knowledge", kind, SBX_PROBLEM.missing);
+    const access = skills[kind] as SbxAccess;
+    if (kind === "skills" && skills.skillsFolder !== undefined && !existsSync(skills.skillsFolder)) {
+      add("skills", kind, SBX_PROBLEM.missing);
     } else if (own.some((entries) => entries[kind].some((entry) => !mountable(entry.host, access)))) {
-      add("knowledge", kind, forbidden);
+      add("skills", kind, forbidden);
     }
   }
   if (check.ports) {

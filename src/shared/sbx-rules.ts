@@ -7,8 +7,8 @@
 import { envNameKey, isEnvName, isReservedName } from "./env-rules";
 import { ownValue } from "./own-value";
 import type {
-  SbxKnowledgeSettings,
-  SbxKnowledgeKind,
+  SbxSkillsSettings,
+  SbxSkillsKind,
   SbxLocalEdits,
   SbxOption,
   SbxPort,
@@ -18,8 +18,8 @@ import type {
   SbxVariable,
 } from "./types/sbx";
 
-/** Every kind of knowledge, in the Knowledge tab's order. */
-export const SBX_KNOWLEDGE_KINDS: SbxKnowledgeKind[] = ["skills", "instructions"];
+/** Every kind of skills, in the Skills tab's order. */
+export const SBX_SKILLS_KINDS: SbxSkillsKind[] = ["skills", "instructions"];
 
 /** What `sbx ports --publish` and `sbx run -p` take: a whole number from 1 to 65535. */
 export function isPort(value: string): boolean {
@@ -69,7 +69,7 @@ export function sbxVariableRefusal(
 }
 
 /**
- * Whether going from `loaded` and `loadedKnowledge` to `settings` and `knowledge` reaches a running
+ * Whether going from `loaded` and `loadedSkills` to `settings` and `skills` reaches a running
  * tab only once it restarts: a mount is added at a tab's start (a removed one goes at Save), and
  * `sbx run -e` sets a variable, a new secret's placeholder included, only there (sbx.ts's
  * prepareSbxRun), as a changed setup script runs there. Ports, hosts and a secret's value or hosts
@@ -77,14 +77,14 @@ export function sbxVariableRefusal(
  */
 export function sbxNeedsRestart(
   loaded: SbxProjectSettings,
-  loadedKnowledge: SbxKnowledgeSettings,
+  loadedSkills: SbxSkillsSettings,
   settings: Omit<SbxProjectSettings, "enabled">,
-  knowledge: SbxKnowledgeSettings,
+  skills: SbxSkillsSettings,
 ): boolean {
   const names = (variables: SbxProjectSettings["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
   return (
-    SBX_KNOWLEDGE_KINDS.some((kind) => knowledge[kind] !== false && knowledge[kind] !== loadedKnowledge[kind]) ||
-    (knowledge.skills !== false && knowledge.skillsFolder !== loadedKnowledge.skillsFolder) ||
+    SBX_SKILLS_KINDS.some((kind) => skills[kind] !== false && skills[kind] !== loadedSkills[kind]) ||
+    (skills.skills !== false && skills.skillsFolder !== loadedSkills.skillsFolder) ||
     settings.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
     settings.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
     names(settings.variables) !== names(loaded.variables) ||
@@ -124,7 +124,7 @@ export function forbiddenBy(organization: string | undefined): string {
 }
 
 /** In the dialog's tab order. */
-const SBX_OPTIONS: SbxOption[] = ["knowledge", "ports", "paths", "hosts", "secrets", "variables", "setup"];
+const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "secrets", "variables", "setup"];
 
 /**
  * What a sandboxed session's start could not apply, one notice per option and reason, its rows
@@ -181,15 +181,15 @@ export function sbxPortKey(port: SbxPort): string {
 }
 
 /** What is saved and applied: the rows readSbxProblems found nothing wrong with, a kind of
- *  knowledge with a problem off. */
+ *  skills with a problem off. */
 export function withoutProblems(
   settings: SbxProjectSettings,
-  knowledge: SbxKnowledgeSettings,
+  skills: SbxSkillsSettings,
   problems: SbxProblems,
-): { settings: SbxProjectSettings; knowledge: SbxKnowledgeSettings } {
+): { settings: SbxProjectSettings; skills: SbxSkillsSettings } {
   const fine = (option: SbxOption, row: string): boolean => problemOf(problems, option, row) === undefined;
-  const next = { ...knowledge };
-  for (const kind of SBX_KNOWLEDGE_KINDS.filter((candidate) => !fine("knowledge", candidate))) {
+  const next = { ...skills };
+  for (const kind of SBX_SKILLS_KINDS.filter((candidate) => !fine("skills", candidate))) {
     next[kind] = false;
   }
   return {
@@ -201,6 +201,6 @@ export function withoutProblems(
       secrets: settings.secrets.filter((secret) => fine("secrets", secret.env)),
       variables: settings.variables.filter((variable) => fine("variables", variable.env)),
     },
-    knowledge: next,
+    skills: next,
   };
 }

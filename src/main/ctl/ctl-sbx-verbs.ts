@@ -1,9 +1,9 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
-import { SBX_ACCESS, type SbxKnowledgeSettings, type SbxProjectSettings, type SbxSecret, type SbxVariable } from "../../shared/types/sbx";
+import { SBX_ACCESS, type SbxSkillsSettings, type SbxProjectSettings, type SbxSecret, type SbxVariable } from "../../shared/types/sbx";
 import {
-  SBX_KNOWLEDGE_KINDS,
+  SBX_SKILLS_KINDS,
   keptValues,
   sbxNeedsRestart,
   sbxPortRefusal,
@@ -60,9 +60,9 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
   const editSbx = async (
     args: Record<string, unknown>,
     caller: ControlRequest["caller"],
-    edit: (loaded: { settings: SbxProjectSettings; knowledge: SbxKnowledgeSettings }) => {
+    edit: (loaded: { settings: SbxProjectSettings; skills: SbxSkillsSettings }) => {
       settings?: SbxProjectSettings;
-      knowledge?: SbxKnowledgeSettings;
+      skills?: SbxSkillsSettings;
       variableValues?: Record<string, string>;
     },
     switching = false,
@@ -76,20 +76,20 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
     }
     const reading = await readySbx(found);
     const settings = await deps.sbx.settings(found);
-    const { knowledge } = deps.sbx.stored(found.id);
+    const { skills } = deps.sbx.stored(found.id);
     if (!settings.enabled && !switching) {
       throw new ControlError("bad_args", `SBX is disabled for ${found.name}: sbx-set-enabled on first`);
     }
-    const next = edit({ settings, knowledge });
+    const next = edit({ settings, skills });
     const request = next.settings ?? settings;
-    const nextKnowledge = next.knowledge ?? knowledge;
+    const nextSkills = next.skills ?? skills;
     const saved = await deps.sbx.save(
       found,
       request,
       {
         secrets: keptValues(request.secrets),
         variables: { ...keptValues(request.variables), values: next.variableValues ?? {} },
-        knowledge: nextKnowledge,
+        skills: nextSkills,
       },
       reading,
     );
@@ -97,8 +97,8 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
     }
     const problems = saved.problems ?? {};
-    const applied = withoutProblems(request, nextKnowledge, problems);
-    const restartRequired = sbxNeedsRestart(settings, knowledge, applied.settings, applied.knowledge);
+    const applied = withoutProblems(request, nextSkills, problems);
+    const restartRequired = sbxNeedsRestart(settings, skills, applied.settings, applied.skills);
     return { result: { saved: true, restartRequired, ...(Object.keys(problems).length > 0 ? { notApplied: problems } : {}) } };
   };
 
@@ -158,7 +158,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       const found = refFrom(args, caller).project;
       const stored = deps.sbx.stored(found.id);
       const [reading, settings] = await Promise.all([deps.sbx.status(found), deps.sbx.settings(found)]);
-      const problems = await deps.sbx.problems(found, settings, stored.knowledge, stored, reading);
+      const problems = await deps.sbx.problems(found, settings, stored.skills, stored, reading);
       return { result: { status: reading.status, settings, stored, problems } };
     },
 
@@ -248,23 +248,23 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       });
     },
 
-    "sbx-set-knowledge": (args, caller) => {
-      const kind = oneOf(args, "kind", "kind", SBX_KNOWLEDGE_KINDS);
+    "sbx-set-skills": (args, caller) => {
+      const kind = oneOf(args, "kind", "kind", SBX_SKILLS_KINDS);
       const access = oneOf(args, "access", "access", ["off", ...SBX_ACCESS]);
-      return editSbx(args, caller, ({ knowledge }) => ({
-        knowledge: { ...knowledge, [kind]: access === "off" ? false : access },
+      return editSbx(args, caller, ({ skills }) => ({
+        skills: { ...skills, [kind]: access === "off" ? false : access },
       }));
     },
 
     "sbx-set-skills-folder": (args, caller) => {
       const typed = optionalText(args, "path");
       const folder = typed === undefined ? undefined : absolute(typed);
-      return editSbx(args, caller, ({ knowledge }) => {
-        const next = { ...knowledge, skillsFolder: folder };
+      return editSbx(args, caller, ({ skills }) => {
+        const next = { ...skills, skillsFolder: folder };
         if (folder === undefined) {
           delete next.skillsFolder;
         }
-        return { knowledge: next };
+        return { skills: next };
       });
     },
   };

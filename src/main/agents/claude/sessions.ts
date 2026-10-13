@@ -147,7 +147,7 @@ async function renameIn(root: string, cwd: string, sessionId: string, title: str
   }
 }
 
-/** Claude Code's config root, where its sessions and knowledge live; TET never overrides it. */
+/** Claude Code's config root, where its sessions and skills live; TET never overrides it. */
 export function claudeConfigDir(): string {
   return process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude");
 }

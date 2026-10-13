@@ -1,4 +1,4 @@
-import { SBX_KNOWLEDGE_KINDS } from "./sbx-rules";
+import { SBX_SKILLS_KINDS } from "./sbx-rules";
 import { EXPLORER_SORT_ORDERS } from "./types/files";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
@@ -405,9 +405,9 @@ const VERBS = [
     sandbox: "ownProject",
   },
   {
-    verb: "sbx-set-knowledge",
+    verb: "sbx-set-skills",
     group: "SBX",
-    usage: `sbx-set-knowledge <${SBX_KNOWLEDGE_KINDS.join("|")}> <off|ro|rw> [--project <id>]`,
+    usage: `sbx-set-skills <${SBX_SKILLS_KINDS.join("|")}> <off|ro|rw> [--project <id>]`,
     summary: "Mount the agents' own skills or instructions file (CLAUDE.md, AGENTS.md) into the sandboxes, or not.",
     positionals: ["kind", "access"],
   },

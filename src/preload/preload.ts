@@ -45,9 +45,9 @@ const api: TETApi = {
     cancelSetup: () => send("sbx:cancel-setup"),
     getSettings: (projectId) => invoke("sbx:get-settings", projectId),
     stored: (projectId) => invoke("sbx:stored", projectId),
-    knowledgeSources: () => invoke("sbx:knowledge-sources"),
+    skillsSources: () => invoke("sbx:skills-sources"),
     saveSettings: (projectId, request, local) => invoke("sbx:save-settings", projectId, request, local),
-    problems: (projectId, settings, knowledge, values, status) => invoke("sbx:problems", projectId, settings, knowledge, values, status),
+    problems: (projectId, settings, skills, values, status) => invoke("sbx:problems", projectId, settings, skills, values, status),
   },
   settings: {
     get: () => invoke("settings:get"),

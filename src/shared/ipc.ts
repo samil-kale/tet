@@ -29,7 +29,7 @@ export interface InvokeChannels {
   "sbx:init-policy": TETApi["sbx"]["initPolicy"];
   "sbx:get-settings": TETApi["sbx"]["getSettings"];
   "sbx:stored": TETApi["sbx"]["stored"];
-  "sbx:knowledge-sources": TETApi["sbx"]["knowledgeSources"];
+  "sbx:skills-sources": TETApi["sbx"]["skillsSources"];
   "sbx:save-settings": TETApi["sbx"]["saveSettings"];
   "sbx:problems": TETApi["sbx"]["problems"];
   "settings:get": TETApi["settings"]["get"];

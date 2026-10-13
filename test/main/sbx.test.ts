@@ -24,7 +24,7 @@ import { sandboxDir } from "../../src/main/store/project-dirs";
 import { SBX_PROBLEM, sbxNeedsRestart, sbxProblemNotices, sbxSecretRefusal, setupLines, withoutProblems } from "../../src/shared/sbx-rules";
 import {
   EMPTY_SBX_SETTINGS,
-  EMPTY_SBX_KNOWLEDGE,
+  EMPTY_SBX_SKILLS,
   type SbxPath,
   type SbxLocalSave,
   type SbxPort,
@@ -157,8 +157,8 @@ describe("saving SBX settings", () => {
   /** A worktree of the project, with a sandbox of its own. */
   const worktree = { ref: { projectId, worktree: "k1" }, path: path.join(os.tmpdir(), "tet-sbx-save-worktree") };
   const worktreeName = sandboxName(worktree.ref, "claude");
-  /** No knowledge before or after: nothing of it to revoke. */
-  const NO_KNOWLEDGE = { previous: EMPTY_SBX_KNOWLEDGE, current: EMPTY_SBX_KNOWLEDGE };
+  /** No skills before or after: nothing of it to revoke. */
+  const NO_SKILLS = { previous: EMPTY_SBX_SKILLS, current: EMPTY_SBX_SKILLS };
   // `sbx ports --publish` of a port another sandbox holds.
   const refusal = "ERROR: publish ports: 409 Conflict: request[0]: port 127.0.0.1:3000/tcp4 is already published\n";
 
@@ -250,7 +250,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   }
 
   /**
-   * Saves `request` for the project at `repoFolder`, with no knowledge, under the stand-in in `dir`:
+   * Saves `request` for the project at `repoFolder`, with no skills, under the stand-in in `dir`:
    * saveSbxSettings as sbx-settings.ts runs it, with the listing taken for its check.
    */
   function saveIn(
@@ -266,7 +266,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     return withSbx(dir, async () => {
       const sandboxes = await listSandboxes();
       assert.ok(sandboxes, "sbx lists the sandboxes");
-      return saveSbxSettings({ ref: main, path: repoFolder }, worktrees, request, NO_KNOWLEDGE, values, changed, undefined, sandboxes);
+      return saveSbxSettings({ ref: main, path: repoFolder }, worktrees, request, NO_SKILLS, values, changed, undefined, sandboxes);
     });
   }
 
@@ -294,7 +294,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       refused: {},
       failures: [],
       settings: settings([port(3000)]),
-      knowledge: EMPTY_SBX_KNOWLEDGE,
+      skills: EMPTY_SBX_SKILLS,
     });
   });
 
@@ -513,7 +513,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
           readSbxProblems({
             projectId,
             settings: { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows },
-            knowledge: EMPTY_SBX_KNOWLEDGE,
+            skills: EMPTY_SBX_SKILLS,
             values: { secrets: new Set(), variables: new Set() },
             agents: [claudeAgent],
             organization: "acme",
@@ -543,7 +543,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
           secrets: [{ env: "TOKEN", hosts: ["open.example.com"] }],
           variables: [{ env: "SET" }, { env: "UNSET" }],
         },
-        knowledge: EMPTY_SBX_KNOWLEDGE,
+        skills: EMPTY_SBX_SKILLS,
         values: { secrets: new Set(), variables: new Set(["SET"]) },
         agents: [claudeAgent],
         organization: "acme",
@@ -571,7 +571,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             ref: main,
             projectRefPath: at,
             settings: { ...EMPTY_SBX_SETTINGS, enabled: true, paths: [{ path: os.tmpdir(), access: "ro" }] },
-            knowledge: EMPTY_SBX_KNOWLEDGE,
+            skills: EMPTY_SBX_SKILLS,
             sandboxes: new Map([[name, [repoFolder]]]),
             paths: { agentDir: sandboxDir(dir, main, "claude") },
             agentArgs: [],
@@ -592,7 +592,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const noLocal = (variables: Record<string, string> = {}): SbxLocalSave => ({
       secrets: { values: {}, from: {} },
       variables: { values: variables, from: {} },
-      knowledge: EMPTY_SBX_KNOWLEDGE,
+      skills: EMPTY_SBX_SKILLS,
     });
     const projectOf = (repoFolder: string): Project => ({ id: projectId, path: repoFolder, name: "repo", worktrees: [] });
     const saveProject = (dir: string, repoFolder: string, request: SbxProjectSettings, local: SbxLocalSave, sbxLocal: SbxLocalStore) =>
@@ -634,12 +634,12 @@ describe("what of the SBX Settings could not be applied", () => {
   const problems = {
     hosts: { "a.example.com": "Forbidden by governance", "b.example.com": "Forbidden by governance" },
     paths: { "/data/one": "Does not exist on this machine", "/data/two": "Forbidden by governance" },
-    knowledge: { instructions: "Forbidden by governance" },
+    skills: { instructions: "Forbidden by governance" },
   };
 
   it("is told once per option and reason, its rows listed, in the dialog's tab order", () => {
     assert.deepEqual(sbxProblemNotices(problems), [
-      "Could not set knowledge:\n - instructions\nForbidden by governance",
+      "Could not set skills:\n - instructions\nForbidden by governance",
       "Could not set paths:\n - /data/one\nDoes not exist on this machine",
       "Could not set paths:\n - /data/two\nForbidden by governance",
       "Could not set hosts:\n - a.example.com\n - b.example.com\nForbidden by governance",
@@ -652,7 +652,7 @@ describe("what of the SBX Settings could not be applied", () => {
     ]);
   });
 
-  it("is left out of what is saved and applied, a kind of knowledge turned off", () => {
+  it("is left out of what is saved and applied, a kind of skills turned off", () => {
     const settings = {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
@@ -662,17 +662,17 @@ describe("what of the SBX Settings could not be applied", () => {
         { path: "/data/three", access: "rw" as const },
       ],
     };
-    const knowledge = { skills: "ro" as const, instructions: "rw" as const };
-    assert.deepEqual(withoutProblems(settings, knowledge, problems), {
+    const skills = { skills: "ro" as const, instructions: "rw" as const };
+    assert.deepEqual(withoutProblems(settings, skills, problems), {
       settings: { ...settings, hosts: ["c.example.com"], paths: [{ path: "/data/three", access: "rw" }] },
-      knowledge: { skills: "ro", instructions: false },
+      skills: { skills: "ro", instructions: false },
     });
   });
 });
 
 describe("the SBX Settings' setup script", () => {
   const loaded = { ...EMPTY_SBX_SETTINGS, setup: ["apt-get update", "apt-get install -y ffmpeg"] };
-  const restart = (setup: string[]): boolean => sbxNeedsRestart(loaded, EMPTY_SBX_KNOWLEDGE, { ...loaded, setup }, EMPTY_SBX_KNOWLEDGE);
+  const restart = (setup: string[]): boolean => sbxNeedsRestart(loaded, EMPTY_SBX_SKILLS, { ...loaded, setup }, EMPTY_SBX_SKILLS);
 
   it("waits for a restart once changed, never once emptied", () => {
     assert.equal(restart(loaded.setup), false, "unchanged");
@@ -741,7 +741,7 @@ describe("what sbx keeps on this machine", () => {
       secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
       variables: { NPM_TOKEN: base64("sealed:npm") },
     });
-    assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"], knowledge: EMPTY_SBX_KNOWLEDGE });
+    assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
     assert.deepEqual([...store.values("p", "secrets")], [["READABLE", "value"]]);
     assert.deepEqual([...store.values("p", "variables")], [["NPM_TOKEN", "npm"]]);
   });
@@ -750,21 +750,21 @@ describe("what sbx keeps on this machine", () => {
     fakeSafeStorage();
     const store = new SbxLocalStore(tempDir("tet-secrets-"));
     const none = { values: {}, from: {} };
-    store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, knowledge: EMPTY_SBX_KNOWLEDGE });
+    store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
-    store.update("p", { secrets: none, variables: { values: {}, from: { NEW: "OLD" } }, knowledge: EMPTY_SBX_KNOWLEDGE });
+    store.update("p", { secrets: none, variables: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual([...store.values("p", "variables")], [["NEW", "kept"]]);
   });
 
-  it("keeps the knowledge on this machine, and no entry once it is all off", () => {
+  it("keeps the skills on this machine, and no entry once it is all off", () => {
     fakeSafeStorage(false);
     const root = tempDir("tet-secrets-");
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
-    const knowledge = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
-    store.update("p", { secrets: none, variables: none, knowledge });
-    assert.deepEqual(new SbxLocalStore(root).knowledge("p"), knowledge, "read back, with no keyring needed");
-    store.update("p", { secrets: none, variables: none, knowledge: EMPTY_SBX_KNOWLEDGE });
+    const skills = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
+    store.update("p", { secrets: none, variables: none, skills });
+    assert.deepEqual(new SbxLocalStore(root).skills("p"), skills, "read back, with no keyring needed");
+    store.update("p", { secrets: none, variables: none, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "all off leaves no entry");
   });
 });

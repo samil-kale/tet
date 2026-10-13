@@ -22,8 +22,8 @@ import { EMPTY_REPOSITORY_STATE, refName, type FileChange, type GitActionResult,
 import { type Project, type ProjectCommand, type ProjectRef, refKeyOf } from "../../src/shared/types/project";
 import {
   EMPTY_SBX_SETTINGS,
-  EMPTY_SBX_KNOWLEDGE,
-  type SbxKnowledgeSettings,
+  EMPTY_SBX_SKILLS,
+  type SbxSkillsSettings,
   type SbxLocalSave,
   type SbxProblems,
   type SbxProjectSettings,
@@ -181,7 +181,7 @@ let sbxStatus: SbxStatus;
 
 let sbxSettings: SbxProjectSettings;
 
-let sbxKnowledge: SbxKnowledgeSettings;
+let sbxSkills: SbxSkillsSettings;
 
 /** What the faked check finds, and so what a save leaves out. */
 let sbxProblems: SbxProblems;
@@ -403,12 +403,12 @@ function deps(): ControlDeps {
       status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
       settings: async () => structuredClone(sbxSettings),
-      stored: () => ({ secrets: ["API_KEY"], variables: [], knowledge: structuredClone(sbxKnowledge) }),
+      stored: () => ({ secrets: ["API_KEY"], variables: [], skills: structuredClone(sbxSkills) }),
       problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);
         sbxSettings = { ...request, hosts: request.hosts.filter((host) => sbxProblems.hosts?.[host] === undefined) };
-        sbxKnowledge = local.knowledge;
+        sbxSkills = local.skills;
         return { ok: true, problems: sbxProblems };
       },
       accounts: () => sbxAccounts.map((user) => ({ id: `id-${user}`, user })),
@@ -531,7 +531,7 @@ describe("tet-ctl against the control server", () => {
     dialogAnswer = undefined;
     sbxStatus = { installed: true, signedIn: true, policyInitialized: true, blockers: [] };
     sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
-    sbxKnowledge = EMPTY_SBX_KNOWLEDGE;
+    sbxSkills = EMPTY_SBX_SKILLS;
     sbxProblems = {};
     sbxAccounts = ["skale", "work"];
     sbxRefusal = undefined;
@@ -1149,7 +1149,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(local, {
       secrets: { values: {}, from: { API_KEY: "API_KEY" } },
       variables: { values: {}, from: {} },
-      knowledge: EMPTY_SBX_KNOWLEDGE,
+      skills: EMPTY_SBX_SKILLS,
     });
     const folder = path.resolve("/data/one");
     const paths = await tetCtl(["sbx-set-paths", `${folder}:ro`]);
@@ -1167,17 +1167,17 @@ describe("tet-ctl against the control server", () => {
       { values: { DB_URL: "a=b" }, from: { DB_URL: "DB_URL", MODE: "MODE" } },
       "NAME=value types a value, split at the first =, an empty one none",
     );
-    assert.equal((await tetCtl(["sbx-set-knowledge", "skills", "ro"])).status, EXIT_CODES.ok);
+    assert.equal((await tetCtl(["sbx-set-skills", "skills", "ro"])).status, EXIT_CODES.ok);
     assert.equal((await tetCtl(["sbx-set-skills-folder", folder])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxKnowledge, { ...EMPTY_SBX_KNOWLEDGE, skills: "ro", skillsFolder: folder });
+    assert.deepEqual(sbxSkills, { ...EMPTY_SBX_SKILLS, skills: "ro", skillsFolder: folder });
     assert.equal((await tetCtl(["sbx-set-skills-folder"])).status, EXIT_CODES.ok, "no path: each agent's own");
-    assert.deepEqual(sbxKnowledge, { ...EMPTY_SBX_KNOWLEDGE, skills: "ro" });
+    assert.deepEqual(sbxSkills, { ...EMPTY_SBX_SKILLS, skills: "ro" });
     assert.equal((await tetCtl(["sbx-set-hosts"])).status, EXIT_CODES.ok, "none clears them");
     assert.deepEqual(sbxSettings.hosts, []);
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge },
+      stored: { secrets: ["API_KEY"], variables: [], skills: sbxSkills },
       problems: {},
     });
   });
@@ -1193,7 +1193,7 @@ describe("tet-ctl against the control server", () => {
       ["sbx-set-variables", "PATH"],
       ["sbx-set-variables", "1X"],
       ["sbx-set-variables", "API_KEY"],
-      ["sbx-set-knowledge", "memory", "ro"],
+      ["sbx-set-skills", "memory", "ro"],
       ["sbx-set-enabled", "maybe"],
     ];
     for (const args of refused) {
@@ -1212,7 +1212,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { secrets: ["API_KEY"], variables: [], knowledge: sbxKnowledge },
+      stored: { secrets: ["API_KEY"], variables: [], skills: sbxSkills },
       problems: sbxProblems,
     });
   });

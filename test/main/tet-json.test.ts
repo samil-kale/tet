@@ -303,7 +303,7 @@ describe("readSbxSettings", () => {
       { path: "~/stale", access: "ro" },
       { path: "/stale/absolute", access: "ro", os: PLATFORM.id },
     ];
-    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, knowledge: { skills: "rw" }, ports: [], paths: [theirs, ...stale] } }));
+    put(JSON.stringify({ commands: ["keep"], sbx: { enabled: false, skills: { skills: "rw" }, ports: [], paths: [theirs, ...stale] } }));
     const elsewhere = path.join(path.parse(os.homedir()).root, "elsewhere");
     const config = {
       enabled: true,
@@ -321,8 +321,8 @@ describe("readSbxSettings", () => {
     };
     await writeSbxSettings(root, config);
     assert.deepEqual(await readSbxSettings(root), config, "the rows that apply here come back, the other OS's does not");
-    const written = stored() as { commands: unknown; sbx: { knowledge: unknown; paths: unknown; hosts: unknown } };
-    assert.equal(written.sbx.knowledge, undefined, "knowledge, kept on this machine, is dropped from tet.json");
+    const written = stored() as { commands: unknown; sbx: { skills: unknown; paths: unknown; hosts: unknown } };
+    assert.equal(written.sbx.skills, undefined, "skills, kept on this machine, is dropped from tet.json");
     assert.deepEqual(written.commands, ["keep"], "the saved command survives");
     assert.deepEqual(written.sbx.hosts, ["gitlab.example.com", "*.s3.example.net:443"], "hosts are written as typed, with no os");
     assert.deepEqual(
@@ -337,7 +337,7 @@ describe("readSbxSettings", () => {
       JSON.stringify({
         sbx: {
           enabled: true,
-          knowledge: { skills: "not-a-real-access", instructions: "ro" },
+          skills: { skills: "not-a-real-access", instructions: "ro" },
           ports: [{ host: "3000" }, { host: "3000", container: "3000" }],
           paths: [
             { path: "", os: PLATFORM.id },

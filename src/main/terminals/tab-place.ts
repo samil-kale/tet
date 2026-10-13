@@ -13,7 +13,7 @@ import type {
 import { sbxProblemNotices } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
-import type { SbxKnowledgeSettings, SbxProjectSettings } from "../../shared/types/sbx";
+import type { SbxSkillsSettings, SbxProjectSettings } from "../../shared/types/sbx";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoverDir, sandboxSessionDir } from "../store/project-dirs";
 import type { ResolvedRef } from "../store/resolved-ref";
 import { prepareSbxRun, sandboxName } from "../sbx/sbx";
@@ -211,7 +211,7 @@ export interface SbxStart {
   idleReminder: boolean;
   theme: AgentPaths["theme"];
   /** This machine's SBX settings for the project (SbxLocalStore). */
-  knowledge: SbxKnowledgeSettings;
+  skills: SbxSkillsSettings;
   secretValues: ReadonlyMap<string, string>;
   variableValues: ReadonlyMap<string, string>;
 }
@@ -347,7 +347,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
         ref: at.ref,
         projectRefPath: at.path,
         settings: start.settings,
-        knowledge: start.knowledge,
+        skills: start.skills,
         sandboxes: start.ready.sandboxes,
         organization: start.ready.organization,
         rules: start.ready.rules,

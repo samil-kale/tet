@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { errorMessage } from "../../shared/errors";
-import { EMPTY_SBX_SETTINGS, EMPTY_SBX_KNOWLEDGE } from "../../shared/types/sbx";
+import { EMPTY_SBX_SETTINGS, EMPTY_SBX_SKILLS } from "../../shared/types/sbx";
 import type { Project } from "../../shared/types/project";
-import type { SbxBlocker, SbxKnowledgeSource, SbxProjectSettings, SbxStoredLocal } from "../../shared/types/sbx";
+import type { SbxBlocker, SbxSkillsSource, SbxProjectSettings, SbxStoredLocal } from "../../shared/types/sbx";
 import {
   SbxSettingsFields,
   fromSettings,
@@ -40,12 +40,12 @@ type Phase =
 type SbxSettingsTab = "general" | keyof FieldsState;
 
 /** Nothing kept on this machine; also the dialog's initial state. */
-const EMPTY_STORED: SbxStoredLocal = { secrets: [], variables: [], knowledge: EMPTY_SBX_KNOWLEDGE };
+const EMPTY_STORED: SbxStoredLocal = { secrets: [], variables: [], skills: EMPTY_SBX_SKILLS };
 
-/** Split along the sections stored in tet.json, and the knowledge kept on this machine. */
+/** Split along the sections stored in tet.json, and the skills kept on this machine. */
 const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "general", label: "General" },
-  { id: "knowledge", label: "Knowledge" },
+  { id: "skills", label: "Skills" },
   { id: "ports", label: "Ports" },
   { id: "paths", label: "Paths" },
   { id: "hosts", label: "Hosts" },
@@ -91,7 +91,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   /** As opened, for whether the edits wait for a restart (needsRestart). */
   const [loaded, setLoaded] = useState<SbxProjectSettings>(EMPTY_SBX_SETTINGS);
   const [stored, setStored] = useState<SbxStoredLocal>(EMPTY_STORED);
-  const [sources, setSources] = useState<SbxKnowledgeSource[]>([]);
+  const [sources, setSources] = useState<SbxSkillsSource[]>([]);
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   /** Who sbx says is signed in, however it happened. */
   const [signedInUser, setSignedInUser] = useState<string | undefined>(undefined);
@@ -133,17 +133,17 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       }
       if (!loadedOnce.current) {
         // Read after the check, so Save writes over what is on disk, not the mount-time defaults.
-        const [settings, local, knowledgeSources, kept] = await Promise.all([
+        const [settings, local, skillsSources, kept] = await Promise.all([
           window.tet.sbx.getSettings(project.id),
           window.tet.sbx.stored(project.id),
-          window.tet.sbx.knowledgeSources(),
+          window.tet.sbx.skillsSources(),
           window.tet.sbx.accounts(),
         ]);
         setEnabled(isLocked || settings.enabled);
         setState(fromSettings(settings, local));
         setLoaded(settings);
         setStored(local);
-        setSources(knowledgeSources);
+        setSources(skillsSources);
         setAccounts(fromAccounts(kept));
         loadedOnce.current = true;
       }
@@ -304,7 +304,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       busy={busy}
       locked={holding}
       error={refused ?? accountError}
-      message={phase.kind === "ready" && needsRestart(loaded, stored.knowledge, state) && <RestartNote />}
+      message={phase.kind === "ready" && needsRestart(loaded, stored.skills, state) && <RestartNote />}
       onCancel={onClose}
       abort={window.tet.sbx.cancelSetup}
       actions={

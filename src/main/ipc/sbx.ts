@@ -4,8 +4,8 @@ import { EMPTY_SBX_SETTINGS } from "../../shared/types/sbx";
 import type {
   SbxAccount,
   SbxAccountEdit,
-  SbxKnowledgeSettings,
-  SbxKnowledgeSource,
+  SbxSkillsSettings,
+  SbxSkillsSource,
   SbxLocalSave,
   SbxProblems,
   SbxProjectSettings,
@@ -16,7 +16,7 @@ import type {
   SbxValueKind,
 } from "../../shared/types/sbx";
 import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxSignIn, runSbxSignOut } from "../sbx/sbx-cli";
-import { readKnowledgeSources } from "../sbx/sbx-mounts";
+import { readSkillsSources } from "../sbx/sbx-mounts";
 import { readSbxStatus } from "../sbx/sbx-status";
 import { signInToSbx } from "../sbx/sbx-accounts";
 import { readProjectSbxProblems, saveProjectSbx } from "../sbx/sbx-settings";
@@ -66,12 +66,12 @@ export function registerSbxIpc({
       _event,
       projectId: string,
       settings: SbxProjectSettings,
-      knowledge: SbxKnowledgeSettings,
+      skills: SbxSkillsSettings,
       values: Record<SbxValueKind, string[]>,
       status: Pick<SbxStatus, "organization">,
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
-      return project ? readProjectSbxProblems(project, settings, knowledge, values, status && { status }) : {};
+      return project ? readProjectSbxProblems(project, settings, skills, values, status && { status }) : {};
     },
   );
 
@@ -80,10 +80,10 @@ export function registerSbxIpc({
     const project = store.get(projectId);
     return project ? readSbxSettings(project.path) : EMPTY_SBX_SETTINGS;
   });
-  // The Secrets and Variables rows holding a value on this machine, never the values; the knowledge.
+  // The Secrets and Variables rows holding a value on this machine, never the values; the skills.
   handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
-  // The Knowledge tab's agents; asked fresh, as agents are installed outside TET.
-  handle("sbx:knowledge-sources", (): Promise<SbxKnowledgeSource[]> => readKnowledgeSources());
+  // The Skills tab's agents; asked fresh, as agents are installed outside TET.
+  handle("sbx:skills-sources", (): Promise<SbxSkillsSource[]> => readSkillsSources());
   // The dialog's Save, shared with tet-ctl's sbx-set-* verbs (sbx-settings.ts).
   handle(
     "sbx:save-settings",

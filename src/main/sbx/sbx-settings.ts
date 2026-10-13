@@ -3,7 +3,7 @@ import { keptValues, mergeProblems, sbxProblemNotices, withoutProblems } from ".
 import { projectRef, projectRefName } from "../../shared/types/project";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { Project, ProjectRef } from "../../shared/types/project";
-import type { SbxKnowledgeSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxStatus } from "../../shared/types/sbx";
+import type { SbxSkillsSettings, SbxLocalSave, SbxProblems, SbxProjectSettings, SbxSaveResult, SbxStatus } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import { logFailure } from "../util/json-file";
 import { inTurn } from "../util/async";
@@ -36,7 +36,7 @@ interface ValueNames {
 function checkProject(
   project: Project,
   settings: SbxProjectSettings,
-  knowledge: SbxKnowledgeSettings,
+  skills: SbxSkillsSettings,
   values: ValueNames,
   organization: string | undefined,
   sandboxes?: SandboxList,
@@ -45,7 +45,7 @@ function checkProject(
   return readSbxProblems({
     projectId: project.id,
     settings,
-    knowledge,
+    skills,
     values: { secrets: new Set(values.secrets), variables: new Set(values.variables) },
     agents: SANDBOXED_AGENTS,
     organization,
@@ -68,11 +68,11 @@ async function organizationOf(known: KnownOrganization | undefined): Promise<str
 export async function readProjectSbxProblems(
   project: Project,
   settings: SbxProjectSettings,
-  knowledge: SbxKnowledgeSettings,
+  skills: SbxSkillsSettings,
   values: ValueNames,
   known?: Known,
 ): Promise<SbxProblems> {
-  return checkProject(project, settings, knowledge, values, await organizationOf(known), known?.sandboxes, known?.rules);
+  return checkProject(project, settings, skills, values, await organizationOf(known), known?.sandboxes, known?.rules);
 }
 
 /** The Save underway per project (saveProjectSbx). */
@@ -111,11 +111,11 @@ async function saveNow(
   );
   const nameOf = (ref: ProjectRef): string => projectRefName(project, ref);
   const stored = sbxLocal.encrypted(project.id);
-  const previous = sbxLocal.knowledge(project.id);
+  const previous = sbxLocal.skills(project.id);
   try {
     sbxLocal.update(project.id, local);
     const secretValues = sbxLocal.values(project.id, "secrets");
-    const knowledge = sbxLocal.knowledge(project.id);
+    const skills = sbxLocal.skills(project.id);
     // Listed once for the check and the Save, in this turn.
     const [organization, sandboxes] = await Promise.all([organizationOf(known), listSandboxes()]);
     if (!sandboxes) {
@@ -124,29 +124,29 @@ async function saveNow(
     // Off, nothing is applied, so nothing is left out. What sbx cannot say stops the Save: a row
     // it could not be asked about is no refusal.
     const problems = request.enabled
-      ? await checkProject(project, request, knowledge, sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
+      ? await checkProject(project, request, skills, sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
           throw new Error(`${errorMessage(error)} Nothing was saved; try again.`);
         })
       : {};
-    const wanted = withoutProblems(request, knowledge, problems);
+    const wanted = withoutProblems(request, skills, problems);
     const {
       removed,
       orphans,
       refused,
       failures,
       settings,
-      knowledge: applied,
+      skills: applied,
     } = await saveSbxSettings(
       { ref: { projectId: project.id }, path: project.path },
       worktrees,
       wanted.settings,
-      { previous, current: wanted.knowledge },
+      { previous, current: wanted.skills },
       secretValues,
       new Set(Object.keys(local.secrets.values)),
       organization,
       sandboxes,
     );
-    sbxLocal.update(project.id, { secrets: keptValues(settings.secrets), variables: keptValues(settings.variables), knowledge: applied });
+    sbxLocal.update(project.id, { secrets: keptValues(settings.secrets), variables: keptValues(settings.variables), skills: applied });
     for (const { ref, agentId } of removed) {
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed and is rebuilt when its next tab starts.`

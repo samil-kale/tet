@@ -80,7 +80,7 @@ export const claudeAgent: SandboxedAgent = {
     // feature flags; this forces fullscreen.
     env: Object.entries(FULLSCREEN_ENV).map(([key, value]) => `${key}=${value}`),
     // `~/.claude/skills`, `~/.claude/CLAUDE.md` — under the config root the sessions are read from.
-    knowledge: () => ({
+    skills: () => ({
       skills: [{ host: path.join(claudeConfigDir(), "skills"), target: `${SANDBOX_HOME}/.claude/skills` }],
       instructions: [{ host: path.join(claudeConfigDir(), "CLAUDE.md"), target: `${SANDBOX_HOME}/.claude/CLAUDE.md` }],
     }),

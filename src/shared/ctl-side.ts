@@ -70,7 +70,7 @@ export const SANDBOX_SIDE: ControlSide = {
   // agent is told where the user does.
   promptNote:
     " You run in an sbx sandbox TET set up, holding only what TET brings in from the user's machine. " +
-    "When something is missing, point the user to TET's SBX Settings: Knowledge for your skills and CLAUDE.md or AGENTS.md, " +
+    "When something is missing, point the user to TET's SBX Settings: Skills for your skills and CLAUDE.md or AGENTS.md, " +
     "Paths for folders and files, Ports, Allowed hosts, Secrets for tokens, Variables, and a Setup script for packages; " +
     "or to drop a file or folder onto this tab, which mounts it until TET quits.",
 };

@@ -467,11 +467,11 @@ the `sbx` CLI.
   at `sbx create`); under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
   worktrees. TET's own live mounts are folders of the `sandboxes/…/<agent>` folder alone; the one
   exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails
-  there. The user's grants (Allowed paths, knowledge) and what is handed over as a drop are
+  there. The user's grants (Allowed paths, skills) and what is handed over as a drop are
   theirs, not TET's.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
-  `sbx policy check` under governance, paths and knowledge through the rules `sbx-policy.ts`
+  `sbx policy check` under governance, paths and skills through the rules `sbx-policy.ts`
   evaluates) and against this machine (a path exists, a port is free, a value is stored). A row
   that fails, or that sbx refuses while applying, is neither saved nor applied; the rest goes
   through. A Save sbx cannot answer for (a listing fails, a sandbox will not start) stops before

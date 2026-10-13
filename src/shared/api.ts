@@ -17,8 +17,8 @@ import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, Provide
 import type {
   SbxAccount,
   SbxAccountEdit,
-  SbxKnowledgeSettings,
-  SbxKnowledgeSource,
+  SbxSkillsSettings,
+  SbxSkillsSource,
   SbxLocalSave,
   SbxProblems,
   SbxProjectSettings,
@@ -78,9 +78,9 @@ export interface TETApi {
     getSettings: (projectId: string) => Promise<SbxProjectSettings>;
     /** What the dialog keeps on this machine — never a value. */
     stored: (projectId: string) => Promise<SbxStoredLocal>;
-    /** The agents installed here and what each brings of its own knowledge. */
-    knowledgeSources: () => Promise<SbxKnowledgeSource[]>;
-    /** Stores `local` (the values typed at this Save, the knowledge) on this machine, then saves
+    /** The agents installed here and what each brings of its own skills. */
+    skillsSources: () => Promise<SbxSkillsSource[]>;
+    /** Stores `local` (the values typed at this Save, the skills) on this machine, then saves
      *  and applies the rows without a problem (sbx-settings.ts's saveProjectSbx); a sandbox whose
      *  folders changed is removed. */
     saveSettings: (projectId: string, request: SbxProjectSettings, local: SbxLocalSave) => Promise<SbxSaveResult>;
@@ -90,7 +90,7 @@ export interface TETApi {
     problems: (
       projectId: string,
       settings: SbxProjectSettings,
-      knowledge: SbxKnowledgeSettings,
+      skills: SbxSkillsSettings,
       values: Record<SbxValueKind, string[]>,
       status: Pick<SbxStatus, "organization">,
     ) => Promise<SbxProblems>;

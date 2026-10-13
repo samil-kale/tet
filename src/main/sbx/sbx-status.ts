@@ -114,7 +114,7 @@ function folderRule(folder: string): string {
  * (isControlChannelAllowed), the repository or worktree as workspace, and TET's mounted folders —
  * each agent's sandbox folder rw (fixedMountSpecs). Checked as mounted, asked for as one rule over
  * projectsDir, which covers a worktree TET made as well, read and write. `rules` are the probe's
- * (probeSbx), evaluated in sbx-policy.ts. The user's Allowed paths and knowledge are not asked
+ * (probeSbx), evaluated in sbx-policy.ts. The user's Allowed paths and skills are not asked
  * for — a tab starts without them. The rules are returned too, for a spawn's readSbxProblems.
  * Either unanswered is a `failure`, never a blocker: could-not-say is no refusal, and the rules it
  * would ask for may well be there.

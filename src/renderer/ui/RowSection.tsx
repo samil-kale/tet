@@ -170,7 +170,7 @@ export function OverridesMachine({ name }: { name: string }) {
 }
 
 /** Nothing without a reason. Outside an EditRow too, beside a field of a grid (the SBX Settings'
- *  knowledge). */
+ *  skills). */
 export function RowMark({ title }: { title: string | undefined }) {
   return title === undefined ? null : (
     <span className="row-mark" title={title}>

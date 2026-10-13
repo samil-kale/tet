@@ -2,7 +2,7 @@ import type { ThemeDefinition } from "../../shared/themes";
 import type { HookEvent } from "../../shared/ctl";
 import type { ControlSide } from "../../shared/ctl-side";
 import type { AgentIcon, AgentId, AskModel } from "../../shared/types/agents";
-import type { SbxKnowledgeEntry, SbxKnowledgeKind } from "../../shared/types/sbx";
+import type { SbxSkillsEntry, SbxSkillsKind } from "../../shared/types/sbx";
 
 export interface AgentSessionInfo {
   /** Agent-native session id (Claude: transcript uuid). */
@@ -234,16 +234,16 @@ export interface AgentSandbox {
   /** "KEY=VALUE" for `sbx run -e`, for facts that differ only inside the sandbox. */
   env?: string[];
   /**
-   * The agent's shareable knowledge on the host, per `SbxKnowledgeKind` — never its config
+   * The agent's shareable skills on the host, per `SbxSkillsKind` — never its config
    * directory (sbx-mounts.ts's fixedMountSpecs). Targets under `SANDBOX_HOME`; a chosen skills
    * folder goes at the `skills` targets. sbx-mounts.ts drops paths that do not exist, and all of it
    * while the agent is not installed on this host.
    */
-  knowledge(): Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
+  skills(): Record<SbxSkillsKind, SbxSkillsEntry[]>;
   /**
    * Absolute container path where the sandboxed CLI reads `~/.agents/skills`, the skills folder no
    * agent owns: mounted whether or not the agent is installed here, unless one of its own skills
-   * folders already takes that target (sbx-mounts.ts's sandboxKnowledgeFor). Omitted by an agent
+   * folders already takes that target (sbx-mounts.ts's sandboxSkillsFor). Omitted by an agent
    * that does not read that folder — TET never stands it in for one the CLI does read.
    */
   sharedSkillsTarget?: string;

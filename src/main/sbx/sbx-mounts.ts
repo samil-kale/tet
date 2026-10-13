@@ -2,15 +2,8 @@ import { existsSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { SBX_KNOWLEDGE_KINDS, addProblems, forbiddenBy } from "../../shared/sbx-rules";
-import type {
-  SbxKnowledgeSettings,
-  SbxKnowledgeEntry,
-  SbxKnowledgeKind,
-  SbxKnowledgeSource,
-  SbxPath,
-  SbxProblems,
-} from "../../shared/types/sbx";
+import { SBX_SKILLS_KINDS, addProblems, forbiddenBy } from "../../shared/sbx-rules";
+import type { SbxSkillsSettings, SbxSkillsEntry, SbxSkillsKind, SbxSkillsSource, SbxPath, SbxProblems } from "../../shared/types/sbx";
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";
@@ -56,7 +49,7 @@ export type SandboxPaths = Pick<AgentPaths, "agentDir">;
  *
  * Never the agent's config directory (`~/.claude`, `~/.codex`): pointed at by `CLAUDE_CONFIG_DIR`/
  * `CODEX_HOME`, the sandboxed CLI would be signed in as the host, and a `/login` inside would
- * replace the host's. Knowledge (AgentSandbox.knowledge) and sessions (sessionMountSpecs)
+ * replace the host's. Skills (AgentSandbox.skills) and sessions (sessionMountSpecs)
  * are curated subpaths, never the directory holding credentials.
  */
 export function fixedMountSpecs(paths: SandboxPaths): MountSpec[] {
@@ -73,24 +66,24 @@ export function worktreeMountSpecs(projectRefPath: string): MountSpec[] {
   return commonDir === undefined ? [] : [pathMountSpecs({ path: commonDir, access: "rw" })];
 }
 
-/** An agent's host knowledge per kind, as sandboxKnowledgeFor resolves it. */
-type KnowledgeEntries = Record<SbxKnowledgeKind, SbxKnowledgeEntry[]>;
+/** An agent's host skills per kind, as sandboxSkillsFor resolves it. */
+type SkillsEntries = Record<SbxSkillsKind, SbxSkillsEntry[]>;
 
 /** Where the sandboxed CLI reads its own skills, whether or not it is installed here. */
 function skillsTargets(agent: SandboxedAgent): string[] {
-  return agent.sandbox.knowledge().skills.map((entry) => entry.target);
+  return agent.sandbox.skills().skills.map((entry) => entry.target);
 }
 
 /**
- * What a sandboxed agent may bring from this host, per kind, only what exists: its own knowledge
+ * What a sandboxed agent may bring from this host, per kind, only what exists: its own skills
  * only while it is installed here — a folder an uninstalled one left is not wanted — and
  * `~/.agents/skills` at its `sharedSkillsTarget` either way, unless its own skills sit there. An
  * agent without a `sharedSkillsTarget` (Claude) never gets it. A `skillsFolder` replaces both, at
  * the agent's own skills targets, installed or not: the user chose it.
  */
-export async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: string): Promise<KnowledgeEntries> {
-  const own = (await agentInstalled(agent, os.tmpdir())) ? agent.sandbox.knowledge() : undefined;
-  const existing = (entries: SbxKnowledgeEntry[] = []): SbxKnowledgeEntry[] => entries.filter((entry) => existsSync(entry.host));
+export async function sandboxSkillsFor(agent: SandboxedAgent, skillsFolder?: string): Promise<SkillsEntries> {
+  const own = (await agentInstalled(agent, os.tmpdir())) ? agent.sandbox.skills() : undefined;
+  const existing = (entries: SbxSkillsEntry[] = []): SbxSkillsEntry[] => entries.filter((entry) => existsSync(entry.host));
   const rest = { instructions: existing(own?.instructions) };
   if (skillsFolder !== undefined) {
     const skills = existsSync(skillsFolder) ? skillsTargets(agent).map((target) => ({ host: skillsFolder, target })) : [];
@@ -105,15 +98,15 @@ export async function sandboxKnowledgeFor(agent: SandboxedAgent, skillsFolder?: 
   return { skills, ...rest };
 }
 
-/** The Knowledge tab's agents: those installed here, with what each brings of its own. */
-export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
+/** The Skills tab's agents: those installed here, with what each brings of its own. */
+export async function readSkillsSources(): Promise<SbxSkillsSource[]> {
   const sources = await Promise.all(
-    SANDBOXED_AGENTS.map(async (agent): Promise<SbxKnowledgeSource | undefined> =>
+    SANDBOXED_AGENTS.map(async (agent): Promise<SbxSkillsSource | undefined> =>
       (await agentInstalled(agent, os.tmpdir()))
         ? {
             agentId: agent.id,
             displayName: agent.displayName,
-            own: await sandboxKnowledgeFor(agent),
+            own: await sandboxSkillsFor(agent),
             skillsTargets: skillsTargets(agent),
           }
         : undefined,
@@ -124,26 +117,26 @@ export async function readKnowledgeSources(): Promise<SbxKnowledgeSource[]> {
 
 /** A grant the dialog changes, with the row it is for (SbxProblems' option and row). */
 interface Grant extends MountSpec {
-  option: "paths" | "knowledge";
+  option: "paths" | "skills";
   row: string;
 }
 
 /**
- * Every grant the dialog changes (Allowed paths, knowledge), as one list: Save narrows and each
+ * Every grant the dialog changes (Allowed paths, skills), as one list: Save narrows and each
  * spawn re-applies the same set (mountAll, revokeMounts). Only what exists here; a missing row or
  * skills folder is a problem (readSbxProblems). A different access is a different grant (`mount`).
- * Knowledge is bind-mounted (`HOST:TARGET[:ro]`), not symlinked: sbx cannot follow a link out of
+ * Skills is bind-mounted (`HOST:TARGET[:ro]`), not symlinked: sbx cannot follow a link out of
  * its workspace.
  */
-export async function grantsOf(agent: SandboxedAgent, knowledge: SbxKnowledgeSettings, paths: SbxPath[]): Promise<Grant[]> {
-  const entries = await sandboxKnowledgeFor(agent, knowledge.skillsFolder);
+export async function grantsOf(agent: SandboxedAgent, skills: SbxSkillsSettings, paths: SbxPath[]): Promise<Grant[]> {
+  const entries = await sandboxSkillsFor(agent, skills.skillsFolder);
   return [
-    ...SBX_KNOWLEDGE_KINDS.flatMap((kind) => {
-      const access = knowledge[kind];
+    ...SBX_SKILLS_KINDS.flatMap((kind) => {
+      const access = skills[kind];
       return access
         ? entries[kind].map((entry) => ({
             ...mountSpec(entry.host, entry.target, access === "ro"),
-            option: "knowledge" as const,
+            option: "skills" as const,
             row: kind,
           }))
         : [];
@@ -329,7 +322,7 @@ export function mountAll(name: string, specs: MountSpec[], onData?: OnData, star
 }
 
 /**
- * Narrows grants at Save, not at the next start: a dropped or rw→ro path or knowledge kind must
+ * Narrows grants at Save, not at the next start: a dropped or rw→ro path or skills kind must
  * stop being accessible *now* in a running sandbox, and a stopped one would bind it again at its
  * start. Only a grant the sandbox holds (readRuntimeMounts; every one when sbx cannot say): one it
  * does not hold is gone already. A stopped sandbox takes the `umount`. Adds what sbx would not take

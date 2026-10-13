@@ -119,8 +119,8 @@ textarea:disabled,
 .account-row.disabled,
 /* A worktree made elsewhere: listed, never opened. */
 .worktree-row.made-elsewhere,
-/* An agent a knowledge row brings nothing to. */
-.sbx-knowledge-agent.dimmed {
+/* An agent a skills row brings nothing to. */
+.sbx-skills-agent.dimmed {
   opacity: 0.4;
   cursor: default;
 }
@@ -1912,9 +1912,9 @@ textarea:focus,
   background-clip: padding-box;
 }
 
-/* The three knowledge rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
+/* The three skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
    label, the skills' source, the agents, access — so the agents and access line up across rows. */
-.sbx-knowledge-rows {
+.sbx-skills-rows {
   display: grid;
   grid-template-columns: max-content 150px minmax(0, 1fr) 120px;
   column-gap: 16px;
@@ -1922,7 +1922,7 @@ textarea:focus,
   margin-top: 5px;
 }
 
-.sbx-knowledge-cell {
+.sbx-skills-cell {
   display: flex;
   align-items: center;
   min-width: 0;
@@ -1930,25 +1930,25 @@ textarea:focus,
 }
 
 /* A label with no source beside it takes that column too. */
-.sbx-knowledge-wide {
+.sbx-skills-wide {
   grid-column: span 2;
 }
 
-.sbx-knowledge-agents {
+.sbx-skills-agents {
   justify-content: flex-end;
   gap: 8px;
 }
 
-.sbx-knowledge-agent {
+.sbx-skills-agent {
   display: flex;
 }
 
 /* The chosen skills folder, one row under the source and the agents. */
-.sbx-knowledge-folder {
+.sbx-skills-folder {
   grid-column: 2 / 4;
 }
 
-.sbx-knowledge-rows .select-field {
+.sbx-skills-rows .select-field {
   width: 100%;
 }
 

@@ -1,5 +1,5 @@
 import {
-  SBX_KNOWLEDGE_KINDS,
+  SBX_SKILLS_KINDS,
   SBX_PROBLEM,
   addProblems,
   mergeProblems,
@@ -9,7 +9,7 @@ import {
 } from "../../shared/sbx-rules";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { SbxKnowledgeSettings, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
+import type { SbxSkillsSettings, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
 import { getAgent, SANDBOXED_AGENTS } from "../agents";
 import type { SandboxedAgent } from "../agents/agent";
 import { readSbxSettings, writeSbxSettings } from "../store/tet-json";
@@ -226,20 +226,20 @@ export interface SbxRemoved {
  * tried again. A row sbx refuses in any sandbox is `refused`, left out of tet.json and taken back
  * where it went through — a port it would not unpublish stays, as the sandbox still has it:
  * tet.json holds what was applied. Grants are narrowed last (revokeMounts), a mount cannot be
- * given back at Save; one sbx would not take back is `refused` too, its row and knowledge kind
+ * given back at Save; one sbx would not take back is `refused` too, its row and skills kind
  * kept as they were. Ports need the sandbox running. A sandbox that cannot be removed rejects,
  * tet.json left as it was; so does a Save sbx cannot read the sandboxes for (assertReadable),
  * before anything changed. The project's `worktrees` take its tet.json (tet-json.ts's
  * configRoot), so their sandboxes are brought in line too, all but the ports, which only the
  * repository's forward. Returns the sandboxes removed, for the caller to say so: a running session
  * of theirs just lost its sandbox; those of other ids; what sbx refused; what could not be taken
- * back; and what tet.json and the knowledge now hold.
+ * back; and what tet.json and the skills now hold.
  */
 export async function saveSbxSettings(
   project: SbxSaveTarget,
   worktrees: readonly SbxSaveTarget[],
   request: SbxProjectSettings,
-  knowledge: { previous: SbxKnowledgeSettings; current: SbxKnowledgeSettings },
+  skills: { previous: SbxSkillsSettings; current: SbxSkillsSettings },
   secretValues: ReadonlyMap<string, string>,
   changedSecrets: ReadonlySet<string>,
   organization: string | undefined,
@@ -251,7 +251,7 @@ export async function saveSbxSettings(
   refused: SbxProblems;
   failures: string[];
   settings: SbxProjectSettings;
-  knowledge: SbxKnowledgeSettings;
+  skills: SbxSkillsSettings;
 }> {
   const previous = await readSbxSettings(project.path);
   const settings = { ...request, paths: request.paths.map((entry) => ({ ...entry, path: contractHome(entry.path) })) };
@@ -373,8 +373,8 @@ export async function saveSbxSettings(
     Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];
   const unrevoked: SbxProblems = {};
   for (const { agent, name } of kept) {
-    const current = new Set((await grantsOf(agent, knowledge.current, applied.paths)).map((grant) => grant.mount));
-    const stale = (await grantsOf(agent, knowledge.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
+    const current = new Set((await grantsOf(agent, skills.current, applied.paths)).map((grant) => grant.mount));
+    const stale = (await grantsOf(agent, skills.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
     if (stale.length > 0) {
       await revokeMounts(name, stale, unrevoked);
     }
@@ -387,14 +387,14 @@ export async function saveSbxSettings(
       .filter((entry) => stays.has(normalizeHostPath(entry.path)))
       .map((entry) => ({ ...entry, path: contractHome(entry.path) })),
   ];
-  const appliedKnowledge = { ...knowledge.current };
-  for (const kind of SBX_KNOWLEDGE_KINDS.filter((candidate) => unrevoked.knowledge?.[candidate] !== undefined)) {
-    appliedKnowledge[kind] = knowledge.previous[kind];
+  const appliedSkills = { ...skills.current };
+  for (const kind of SBX_SKILLS_KINDS.filter((candidate) => unrevoked.skills?.[candidate] !== undefined)) {
+    appliedSkills[kind] = skills.previous[kind];
     if (kind === "skills") {
-      appliedKnowledge.skillsFolder = knowledge.previous.skillsFolder;
+      appliedSkills.skillsFolder = skills.previous.skillsFolder;
     }
   }
   mergeProblems(refused, unrevoked);
   await writeSbxSettings(project.path, applied);
-  return { removed, orphans, refused, failures, settings: applied, knowledge: appliedKnowledge };
+  return { removed, orphans, refused, failures, settings: applied, skills: appliedSkills };
 }

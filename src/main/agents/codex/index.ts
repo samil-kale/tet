@@ -52,7 +52,7 @@ export const codexAgent: SandboxedAgent = {
     prepare: () => ({ args: [...BASE_ARGS, ...setupCodexHooks(SANDBOX_TARGET)] }),
     // Skills in `~/.codex/skills` and `~/.agents/skills`; `~/.codex/AGENTS.md`, `AGENTS.override.md`
     // preferred. Under the config root the sessions are read from.
-    knowledge: () => {
+    skills: () => {
       const home = codexHome();
       const instructionsHost = [path.join(home, "AGENTS.override.md"), path.join(home, "AGENTS.md")].find((file) => fs.existsSync(file));
       return {

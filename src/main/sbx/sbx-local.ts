@@ -1,13 +1,13 @@
 import * as path from "node:path";
-import { EMPTY_SBX_KNOWLEDGE, SBX_ACCESS } from "../../shared/types/sbx";
-import type { SbxAccess, SbxKnowledgeSettings, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
+import { EMPTY_SBX_SKILLS, SBX_ACCESS } from "../../shared/types/sbx";
+import type { SbxAccess, SbxSkillsSettings, SbxLocalSave, SbxStoredLocal, SbxValueKind } from "../../shared/types/sbx";
 import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
 import { seal, unseal } from "../util/sealed";
 
 /** What the file holds per project id: each kind's values by env name, encrypted by the OS and
- *  base64-wrapped, and the knowledge unless it is all off (EMPTY_SBX_KNOWLEDGE). */
+ *  base64-wrapped, and the skills unless it is all off (EMPTY_SBX_SKILLS). */
 interface StoredSbxLocal extends Record<SbxValueKind, Record<string, string>> {
-  knowledge?: SbxKnowledgeSettings;
+  skills?: SbxSkillsSettings;
 }
 
 function emptyLocal(): StoredSbxLocal {
@@ -21,38 +21,38 @@ function stringsOf(value: unknown): Record<string, string> {
 }
 
 /** A malformed kind reads as off, a malformed folder as each agent's own. */
-function toKnowledge(value: unknown): SbxKnowledgeSettings | undefined {
+function toSkills(value: unknown): SbxSkillsSettings | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
   const toAccess = (field: unknown): SbxAccess | false => SBX_ACCESS.find((access) => access === field) ?? false;
-  const knowledge: SbxKnowledgeSettings = {
+  const skills: SbxSkillsSettings = {
     skills: toAccess(value.skills),
     instructions: toAccess(value.instructions),
   };
   if (typeof value.skillsFolder === "string" && value.skillsFolder !== "") {
-    knowledge.skillsFolder = value.skillsFolder;
+    skills.skillsFolder = value.skillsFolder;
   }
-  return isEmptyKnowledge(knowledge) ? undefined : knowledge;
+  return isEmptySkills(skills) ? undefined : skills;
 }
 
-function isEmptyKnowledge(knowledge: SbxKnowledgeSettings): boolean {
-  return JSON.stringify(knowledge) === JSON.stringify(EMPTY_SBX_KNOWLEDGE);
+function isEmptySkills(skills: SbxSkillsSettings): boolean {
+  return JSON.stringify(skills) === JSON.stringify(EMPTY_SBX_SKILLS);
 }
 
 /** A project's entry as read. */
 function toLocal(project: Record<string, unknown>): StoredSbxLocal {
   const local: StoredSbxLocal = { secrets: stringsOf(project.secrets), variables: stringsOf(project.variables) };
-  const knowledge = toKnowledge(project.knowledge);
-  if (knowledge) {
-    local.knowledge = knowledge;
+  const skills = toSkills(project.skills);
+  if (skills) {
+    local.skills = skills;
   }
   return local;
 }
 
 /**
  * The values of the SBX Settings' Secrets and Variables, which tet.json never holds (its rows are
- * only names and hosts), and its Knowledge, which names this machine's folders. A secret's is kept because sbx cannot give one back and forgets a
+ * only names and hosts), and its Skills, which names this machine's folders. A secret's is kept because sbx cannot give one back and forgets a
  * sandbox's with `sbx rm`, so a rebuilt sandbox is seeded from here (sbx.ts's applySecrets). A value
  * leaves this class only decrypted into `sbx secret set-custom` or a sandboxed tab's `sbx run`
  * (sbx.ts's sandboxEnv); the renderer never sees one.
@@ -72,18 +72,18 @@ export class SbxLocalStore {
     return {
       secrets: [...this.values(projectId, "secrets").keys()],
       variables: [...this.values(projectId, "variables").keys()],
-      knowledge: this.knowledge(projectId),
+      skills: this.skills(projectId),
     };
   }
 
-  /** What a sandboxed tab of the project mounts of this machine's knowledge (sbx.ts's prepareSbxRun). */
-  knowledge(projectId: string): SbxKnowledgeSettings {
-    return structuredClone(this.projects[projectId]?.knowledge ?? EMPTY_SBX_KNOWLEDGE);
+  /** What a sandboxed tab of the project mounts of this machine's skills (sbx.ts's prepareSbxRun). */
+  skills(projectId: string): SbxSkillsSettings {
+    return structuredClone(this.projects[projectId]?.skills ?? EMPTY_SBX_SKILLS);
   }
 
   /**
    * Keeps what the dialog's rows hold: a typed value, else the stored one of the name the row was
-   * opened under (`from`), so it follows a rename; a removed row's goes. And the knowledge as
+   * opened under (`from`), so it follows a rename; a removed row's goes. And the skills as
    * given. Throws before changing anything when the OS offers no encryption (`seal`).
    */
   update(projectId: string, local: SbxLocalSave): void {
@@ -101,9 +101,9 @@ export class SbxLocalStore {
         next[kind][env] = seal(value);
       }
     }
-    const knowledge = toKnowledge(local.knowledge);
-    if (knowledge) {
-      next.knowledge = knowledge;
+    const skills = toSkills(local.skills);
+    if (skills) {
+      next.skills = skills;
     }
     this.setProject(projectId, next);
   }
@@ -143,7 +143,7 @@ export class SbxLocalStore {
       return;
     }
     const next = { ...this.projects, [projectId]: local };
-    if (Object.keys(local.secrets).length === 0 && Object.keys(local.variables).length === 0 && !local.knowledge) {
+    if (Object.keys(local.secrets).length === 0 && Object.keys(local.variables).length === 0 && !local.skills) {
       delete next[projectId];
     }
     // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
