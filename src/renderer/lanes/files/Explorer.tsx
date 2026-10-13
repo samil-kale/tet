@@ -19,6 +19,7 @@ import { INDENT_BASE, INDENT_STEP, TreeRow, ChevronBox } from "../../ui/tree-row
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirmed } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
+import { named } from "../../ui/named";
 import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 
 interface ExplorerRowProps extends VisibleRow {
@@ -271,7 +272,7 @@ export const Explorer = memo(function Explorer({
     const create = kind === "file" ? window.tet.repository.createFile : window.tet.repository.createDirectory;
     await askName({
       title: kind === "file" ? "New File" : "New Folder",
-      detail: dir ? `Created inside ${dir}.` : "Created at the repository root.",
+      detail: dir ? named`Created inside ${dir}.` : "Created at the repository root.",
       confirmLabel: "Create",
       submit: (name) => runAsked(() => create(resolved.ref, under(dir, name))),
     });
@@ -294,7 +295,7 @@ export const Explorer = memo(function Explorer({
     const isFolder = node.children !== undefined;
     const answer = await confirmed({
       title: isFolder ? "Delete folder" : "Delete file",
-      message: `Are you sure you want to delete ${node.path}?`,
+      message: named`Are you sure you want to delete ${node.path}?`,
       detail: "Goes to the trash and can be restored from there.",
       confirmLabel: "Delete",
     });

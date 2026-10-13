@@ -4,6 +4,7 @@ import { canDiscardRefEdits } from "../editor/editor-views";
 import { runWithFollowUp, type GitRun } from "./run-action";
 import type { ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirm, confirmedFollowUp } from "../ui/Dialog";
+import { named } from "../ui/named";
 
 /**
  * The worktree questions, asked alike from a projects lane row and from the branch tree's
@@ -26,7 +27,7 @@ export function worktreeEntry(label: string, why: string | undefined, run: (() =
 export async function askNewWorktree(projectId: string, run: GitRun, base: string): Promise<void> {
   await askName({
     title: "Add worktree",
-    detail: `A new worktree starting at ${base}, in its own folder under ~/.tet/projects.`,
+    detail: named`A new worktree starting at ${base}, in its own folder under ~/.tet/projects.`,
     confirmLabel: "Add worktree",
     // The name is the branch's, so git refuses the same names here; shown at the field.
     submit: (name) =>
@@ -57,10 +58,10 @@ export async function askRenameWorktree(projectId: string, branch: string, run: 
 export async function askDeleteWorktree(worktree: ProjectRef, branch: string, upstream: string | undefined, run: GitRun): Promise<void> {
   const answer = await confirm({
     title: "Delete worktree",
-    message: `Are you sure you want to delete ${branch}?`,
+    message: named`Are you sure you want to delete ${branch}?`,
     detail: "The worktree and its folder are deleted, and its terminals closed. Commits that exist only in this worktree are lost.",
     confirmLabel: "Delete worktree",
-    checkboxLabel: upstream ? `Also delete ${upstream} on the remote` : undefined,
+    checkboxLabel: upstream ? named`Also delete ${upstream} on the remote` : undefined,
     checkboxChecked: (await window.tet.settings.get()).git.deleteWorktreeOnRemote,
   });
   if (!answer.confirmed || !(await canDiscardRefEdits(worktree))) {
@@ -81,7 +82,7 @@ export async function askDeleteWorktree(worktree: ProjectRef, branch: string, up
       confirmedFollowUp(
         {
           title: "Delete worktree",
-          message: `${branch} has uncommitted changes. Delete them too?`,
+          message: named`${branch} has uncommitted changes. Delete them too?`,
           detail: "Its changed and untracked files are lost.",
           confirmLabel: "Delete worktree",
         },

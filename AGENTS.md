@@ -372,9 +372,12 @@ per-line decision is for an agent.
   marks or points. Exceptions: git status letters, the error mark, a notice's severity icon,
   an editor tab's unsaved dot, the file icons. A theme whose own mark colour differs sets it in
   place of the accent (`THEMES.md`).
-- A git name in a label of the branch tree's menus — a branch, a remote — is a `MenuName`
-  (`ContextMenu.tsx`), set apart from the words saying what the entry does. Ask the user before
-  setting a name apart in any other menu.
+- **A git name or a file's path in a sentence is set apart from the words around it** — a
+  branch, a remote, a tag, a stash — in every menu entry and every question: its message,
+  detail, checkbox and field label. The sentence is `named` (`ui/named.tsx`), never a span of
+  the caller's own. Plain stay a count (`3 files`), what a notice or a progress line says, and
+  every other kind of name — a project, an account, a host, a command: ask the user before
+  setting one of those apart.
 - Row hover is `--tet-list-hoverBackground`, action button hover
   `--tet-toolbar-hoverBackground`.
 - A disabled control is dimmed, never recolored (opacity 0.4, the default cursor): every new

@@ -7,14 +7,14 @@ import { createStore, useStore } from "./store";
 
 interface ConfirmOptions {
   title: string;
-  /** The question, in one line. */
-  message: string;
+  /** The question, in one line; a sentence naming what it asks about is `named`, here and below. */
+  message: ReactNode;
   /** What it means, when the question does not say. */
-  detail?: string;
+  detail?: ReactNode;
   /** The button that goes through; the other is always "Cancel". */
   confirmLabel: string;
   /** An option carried along, e.g. "delete it on the remote too". */
-  checkboxLabel?: string;
+  checkboxLabel?: ReactNode;
   /** Whether that checkbox starts ticked. */
   checkboxChecked?: boolean;
   /** Runs the answer while the question still stands, with the header's bar, as `PromptOptions.submit`
@@ -50,7 +50,7 @@ export interface PromptFields<T> {
 export interface PromptOptions<T> {
   title: string;
   /** What it is for, when the fields do not say — e.g. the branch a new one starts from. */
-  detail?: string;
+  detail?: ReactNode;
   confirmLabel: string;
   /** The answer as the dialog opens. */
   value: T;
@@ -161,7 +161,7 @@ export function refusal(result: GitActionResult, fallback: string): string | und
 }
 
 /** `render` for a question asking one line of text, e.g. a name. */
-export function singleField(label: string, maxLength?: number): PromptOptions<string>["render"] {
+export function singleField(label: ReactNode, maxLength?: number): PromptOptions<string>["render"] {
   return ({ value, onChange, error, busy, field }) => (
     <TextField label={label} value={value} onChange={onChange} maxLength={maxLength} disabled={busy} ref={field} error={error} />
   );
@@ -169,7 +169,7 @@ export function singleField(label: string, maxLength?: number): PromptOptions<st
 
 interface NameOptions {
   title: string;
-  detail?: string;
+  detail?: ReactNode;
   confirmLabel: string;
   /** The name as it stands, for a rename: handed back unchanged it is done, nothing run. Left out
    *  for a new one. */

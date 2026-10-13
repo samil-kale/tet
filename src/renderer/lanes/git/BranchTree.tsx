@@ -7,10 +7,11 @@ import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "
 import type { ResolvedRef } from "../../resolved-ref";
 import { runWithFollowUp, type BranchActions } from "../../git/run-action";
 import { COLUMN_STEP, INDENT_BASE, TreeRow } from "../../ui/tree-row";
-import { MenuName, SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
 import { TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
+import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
 import { useCollapsedGroups } from "../../ui/layout-storage";
 import { ArrowDownIcon, ArrowUpIcon, BranchIcon, RemoteIcon, StashIcon, TagIcon, ChevronIcon, WorktreeIcon } from "../../ui/icons";
@@ -156,7 +157,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   const askCreateBranch = async (startPoint: CheckoutTarget): Promise<void> => {
     await askName({
       title: "Create branch",
-      detail: `The new branch starts at ${refName(startPoint)} and is checked out.`,
+      detail: named`The new branch starts at ${refName(startPoint)} and is checked out.`,
       confirmLabel: "Create branch",
       // git's own words for a name it will not take, at the field (`prompt`'s `submit`).
       submit: (name) => branch.ask(`Creating ${name}...`, () => repository.createBranch(at, name, startPoint)),
@@ -178,10 +179,17 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     const upstream = upstreamOf(state, name);
     const answer = await confirm({
       title: "Delete branch",
-      message: `Are you sure you want to delete ${name}?`,
-      detail: isCurrent(name) && defaultRef ? `Switches to ${defaultRef} first. ${COMMITS_LOST}` : COMMITS_LOST,
+      message: named`Are you sure you want to delete ${name}?`,
+      detail:
+        isCurrent(name) && defaultRef ? (
+          <>
+            {named`Switches to ${defaultRef} first.`} {COMMITS_LOST}
+          </>
+        ) : (
+          COMMITS_LOST
+        ),
       confirmLabel: "Delete branch",
-      checkboxLabel: upstream ? `Also delete ${upstreamName(upstream)} on the remote` : undefined,
+      checkboxLabel: upstream ? named`Also delete ${upstreamName(upstream)} on the remote` : undefined,
       checkboxChecked: (await window.tet.settings.get()).git.deleteBranchOnRemote,
     });
     if (answer.confirmed) {
@@ -198,7 +206,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     if (
       await confirmed({
         title: "Delete remote branch",
-        message: `Are you sure you want to delete ${name} on ${from}?`,
+        message: named`Are you sure you want to delete ${name} on ${from}?`,
         detail: COMMITS_LOST,
         confirmLabel: "Delete branch",
       })
@@ -210,7 +218,8 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** Asks first only when the main process answers `rewrites-pushed`, as GitHub Desktop warns. */
   const rebaseOnto = (target: CheckoutTarget): void => {
     const ref = refName(target);
-    const message = `Rebasing ${state.head} onto ${ref} rewrites commits already on ${state.upstream && refName(state.upstream)}.`;
+    // Asked only of a branch that was pushed, so it has its upstream.
+    const upstream = state.upstream ? refName(state.upstream) : "";
     runWithFollowUp(
       (action) => branch.run(`Rebasing onto ${ref}...`, action),
       () => repository.rebase(at, target, false),
@@ -220,11 +229,11 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         confirmedFollowUp(
           {
             title: "Rebase",
-            message,
+            message: named`Rebasing ${state.head} onto ${ref} rewrites commits already on ${upstream}.`,
             detail: "Pushing the branch afterwards takes a force push, which is for a terminal.",
             confirmLabel: "Rebase",
           },
-          message,
+          `Rebasing ${state.head} onto ${ref} rewrites commits already on ${upstream}.`,
         ),
       () => repository.rebase(at, target, true),
     );
@@ -233,7 +242,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   const askCreateTag = async (target: CheckoutTarget): Promise<void> => {
     await prompt({
       title: "Create tag",
-      detail: `The tag points at ${refName(target)}.`,
+      detail: named`The tag points at ${refName(target)}.`,
       value: { name: "", message: "" },
       confirmLabel: "Create tag",
       ready: ({ name }) => filled(name),
@@ -264,9 +273,9 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   const askDeleteTag = async (name: string): Promise<void> => {
     const answer = await confirm({
       title: "Delete tag",
-      message: `Are you sure you want to delete the tag ${name}?`,
+      message: named`Are you sure you want to delete the tag ${name}?`,
       confirmLabel: "Delete tag",
-      checkboxLabel: remote ? `Also delete it on ${remote}` : undefined,
+      checkboxLabel: remote ? named`Also delete it on ${remote}` : undefined,
       checkboxChecked: (await window.tet.settings.get()).git.deleteTagOnRemote,
     });
     if (answer.confirmed) {
@@ -281,7 +290,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     if (
       await confirmed({
         title: "Drop stash",
-        message: `Are you sure you want to drop ${stash.ref}?`,
+        message: named`Are you sure you want to drop ${stash.ref}?`,
         detail: stash.message,
         confirmLabel: "Drop stash",
       })
@@ -305,13 +314,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   /** Brings the default branch into HEAD; every fetch moves a local default branch up to its
    *  upstream. Nothing to bring in while standing on the default branch. */
   const updateFromDefault = (): ContextMenuEntry => ({
-    label: defaultRef ? (
-      <>
-        Update from <MenuName>{defaultRef}</MenuName>
-      </>
-    ) : (
-      "Update from the default branch"
-    ),
+    label: defaultRef ? named`Update from ${defaultRef}` : "Update from the default branch",
     run: defaultBranch && !state.detached && state.head !== defaultRef ? () => merge(defaultBranch) : undefined,
   });
 
@@ -330,11 +333,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       { label: "Check out", run: current || inWorktree ? undefined : () => checkout(branchTarget) },
       // It checks the new branch out, which a worktree's own branch never gives way to.
       {
-        label: (
-          <>
-            Create branch from <MenuName>{ref}</MenuName>...
-          </>
-        ),
+        label: named`Create branch from ${ref}...`,
         run: inWorktree ? undefined : () => void askCreateBranch(branchTarget),
       },
       ...(from
@@ -349,19 +348,11 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         ? [updateFromDefault()]
         : [
             {
-              label: (
-                <>
-                  Merge <MenuName>{ref}</MenuName> into <MenuName>{state.head}</MenuName>
-                </>
-              ),
+              label: named`Merge ${ref} into ${state.head}`,
               run: () => merge(branchTarget),
             },
             {
-              label: (
-                <>
-                  Rebase <MenuName>{state.head}</MenuName> onto <MenuName>{ref}</MenuName>
-                </>
-              ),
+              label: named`Rebase ${state.head} onto ${ref}`,
               run: () => rebaseOnto(branchTarget),
             },
           ]),
@@ -375,13 +366,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     ...abortEntries(),
     { label: "Check out", run: inWorktree ? undefined : () => checkoutTag(name) },
     {
-      label: remote ? (
-        <>
-          Push to <MenuName>{remote}</MenuName>
-        </>
-      ) : (
-        "Push"
-      ),
+      label: remote ? named`Push to ${remote}` : "Push",
       run: remote ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(at, name, login)) : undefined,
     },
     { label: "Delete...", run: () => void askDeleteTag(name) },
@@ -422,13 +407,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       worktree.current
         ? updateFromDefault()
         : {
-            label: merged ? (
-              <>
-                Merge <MenuName>{merged}</MenuName> into <MenuName>{state.head}</MenuName>
-              </>
-            ) : (
-              "Merge (no branch checked out)"
-            ),
+            label: merged ? named`Merge ${merged} into ${state.head}` : "Merge (no branch checked out)",
             run: merged && !state.detached ? () => merge({ name: merged }) : undefined,
           },
       SEPARATOR,

@@ -9,6 +9,7 @@ import { PLATFORM } from "../../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed, filled, prompt, singleField } from "../../ui/Dialog";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { named } from "../../ui/named";
 import { setDragName } from "../../ui/row-drag";
 import { Section } from "../../ui/Section";
 import { TabMark } from "../../ui/TabMark";
@@ -155,7 +156,7 @@ export const ProjectList = memo(function ProjectList({
       value: current ?? "",
       confirmLabel: "Change URL",
       ready: filled,
-      render: singleField(`URL of ${remote}`),
+      render: singleField(named`URL of ${remote}`),
       submit: async (url) =>
         url.trim() === current
           ? undefined
@@ -215,7 +216,7 @@ export const ProjectList = memo(function ProjectList({
     const own: ContextMenuEntry[] = worktree
       ? [
           {
-            label: base ? `Merge into ${base}` : "Merge into its base",
+            label: base ? named`Merge into ${base}` : "Merge into its base",
             run:
               base && baseResolved && branch && !detached
                 ? () =>

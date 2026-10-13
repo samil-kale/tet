@@ -4,6 +4,7 @@ import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ProjectRef } from "../../shared/types/project";
 import { confirmed, confirmedFollowUp } from "../ui/Dialog";
 import { layoutFlag } from "../ui/layout-storage";
+import { named } from "../ui/named";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
@@ -649,12 +650,12 @@ export async function saveEditorFile(tabId: string): Promise<void> {
       deleted
         ? {
             title: "File deleted on disk",
-            message: `${path} was deleted on disk since it was opened. Save it again with your changes?`,
+            message: named`${path} was deleted on disk since it was opened. Save it again with your changes?`,
             confirmLabel: "Save",
           }
         : {
             title: "File changed on disk",
-            message: `${path} changed on disk since it was opened. Overwrite it with your changes?`,
+            message: named`${path} changed on disk since it was opened. Overwrite it with your changes?`,
             confirmLabel: "Overwrite",
           },
       result.error ?? "Could not save the file",
@@ -707,7 +708,7 @@ export async function canDiscardEdits(tabIds: string[]): Promise<boolean> {
   }
   return confirmed({
     title: "Unsaved changes",
-    message: `Discard unsaved changes to ${paths.join(", ")}?`,
+    message: named`Discard unsaved changes to ${paths}?`,
     confirmLabel: "Discard changes",
   });
 }

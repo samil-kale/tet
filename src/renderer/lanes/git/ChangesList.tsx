@@ -26,6 +26,7 @@ import { confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
 import { askLogin } from "../../git/GitLogin";
 import { Checkbox, SuggestField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
+import { named } from "../../ui/named";
 import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 import { notify } from "../../ui/Notices";
 
@@ -78,11 +79,13 @@ export function canCommit(state: RepositoryState, paths: string[]): boolean {
  *  Asked although the trash can give them back: a discard is GitHub Desktop's one confirmed
  *  action, and a click on a row's × would otherwise empty the list. */
 export async function confirmDiscard(ref: ProjectRef, paths: string[], act: FileAct): Promise<void> {
-  const what = paths.length === 1 ? paths[0] : `${paths.length} files`;
   if (
     await confirmed({
       title: "Discard changes",
-      message: `Are you sure you want to discard all changes to ${what}?`,
+      message:
+        paths.length === 1
+          ? named`Are you sure you want to discard all changes to ${paths[0]}?`
+          : `Are you sure you want to discard all changes to ${paths.length} files?`,
       detail: "The changed files go to the trash and can be restored from there.",
       confirmLabel: "Discard changes",
     })
@@ -119,7 +122,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
   }
   const { remote, canSync } = syncRemote(state);
   // No checkbox without a remote or on a detached HEAD. Worded as the push button is (GitLane).
-  const pushLabel = canSync ? (state.upstream === undefined ? "Also publish branch" : `Also push ${remote}`) : undefined;
+  const pushLabel = canSync && remote ? (state.upstream === undefined ? "Also publish branch" : named`Also push ${remote}`) : undefined;
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
    *  question is gone — only one question is up at a time. */
   const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};
@@ -134,7 +137,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
     detail: !paths
       ? `Stages and commits all ${state.changes.length} changed files, untracked ones included.`
       : paths.length === 1
-        ? `Stages and commits ${paths[0]}; the other changes stay as they are.`
+        ? named`Stages and commits ${paths[0]}; the other changes stay as they are.`
         : `Stages and commits these ${paths.length} files; the other changes stay as they are.`,
     value: { message: "", push: pushLabel !== undefined && (await window.tet.settings.get()).git.pushOnCommit },
     confirmLabel: "Commit",

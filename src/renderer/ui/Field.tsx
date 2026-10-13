@@ -16,7 +16,8 @@ export function DialogError({ message }: { message: string | undefined }) {
 }
 
 interface FieldProps {
-  label: string;
+  /** A sentence naming what the field is of is `named`. */
+  label: ReactNode;
   children: ReactNode;
   /** What refused this field's value, on its own line under the control (`DialogError`). */
   error?: string;
@@ -114,7 +115,7 @@ export function PathField({ label, ...input }: PathInputProps & { label: string 
 }
 
 interface TextFieldProps {
-  label: string;
+  label: ReactNode;
   value: string;
   onChange: (value: string) => void;
   /** `password` for a secret entered once and never shown again. */
