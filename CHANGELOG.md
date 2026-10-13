@@ -3,6 +3,16 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.18.9 (2026-10-14)
+
+- **MCP servers in sandboxes.** The SBX dialog has a tab for the MCP servers loaded into a
+  project's sandboxes, by URL or by a name sbx has registered, with a browser sign-in where one is
+  needed; `tet-ctl sbx-set-mcp` sets them too.
+- **Skills.** The SBX dialog's Knowledge tab is now Skills, and `sbx-set-knowledge` is
+  `sbx-set-skills`.
+- **Fixes.** Saving the SBX settings starts no sandbox: each one takes them up when its next tab
+  starts. The sandbox listing of newer sbx versions is read.
+
 ## 0.18.8 (2026-10-13)
 
 - **Names set apart.** A branch, remote, tag, stash or file path in a menu entry or a question
