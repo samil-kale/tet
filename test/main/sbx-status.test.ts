@@ -13,6 +13,8 @@ interface Answers {
   /** `sbx ls --json`: the sandboxes, or the stderr it fails with. */
   sandboxes?: Record<string, string[]>;
   lsFails?: string;
+  /** The listing as a bare array, as newer sbx prints it, not wrapped in `sandboxes`. */
+  lsBare?: boolean;
   /** `sbx policy ls --type filesystem --json`: its rules, or none for a policy never set up. */
   filesystemRules?: object[];
   /** `sbx policy ls`'s whole stdout, where the rules alone do not say it (a governed account). */
@@ -40,7 +42,8 @@ const fail = (message) => { process.stderr.write(message + "\\n"); process.exit(
 if (args.startsWith("version")) {
   answers.version === undefined ? fail("unknown command") : out({ client: { version: "v" + answers.version } });
 } else if (args.startsWith("ls")) {
-  answers.lsFails !== undefined ? fail(answers.lsFails) : out({ sandboxes: Object.entries(answers.sandboxes ?? {}).map(([name, workspaces]) => ({ name, workspaces })) });
+  const listed = Object.entries(answers.sandboxes ?? {}).map(([name, workspaces]) => ({ name, workspaces }));
+  answers.lsFails !== undefined ? fail(answers.lsFails) : out(answers.lsBare ? listed : { sandboxes: listed });
 } else if (args.startsWith("policy ls")) {
   answers.filesystemRules === undefined ? fail("no policy") : out(answers.policyStdout ?? { rules: answers.filesystemRules });
 } else if (args.startsWith("policy check")) {
@@ -131,5 +134,10 @@ describe("what the SBX Settings read of sbx", () => {
     assert.equal(await withSbx({ version: "0.45.1", sandboxes: {} }, () => readSbxSignedIn()), true);
     assert.equal(await withSbx({ version: "0.45.1", lsFails: "Not authenticated to Docker" }, () => readSbxSignedIn()), false);
     assert.equal(await withSbx({ lsFails: "x" }, () => listSandboxes()), undefined);
+  });
+
+  it("reads the sandbox listing as a bare array too", async () => {
+    const listed = await withSbx({ lsBare: true, sandboxes: { a: ["/work"] } }, () => listSandboxes());
+    assert.deepEqual([...(listed ?? [])], [["a", ["/work"]]]);
   });
 });

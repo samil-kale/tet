@@ -344,12 +344,13 @@ export async function listSandboxes(): Promise<SandboxList | undefined> {
 
 /** probeSbx reads the run itself too, for why `ls` failed. */
 function parseSandboxes(result: RunResult): SandboxList | undefined {
-  const parsed = jsonOf<{ sandboxes?: { name?: string; workspaces?: string[] }[] }>(result);
+  type Listed = { name?: string; workspaces?: string[] }[];
+  const parsed = jsonOf<Listed | { sandboxes?: Listed }>(result);
   if (!parsed) {
     return undefined;
   }
   const sandboxes: SandboxList = new Map();
-  for (const sandbox of parsed.sandboxes ?? []) {
+  for (const sandbox of (Array.isArray(parsed) ? parsed : parsed.sandboxes) ?? []) {
     if (sandbox.name) {
       sandboxes.set(sandbox.name, sandbox.workspaces ?? []);
     }
