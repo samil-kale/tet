@@ -226,6 +226,12 @@ async function probeSbx(refreshPath: boolean): Promise<SbxProbe> {
  * Once the `sbx ls` of the probe underway (one begun if none is) has answered, whatever it said:
  * the daemon is started by then, so an sbx process begun beside the readiness check waits on this
  * instead of starting the daemon against it (a spawn's `ensureRunning`).
+ *
+ * The gate of every sbx process that overlaps the readiness check: sbx starts its daemon on
+ * whichever process comes first, and two processes doing so at once fail on its state lock
+ * ("another daemon is already running"), leaving the start in error. Speeding a start up by
+ * overlapping sbx calls — a warm-up, a parallel probe — waits on this first; only the check's own
+ * `ls` may run ahead of it.
  */
 export async function sbxListed(): Promise<void> {
   await sharedProbe().listed;
