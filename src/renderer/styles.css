@@ -116,6 +116,8 @@ textarea:disabled,
 .icon-button:disabled,
 .context-menu-item.disabled,
 .dialog-tab.disabled,
+/* The rows' mark goes with its tab's while a run holds the body. */
+.dialog-body:disabled .row-mark,
 .account-row.disabled,
 /* A worktree made elsewhere: listed, never opened. */
 .worktree-row.made-elsewhere,
@@ -327,6 +329,8 @@ textarea:focus,
   /* The tabbed dialogs (settings, sbx), and the command's: their tabs and fields need more than
      `.dialog`'s width. */
   --dialog-wide-width: 620px;
+  /* The SBX Settings' tabs need more than the other tabbed dialogs. */
+  --dialog-sbx-width: 660px;
   /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
      not resize them. Capped to the window. */
   --dialog-tall-height: 450px;
@@ -2014,6 +2018,11 @@ textarea:focus,
   width: var(--field-width);
 }
 
+.sbx-mcp-add {
+  display: flex;
+  gap: 16px;
+}
+
 .sbx-arrow {
   color: var(--tet-descriptionForeground);
 }
@@ -2102,9 +2111,12 @@ textarea:focus,
   max-height: var(--dialog-max-height);
 }
 
-.sbx-settings-dialog,
 .command-dialog {
   width: var(--dialog-wide-width);
+}
+
+.sbx-settings-dialog {
+  width: var(--dialog-sbx-width);
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can

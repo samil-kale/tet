@@ -42,7 +42,7 @@ const fail = (message) => { process.stderr.write(message + "\\n"); process.exit(
 if (args.startsWith("version")) {
   answers.version === undefined ? fail("unknown command") : out({ client: { version: "v" + answers.version } });
 } else if (args.startsWith("ls")) {
-  const listed = Object.entries(answers.sandboxes ?? {}).map(([name, workspaces]) => ({ name, workspaces }));
+  const listed = Object.entries(answers.sandboxes ?? {}).map(([name, workspaces]) => ({ name, workspaces, status: "running" }));
   answers.lsFails !== undefined ? fail(answers.lsFails) : out(answers.lsBare ? listed : { sandboxes: listed });
 } else if (args.startsWith("policy ls")) {
   answers.filesystemRules === undefined ? fail("no policy") : out(answers.policyStdout ?? { rules: answers.filesystemRules });
@@ -83,7 +83,7 @@ describe("whether sbx is ready for a sandboxed tab", () => {
     const answers: Answers = { version: "0.45.1", sandboxes: { "tet-claude-abc": ["/work"] }, filesystemRules: ALLOW_ALL };
     const ready = await withSbx(answers, (folder) => checkSbxReady(folder, REF));
     assert.ok(!("notReady" in ready), JSON.stringify(ready));
-    assert.deepEqual([...ready.sandboxes], [["tet-claude-abc", ["/work"]]]);
+    assert.deepEqual([...ready.sandboxes], [["tet-claude-abc", { workspaces: ["/work"], running: true }]]);
     assert.equal(ready.rules?.length, 1);
   });
 
@@ -113,7 +113,7 @@ describe("what the SBX Settings read of sbx", () => {
     assert.equal(ready.status.signedIn, true);
     assert.equal(ready.status.policyInitialized, true);
     assert.deepEqual(ready.status.blockers, []);
-    assert.deepEqual([...(ready.sandboxes ?? [])], [["a", []]]);
+    assert.deepEqual([...(ready.sandboxes ?? [])], [["a", { workspaces: [], running: true }]]);
     assert.equal(ready.rules?.length, 1);
 
     const noPolicy = await withSbx({ version: "0.45.1", sandboxes: {} }, (folder) => readSbxReading(folder, REF, false));
@@ -138,6 +138,6 @@ describe("what the SBX Settings read of sbx", () => {
 
   it("reads the sandbox listing as a bare array too", async () => {
     const listed = await withSbx({ lsBare: true, sandboxes: { a: ["/work"] } }, () => listSandboxes());
-    assert.deepEqual([...(listed ?? [])], [["a", ["/work"]]]);
+    assert.deepEqual([...(listed ?? [])], [["a", { workspaces: ["/work"], running: true }]]);
   });
 });

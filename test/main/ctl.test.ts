@@ -27,6 +27,7 @@ import {
   type SbxLocalSave,
   type SbxProblems,
   type SbxProjectSettings,
+  type SbxRegisteredMcp,
   type SbxStatus,
 } from "../../src/shared/types/sbx";
 import { type AppSettings, laneOrders, laneSettings, withSettings } from "../../src/shared/types/settings";
@@ -114,6 +115,7 @@ interface Calls {
   sbxSaved: [string, SbxProjectSettings, SbxLocalSave][];
   /** The users sbx was signed in as with a kept access token. */
   sbxSignedIn: string[];
+  mcpSignedIn: string[];
 }
 
 /** What the window reported for PROJECT's active editor tab, a preview, beside a kept one. */
@@ -180,6 +182,9 @@ const DIALOG_STAYS_OPEN = ["(stays open)"];
 let sbxStatus: SbxStatus;
 
 let sbxSettings: SbxProjectSettings;
+/** The servers sbx lists as registered, and what its sign-in said for one it refused. */
+let mcpRegistered: SbxRegisteredMcp[];
+let mcpRefusal: Record<string, string>;
 
 let sbxSkills: SbxSkillsSettings;
 
@@ -414,6 +419,11 @@ function deps(): ControlDeps {
       accounts: () => sbxAccounts.map((user) => ({ id: `id-${user}`, user })),
       signedIn: async () => sbxStatus.signedIn,
       signedInUser: async () => sbxUser,
+      mcpRegistered: async () => mcpRegistered,
+      mcpSignIn: async (name) => {
+        calls.mcpSignedIn.push(name);
+        return mcpRefusal[name];
+      },
       signIn: async (account) => {
         if (sbxRefusal !== undefined) {
           return { signedIn: false, error: sbxRefusal };
@@ -490,6 +500,7 @@ describe("tet-ctl against the control server", () => {
       envWithdrawn: [],
       sbxSaved: [],
       sbxSignedIn: [],
+      mcpSignedIn: [],
     };
     server = await startControlServer(deps(), TOKEN, port);
   });
@@ -531,6 +542,8 @@ describe("tet-ctl against the control server", () => {
     dialogAnswer = undefined;
     sbxStatus = { installed: true, signedIn: true, policyInitialized: true, blockers: [] };
     sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
+    mcpRegistered = [];
+    mcpRefusal = {};
     sbxSkills = EMPTY_SBX_SKILLS;
     sbxProblems = {};
     sbxAccounts = ["skale", "work"];
@@ -1104,6 +1117,7 @@ describe("tet-ctl against the control server", () => {
       ["sbx-sign-in", "work"],
       ["sbx-set-enabled", "off"],
       ["sbx-set-hosts", "example.com"],
+      ["sbx-set-mcp", "notion=https://mcp.notion.com/mcp"],
     ];
     for (const args of refused) {
       assertRefused(await tetCtl(args, FROM_SANDBOX), /inside a sandbox/, args[0]);
@@ -1167,6 +1181,34 @@ describe("tet-ctl against the control server", () => {
       { values: { DB_URL: "a=b" }, from: { DB_URL: "DB_URL", MODE: "MODE" } },
       "NAME=value types a value, split at the first =, an empty one none",
     );
+    assert.equal((await tetCtl(["sbx-set-mcp", "notion=https://mcp.notion.com/mcp?a=b", "linear"])).status, EXIT_CODES.ok);
+    assert.deepEqual(
+      sbxSettings.mcp,
+      [
+        { name: "notion", url: "https://mcp.notion.com/mcp?a=b" },
+        { name: "linear", url: "" },
+      ],
+      "NAME=url splits at the first =, a bare NAME has no url",
+    );
+    assert.equal((await tetCtl(["sbx-set-mcp", "notion=https://a.example/mcp", "notion"])).status, EXIT_CODES.usage, "one server per name");
+    mcpRegistered = [
+      { name: "notion", url: "", transport: "remote http", status: "needs-auth" },
+      { name: "linear", url: "", transport: "remote http", status: "ready" },
+      { name: "slack", url: "", transport: "remote http", status: "needs-auth" },
+    ];
+    mcpRefusal = { notion: "authorization timed out" };
+    assert.deepEqual((await tetCtl(["sbx-set-mcp", "notion", "linear"])).result, { saved: true, restartRequired: false });
+    assert.deepEqual(calls.mcpSignedIn, [], "no browser without --auth");
+    const authed = await tetCtl(["sbx-set-mcp", "notion", "linear", "--auth"]);
+    assert.deepEqual(authed.result, {
+      saved: true,
+      restartRequired: false,
+      signedIn: [],
+      notSignedIn: { notion: "authorization timed out" },
+    });
+    assert.deepEqual(calls.mcpSignedIn, ["notion"], "only a kept server that needs a sign-in, and not slack");
+    assert.equal((await tetCtl(["sbx-set-mcp"])).status, EXIT_CODES.ok, "none clears them");
+    assert.deepEqual(sbxSettings.mcp, []);
     assert.equal((await tetCtl(["sbx-set-skills", "skills", "ro"])).status, EXIT_CODES.ok);
     assert.equal((await tetCtl(["sbx-set-skills-folder", folder])).status, EXIT_CODES.ok);
     assert.deepEqual(sbxSkills, { ...EMPTY_SBX_SKILLS, skills: "ro", skillsFolder: folder });

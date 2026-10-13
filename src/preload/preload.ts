@@ -46,6 +46,8 @@ const api: TETApi = {
     getSettings: (projectId) => invoke("sbx:get-settings", projectId),
     stored: (projectId) => invoke("sbx:stored", projectId),
     skillsSources: () => invoke("sbx:skills-sources"),
+    mcpRegistered: () => invoke("sbx:mcp-registered"),
+    mcpSignIn: (name) => invoke("sbx:mcp-sign-in", name),
     saveSettings: (projectId, request, local) => invoke("sbx:save-settings", projectId, request, local),
     problems: (projectId, settings, skills, values, status) => invoke("sbx:problems", projectId, settings, skills, values, status),
   },

@@ -20,7 +20,7 @@ import { COMMAND_COLORS } from "../../shared/types/project";
 import { SBX_ACCESS } from "../../shared/types/sbx";
 import type { ExplorerRoot } from "../../shared/types/files";
 import type { CommandColor, ProjectCommand } from "../../shared/types/project";
-import type { SbxPath, SbxPort, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
+import type { SbxMcpServer, SbxPath, SbxPort, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
 import { readRepositoryPath } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";
@@ -462,6 +462,16 @@ function toSbxVariables(value: unknown, secrets: SbxSecret[]): SbxVariable[] {
   return variables.filter((variable, i) => variables.findIndex((other) => machineName(other.env) === machineName(variable.env)) === i);
 }
 
+/** A row needs a name, trimmed; a repeated name keeps the first row only, as sbx has one server per
+ *  name. The URL may be empty: a registered server without one is only loaded. */
+function toSbxMcp(value: unknown): SbxMcpServer[] {
+  const servers = objectRows(value, ({ name, url }) => {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    return trimmed ? { name: trimmed, url: typeof url === "string" ? url.trim() : "" } : undefined;
+  });
+  return servers.filter((server, i) => servers.findIndex((other) => other.name === server.name) === i);
+}
+
 /** An allowed-path row plus, outside the home, the platform it was entered on: an absolute path
  *  means nothing on another OS, so readSbxSettings reads and writeSbxSettings replaces only this
  *  platform's rows. A `~/…` row carries no `os` and applies everywhere. */
@@ -487,7 +497,7 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
 }
 
 /** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
- *  hosts, the variables' names and the setup script. Never holds a token: each sandboxed agent signs
+ *  hosts, the variables' names, the MCP servers and the setup script. Never holds a token: each sandboxed agent signs
  *  in with its own `/login` inside the sandbox, and a secret's or variable's value stays on this
  *  machine, as does the skills (sbx-local.ts). A worktree forwards no ports: a port of this
  *  machine reaches one sandbox, and its repository's has it. */
@@ -509,6 +519,7 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
     hosts: toSbxHosts(sbx.hosts),
     secrets,
     variables: toSbxVariables(sbx.variables, secrets),
+    mcp: toSbxMcp(sbx.mcp),
     setup: toSbxSetup(sbx.setup),
   };
 }
@@ -528,6 +539,7 @@ export function writeSbxSettings(root: string, config: SbxProjectSettings): Prom
           hosts: config.hosts,
           secrets: config.secrets,
           variables: config.variables,
+          mcp: config.mcp,
           setup: config.setup,
         },
       ],

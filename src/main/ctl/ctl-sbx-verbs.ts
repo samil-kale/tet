@@ -1,10 +1,18 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
-import { SBX_ACCESS, type SbxSkillsSettings, type SbxProjectSettings, type SbxSecret, type SbxVariable } from "../../shared/types/sbx";
+import {
+  SBX_ACCESS,
+  SBX_MCP_NEEDS_AUTH,
+  type SbxSkillsSettings,
+  type SbxProjectSettings,
+  type SbxSecret,
+  type SbxVariable,
+} from "../../shared/types/sbx";
 import {
   SBX_SKILLS_KINDS,
   keptValues,
+  sbxMcpRefusal,
   sbxNeedsRestart,
   sbxPortRefusal,
   sbxSecretRefusal,
@@ -246,6 +254,45 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
         refuseVariables(variables, settings.secrets);
         return { settings: { ...settings, variables }, variableValues };
       });
+    },
+
+    "sbx-set-mcp": async (args, caller) => {
+      // The first `=` splits, so a URL may hold more; a bare NAME has no URL to register from.
+      const servers = list(args, "servers").map((entry) => {
+        const at = entry.indexOf("=");
+        return at < 0 ? { name: entry.trim(), url: "" } : { name: entry.slice(0, at).trim(), url: entry.slice(at + 1).trim() };
+      });
+      servers.forEach((server, index) => {
+        const refusal = server.name === "" ? "needs a name" : sbxMcpRefusal(server, servers.slice(0, index));
+        if (refusal) {
+          throw new ControlError("bad_args", `${refusal}: ${server.name || server.url}`);
+        }
+      });
+      const saved = await editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, mcp: servers } }));
+      if (args.auth !== true) {
+        return saved;
+      }
+      // Of what the Save kept, the servers that still want a sign-in, one browser flow after the
+      // other: each waits on the user.
+      const found = refFrom(args, caller).project;
+      const kept = (await deps.sbx.settings(found)).mcp.map((server) => server.name);
+      const registered = await deps.sbx.mcpRegistered();
+      const needing = (registered ?? []).filter((server) => kept.includes(server.name) && server.status === SBX_MCP_NEEDS_AUTH);
+      const notSignedIn: Record<string, string> = {};
+      for (const { name } of needing) {
+        const failed = await deps.sbx.mcpSignIn(name);
+        if (failed !== undefined) {
+          notSignedIn[name] = failed;
+        }
+      }
+      return {
+        ...saved,
+        result: {
+          ...(saved.result as object),
+          signedIn: needing.map((server) => server.name).filter((name) => notSignedIn[name] === undefined),
+          ...(Object.keys(notSignedIn).length > 0 ? { notSignedIn } : {}),
+        },
+      };
     },
 
     "sbx-set-skills": (args, caller) => {

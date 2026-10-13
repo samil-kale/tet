@@ -30,6 +30,8 @@ export interface InvokeChannels {
   "sbx:get-settings": TETApi["sbx"]["getSettings"];
   "sbx:stored": TETApi["sbx"]["stored"];
   "sbx:skills-sources": TETApi["sbx"]["skillsSources"];
+  "sbx:mcp-registered": TETApi["sbx"]["mcpRegistered"];
+  "sbx:mcp-sign-in": TETApi["sbx"]["mcpSignIn"];
   "sbx:save-settings": TETApi["sbx"]["saveSettings"];
   "sbx:problems": TETApi["sbx"]["problems"];
   "settings:get": TETApi["settings"]["get"];

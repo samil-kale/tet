@@ -312,7 +312,8 @@ per-line decision is for an agent.
 - **A dialog on screen says what concerns it; prefer this to a notice.** Words alone, no mark,
   coloured by what it is. A failure belongs where the answer was typed: under that field
   (`Field`'s `error`); in a row of a list as the error mark's tooltip beside it (`RowMark`, the
-  one mark; on a dialog tab, `DialogTab.mark`); else left in the button row, level with the
+  one mark; on a dialog tab, `DialogTab.mark`, repeating its first row's, from the one function
+  that builds the row's); else left in the button row, level with the
   buttons (`DialogFrame`'s `error`) where the fields are several or across tabs — what was typed
   is held so it can be corrected, and it is git's own words for a name it will not take, never
   TET's guess at them. A list that could not be loaded shows its failure in its place
@@ -479,7 +480,9 @@ the `sbx` CLI.
   session's start (`readSbxProblems`).
 - **The dialog checks live** whatever can be checked, and marks a failing row with the error mark
   saying what is wrong — never that it will not be saved.
-- **A session's start applies tet.json as it stands and never writes it.** What the policy forbids
+- **A session's start applies tet.json as it stands and never writes it**, the same way to a
+  sandbox it created and one it found (`alignSandbox`); a Save starts none, so a stopped one takes
+  its ports and MCP servers there. What the policy forbids
   or this machine lacks is skipped and told in one notice per dialog tab and reason, its rows
   listed (`Could not set hosts:` … `Forbidden by governance`): how a user learns that governance
   took over.

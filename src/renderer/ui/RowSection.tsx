@@ -55,7 +55,8 @@ export interface RowReorder {
 }
 
 /**
- * A section's row: its fields, then the mark saying what is wrong with it, then its remove button —
+ * A section's row: its fields, then the mark saying what is wrong with it, then the row's own
+ * `action` (a button beside the mark, such as an MCP server's sign-in), then its remove button —
  * none for a row that is asked for rather than kept (EnvDialog). The mark takes its room from the
  * field before it (styles.css), so nothing else in the row moves. A row of a reorderable section
  * (`reorder`) leads with a grip and is dragged whole; one switched off (`off`) is dimmed, but for
@@ -63,6 +64,7 @@ export interface RowReorder {
  */
 export function EditRow({
   mark,
+  action,
   remove,
   onRemove,
   reorder,
@@ -71,6 +73,7 @@ export function EditRow({
   children,
 }: {
   mark?: string;
+  action?: ReactNode;
   reorder?: RowReorder;
   off?: boolean;
   /** Beside `edit-row`, for a section's own placement of its fields. */
@@ -82,6 +85,7 @@ export function EditRow({
       {reorder && <GripIcon className="row-grip" />}
       {children}
       <RowMark title={mark} />
+      {action}
       {onRemove && (
         <IconButton title={remove} onClick={onRemove}>
           <CloseIcon />

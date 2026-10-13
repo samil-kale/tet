@@ -7,6 +7,7 @@ import type { CheckoutTarget, GitActionResult, RepositoryState } from "../../sha
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type {
   SbxAccount,
+  SbxRegisteredMcp,
   SbxSkillsSettings,
   SbxLocalSave,
   SbxProblems,
@@ -210,6 +211,10 @@ export interface ControlDeps {
     signedInUser(): Promise<string | undefined>;
     /** sbx-accounts.ts's signInToSbx with the token kept for that account. */
     signIn(account: SbxAccount): Promise<SbxSignInResult>;
+    /** sbx-mcp.ts's readRegisteredMcp; undefined when sbx cannot say. */
+    mcpRegistered(): Promise<SbxRegisteredMcp[] | undefined>;
+    /** sbx-mcp.ts's signInMcp: opens the browser and waits; what sbx said on refusing. */
+    mcpSignIn(name: string): Promise<string | undefined>;
   };
 }
 

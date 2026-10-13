@@ -11,10 +11,12 @@ import type {
   SbxPort,
   SbxProblems,
   SbxProjectSettings,
+  SbxRegisteredMcp,
   SbxStoredLocal,
 } from "../../shared/types/sbx";
 import {
   problemOf,
+  sbxMcpRefusal,
   sbxNeedsRestart,
   sbxPortKey,
   sbxPortRefusal,
@@ -39,6 +41,7 @@ import {
   without,
   type Row,
 } from "../ui/RowSection";
+import { BLANK_MCP, isEmptyMcpRow, MCP_NEEDS_SIGN_IN, needsSignIn, SbxMcpSection, type McpRow } from "./SbxMcp";
 import { Dropdown } from "../ui/Dropdown";
 import { Checkbox, FieldGroup, FieldRow, PathInput } from "../ui/Field";
 import { AgentIcon } from "../ui/agent-icons";
@@ -78,6 +81,7 @@ export interface FieldsState {
   secrets: Row<{ env: string; hosts: string; value: string; from?: string }>[];
   /** `value` and `from` as for `secrets`. */
   variables: Row<{ env: string; value: string; from?: string }>[];
+  mcp: McpRow[];
   /** The setup script as typed. */
   setup: string;
 }
@@ -108,6 +112,10 @@ export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLoca
     variables: atLeastOne(
       settings.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
       BLANK_VARIABLE,
+    ),
+    mcp: atLeastOne(
+      settings.mcp.map((server) => withId({ name: server.name, url: server.url })),
+      BLANK_MCP,
     ),
     setup: settings.setup.join("\n"),
   };
@@ -143,6 +151,36 @@ function secretRefusal(row: SecretRow, rows: SecretRow[]): string | undefined {
     : sbxSecretRefusal({ env: row.env.trim(), hosts: secretHosts(row) }, rows.filter((other) => other.id !== row.id).map(named));
 }
 
+/** Why Save refuses an MCP row (sbxMcpRefusal), or `undefined`: an empty one is dropped. */
+function mcpRefusal(row: McpRow, rows: McpRow[]): string | undefined {
+  if (isEmptyMcpRow(row)) {
+    return undefined;
+  }
+  return row.name.trim() === ""
+    ? "Needs a name"
+    : sbxMcpRefusal(
+        { name: row.name, url: row.url },
+        rows.filter((other) => other.id !== row.id && !isEmptyMcpRow(other)).map((other) => ({ name: other.name, url: other.url })),
+      );
+}
+
+/** An MCP row's mark, or `undefined`, likewise; `failure` is what sbx said on refusing its sign-in,
+ *  which the row alone holds. The one source of the row's mark and its tab's. */
+function mcpMark(
+  row: McpRow,
+  rows: McpRow[],
+  problems: SbxProblems,
+  registered: SbxRegisteredMcp[] | undefined | null,
+  failure?: string,
+): string | undefined {
+  return (
+    mcpRefusal(row, rows) ??
+    problemOf(problems, "mcp", row.name.trim()) ??
+    failure ??
+    (needsSignIn(registered, row.name.trim()) ? MCP_NEEDS_SIGN_IN : undefined)
+  );
+}
+
 type VariableRow = FieldsState["variables"][number];
 
 function isEmptyVariableRow(row: VariableRow): boolean {
@@ -173,6 +211,9 @@ export function saveBlocked(state: FieldsState): string | undefined {
   if (state.variables.some((row) => variableRefusal(row, state) !== undefined)) {
     return "A variable on the Variables tab needs a name no secret or other variable holds, not PATH or TET_*";
   }
+  if (state.mcp.some((row) => mcpRefusal(row, state.mcp) !== undefined)) {
+    return "A server on the MCP tab needs a name no other server holds";
+  }
   if (state.skills.skills !== false && state.skills.skillsFolder === "") {
     return "The skills on the Skills tab need a folder";
   }
@@ -190,6 +231,7 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
     secrets: state.secrets.filter((row) => !isEmptySecretRow(row)).map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
     variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() })),
+    mcp: state.mcp.filter((row) => !isEmptyMcpRow(row)).map((row) => ({ name: row.name.trim(), url: row.url.trim() })),
     setup: setupLines(state.setup),
   };
 }
@@ -313,14 +355,21 @@ function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblem
 }
 
 /** Each tab's mark: its first marked row's, repeated on the tab so it shows from any tab. */
-export function tabMarks(state: FieldsState, problems: SbxProblems): Partial<Record<keyof FieldsState, string>> {
+export function tabMarks(
+  state: FieldsState,
+  problems: SbxProblems,
+  registered: SbxRegisteredMcp[] | undefined | null,
+): Record<keyof FieldsState, string | undefined> {
   return {
     skills: firstMark(SKILLS_LABELS.map(({ kind }) => problemOf(problems, "skills", kind))),
     ports: firstMark(state.ports.map((row) => portMark(row, problems))),
     paths: firstMark(state.paths.map((row) => problemOf(problems, "paths", row.path))),
     hosts: firstMark(state.hosts.map((row) => problemOf(problems, "hosts", row.host.trim()))),
+    mcp: firstMark(state.mcp.map((row) => mcpMark(row, state.mcp, problems, registered))),
     secrets: firstMark(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
     variables: firstMark(state.variables.map((row) => variableMark(row, state, problems))),
+    // A script as typed has no row to refuse.
+    setup: undefined,
   };
 }
 
@@ -335,11 +384,28 @@ interface SbxSettingsFieldsProps {
   sources: SbxSkillsSource[];
   /** Asked by the dialog from its opening (useSbxProblems), for the tabs' marks too. */
   problems: SbxProblems;
+  /** The MCP tab's browser sign-in, which the dialog holds the bar of. */
+  signInMcp: (name: string) => Promise<string | undefined>;
+  signingInMcp: boolean;
+  /** What sbx has registered, asked by the dialog, and how to ask again. */
+  mcpRegistered: SbxRegisteredMcp[] | undefined | null;
+  askMcp: () => void;
 }
 
 /** One tab of the dialog's fields, shown once sbx is ready (see SbxSettingsDialog). State is
  *  shared across tabs. */
-export function SbxSettingsFields({ state, setState, section, stored, sources, problems }: SbxSettingsFieldsProps) {
+export function SbxSettingsFields({
+  state,
+  setState,
+  section,
+  stored,
+  sources,
+  problems,
+  signInMcp,
+  signingInMcp,
+  mcpRegistered,
+  askMcp,
+}: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
 
@@ -445,6 +511,20 @@ export function SbxSettingsFields({ state, setState, section, stored, sources, p
           );
         }}
         add={ports.add}
+      />
+    );
+  }
+
+  if (section === "mcp") {
+    return (
+      <SbxMcpSection
+        rows={state.mcp}
+        registered={mcpRegistered}
+        ask={askMcp}
+        setRows={(change) => update("mcp", change)}
+        markOf={(row, failure) => mcpMark(row, state.mcp, problems, mcpRegistered, failure)}
+        onSignIn={signInMcp}
+        signingIn={signingInMcp}
       />
     );
   }

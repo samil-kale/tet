@@ -10,6 +10,7 @@ import type {
   SbxSkillsSettings,
   SbxSkillsKind,
   SbxLocalEdits,
+  SbxMcpServer,
   SbxOption,
   SbxPort,
   SbxProblems,
@@ -68,6 +69,17 @@ export function sbxVariableRefusal(
     : undefined;
 }
 
+/** A server's row: one per name, as sbx has one server per name. */
+export function sbxMcpRefusal({ name }: SbxMcpServer, others: SbxMcpServer[]): string | undefined {
+  return others.some((other) => other.name.trim() === name.trim()) ? "Needs a name no other server holds" : undefined;
+}
+
+/** Whether two URLs are one server's, as sbx stores a registration: apart from a trailing slash. */
+export function sameMcpUrl(first: string, second: string): boolean {
+  const bare = (url: string): string => url.trim().replace(/\/+$/, "");
+  return bare(first) === bare(second);
+}
+
 /**
  * Whether going from `loaded` and `loadedSkills` to `settings` and `skills` reaches a running
  * tab only once it restarts: a mount is added at a tab's start (a removed one goes at Save), and
@@ -102,6 +114,9 @@ export const SBX_PROBLEM = {
   notStarted: "Its sandbox could not be started",
   secretsUnlisted: "sbx did not list the sandbox's secrets",
   hostsUnlisted: "sbx did not list the sandbox's allowed hosts",
+  mcpUnlisted: "sbx did not list its registered MCP servers",
+  mcpOtherUrl: "Already registered with sbx under another URL",
+  mcpUnregistered: "Not registered with sbx, and no URL to register it with",
   failed: "Tried again at the next start",
 } as const;
 
@@ -124,7 +139,7 @@ export function forbiddenBy(organization: string | undefined): string {
 }
 
 /** In the dialog's tab order. */
-const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "secrets", "variables", "setup"];
+const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "mcp", "secrets", "variables", "setup"];
 
 /**
  * What a sandboxed session's start could not apply, one notice per option and reason, its rows
@@ -200,6 +215,7 @@ export function withoutProblems(
       hosts: settings.hosts.filter((host) => fine("hosts", host)),
       secrets: settings.secrets.filter((secret) => fine("secrets", secret.env)),
       variables: settings.variables.filter((variable) => fine("variables", variable.env)),
+      mcp: settings.mcp.filter((server) => fine("mcp", server.name)),
     },
     skills: next,
   };

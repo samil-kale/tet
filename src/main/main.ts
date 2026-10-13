@@ -36,6 +36,7 @@ import {
 } from "./projects";
 import { ProjectStore } from "./store/project-store";
 import { readSbxUser } from "./sbx/sbx-cli";
+import { readRegisteredMcp, signInMcp } from "./sbx/sbx-mcp";
 import { readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
 import { SbxAccountStore, signInToSbx } from "./sbx/sbx-accounts";
 import { SbxLocalStore } from "./sbx/sbx-local";
@@ -339,6 +340,8 @@ async function startControl(): Promise<void> {
           signedIn: readSbxSignedIn,
           signedInUser: () => readSbxUser(false),
           signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id),
+          mcpRegistered: () => readRegisteredMcp(),
+          mcpSignIn: signInMcp,
         },
       },
       controlChannel.token,

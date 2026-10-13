@@ -130,6 +130,7 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   keep: "switch",
   background: "switch",
   force: "switch",
+  auth: "switch",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
@@ -403,6 +404,15 @@ const VERBS = [
     positionals: ["variables"],
     variadic: true,
     sandbox: "ownProject",
+  },
+  {
+    verb: "sbx-set-mcp",
+    group: "SBX",
+    usage: "sbx-set-mcp [<NAME>[=<url>]...] [--auth] [--project <id>]",
+    summary:
+      "Replace the MCP servers loaded into the sandboxes. NAME=url registers it with sbx if new, a bare NAME uses one sbx has registered. A removed one is unloaded, its registration stays; none clears them. --auth then opens the user's browser for each of them that needs a sign-in, and waits.",
+    positionals: ["servers"],
+    variadic: true,
   },
   {
     verb: "sbx-set-skills",

@@ -4,6 +4,7 @@ import { EMPTY_SBX_SETTINGS } from "../../shared/types/sbx";
 import type {
   SbxAccount,
   SbxAccountEdit,
+  SbxRegisteredMcp,
   SbxSkillsSettings,
   SbxSkillsSource,
   SbxLocalSave,
@@ -16,6 +17,7 @@ import type {
   SbxValueKind,
 } from "../../shared/types/sbx";
 import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxSignIn, runSbxSignOut } from "../sbx/sbx-cli";
+import { readRegisteredMcp, signInMcp } from "../sbx/sbx-mcp";
 import { readSkillsSources } from "../sbx/sbx-mounts";
 import { readSbxStatus } from "../sbx/sbx-status";
 import { signInToSbx } from "../sbx/sbx-accounts";
@@ -84,6 +86,9 @@ export function registerSbxIpc({
   handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
   // The Skills tab's agents; asked fresh, as agents are installed outside TET.
   handle("sbx:skills-sources", (): Promise<SbxSkillsSource[]> => readSkillsSources());
+  // The MCP tab's picker; asked fresh, as servers are registered outside TET.
+  handle("sbx:mcp-registered", (): Promise<SbxRegisteredMcp[] | undefined> => readRegisteredMcp());
+  handle("sbx:mcp-sign-in", (_event, name: string): Promise<string | undefined> => signInMcp(name));
   // The dialog's Save, shared with tet-ctl's sbx-set-* verbs (sbx-settings.ts).
   handle(
     "sbx:save-settings",

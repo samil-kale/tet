@@ -41,8 +41,14 @@ export async function readSbxSignedIn(): Promise<boolean> {
   return (await listSandboxes()) !== undefined;
 }
 
-/** `sbx ls --json` as name → workspaces. */
-export type SandboxList = Map<string, string[]>;
+/** One sandbox of `sbx ls --json`: its workspaces, and whether it runs now. */
+export interface ListedSandbox {
+  workspaces: string[];
+  running: boolean;
+}
+
+/** `sbx ls --json` by name. */
+export type SandboxList = Map<string, ListedSandbox>;
 
 /**
  * Before every sandboxed spawn (`resolvePlace`): the first unmet precondition as a notice, or the
@@ -344,7 +350,7 @@ export async function listSandboxes(): Promise<SandboxList | undefined> {
 
 /** probeSbx reads the run itself too, for why `ls` failed. */
 function parseSandboxes(result: RunResult): SandboxList | undefined {
-  type Listed = { name?: string; workspaces?: string[] }[];
+  type Listed = { name?: string; workspaces?: string[]; status?: string }[];
   const parsed = jsonOf<Listed | { sandboxes?: Listed }>(result);
   if (!parsed) {
     return undefined;
@@ -352,7 +358,7 @@ function parseSandboxes(result: RunResult): SandboxList | undefined {
   const sandboxes: SandboxList = new Map();
   for (const sandbox of (Array.isArray(parsed) ? parsed : parsed.sandboxes) ?? []) {
     if (sandbox.name) {
-      sandboxes.set(sandbox.name, sandbox.workspaces ?? []);
+      sandboxes.set(sandbox.name, { workspaces: sandbox.workspaces ?? [], running: sandbox.status === "running" });
     }
   }
   return sandboxes;

@@ -18,6 +18,7 @@ import type {
   SbxAccount,
   SbxAccountEdit,
   SbxSkillsSettings,
+  SbxRegisteredMcp,
   SbxSkillsSource,
   SbxLocalSave,
   SbxProblems,
@@ -72,7 +73,7 @@ export interface TETApi {
     saveAccounts: (edits: SbxAccountEdit[]) => Promise<string | undefined>;
     /** Sets the machine-wide network policy to "balanced", Docker's recommended default. */
     initPolicy: () => Promise<boolean>;
-    /** Kills a running `signInInBrowser`/`signedInUser`/`initPolicy` — the Cancel button. */
+    /** Kills a running `signInInBrowser`/`signedInUser`/`initPolicy`/`mcpSignIn` — the Cancel button. */
     cancelSetup: () => void;
     /** From tet.json. */
     getSettings: (projectId: string) => Promise<SbxProjectSettings>;
@@ -80,6 +81,11 @@ export interface TETApi {
     stored: (projectId: string) => Promise<SbxStoredLocal>;
     /** The agents installed here and what each brings of its own skills. */
     skillsSources: () => Promise<SbxSkillsSource[]>;
+    /** The MCP servers sbx has registered, for the MCP tab's picker; undefined when sbx cannot say. */
+    mcpRegistered: () => Promise<SbxRegisteredMcp[] | undefined>;
+    /** Opens the browser for a registered MCP server's OAuth and waits; what sbx said on refusing,
+     *  else undefined. Killed by `cancelSetup`. */
+    mcpSignIn: (name: string) => Promise<string | undefined>;
     /** Stores `local` (the values typed at this Save, the skills) on this machine, then saves
      *  and applies the rows without a problem (sbx-settings.ts's saveProjectSbx); a sandbox whose
      *  folders changed is removed. */

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { errorMessage } from "../../shared/errors";
-import { EMPTY_SBX_SETTINGS, EMPTY_SBX_SKILLS } from "../../shared/types/sbx";
+import { EMPTY_SBX_SETTINGS, EMPTY_SBX_SKILLS, SBX_MCP_NEEDS_AUTH } from "../../shared/types/sbx";
 import type { Project } from "../../shared/types/project";
-import type { SbxBlocker, SbxSkillsSource, SbxProjectSettings, SbxStoredLocal } from "../../shared/types/sbx";
+import type { SbxBlocker, SbxSkillsSource, SbxProjectSettings, SbxRegisteredMcp, SbxStoredLocal } from "../../shared/types/sbx";
 import {
   SbxSettingsFields,
   fromSettings,
@@ -49,6 +49,7 @@ const TABS: { id: SbxSettingsTab; label: string }[] = [
   { id: "ports", label: "Ports" },
   { id: "paths", label: "Paths" },
   { id: "hosts", label: "Hosts" },
+  { id: "mcp", label: "MCP" },
   { id: "secrets", label: "Secrets" },
   { id: "variables", label: "Variables" },
   { id: "setup", label: "Setup" },
@@ -102,10 +103,20 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const { busy: signingIn, run: runSignIn } = useBusy();
   /** `sbx logout` running: it is not killed, so Cancel waits for it (`holding`). */
   const { busy: signingOut, run: runSignOut } = useBusy();
+  /** An MCP server's browser sign-in running: it waits on the user and kills cleanly, so Cancel
+   *  stops it (`abort`) rather than waiting for it. */
+  const { busy: signingInMcp, run: runMcpSignIn } = useBusy();
   /** Why the browser's sign-in or the sign-out failed: no row to mark, so the button row says it. */
   const [accountError, setAccountError] = useState<string | undefined>(undefined);
   const [phase, setPhase] = useState<Phase>({ kind: "checking" });
   const [tab, setTab] = useState<SbxSettingsTab>(TABS[0].id);
+  /** A Save registered a server that wants a sign-in: the dialog stays, on the MCP tab, for its link
+   *  (`useSubmit`'s `onDone`). */
+  const staysOpen = useRef(false);
+  /** What sbx has registered, for the MCP tab's rows and its mark; `null` until asked, `undefined`
+   *  when sbx could not say. */
+  const [mcpRegistered, setMcpRegistered] = useState<SbxRegisteredMcp[] | undefined | null>(null);
+  const askMcp = (): void => void window.tet.sbx.mcpRegistered().then(setMcpRegistered);
   /** The saved settings and tokens are read once: a check after signing in keeps the edits. */
   const loadedOnce = useRef(false);
 
@@ -189,17 +200,51 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     refused,
     submit: save,
     changing,
-  } = useSubmit(async () => {
-    const tokensRefused = await window.tet.sbx.saveAccounts(toAccountEdits(accounts));
-    if (tokensRefused !== undefined) {
-      return tokensRefused;
-    }
-    if (phase.kind !== "ready") {
+  } = useSubmit(
+    async () => {
+      const tokensRefused = await window.tet.sbx.saveAccounts(toAccountEdits(accounts));
+      if (tokensRefused !== undefined) {
+        return tokensRefused;
+      }
+      if (phase.kind !== "ready") {
+        return undefined;
+      }
+      const request = toSettings(state);
+      const names = request.mcp.map((server) => server.name);
+      // What sbx had registered before, to tell a server this Save brought in from one already known.
+      const before = enabled && names.length > 0 ? await window.tet.sbx.mcpRegistered() : undefined;
+      const result = await window.tet.sbx.saveSettings(project.id, { enabled, ...request }, toLocalSave(state));
+      const refused = refusal(result, "Could not save the SBX Settings");
+      staysOpen.current = false;
+      if (refused !== undefined || !enabled || names.length === 0) {
+        return refused;
+      }
+      const registered = await window.tet.sbx.mcpRegistered();
+      // What the Save registered, for the MCP tab's rows and its mark.
+      setMcpRegistered(registered);
+      const fresh = (registered ?? []).filter(
+        (server) =>
+          names.includes(server.name) &&
+          server.status === SBX_MCP_NEEDS_AUTH &&
+          !(before ?? []).some((known) => known.name === server.name),
+      );
+      if (fresh.length > 0) {
+        // Shows what was applied, as the rows now stand in tet.json.
+        const [settings, local] = await Promise.all([window.tet.sbx.getSettings(project.id), window.tet.sbx.stored(project.id)]);
+        setState(fromSettings(settings, local));
+        // `loaded` and the skills in `stored` stay as opened: what needs a restart still does.
+        setStored({ ...local, skills: stored.skills });
+        setTab("mcp");
+        staysOpen.current = true;
+      }
       return undefined;
-    }
-    const result = await window.tet.sbx.saveSettings(project.id, { enabled, ...toSettings(state) }, toLocalSave(state));
-    return refusal(result, "Could not save the SBX Settings");
-  }, onClose);
+    },
+    () => {
+      if (!staysOpen.current) {
+        onClose();
+      }
+    },
+  );
   // Its setup (`sbx login`, `policy init`) is aborted with Cancel, a no-op when none runs; a Save,
   // a token's sign-in or a sign-out is not, so it finishes first.
   const holding = saving || signingIn || signingOut;
@@ -263,7 +308,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const showsAccount = signedIn || phase.kind === "signed-out";
   /** The tabs are up: the fields, or General waiting for a sign-in. */
   const tabbed = phase.kind === "ready" || phase.kind === "signed-out";
-  const busy = phase.kind === "checking" || phase.kind === "initializing-policy" || saving || rechecking;
+  const busy = phase.kind === "checking" || phase.kind === "initializing-policy" || saving || rechecking || signingInMcp;
   // The access token rows count in every phase showing Save, signed out too.
   const accountRowMarks = useMemo(() => accountMarks(accounts), [accounts]);
   const blocked = firstMark(accountRowMarks.values()) ?? (phase.kind === "ready" ? saveBlocked(state) : undefined);
@@ -271,7 +316,13 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   // Asked from the moment the rows are loaded, not when their tab is opened; not while SBX is disabled,
   // which applies none of them.
   const problems = useSbxProblems(project.id, state, stored, phase.kind === "ready" && enabled, organization);
-  const marks = useMemo(() => tabMarks(state, problems), [state, problems]);
+  // Asked once ready, not when the MCP tab is opened: its mark is on the tab.
+  useEffect(() => {
+    if (phase.kind === "ready") {
+      askMcp();
+    }
+  }, [phase.kind]);
+  const marks = useMemo(() => tabMarks(state, problems, mcpRegistered), [state, problems, mcpRegistered]);
   const tabs = useMemo(
     () =>
       TABS.map((entry) => {
@@ -304,7 +355,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       busy={busy}
       locked={holding}
       error={refused ?? accountError}
-      message={phase.kind === "ready" && needsRestart(loaded, stored.skills, state) && <RestartNote />}
+      message={
+        signingInMcp ? "Waiting for the browser…" : phase.kind === "ready" && needsRestart(loaded, stored.skills, state) && <RestartNote />
+      }
       onCancel={onClose}
       abort={window.tet.sbx.cancelSetup}
       actions={
@@ -360,7 +413,18 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       )}
       {phase.kind === "ready" && tab !== "general" && (
         <FieldColumn fill className="sbx-settings-tab">
-          <SbxSettingsFields section={tab} state={state} setState={editState} stored={stored} sources={sources} problems={problems} />
+          <SbxSettingsFields
+            section={tab}
+            state={state}
+            setState={editState}
+            stored={stored}
+            sources={sources}
+            problems={problems}
+            signInMcp={(name) => runMcpSignIn(() => window.tet.sbx.mcpSignIn(name))}
+            signingInMcp={signingInMcp}
+            mcpRegistered={mcpRegistered}
+            askMcp={askMcp}
+          />
         </FieldColumn>
       )}
     </DialogFrame>

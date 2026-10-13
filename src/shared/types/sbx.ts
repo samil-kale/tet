@@ -70,6 +70,27 @@ export interface SbxVariable {
   env: string;
 }
 
+/**
+ * An "MCP" row: an MCP server by its sbx name, registered with sbx when it is not yet (sbx.ts's
+ * registerMcp) and loaded into every sandbox of the project. `url` is what a missing registration
+ * is made from; empty for a registered server without one (a local command), which is only loaded.
+ */
+export interface SbxMcpServer {
+  name: string;
+  url: string;
+}
+
+/** sbx's status word for a registered server that wants a sign-in (`sbx mcp ls --json`). */
+export const SBX_MCP_NEEDS_AUTH = "needs-auth";
+
+/** A server sbx has registered, for the MCP tab's picker (sbx.ts's readRegisteredMcp). */
+export interface SbxRegisteredMcp extends SbxMcpServer {
+  /** sbx's own words for how it is reached, e.g. `remote http`. */
+  transport: string;
+  /** sbx's own status word, `needs-auth` while the server wants a sign-in. */
+  status: string;
+}
+
 /** Per project, for every sandboxed tab whatever its agent. No authentication: each agent signs in
  *  inside the sandbox, pi excepted (a credential from sbx's own store, see pi's `sandbox.kit`). */
 export interface SbxProjectSettings {
@@ -81,6 +102,9 @@ export interface SbxProjectSettings {
   hosts: string[];
   secrets: SbxSecret[];
   variables: SbxVariable[];
+  /** Loaded into every sandbox of the project at Save and into a new one at its first start; a row removed is
+   *  unloaded at Save. The registration stays (sbx.ts's registerMcp). */
+  mcp: SbxMcpServer[];
   /** A script, by its lines (sbx-rules.ts's setupLines), run by `sh -e` as root in each sandbox at a
    *  tab's start: once per sandbox, and again once its text changes (sbx.ts's runSetup). What an
    *  earlier version did is not undone. */
@@ -164,7 +188,7 @@ export interface SbxSignInResult {
 }
 
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
-export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "secrets" | "variables" | "setup";
+export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "secrets" | "variables" | "mcp" | "setup";
 
 /**
  * What of the SBX Settings cannot be applied here, per option: each row's key (the host, the path
@@ -188,5 +212,6 @@ export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {
   hosts: [],
   secrets: [],
   variables: [],
+  mcp: [],
   setup: [],
 };

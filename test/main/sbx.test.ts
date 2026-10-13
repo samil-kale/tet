@@ -19,9 +19,19 @@ import { listSandboxes, readHostAllowed } from "../../src/main/sbx/sbx-status";
 import { contractHome } from "../../src/main/util/path-inside";
 import { isMountAllowed, parseFilesystemRules, parseGovernance } from "../../src/main/sbx/sbx-policy";
 import { SbxAccountStore } from "../../src/main/sbx/sbx-accounts";
+import { signInMcp } from "../../src/main/sbx/sbx-mcp";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { sandboxDir } from "../../src/main/store/project-dirs";
-import { SBX_PROBLEM, sbxNeedsRestart, sbxProblemNotices, sbxSecretRefusal, setupLines, withoutProblems } from "../../src/shared/sbx-rules";
+import {
+  SBX_PROBLEM,
+  sameMcpUrl,
+  sbxMcpRefusal,
+  sbxNeedsRestart,
+  sbxProblemNotices,
+  sbxSecretRefusal,
+  setupLines,
+  withoutProblems,
+} from "../../src/shared/sbx-rules";
 import {
   EMPTY_SBX_SETTINGS,
   EMPTY_SBX_SKILLS,
@@ -30,7 +40,7 @@ import {
   type SbxPort,
   type SbxProjectSettings,
 } from "../../src/shared/types/sbx";
-import { fakeCommand, fakeSafeStorage, tempDir, withCommandOn } from "../helpers";
+import { fakeCommand, fakeSafeStorage, tempDir, withCommandOn, withEnvAsync } from "../helpers";
 
 /** sbx/: sandbox names and mounts, ports, secrets, the SBX Settings' Save, policy and status. */
 
@@ -179,8 +189,16 @@ describe("saving SBX settings", () => {
     secrets?: object[];
     secretsFail?: boolean;
     allowedHosts?: string[];
-    /** More sandboxes `ls` lists, each with the project's folder unless it names another. */
-    others?: { name: string; workspaces?: string[] }[];
+    /** `mcp ls --json`'s servers; `mcp add` registers more. */
+    registered?: { name: string }[];
+    /** The name `mcp add` refuses, as a policy without a rule for it does. */
+    refuseMcp?: string;
+    /** What `mcp unload` answers for a server: "not loaded" (a 404) or "failed", else it works. */
+    unload?: "not loaded" | "failed";
+    /** `ls` lists the project's sandbox as stopped; it runs otherwise. */
+    stopped?: boolean;
+    /** More sandboxes `ls` lists, each running with the project's folder unless it says otherwise. */
+    others?: { name: string; workspaces?: string[]; status?: string }[];
     /** `inspect --json`'s `runtime_mounts`. */
     mounts?: object[];
     /** `policy ls --type filesystem`'s rules; none by default, which lets nothing be mounted. */
@@ -204,8 +222,9 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   process.stderr.write("ERROR: ensure daemon\\n");
   process.exit(1);
 } else if (args[0] === "ls") {
-  const others = (answers.others ?? []).map((other) => ({ workspaces: answers.workspaces, ...other }));
-  process.stdout.write(JSON.stringify({ sandboxes: [{ name: answers.name, workspaces: answers.workspaces }, ...others] }));
+  const others = (answers.others ?? []).map((other) => ({ workspaces: answers.workspaces, status: "running", ...other }));
+  const own = { name: answers.name, workspaces: answers.workspaces, status: answers.stopped ? "stopped" : "running" };
+  process.stdout.write(JSON.stringify({ sandboxes: [own, ...others] }));
 } else if (args[0] === "policy" && args[1] === "check") {
   // \`policy check network --json <host>\`: exit 1 with "allowed": false on a denial (sbx-status.ts).
   const allowed = (answers.allowedHosts ?? []).includes(args[4]);
@@ -213,6 +232,14 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   process.exit(allowed ? 0 : 1);
 } else if (args[0] === "policy") {
   process.stdout.write(JSON.stringify({ rules: args.includes("filesystem") ? (answers.filesystemRules ?? []) : [] }));
+} else if (args[0] === "mcp" && args[1] === "ls") {
+  process.stdout.write(JSON.stringify(answers.registered ?? []));
+} else if (args[0] === "mcp" && args[1] === "add" && args[2] === answers.refuseMcp) {
+  process.stderr.write("error: registration denied for MCP server\\n");
+  process.exit(1);
+} else if (args[0] === "mcp" && args[1] === "unload" && answers.unload) {
+  process.stderr.write(answers.unload === "not loaded" ? "error: MCP server is not loaded in sandbox\\n" : "error: gateway unavailable\\n");
+  process.exit(1);
 } else if (args[0] === "inspect") {
   process.stdout.write(JSON.stringify({ name: args[1], runtime_mounts: answers.mounts ?? [] }));
 } else if (args[0] === "ports" && args[2] === "--json") {
@@ -280,11 +307,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   it("publishes a port tet.json already listed, because the sandbox never published it", async () => {
     const { result, calls } = await save({ has: [], before: [3000], now: [3000] });
-    // Started and listed before anything changes (assertReadable), then worked against.
+    // Listed before anything changes (assertReadable), then worked against.
     assert.deepEqual(calls, [
       "ls --json",
       "policy ls --type network --include-inactive --json",
-      `exec -i ${name} true`,
       `ports ${name} --json`,
       `ports ${name} --publish 3000:3000`,
     ]);
@@ -344,9 +370,35 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     assert.deepEqual((await readSbxSettings(repoFolder)).ports, [port(5000)]);
   });
 
-  it("does not start the sandbox where no port is configured and none was", async () => {
+  it("asks nothing of the ports where none is configured and none was", async () => {
     const { calls } = await save({ has: [], before: [], now: [] });
     assert.deepEqual(calls, ["ls --json", "policy ls --type network --include-inactive --json"]);
+  });
+
+  it("starts no stopped sandbox: its ports are unpublished unseen, its hosts set, its MCP servers left to its next tab", async () => {
+    const notion = { name: "notion", url: "https://mcp.notion.com/mcp" };
+    const { dir, repoFolder } = fakeSbx({ published: [], stopped: true });
+    await writeSbxSettings(repoFolder, settings([port(4000)]));
+    const { result, calls } = await saveIn(dir, repoFolder, { ...settings([port(3000)]), hosts: ["example.com"], mcp: [notion] });
+    assert.deepEqual(
+      calls.filter((call) => call.startsWith("ports ") || call.startsWith("exec ") || call.startsWith("mcp load")),
+      [`ports ${name} --unpublish 3000:3000`, `ports ${name} --unpublish 4000:4000`],
+    );
+    assert.ok(calls.includes(`policy allow network --sandbox ${name} example.com`));
+    assert.ok(calls.includes(`mcp add notion --url ${notion.url} --skip-auth`), "registered all the same");
+    assert.deepEqual(result.refused, {}, "what waits for the next tab is not refused");
+    const saved = await readSbxSettings(repoFolder);
+    assert.deepEqual([saved.ports, saved.hosts, saved.mcp], [[port(3000)], ["example.com"], [notion]]);
+  });
+
+  it("unpublishes a port in a stopped sandbox before a running one takes it", async () => {
+    const stopped = sandboxName(main, "codex");
+    const { dir, repoFolder } = fakeSbx({ published: [], others: [{ name: stopped, status: "stopped" }] });
+    const { calls } = await saveIn(dir, repoFolder, settings([port(3000)]));
+    assert.deepEqual(
+      calls.filter((call) => call.startsWith("ports ") || call.startsWith("exec ")),
+      [`ports ${name} --json`, `ports ${stopped} --unpublish 3000:3000`, `ports ${name} --publish 3000:3000`],
+    );
   });
 
   it("unmounts a dropped path the sandbox holds, without starting it, and leaves one it does not hold alone", async () => {
@@ -451,6 +503,66 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     );
     assert.deepEqual(result, [true, false, true]);
     assert.deepEqual(calls.sort(), ["policy check network --json closed.example.com", "policy check network --json open.example.com"]);
+  });
+
+  describe("MCP servers", () => {
+    const notion = { name: "notion", url: "https://mcp.notion.com/mcp" };
+    const mcpCalls = (calls: string[]): string[] => calls.filter((call) => call.startsWith("mcp ") && !call.startsWith("mcp ls"));
+    const withMcp = (mcp: SbxProjectSettings["mcp"]): SbxProjectSettings => ({ ...EMPTY_SBX_SETTINGS, enabled: true, mcp });
+
+    it("registers a server sbx does not have and loads it into the project's sandbox", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [] });
+      const { result, calls } = await saveIn(dir, repoFolder, withMcp([notion]));
+      assert.deepEqual(mcpCalls(calls), [`mcp add notion --url ${notion.url} --skip-auth`, `mcp load notion --sandbox ${name}`]);
+      assert.deepEqual([result.refused, result.settings.mcp], [{}, [notion]]);
+      assert.deepEqual((await readSbxSettings(repoFolder)).mcp, [notion], "tet.json holds the row");
+    });
+
+    it("registers nothing sbx already has, and loads it all the same", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [], registered: [{ name: "notion" }] });
+      const { calls } = await saveIn(dir, repoFolder, withMcp([{ name: "notion", url: "" }]));
+      assert.deepEqual(mcpCalls(calls), [`mcp load notion --sandbox ${name}`]);
+    });
+
+    it("unloads a row removed, and counts a server that was not loaded as gone", async () => {
+      for (const unload of [undefined, "not loaded"] as const) {
+        const { dir, repoFolder } = fakeSbx({ published: [], registered: [{ name: "notion" }], unload });
+        await writeSbxSettings(repoFolder, withMcp([notion]));
+        const { result, calls } = await saveIn(dir, repoFolder, withMcp([]));
+        assert.deepEqual(mcpCalls(calls), [`mcp unload notion --sandbox ${name}`], String(unload));
+        assert.deepEqual([result.refused, result.settings.mcp], [{}, []], String(unload));
+      }
+    });
+
+    it("keeps the row of a server sbx would not unload", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [], registered: [{ name: "notion" }], unload: "failed" });
+      await writeSbxSettings(repoFolder, withMcp([notion]));
+      const { result } = await saveIn(dir, repoFolder, withMcp([]));
+      assert.deepEqual(result.refused, { mcp: { notion: "error: gateway unavailable" } });
+      assert.deepEqual(result.settings.mcp, [notion], "still loaded, so still a row");
+    });
+
+    it("leaves out a server sbx refuses to register, loading nothing for it", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [], refuseMcp: "notion" });
+      const { result, calls } = await saveIn(dir, repoFolder, withMcp([notion]));
+      assert.ok(!mcpCalls(calls).some((call) => call.startsWith("mcp load")));
+      assert.deepEqual(Object.keys(result.refused.mcp ?? {}), ["notion"]);
+      assert.deepEqual(result.settings.mcp, []);
+    });
+
+    it("signs a server in through the browser, and says what sbx said when it would not", async () => {
+      const ok = fakeSbx({ published: [] });
+      const signedIn = await withSbx(ok.dir, () => signInMcp("notion"));
+      assert.deepEqual([signedIn.result, signedIn.calls], [undefined, ["mcp auth notion"]]);
+      const failing = fakeSbx({ published: [], fail: ["mcp auth"] });
+      const refused = await withSbx(failing.dir, () => signInMcp("notion"));
+      assert.match(refused.result ?? "", /ensure daemon/);
+    });
+
+    it("stops a Save where sbx does not list the registered servers, changing nothing", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [], fail: ["mcp ls"] });
+      await assert.rejects(saveIn(dir, repoFolder, withMcp([notion])), /could not list its registered MCP servers/);
+    });
   });
 
   it("removes a sandbox an earlier id of the project left, and no other", async () => {
@@ -558,35 +670,73 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     });
   });
 
-  for (const created of [true, false]) {
-    it(`${created ? "removes the sandbox a start created" : "keeps a sandbox the start found"} when the start fails after it`, async () => {
-      const { dir, repoFolder } = fakeSbx({ published: [], fail: ["policy ls --type filesystem"] });
-      // Listed at another folder, the sandbox is rebuilt: removed, then created at this one.
-      const at = created ? path.join(dir, "moved") : repoFolder;
-      const { calls } = await withSbx(dir, () =>
-        assert.rejects(
-          prepareSbxRun({
-            agent: claudeAgent,
-            name,
-            ref: main,
-            projectRefPath: at,
-            settings: { ...EMPTY_SBX_SETTINGS, enabled: true, paths: [{ path: os.tmpdir(), access: "ro" }] },
-            skills: EMPTY_SBX_SKILLS,
-            sandboxes: new Map([[name, [repoFolder]]]),
-            paths: { agentDir: sandboxDir(dir, main, "claude") },
-            agentArgs: [],
-            secretValues: new Map(),
-            variableValues: new Map(),
-          }),
-          /SBX could not/,
-        ),
+  describe("at a tab's start", () => {
+    const ALLOW_ALL = [{ resource_type: "filesystem", decision: "allow", resources: ["**"] }];
+    const notion = { name: "notion", url: "https://mcp.notion.com/mcp" };
+    /** What a start asks of sbx to bring its sandbox in line, apart from its mounts. */
+    const aligning = (calls: string[]): string[] =>
+      calls.filter((call) => /^(policy (ls --type network|allow|rm)|secret|mcp|ports) /.test(call));
+
+    /** Starts a Claude tab of the project at `at`, sbx listing its sandbox at `repoFolder`. */
+    const start = (dir: string, repoFolder: string, rows: Partial<SbxProjectSettings>, at = repoFolder) =>
+      // The first-run marker of sbx goes beside the stand-in, not into this machine's profile.
+      withEnvAsync({ LOCALAPPDATA: dir, HOME: dir }, () =>
+        prepareSbxRun({
+          agent: claudeAgent,
+          name,
+          ref: main,
+          projectRefPath: at,
+          settings: { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows },
+          skills: EMPTY_SBX_SKILLS,
+          sandboxes: new Map([[name, { workspaces: [repoFolder], running: true }]]),
+          paths: { agentDir: sandboxDir(dir, main, "claude") },
+          agentArgs: [],
+          secretValues: new Map(),
+          variableValues: new Map(),
+        }),
       );
+
+    for (const created of [true, false]) {
+      it(`keeps ${created ? "the sandbox it created" : "a sandbox it found"} when it fails afterwards, for the next start to bring in line`, async () => {
+        const { dir, repoFolder } = fakeSbx({ published: [], fail: ["policy ls --type filesystem"] });
+        // Listed at another folder, the sandbox is rebuilt: removed, then created at this one.
+        const at = created ? path.join(dir, "moved") : repoFolder;
+        const { calls } = await withSbx(dir, () =>
+          assert.rejects(start(dir, repoFolder, { paths: [{ path: os.tmpdir(), access: "ro" }] }, at), /SBX could not/),
+        );
+        assert.deepEqual(
+          calls.filter((call) => /^(rm|create) /.test(call)),
+          created ? [`rm ${name} --force`, `create claude ${at} --name ${name} --skills=off`] : [],
+        );
+      });
+    }
+
+    it("brings a sandbox it found in line with tet.json both ways, and asks nothing again while tet.json stays", async () => {
+      // Ports nothing here listens on: the start asks this machine whether a new one is free.
+      const [wanted, stale] = [47813, 47814];
+      const { dir, repoFolder } = fakeSbx({ published: [listed(stale)], filesystemRules: ALLOW_ALL, registered: [{ name: "stale" }] });
+      const rows = { ports: [port(wanted)], hosts: ["example.com"], mcp: [notion] };
+      const first = await withSbx(dir, () => start(dir, repoFolder, rows));
+      assert.deepEqual(first.result.problems, {});
       assert.deepEqual(
-        calls.filter((call) => /^(rm|create) /.test(call)),
-        created ? [`rm ${name} --force`, `create claude ${at} --name ${name} --skills=off`, `rm ${name} --force`] : [],
+        aligning(first.calls).filter((call) => !/ ls |--json$/.test(call)),
+        [
+          `mcp add notion --url ${notion.url} --skip-auth`,
+          `policy allow network --sandbox ${name} example.com`,
+          `mcp load notion --sandbox ${name}`,
+          `mcp unload stale --sandbox ${name}`,
+          `ports ${name} --unpublish ${stale}:${stale}`,
+          `ports ${name} --publish ${wanted}:${wanted}`,
+        ],
       );
+      fs.rmSync(path.join(dir, "calls.log"));
+      const second = await withSbx(dir, () => start(dir, repoFolder, rows));
+      assert.deepEqual(aligning(second.calls), [], "a second tab of the sandbox");
+      fs.rmSync(path.join(dir, "calls.log"));
+      const changed = await withSbx(dir, () => start(dir, repoFolder, { ...rows, hosts: [] }));
+      assert.ok(aligning(changed.calls).length > 0, "a tet.json changed without a Save");
     });
-  }
+  });
 
   describe("through the project's Save", () => {
     const noLocal = (variables: Record<string, string> = {}): SbxLocalSave => ({
@@ -700,6 +850,19 @@ describe("an SBX Settings secret row", () => {
     for (const env of ["PATH", "path", "TET_TAB_ID"]) {
       assert.ok(sbxSecretRefusal({ env, hosts }, []), env);
     }
+  });
+});
+
+describe("an SBX Settings MCP row", () => {
+  it("takes one server per name", () => {
+    const notion = { name: "notion", url: "https://mcp.notion.com/mcp" };
+    assert.equal(sbxMcpRefusal(notion, []), undefined);
+    assert.ok(sbxMcpRefusal(notion, [{ name: " notion ", url: "" }]));
+  });
+
+  it("reads a URL as the one it was registered under, apart from a trailing slash", () => {
+    assert.ok(sameMcpUrl("https://mcp.notion.com/mcp", " https://mcp.notion.com/mcp/ "));
+    assert.ok(!sameMcpUrl("https://mcp.notion.com/mcp", "https://mcp.linear.app/mcp"));
   });
 });
 
