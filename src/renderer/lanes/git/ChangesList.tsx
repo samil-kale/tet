@@ -126,6 +126,8 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
    *  question is gone — only one question is up at a time. */
   const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};
+  // No wand where no agent on this machine can answer (a machine with only sbx).
+  const canSuggest = (await window.tet.agents.askable()).length > 0;
   const commitAndPush = async (message: string, push: boolean) => {
     const committed = await (paths
       ? window.tet.repository.commitPaths(ref, message, paths)
@@ -148,10 +150,11 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
           label="Message"
           value={value.message}
           onChange={(message) => onChange((current) => ({ ...current, message }))}
-          suggestion={{
-            title: "Suggest a commit message",
-            run: () => window.tet.repository.suggestCommitMessage(ref, paths),
-          }}
+          suggestion={
+            canSuggest
+              ? { title: "Suggest a commit message", run: () => window.tet.repository.suggestCommitMessage(ref, paths) }
+              : undefined
+          }
           disabled={busy}
           ref={field}
           error={error}

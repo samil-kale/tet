@@ -151,8 +151,8 @@ interface SuggestFieldProps {
   value: string;
   onChange: (value: string) => void;
   /** An async way to fill the field, shown as a wand beside it. Why it had none is said under the
-   *  field, in `error`'s place, until the next suggestion or keystroke. */
-  suggestion: {
+   *  field, in `error`'s place, until the next suggestion or keystroke. Without one, no wand. */
+  suggestion?: {
     title: string;
     run: () => Promise<SuggestionResult>;
   };
@@ -173,7 +173,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
   useEffect(() => onSuggesting?.(suggesting), [suggesting, onSuggesting]);
 
   const suggest = async (): Promise<void> => {
-    if (suggesting) {
+    if (suggesting || !suggestion) {
       return;
     }
     setRefused(undefined);
@@ -210,16 +210,18 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
           }}
           ref={ref}
         />
-        <button
-          type="button"
-          className="button secondary dialog-suggest"
-          title={suggestion.title}
-          disabled={disabled || suggesting}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => void suggest()}
-        >
-          <SparkleIcon />
-        </button>
+        {suggestion && (
+          <button
+            type="button"
+            className="button secondary dialog-suggest"
+            title={suggestion.title}
+            disabled={disabled || suggesting}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void suggest()}
+          >
+            <SparkleIcon />
+          </button>
+        )}
       </FieldRow>
     </Field>
   );
