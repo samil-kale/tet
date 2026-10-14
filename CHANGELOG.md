@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.19.0 (2026-10-14)
+
+- **Sandboxes kept in line.** Every sandboxed tab's start brings its sandbox in line with
+  `tet.json`, whether TET created it or found it, and says whether it creates, starts or attaches
+  to it.
+- **Fixes.** A tab whose process ended says how to restart it; the commit field's suggestion wand
+  is hidden where no agent can answer; sandbox starts and Saves read sbx's listings in one round.
+
 ## 0.18.9 (2026-10-14)
 
 - **MCP servers in sandboxes.** The SBX dialog has a tab for the MCP servers loaded into a
