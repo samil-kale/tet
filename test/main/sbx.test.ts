@@ -276,6 +276,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     return { result, calls: fs.readFileSync(path.join(dir, "calls.log"), "utf8").trim().split(/\r?\n/) };
   }
 
+  /** The listings every Save and aligning start reads the sandboxes with, together (readSandboxReads). */
+  const READ_ROUND = ["policy ls --type network --include-inactive --json", "secret ls --json", "mcp ls --json"];
+  const readRound = (call: string): boolean => READ_ROUND.includes(call);
+
   /**
    * Saves `request` for the project at `repoFolder`, with no skills, under the stand-in in `dir`:
    * saveSbxSettings as sbx-settings.ts runs it, with the listing taken for its check.
@@ -309,13 +313,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { result, calls } = await save({ has: [], before: [3000], now: [3000] });
     // Listed again within the sandbox's turn, for which runs now, and read before anything changes
     // (assertReadable), then worked against.
-    assert.deepEqual(calls, [
-      "ls --json",
-      "ls --json",
-      "policy ls --type network --include-inactive --json",
-      `ports ${name} --json`,
-      `ports ${name} --publish 3000:3000`,
-    ]);
+    assert.deepEqual(
+      calls.filter((call) => !readRound(call)),
+      ["ls --json", "ls --json", `ports ${name} --json`, `ports ${name} --publish 3000:3000`],
+    );
+    assert.deepEqual(calls.filter(readRound).sort(), [...READ_ROUND].sort());
     assert.deepEqual(result, {
       removed: [],
       orphans: [],
@@ -374,7 +376,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   it("asks nothing of the ports where none is configured and none was", async () => {
     const { calls } = await save({ has: [], before: [], now: [] });
-    assert.deepEqual(calls, ["ls --json", "policy ls --type network --include-inactive --json"]);
+    assert.deepEqual(
+      calls.filter((call) => !readRound(call)),
+      ["ls --json"],
+    );
   });
 
   it("starts no stopped sandbox: its ports are unpublished unseen, its hosts set, its MCP servers left to its next tab", async () => {
@@ -413,7 +418,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     });
     await writeSbxSettings(repoFolder, { ...settings([]), paths: [held, unheld] });
     const { result, calls } = await saveIn(dir, repoFolder, settings([]));
-    assert.deepEqual(calls.slice(2), [`inspect ${name} --json`, `umount ${name} ${pathMountSpecs(held).unmount}`]);
+    assert.deepEqual(calls.filter((call) => !readRound(call)).slice(1), [
+      `inspect ${name} --json`,
+      `umount ${name} ${pathMountSpecs(held).unmount}`,
+    ]);
     assert.deepEqual([result.refused, result.settings.paths], [{}, []]);
   });
 
@@ -480,9 +488,9 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       { values, changed: new Set(["CHANGED"]) },
     );
     const placeholder = (env: string) => secretPlaceholder(projectId, env);
-    // The two listings run together, in either order.
-    assert.deepEqual(calls.slice(1, 3).sort(), ["policy ls --type network --include-inactive --json", "secret ls --json"]);
-    assert.deepEqual(calls.slice(3), [
+    // The listings run together, in any order.
+    assert.deepEqual(calls.slice(1, 4).sort(), [...READ_ROUND].sort());
+    assert.deepEqual(calls.slice(4), [
       `secret rm --sandbox ${name} --placeholder ${placeholder("CHANGED")} -f`,
       `secret rm --sandbox ${name} --placeholder ${placeholder("REHOSTED")} -f`,
       `secret rm --sandbox ${name} --placeholder ${placeholder("DROPPED")} -f`,
@@ -762,6 +770,19 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const second = await withSbx(dir, () => start(dir, repoFolder, rows));
       assert.deepEqual(aligning(second.calls), []);
       assert.deepEqual(second.result.problems, first.result.problems, "told at every start all the same");
+    });
+
+    it("lists the hosts, secrets and MCP servers once for its check and its alignment", async () => {
+      const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
+      const rows = { hosts: ["example.com"], mcp: [notion] };
+      await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
+      const { calls } = await withSbx(dir, () => start(dir, repoFolder, rows));
+      const listings = ["policy ls --type network", "secret ls", "mcp ls"];
+      assert.deepEqual(
+        listings.map((listing) => calls.filter((call) => call.startsWith(`${listing} `)).length),
+        listings.map(() => 1),
+        calls.join("\n"),
+      );
     });
   });
 

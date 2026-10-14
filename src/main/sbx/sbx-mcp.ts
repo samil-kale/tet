@@ -26,11 +26,6 @@ export function mcpNamesOf(listed: readonly ListedMcp[]): Set<string> {
   return new Set(listed.flatMap((entry) => (entry.name ? [entry.name] : [])));
 }
 
-export async function readMcpNames(): Promise<Set<string> | undefined> {
-  const listed = await listMcp();
-  return listed && mcpNamesOf(listed);
-}
-
 /**
  * The servers sbx has registered, each with the URL it was registered under (empty for a local
  * command), for the MCP tab's picker and the check of a typed row against its registration. Only

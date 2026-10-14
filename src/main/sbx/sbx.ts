@@ -24,7 +24,7 @@ import type { SandboxedAgent } from "../agents/agent";
 import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
 import { runSbx, sbxError, sbxFailure, sbxJson, sbxRefusal, suppressSbxFirstRunWizard, writeIntoSandbox, type OnData } from "./sbx-cli";
-import { listMcp, loadMcp, mcpNamesOf, planMcp, readMcpNames, readRegisteredMcp, unloadMcp, type ListedMcp, type McpPlan } from "./sbx-mcp";
+import { listMcp, loadMcp, mcpNamesOf, planMcp, readRegisteredMcp, unloadMcp, type ListedMcp, type McpPlan } from "./sbx-mcp";
 import { listSandboxes, mountableBy, readHostAllowed, readPolicy, sandboxControl, type SandboxList } from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
@@ -527,11 +527,37 @@ export async function applyProjectPorts(
   return refused;
 }
 
-/** What the sandboxes hold as sbx lists it for all of them at once (readSandboxHosts,
- *  readSandboxSecrets), each undefined where sbx could not say. */
-interface SandboxReads {
+/** What bringing sandboxes in line works against, as sbx lists it (readSandboxReads), each
+ *  undefined where sbx could not say. */
+export interface SandboxReads {
   hosts: Map<string, string[]> | undefined;
   secrets: Map<string, LiveSecret[]> | undefined;
+  mcp: ListedMcp[] | undefined;
+  /** By sandbox, of those asked; undefined when one could not be listed. */
+  ports: Map<string, SbxPort[]> | undefined;
+}
+
+/**
+ * What a tab's start and a Save bring sandboxes in line against, in one round: each listing is an
+ * sbx process, the hosts, secrets and MCP servers answer for every sandbox, and the ports for
+ * `portsOf`. All are asked, needed or not, rather than waited on in turn; what a listing sbx could
+ * not answer means is the caller's — a Save stops (assertReadable), a start tells its rows.
+ */
+export async function readSandboxReads(portsOf: readonly string[]): Promise<SandboxReads> {
+  const [hosts, secrets, mcp, ports] = await Promise.all([readSandboxHosts(), readSandboxSecrets(), listMcp(), readPorts(portsOf)]);
+  return { hosts, secrets, mcp, ports };
+}
+
+/** What each sandbox named has published (readSandboxPorts); undefined when one could not say. */
+async function readPorts(names: readonly string[]): Promise<Map<string, SbxPort[]> | undefined> {
+  const published = await Promise.all(names.map(readSandboxPorts));
+  return published.includes(undefined) ? undefined : new Map(names.map((name, index) => [name, published[index] ?? []]));
+}
+
+/** The repository's sandboxes of the project sbx lists: a worktree forwards no ports
+ *  (tet-json.ts's readSbxSettings), so only these do. */
+function projectSandboxes(projectId: string, sandboxes: SandboxList): string[] {
+  return SANDBOXED_AGENTS.map((agent) => sandboxName({ projectId }, agent.id)).filter((name) => sandboxes.has(name));
 }
 
 /** What alignSandbox brings one sandbox to. */
@@ -686,76 +712,72 @@ export async function prepareSbxRun(
   const { agent, name, onData, secretValues, variableValues } = request;
   const { projectId } = request.ref;
   const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
-  const align = aligned.get(name) !== alignedStamp(request.settings);
-  // The start underway decides what the sandbox lists as published (readSandboxPorts): only once
-  // it ran is the listing below the one alignAtStart works against.
-  const warmed = created || (align && (await request.warm) === true);
-  // Read once for the check and the alignment after it: each is an sbx process.
-  const published = align && request.settings.ports.length > 0 ? await readProjectPorts(projectId, request.sandboxes) : undefined;
-  const listedMcp = align && request.settings.mcp.length > 0 ? await listMcp() : undefined;
-  const problems = await readSbxProblems({
-    projectId,
-    settings: request.settings,
-    skills: request.skills,
-    values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
-    agents: [agent],
-    organization: request.organization,
-    rules: request.rules,
-    ports: align,
-    // A port a sandbox of the project forwards is in place already (applyProjectPorts).
-    published: portKeys(published),
-    listedMcp,
-  });
-  const { settings, skills } = withoutProblems(request.settings, request.skills, problems);
-  const { env, passed } = sandboxEnv({ ...request, settings });
-  // TET's own folders are not skipped: without them the agent has no hook settings or listable
-  // sessions, silently. Everything else is in place by here, so a refusal is sbx's policy, and the
-  // tab stops with sbx's reason in its output.
-  const own = [
-    ...fixedMountSpecs(request.paths),
-    ...worktreeMountSpecs(request.projectRefPath),
-    ...(await sessionMountSpecs(request.sessionMounts ?? [])),
-  ];
-  const grants = await grantsOf(agent, skills, settings.paths);
-  // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
-  const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
-  const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
-  if (ownFailed.length > 0) {
-    throw new Error(
-      `sbx did not mount TET's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`,
-    );
-  }
-  for (const grant of grants) {
-    const reason = refused.get(grant.mount);
-    if (reason !== undefined) {
-      addProblems(problems, grant.option, { [grant.row]: reason });
-    }
-  }
-  // One turn per sandbox, which a Save holds too (inSandboxTurns): two tabs starting together would
-  // both apply, and a Save meanwhile may have left this sandbox to its next start, so the mark is
-  // read within the turn whatever it was above.
-  const stamp = alignedStamp(request.settings);
-  let savedOver = false;
-  const refusedRows = await inTurn(sandboxSetups, name, async (): Promise<SbxProblems> => {
-    if (aligned.get(name) === stamp) {
-      return {};
-    }
+  // One turn per sandbox, which a Save holds too (inSandboxTurns): what is read is what is applied,
+  // with no Save or other start of the sandbox in between — two tabs starting together would both
+  // apply, the second against what the first changed.
+  const { problems, settings, savedOver } = await inTurn(sandboxSetups, name, async () => {
+    const stamp = alignedStamp(request.settings);
     // Saved over since this start read it: its rows are tet.json's no more, and applying them would
     // take back what that Save set. Left to the next start, and told.
-    if (alignedStamp(await readSbxSettings(request.projectRefPath)) !== stamp) {
+    const savedOver = aligned.get(name) !== stamp && alignedStamp(await readSbxSettings(request.projectRefPath)) !== stamp;
+    if (savedOver) {
       markAligned(name, undefined);
-      savedOver = true;
-      return {};
     }
-    const rows = await alignAtStart(request, settings, { ports: warmed ? published : undefined, mcp: listedMcp });
-    // In line unless sbx refused a row, or a port or server was left out, which the next start
-    // tries again; a host, secret or variable left out waits for a Save, which brings it to every
-    // sandbox itself.
-    const left = settings.ports.length < request.settings.ports.length || settings.mcp.length < request.settings.mcp.length;
-    markAligned(name, Object.keys(rows).length === 0 && !left ? request.settings : undefined);
-    return rows;
+    const align = aligned.get(name) !== stamp && !savedOver;
+    // The start underway decides what the sandbox lists as published (readSandboxPorts): only once
+    // it ran are the ports read the ones alignAtStart works against.
+    const warmed = created || (align && (await request.warm) === true);
+    const ports = request.settings.ports.length > 0;
+    const reads = align ? await readSandboxReads(ports ? projectSandboxes(projectId, request.sandboxes) : []) : undefined;
+    const problems = await readSbxProblems({
+      projectId,
+      settings: request.settings,
+      skills: request.skills,
+      values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
+      agents: [agent],
+      organization: request.organization,
+      rules: request.rules,
+      ports: align,
+      // A port a sandbox of the project forwards is in place already (applyProjectPorts).
+      published: portKeys(reads && ports ? portsListed(reads.ports) : undefined),
+      listedMcp: reads?.mcp,
+    });
+    const { settings, skills } = withoutProblems(request.settings, request.skills, problems);
+    // TET's own folders are not skipped: without them the agent has no hook settings or listable
+    // sessions, silently. Everything else is in place by here, so a refusal is sbx's policy, and the
+    // tab stops with sbx's reason in its output.
+    const own = [
+      ...fixedMountSpecs(request.paths),
+      ...worktreeMountSpecs(request.projectRefPath),
+      ...(await sessionMountSpecs(request.sessionMounts ?? [])),
+    ];
+    const grants = await grantsOf(agent, skills, settings.paths);
+    // A dropped path sbx refuses now is left out without a word: its drop said it was mounted.
+    const refused = await mountAll(name, [...own, ...grants, ...droppedMountSpecs(name)], onData, created ? undefined : request.warm);
+    const ownFailed = own.filter((spec) => refused.has(spec.mount)).map((spec) => spec.mount);
+    if (ownFailed.length > 0) {
+      throw new Error(
+        `sbx did not mount TET's own ${ownFailed.length === 1 ? "folder" : "folders"} ${ownFailed.join(", ")} — see the tab's output`,
+      );
+    }
+    for (const grant of grants) {
+      const reason = refused.get(grant.mount);
+      if (reason !== undefined) {
+        addProblems(problems, grant.option, { [grant.row]: reason });
+      }
+    }
+    if (reads) {
+      const rows = await alignAtStart(request, settings, reads, warmed);
+      // In line unless sbx refused a row, or a port or server was left out, which the next start
+      // tries again; a host, secret or variable left out waits for a Save, which brings it to every
+      // sandbox itself.
+      const left = settings.ports.length < request.settings.ports.length || settings.mcp.length < request.settings.mcp.length;
+      markAligned(name, Object.keys(rows).length === 0 && !left ? request.settings : undefined);
+      mergeProblems(problems, rows);
+    }
+    return { problems, settings, savedOver };
   });
-  mergeProblems(problems, refusedRows);
+  const { env, passed } = sandboxEnv({ ...request, settings });
   addProblems(problems, "setup", await runSetup(name, settings.setup, onData));
   // No workspace positionals, not even right after creating: the sandbox always exists by now, and
   // sbx run refuses them on an existing one even when unchanged. No agent positional either: sbx
@@ -784,23 +806,20 @@ export async function prepareSbxRun(
 /**
  * A start's share of bringing its sandbox in line, the sandbox running by now (mountAll): hosts,
  * secrets and MCP servers (alignSandbox), and from the repository's sandbox the project's ports
- * (applyProjectPorts), this one first to take a missing one. Each listing is one sbx process for all
- * sandboxes, and `read` holds what the start listed for its check already. Not `sbx run -p` for
- * the ports: `run --name` drops `-p` on an existing sandbox.
+ * (applyProjectPorts), this one first to take a missing one — all against what the start read
+ * (readSandboxReads); the ports only where the sandbox ran when they were read (`warmed`), since a
+ * stopped one lists none. Not `sbx run -p` for the ports: `run --name` drops `-p` on an existing
+ * sandbox.
  */
 async function alignAtStart(
   request: SbxRunRequest,
   settings: SbxProjectSettings,
-  read: { ports?: Map<string, SbxPort[]>; mcp?: ListedMcp[] },
+  reads: SandboxReads,
+  warmed: boolean,
 ): Promise<SbxProblems> {
   const { name, onData, organization } = request;
   const { projectId } = request.ref;
-  const [hosts, secrets, registered] = await Promise.all([
-    organization ? undefined : readSandboxHosts(),
-    readSandboxSecrets(),
-    read.mcp ? mcpNamesOf(read.mcp) : readMcpNames(),
-  ]);
-  const plan = await planMcp(settings.mcp, registered, onData);
+  const plan = await planMcp(settings.mcp, reads.mcp && mcpNamesOf(reads.mcp), onData);
   const refused = await alignSandbox(
     name,
     {
@@ -809,20 +828,18 @@ async function alignAtStart(
       organization,
       secretValues: request.secretValues,
       changedSecrets: new Set(),
-      live: { hosts, secrets },
+      live: reads,
       mcp: { load: plan.load, unload: plan.unload },
     },
     onData,
   );
   addProblems(refused, "mcp", plan.refused);
-  // A worktree forwards no ports (tet-json.ts's readSbxSettings): only the repository's sandboxes.
   if (request.ref.worktree === undefined) {
-    const others = SANDBOXED_AGENTS.map((agent) => sandboxName({ projectId }, agent.id)).filter(
-      (other) => other !== name && request.sandboxes.has(other),
-    );
+    const others = projectSandboxes(projectId, request.sandboxes).filter((other) => other !== name);
     const running = [name, ...others.filter((other) => request.sandboxes.get(other)?.running)];
     const stopped = others.filter((other) => !running.includes(other));
-    addProblems(refused, "ports", await applyProjectPorts({ running, stopped }, settings.ports, { read: read.ports, onData }));
+    const read = warmed ? reads.ports : undefined;
+    addProblems(refused, "ports", await applyProjectPorts({ running, stopped }, settings.ports, { read, onData }));
   }
   return refused;
 }
@@ -839,13 +856,15 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
   if (!sandboxes) {
     throw new Error("SBX could not list the sandboxes.");
   }
-  // A worktree forwards no ports (tet-json.ts's readSbxSettings): only the repository's sandboxes.
-  const names = SANDBOXED_AGENTS.map((agent) => sandboxName({ projectId }, agent.id)).filter((name) => sandboxes.has(name));
-  const published = await Promise.all(names.map(readSandboxPorts));
-  if (published.includes(undefined)) {
+  return portsListed(await readPorts(projectSandboxes(projectId, sandboxes)));
+}
+
+/** The ports read, or a rejection where sbx could not list them (readProjectPorts). */
+function portsListed(ports: Map<string, SbxPort[]> | undefined): Map<string, SbxPort[]> {
+  if (!ports) {
     throw new Error("SBX could not list the sandboxes' ports.");
   }
-  return new Map(names.map((name, index) => [name, published[index] ?? []]));
+  return ports;
 }
 
 /** What readSbxProblems checks: the rows, and what this machine holds for them. */

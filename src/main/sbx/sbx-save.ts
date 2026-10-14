@@ -9,18 +9,17 @@ import { listSandboxes, type SandboxList } from "./sbx-status";
 import { contractHome, normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
 import { grantsOf, revokeMounts } from "./sbx-mounts";
-import { planMcp, readMcpNames } from "./sbx-mcp";
+import { mcpNamesOf, planMcp } from "./sbx-mcp";
 import {
   alignSandbox,
   applyProjectPorts,
   inSandboxTurns,
   markAligned,
-  readSandboxHosts,
-  readSandboxPorts,
-  readSandboxSecrets,
+  readSandboxReads,
   removeSandbox,
   sandboxName,
   type LiveSecret,
+  type SandboxReads,
 } from "./sbx";
 
 /**
@@ -40,18 +39,6 @@ export interface SbxSaveTarget {
   path: string;
 }
 
-/** What a Save read of the kept sandboxes before changing anything (assertReadable), for its
- *  first pass to work against rather than ask again. */
-interface SaveReads {
-  secrets?: Map<string, LiveSecret[]>;
-  /** Without governance: each sandbox's Allowed hosts. */
-  hosts?: Map<string, string[]>;
-  /** By sandbox, each running: what it published. */
-  ports?: Map<string, SbxPort[]>;
-  /** The names sbx has registered as MCP servers. */
-  mcp?: Set<string>;
-}
-
 /**
  * Rejects a Save sbx cannot answer for, before it changes anything (saveSbxSettings): what a kept
  * sandbox holds must be readable, or a row sbx merely could not list would go as refused — a
@@ -59,49 +46,28 @@ interface SaveReads {
  * Ports are listed only by a running sandbox (readSandboxPorts), and only those are asked: a Save
  * starts none.
  */
-async function assertReadable(
-  kept: readonly { agent: SandboxedAgent; name: string; ports: boolean; running: boolean }[],
-  secrets: boolean,
-  ports: boolean,
-  hosts: boolean,
-  mcp: boolean,
-): Promise<SaveReads> {
+function assertReadable(
+  reads: SandboxReads,
+  kept: boolean,
+  { secrets, ports, hosts, mcp }: { secrets: boolean; ports: boolean; hosts: boolean; mcp: boolean },
+): void {
   const unsaved = "Nothing was saved; try again.";
-  const reads: SaveReads = {};
   // Registered at Save whether or not a sandbox exists yet.
-  if (mcp) {
-    reads.mcp = await readMcpNames();
-    if (reads.mcp === undefined) {
-      throw new Error(`SBX could not list its registered MCP servers. ${unsaved}`);
-    }
+  if (mcp && reads.mcp === undefined) {
+    throw new Error(`SBX could not list its registered MCP servers. ${unsaved}`);
   }
-  if (kept.length === 0) {
-    return reads;
+  if (!kept) {
+    return;
   }
-  if (secrets) {
-    reads.secrets = await readSandboxSecrets();
-    if (reads.secrets === undefined) {
-      throw new Error(`SBX could not list the sandboxes' secrets. ${unsaved}`);
-    }
+  if (secrets && reads.secrets === undefined) {
+    throw new Error(`SBX could not list the sandboxes' secrets. ${unsaved}`);
   }
-  if (hosts) {
-    reads.hosts = await readSandboxHosts();
-    if (reads.hosts === undefined) {
-      throw new Error(`SBX could not list the sandboxes' allowed hosts. ${unsaved}`);
-    }
+  if (hosts && reads.hosts === undefined) {
+    throw new Error(`SBX could not list the sandboxes' allowed hosts. ${unsaved}`);
   }
-  if (ports) {
-    // All at once: each sandbox is its own listing.
-    const portsOf = async ({ agent, name }: (typeof kept)[number]): Promise<[string, SbxPort[]]> => {
-      const listed = await readSandboxPorts(name);
-      if (!listed) {
-        throw new Error(`SBX could not list the ports of the ${agent.displayName} sandbox. ${unsaved}`);
-      }
-      return [name, listed];
-    };
-    reads.ports = new Map(await Promise.all(kept.filter((entry) => entry.ports && entry.running).map(portsOf)));
+  if (ports && reads.ports === undefined) {
+    throw new Error(`SBX could not list the sandboxes' ports. ${unsaved}`);
   }
-  return reads;
 }
 
 /** A sandbox a Save removed, by the repository or worktree it was of. */
@@ -196,7 +162,15 @@ export async function saveSbxSettings(
           entry.running = listed?.get(entry.name)?.running ?? entry.running;
         }
       }
-      const reads = await assertReadable(kept, settings.secrets.length > 0 || previous.secrets.length > 0, anyPorts, !organization, anyMcp);
+      // Only the repository's running sandboxes list their ports (readSandboxPorts).
+      const portsOf = anyPorts ? kept.filter(({ ports, running }) => ports && running).map(({ name }) => name) : [];
+      const reads = await readSandboxReads(portsOf);
+      assertReadable(reads, kept.length > 0, {
+        secrets: settings.secrets.length > 0 || previous.secrets.length > 0,
+        ports: anyPorts,
+        hosts: !organization,
+        mcp: anyMcp,
+      });
       for (const { name, ref, agentId } of orphaned) {
         if (!(await removeSandbox(name))) {
           throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
@@ -209,24 +183,19 @@ export async function saveSbxSettings(
         }
         removed.push({ ref, agentId });
       }
-      // Brings every kept sandbox to `target`. The listings answer for every sandbox at once, so they
-      // are asked together, and only when the project has one: each is an sbx process.
-      const apply = async (target: SbxProjectSettings, first?: SaveReads): Promise<SbxProblems> => {
+      // Brings every kept sandbox to `target`, against what was read for it (readSandboxReads).
+      const apply = async (target: SbxProjectSettings, live: SandboxReads): Promise<SbxProblems> => {
         const refused: SbxProblems = {};
         // Registered whether or not a sandbox exists yet; a refusal (a policy without a rule for it) is
         // told at Save, as a row sbx would not take.
         const mcpRows = [...previous.mcp, ...settings.mcp];
-        const plan = anyMcp ? await planMcp(target.mcp, first?.mcp ?? (await readMcpNames())) : undefined;
+        const plan = anyMcp ? await planMcp(target.mcp, live.mcp && mcpNamesOf(live.mcp)) : undefined;
         addProblems(refused, "mcp", plan?.refused ?? {});
         if (kept.length === 0) {
           return refused;
         }
         const secrets = target.secrets.length > 0 || previous.secrets.length > 0;
-        // Unread only by the second pass: the first has them (assertReadable).
-        const [hosts, liveSecrets] = await Promise.all([
-          organization ? undefined : (first?.hosts ?? readSandboxHosts()),
-          secrets ? (first?.secrets ?? readSandboxSecrets()) : new Map<string, LiveSecret[]>(),
-        ]);
+        const liveSecrets = secrets ? live.secrets : new Map<string, LiveSecret[]>();
         // Whenever any are configured or were: the rows may match tet.json and still be unpublished
         // (ports written before the sandbox existed).
         if (target.ports.length > 0 || previous.ports.length > 0) {
@@ -240,7 +209,7 @@ export async function saveSbxSettings(
                 stopped: forwarding.filter(({ running }) => !running).map(({ name }) => name),
               },
               target.ports,
-              { dropped: [...previous.ports, ...settings.ports], read: first?.ports },
+              { dropped: [...previous.ports, ...settings.ports], read: live.ports },
             ),
           );
         }
@@ -255,7 +224,7 @@ export async function saveSbxSettings(
               organization,
               secretValues,
               changedSecrets,
-              live: { hosts, secrets: liveSecrets },
+              live: { ...live, secrets: liveSecrets },
               mcp: running && plan ? { load: plan.load, unload: plan.unload, told } : undefined,
             }),
           );
@@ -281,7 +250,9 @@ export async function saveSbxSettings(
         ],
       };
       const failures =
-        Object.keys(refused).length > 0 ? sbxProblemNotices(await apply(applied)).map((notice) => `Not taken back: ${notice}`) : [];
+        Object.keys(refused).length > 0
+          ? sbxProblemNotices(await apply(applied, await readSandboxReads(portsOf))).map((notice) => `Not taken back: ${notice}`)
+          : [];
       const unrevoked: SbxProblems = {};
       for (const { agent, name } of kept) {
         const current = new Set((await grantsOf(agent, skills.current, applied.paths)).map((grant) => grant.mount));
