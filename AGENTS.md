@@ -298,7 +298,9 @@ per-line decision is for an agent.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
   message of its own but the SEARCH section, whose failure stands in its header as VS Code's does:
-  it follows each keystroke; a status (marks, progress bar) is not a notice.
+  it follows each keystroke; a status (marks, progress bar) is not a notice. A tab's process that
+  ended unasked says so in its own terminal, as a `[TET]` line with how to go on
+  (`terminal-session.ts`): it concerns that tab alone, and a notice for every end would be noise.
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes

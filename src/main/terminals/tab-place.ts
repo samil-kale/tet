@@ -16,7 +16,7 @@ import type { NoticeSeverity } from "../../shared/types/app";
 import type { SbxSkillsSettings, SbxProjectSettings } from "../../shared/types/sbx";
 import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoverDir, sandboxSessionDir } from "../store/project-dirs";
 import type { ResolvedRef } from "../store/resolved-ref";
-import { prepareSbxRun, sandboxName } from "../sbx/sbx";
+import { holdsWorkspace, prepareSbxRun, sandboxName } from "../sbx/sbx";
 import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
 import type { checkSbxReady } from "../sbx/sbx-status";
 import { openInside, removeInside } from "../util/path-inside";
@@ -337,8 +337,11 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
     const hooks = agent.sandbox.prepare(paths);
     const handoverDir = input.handover && sandboxHandoverDir(this.agentDir, input.handover.from, input.handover.sessionId);
     try {
-      // Said first: sbx prints nothing of its own until its first step answers.
-      input.onData("Starting sandbox...\r\n");
+      // Said first: sbx prints nothing of its own until its first step answers. The listing predates
+      // the start's warm-up (SbxRunRequest.warm), so it tells what this start does to the sandbox.
+      const listed = start.ready.sandboxes.get(this.name);
+      const step = holdsWorkspace(listed, at.path) ? (listed.running ? "Attaching to" : "Starting") : "Creating";
+      input.onData(`[TET] ${step} sandbox...\r\n`);
       const files =
         input.handover && handoverDir !== undefined
           ? (await copyInto(input.handover, handoverDir, this.agentDir)).map(toContainerPath)

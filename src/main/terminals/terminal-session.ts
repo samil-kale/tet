@@ -101,7 +101,9 @@ export class TerminalSession {
     this.process.onExit(({ exitCode }) => {
       this.process = undefined;
       if (!this.intentionalStop) {
-        this.callbacks.onOutput(`\r\n[TET] ${this.executable} exited with code ${exitCode}\r\n`);
+        this.callbacks.onOutput(
+          `\r\n[TET] ${this.executable} exited with code ${exitCode}. Restart the tab from its menu to continue.\r\n`,
+        );
       }
       // By exit code, so a passed build is no error; killed by us is "stopped" whatever the code.
       this.setStatus(this.intentionalStop || exitCode === 0 ? "stopped" : "error");

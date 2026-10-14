@@ -25,7 +25,15 @@ import { parseSbxJson, type FilesystemRule } from "./sbx-policy";
 import { logError } from "../util/error-log";
 import { runSbx, sbxError, sbxFailure, sbxJson, sbxRefusal, suppressSbxFirstRunWizard, writeIntoSandbox, type OnData } from "./sbx-cli";
 import { listMcp, loadMcp, mcpNamesOf, planMcp, readRegisteredMcp, unloadMcp, type ListedMcp, type McpPlan } from "./sbx-mcp";
-import { listSandboxes, mountableBy, readHostAllowed, readPolicy, sandboxControl, type SandboxList } from "./sbx-status";
+import {
+  listSandboxes,
+  mountableBy,
+  readHostAllowed,
+  readPolicy,
+  sandboxControl,
+  type ListedSandbox,
+  type SandboxList,
+} from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
 import { readSbxSettings } from "../store/tet-json";
@@ -111,6 +119,12 @@ export async function removeRefSandboxes(refs: ProjectRef[]): Promise<void> {
   }
 }
 
+/** Whether a sandbox as `sbx ls` listed it is the one for `folder`: one with another workspace is
+ *  rebuilt (ensureSandboxExists). */
+export function holdsWorkspace(listed: ListedSandbox | undefined, folder: string): listed is ListedSandbox {
+  return listed !== undefined && sameSet(listed.workspaces, [folder]);
+}
+
 /**
  * Ensures a sandbox whose one workspace is this repository or worktree — all else is mounted live,
  * so this is all `sbx create` is told. A different workspace means a rebuild: a repository moved
@@ -138,13 +152,12 @@ function ensureSandboxExists(
   sandboxes: SandboxList,
   onData?: OnData,
 ): Promise<boolean> {
-  const listed = sandboxes.get(name);
-  if (listed !== undefined && sameSet(listed.workspaces, [folder])) {
+  if (holdsWorkspace(sandboxes.get(name), folder)) {
     return Promise.resolve(false);
   }
   return inTurn(sandboxSetups, name, async () => {
     const existing = ((await listSandboxes()) ?? sandboxes).get(name);
-    if (existing !== undefined && sameSet(existing.workspaces, [folder])) {
+    if (holdsWorkspace(existing, folder)) {
       return false;
     }
     if (existing !== undefined) {
@@ -707,7 +720,6 @@ export async function prepareSbxRun(
     // The repository's sandboxes, ports configured or not: one may still publish a port dropped since.
     const forwarding = request.ref.worktree === undefined ? projectSandboxes(projectId, request.sandboxes) : [];
     const reads = savedOver ? undefined : await readSandboxReads(forwarding);
-    const ports = request.settings.ports.length > 0;
     const problems = await readSbxProblems({
       projectId,
       settings: request.settings,
@@ -717,8 +729,9 @@ export async function prepareSbxRun(
       organization: request.organization,
       rules: request.rules,
       ports: !savedOver,
-      // A port a sandbox of the project forwards is in place already (applyProjectPorts).
-      published: portKeys(reads && ports ? portsListed(reads.ports) : undefined),
+      // A port a sandbox of the project forwards is in place already (applyProjectPorts); listed
+      // again there where the read failed, which rejects as readProjectPorts does.
+      published: reads?.ports && portKeys(reads.ports),
       listedMcp: reads?.mcp,
     });
     const { settings, skills } = withoutProblems(request.settings, request.skills, problems);
@@ -817,9 +830,9 @@ async function alignAtStart(
   return refused;
 }
 
-/** readProjectPorts' as the keys readSbxProblems checks against; none where it was not read. */
-function portKeys(published: Map<string, SbxPort[]> | undefined): Set<string> {
-  return new Set([...(published?.values() ?? [])].flat().map(sbxPortKey));
+/** readProjectPorts' as the keys readSbxProblems checks against. */
+function portKeys(published: Map<string, SbxPort[]>): Set<string> {
+  return new Set([...published.values()].flat().map(sbxPortKey));
 }
 
 /** The ports the project's sandboxes publish, by sandbox — a stopped one lists none, and binds
@@ -829,15 +842,11 @@ async function readProjectPorts(projectId: string, listed?: SandboxList): Promis
   if (!sandboxes) {
     throw new Error("SBX could not list the sandboxes.");
   }
-  return portsListed(await readPorts(projectSandboxes(projectId, sandboxes)));
-}
-
-/** The ports read, or a rejection where sbx could not list them (readProjectPorts). */
-function portsListed(ports: Map<string, SbxPort[]> | undefined): Map<string, SbxPort[]> {
-  if (!ports) {
+  const published = await readPorts(projectSandboxes(projectId, sandboxes));
+  if (!published) {
     throw new Error("SBX could not list the sandboxes' ports.");
   }
-  return ports;
+  return published;
 }
 
 /** What readSbxProblems checks: the rows, and what this machine holds for them. */
