@@ -338,7 +338,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
     const handoverDir = input.handover && sandboxHandoverDir(this.agentDir, input.handover.from, input.handover.sessionId);
     try {
       // Said first: sbx prints nothing of its own until its first step answers.
-      input.onData("Preparing sandbox\r\n");
+      input.onData("Starting sandbox...\r\n");
       const files =
         input.handover && handoverDir !== undefined
           ? (await copyInto(input.handover, handoverDir, this.agentDir)).map(toContainerPath)
