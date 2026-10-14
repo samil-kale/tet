@@ -688,7 +688,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       calls.filter((call) => /^(policy (ls --type network|allow|rm)|secret|mcp|ports) /.test(call));
 
     /** Starts a Claude tab of the project at `at`, sbx listing its sandbox at `repoFolder`. */
-    const start = (dir: string, repoFolder: string, rows: Partial<SbxProjectSettings>, at = repoFolder) =>
+    const start = (dir: string, repoFolder: string, rows: Partial<SbxProjectSettings>, at = repoFolder, warm?: Promise<boolean>) =>
       // The first-run marker of sbx goes beside the stand-in, not into this machine's profile.
       withEnvAsync({ LOCALAPPDATA: dir, HOME: dir }, () =>
         prepareSbxRun({
@@ -703,8 +703,20 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
           agentArgs: [],
           secretValues: new Map(),
           variableValues: new Map(),
+          warm,
         }),
       );
+
+    it("unpublishes a port tet.json no longer lists, in a sandbox already running", async () => {
+      const stale = 47815;
+      const { dir, repoFolder } = fakeSbx({ published: [listed(stale)], filesystemRules: ALLOW_ALL });
+      await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true });
+      const { calls } = await withSbx(dir, () => start(dir, repoFolder, {}, repoFolder, Promise.resolve(true)));
+      assert.deepEqual(
+        calls.filter((call) => call.includes("publish")),
+        [`ports ${name} --unpublish ${stale}:${stale}`],
+      );
+    });
 
     for (const created of [true, false]) {
       it(`keeps ${created ? "the sandbox it created" : "a sandbox it found"} when it fails afterwards, for the next start to bring in line`, async () => {
@@ -721,7 +733,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       });
     }
 
-    it("brings a sandbox it found in line with tet.json both ways, and asks nothing again while tet.json stays", async () => {
+    it("brings a sandbox it found in line with tet.json both ways, at every start", async () => {
       // Ports nothing here listens on: the start asks this machine whether a new one is free.
       const [wanted, stale] = [47813, 47814];
       const { dir, repoFolder } = fakeSbx({ published: [listed(stale)], filesystemRules: ALLOW_ALL, registered: [{ name: "stale" }] });
@@ -744,11 +756,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       );
       fs.rmSync(path.join(dir, "calls.log"));
       const second = await withSbx(dir, () => start(dir, repoFolder, rows));
-      assert.deepEqual(aligning(second.calls), [], "a second tab of the sandbox");
-      fs.rmSync(path.join(dir, "calls.log"));
-      await onDisk({ ...rows, hosts: [] });
-      const changed = await withSbx(dir, () => start(dir, repoFolder, { ...rows, hosts: [] }));
-      assert.ok(aligning(changed.calls).length > 0, "a tet.json changed without a Save");
+      assert.deepEqual(
+        [READ_ROUND.every((listing) => second.calls.includes(listing)), second.calls.filter((call) => call.includes("publish"))],
+        [true, []],
+        "a second tab of the sandbox lists it again, and finds the ports in place",
+      );
       fs.rmSync(path.join(dir, "calls.log"));
       await onDisk({ ...rows, hosts: ["saved.example.com"] });
       const savedOver = await withSbx(dir, () => start(dir, repoFolder, rows));
@@ -760,7 +772,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       assert.deepEqual([first.result.savedOver, savedOver.result.savedOver], [false, true], "and the tab is told so");
     });
 
-    it("asks nothing again for a sandbox whose one row left out waits for a Save", async () => {
+    it("tells a row left out at every start", async () => {
       const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
       const rows = { secrets: [{ env: "TOKEN", hosts: ["api.example.com"] }] };
       await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
@@ -768,7 +780,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       assert.deepEqual(first.result.problems, { secrets: { TOKEN: SBX_PROBLEM.noValue } });
       fs.rmSync(path.join(dir, "calls.log"));
       const second = await withSbx(dir, () => start(dir, repoFolder, rows));
-      assert.deepEqual(aligning(second.calls), []);
       assert.deepEqual(second.result.problems, first.result.problems, "told at every start all the same");
     });
 

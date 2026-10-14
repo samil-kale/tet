@@ -10,17 +10,7 @@ import { contractHome, normalizeHostPath } from "../util/path-inside";
 import { sameSet } from "../util/same-set";
 import { grantsOf, revokeMounts } from "./sbx-mounts";
 import { mcpNamesOf, planMcp } from "./sbx-mcp";
-import {
-  alignSandbox,
-  applyProjectPorts,
-  inSandboxTurns,
-  markAligned,
-  readSandboxReads,
-  removeSandbox,
-  sandboxName,
-  type LiveSecret,
-  type SandboxReads,
-} from "./sbx";
+import { alignSandbox, applyProjectPorts, inSandboxTurns, readSandboxReads, removeSandbox, sandboxName, type SandboxReads } from "./sbx";
 
 /**
  * The agent of a sandbox TET made (sandboxName) for this workspace under another id, as for a
@@ -81,10 +71,10 @@ export interface SbxRemoved {
  * SBX is disabled, one with another workspace too (see ensureSandboxExists; rebuilt at its next
  * tab), and one another id of the project left (orphanAgent). The others are brought in line as a
  * tab's start does it (alignSandbox, applyProjectPorts), each against the sandboxes' own
- * (readSandboxPorts, readSandboxHosts, readSandboxSecrets), so a hand-set rule deleted as a row
+ * (readSandboxReads), so a hand-set rule deleted as a row
  * goes too and a port never published is tried again — but none is started for it: hosts and
  * secrets reach a stopped sandbox too, ports and MCP servers only one that runs, and a stopped one
- * takes them at its next tab's start (`markAligned`). A row sbx refuses in any sandbox is
+ * takes them at its next tab's start (prepareSbxRun). A row sbx refuses in any sandbox is
  * `refused`, left out of tet.json and taken back where it went through — a port it would not
  * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
  * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
@@ -194,8 +184,6 @@ export async function saveSbxSettings(
         if (kept.length === 0) {
           return refused;
         }
-        const secrets = target.secrets.length > 0 || previous.secrets.length > 0;
-        const liveSecrets = secrets ? live.secrets : new Map<string, LiveSecret[]>();
         // Whenever any are configured or were: the rows may match tet.json and still be unpublished
         // (ports written before the sandbox existed).
         if (target.ports.length > 0 || previous.ports.length > 0) {
@@ -224,7 +212,7 @@ export async function saveSbxSettings(
               organization,
               secretValues,
               changedSecrets,
-              live: { ...live, secrets: liveSecrets },
+              live,
               mcp: running && plan ? { load: plan.load, unload: plan.unload, told } : undefined,
             }),
           );
@@ -275,12 +263,6 @@ export async function saveSbxSettings(
         if (kind === "skills") {
           appliedSkills.skillsFolder = skills.previous.skillsFolder;
         }
-      }
-      // A running sandbox now holds the rows; a stopped one, or one sbx refused a row of, takes them
-      // at its next tab's start (prepareSbxRun). A worktree's holds no ports (readSbxSettings).
-      const inLine = Object.keys(refused).length === 0;
-      for (const { name, ports, running } of kept) {
-        markAligned(name, running && inLine ? { ...applied, ports: ports ? applied.ports : [] } : undefined);
       }
       mergeProblems(refused, unrevoked);
       await writeSbxSettings(project.path, applied);

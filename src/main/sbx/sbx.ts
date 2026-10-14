@@ -67,33 +67,17 @@ const sandboxSetups = new Map<string, Promise<unknown>>();
  *  takes at once. */
 type Aligned = Pick<SbxProjectSettings, "hosts" | "ports" | "secrets" | "mcp">;
 
-/**
- * The rows each sandbox was last brought in line with this run, as their hash (alignedStamp): a
- * tab's start aligns its sandbox only where tet.json's differ, so a second tab of one adds no sbx
- * process, and a tet.json changed without a Save (pulled, edited) is taken up. Forgotten for a
- * sandbox a Save left stopped (saveSbxSettings), one sbx refused a row of, and one gone
- * (removeSandbox, ensureSandboxExists); never kept on disk, so the first start after TET's aligns.
- */
-const aligned = new Map<string, string>();
-
-function alignedStamp({ hosts, ports, secrets, mcp }: Aligned): string {
-  return idHash(
+/** Whether `a` and `b` hold the same rows a tab's start brings its sandbox to: what tells a Save
+ *  that replaced them while the start ran (prepareSbxRun's `savedOver`). */
+function sameAligned(a: Aligned, b: Aligned): boolean {
+  const rows = ({ hosts, ports, secrets, mcp }: Aligned): string =>
     JSON.stringify([
       hosts,
       ports.map(sbxPortKey),
       secrets.map((secret) => [secret.env, secret.hosts]),
       mcp.map((server) => [server.name, server.url]),
-    ]),
-  );
-}
-
-/** Records that the sandbox holds `settings`' rows, or forgets it where sbx refused one. */
-export function markAligned(name: string, settings: Aligned | undefined): void {
-  if (settings) {
-    aligned.set(name, alignedStamp(settings));
-  } else {
-    aligned.delete(name);
-  }
+    ]);
+  return rows(a) === rows(b);
 }
 
 /**
@@ -108,7 +92,6 @@ export function inSandboxTurns<T>(names: readonly string[], action: () => Promis
 
 export async function removeSandbox(name: string, onData?: OnData): Promise<boolean> {
   launcherWritten.delete(name);
-  aligned.delete(name);
   return (await runSbx(["rm", name, "--force"], { onData })).ok;
 }
 
@@ -175,7 +158,6 @@ function ensureSandboxExists(
     // (`sbx rm`, `prune`, `reset`) never passed removeSandbox, which is the other place this is
     // forgotten. Kept here, the launcher would be skipped and the agent would run without hooks.
     launcherWritten.delete(name);
-    aligned.delete(name);
     return true;
   });
 }
@@ -697,8 +679,8 @@ export function sandboxEnv({
  * and with a control channel its env and the `tet-ctl` launcher. Creates the sandbox itself
  * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent, and
  * `sbx create` is told its workspace alone: every start, the creating one too, brings the sandbox
- * in line with tet.json the same way — the mounts each time (mountAll), hosts, ports, secrets and
- * MCP servers unless it holds these rows already (`aligned`).
+ * in line with tet.json the same way, each time: the mounts (mountAll), hosts, ports, secrets and
+ * MCP servers (alignAtStart), against what sbx lists (readSandboxReads).
  * Applies tet.json as it stands and never writes it: what cannot be applied here
  * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
  * tell (sbxProblemNotices) — how a user learns that governance took over. `savedOver` says a Save
@@ -716,19 +698,16 @@ export async function prepareSbxRun(
   // with no Save or other start of the sandbox in between — two tabs starting together would both
   // apply, the second against what the first changed.
   const { problems, settings, savedOver } = await inTurn(sandboxSetups, name, async () => {
-    const stamp = alignedStamp(request.settings);
     // Saved over since this start read it: its rows are tet.json's no more, and applying them would
     // take back what that Save set. Left to the next start, and told.
-    const savedOver = aligned.get(name) !== stamp && alignedStamp(await readSbxSettings(request.projectRefPath)) !== stamp;
-    if (savedOver) {
-      markAligned(name, undefined);
-    }
-    const align = aligned.get(name) !== stamp && !savedOver;
+    const savedOver = !sameAligned(await readSbxSettings(request.projectRefPath), request.settings);
     // The start underway decides what the sandbox lists as published (readSandboxPorts): only once
     // it ran are the ports read the ones alignAtStart works against.
-    const warmed = created || (align && (await request.warm) === true);
+    const warmed = created || (!savedOver && (await request.warm) === true);
+    // The repository's sandboxes, ports configured or not: one may still publish a port dropped since.
+    const forwarding = request.ref.worktree === undefined ? projectSandboxes(projectId, request.sandboxes) : [];
+    const reads = savedOver ? undefined : await readSandboxReads(forwarding);
     const ports = request.settings.ports.length > 0;
-    const reads = align ? await readSandboxReads(ports ? projectSandboxes(projectId, request.sandboxes) : []) : undefined;
     const problems = await readSbxProblems({
       projectId,
       settings: request.settings,
@@ -737,7 +716,7 @@ export async function prepareSbxRun(
       agents: [agent],
       organization: request.organization,
       rules: request.rules,
-      ports: align,
+      ports: !savedOver,
       // A port a sandbox of the project forwards is in place already (applyProjectPorts).
       published: portKeys(reads && ports ? portsListed(reads.ports) : undefined),
       listedMcp: reads?.mcp,
@@ -767,13 +746,7 @@ export async function prepareSbxRun(
       }
     }
     if (reads) {
-      const rows = await alignAtStart(request, settings, reads, warmed);
-      // In line unless sbx refused a row, or a port or server was left out, which the next start
-      // tries again; a host, secret or variable left out waits for a Save, which brings it to every
-      // sandbox itself.
-      const left = settings.ports.length < request.settings.ports.length || settings.mcp.length < request.settings.mcp.length;
-      markAligned(name, Object.keys(rows).length === 0 && !left ? request.settings : undefined);
-      mergeProblems(problems, rows);
+      mergeProblems(problems, await alignAtStart(request, settings, reads, warmed));
     }
     return { problems, settings, savedOver };
   });
