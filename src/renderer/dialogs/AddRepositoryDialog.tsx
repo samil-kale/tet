@@ -154,6 +154,8 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** Loaded lists by account, kept while the dialog is open. */
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
+  /** The accounts whose list was fetched in this dialog; a kept list in `repos` alone is still stale. */
+  const [listed, setListed] = useState<Record<string, true>>({});
   /** Why the list is empty, in the list's own place. Tagged with its account: another account's
    *  failure is not this one's. */
   const [listFailure, setListFailure] = useState<{ accountId: string; message: string } | undefined>(undefined);
@@ -177,32 +179,48 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
   }, []);
 
   useEffect(() => {
-    if (selectedId === null || repos[selectedId]) {
+    if (selectedId === null || listed[selectedId]) {
       return;
     }
     // A failure of this account's last listing stands only until it is listed again.
     setListFailure(undefined);
+    let cancelled = false;
+    // The kept listing shows at once, until the fetch below replaces it.
+    void window.tet.providers.cachedRepos(selectedId).then((kept) => {
+      if (kept && !cancelled) {
+        setRepos((current) => (current[selectedId] ? current : { ...current, [selectedId]: kept }));
+      }
+    });
     // Its cleanup releases the bar only for a fetch still running: the next run turns the bar on
     // only when it fetches, so an already-listed account shows none.
-    return fetchHeld(
+    const release = fetchHeld(
       () => window.tet.providers.repos(selectedId),
       hold,
       (result) => {
         const list = result.repos;
         if (list) {
-          setRepos((current) => ({ ...current, [selectedId]: list }));
+          setListed((current) => ({ ...current, [selectedId]: true }));
+          // Unchanged keeps the identity, so nothing redraws or jumps.
+          setRepos((current) =>
+            JSON.stringify(current[selectedId]) === JSON.stringify(list) ? current : { ...current, [selectedId]: list },
+          );
         } else {
           setListFailure({ accountId: selectedId, message: result.error ?? "The repositories could not be listed" });
         }
       },
     );
-  }, [selectedId, repos, hold]);
+    return () => {
+      cancelled = true;
+      release();
+    };
+  }, [selectedId, listed, hold]);
 
   const accountAdded = (account: ProviderAccount): void => {
     // Replace, not append: a fresh token answers with the same account id.
     setAccounts((current) => [...(current ?? []).filter((entry) => entry.id !== account.id), account]);
     // A re-entered token may reach further, so the cached list is stale.
     setRepos((current) => forget(current, account.id));
+    setListed((current) => forget(current, account.id));
     setSelectedId(account.id);
     setAdding(false);
   };

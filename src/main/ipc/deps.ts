@@ -7,6 +7,7 @@ import type { RepositoryManager } from "../git/repository";
 import type { ProjectDeps } from "../projects";
 import type { ProjectStore } from "../store/project-store";
 import type { AccountStore } from "../providers/accounts";
+import type { RepoCache } from "../providers/repo-cache";
 import type { SbxAccountStore } from "../sbx/sbx-accounts";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsAccess } from "../store/settings";
@@ -17,6 +18,7 @@ export interface IpcDeps {
   store: ProjectStore;
   settings: SettingsAccess;
   accounts: AccountStore;
+  repoCache: RepoCache;
   /** The logins typed into TET for git hosts without a credential helper. */
   logins: GitLoginStore;
   sbxLocal: SbxLocalStore;

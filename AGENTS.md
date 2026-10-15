@@ -115,6 +115,7 @@ own profile stays in Electron's `userData` (`data-root.ts`).
 ```
 ~/.tet/
   settings.json  environment.json  projects.json  sbx-local.json  *-accounts.json  git-logins.json
+  repos-cache.json
   errors.log
   bin/                             tet-ctl, first on every tab's PATH
   askpass/                         for TET's own git runs only

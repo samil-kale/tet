@@ -75,6 +75,7 @@ const api: TETApi = {
     removeAccount: (accountId) => invoke("providers:remove-account", accountId),
     setNamespace: (accountId, namespace) => invoke("providers:set-namespace", accountId, namespace),
     repos: (accountId) => invoke("providers:repos", accountId),
+    cachedRepos: (accountId) => invoke("providers:cached-repos", accountId),
   },
   env: {
     list: () => invoke("env:list"),

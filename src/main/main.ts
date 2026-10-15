@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
+import { RepoCache } from "./providers/repo-cache";
 import { GitLoginStore } from "./git/git-logins";
 import { CONTROL_ENV } from "../shared/ctl";
 import { RELEASES_URL } from "../shared/release";
@@ -125,6 +126,7 @@ installUncaughtHandler(path.join(dataRoot, "errors.log"), notice);
 const store = new ProjectStore(dataRoot);
 const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
+const repoCache = new RepoCache(dataRoot);
 const logins = new GitLoginStore(dataRoot);
 const sbxLocal = new SbxLocalStore(dataRoot);
 const sbxAccounts = new SbxAccountStore(dataRoot);
@@ -429,6 +431,7 @@ if (!app.requestSingleInstanceLock()) {
       store,
       settings: settingsAccess,
       accounts,
+      repoCache,
       logins,
       sbxLocal,
       sbxAccounts,

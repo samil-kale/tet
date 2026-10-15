@@ -13,7 +13,7 @@ import type {
   StashCommand,
 } from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
-import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "./types/providers";
+import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId, RemoteRepository } from "./types/providers";
 import type {
   SbxAccount,
   SbxAccountEdit,
@@ -152,6 +152,8 @@ export interface TETApi {
     setNamespace: (accountId: string, namespace: string) => Promise<void>;
     /** Most recently active first. */
     repos: (accountId: string) => Promise<ListRepositoriesResult>;
+    /** The last listing kept for the account, possibly stale; undefined when none was fetched yet. */
+    cachedRepos: (accountId: string) => Promise<RemoteRepository[] | undefined>;
   };
   env: {
     /** Never the values. */

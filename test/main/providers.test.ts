@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
+import { RepoCache } from "../../src/main/providers/repo-cache";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
 /** providers/: the accounts kept for the providers. */
@@ -77,5 +78,27 @@ describe("the accounts kept for the providers", () => {
     assert.throws(() => store.add("github", "github.com", "d", "t"));
     assert.equal(store.list().length, 1, "the row is not kept for a token that could not be sealed");
     assert.deepEqual(Object.keys(PROVIDERS).sort(), ["github", "gitlab"]);
+  });
+});
+
+describe("the repositories cache", () => {
+  const repo = { fullName: "octocat/hello", name: "hello", cloneUrl: "https://github.com/octocat/hello.git" };
+
+  it("keeps an account's listing across restarts and drops it with the account", () => {
+    const root = tempDir("tet-repos-cache-");
+    const cache = new RepoCache(root);
+    assert.equal(cache.get("a"), undefined);
+    cache.set("a", [repo]);
+    assert.deepEqual(new RepoCache(root).get("a"), [repo]);
+    cache.remove("a");
+    assert.equal(new RepoCache(root).get("a"), undefined);
+  });
+
+  it("reads a damaged file defensively", () => {
+    const root = tempDir("tet-repos-cache-");
+    fs.writeFileSync(path.join(root, "repos-cache.json"), JSON.stringify({ a: [repo, { fullName: 1 }], b: "x" }));
+    const cache = new RepoCache(root);
+    assert.deepEqual(cache.get("a"), [repo]);
+    assert.equal(cache.get("b"), undefined);
   });
 });

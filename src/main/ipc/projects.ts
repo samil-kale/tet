@@ -6,7 +6,7 @@ import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
 import type { GitActionResult, GitLogin } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectRef } from "../../shared/types/project";
-import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId } from "../../shared/types/providers";
+import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types/providers";
 import { urlOrigin } from "../../shared/git-url";
 import { git } from "../git/git-client";
 import { logFailure } from "../util/json-file";
@@ -40,9 +40,10 @@ async function existingFolder(candidate: string): Promise<string | undefined> {
 export function registerProjectsIpc({
   store,
   accounts,
+  repoCache,
   logins,
   projectDeps,
-}: Pick<IpcDeps, "store" | "accounts" | "logins" | "projectDeps">): void {
+}: Pick<IpcDeps, "store" | "accounts" | "repoCache" | "logins" | "projectDeps">): void {
   handle("projects:list", (): Project[] => store.list());
 
   handle("projects:pick-directory", async (_event, title: string, startPaths: string[] = []): Promise<string | null> => {
@@ -139,6 +140,7 @@ export function registerProjectsIpc({
   handle("providers:remove-account", (_event, accountId: string): string | undefined => {
     try {
       accounts.remove(accountId);
+      repoCache.remove(accountId);
       return undefined;
     } catch (error) {
       return errorMessage(error);
@@ -157,11 +159,15 @@ export function registerProjectsIpc({
       return { error: "The account's token could not be read — add the account again" };
     }
     try {
-      return { repos: await PROVIDERS[account.provider].listRepositories(account.host, token) };
+      const repos = await PROVIDERS[account.provider].listRepositories(account.host, token);
+      repoCache.set(accountId, repos);
+      return { repos };
     } catch (error) {
       return { error: errorMessage(error) };
     }
   });
+
+  handle("providers:cached-repos", (_event, accountId: string): RemoteRepository[] | undefined => repoCache.get(accountId));
 
   // The projects lane's order, kept for the next start: not kept, only the order is lost.
   handle("projects:reorder", (_event, projectIds: string[]): void =>

@@ -52,6 +52,7 @@ export interface InvokeChannels {
   "providers:remove-account": TETApi["providers"]["removeAccount"];
   "providers:set-namespace": TETApi["providers"]["setNamespace"];
   "providers:repos": TETApi["providers"]["repos"];
+  "providers:cached-repos": TETApi["providers"]["cachedRepos"];
   "env:list": TETApi["env"]["list"];
   "env:save": TETApi["env"]["save"];
   "env:answer": TETApi["env"]["answer"];
