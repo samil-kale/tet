@@ -353,16 +353,22 @@ describe("pi's model listing", () => {
 });
 
 describe("a suggested commit message", () => {
-  it("takes a plain subject unchanged", () => {
-    assert.equal(commitMessageFrom("fix terminal focus"), "fix terminal focus");
+  it("takes the subject between the tags", () => {
+    assert.equal(commitMessageFrom("<commit>fix terminal focus</commit>"), "fix terminal focus");
   });
 
-  it("tolerates a fence, label and wrapping quotes", () => {
-    assert.equal(commitMessageFrom('```text\nCommit message: "add commit suggestions"\n```'), "add commit suggestions");
+  it("ignores what the agent says around its answer", () => {
+    const reply = "Let me look at the subjects first.\n<commit>\n add commit suggestions \n</commit>\nDone.";
+    assert.equal(commitMessageFrom(reply), "add commit suggestions");
   });
 
-  it("rejects an empty or fence-only answer", () => {
-    assert.equal(commitMessageFrom("\n```\n```\n"), "");
+  it("takes the last answer when the instruction was echoed before it", () => {
+    assert.equal(commitMessageFrom("Between <commit> and </commit>:\n<commit>add commit suggestions</commit>"), "add commit suggestions");
+  });
+
+  it("rejects an answer without tags or with an empty one", () => {
+    assert.equal(commitMessageFrom("fix terminal focus"), "");
+    assert.equal(commitMessageFrom("<commit>\n</commit>"), "");
   });
 });
 

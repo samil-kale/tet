@@ -4,18 +4,18 @@ import { askAgent } from "./ask";
 import { AGENTS } from "./index";
 import { stoppable } from "../util/process";
 
-/** Takes the first subject out of an otherwise well-formed answer, tolerating a fenced reply. */
+/** The subject between the answer's last `<commit>` and `</commit>` (`COMMIT_MESSAGE_PROMPT`); an
+ *  answer without them is none, so whatever an agent says around its answer never becomes the
+ *  message. */
 export function commitMessageFrom(reply: string): string {
-  const line = reply
-    .split(/\r?\n/)
-    .map((entry) => entry.trim())
-    .find((entry) => entry.length > 0 && !entry.startsWith("```"));
-  if (!line) {
-    return "";
-  }
-  const withoutLabel = line.replace(/^(?:commit (?:message|subject)|message|subject)\s*:\s*/i, "").trim();
-  const quote = withoutLabel[0];
-  return quote && ['"', "'", "`"].includes(quote) && withoutLabel.endsWith(quote) ? withoutLabel.slice(1, -1).trim() : withoutLabel;
+  const answers = [...reply.matchAll(/<commit>([\s\S]*?)<\/commit>/gi)];
+  const inside = answers.at(-1)?.[1] ?? "";
+  return (
+    inside
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .find((entry) => entry.length > 0) ?? ""
+  );
 }
 
 /** The agent the commit prompt waits on, for `cancelCommitSuggestion`: one question is up at a
