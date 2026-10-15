@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.19.1 (2026-10-15)
+
+- **Repositories listed at once.** The Add Repository dialog shows the account's last repository
+  listing straight away while the current one loads.
+- **Fixes.** The editor's selection is tinted over colored text.
+
 ## 0.19.0 (2026-10-14)
 
 - **Sandboxes kept in line.** Every sandboxed tab's start brings its sandbox in line with
