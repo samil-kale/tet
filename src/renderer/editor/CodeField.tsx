@@ -51,7 +51,7 @@ export function CodeField({ language, value, onChange, placeholder, className }:
         }
         placeholder={placeholder}
         ignoreTabKey
-        padding="5px 6px"
+        padding={{ top: 5, right: 6, bottom: 5, left: 6 }}
       />
     </div>
   );

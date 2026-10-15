@@ -787,8 +787,8 @@ textarea:focus,
   pointer-events: none;
 }
 
-/* The remote tab's column gap spaces the field. */
-.remote-main .filter-field {
+/* The remote tab's column gap spaces the field; the `Dropdown` menu's own field inside it keeps the padding. */
+.remote-main > .filter-field {
   padding: 0;
 }
 
@@ -799,7 +799,7 @@ textarea:focus,
 }
 
 /* Here the field lacks the 6px the branch tree's icon is placed against. */
-.remote-main .filter-icon {
+.remote-main > .filter-field .filter-icon {
   left: 7px;
 }
 
@@ -2359,6 +2359,11 @@ textarea:focus,
 
 .code-field-editor {
   min-height: 100%;
+}
+
+/* The textarea lies over the colored text, so its selection must let that text show through. */
+.code-field-editor textarea::selection {
+  background: color-mix(in srgb, var(--tet-editor-selectionBackground) 50%, transparent);
 }
 
 /* A script, so in the editor's font. */
