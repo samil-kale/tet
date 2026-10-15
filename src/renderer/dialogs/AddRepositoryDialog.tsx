@@ -303,7 +303,6 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
           <div className="placeholder">No account yet — add one to browse its repositories.</div>
         ) : (
           <>
-            <FilterField placeholder="Search" value={filter} onChange={setFilter} />
             {/* Only with more than one group. */}
             {groups.length > 1 && (
               <Dropdown
@@ -319,6 +318,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
                 ]}
               />
             )}
+            <FilterField placeholder="Search" value={filter} onChange={setFilter} />
             <div className="repository-list">
               {filtered.map((repo) => (
                 <div className="repository-row" key={repo.fullName}>
