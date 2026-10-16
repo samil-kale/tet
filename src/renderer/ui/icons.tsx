@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  BookOpen,
   CaseSensitive,
   Check,
   ChevronDown,
@@ -44,10 +45,10 @@ import {
   Search,
   Settings,
   Shield,
+  SquareSplitHorizontal,
   Tag,
   Undo2,
   User,
-  View,
   Wand,
   WholeWord,
   X,
@@ -455,9 +456,14 @@ export function SaveIcon(props: IconProps) {
   return <Lucide {...props} icon={Save} />;
 }
 
-/** Lucide's `view` — a Markdown preview. */
-export function ViewIcon(props: IconProps) {
-  return <Lucide {...props} icon={View} />;
+/** Lucide's `square-split-horizontal` — the Markdown preview beside the editor. */
+export function SquareSplitHorizontalIcon(props: IconProps) {
+  return <Lucide {...props} icon={SquareSplitHorizontal} />;
+}
+
+/** Lucide's `book-open` — the Markdown preview alone. */
+export function BookOpenIcon(props: IconProps) {
+  return <Lucide {...props} icon={BookOpen} />;
 }
 
 /** Lucide's `git-compare` — the editor tab's diff toggle. */

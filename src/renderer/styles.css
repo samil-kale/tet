@@ -1523,6 +1523,8 @@ textarea:focus,
 .editor-tab.hidden *,
 .editor-split.hidden,
 .editor-split.hidden *,
+.editor-frame.hidden,
+.editor-frame.hidden *,
 .editor-host.hidden,
 .editor-host.hidden * {
   visibility: hidden !important;
@@ -1548,11 +1550,21 @@ textarea:focus,
   min-width: var(--area-min-width);
 }
 
+/* The preview alone: the editor stays laid out beneath it, invisible, so showing it needs no relayout. */
+.editor-frame.hidden {
+  position: absolute;
+  inset: 0;
+}
+
 /* Where `attachMarkdownPreview` moves the preview's scroller; sized by the sash. */
 .markdown-frame {
   position: relative;
   flex: none;
   min-width: var(--area-min-width);
+}
+
+.markdown-frame.alone {
+  flex: 1;
 }
 
 /* Where monaco mounts. Two per tab, stacked: the diff editor and the plain one (`applyMode`). No

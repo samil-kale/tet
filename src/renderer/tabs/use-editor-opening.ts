@@ -8,10 +8,10 @@ import {
   disposeEditor,
   keepEditor,
   openEditorFile,
+  openMarkdownPreview,
   previewEditorTab,
   revealEditorMatch,
   showDiff,
-  showMarkdownPreview,
 } from "../editor/editor-views";
 import type { PaneId } from "./pane-layout";
 
@@ -54,7 +54,7 @@ export function useEditorOpening(
           keepEditor(tabId);
         }
         if (how.markdownPreview) {
-          showMarkdownPreview(tabId, true);
+          openMarkdownPreview(tabId);
         }
         if (how.diff) {
           showDiff(tabId, true);

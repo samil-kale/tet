@@ -3,7 +3,7 @@ import { refKeyOf } from "../../shared/types/project";
 import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ProjectRef } from "../../shared/types/project";
 import { confirmed, confirmedFollowUp } from "../ui/Dialog";
-import { layoutFlag } from "../ui/layout-storage";
+import { layoutChoice, layoutFlag } from "../ui/layout-storage";
 import { named } from "../ui/named";
 import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
@@ -36,13 +36,17 @@ const SCROLL_ECHO_MS = 150;
  *  (`https://exa`), is asked for once typing has stopped this long. */
 const MARKDOWN_PREVIEW_IMAGE_DELAY_MS = 1000;
 
+/** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
+export type MarkdownPreviewMode = "off" | "side" | "only";
+
+const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "side", "only"];
+
 /**
- * Whether a Markdown file opens with its Markdown preview beside it: the last answer the user gave,
- * for every tab and the next start. A layout key, like the Markdown preview's width
- * (`markdown-preview`, a key of its own): where the preview shows describes the window, not a
- * repository.
+ * How a Markdown file opens: the last answer the user gave, for every tab and the next start. A
+ * layout key, like the Markdown preview's width (`markdown-preview`, a key of its own): where the
+ * preview shows describes the window, not a repository.
  */
-const markdownPreviewByDefault = layoutFlag("markdown-preview.shown");
+const markdownPreviewByDefault = layoutChoice("markdown-preview.mode", MARKDOWN_PREVIEW_MODES, "off");
 /** Whether a diff opens side by side, and with its unchanged regions collapsed: as the Markdown preview's,
  *  the last answer, for every tab and the next start. */
 const diffDefaults = {
@@ -68,9 +72,9 @@ export interface EditorSnapshot {
   /** The file against HEAD in the diff editor; off shows it in the plain one (`showDiff`). What
    *  is on screen is `diffShown`. */
   diff: boolean;
-  /** The rendered file beside the editor, for a Markdown file (VS Code's "Open Preview to the
-   *  Side"). As the user last left it, the next Markdown file included (`markdownPreviewByDefault`). */
-  markdownPreview: boolean;
+  /** The rendered file beside the editor (VS Code's "Open Preview to the Side") or alone, for a
+   *  Markdown file. As the user last left it, the next Markdown file included (`markdownPreviewByDefault`). */
+  markdownPreview: MarkdownPreviewMode;
   /** The diff in two columns instead of one (`setDiffOption`), as the user last left it. */
   sideBySide: boolean;
   /** The diff's unchanged regions collapsed (`setDiffOption`), as the user last left it. */
@@ -171,7 +175,7 @@ const CLOSED: EditorSnapshot = {
   dirty: false,
   preview: false,
   diff: true,
-  markdownPreview: false,
+  markdownPreview: "off",
   sideBySide: false,
   unchangedCollapsed: false,
 };
@@ -305,18 +309,26 @@ function switchEditor(view: EditorView, leaving: MonacoEditor.IStandaloneCodeEdi
 }
 
 /**
- * Shows or hides the Markdown preview beside the tab's editor; a file of another kind has none.
- * The answer is the default every Markdown file opened afterwards takes. A tab withholding its
- * preview (`previewWithheld`) takes no answer.
+ * Shows the tab's Markdown file as `mode` says; a file of another kind has no preview. The answer
+ * is the default every Markdown file opened afterwards takes. A tab withholding its preview
+ * (`previewWithheld`) takes no answer.
  */
-export function showMarkdownPreview(tabId: string, shown: boolean): void {
+export function showMarkdownPreview(tabId: string, mode: MarkdownPreviewMode): void {
   const view = views.get(tabId);
   if (!view || !isMarkdown(view.snapshot.path) || previewWithheld(view.snapshot)) {
     return;
   }
-  markdownPreviewByDefault.set(shown);
-  if (view.snapshot.markdownPreview !== shown) {
-    publish(view, { markdownPreview: shown });
+  markdownPreviewByDefault.set(mode);
+  if (view.snapshot.markdownPreview !== mode) {
+    publish(view, { markdownPreview: mode });
+  }
+}
+
+/** "Open Markdown Preview": a tab showing the preview already keeps its mode, else it opens beside the editor. */
+export function openMarkdownPreview(tabId: string): void {
+  const view = views.get(tabId);
+  if (view) {
+    showMarkdownPreview(tabId, view.snapshot.markdownPreview === "off" ? "side" : view.snapshot.markdownPreview);
   }
 }
 
@@ -459,7 +471,9 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   }
   // "Open Markdown Preview" is the same answer as the toggle, whether or not the file was already open.
   if (how.markdownPreview === true && isMarkdown(path)) {
-    markdownPreviewByDefault.set(true);
+    if (markdownPreviewByDefault.get() === "off") {
+      markdownPreviewByDefault.set("side");
+    }
   }
   const seq = ++view.readSeq;
   // Now, or the editor shows the previous file under the new path until the read lands.
@@ -479,7 +493,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     preview,
     diff: how.diff === true || how.commit !== undefined,
     commit: how.commit,
-    markdownPreview: markdownPreviewByDefault.get() && isMarkdown(path),
+    markdownPreview: isMarkdown(path) ? markdownPreviewByDefault.get() : "off",
     sideBySide: diffDefaults.sideBySide.get(),
     unchangedCollapsed: diffDefaults.unchangedCollapsed.get(),
   });
@@ -874,7 +888,7 @@ function makeMarkdownPreview(view: EditorView): MarkdownPreviewView {
  */
 function renderMarkdownPreview(view: EditorView, delay: number): void {
   const preview = view.markdownView;
-  if (!preview || !view.snapshot.markdownPreview || previewWithheld(view.snapshot)) {
+  if (!preview || view.snapshot.markdownPreview === "off" || previewWithheld(view.snapshot)) {
     return;
   }
   const typing = delay > 0;
@@ -942,7 +956,13 @@ function echoing(preview: MarkdownPreviewView, side: "editor" | "preview"): bool
 function followEditor(view: EditorView): void {
   const editor = activeEditor(view);
   const line = editor?.getVisibleRanges()[0]?.startLineNumber;
-  if (!view.markdownView || !view.snapshot.markdownPreview || !editor || line === undefined || echoing(view.markdownView, "editor")) {
+  if (
+    !view.markdownView ||
+    view.snapshot.markdownPreview === "off" ||
+    !editor ||
+    line === undefined ||
+    echoing(view.markdownView, "editor")
+  ) {
     return;
   }
   const top = editor.getTopForLineNumber(line);
@@ -1002,7 +1022,7 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
   editor.addAction({
     id: "tet.markdownPreview",
     label: "Show/Hide Markdown Preview",
-    run: () => showMarkdownPreview(view.tabId, !view.snapshot.markdownPreview),
+    run: () => showMarkdownPreview(view.tabId, view.snapshot.markdownPreview === "side" ? "off" : "side"),
   });
   editor.onDidScrollChange((event) => {
     if (event.scrollTopChanged) {
