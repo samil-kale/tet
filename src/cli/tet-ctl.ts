@@ -63,8 +63,7 @@ function ownSide(): ControlSide {
   return process.env[CONTROL_ENV.host] ? SANDBOX_SIDE : HOST_SIDE;
 }
 
-/** Each verb's summary on its own indented line: padding every usage to the longest (tabs-wait)
- *  would cost an agent some 140 spaces a line. */
+/** Each verb's summary on its own indented line, not padded to the longest usage. */
 function usage(): string {
   const side = ownSide();
   // A verb the side refuses is left out (ControlSide.admits).

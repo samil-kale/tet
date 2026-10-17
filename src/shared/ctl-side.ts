@@ -39,8 +39,7 @@ const OWN_LIMITS = [
   `Exit codes: ${EXIT_CODES.ok} ok, ${EXIT_CODES.internal} TET failed, ${EXIT_CODES.unauthorized} refused, ${EXIT_CODES.usage} wrong call (the reason on stderr), ${EXIT_CODES.timeout} tabs-wait gave up.`,
 ];
 
-/** A tab on this machine: every verb, across every project. A sandbox is no concern of it, which
- *  cannot end up in one. */
+/** A tab on this machine: every verb, across every project. */
 export const HOST_SIDE: ControlSide = {
   key: "host",
   admits: () => true,

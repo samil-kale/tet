@@ -121,7 +121,7 @@ export function notificationFor(
     return undefined;
   }
   const name = getAgent(tab.agentId).displayName;
-  // The tab's title too, or two tabs of one agent would notification identically.
+  // The tab's title too, or two tabs of one agent would read alike.
   const where = tab.title ? `${placeName} - ${tab.title}` : placeName;
   switch (kind) {
     case "finished":

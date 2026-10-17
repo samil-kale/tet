@@ -11,8 +11,8 @@ export type PaneTabKind = "terminal" | "editor";
 /** A tab with its kind, which a `switch` on `kind` narrows. */
 export type KindedTab = { kind: "terminal"; tab: TabDescriptor } | { kind: "editor"; tab: EditorTab };
 
-/** By the editor's id prefix; a terminal's id is
- *  its session's, or main's own before it has one, and has none. */
+/** By the editor's id prefix, which a terminal's id never has: it is its session's, or main's own
+ *  before it has one. */
 export function paneTabKind(tabId: string): PaneTabKind {
   return isEditorTabId(tabId) ? "editor" : "terminal";
 }

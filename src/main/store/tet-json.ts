@@ -35,7 +35,7 @@ import { PLATFORM } from "../util/host-platform";
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
- *  os. The line runs in the platform's shell (`AgentDefinition.run`), so one written for a single
+ *  os. The line runs in the platform's shell (`Platform.shellCommandArgs`), so one written for a single
  *  platform names it in `os`: readCommands reads and writeCommands replaces only this platform's,
  *  as the SBX settings' paths (StoredSbxPath). */
 type StoredCommand = string | { command?: unknown; name?: unknown; color?: unknown; cwd?: unknown; env?: unknown; os?: unknown };
@@ -164,8 +164,8 @@ function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<
  * comma before it goes, and the element with the blank start of its line. Undefined for any other
  * path, which `modify` removes.
  *
- * A workaround for jsonc-parser 3: its 4.0 removes the element right, so once that is the version
- * in package.json this function and its call in `patchNow` go.
+ * A workaround for a jsonc-parser bug fixed in its next major version; once package.json has that,
+ * this function and its call in `patchNow` go.
  */
 function lastElementRemoval(text: string, jsonPath: JSONPath): Edit[] | undefined {
   const tree = parseTree(text, [], { allowTrailingComma: true });
@@ -490,9 +490,8 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
 
 /** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the environment's names,
  *  the MCP servers and the setup script. Never holds a token: each sandboxed agent signs in with
- *  its own `/login` inside the sandbox, and a variable's value stays on this machine, as does the
- *  skills (sbx-local.ts). A worktree forwards no ports: a port of this
- *  machine reaches one sandbox, and its repository's has it. */
+ *  its own `/login` inside the sandbox, and an environment value stays on this machine, as do the
+ *  skills (sbx-local.ts). A worktree forwards no ports: its repository's sandboxes do. */
 export async function readSbxSettings(root: string): Promise<SbxProjectSettings> {
   const own = configRoot(root);
   return toSbxSettings(await read(path.join(own, PROJECT_FILE)), own !== root);

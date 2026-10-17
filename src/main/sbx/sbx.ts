@@ -572,7 +572,7 @@ export function sandboxEnv({
  * MCP servers (alignAtStart), against what sbx lists (readSandboxReads).
  * Applies tet.json as it stands and never writes it: what cannot be applied here
  * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
- * tell (sbxProblemNotices) — how a user learns that governance took over. `savedOver` says a Save
+ * tell (sbxProblemNotices). `savedOver` says a Save
  * replaced tet.json's rows while this start ran, which then applied none of its own. Rejects when
  * creating fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's own cannot be
  * mounted.

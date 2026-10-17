@@ -60,8 +60,7 @@ interface GitBufferOptions extends GitOptions {
 
 /**
  * Git runs at once, beyond which one more waits for a free slot (`unqueued` excepted): dozens
- * started together — every project's first read at startup — slow each other down until all of
- * them end later than they would in turns.
+ * started together slow each other down.
  */
 const MAX_QUEUED = 6;
 let queuedRunning = 0;
@@ -144,9 +143,8 @@ function spawnGit(
   });
 }
 
-/** git's version as it prints it; undefined when the CLI cannot be started.
- *  Runs in the temp directory, which exists everywhere. Asked once: git does not change under a
- *  running app, and the worktree actions would otherwise spawn a process each to ask again. */
+/** git's version as it prints it; undefined when the CLI cannot be started. Asked once, in the
+ *  temp directory. */
 let gitVersion: Promise<string | undefined> | undefined;
 export function version(): Promise<string | undefined> {
   gitVersion ??= (async () => {
@@ -247,9 +245,8 @@ function readHead(headers: Map<string, string>): HeadState {
 type TrackCounts = Map<string, { ahead: number; behind: number }>;
 
 /**
- * Ahead/behind per working directory and commit pair, cached: two hashes fix the count, and
- * readRefs would otherwise spend a process per diverged branch every refresh. Each refresh keeps
- * only the pairs it asked for, so a branch moving on does not grow the cache.
+ * Ahead/behind per working directory and commit pair, cached: two hashes fix the count. Each
+ * refresh keeps only the pairs it asked for.
  */
 const trackCounts = new Map<string, TrackCounts>();
 
@@ -278,7 +275,7 @@ async function readTrackCount(
 
 /**
  * The branches merged into the default branch, per working directory, with the refs they were read
- * off: they change only when a ref moves, and readRefs would otherwise spend a process every refresh.
+ * off: they change only when a ref moves.
  */
 const mergedBranches = new Map<string, { refs: string; merged: Set<string> }>();
 
@@ -729,10 +726,9 @@ export async function hasChanges(cwd: string): Promise<boolean> {
  *  part of a remote-tracking ref (`readRefs`). */
 export async function readState(cwd: string, remoteNames: string[] = [], fallbackDefault?: string): Promise<RepositoryState> {
   try {
-    // No `isRepository` check: Repository asks once on open, and the check costs a quarter of every
-    // refresh where starting git is slow. The stash list is the third process, earned by being a
-    // list the user acts on; anything added here has to earn its process too. All three run at
-    // once, so no extra wall time. Operation and worktrees are file reads.
+    // No `isRepository` check: Repository asks once on open. Status, refs and the stash list are
+    // the three git processes, run at once; anything added here has to earn its process too.
+    // Operation and worktrees are file reads.
     const statusOf = readStatus(cwd);
     const refsOf = readRefs(cwd, remoteNames, fallbackDefault);
     const stashesOf = readStashes(cwd);

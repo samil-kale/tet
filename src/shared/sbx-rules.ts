@@ -33,10 +33,9 @@ export function sbxPortRefusal({ host, container }: SbxPort): string | undefined
 }
 
 /**
- * Why a variable row cannot be saved beside the `others`, or undefined: it needs a name no other
- * variable holds — the sandbox sees one value per name, and `sbx run -e NAME` reads a variable's
- * from this machine's environment, which on win32 ignores case (`ignoreCase`, the machine's) — and
- * not one of TET's own (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv).
+ * Why an environment row cannot be saved beside the `others`, or undefined: it needs a name no
+ * other row holds (compared ignoring case where `ignoreCase`, the machine's) and not one of TET's
+ * own (isReservedName), whose value is set on `sbx run` itself (sbx.ts's sandboxEnv).
  */
 export function sbxVariableRefusal(env: string, others: string[], ignoreCase: boolean): string | undefined {
   const same = (name: string): string => envNameKey(name, ignoreCase);
@@ -49,7 +48,7 @@ export function sbxVariableRefusal(env: string, others: string[], ignoreCase: bo
 const MCP_IMAGE_PREFIX = "dhi.io/";
 
 /**
- * A server's row: one per name, as sbx has one server per name, and a URL sbx can register it from
+ * A server's row: one per name, and a URL sbx can register it from
  * — an http(s) one or an image of sbx's own registry; none for a server it has registered already.
  * What sbx then makes of the URL is its own answer at Save.
  */

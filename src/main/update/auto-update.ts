@@ -222,9 +222,8 @@ async function stage(
  * Installs only (`app.isPackaged`). Checks at startup and every four hours; a newer version is
  * fetched, unpacked and copied beside the install at once — one notice from the download's share
  * to the announcement it ends on, which goes silently if any step fails — announced once, and
- * installed on quit (`installPendingUpdate`) —
- * never mid-session, a tab being a live agent session. If TET cannot replace its own folder, the
- * notice carries the install command instead.
+ * installed on quit (`installPendingUpdate`), never mid-session. If TET cannot replace its own
+ * folder, the notice carries the install command instead.
  *
  * `releasesUrl` is `RELEASES_URL` except for test/e2e/install.test.ts.
  */

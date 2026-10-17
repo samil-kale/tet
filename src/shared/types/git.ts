@@ -21,7 +21,7 @@ export type StashCommand = "apply" | "pop" | "drop";
 export interface StashEntry {
   /** e.g. "stash@{0}". Not stable: dropping one renumbers the rest. */
   ref: string;
-  /** The stash's commit, which the commands take: it stays put while the refs renumber. */
+  /** The stash's commit, which the commands take. */
   sha: string;
   /** git's line, e.g. "WIP on main: 1a2b3c the last commit's subject". */
   message: string;
@@ -80,8 +80,8 @@ export interface RepositoryState {
   ahead: number;
   behind: number;
   localBranches: string[];
-  /** Ahead/behind of non-current branches, only where `%(upstream:trackshort)` says they differ —
-   *  each count costs a `rev-list`. The current branch's are `ahead`/`behind`. */
+  /** Ahead/behind of non-current branches, only where `%(upstream:trackshort)` says they differ.
+   *  The current branch's are `ahead`/`behind`. */
   branchTrack: Record<string, { ahead: number; behind: number }>;
   /** Each local branch's upstream on a remote — what a push goes to and "Also delete on the
    *  remote" deletes. Absent without one. */
@@ -154,8 +154,7 @@ export interface GitActionResult {
   /**
    * Nothing was done: the command waits on a question. Which one is the reason named here, and
    * the view that offered the action puts it in its own words and runs the action again
-   * confirmed (AGENTS.md: main asks nothing). One field, so a new question is a new reason and
-   * not another flag every other caller has to ignore.
+   * confirmed (AGENTS.md: main asks nothing).
    *
    * - `trash-failed`: a discard could not move a file to the trash; nothing was reset. Confirmed,
    *   it deletes.

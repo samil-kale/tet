@@ -24,7 +24,7 @@ export function isImage(filePath: string): boolean {
 }
 
 /** One version of an image, or undefined for an empty file. No size cap of its own: both callers
- *  already apply the editor's, and a second number would go stale. */
+ *  apply the editor's. */
 export function toDataUrl(filePath: string, content: Buffer): string | undefined {
   return content.length > 0 ? `data:${imageType(filePath)};base64,${content.toString("base64")}` : undefined;
 }

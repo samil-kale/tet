@@ -108,8 +108,8 @@ async function askCommand(
 }
 
 /** The dialog's answer as an entry with only what was filled in, so a bare command stays a plain
- *  string in tet.json. `shell` carries over from the edited command: editing must not change how
- *  it starts. */
+ *  string in tet.json. `os` carries over from the edited command: editing must not change the
+ *  platform it applies to. */
 function toCommand(answer: CommandAnswer, edited?: ProjectCommand): ProjectCommand {
   const name = answer.name.trim();
   const cwd = answer.cwd.trim();

@@ -186,9 +186,7 @@ interface ResolvedTitle {
 /** Resolves the display name as Claude Code's `/resume` list does: `custom-title` (anywhere in
  *  the file, so from the backwards scan); else "agent-name",
  *  else "ai-title" — the last occurrence wins, the head window's copy is the fallback; else
- *  "summary" (only after `/compact`); else the first typed prompt; else "".
- *
- *  Change with care: a regression silently shows the wrong tab title. */
+ *  "summary" (only after `/compact`); else the first typed prompt; else "". */
 function resolveTitle(head: TranscriptHead, tail: TranscriptTail): ResolvedTitle {
   if (tail.customTitle) {
     return { title: truncateTitle(tail.customTitle), provisional: false };

@@ -116,7 +116,7 @@ for (const name of allNames) {
   }
 }
 
-// The lookup Explorer.tsx does, checked against the full resolution on every key read.
+// The lookup file-icon.tsx does, checked against the full resolution on every key read.
 const lookup = (name) => (fileNames.has(name) ? fileNames.get(name) : byExtensions(name));
 for (const name of [...allNames, ...[...allExtensions].flatMap((extension) => [`x.${extension}`, `.${extension}`, `a.b.${extension}`])]) {
   if (!same(lookup(name), fileIconOf(name))) {

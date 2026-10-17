@@ -54,8 +54,8 @@ export interface TETApi {
   };
   /** Docker Sandboxes, opt-in per project through the project row's "SBX Settings". */
   sbx: {
-    /** All the dialog checks before showing its fields. Never cached, PATH re-read first — "Check
-     *  again" follows an install. Per project: the policy must allow the project's folder. */
+    /** All the dialog checks before showing its fields. Never cached, PATH re-read first. Per
+     *  project: the policy must allow the project's folder. */
     status: (projectId: string) => Promise<SbxStatus>;
     /** Opens the OAuth page in the browser and waits; no terminal. */
     signInInBrowser: () => Promise<boolean>;
@@ -112,7 +112,6 @@ export interface TETApi {
     /** Native folder picker opening at the first of `startPaths` on disk, or its nearest folder
      *  there; null when cancelled. */
     pickDirectory: (title: string, startPaths?: string[]) => Promise<string | null>;
-    /** Separate because only macOS honours both modes in one dialog. */
     pickFile: (title: string) => Promise<string | null>;
     /** Where the folder picker opens next: `directory`, or its parent when it is a repository root. */
     directoryToRemember: (directory: string) => Promise<string>;
@@ -209,7 +208,7 @@ export interface TETApi {
     commitAll: (ref: ProjectRef, message: string) => Promise<GitActionResult>;
     /** These files alone, untracked included; nothing else staged goes with them. */
     commitPaths: (ref: ProjectRef, message: string, paths: string[]) => Promise<GitActionResult>;
-    /** The settings' `prompts.commitSuggester` suggests one subject for all changes, or only `paths`. */
+    /** The settings' `prompts.commitSuggesters` suggest one subject for all changes, or only `paths`. */
     suggestCommitMessage: (ref: ProjectRef, paths?: string[]) => Promise<SuggestionResult>;
     /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
     cancelCommitSuggestion: () => void;
@@ -265,7 +264,7 @@ export interface TETApi {
     onFileChanged: (listener: (payload: { ref: ProjectRef; path: string }) => void) => Unsubscribe;
     /** For `tet-ctl editor-get` and `editor-list`; null once the tab is closed. */
     reportEditor: (ref: ProjectRef, tabId: string, report: EditorReport | null) => void;
-    /** The project's active editor tab, which `editor-get` answers for — the window's layout knows. */
+    /** The project's active editor tab, which `editor-get` answers for. */
     reportActiveEditor: (ref: ProjectRef, tabId: string) => void;
     /** `tet-ctl editor-get` asks for the active editor tab's text; the listener answers. */
     onEditorContentRequest: (listener: (ref: ProjectRef) => string | undefined) => Unsubscribe;
@@ -296,7 +295,7 @@ export interface TETApi {
     handOver: (ref: ProjectRef, tabId: string, agentId: AgentId) => Promise<HandoverResult>;
     /** Respawns a saved command in the same tab. */
     restart: (ref: ProjectRef, tabId: string) => Promise<void>;
-    /** Clears `finishedAt` — only the renderer knows which tab is on screen. */
+    /** Clears `finishedAt`. */
     seen: (ref: ProjectRef, tabId: string) => void;
     /** The active repository's or worktree's tabs on screen (focused window, no dialog); a turn
      *  there raises no notification. Sent whenever the set changes. */
@@ -315,7 +314,7 @@ export interface TETApi {
     onShow: (listener: (payload: { ref: ProjectRef; tabId: string }) => void) => Unsubscribe;
     /** `tet-ctl tabs-output` asks for what a tab's terminal shows; the listener answers. */
     onTextRequest: (listener: (ref: ProjectRef, tabId: string) => Promise<string>) => Unsubscribe;
-    /** onStartupProgress's current value: a project restored at start bootstraps before the window. */
+    /** onStartupProgress's current value. */
     starting: (ref: ProjectRef) => Promise<boolean>;
   };
   agents: {
@@ -355,8 +354,7 @@ export interface TETApi {
   onNotice: (listener: (payload: Notice) => void) => Unsubscribe;
   /** A download the main process runs — see NoticeProgress. */
   onNoticeProgress: (listener: (payload: NoticeProgress) => void) => Unsubscribe;
-  /** Read synchronously off `webPreferences.additionalArguments` before main.tsx runs: an async read
-   *  would draw the first frame in the wrong colors. */
+  /** Read synchronously off `webPreferences.additionalArguments` before main.tsx runs. */
   initialTheme: string;
   /** From main.ts's `applyTheme`, and after every page load. */
   onTheme: (listener: (themeId: string) => void) => Unsubscribe;

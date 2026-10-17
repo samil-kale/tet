@@ -223,8 +223,8 @@ export class AppWindow {
       // shows at once. Equals --tet-titleBar-activeBackground and --tet-sideBar-background.
       backgroundColor: theme.windowBackground,
       show: false,
-      // Windows takes the .ico (generated from icon.png): per-size frames stay sharp in the taskbar,
-      // where a resampled image looks soft. Linux wants a plain image; macOS reads the app bundle.
+      // Windows takes the .ico (generated from icon.png), Linux a plain image; macOS reads the app
+      // bundle.
       icon: path.join(__dirname, PLATFORM.windowIcon),
       // Our own title bar; the platform's window controls stay via the overlay.
       titleBarStyle: PLATFORM.titleBarOverlay ? "hidden" : "hiddenInset",

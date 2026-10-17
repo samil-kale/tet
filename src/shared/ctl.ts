@@ -39,7 +39,7 @@ export interface ControlRequest {
   caller: { projectId?: string; worktree?: string; tabId?: string };
   /**
    * When the caller spoke, by its own clock. Turn reports are ordered by this, not by arrival: two
-   * hooks of one turn race each other. A tab's reports all come from its own agent, so one clock.
+   * hooks of one turn race each other.
    */
   at?: number;
 }

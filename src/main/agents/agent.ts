@@ -104,7 +104,7 @@ export interface AgentPaths {
   /**
    * The one notification setting handed to an agent: every other one is read when a report
    * arrives (session-manager's `notification`), but the idle reminder has no mark, so its hook is only
-   * registered when wanted — which is why this switch applies only to tabs started after it.
+   * registered when wanted, so a change applies only to tabs started after it.
    */
   idleReminder: boolean;
   /** The window's theme, for agents that are told it rather than reading the terminal's colors. */
@@ -259,8 +259,8 @@ export interface AgentSandbox {
 /**
  * Everything the shared terminal layer needs to run one agent, so it never imports an agent's
  * own code. Each group is present whole or not at all: what an agent can do is which groups it
- * has, and the shell has none but `run`. `turns` only with `sessions`: a hook report binds a tab to
- * a session.
+ * has, and the shell has none. `turns` only with `sessions`: a hook report binds a tab to a
+ * session.
  */
 export type AgentDefinition = AgentBase &
   (

@@ -13,7 +13,7 @@ import { askLogin } from "./GitLogin";
  *
  * A question carries its progress the same way — the dialog header's bar (`DialogFrame`'s `busy`)
  * is the one indicator while it is up. So `ask` leaves the view's bar alone and only `run`/`act`,
- * which have no dialog to show them, raise it; two bars for one command is the bug this avoids.
+ * which have no dialog to show them, raise it.
  *
  * A file action needs no label — the section's own bar covers the whole section — while a git command
  * says what it is doing.

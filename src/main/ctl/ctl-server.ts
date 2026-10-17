@@ -22,8 +22,8 @@ const MAX_REQUEST_CHARS = 1024 * 1024;
 /**
  * The server `tet-ctl` talks to: one POST per connection on 127.0.0.1. HTTP, not raw TCP, because
  * a sandbox reaches `host.docker.internal` through sbx's HTTP-only proxy. Every request must
- * carry this run's token from
- * main.ts, or its tab's token for the caller ids it names (ctl-token.ts), else `unauthorized`.
+ * carry this run's token from main.ts, or its tab's token for the caller ids it names
+ * (ctl-token.ts), else `unauthorized`.
  */
 export async function startControlServer(deps: ControlDeps, token: string, port: number): Promise<{ close: () => Promise<void> }> {
   const handlers = verbs(deps);

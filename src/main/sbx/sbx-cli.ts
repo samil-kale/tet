@@ -132,7 +132,7 @@ export function cancelSbxSetup(): void {
   setup.stop();
 }
 
-/** The sbx version test/e2e/agents.test.ts last passed against (TET_SBX_TEST=1); read by nothing in
+/** The sbx version test/e2e/agents.test.ts is verified against (TET_SBX_TEST=1); read by nothing in
  *  the app. */
 export const SBX_VERIFIED_VERSION = "0.48.0";
 
@@ -195,8 +195,7 @@ export async function runSbxSignIn(): Promise<boolean> {
 }
 
 /** The user `sbx login` names while signed in ("You are signed in [username: <name>]" on stdout,
- *  exit 0, no browser). Text, since no sbx command names the user otherwise. Worth checking on a
- *  newer sbx for a structured answer. */
+ *  exit 0, no browser). Text, since no sbx command names the user otherwise. */
 export function parseSignedInUser(stdout: string): string | undefined {
   return /\[username: ([^\]]+)\]/.exec(stdout)?.[1].trim() || undefined;
 }

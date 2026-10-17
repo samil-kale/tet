@@ -1,7 +1,6 @@
 /**
  * What differs between the operating systems TET runs on, each as what it means rather than which
- * one it is — so a place that needs a difference names it, and a platform is these values and
- * nothing else. Main (`process.platform`) and the window (`navigator`) each take theirs through
+ * one it is. Main (`process.platform`) and the window (`navigator`) each take theirs through
  * `platformOf`. The id is data alone: stored (tet.json's `os`), shown, or a file name.
  */
 export interface Platform {
@@ -53,12 +52,11 @@ export interface Platform {
   readonly assetExtension: string;
   /** The README's manual install line. */
   readonly installCommand: string;
-  /** The window icon: an .ico keeps per-size frames sharp in the taskbar; macOS reads the bundle. */
+  /** The window icon; macOS reads the bundle's. */
   readonly windowIcon: "icon.ico" | "icon.png";
   /** Window controls drawn over TET's own title bar (titleBarOverlay); macOS keeps its inset lights. */
   readonly titleBarOverlay: boolean;
-  /** The app name stands in the middle of the title bar, as a native macOS window's title does:
-   *  the inset lights take its left edge. */
+  /** The app name stands in the middle of the title bar. */
   readonly centersTitle: boolean;
   /** The app quits with its last window; macOS keeps it running. */
   readonly quitsWithLastWindow: boolean;

@@ -34,8 +34,9 @@ let deps: NotificationDeps;
  */
 let notificationTargetAwaited: (NotificationTarget & { sessionId?: string }) | undefined;
 
-/** An identical notification within this span is dropped, without extending it. The target tab is part of the identity: two untitled tabs of one agent read the same, and
- *  dropping the second would point its click at the first's tab. */
+/** An identical notification within this span is dropped, without extending it. The target tab is
+ *  part of the identity: two untitled tabs of one agent read the same, and dropping the second
+ *  would point its click at the first's tab. */
 const NOTIFICATION_REPEAT_MS = 8000;
 const recentNotifications = new Map<string, number>();
 

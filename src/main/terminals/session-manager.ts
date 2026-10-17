@@ -1120,8 +1120,7 @@ export class TabSessionManager {
     this.onScreen = new Set(tabIds);
   }
 
-  /** Whether a tab of the agent still waits for its session or title. `some`, not a filter, which
-   *  would allocate per output chunk. */
+  /** Whether a tab of the agent still waits for its session or title. */
   private titlesUnsettled(runtime: AgentRuntime): boolean {
     return this.tabs.some((tab) => tab.agentId === runtime.agent.id && titleUnsettled(tab));
   }

@@ -103,8 +103,7 @@ const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
  *  waiting on its own. */
 const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
 
-/** Delay before a failed watcher is put back, doubling up to the max: a filesystem that can't watch
- *  recursively (a network share) fails every time, and a fixed one-second retry is a busy loop. */
+/** Delay before a failed watcher is put back, doubling up to the max. */
 const WATCH_RETRY_MS = 1000;
 const WATCH_RETRY_MAX_MS = 60_000;
 /** Paths that change constantly without affecting the UI; otherwise every object git writes costs a
@@ -173,14 +172,12 @@ export class Repository {
   private autoFetchTimer: ReturnType<typeof setInterval> | undefined;
   /** The periodic fetch underway; an action waits for it rather than being refused. */
   private autoFetching: Promise<void> | undefined;
-  /** Each remote's url, read on open and after `.git/config` changes — not on every refresh, which
-   *  pays per git process for a url that almost never changes. */
+  /** Each remote's url, read on open and after `.git/config` changes — not on every refresh. */
   private remoteUrls: Record<string, string> = {};
   /** `init.defaultBranch`, or "main": the default branch where no remote names one (GitHub Desktop's
    *  fallback), handed to each read. Read with the urls, on open and after `.git/config` changes. */
   private defaultBranchName = "main";
-  /** Each worktree branch's `branch.<name>.base`, read with the urls and for the same reason: it is
-   *  written once, when the worktree is made, and read on every refresh. */
+  /** Each worktree branch's `branch.<name>.base`, read with the urls. */
   private worktreeBases: Record<string, string> = {};
   private configStale = false;
   /** The running `searchFiles`, aborted by the next one: the readers of one overtaken stop where they are. */

@@ -12,7 +12,8 @@ one file is a comment at that site, not an entry here. Adding here means cutting
 
 Comments, here and in code, say what holds and why, in a sentence: never how it was found, what
 was measured, history, dates, version numbers or links. An agent's tested version is its
-`install.verifiedVersion` alone.
+`install.verifiedVersion` alone. The one exception: code carrying an older version for a while
+(a migration, a legacy fallback) says so with the date it goes, and that comment is expected.
 
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI —
 classic layout, Dark Modern's palette, tab semantics, theme names; **IntelliJ** where VS Code has

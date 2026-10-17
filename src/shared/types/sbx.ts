@@ -20,7 +20,7 @@ export interface SbxPath {
 
 /** Which non-identity host skills to mount into the sandbox, with which access; `false` is off.
  *  Agent-agnostic — the paths per agent are `AgentSandbox.skills`. Kept on this
- *  machine per project, never in tet.json (sbx-local.ts): it names this machine's folders. */
+ *  machine per project, never in tet.json (sbx-local.ts). */
 export interface SbxSkillsSettings {
   skills: SbxAccess | false;
   /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */

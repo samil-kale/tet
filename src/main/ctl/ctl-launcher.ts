@@ -21,10 +21,10 @@ export function writeLaunchers(dataRoot: string, cliPath: string): string {
       path.join(binDir, "tet-ctl.cmd"),
       `@echo off\r\nsetlocal\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${process.execPath}" "${cliPath}" %*\r\n`,
     );
-    // The POSIX one too: hooks run in the agent's shell, on win32 an MSYS bash, which never
-    // resolves .cmd and rewrites `cmd.exe /c` to `C:\`. bash runs the extensionless shebang file;
-    // PowerShell and cmd.exe resolve the .cmd via PATHEXT.
   }
+  // On win32 too: hooks run in the agent's shell, an MSYS bash, which never resolves .cmd and
+  // rewrites `cmd.exe /c` to `C:\`. bash runs the extensionless shebang file; PowerShell and
+  // cmd.exe resolve the .cmd via PATHEXT.
   writePosixScript(
     posix,
     `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shellSingleQuote(process.execPath)} ${shellSingleQuote(cliPath)} "$@"\n`,

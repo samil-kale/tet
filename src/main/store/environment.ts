@@ -8,7 +8,7 @@ import { hasStrings, writeJson } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 import { logError } from "../util/error-log";
 
-/** What the file holds: the variable plus its value in the clear, as every tab gets it anyway. */
+/** What the file holds: the variable plus its value in the clear. */
 interface StoredVar {
   name: string;
   text: string;

@@ -67,8 +67,7 @@ export function titleUnsettled(tab: TabState): boolean {
  * A turn started or ended. Either end clears `waitingAt` — a question stands within its turn.
  *
  * `keepQuestion`, for AgentTurns.questionOutlivesTurn: the question stays **and the end
- * leaves no bubble beside it** — one moment, and the project row, with a button per condition,
- * would step through that tab twice. The question is the more urgent and actionable of the two.
+ * leaves no bubble beside it**, the question being the more urgent and actionable of the two.
  *
  * Only pi reports an answered question (`answered`), so another agent's permission granted
  * mid-turn keeps the mark until the tab is typed into.
