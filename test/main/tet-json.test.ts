@@ -315,7 +315,7 @@ describe("readSbxSettings", () => {
         { path: "~/.npmrc", access: "ro" as const },
       ],
       hosts: ["gitlab.example.com", "*.s3.example.net:443"],
-      variables: [{ env: "NPM_TOKEN" }],
+      variables: ["NPM_TOKEN"],
       mcp: [
         { name: "notion", url: "https://mcp.notion.com/mcp" },
         { name: "local", url: "" },
@@ -376,7 +376,7 @@ describe("readSbxSettings", () => {
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],
       hosts: ["ok.example.com", "spaced.example.com"],
-      variables: [{ env: "NPM_TOKEN" }],
+      variables: ["NPM_TOKEN", "BARE_STRING"],
       mcp: [
         { name: "notion", url: "https://mcp.notion.com/mcp" },
         { name: "local", url: "" },

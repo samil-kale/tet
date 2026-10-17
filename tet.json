@@ -23,10 +23,9 @@
     "paths": [],
     "hosts": [],
     "variables": [
-      {
-        "env": "CLAUDE_CODE_SCROLL_SPEED"
-      }
+      "CLAUDE_CODE_SCROLL_SPEED"
     ],
+    "mcp": [],
     "setup": []
   }
 }

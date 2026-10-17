@@ -1,7 +1,7 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
-import { SBX_ACCESS, SBX_MCP_NEEDS_AUTH, type SbxSkillsSettings, type SbxProjectSettings, type SbxVariable } from "../../shared/types/sbx";
+import { SBX_ACCESS, SBX_MCP_NEEDS_AUTH, type SbxSkillsSettings, type SbxProjectSettings } from "../../shared/types/sbx";
 import {
   SBX_SKILLS_KINDS,
   keptValues,
@@ -103,11 +103,11 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
 
   /** Refuses the first variable that cannot be saved beside those before it (sbxVariableRefusal),
    *  names compared as this machine does. */
-  const refuseVariables = (variables: SbxVariable[]): void => {
+  const refuseVariables = (variables: string[]): void => {
     variables.forEach((variable, index) => {
       const refusal = sbxVariableRefusal(variable, variables.slice(0, index), PLATFORM.envNamesIgnoreCase);
       if (refusal) {
-        throw new ControlError("bad_args", `${refusal}: ${variable.env}`);
+        throw new ControlError("bad_args", `${refusal}: ${variable}`);
       }
     });
   };
@@ -214,7 +214,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
         const at = entry.indexOf("=");
         return at < 0 ? { env: entry.trim(), value: "" } : { env: entry.slice(0, at).trim(), value: entry.slice(at + 1) };
       });
-      const variables = entries.map(({ env }) => ({ env }));
+      const variables = entries.map(({ env }) => env);
       const variableValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
       return editSbx(args, caller, ({ settings }) => {
         refuseVariables(variables);

@@ -564,7 +564,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             { path: missing, access: "ro" },
             { path: repoFolder, access: "rw" },
           ],
-          variables: [{ env: "SET" }, { env: "UNSET" }],
+          variables: ["SET", "UNSET"],
         },
         skills: EMPTY_SBX_SKILLS,
         values: { variables: new Set(["SET"]) },
@@ -672,7 +672,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
     it("tells a row left out at every start", async () => {
       const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
-      const rows = { variables: [{ env: "TOKEN" }] };
+      const rows = { variables: ["TOKEN"] };
       await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
       const first = await withSbx(dir, () => start(dir, repoFolder, rows));
       assert.deepEqual(first.result.problems, { variables: { TOKEN: SBX_PROBLEM.noValue } });
@@ -801,11 +801,11 @@ describe("the SBX Settings' setup script", () => {
 
 describe("an SBX Settings variable row", () => {
   it("is refused a name TET sets itself or another variable holds", () => {
-    assert.equal(sbxVariableRefusal({ env: "TOKEN" }, [], false), undefined);
+    assert.equal(sbxVariableRefusal("TOKEN", [], false), undefined);
     for (const env of ["PATH", "path", "TET_TAB_ID"]) {
-      assert.ok(sbxVariableRefusal({ env }, [], false), env);
+      assert.ok(sbxVariableRefusal(env, [], false), env);
     }
-    assert.ok(sbxVariableRefusal({ env: "TOKEN" }, [{ env: "TOKEN" }], false));
+    assert.ok(sbxVariableRefusal("TOKEN", ["TOKEN"], false));
   });
 });
 
@@ -838,7 +838,7 @@ describe("a sandboxed tab's variables", () => {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
       // A hand-edited tet.json: one the agent sets, one without a value here.
-      variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "MISSING" }],
+      variables: ["NPM_TOKEN", "AGENT_SET", "MISSING"],
     };
     const result = sandboxEnv({
       settings,

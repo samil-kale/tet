@@ -20,7 +20,7 @@ import { COMMAND_COLORS } from "../../shared/types/project";
 import { SBX_ACCESS } from "../../shared/types/sbx";
 import type { ExplorerRoot } from "../../shared/types/files";
 import type { CommandColor, ProjectCommand } from "../../shared/types/project";
-import type { SbxMcpServer, SbxPath, SbxPort, SbxProjectSettings, SbxVariable } from "../../shared/types/sbx";
+import type { SbxMcpServer, SbxPath, SbxPort, SbxProjectSettings } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
 import { readRepositoryPath } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";
@@ -438,16 +438,20 @@ function toSbxSetup(value: unknown): string[] {
   return Array.isArray(value) ? setupLines(value.filter((line): line is string => typeof line === "string").join("\n")) : [];
 }
 
-/** A row needs an env name, trimmed; a repeated one (on win32 in any case, as the environment
- *  `sbx run -e NAME` reads it from) or one of TET's own dropped — the sandbox sees one value per
- *  name (sbx.ts's sandboxEnv). */
-function toSbxVariables(value: unknown): SbxVariable[] {
-  const variables = objectRows(value, ({ env }) => {
-    const name = typeof env === "string" ? env.trim() : "";
-    return isEnvName(name) && !isReservedName(name) ? { env: name } : undefined;
-  });
+/** An entry needs an env name, trimmed (an earlier file's `{ "env": NAME }` row is read as NAME); a
+ *  repeated one (on win32 in any case, as the environment `sbx run -e NAME` reads it from) or one
+ *  of TET's own dropped — the sandbox sees one value per name (sbx.ts's sandboxEnv). */
+function toSbxVariables(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const variables = value
+    .map((entry: unknown) => (isRecord(entry) ? entry.env : entry))
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((name) => isEnvName(name) && !isReservedName(name));
   // A repeated env name keeps the first row only.
-  return variables.filter((variable, i) => variables.findIndex((other) => machineName(other.env) === machineName(variable.env)) === i);
+  return variables.filter((variable, i) => variables.findIndex((other) => machineName(other) === machineName(variable)) === i);
 }
 
 /** A row needs a name, trimmed; a repeated name keeps the first row only, as sbx has one server per

@@ -102,7 +102,7 @@ export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLoca
       BLANK_HOST,
     ),
     variables: atLeastOne(
-      settings.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
+      settings.variables.map((variable) => withId({ env: variable, value: "", from: variable })),
       BLANK_VARIABLE,
     ),
     mcp: atLeastOne(
@@ -119,8 +119,8 @@ function portRefusal(row: SbxPort): string | undefined {
 }
 
 /** A row's name, as Save keeps it, for another row's rules. */
-function named(row: { env: string }): { env: string } {
-  return { env: row.env.trim() };
+function named(row: { env: string }): string {
+  return row.env.trim();
 }
 
 /** Why Save refuses an MCP row (sbxMcpRefusal), or `undefined`: an empty one is dropped. */
@@ -193,7 +193,7 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
       .filter((port) => port.host && port.container),
     paths: state.paths.map(({ path, access }) => ({ path, access })),
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
-    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() })),
+    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map(named),
     mcp: state.mcp.filter((row) => !isEmptyMcpRow(row)).map((row) => ({ name: row.name.trim(), url: row.url.trim() })),
     setup: setupLines(state.setup),
   };

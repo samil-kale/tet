@@ -549,7 +549,7 @@ export function sandboxEnv({ settings, env: agentEnv = [], variableValues }: Pic
 } {
   const taken = new Set([...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))), ...Object.values(CONTROL_ENV)]);
   const passed: Record<string, string> = {};
-  for (const { env: name } of settings.variables.filter((variable) => !taken.has(variable.env))) {
+  for (const name of settings.variables.filter((variable) => !taken.has(variable))) {
     const value = variableValues.get(name);
     if (value !== undefined) {
       passed[name] = value;
@@ -799,8 +799,8 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   }
   settings.hosts.forEach((host, index) => hostsAllowed[index] || add("hosts", host, forbidden));
   for (const variable of settings.variables) {
-    if (!values.variables.has(variable.env)) {
-      add("variables", variable.env, SBX_PROBLEM.noValue);
+    if (!values.variables.has(variable)) {
+      add("variables", variable, SBX_PROBLEM.noValue);
     }
   }
   if (check.ports && settings.mcp.length > 0) {

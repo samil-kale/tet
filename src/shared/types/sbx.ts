@@ -52,14 +52,6 @@ export interface SbxSkillsSource {
 }
 
 /**
- * A "Variables" row: `env` set in the sandbox with its real value, which the sandbox sees
- * (sbx.ts's sandboxEnv). Never the value, which stays on this machine (sbx-local.ts).
- */
-export interface SbxVariable {
-  env: string;
-}
-
-/**
  * An "MCP" row: an MCP server by its sbx name, registered with sbx when it is not yet (sbx-mcp.ts's
  * planMcp) and loaded into every sandbox of the project. `url` is what a missing registration
  * is made from; empty for a registered server without one (a local command), which is only loaded.
@@ -89,7 +81,9 @@ export interface SbxProjectSettings {
   /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
    *  Unvalidated: sbx accepts anything, and a scheme then matches nothing. */
   hosts: string[];
-  variables: SbxVariable[];
+  /** The "Variables" rows: env names set in the sandbox with their real values, which the sandbox
+   *  sees (sbx.ts's sandboxEnv). Never a value, which stays on this machine (sbx-local.ts). */
+  variables: string[];
   /** Loaded into every running sandbox of the project at Save and into any other at its next tab's
    *  start, where a row removed is unloaded too (sbx.ts's alignSandbox). The registration stays. */
   mcp: SbxMcpServer[];

@@ -16,7 +16,6 @@ import type {
   SbxPort,
   SbxProblems,
   SbxProjectSettings,
-  SbxVariable,
 } from "./types/sbx";
 
 /** Every kind of skills, in the Skills tab's order. */
@@ -39,9 +38,9 @@ export function sbxPortRefusal({ host, container }: SbxPort): string | undefined
  * from this machine's environment, which on win32 ignores case (`ignoreCase`, the machine's) — and
  * not one of TET's own (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv).
  */
-export function sbxVariableRefusal({ env }: SbxVariable, others: SbxVariable[], ignoreCase: boolean): string | undefined {
+export function sbxVariableRefusal(env: string, others: string[], ignoreCase: boolean): string | undefined {
   const same = (name: string): string => envNameKey(name, ignoreCase);
-  return !isEnvName(env) || isReservedName(env) || others.some((other) => same(other.env) === same(env))
+  return !isEnvName(env) || isReservedName(env) || others.some((other) => same(other) === same(env))
     ? "Needs a variable name no other variable holds, not PATH or TET_*"
     : undefined;
 }
@@ -82,7 +81,7 @@ export function sbxNeedsRestart(
   settings: Omit<SbxProjectSettings, "enabled">,
   skills: SbxSkillsSettings,
 ): boolean {
-  const names = (variables: SbxProjectSettings["variables"]): string => JSON.stringify(variables.map((variable) => variable.env).sort());
+  const names = (variables: SbxProjectSettings["variables"]): string => JSON.stringify([...variables].sort());
   return (
     SBX_SKILLS_KINDS.some((kind) => skills[kind] !== false && skills[kind] !== loadedSkills[kind]) ||
     (skills.skills !== false && skills.skillsFolder !== loadedSkills.skillsFolder) ||
@@ -173,8 +172,8 @@ export function mergeProblems(problems: SbxProblems, from: SbxProblems): void {
 
 /** A list's edits that type no value and keep each row's stored one (SbxLocalEdits): a Save that
  *  changes no value, of rows under their stored names. */
-export function keptValues(rows: { env: string }[]): SbxLocalEdits {
-  return { values: {}, from: Object.fromEntries(rows.map(({ env }) => [env, env])) };
+export function keptValues(names: string[]): SbxLocalEdits {
+  return { values: {}, from: Object.fromEntries(names.map((env) => [env, env])) };
 }
 
 /** A port row's key in SbxProblems, as `sbx ports` takes it. */
@@ -200,7 +199,7 @@ export function withoutProblems(
       ports: settings.ports.filter((port) => fine("ports", sbxPortKey(port))),
       paths: settings.paths.filter((entry) => fine("paths", entry.path)),
       hosts: settings.hosts.filter((host) => fine("hosts", host)),
-      variables: settings.variables.filter((variable) => fine("variables", variable.env)),
+      variables: settings.variables.filter((variable) => fine("variables", variable)),
       mcp: settings.mcp.filter((server) => fine("mcp", server.name)),
     },
     skills: next,

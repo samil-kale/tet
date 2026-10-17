@@ -541,7 +541,7 @@ describe("tet-ctl against the control server", () => {
     envNames = ["GITLAB_TOKEN"];
     dialogAnswer = undefined;
     sbxStatus = { installed: true, signedIn: true, policyInitialized: true, blockers: [] };
-    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, variables: [{ env: "API_KEY" }] };
+    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, variables: ["API_KEY"] };
     mcpRegistered = [];
     mcpRefusal = {};
     sbxSkills = EMPTY_SBX_SKILLS;
@@ -1157,7 +1157,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(request, {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
-      variables: [{ env: "API_KEY" }],
+      variables: ["API_KEY"],
       hosts: ["example.com", "*.example.org:8080"],
     });
     assert.deepEqual(local, {
@@ -1171,10 +1171,10 @@ describe("tet-ctl against the control server", () => {
     assert.equal((await tetCtl(["sbx-set-ports", "8080:80"])).status, EXIT_CODES.ok);
     assert.deepEqual(sbxSettings.ports, [{ host: "8080", container: "80" }]);
     assert.equal((await tetCtl(["sbx-set-variables", "DB_URL"])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxSettings.variables, [{ env: "DB_URL" }]);
+    assert.deepEqual(sbxSettings.variables, ["DB_URL"]);
     assert.deepEqual(calls.sbxSaved.at(-1)?.[2].variables, { values: {}, from: { DB_URL: "DB_URL" } }, "a bare name types no value");
     assert.equal((await tetCtl(["sbx-set-variables", "DB_URL=a=b", "MODE="])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxSettings.variables, [{ env: "DB_URL" }, { env: "MODE" }]);
+    assert.deepEqual(sbxSettings.variables, ["DB_URL", "MODE"]);
     assert.deepEqual(
       calls.sbxSaved.at(-1)?.[2].variables,
       { values: { DB_URL: "a=b" }, from: { DB_URL: "DB_URL", MODE: "MODE" } },
