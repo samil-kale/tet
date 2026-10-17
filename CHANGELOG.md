@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.19.2 (2026-10-17)
+
+- **SBX variables only.** The SBX dialog no longer handles secrets; variables are kept in
+  `tet.json` as plain environment variable names. sbx 0.48 is the minimum version.
+- **Markdown preview alone.** The preview can be shown on its own as well as beside the editor.
+- **Fixes.** The suggested commit message is read only from between its commit tags; the search
+  field sits below the group dropdown; the SBX dialog is as wide as the other tabbed dialogs.
+
 ## 0.19.1 (2026-10-15)
 
 - **Repositories listed at once.** The Add Repository dialog shows the account's last repository
