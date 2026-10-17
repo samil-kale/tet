@@ -22,7 +22,6 @@ the editor tab.
 
 ## Do not restart the app yourself
 
-Agents run *inside* TET, as terminal tabs; killing the Electron process kills your own session.
 Build and typecheck freely, but ask the user to restart — and before anything that tears down a
 project's tabs.
 
@@ -76,7 +75,7 @@ project's tabs.
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the
      fonts the app ships with their licenses (`fonts/`).
 - Each agent is a folder under `src/main/agents/`, described by one `AgentDefinition` (`agent.ts`
-  documents every field), grouped by what it can do — `install`, `terminal`, `run`, `ask`,
+  documents every field), grouped by what it can do — `install`, `terminal`, `ask`,
   `sessions`, `turns`, `host`, `sandbox` — each group present whole or not at all: whether an agent
   can do something is whether it has the group (`hasSandbox`), never a list of ids. Shared code
   never imports an agent's own folder: only the registry (`agents/index.ts`), `agent.ts`'s types
@@ -109,7 +108,7 @@ project's tabs.
 
 Everything TET keeps lives here (`data-root.ts`, `project-dirs.ts`). The layout is fixed: every
 change, and every agent added, fits it. The one file TET writes elsewhere is sbx's first-run
-marker (`Platform.sbxFirstRunMarker`), which keeps sbx's one-time wizard out of a tab. Chromium's
+marker (`Platform.sbxFirstRunMarker`). Chromium's
 own profile stays in Electron's `userData` (`data-root.ts`).
 
 ```
@@ -132,7 +131,7 @@ own profile stays in Electron's `userData` (`data-root.ts`).
 ```
 
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
-  `projects/<id>/` only what a sandbox may see, since sbx is granted it whole — never a setting, a
+  `projects/<id>/` only what a sandbox may see — never a setting, a
   token or an sbx value. Removing a project deletes its folder.
 - **A sandbox sees its agent folder, and nothing else of `~/.tet`** — but the worktree it runs in,
   and a worktree or path handed to it (dropped, or by `worktree-agent-merge`), mounted as a drop.
@@ -142,7 +141,7 @@ own profile stays in Electron's `userData` (`data-root.ts`).
   same name: `projects/<id>/<name>/` for the project's host tabs (`config/<agent>/` if it knows no
   project), `<agent folder>/<name>/` for sandboxed ones.
 - **Split only where a sandbox forces it.** Repository, worktree and agent divide `sandboxes/`
-  alone, since each is its own sandbox; a folder beneath `projects/<id>/` or an agent folder is
+  alone; a folder beneath `projects/<id>/` or an agent folder is
   flat, its entries kept apart by their names (one subfolder per entry where it goes as a whole,
   as `handovers/`).
 - **What exists is handed over, never copied.** A host tab gets the original path. A path dropped
@@ -152,7 +151,7 @@ own profile stays in Electron's `userData` (`data-root.ts`).
   the repository tab that merges it the same way, and deleting a worktree releases every such mount
   of its folder (`releaseDropped`). Only what has no path of its own (a browser's drop, a pasted
   image) is written, into `drops/` on either side; a handover copies what sits in another agent's
-  store, which no sandbox may see.
+  store.
 - **A store written by a Save someone waits on writes before it changes** (`writeJson`,
   `json-file.ts`): a failure reaches the one who saved — in the dialog, or `tet-ctl`'s answer —
   and the store keeps what the disk has. Only a write nobody waits on, or a cleanup that must not
@@ -209,11 +208,10 @@ others.
   installer, alone branches on it. A new difference extends the interface.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
   (`src/main/util/process.ts`), never `shell: true`.
-- Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`: only
-  Chromium's stack applies the machine's proxy and certificate store. Code the tests run under
+- Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`. Code the tests run under
   node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`). A request that reads
-  a redirect instead of following it uses `net.request`, the same stack: `net.fetch` throws on
-  `redirect: "manual"` (the update check's `latestVersion`).
+  a redirect instead of following it uses `net.request`, the same stack (the update check's
+  `latestVersion`).
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
   (`src/main/util/generated-file.ts`).
 - A hook command runs under whichever shell the agent picks: keep it a bare
@@ -224,8 +222,7 @@ others.
 ## Read structure, never messages
 
 What a CLI tells TET is read from its exit code or its `--json` (`sbx policy ls --json`'s
-`organization`), never from the words of an error or of human-facing output: those change with
-the version and the locale. Text is matched only where the tool offers nothing else (git has no
+`organization`), never from the words of an error or of human-facing output. Text is matched only where the tool offers nothing else (git has no
 error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
 
 ## Git
@@ -233,7 +230,7 @@ error codes: `AUTH_FAILURES`, under `LC_ALL=C`), said in a comment at that site.
 - Git is never reimplemented and never run from the renderer. `src/main/git/git.ts` wraps the CLI
   in its own `utilityProcess` (`git-host.ts`, via `git-client.ts`): nothing in `git.ts` or
   `git-host.ts` imports electron, everything crossing the boundary survives a structured clone.
-- Starting git is the cost, so count invocations: anything added to the refresh path must earn its
+- Count git invocations: anything added to the refresh path must earn its
   process (the budget is commented at `git.ts`'s `readState`).
 - `Repository` is the single source of truth for the git lane and the tabs; every git command
   that changes an open repository goes through `Repository.runAction` (renderer:
@@ -295,13 +292,13 @@ per-line decision is for an agent.
   `use-project-layouts.ts`, called from `App`.
 - **A diff withholds every preview beside the editor** — Markdown's, and any added later
   (`previewWithheld`): it is hidden, its toggle, shortcut and menu entry disabled, and its own
-  setting kept, so it shows again once the diff is off.
+  setting kept.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
-  message of its own but the SEARCH section, whose failure stands in its header as VS Code's does:
-  it follows each keystroke; a status (marks, progress bar) is not a notice. A tab's process that
+  message of its own but the SEARCH section, whose failure stands in its header as VS Code's does;
+  a status (marks, progress bar) is not a notice. A tab's process that
   ended unasked says so in its own terminal, as a `[TET]` line with how to go on
-  (`terminal-session.ts`): it concerns that tab alone, and a notice for every end would be noise.
+  (`terminal-session.ts`).
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes
@@ -331,8 +328,7 @@ per-line decision is for an agent.
   run is one of two kinds, decided by what a stop would leave:
   - *Held* (the default; `DialogFrame`'s `locked`): anything that changes state in steps or is
     not killed — a Save, a git command, a store, a sign-out. Cancel and × are disabled, Escape
-    does nothing and the body's fields are disabled with them, so nothing is left half done,
-    edited under the run, or answered into a closed dialog.
+    does nothing and the body's fields are disabled with them.
   - *Stopped*: a run a stop leaves as if it never started — it changes nothing, or what it changes
     happens whole or not at all — and that waits on something outside TET (a browser, an agent, a
     provider's API). It runs the bar but holds no Cancel: Cancel kills it where it can
@@ -341,7 +337,7 @@ per-line decision is for an agent.
   A new run is held unless it meets both conditions; a dialog's Save is always held.
 - **A follow-up question comes after its run** (`runWithFollowUp`): an action answering
   `needsConfirmation` ends there, its bar and lock released, and a yes runs the confirmed action
-  anew — a bar shows TET working, never TET waiting on the user.
+  anew.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out and the Add Repository dialog's account adding and
   removal and namespace pick, which act at once. A setting reaches an agent at its setup
@@ -403,8 +399,7 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
   — never starts one, never marks.
 - The main process sets the state (`TabSessionManager.hookEvent`); the renderer decides what is
   shown (`useTabMarks`) and clears what was seen (`terminals.seen`).
-- A tab is asked to quit (`terminal.quitPresses`) before it is killed — a hard kill skips a
-  CLI's exit handlers.
+- A tab is asked to quit (`terminal.quitPresses`) before it is killed.
 
 ## The control channel: `tet-ctl`
 
@@ -422,8 +417,7 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
   (`src/main/agents/system-prompt.ts`), appended to each agent's system prompt (Codex: its
   `SessionStart` hook's added context), never replacing the user's instructions.
 - **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent
-  needs, typed only into TET's dialog (`env-request`), never the chat; kept in the clear (every tab
-  gets them anyway), global, and set in every tab at its start (`pty.ts`'s `buildEnv`), over what
+  needs, typed only into TET's dialog (`env-request`), never the chat; kept in the clear, global, and set in every tab at its start (`pty.ts`'s `buildEnv`), over what
   the machine sets itself — said in a notice. A running tab takes them up only when restarted: the
   dialog's Save restarts the asking one. None in a sandbox, and the verbs refused *and* unmentioned
   there — not in `help`, not in its system prompt.
@@ -440,10 +434,9 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
 - A host caller reaches every project and every one of its tabs. **From a sandbox, whatever runs
   in a sandbox of its project**: the worktree verbs and every tab verb reach its repository and
   every worktree (`ownProject`), a
-  tab verb only a tab running in a sandbox (`CallerSide.reachesTab`) — a host tab is the machine's,
-  and its output may print the host's control token — and a tab it opens runs in one too; what acts
-  on this machine (its settings, projects, environment, the SBX settings but `sbx-get` and the
-  variables, a saved command, restarting TET) is refused; the other verbs answer for the caller's
+  tab verb only a tab running in a sandbox (`CallerSide.reachesTab`), and a tab it opens runs in one too; what acts
+  on this machine (its settings, projects, environment, the SBX settings but `sbx-get` and
+  `sbx-set-environment`, a saved command, restarting TET) is refused; the other verbs answer for the caller's
   own repository or worktree only. **Refuse a sandbox only what it cannot do itself**: where it
   already can and `tet-ctl` doing it changes nothing beyond that, the verb answers there.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
@@ -462,16 +455,13 @@ the `sbx` CLI.
   from, the spawn — is a member of it, implemented by `HostPlace` (a saved command's `CommandPlace`
   extends it) and `SandboxPlace`; nothing else asks where a tab runs, and a new difference extends
   the interface.
-- **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error` — the
-  host would bypass an organization's policy.
+- **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error`.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
   (`AgentRuntime.sbxOnly`).
 - The sandbox never sees the agent's own config directory, and of `~/.tet` only what the data
-  model grants it. A worktree's sandbox is its own (its workspace, the worktree's folder, is fixed
-  at `sbx create`); under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
+  model grants it. A worktree's sandbox is its own; under governance one rule, `~/.tet/projects/**`, allows TET's folders and its
   worktrees. TET's own live mounts are folders of the `sandboxes/…/<agent>` folder alone; the one
-  exception is a worktree's repository `.git` (`worktreeMountSpecs`), without which git fails
-  there. The user's grants (Allowed paths, skills) and what is handed over as a drop are
+  exception is a worktree's repository `.git` (`worktreeMountSpecs`). The user's grants (Allowed paths, skills) and what is handed over as a drop are
   theirs, not TET's.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
 - **tet.json holds what was applied.** Save checks each row against sbx's policy (hosts through
@@ -479,7 +469,7 @@ the `sbx` CLI.
   evaluates) and against this machine (a path exists, a port is free, a value is stored). A row
   that fails, or that sbx refuses while applying, is neither saved nor applied; the rest goes
   through. A Save sbx cannot answer for (a listing fails, a sandbox will not start) stops before
-  changing anything — could-not-say is no refusal. One check for the dialog, `sbx-set-*` and a
+  changing anything. One check for the dialog, `sbx-set-*` and a
   session's start (`readSbxProblems`).
 - **The dialog checks live** whatever can be checked, and marks a failing row with the error mark
   saying what is wrong — never that it will not be saved.
@@ -487,8 +477,7 @@ the `sbx` CLI.
   sandbox it created and one it found (`alignSandbox`); a Save starts none, so a stopped one takes
   its ports and MCP servers there. What the policy forbids
   or this machine lacks is skipped and told in one notice per dialog tab and reason, its rows
-  listed (`Could not set hosts:` … `Forbidden by governance`): how a user learns that governance
-  took over.
+  listed (`Could not set hosts:` … `Forbidden by governance`).
 
 ## Startup
 
@@ -521,8 +510,7 @@ is a wall and **installs nothing**. `process.env.PATH` is rewritten before that 
 
 When asked for a release, run it:
 
-0. Ask the user for the version number (AskUserQuestion) — never pick patch/minor/major yourself;
-   a published version can't be taken back once an install has updated to it.
+0. Ask the user for the version number (AskUserQuestion) — never pick patch/minor/major yourself.
 1. Write the release's section at the top of `CHANGELOG.md` — `## <version> (<date>)`, then a
    handful of bullets, read off `git log <last tag>..HEAD`: a bold title of a few words, then one
    or two short sentences. **Written against the last release, not against the commits**: a
@@ -539,5 +527,5 @@ When asked for a release, run it:
 
 The tag push runs `.github/workflows/build.yml`, which publishes the GitHub Release only when every
 platform passed. TET ships as archives installed by `scripts/install.sh`/`install.ps1` — no
-installer, no npm package (reasons in `electron-builder.yml`). An update is put in place only after
+installer, no npm package. An update is put in place only after
 TET quits, never mid-session.
