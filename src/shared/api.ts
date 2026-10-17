@@ -27,7 +27,6 @@ import type {
   SbxSignInResult,
   SbxStatus,
   SbxStoredLocal,
-  SbxValueKind,
 } from "./types/sbx";
 import type { AppSettings, LaneSettings, SettingsEdits } from "./types/settings";
 import type { HandoverResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
@@ -97,7 +96,7 @@ export interface TETApi {
       projectId: string,
       settings: SbxProjectSettings,
       skills: SbxSkillsSettings,
-      values: Record<SbxValueKind, string[]>,
+      values: Pick<SbxStoredLocal, "variables">,
       status: Pick<SbxStatus, "organization">,
     ) => Promise<SbxProblems>;
   };

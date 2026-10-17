@@ -14,7 +14,6 @@ interface Answers {
   sandboxes?: Record<string, string[]>;
   lsFails?: string;
   /** The listing as a bare array, as newer sbx prints it, not wrapped in `sandboxes`. */
-  lsBare?: boolean;
   /** `sbx policy ls --type filesystem --json`: its rules, or none for a policy never set up. */
   filesystemRules?: object[];
   /** `sbx policy ls`'s whole stdout, where the rules alone do not say it (a governed account). */
@@ -43,7 +42,7 @@ if (args.startsWith("version")) {
   answers.version === undefined ? fail("unknown command") : out({ client: { version: "v" + answers.version } });
 } else if (args.startsWith("ls")) {
   const listed = Object.entries(answers.sandboxes ?? {}).map(([name, workspaces]) => ({ name, workspaces, status: "running" }));
-  answers.lsFails !== undefined ? fail(answers.lsFails) : out(answers.lsBare ? listed : { sandboxes: listed });
+  answers.lsFails !== undefined ? fail(answers.lsFails) : out(listed);
 } else if (args.startsWith("policy ls")) {
   answers.filesystemRules === undefined ? fail("no policy") : out(answers.policyStdout ?? { rules: answers.filesystemRules });
 } else if (args.startsWith("policy check")) {
@@ -66,21 +65,21 @@ describe("whether sbx is ready for a sandboxed tab", () => {
       /^SBX failed: version 0\.44\.2 is too old/,
     );
     assert.equal(
-      (await notReady({ version: "0.45.1", lsFails: "Not authenticated to Docker" })).notReady,
+      (await notReady({ version: "0.48.0", lsFails: "Not authenticated to Docker" })).notReady,
       "SBX is not signed in to Docker",
     );
-    assert.match((await notReady({ version: "0.45.1", lsFails: "the daemon is down" })).notReady ?? "", /^SBX failed: /);
-    assert.equal((await notReady({ version: "0.45.1", sandboxes: {} })).notReady, "SBX's network policy is not set up");
+    assert.match((await notReady({ version: "0.48.0", lsFails: "the daemon is down" })).notReady ?? "", /^SBX failed: /);
+    assert.equal((await notReady({ version: "0.48.0", sandboxes: {} })).notReady, "SBX's network policy is not set up");
   });
 
   it("says what the policy does not allow, with the rule to ask for", async () => {
-    const answers: Answers = { version: "0.45.1", sandboxes: {}, filesystemRules: [] };
+    const answers: Answers = { version: "0.48.0", sandboxes: {}, filesystemRules: [] };
     const { notReady } = await withSbx(answers, async (folder) => (await checkSbxReady(folder, REF)) as { notReady?: string });
     assert.match(notReady ?? "", /^SBX's policy does not allow .*\(The project\)/);
   });
 
   it("answers the sandboxes and the rules a spawn is prepared with once everything is in place", async () => {
-    const answers: Answers = { version: "0.45.1", sandboxes: { "tet-claude-abc": ["/work"] }, filesystemRules: ALLOW_ALL };
+    const answers: Answers = { version: "0.48.0", sandboxes: { "tet-claude-abc": ["/work"] }, filesystemRules: ALLOW_ALL };
     const ready = await withSbx(answers, (folder) => checkSbxReady(folder, REF));
     assert.ok(!("notReady" in ready), JSON.stringify(ready));
     assert.deepEqual([...ready.sandboxes], [["tet-claude-abc", { workspaces: ["/work"], running: true }]]);
@@ -88,7 +87,7 @@ describe("whether sbx is ready for a sandboxed tab", () => {
   });
 
   it("lets what starts beside the check wait on the check's own listing, which starts the daemon", async () => {
-    const answers: Answers = { version: "0.45.1", sandboxes: {}, filesystemRules: ALLOW_ALL };
+    const answers: Answers = { version: "0.48.0", sandboxes: {}, filesystemRules: ALLOW_ALL };
     const atListed = await withSbx(answers, async (folder) => {
       const calls = () =>
         fs
@@ -106,7 +105,7 @@ describe("whether sbx is ready for a sandboxed tab", () => {
 
 describe("what the SBX Settings read of sbx", () => {
   it("reads the status with the sandboxes and rules read on the way, and the blockers only once a policy is set up", async () => {
-    const ready = await withSbx({ version: "0.45.1", sandboxes: { a: [] }, filesystemRules: ALLOW_ALL }, (folder) =>
+    const ready = await withSbx({ version: "0.48.0", sandboxes: { a: [] }, filesystemRules: ALLOW_ALL }, (folder) =>
       readSbxReading(folder, REF, false),
     );
     assert.equal(ready.status.installed, true);
@@ -116,14 +115,14 @@ describe("what the SBX Settings read of sbx", () => {
     assert.deepEqual([...(ready.sandboxes ?? [])], [["a", { workspaces: [], running: true }]]);
     assert.equal(ready.rules?.length, 1);
 
-    const noPolicy = await withSbx({ version: "0.45.1", sandboxes: {} }, (folder) => readSbxReading(folder, REF, false));
+    const noPolicy = await withSbx({ version: "0.48.0", sandboxes: {} }, (folder) => readSbxReading(folder, REF, false));
     assert.equal(noPolicy.status.policyInitialized, false);
     assert.equal(noPolicy.rules, undefined, "no rules are asked of a policy that is not there");
   });
 
   it("names the organization governing the policy, in the status and in what it does not allow", async () => {
     const policyStdout = JSON.stringify({ rules: [], organization: "Acme" });
-    const answers: Answers = { version: "0.45.1", sandboxes: {}, filesystemRules: [], policyStdout };
+    const answers: Answers = { version: "0.48.0", sandboxes: {}, filesystemRules: [], policyStdout };
     const { status } = await withSbx(answers, (folder) => readSbxReading(folder, REF, false));
     assert.equal(status.organization, "Acme");
     const { notReady } = await withSbx(answers, async (folder) => (await checkSbxReady(folder, REF)) as { notReady?: string });
@@ -131,13 +130,8 @@ describe("what the SBX Settings read of sbx", () => {
   });
 
   it("reads signed in off the sandbox listing, and no listing off a failure", async () => {
-    assert.equal(await withSbx({ version: "0.45.1", sandboxes: {} }, () => readSbxSignedIn()), true);
-    assert.equal(await withSbx({ version: "0.45.1", lsFails: "Not authenticated to Docker" }, () => readSbxSignedIn()), false);
+    assert.equal(await withSbx({ version: "0.48.0", sandboxes: {} }, () => readSbxSignedIn()), true);
+    assert.equal(await withSbx({ version: "0.48.0", lsFails: "Not authenticated to Docker" }, () => readSbxSignedIn()), false);
     assert.equal(await withSbx({ lsFails: "x" }, () => listSandboxes()), undefined);
-  });
-
-  it("reads the sandbox listing as a bare array too", async () => {
-    const listed = await withSbx({ lsBare: true, sandboxes: { a: ["/work"] } }, () => listSandboxes());
-    assert.deepEqual([...(listed ?? [])], [["a", { workspaces: ["/work"], running: true }]]);
   });
 });

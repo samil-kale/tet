@@ -15,7 +15,6 @@ import type {
   SbxSaveResult,
   SbxSignInResult,
   SbxStoredLocal,
-  SbxValueKind,
 } from "../../shared/types/sbx";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
@@ -197,7 +196,7 @@ export interface ControlDeps {
       project: Project,
       settings: SbxProjectSettings,
       skills: SbxSkillsSettings,
-      values: Record<SbxValueKind, string[]>,
+      values: Pick<SbxStoredLocal, "variables">,
       reading?: SbxReading,
     ): Promise<SbxProblems>;
     /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */

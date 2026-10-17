@@ -2023,8 +2023,7 @@ textarea:focus,
   min-width: 0;
 }
 
-/* A name or value beside a field filling the row (.row-fill-input): a secret's either side of its
-   hosts, an environment variable's value. */
+/* A name or value beside a field filling the row (.row-fill-input): an environment variable's value. */
 .row-fixed-input {
   --field-width: 140px;
   width: var(--field-width);

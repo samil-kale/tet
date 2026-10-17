@@ -345,7 +345,7 @@ describe("a project removed", () => {
     const key = (await addWorktree(deps, id, "own")).worktree!;
     const ref = { projectId: id, worktree: key };
     await repositories.get(ref)!.refresh();
-    deps.sbxLocal.restore(id, { secrets: { TOKEN: "encrypted" }, variables: {} });
+    deps.sbxLocal.restore(id, { variables: { TOKEN: "encrypted" } });
     fs.rmSync(repo.main, { recursive: true, force: true });
 
     await eventually("the missing project cleaned up", () => notices.some((notice) => notice.severity === "info"), 5000);
@@ -356,7 +356,7 @@ describe("a project removed", () => {
     assert.equal(repositories.get({ projectId: id }), undefined);
     assert.equal(repositories.get(ref), undefined);
     assert.equal(fs.existsSync(projectDir(dataRoot, id)), false);
-    assert.deepEqual(deps.sbxLocal.encrypted(id), { secrets: {}, variables: {} });
+    assert.deepEqual(deps.sbxLocal.encrypted(id), { variables: {} });
     assert.deepEqual(notices, [
       {
         severity: "info",
@@ -422,13 +422,13 @@ describe("a project removed", () => {
     const { deps, store, changes, dataRoot, add } = open();
     const id = await add(repo.main);
     const key = (await addWorktree(deps, id, "own")).worktree!;
-    deps.sbxLocal.restore(id, { secrets: { TOKEN: "encrypted" }, variables: {} });
+    deps.sbxLocal.restore(id, { variables: { TOKEN: "encrypted" } });
     assert.deepEqual(await removeProject(deps, id), { ok: true });
     assert.ok(!fs.existsSync(worktreeDir(dataRoot, id, key)));
     assert.equal(git(repo.main, "branch", "--list", "own"), "", "its branch went with it");
     assert.ok(!fs.existsSync(projectDir(dataRoot, id)));
     assert.equal(tetId(repo.main), undefined);
-    assert.deepEqual(deps.sbxLocal.encrypted(id), { secrets: {}, variables: {} });
+    assert.deepEqual(deps.sbxLocal.encrypted(id), { variables: {} });
     assert.deepEqual(store.list(), []);
     assert.deepEqual(changes.slice(-2), [{ removed: [{ projectId: id, worktree: key }] }, { removed: [{ projectId: id }] }]);
     assert.ok(fs.existsSync(repo.main), "the repository's folder stays");

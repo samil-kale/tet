@@ -22,7 +22,6 @@
     "ports": [],
     "paths": [],
     "hosts": [],
-    "secrets": [],
     "variables": [
       {
         "env": "CLAUDE_CODE_SCROLL_SPEED"

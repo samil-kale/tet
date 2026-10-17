@@ -26,9 +26,8 @@ interface SaveDeps {
   notice: (severity: NoticeSeverity, message: string) => void;
 }
 
-/** The env names holding a value, per list. */
+/** The env names holding a value. */
 interface ValueNames {
-  secrets: Iterable<string>;
   variables: Iterable<string>;
 }
 
@@ -46,7 +45,7 @@ function checkProject(
     projectId: project.id,
     settings,
     skills,
-    values: { secrets: new Set(values.secrets), variables: new Set(values.variables) },
+    values: { variables: new Set(values.variables) },
     agents: SANDBOXED_AGENTS,
     organization,
     ports: true,
@@ -114,7 +113,6 @@ async function saveNow(
   const previous = sbxLocal.skills(project.id);
   try {
     sbxLocal.update(project.id, local);
-    const secretValues = sbxLocal.values(project.id, "secrets");
     const skills = sbxLocal.skills(project.id);
     // Listed once for the check and the Save, in this turn.
     const [organization, sandboxes] = await Promise.all([organizationOf(known), listSandboxes()]);
@@ -141,12 +139,10 @@ async function saveNow(
       worktrees,
       wanted.settings,
       { previous, current: wanted.skills },
-      secretValues,
-      new Set(Object.keys(local.secrets.values)),
       organization,
       sandboxes,
     );
-    sbxLocal.update(project.id, { secrets: keptValues(settings.secrets), variables: keptValues(settings.variables), skills: applied });
+    sbxLocal.update(project.id, { variables: keptValues(settings.variables), skills: applied });
     for (const { ref, agentId } of removed) {
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed and is rebuilt when its next tab starts.`

@@ -1,21 +1,13 @@
 import * as path from "node:path";
 import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
-import {
-  SBX_ACCESS,
-  SBX_MCP_NEEDS_AUTH,
-  type SbxSkillsSettings,
-  type SbxProjectSettings,
-  type SbxSecret,
-  type SbxVariable,
-} from "../../shared/types/sbx";
+import { SBX_ACCESS, SBX_MCP_NEEDS_AUTH, type SbxSkillsSettings, type SbxProjectSettings, type SbxVariable } from "../../shared/types/sbx";
 import {
   SBX_SKILLS_KINDS,
   keptValues,
   sbxMcpRefusal,
   sbxNeedsRestart,
   sbxPortRefusal,
-  sbxSecretRefusal,
   sbxVariableRefusal,
   withoutProblems,
 } from "../../shared/sbx-rules";
@@ -95,7 +87,6 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       found,
       request,
       {
-        secrets: keptValues(request.secrets),
         variables: { ...keptValues(request.variables), values: next.variableValues ?? {} },
         skills: nextSkills,
       },
@@ -110,11 +101,11 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
     return { result: { saved: true, restartRequired, ...(Object.keys(problems).length > 0 ? { notApplied: problems } : {}) } };
   };
 
-  /** Refuses the first variable that cannot be saved beside those before it and the secrets
-   *  (sbxVariableRefusal), names compared as this machine does. */
-  const refuseVariables = (variables: SbxVariable[], secrets: SbxSecret[]): void => {
+  /** Refuses the first variable that cannot be saved beside those before it (sbxVariableRefusal),
+   *  names compared as this machine does. */
+  const refuseVariables = (variables: SbxVariable[]): void => {
     variables.forEach((variable, index) => {
-      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), secrets, PLATFORM.envNamesIgnoreCase);
+      const refusal = sbxVariableRefusal(variable, variables.slice(0, index), PLATFORM.envNamesIgnoreCase);
       if (refusal) {
         throw new ControlError("bad_args", `${refusal}: ${variable.env}`);
       }
@@ -214,36 +205,11 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       return editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, hosts } }));
     },
 
-    "sbx-set-secrets": (args, caller) => {
-      const secrets = list(args, "secrets").map((entry) => {
-        const at = entry.indexOf("=");
-        if (at < 0) {
-          throw new ControlError("bad_args", `not <NAME>=<host>[,<host>...]: ${entry}`);
-        }
-        const hosts = entry
-          .slice(at + 1)
-          .split(",")
-          .map((host) => host.trim())
-          .filter(Boolean);
-        return { env: entry.slice(0, at).trim(), hosts };
-      });
-      secrets.forEach((secret, index) => {
-        const refusal = sbxSecretRefusal(secret, secrets.slice(0, index));
-        if (refusal) {
-          throw new ControlError("bad_args", `${refusal}: ${secret.env}`);
-        }
-      });
-      return editSbx(args, caller, ({ settings }) => {
-        refuseVariables(settings.variables, secrets);
-        return { settings: { ...settings, secrets } };
-      });
-    },
-
     "sbx-set-variables": (args, caller) => {
       // `NAME=value` types a value as the dialog's field does (an empty one keeps the stored one);
       // the first `=` splits, so a value may hold more. Typing one here is no hole, from a sandbox
       // either: an agent there can already set any variable for its own processes, and these reach
-      // only its project's sandboxes. A secret's value stays the user's.
+      // only its project's sandboxes.
       const entries = list(args, "variables").map((entry) => {
         const at = entry.indexOf("=");
         return at < 0 ? { env: entry.trim(), value: "" } : { env: entry.slice(0, at).trim(), value: entry.slice(at + 1) };
@@ -251,7 +217,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       const variables = entries.map(({ env }) => ({ env }));
       const variableValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
       return editSbx(args, caller, ({ settings }) => {
-        refuseVariables(variables, settings.secrets);
+        refuseVariables(variables);
         return { settings: { ...settings, variables }, variableValues };
       });
     },

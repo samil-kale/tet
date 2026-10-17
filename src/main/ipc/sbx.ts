@@ -14,7 +14,6 @@ import type {
   SbxSignInResult,
   SbxStatus,
   SbxStoredLocal,
-  SbxValueKind,
 } from "../../shared/types/sbx";
 import { cancelSbxSetup, initSbxPolicy, readSbxUser, runSbxSignIn, runSbxSignOut } from "../sbx/sbx-cli";
 import { readRegisteredMcp, signInMcp } from "../sbx/sbx-mcp";
@@ -69,7 +68,7 @@ export function registerSbxIpc({
       projectId: string,
       settings: SbxProjectSettings,
       skills: SbxSkillsSettings,
-      values: Record<SbxValueKind, string[]>,
+      values: Pick<SbxStoredLocal, "variables">,
       status: Pick<SbxStatus, "organization">,
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
@@ -82,7 +81,7 @@ export function registerSbxIpc({
     const project = store.get(projectId);
     return project ? readSbxSettings(project.path) : EMPTY_SBX_SETTINGS;
   });
-  // The Secrets and Variables rows holding a value on this machine, never the values; the skills.
+  // The Variables rows holding a value on this machine, never the values; the skills.
   handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
   // The Skills tab's agents; asked fresh, as agents are installed outside TET.
   handle("sbx:skills-sources", (): Promise<SbxSkillsSource[]> => readSkillsSources());

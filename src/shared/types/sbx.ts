@@ -52,19 +52,8 @@ export interface SbxSkillsSource {
 }
 
 /**
- * A "Secrets" row: an sbx custom secret. The sandbox sees `env` set to a placeholder, and sbx's
- * proxy swaps it for the value in requests to `hosts` (sbx.ts's applySecrets). Never the value,
- * which stays on this machine (sbx-local.ts).
- */
-export interface SbxSecret {
-  env: string;
-  /** Exact host, IP or wildcard (`*.example.com`) — sbx refuses a scheme or port. */
-  hosts: string[];
-}
-
-/**
- * A "Variables" row: `env` set in the sandbox with its real value — which, unlike a secret's, the
- * sandbox sees (sbx.ts's sandboxEnv). Never the value, which stays on this machine (sbx-local.ts).
+ * A "Variables" row: `env` set in the sandbox with its real value, which the sandbox sees
+ * (sbx.ts's sandboxEnv). Never the value, which stays on this machine (sbx-local.ts).
  */
 export interface SbxVariable {
   env: string;
@@ -100,7 +89,6 @@ export interface SbxProjectSettings {
   /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
    *  Unvalidated: sbx accepts anything, and a scheme then matches nothing. */
   hosts: string[];
-  secrets: SbxSecret[];
   variables: SbxVariable[];
   /** Loaded into every running sandbox of the project at Save and into any other at its next tab's
    *  start, where a row removed is unloaded too (sbx.ts's alignSandbox). The registration stays. */
@@ -111,17 +99,15 @@ export interface SbxProjectSettings {
   setup: string[];
 }
 
-/** The two lists of the SBX Settings whose values stay on this machine (sbx-local.ts). */
-export type SbxValueKind = "secrets" | "variables";
-
-/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Secrets and
- *  Variables rows hold a value here — never a value — and the skills. */
-export interface SbxStoredLocal extends Record<SbxValueKind, string[]> {
+/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Variables
+ *  rows hold a value here — never a value — and the skills. */
+export interface SbxStoredLocal {
+  variables: string[];
   skills: SbxSkillsSettings;
 }
 
 /**
- * Save's part of one list for this machine, both by the row's env name: the values typed since
+ * Save's part of the Variables for this machine, both by the row's env name: the values typed since
  * opening, and the name each row was opened under — its stored value follows a renamed row, and a
  * row added under a stored name does not inherit that value.
  */
@@ -130,7 +116,8 @@ export interface SbxLocalEdits {
   from: Record<string, string>;
 }
 
-export interface SbxLocalSave extends Record<SbxValueKind, SbxLocalEdits> {
+export interface SbxLocalSave {
+  variables: SbxLocalEdits;
   skills: SbxSkillsSettings;
 }
 
@@ -188,7 +175,7 @@ export interface SbxSignInResult {
 }
 
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
-export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "secrets" | "variables" | "mcp" | "setup";
+export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "variables" | "mcp" | "setup";
 
 /**
  * What of the SBX Settings cannot be applied here, per option: each row's key (the host, the path
@@ -210,7 +197,6 @@ export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {
   ports: [],
   paths: [],
   hosts: [],
-  secrets: [],
   variables: [],
   mcp: [],
   setup: [],

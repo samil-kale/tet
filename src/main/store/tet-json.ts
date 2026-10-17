@@ -20,7 +20,7 @@ import { COMMAND_COLORS } from "../../shared/types/project";
 import { SBX_ACCESS } from "../../shared/types/sbx";
 import type { ExplorerRoot } from "../../shared/types/files";
 import type { CommandColor, ProjectCommand } from "../../shared/types/project";
-import type { SbxMcpServer, SbxPath, SbxPort, SbxProjectSettings, SbxSecret, SbxVariable } from "../../shared/types/sbx";
+import type { SbxMcpServer, SbxPath, SbxPort, SbxProjectSettings, SbxVariable } from "../../shared/types/sbx";
 import { machineName } from "./env-names";
 import { readRepositoryPath } from "../util/linked-git-dir";
 import { inTurn } from "../util/async";
@@ -438,25 +438,13 @@ function toSbxSetup(value: unknown): string[] {
   return Array.isArray(value) ? setupLines(value.filter((line): line is string => typeof line === "string").join("\n")) : [];
 }
 
-/** A row needs an env name and a host; hosts trimmed as toSbxHosts, a repeated env name dropped —
- *  sbx refuses a second secret for one. */
-function toSbxSecrets(value: unknown): SbxSecret[] {
-  const secrets = objectRows(value, ({ env, hosts }) => {
-    const name = typeof env === "string" ? env.trim() : "";
-    const trimmedHosts = toSbxHosts(hosts);
-    return name && trimmedHosts.length > 0 ? { env: name, hosts: trimmedHosts } : undefined;
-  });
-  // A repeated env name keeps the first row only.
-  return secrets.filter((secret, i) => secrets.findIndex((other) => other.env === secret.env) === i);
-}
-
 /** A row needs an env name, trimmed; a repeated one (on win32 in any case, as the environment
- *  `sbx run -e NAME` reads it from), one a secret already holds, or one of TET's own dropped — the
- *  sandbox sees one value per name, and a secret's is its placeholder (sbx.ts's sandboxEnv). */
-function toSbxVariables(value: unknown, secrets: SbxSecret[]): SbxVariable[] {
+ *  `sbx run -e NAME` reads it from) or one of TET's own dropped — the sandbox sees one value per
+ *  name (sbx.ts's sandboxEnv). */
+function toSbxVariables(value: unknown): SbxVariable[] {
   const variables = objectRows(value, ({ env }) => {
     const name = typeof env === "string" ? env.trim() : "";
-    return isEnvName(name) && !isReservedName(name) && !secrets.some((secret) => secret.env === name) ? { env: name } : undefined;
+    return isEnvName(name) && !isReservedName(name) ? { env: name } : undefined;
   });
   // A repeated env name keeps the first row only.
   return variables.filter((variable, i) => variables.findIndex((other) => machineName(other.env) === machineName(variable.env)) === i);
@@ -496,10 +484,10 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
   });
 }
 
-/** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the secrets' names and
- *  hosts, the variables' names, the MCP servers and the setup script. Never holds a token: each sandboxed agent signs
- *  in with its own `/login` inside the sandbox, and a secret's or variable's value stays on this
- *  machine, as does the skills (sbx-local.ts). A worktree forwards no ports: a port of this
+/** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the variables' names,
+ *  the MCP servers and the setup script. Never holds a token: each sandboxed agent signs in with
+ *  its own `/login` inside the sandbox, and a variable's value stays on this machine, as does the
+ *  skills (sbx-local.ts). A worktree forwards no ports: a port of this
  *  machine reaches one sandbox, and its repository's has it. */
 export async function readSbxSettings(root: string): Promise<SbxProjectSettings> {
   const own = configRoot(root);
@@ -511,14 +499,12 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
   const paths = toSbxPaths(sbx.paths)
     .filter(appliesHere)
     .map(({ path: hostPath, access }) => ({ path: hostPath, access }));
-  const secrets = toSbxSecrets(sbx.secrets);
   return {
     enabled: sbx.enabled === true,
     ports: worktree ? [] : toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
-    secrets,
-    variables: toSbxVariables(sbx.variables, secrets),
+    variables: toSbxVariables(sbx.variables),
     mcp: toSbxMcp(sbx.mcp),
     setup: toSbxSetup(sbx.setup),
   };
@@ -537,7 +523,6 @@ export function writeSbxSettings(root: string, config: SbxProjectSettings): Prom
           ports: config.ports,
           paths: [...others, ...mine],
           hosts: config.hosts,
-          secrets: config.secrets,
           variables: config.variables,
           mcp: config.mcp,
           setup: config.setup,

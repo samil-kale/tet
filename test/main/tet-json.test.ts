@@ -315,7 +315,6 @@ describe("readSbxSettings", () => {
         { path: "~/.npmrc", access: "ro" as const },
       ],
       hosts: ["gitlab.example.com", "*.s3.example.net:443"],
-      secrets: [{ env: "GITLAB_TOKEN", hosts: ["gitlab.example.com", "*.gitlab.example.com"] }],
       variables: [{ env: "NPM_TOKEN" }],
       mcp: [
         { name: "notion", url: "https://mcp.notion.com/mcp" },
@@ -349,16 +348,11 @@ describe("readSbxSettings", () => {
             { path: "/elsewhere", access: "ro", os: "aix" },
           ],
           hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
-          secrets: [
-            { env: " API_KEY ", hosts: [" api.example.com "], value: "should-not-be-read" },
-            { env: "API_KEY", hosts: ["twice.example.com"] },
-            { env: "NO_HOST", hosts: [] },
-            { hosts: ["no-env.example.com"] },
-          ],
+          // Legacy: SBX secrets were removed and the key is ignored. Remove this input after 2026-11-17.
+          secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
           variables: [
             { env: " NPM_TOKEN ", value: "should-not-be-read" },
             { env: "NPM_TOKEN" },
-            { env: "API_KEY" },
             { env: "PATH" },
             { env: "TET_TAB_ID" },
             { env: "not a name" },
@@ -382,7 +376,6 @@ describe("readSbxSettings", () => {
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],
       hosts: ["ok.example.com", "spaced.example.com"],
-      secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
       variables: [{ env: "NPM_TOKEN" }],
       mcp: [
         { name: "notion", url: "https://mcp.notion.com/mcp" },

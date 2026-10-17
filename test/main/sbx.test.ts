@@ -8,7 +8,7 @@ import { PLATFORM } from "../../src/main/util/host-platform";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { toContainerPath } from "../../src/main/agents/hook-target";
 import { readSbxSettings, writeSbxSettings } from "../../src/main/store/tet-json";
-import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandboxName, secretPlaceholder } from "../../src/main/sbx/sbx";
+import { parsePublishedPorts, prepareSbxRun, readSbxProblems, sandboxEnv, sandboxName } from "../../src/main/sbx/sbx";
 import { parseSignedInUser, sbxError, sbxVersionSupported } from "../../src/main/sbx/sbx-cli";
 import { droppedMountSpecs, fixedMountSpecs, mountDropped, pathMountSpecs, releaseDropped } from "../../src/main/sbx/sbx-mounts";
 import { saveSbxSettings, type SbxSaveTarget } from "../../src/main/sbx/sbx-save";
@@ -28,7 +28,7 @@ import {
   sbxMcpRefusal,
   sbxNeedsRestart,
   sbxProblemNotices,
-  sbxSecretRefusal,
+  sbxVariableRefusal,
   setupLines,
   withoutProblems,
 } from "../../src/shared/sbx-rules";
@@ -42,7 +42,7 @@ import {
 } from "../../src/shared/types/sbx";
 import { fakeCommand, fakeSafeStorage, tempDir, withCommandOn, withEnvAsync } from "../helpers";
 
-/** sbx/: sandbox names and mounts, ports, secrets, the SBX Settings' Save, policy and status. */
+/** sbx/: sandbox names and mounts, ports, the SBX Settings' Save, policy and status. */
 
 describe("sbx sandbox naming and mounts", () => {
   it("names a sandbox deterministically, within sbx create --name's own character set", () => {
@@ -186,8 +186,6 @@ describe("saving SBX settings", () => {
   function fakeSbx(answers: {
     published: object[];
     refuse?: string;
-    secrets?: object[];
-    secretsFail?: boolean;
     allowedHosts?: string[];
     /** `mcp ls --json`'s servers; `mcp add` registers more. */
     registered?: { name: string }[];
@@ -224,7 +222,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 } else if (args[0] === "ls") {
   const others = (answers.others ?? []).map((other) => ({ workspaces: answers.workspaces, status: "running", ...other }));
   const own = { name: answers.name, workspaces: answers.workspaces, status: answers.stopped ? "stopped" : "running" };
-  process.stdout.write(JSON.stringify({ sandboxes: [own, ...others] }));
+  process.stdout.write(JSON.stringify([own, ...others]));
 } else if (args[0] === "policy" && args[1] === "check") {
   // \`policy check network --json <host>\`: exit 1 with "allowed": false on a denial (sbx-status.ts).
   const allowed = (answers.allowedHosts ?? []).includes(args[4]);
@@ -244,14 +242,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   process.stdout.write(JSON.stringify({ name: args[1], runtime_mounts: answers.mounts ?? [] }));
 } else if (args[0] === "ports" && args[2] === "--json") {
   process.stdout.write(JSON.stringify(answers.published));
-} else if (args[0] === "secret" && args[1] === "ls") {
-  if (answers.secretsFail) {
-    process.stderr.write("ERROR: secrets engine unavailable\\n");
-    process.exit(1);
-  }
-  process.stdout.write(JSON.stringify({ secrets: [], custom_secrets: answers.secrets ?? [] }));
-} else if (args[0] === "secret" && args[1] === "set-custom") {
-  fs.appendFileSync(answers.log, "stdin " + fs.readFileSync(0, "utf8") + "\\n");
 } else if (args[2] === "--publish" && args[3] === answers.refuse) {
   process.stderr.write(answers.refusal);
   process.exit(1);
@@ -277,27 +267,18 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
   }
 
   /** The listings every Save and aligning start reads the sandboxes with, together (readSandboxReads). */
-  const READ_ROUND = ["policy ls --type network --include-inactive --json", "secret ls --json", "mcp ls --json"];
+  const READ_ROUND = ["policy ls --type network --include-inactive --json", "mcp ls --json"];
   const readRound = (call: string): boolean => READ_ROUND.includes(call);
 
   /**
    * Saves `request` for the project at `repoFolder`, with no skills, under the stand-in in `dir`:
    * saveSbxSettings as sbx-settings.ts runs it, with the listing taken for its check.
    */
-  function saveIn(
-    dir: string,
-    repoFolder: string,
-    request: SbxProjectSettings,
-    {
-      worktrees = [],
-      values = new Map(),
-      changed = new Set(),
-    }: { worktrees?: SbxSaveTarget[]; values?: Map<string, string>; changed?: Set<string> } = {},
-  ) {
+  function saveIn(dir: string, repoFolder: string, request: SbxProjectSettings, { worktrees = [] }: { worktrees?: SbxSaveTarget[] } = {}) {
     return withSbx(dir, async () => {
       const sandboxes = await listSandboxes();
       assert.ok(sandboxes, "sbx lists the sandboxes");
-      return saveSbxSettings({ ref: main, path: repoFolder }, worktrees, request, NO_SKILLS, values, changed, undefined, sandboxes);
+      return saveSbxSettings({ ref: main, path: repoFolder }, worktrees, request, NO_SKILLS, undefined, sandboxes);
     });
   }
 
@@ -445,68 +426,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     assert.deepEqual(droppedMountSpecs("tet-release-b"), []);
   });
 
-  it("brings the sandbox's secrets in line, values through stdin, leaving one set by hand alone", async () => {
-    const live = (env: string, hosts: string[]) => ({
-      scope: name,
-      targets: hosts,
-      env: "",
-      placeholder: secretPlaceholder(projectId, env),
-    });
-    const { dir, repoFolder } = fakeSbx({
-      published: [],
-      secrets: [
-        live("KEPT", ["kept.example.com"]),
-        live("CHANGED", ["changed.example.com"]),
-        live("REHOSTED", ["old.example.com"]),
-        live("DROPPED", ["dropped.example.com"]),
-        { scope: name, targets: ["hand.example.com"], env: "HAND", placeholder: "sbx-cs-byhand" },
-      ],
-    });
-    const before = [
-      { env: "KEPT", hosts: ["kept.example.com"] },
-      { env: "CHANGED", hosts: ["changed.example.com"] },
-      { env: "REHOSTED", hosts: ["old.example.com"] },
-      { env: "DROPPED", hosts: ["dropped.example.com"] },
-    ];
-    await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: before });
-    const now = [
-      { env: "KEPT", hosts: ["kept.example.com"] },
-      { env: "CHANGED", hosts: ["changed.example.com"] },
-      { env: "REHOSTED", hosts: ["new.example.com"] },
-      { env: "ADDED", hosts: ["a.example.com", "*.b.example.com"] },
-    ];
-    const values = new Map([
-      ["KEPT", "v-kept"],
-      ["CHANGED", "v-changed"],
-      ["REHOSTED", "v-rehosted"],
-      ["ADDED", "v-added"],
-    ]);
-    const { result, calls } = await saveIn(
-      dir,
-      repoFolder,
-      { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: now },
-      { values, changed: new Set(["CHANGED"]) },
-    );
-    const placeholder = (env: string) => secretPlaceholder(projectId, env);
-    // The listings run together, in any order.
-    assert.deepEqual(calls.slice(1, 4).sort(), [...READ_ROUND].sort());
-    assert.deepEqual(calls.slice(4), [
-      `secret rm --sandbox ${name} --placeholder ${placeholder("CHANGED")} -f`,
-      `secret rm --sandbox ${name} --placeholder ${placeholder("REHOSTED")} -f`,
-      `secret rm --sandbox ${name} --placeholder ${placeholder("DROPPED")} -f`,
-      `secret set-custom --sandbox ${name} --placeholder ${placeholder("CHANGED")} --host changed.example.com`,
-      "stdin v-changed",
-      `secret set-custom --sandbox ${name} --placeholder ${placeholder("REHOSTED")} --host new.example.com`,
-      "stdin v-rehosted",
-      `secret set-custom --sandbox ${name} --placeholder ${placeholder("ADDED")} --host a.example.com --host *.b.example.com`,
-      "stdin v-added",
-    ]);
-    assert.deepEqual([result.refused, result.failures], [{}, []]);
-    assert.deepEqual((await readSbxSettings(repoFolder)).secrets, now, "tet.json holds names and hosts");
-    assert.ok(!fs.readFileSync(path.join(repoFolder, "tet.json"), "utf8").includes("v-"), "no value reaches tet.json");
-  });
-
-  it("asks the policy about a secret host, but not about a wildcard it cannot answer", async () => {
+  it("asks the policy about a host, but not about a wildcard it cannot answer", async () => {
     const { dir } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
     const { result, calls } = await withSbx(dir, () =>
       Promise.all(["open.example.com", "closed.example.com", "*.example.com"].map(readHostAllowed)),
@@ -592,24 +512,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     );
   });
 
-  it("stops a Save where sbx does not list the secrets, changing nothing", async () => {
-    const { dir, repoFolder } = fakeSbx({ published: [], secretsFail: true });
-    const secrets = [{ env: "TOKEN", hosts: ["api.example.com"] }];
-    const before = await readSbxSettings(repoFolder);
-    await assert.rejects(
-      saveIn(
-        dir,
-        repoFolder,
-        { ...EMPTY_SBX_SETTINGS, enabled: true, secrets },
-        { values: new Map([["TOKEN", "v"]]), changed: new Set(["TOKEN"]) },
-      ),
-      /could not list the sandboxes' secrets/,
-    );
-    const calls = fs.readFileSync(path.join(dir, "calls.log"), "utf8");
-    assert.ok(!/secret rm|secret set-custom|^rm /m.test(calls), calls);
-    assert.deepEqual(await readSbxSettings(repoFolder), before, "tet.json as it was");
-  });
-
   it("stops a Save where sbx does not list the sandboxes' allowed hosts, changing nothing", async () => {
     const { dir, repoFolder } = fakeSbx({ published: [], fail: ["policy ls --type network"] });
     await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, hosts: ["old.example.com"] });
@@ -636,7 +538,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             projectId,
             settings: { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows },
             skills: EMPTY_SBX_SKILLS,
-            values: { secrets: new Set(), variables: new Set() },
+            values: { variables: new Set() },
             agents: [claudeAgent],
             organization: "acme",
             ports: true,
@@ -647,7 +549,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     });
   }
 
-  it("finds what cannot be applied here: under governance a host its policy refuses, a missing or refused path, a secret or variable without a value", async () => {
+  it("finds what cannot be applied here: under governance a host its policy refuses, a missing or refused path, a variable without a value", async () => {
     const { dir, repoFolder } = fakeSbx({ published: [], allowedHosts: ["open.example.com"] });
     const missing = path.join(dir, "gone");
     const problems = await withSbx(dir, () =>
@@ -662,11 +564,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             { path: missing, access: "ro" },
             { path: repoFolder, access: "rw" },
           ],
-          secrets: [{ env: "TOKEN", hosts: ["open.example.com"] }],
           variables: [{ env: "SET" }, { env: "UNSET" }],
         },
         skills: EMPTY_SBX_SKILLS,
-        values: { secrets: new Set(), variables: new Set(["SET"]) },
+        values: { variables: new Set(["SET"]) },
         agents: [claudeAgent],
         organization: "acme",
         ports: false,
@@ -675,7 +576,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     assert.deepEqual(problems.result, {
       hosts: { "closed.example.com": "Forbidden by governance" },
       paths: { [missing]: "Does not exist on this machine", [repoFolder]: "Forbidden by governance" },
-      secrets: { TOKEN: "No value on this machine" },
       variables: { UNSET: "No value on this machine" },
     });
   });
@@ -684,8 +584,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const ALLOW_ALL = [{ resource_type: "filesystem", decision: "allow", resources: ["**"] }];
     const notion = { name: "notion", url: "https://mcp.notion.com/mcp" };
     /** What a start asks of sbx to bring its sandbox in line, apart from its mounts. */
-    const aligning = (calls: string[]): string[] =>
-      calls.filter((call) => /^(policy (ls --type network|allow|rm)|secret|mcp|ports) /.test(call));
+    const aligning = (calls: string[]): string[] => calls.filter((call) => /^(policy (ls --type network|allow|rm)|mcp|ports) /.test(call));
 
     /** Starts a Claude tab of the project at `at`, sbx listing its sandbox at `repoFolder`. */
     const start = (dir: string, repoFolder: string, rows: Partial<SbxProjectSettings>, at = repoFolder, warm?: Promise<boolean>) =>
@@ -701,7 +600,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
           sandboxes: new Map([[name, { workspaces: [repoFolder], running: true }]]),
           paths: { agentDir: sandboxDir(dir, main, "claude") },
           agentArgs: [],
-          secretValues: new Map(),
           variableValues: new Map(),
           warm,
         }),
@@ -774,21 +672,21 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
     it("tells a row left out at every start", async () => {
       const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
-      const rows = { secrets: [{ env: "TOKEN", hosts: ["api.example.com"] }] };
+      const rows = { variables: [{ env: "TOKEN" }] };
       await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
       const first = await withSbx(dir, () => start(dir, repoFolder, rows));
-      assert.deepEqual(first.result.problems, { secrets: { TOKEN: SBX_PROBLEM.noValue } });
+      assert.deepEqual(first.result.problems, { variables: { TOKEN: SBX_PROBLEM.noValue } });
       fs.rmSync(path.join(dir, "calls.log"));
       const second = await withSbx(dir, () => start(dir, repoFolder, rows));
       assert.deepEqual(second.result.problems, first.result.problems, "told at every start all the same");
     });
 
-    it("lists the hosts, secrets and MCP servers once for its check and its alignment", async () => {
+    it("lists the hosts and MCP servers once for its check and its alignment", async () => {
       const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
       const rows = { hosts: ["example.com"], mcp: [notion] };
       await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
       const { calls } = await withSbx(dir, () => start(dir, repoFolder, rows));
-      const listings = ["policy ls --type network", "secret ls", "mcp ls"];
+      const listings = ["policy ls --type network", "mcp ls"];
       assert.deepEqual(
         listings.map((listing) => calls.filter((call) => call.startsWith(`${listing} `)).length),
         listings.map(() => 1),
@@ -799,7 +697,6 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   describe("through the project's Save", () => {
     const noLocal = (variables: Record<string, string> = {}): SbxLocalSave => ({
-      secrets: { values: {}, from: {} },
       variables: { values: variables, from: {} },
       skills: EMPTY_SBX_SKILLS,
     });
@@ -902,13 +799,13 @@ describe("the SBX Settings' setup script", () => {
   });
 });
 
-describe("an SBX Settings secret row", () => {
-  it("is refused a name TET sets itself, as a variable row is", () => {
-    const hosts = ["api.example.com"];
-    assert.equal(sbxSecretRefusal({ env: "TOKEN", hosts }, []), undefined);
+describe("an SBX Settings variable row", () => {
+  it("is refused a name TET sets itself or another variable holds", () => {
+    assert.equal(sbxVariableRefusal({ env: "TOKEN" }, [], false), undefined);
     for (const env of ["PATH", "path", "TET_TAB_ID"]) {
-      assert.ok(sbxSecretRefusal({ env, hosts }, []), env);
+      assert.ok(sbxVariableRefusal({ env }, [], false), env);
     }
+    assert.ok(sbxVariableRefusal({ env: "TOKEN" }, [{ env: "TOKEN" }], false));
   });
 });
 
@@ -936,30 +833,23 @@ describe("an SBX Settings MCP row", () => {
 });
 
 describe("a sandboxed tab's variables", () => {
-  it("put a secret's placeholder on the command line and a variable's value only in the environment", () => {
+  it("put a variable's value only in the environment, never on the command line", () => {
     const settings = {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
-      secrets: [
-        { env: "GITLAB_TOKEN", hosts: ["gitlab.example.com"] },
-        { env: "NO_VALUE_HERE", hosts: ["api.example.com"] },
-      ],
-      // A hand-edited tet.json: one the agent sets, one a secret holds, one without a value here.
-      variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "NO_VALUE_HERE" }, { env: "MISSING" }],
+      // A hand-edited tet.json: one the agent sets, one without a value here.
+      variables: [{ env: "NPM_TOKEN" }, { env: "AGENT_SET" }, { env: "MISSING" }],
     };
     const result = sandboxEnv({
-      ref: { projectId: "p" },
       settings,
       env: ["AGENT_SET=agent"],
-      secretValues: new Map([["GITLAB_TOKEN", "glpat-real"]]),
       variableValues: new Map([
         ["NPM_TOKEN", "npm-real"],
         ["AGENT_SET", "variable"],
-        ["NO_VALUE_HERE", "real"],
       ]),
     });
-    assert.deepEqual(result.env, ["AGENT_SET=agent", `GITLAB_TOKEN=${secretPlaceholder("p", "GITLAB_TOKEN")}`]);
-    assert.deepEqual(result.passed, { NPM_TOKEN: "npm-real" }, "a secret without a value never falls back to a real one");
+    assert.deepEqual(result.env, ["AGENT_SET=agent"]);
+    assert.deepEqual(result.passed, { NPM_TOKEN: "npm-real" }, "a variable without a value is left out");
     assert.doesNotMatch(result.env.join(" "), /real/, "no real value on the command line");
   });
 });
@@ -967,36 +857,33 @@ describe("a sandboxed tab's variables", () => {
 describe("what sbx keeps on this machine", () => {
   it("counts a value as stored only where it can still be decrypted", () => {
     fakeSafeStorage();
-    const store = new SbxLocalStore(tempDir("tet-secrets-"));
+    const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
-      secrets: { READABLE: base64("sealed:value"), LOST: base64("under another keychain") },
-      variables: { NPM_TOKEN: base64("sealed:npm") },
+      variables: { NPM_TOKEN: base64("sealed:npm"), LOST: base64("under another keychain") },
     });
-    assert.deepEqual(store.stored("p"), { secrets: ["READABLE"], variables: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
-    assert.deepEqual([...store.values("p", "secrets")], [["READABLE", "value"]]);
-    assert.deepEqual([...store.values("p", "variables")], [["NPM_TOKEN", "npm"]]);
+    assert.deepEqual(store.stored("p"), { variables: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual([...store.variableValues("p")], [["NPM_TOKEN", "npm"]]);
   });
 
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
     fakeSafeStorage();
-    const store = new SbxLocalStore(tempDir("tet-secrets-"));
-    const none = { values: {}, from: {} };
-    store.update("p", { secrets: none, variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
+    const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
+    store.update("p", { variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
-    store.update("p", { secrets: none, variables: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
-    assert.deepEqual([...store.values("p", "variables")], [["NEW", "kept"]]);
+    store.update("p", { variables: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual([...store.variableValues("p")], [["NEW", "kept"]]);
   });
 
   it("keeps the skills on this machine, and no entry once it is all off", () => {
     fakeSafeStorage(false);
-    const root = tempDir("tet-secrets-");
+    const root = tempDir("tet-sbx-local-");
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
     const skills = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
-    store.update("p", { secrets: none, variables: none, skills });
+    store.update("p", { variables: none, skills });
     assert.deepEqual(new SbxLocalStore(root).skills("p"), skills, "read back, with no keyring needed");
-    store.update("p", { secrets: none, variables: none, skills: EMPTY_SBX_SKILLS });
+    store.update("p", { variables: none, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "all off leaves no entry");
   });
 });
@@ -1164,11 +1051,12 @@ describe("sbx's governance", () => {
 });
 
 describe("sbx's version", () => {
-  it("is supported from 0.45 on, where mounts survive a stop", () => {
+  it("is supported from 0.48 on, whose CLI and --json documents TET reads", () => {
     for (const [printed, supported] of [
-      ["0.42.1", false],
-      ["0.45.0", true],
-      ["0.46.0", true],
+      ["0.45.1", false],
+      ["0.47.0", false],
+      ["0.48.0", true],
+      ["0.49.0", true],
       ["1.0.0", true],
     ] as const) {
       assert.equal(sbxVersionSupported(printed), supported, printed);

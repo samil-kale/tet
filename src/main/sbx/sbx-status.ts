@@ -284,7 +284,7 @@ async function readProbe(listed: Promise<RunResult>): Promise<SbxProbe> {
     return { status };
   }
   if (version && !sbxVersionSupported(version)) {
-    status.failure = `version ${version} is too old, TET needs 0.45 or later`;
+    status.failure = `version ${version} is too old, TET needs 0.48 or later`;
     return { status };
   }
   const sandboxes = parseSandboxes(list);
@@ -350,13 +350,12 @@ export async function listSandboxes(): Promise<SandboxList | undefined> {
 
 /** probeSbx reads the run itself too, for why `ls` failed. */
 function parseSandboxes(result: RunResult): SandboxList | undefined {
-  type Listed = { name?: string; workspaces?: string[]; status?: string }[];
-  const parsed = jsonOf<Listed | { sandboxes?: Listed }>(result);
-  if (!parsed) {
+  const parsed = jsonOf<{ name?: string; workspaces?: string[]; status?: string }[]>(result);
+  if (!Array.isArray(parsed)) {
     return undefined;
   }
   const sandboxes: SandboxList = new Map();
-  for (const sandbox of (Array.isArray(parsed) ? parsed : parsed.sandboxes) ?? []) {
+  for (const sandbox of parsed) {
     if (sandbox.name) {
       sandboxes.set(sandbox.name, { workspaces: sandbox.workspaces ?? [], running: sandbox.status === "running" });
     }

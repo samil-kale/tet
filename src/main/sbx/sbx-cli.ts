@@ -157,11 +157,11 @@ export async function readSbxVersion(): Promise<string | undefined> {
   return typeof version === "string" ? version.replace(/^v/, "") : "";
 }
 
-/** Whether that version keeps a sandbox's live mounts across a stop and lists them in
- *  `sbx inspect` (mountAll). */
+/** Whether that version has the CLI TET drives: `--force` on `logout` and the `--json` documents
+ *  its readers expect. */
 export function sbxVersionSupported(version: string): boolean {
   const [major = 0, minor = 0] = version.split(".").map((part) => parseInt(part, 10) || 0);
-  return major > 0 || minor >= 45;
+  return major > 0 || minor >= 48;
 }
 
 /**
@@ -223,10 +223,10 @@ export async function runSbxTokenSignIn(user: string, token: string): Promise<st
   return result.ok ? undefined : sbxFailure(result, "sbx login");
 }
 
-/** `sbx logout` stops every running local sandbox; `--yes` skips its "Proceed y/N?", which a closed
+/** `sbx logout` stops every running local sandbox; `--force` skips its "Proceed y/N?", which a closed
  *  stdin would cancel. */
 export async function runSbxSignOut(): Promise<string | undefined> {
-  const result = await runSbx(["logout", "--yes"]);
+  const result = await runSbx(["logout", "--force"]);
   return result.ok ? undefined : sbxFailure(result, "sbx logout");
 }
 

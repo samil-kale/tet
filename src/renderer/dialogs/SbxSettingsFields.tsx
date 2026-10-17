@@ -20,7 +20,6 @@ import {
   sbxNeedsRestart,
   sbxPortKey,
   sbxPortRefusal,
-  sbxSecretRefusal,
   sbxVariableRefusal,
   setupLines,
 } from "../../shared/sbx-rules";
@@ -76,10 +75,8 @@ export interface FieldsState {
   ports: Row<SbxPort>[];
   paths: Row<SbxPath>[];
   hosts: Row<{ host: string }>[];
-  /** `hosts` as typed, comma-separated; `value` only what was typed since opening — a stored one
-   *  never reaches the renderer; `from` the name a row was opened under (SbxLocalEdits). */
-  secrets: Row<{ env: string; hosts: string; value: string; from?: string }>[];
-  /** `value` and `from` as for `secrets`. */
+  /** `value` only what was typed since opening — a stored one never reaches the renderer; `from`
+   *  the name a row was opened under (SbxLocalEdits). */
   variables: Row<{ env: string; value: string; from?: string }>[];
   mcp: McpRow[];
   /** The setup script as typed. */
@@ -90,7 +87,6 @@ export interface FieldsState {
  *  (`atLeastOne`); the paths come from a picker and have none. */
 const BLANK_PORT = { host: "", container: "" };
 const BLANK_HOST = { host: "" };
-const BLANK_SECRET = { env: "", hosts: "", value: "" };
 const BLANK_VARIABLE = { env: "", value: "" };
 
 /** `sbx:get-settings`'s and `sbx:stored`'s answers as rows. Only the user's paths: TET's directories
@@ -104,10 +100,6 @@ export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLoca
     hosts: atLeastOne(
       settings.hosts.map((host) => withId({ host })),
       BLANK_HOST,
-    ),
-    secrets: atLeastOne(
-      settings.secrets.map((secret) => withId({ env: secret.env, hosts: secret.hosts.join(", "), value: "", from: secret.env })),
-      BLANK_SECRET,
     ),
     variables: atLeastOne(
       settings.variables.map((variable) => withId({ env: variable.env, value: "", from: variable.env })),
@@ -126,29 +118,9 @@ function portRefusal(row: SbxPort): string | undefined {
   return row.host.trim() === "" && row.container.trim() === "" ? undefined : sbxPortRefusal(row);
 }
 
-type SecretRow = FieldsState["secrets"][number];
-
-function secretHosts(row: SecretRow): string[] {
-  return row.hosts
-    .split(",")
-    .map((host) => host.trim())
-    .filter(Boolean);
-}
-
-function isEmptySecretRow(row: SecretRow): boolean {
-  return row.env.trim() === "" && row.hosts.trim() === "" && row.value === "";
-}
-
 /** A row's name, as Save keeps it, for another row's rules. */
-function named(row: { env: string }): { env: string; hosts: string[] } {
-  return { env: row.env.trim(), hosts: [] };
-}
-
-/** Why Save refuses a secret row (sbxSecretRefusal), or `undefined`: an empty one is dropped. */
-function secretRefusal(row: SecretRow, rows: SecretRow[]): string | undefined {
-  return isEmptySecretRow(row)
-    ? undefined
-    : sbxSecretRefusal({ env: row.env.trim(), hosts: secretHosts(row) }, rows.filter((other) => other.id !== row.id).map(named));
+function named(row: { env: string }): { env: string } {
+  return { env: row.env.trim() };
 }
 
 /** Why Save refuses an MCP row (sbxMcpRefusal), or `undefined`: an empty one is dropped. */
@@ -191,25 +163,17 @@ function isEmptyVariableRow(row: VariableRow): boolean {
 function variableRefusal(row: VariableRow, state: FieldsState): string | undefined {
   return isEmptyVariableRow(row)
     ? undefined
-    : sbxVariableRefusal(
-        named(row),
-        state.variables.filter((other) => other.id !== row.id).map(named),
-        state.secrets.map(named),
-        PLATFORM.envNamesIgnoreCase,
-      );
+    : sbxVariableRefusal(named(row), state.variables.filter((other) => other.id !== row.id).map(named), PLATFORM.envNamesIgnoreCase);
 }
 
-/** Why Save waits, or `undefined`: every port row two ports or empty, every secret and variable row
- *  complete or empty — the rows mark which is not — and skills from a folder with one picked. */
+/** Why Save waits, or `undefined`: every port row two ports or empty, every variable row complete
+ *  or empty — the rows mark which is not — and skills from a folder with one picked. */
 export function saveBlocked(state: FieldsState): string | undefined {
   if (state.ports.some((row) => portRefusal(row) !== undefined)) {
     return "A port on the Ports tab is not a whole number from 1 to 65535";
   }
-  if (state.secrets.some((row) => secretRefusal(row, state.secrets) !== undefined)) {
-    return "A secret on the Secrets tab needs a variable name of its own and hosts without scheme or port";
-  }
   if (state.variables.some((row) => variableRefusal(row, state) !== undefined)) {
-    return "A variable on the Variables tab needs a name no secret or other variable holds, not PATH or TET_*";
+    return "A variable on the Variables tab needs a name no other variable holds, not PATH or TET_*";
   }
   if (state.mcp.some((row) => mcpRefusal(row, state.mcp) !== undefined)) {
     return "A server on the MCP tab needs a name no other server holds and a URL starting with https:// or http://";
@@ -220,7 +184,7 @@ export function saveBlocked(state: FieldsState): string | undefined {
   return undefined;
 }
 
-/** The inverse, for Save: ids dropped, as are empty port, host, secret and variable rows; the
+/** The inverse, for Save: ids dropped, as are empty port, host and variable rows; the
  *  setup script as its lines. */
 export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enabled"> {
   return {
@@ -229,14 +193,13 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
       .filter((port) => port.host && port.container),
     paths: state.paths.map(({ path, access }) => ({ path, access })),
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
-    secrets: state.secrets.filter((row) => !isEmptySecretRow(row)).map((row) => ({ env: row.env.trim(), hosts: secretHosts(row) })),
     variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map((row) => ({ env: row.env.trim() })),
     mcp: state.mcp.filter((row) => !isEmptyMcpRow(row)).map((row) => ({ name: row.name.trim(), url: row.url.trim() })),
     setup: setupLines(state.setup),
   };
 }
 
-/** One list's rows as Save stores them on this machine; a row left without a name holds nothing. */
+/** The variables' rows as Save stores them on this machine; a row left without a name holds nothing. */
 function toLocalEdits(rows: { env: string; value: string; from?: string }[]): SbxLocalEdits {
   const kept = rows.filter((row) => row.env.trim() !== "");
   return {
@@ -256,7 +219,6 @@ function toSkills(skills: SbxSkillsSettings): SbxSkillsSettings {
  *  skills, for Save. */
 export function toLocalSave(state: FieldsState): SbxLocalSave {
   return {
-    secrets: toLocalEdits(state.secrets),
     variables: toLocalEdits(state.variables),
     skills: toSkills(state.skills),
   };
@@ -307,7 +269,7 @@ export function useSbxProblems(
   const [problems, setProblems] = useState<SbxProblems>({});
   const settings = { enabled: true, ...toSettings(state) };
   const skills = toSkills(state.skills);
-  const values = { secrets: valueNames(state.secrets, stored.secrets), variables: valueNames(state.variables, stored.variables) };
+  const values = { variables: valueNames(state.variables, stored.variables) };
   const key = JSON.stringify([settings, skills, values, organization]);
   /** The loaded rows go at once; an edit waits (CHECK_DELAY_MS). */
   const opened = useRef(true);
@@ -344,11 +306,6 @@ function portMark(row: FieldsState["ports"][number], problems: SbxProblems): str
   return portRefusal(row) ?? problemOf(problems, "ports", sbxPortKey({ host: row.host.trim(), container: row.container.trim() }));
 }
 
-/** A secret row's mark, or `undefined`, likewise. */
-function secretMark(row: SecretRow, rows: SecretRow[], problems: SbxProblems): string | undefined {
-  return secretRefusal(row, rows) ?? problemOf(problems, "secrets", row.env.trim());
-}
-
 /** A variable row's mark, or `undefined`, likewise. */
 function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblems): string | undefined {
   return variableRefusal(row, state) ?? problemOf(problems, "variables", row.env.trim());
@@ -366,7 +323,6 @@ export function tabMarks(
     paths: firstMark(state.paths.map((row) => problemOf(problems, "paths", row.path))),
     hosts: firstMark(state.hosts.map((row) => problemOf(problems, "hosts", row.host.trim()))),
     mcp: firstMark(state.mcp.map((row) => mcpMark(row, state.mcp, problems, registered))),
-    secrets: firstMark(state.secrets.map((row) => secretMark(row, state.secrets, problems))),
     variables: firstMark(state.variables.map((row) => variableMark(row, state, problems))),
     // A script as typed has no row to refuse.
     setup: undefined,
@@ -563,45 +519,6 @@ export function SbxSettingsFields({
             <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>+ Add file</ActionLink>
           </FieldRow>
         }
-      />
-    );
-  }
-
-  if (section === "secrets") {
-    const secrets = typedRows("secret", BLANK_SECRET, (change) => update("secrets", change));
-    return (
-      <RowSection
-        label="Secrets"
-        rows={state.secrets}
-        renderRow={(row) => {
-          const setSecret = (change: Partial<typeof row>): void => update("secrets", (rows) => patched(rows, row.id, change));
-          const valueStored = holdsValue(row, stored.secrets);
-          return (
-            <EditRow key={row.id} mark={secretMark(row, state.secrets, problems)} {...secrets.remove(row.id)}>
-              <RowInput
-                width="fixed"
-                placeholder="GITLAB_TOKEN"
-                title="The environment variable the sandbox sees, holding a placeholder instead of the value"
-                value={row.env}
-                onChange={(env) => setSecret({ env })}
-              />
-              <RowInput
-                placeholder="gitlab.example.com"
-                title="Where sbx puts the value in place of the placeholder, in request headers only: exact host or *.example.com, comma-separated, no scheme or port"
-                value={row.hosts}
-                onChange={(hosts) => setSecret({ hosts })}
-              />
-              <SecretInput
-                stored={valueStored}
-                storedTitle="Stored on this machine; typing replaces it. The sandbox never sees it."
-                emptyTitle="Stored on this machine, never in tet.json. The sandbox never sees it."
-                value={row.value}
-                onChange={(value) => setSecret({ value })}
-              />
-            </EditRow>
-          );
-        }}
-        add={secrets.add}
       />
     );
   }

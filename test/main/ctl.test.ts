@@ -408,7 +408,7 @@ function deps(): ControlDeps {
       status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
       settings: async () => structuredClone(sbxSettings),
-      stored: () => ({ secrets: ["API_KEY"], variables: [], skills: structuredClone(sbxSkills) }),
+      stored: () => ({ variables: ["API_KEY"], skills: structuredClone(sbxSkills) }),
       problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);
@@ -541,7 +541,7 @@ describe("tet-ctl against the control server", () => {
     envNames = ["GITLAB_TOKEN"];
     dialogAnswer = undefined;
     sbxStatus = { installed: true, signedIn: true, policyInitialized: true, blockers: [] };
-    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }] };
+    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, variables: [{ env: "API_KEY" }] };
     mcpRegistered = [];
     mcpRefusal = {};
     sbxSkills = EMPTY_SBX_SKILLS;
@@ -1157,12 +1157,11 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(request, {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
-      secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
+      variables: [{ env: "API_KEY" }],
       hosts: ["example.com", "*.example.org:8080"],
     });
     assert.deepEqual(local, {
-      secrets: { values: {}, from: { API_KEY: "API_KEY" } },
-      variables: { values: {}, from: {} },
+      variables: { values: {}, from: { API_KEY: "API_KEY" } },
       skills: EMPTY_SBX_SKILLS,
     });
     const folder = path.resolve("/data/one");
@@ -1219,7 +1218,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { secrets: ["API_KEY"], variables: [], skills: sbxSkills },
+      stored: { variables: ["API_KEY"], skills: sbxSkills },
       problems: {},
     });
   });
@@ -1230,11 +1229,9 @@ describe("tet-ctl against the control server", () => {
       ["sbx-set-ports", "8080:0"],
       ["sbx-set-paths", "relative:ro"],
       ["sbx-set-paths", `${path.resolve("/data")}:x`],
-      ["sbx-set-secrets", "TOKEN=https://example.com"],
-      ["sbx-set-secrets", "TOKEN="],
       ["sbx-set-variables", "PATH"],
       ["sbx-set-variables", "1X"],
-      ["sbx-set-variables", "API_KEY"],
+      ["sbx-set-variables", "DB_URL", "DB_URL=x"],
       ["sbx-set-skills", "memory", "ro"],
       ["sbx-set-enabled", "maybe"],
     ];
@@ -1254,7 +1251,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { secrets: ["API_KEY"], variables: [], skills: sbxSkills },
+      stored: { variables: ["API_KEY"], skills: sbxSkills },
       problems: sbxProblems,
     });
   });

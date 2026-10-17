@@ -16,7 +16,7 @@ import {
 import { refKeyOf } from "../../shared/types/project";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { SbxAccess, SbxSkillsSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings, SbxSecret } from "../../shared/types/sbx";
+import type { SbxAccess, SbxSkillsSettings, SbxOption, SbxPort, SbxProblems, SbxProjectSettings } from "../../shared/types/sbx";
 import { SANDBOXED_AGENTS } from "../agents";
 import { canBind } from "../util/can-bind";
 import { inTurn } from "../util/async";
@@ -58,8 +58,8 @@ export function sandboxName(ref: ProjectRef, agentId: AgentId): string {
   return `tet-${agentId}-${idHash(refKeyOf(ref))}`;
 }
 
-/** An id's share of a sandbox name (a repository's or worktree's) and of a secret placeholder (a
- *  project's); the setup script's mark in its sandbox (runSetup). */
+/** An id's share of a sandbox name (a repository's or worktree's); the setup script's mark in its
+ *  sandbox (runSetup). */
 function idHash(id: string): string {
   return crypto.createHash("sha1").update(id).digest("hex").slice(0, 12);
 }
@@ -73,18 +73,13 @@ const sandboxSetups = new Map<string, Promise<unknown>>();
 
 /** What alignSandbox and applyProjectPorts bring a sandbox to: tet.json's rows a running sandbox
  *  takes at once. */
-type Aligned = Pick<SbxProjectSettings, "hosts" | "ports" | "secrets" | "mcp">;
+type Aligned = Pick<SbxProjectSettings, "hosts" | "ports" | "mcp">;
 
 /** Whether `a` and `b` hold the same rows a tab's start brings its sandbox to: what tells a Save
  *  that replaced them while the start ran (prepareSbxRun's `savedOver`). */
 function sameAligned(a: Aligned, b: Aligned): boolean {
-  const rows = ({ hosts, ports, secrets, mcp }: Aligned): string =>
-    JSON.stringify([
-      hosts,
-      ports.map(sbxPortKey),
-      secrets.map((secret) => [secret.env, secret.hosts]),
-      mcp.map((server) => [server.name, server.url]),
-    ]);
+  const rows = ({ hosts, ports, mcp }: Aligned): string =>
+    JSON.stringify([hosts, ports.map(sbxPortKey), mcp.map((server) => [server.name, server.url])]);
   return rows(a) === rows(b);
 }
 
@@ -369,101 +364,6 @@ async function applyPortChanges(
 }
 
 /**
- * The placeholder a project's secret goes by in its sandboxes: fixed by TET (`--placeholder`), not
- * sbx's random one, so it outlives a changed value and a rebuild, and `sbx run -e` can name it
- * without asking sbx. The prefix tells TET's secrets from ones set in the sandbox's scope by hand.
- */
-export function secretPlaceholder(projectId: string, env: string): string {
-  return `${secretPrefix(projectId)}${env}`;
-}
-
-function secretPrefix(projectId: string): string {
-  return `tet-${idHash(projectId)}-`;
-}
-
-/** A custom secret as `sbx secret ls --json` lists it. */
-export interface LiveSecret {
-  placeholder: string;
-  hosts: string[];
-}
-
-/**
- * Brings a sandbox's custom secrets in line with the rows that have a value here. Scoped to the
- * sandbox (`--sandbox`), as its hosts are.
- * - the proxy swaps the placeholder for the value in any request header to a listed host, Basic
- *   auth's base64 included (so git over HTTPS works), never in the URL or body, never for another
- *   host; the swap reaches a *running* sandbox at once.
- * - sbx sets `--env` in the sandbox only at `sbx create`, so TET leaves it out and passes the
- *   placeholder itself with `sbx run -e` (prepareSbxRun), which reaches an existing sandbox too.
- * - `sbx rm` removes the sandbox's secrets with it, and sbx never gives a value back: a new sandbox
- *   is seeded from this machine's store (sbx-local.ts).
- * - no update: a second secret for one placeholder or env fails ("already exists"), so a changed
- *   one is removed and set again. `rm` without `-f` asks and cancels on a closed stdin.
- * - the value goes through stdin: `--value` would show in the process list.
- * `changed` holds the env names whose value was just replaced. Returns what sbx refused, by env name.
- */
-async function applySecrets(
-  name: string,
-  projectId: string,
-  secrets: SbxSecret[],
-  values: ReadonlyMap<string, string>,
-  live: LiveSecret[],
-  changed: ReadonlySet<string>,
-  onData?: OnData,
-): Promise<Record<string, string>> {
-  const wanted = secrets.filter((secret) => values.has(secret.env));
-  const ours = live.filter((secret) => secret.placeholder.startsWith(secretPrefix(projectId)));
-  const kept = wanted.filter(
-    (secret) =>
-      !changed.has(secret.env) &&
-      ours.some((old) => old.placeholder === secretPlaceholder(projectId, secret.env) && sameSet(old.hosts, secret.hosts)),
-  );
-  const keptPlaceholders = kept.map((secret) => secretPlaceholder(projectId, secret.env));
-  for (const old of ours.filter((secret) => !keptPlaceholders.includes(secret.placeholder))) {
-    await runSbx(["secret", "rm", "--sandbox", name, "--placeholder", old.placeholder, "-f"], { onData });
-  }
-  const refused: Record<string, string> = {};
-  for (const secret of wanted.filter((entry) => !kept.includes(entry))) {
-    const placeholder = secretPlaceholder(projectId, secret.env);
-    const hosts = secret.hosts.flatMap((host) => ["--host", host]);
-    const result = await runSbx(["secret", "set-custom", "--sandbox", name, "--placeholder", placeholder, ...hosts], {
-      stdin: values.get(secret.env),
-      onData,
-    });
-    if (!result.ok) {
-      refused[secret.env] = sbxRefusal(result);
-    }
-  }
-  return refused;
-}
-
-/**
- * Each sandbox's custom secrets — the truth applySecrets works against, as readSandboxHosts is for
- * hosts — from one `sbx secret ls --json` (`custom_secrets`: `{scope, targets, env, placeholder,
- * secret}`, scope the sandbox's name or "global"). Never the value: sbx lists only its first
- * characters. Undefined when sbx does not answer: read as none, every secret set would fail as
- * "already exists", and a changed one would never arrive.
- */
-export async function readSandboxSecrets(): Promise<Map<string, LiveSecret[]> | undefined> {
-  const parsed = await sbxJson<{ custom_secrets?: { scope?: string; targets?: string[]; placeholder?: string }[] }>([
-    "secret",
-    "ls",
-    "--json",
-  ]);
-  if (!parsed) {
-    return undefined;
-  }
-  const secrets = new Map<string, LiveSecret[]>();
-  for (const secret of parsed.custom_secrets ?? []) {
-    if (secret.scope && secret.placeholder) {
-      const live = { placeholder: secret.placeholder, hosts: secret.targets ?? [] };
-      secrets.set(secret.scope, [...(secrets.get(secret.scope) ?? []), live]);
-    }
-  }
-  return secrets;
-}
-
-/**
  * Brings the project's forwarded ports to `ports`, across the repository's sandboxes — a worktree's
  * forward none — for a tab's start and a Save alike. A host port is forwarded by one sandbox only,
  * another's publish of it is refused, so a port is in place once any running one has it: one it is
@@ -526,7 +426,6 @@ export async function applyProjectPorts(
  *  undefined where sbx could not say. */
 export interface SandboxReads {
   hosts: Map<string, string[]> | undefined;
-  secrets: Map<string, LiveSecret[]> | undefined;
   mcp: ListedMcp[] | undefined;
   /** By sandbox, of those asked; undefined when one could not be listed. */
   ports: Map<string, SbxPort[]> | undefined;
@@ -534,13 +433,13 @@ export interface SandboxReads {
 
 /**
  * What a tab's start and a Save bring sandboxes in line against, in one round: each listing is an
- * sbx process, the hosts, secrets and MCP servers answer for every sandbox, and the ports for
+ * sbx process, the hosts and MCP servers answer for every sandbox, and the ports for
  * `portsOf`. All are asked, needed or not, rather than waited on in turn; what a listing sbx could
  * not answer means is the caller's — a Save stops (assertReadable), a start tells its rows.
  */
 export async function readSandboxReads(portsOf: readonly string[]): Promise<SandboxReads> {
-  const [hosts, secrets, mcp, ports] = await Promise.all([readSandboxHosts(), readSandboxSecrets(), listMcp(), readPorts(portsOf)]);
-  return { hosts, secrets, mcp, ports };
+  const [hosts, mcp, ports] = await Promise.all([readSandboxHosts(), listMcp(), readPorts(portsOf)]);
+  return { hosts, mcp, ports };
 }
 
 /** What each sandbox named has published (readSandboxPorts); undefined when one could not say. */
@@ -557,13 +456,9 @@ function projectSandboxes(projectId: string, sandboxes: SandboxList): string[] {
 
 /** What alignSandbox brings one sandbox to. */
 interface SandboxAlignment {
-  projectId: string;
-  settings: Pick<SbxProjectSettings, "hosts" | "secrets">;
+  settings: Pick<SbxProjectSettings, "hosts">;
   /** The organization managing sbx's policy: no local host rule applies under one (allowHosts). */
   organization: string | undefined;
-  secretValues: ReadonlyMap<string, string>;
-  /** The env names whose value was just replaced (applySecrets). */
-  changedSecrets: ReadonlySet<string>;
   live: SandboxReads;
   /** Only for a running sandbox (loadMcp). With `told`, only a server in it that sbx would not
    *  unload is refused: a Save leaves a refused row out of tet.json, and any other never was one. */
@@ -571,10 +466,10 @@ interface SandboxAlignment {
 }
 
 /**
- * Brings one sandbox's hosts, secrets and MCP servers in line with tet.json's rows, both ways and
+ * Brings one sandbox's hosts and MCP servers in line with tet.json's rows, both ways and
  * against the sandbox's own (`live`), so a rule set by hand and deleted as a row goes too: the one
  * way they reach a sandbox, at its tab's start (prepareSbxRun) and at a Save (saveSbxSettings).
- * Hosts and secrets live in sbx's stores, so a stopped sandbox takes them; MCP servers and the
+ * Hosts live in sbx's store, so a stopped sandbox takes them; MCP servers and the
  * ports (applyProjectPorts) need it running. Returns what sbx refused, or could not list.
  */
 export async function alignSandbox(name: string, to: SandboxAlignment, onData?: OnData): Promise<SbxProblems> {
@@ -592,13 +487,6 @@ export async function alignSandbox(name: string, to: SandboxAlignment, onData?: 
       live.hosts ? await allowHosts(name, missing, onData) : Object.fromEntries(missing.map((host) => [host, SBX_PROBLEM.hostsUnlisted])),
     );
   }
-  addProblems(
-    refused,
-    "secrets",
-    live.secrets
-      ? await applySecrets(name, to.projectId, settings.secrets, to.secretValues, live.secrets.get(name) ?? [], to.changedSecrets, onData)
-      : Object.fromEntries(settings.secrets.map((secret) => [secret.env, SBX_PROBLEM.secretsUnlisted])),
-  );
   if (mcp) {
     const loaded = await loadMcp(name, mcp.load, onData);
     // Silent: a server that was never loaded answers an error, which is no news to the tab; what
@@ -639,9 +527,7 @@ interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentSandbox.env` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
-  /** This machine's values of `settings.secrets`, by env name (SbxLocalStore.values). */
-  secretValues: ReadonlyMap<string, string>;
-  /** This machine's values of `settings.variables`, likewise. */
+  /** This machine's values of `settings.variables`, by env name (SbxLocalStore.variableValues). */
   variableValues: ReadonlyMap<string, string>;
   /** Where this agent's sessions land on the host; created if missing, rw, re-applied per spawn. */
   sessionMounts?: SbxSessionMount[];
@@ -650,29 +536,18 @@ interface SbxRunRequest {
 }
 
 /**
- * A sandboxed tab's variables for `sbx run -e`: the agent's own and each secret's placeholder as
- * `NAME=value` (`env`), each variable only by name (`passed`, its value for the environment the
- * caller spawns `sbx run` with, as the control channel's are), since the process list shows a
- * command line and a variable's value is real. A variable a name of TET's own or a secret already
- * holds is left out — tet.json and the dialog refuse one, a hand-edited file may not — as is a
- * secret or variable without a value on this machine (a problem, readSbxProblems).
+ * A sandboxed tab's variables for `sbx run -e`: the agent's own as `NAME=value` (`env`), each
+ * variable only by name (`passed`, its value for the environment the caller spawns `sbx run` with,
+ * as the control channel's are), since the process list shows a command line and a variable's
+ * value is real. A variable a name of TET's own holds is left out — tet.json and the dialog refuse
+ * one, a hand-edited file may not — as is a variable without a value on this machine (a problem,
+ * readSbxProblems).
  */
-export function sandboxEnv({
-  ref,
-  settings,
-  env: agentEnv = [],
-  secretValues,
-  variableValues,
-}: Pick<SbxRunRequest, "ref" | "settings" | "env" | "secretValues" | "variableValues">): {
+export function sandboxEnv({ settings, env: agentEnv = [], variableValues }: Pick<SbxRunRequest, "settings" | "env" | "variableValues">): {
   env: string[];
   passed: Record<string, string>;
 } {
-  const secrets = settings.secrets.filter((secret) => secretValues.has(secret.env));
-  const taken = new Set([
-    ...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))),
-    ...Object.values(CONTROL_ENV),
-    ...settings.secrets.map((secret) => secret.env),
-  ]);
+  const taken = new Set([...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))), ...Object.values(CONTROL_ENV)]);
   const passed: Record<string, string> = {};
   for (const { env: name } of settings.variables.filter((variable) => !taken.has(variable.env))) {
     const value = variableValues.get(name);
@@ -680,19 +555,16 @@ export function sandboxEnv({
       passed[name] = value;
     }
   }
-  return {
-    env: [...agentEnv, ...secrets.map((secret) => `${secret.env}=${secretPlaceholder(ref.projectId, secret.env)}`)],
-    passed,
-  };
+  return { env: agentEnv, passed };
 }
 
 /**
  * Readies a tab's sandbox and returns the `sbx run` arguments: TET's mounts, skills and Allowed
- * paths, ports, secrets and variables (sandboxEnv: `env` for the caller to spawn `sbx run` with),
+ * paths, ports and variables (sandboxEnv: `env` for the caller to spawn `sbx run` with),
  * and with a control channel its env and the `tet-ctl` launcher. Creates the sandbox itself
  * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent, and
  * `sbx create` is told its workspace alone: every start, the creating one too, brings the sandbox
- * in line with tet.json the same way, each time: the mounts (mountAll), hosts, ports, secrets and
+ * in line with tet.json the same way, each time: the mounts (mountAll), hosts, ports and
  * MCP servers (alignAtStart), against what sbx lists (readSandboxReads).
  * Applies tet.json as it stands and never writes it: what cannot be applied here
  * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
@@ -704,7 +576,7 @@ export function sandboxEnv({
 export async function prepareSbxRun(
   request: SbxRunRequest,
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems; savedOver: boolean }> {
-  const { agent, name, onData, secretValues, variableValues } = request;
+  const { agent, name, onData, variableValues } = request;
   const { projectId } = request.ref;
   const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
   // One turn per sandbox, which a Save holds too (inSandboxTurns): what is read is what is applied,
@@ -724,7 +596,7 @@ export async function prepareSbxRun(
       projectId,
       settings: request.settings,
       skills: request.skills,
-      values: { secrets: new Set(secretValues.keys()), variables: new Set(variableValues.keys()) },
+      values: { variables: new Set(variableValues.keys()) },
       agents: [agent],
       organization: request.organization,
       rules: request.rules,
@@ -791,7 +663,7 @@ export async function prepareSbxRun(
 
 /**
  * A start's share of bringing its sandbox in line, the sandbox running by now (mountAll): hosts,
- * secrets and MCP servers (alignSandbox), and from the repository's sandbox the project's ports
+ * and MCP servers (alignSandbox), and from the repository's sandbox the project's ports
  * (applyProjectPorts), this one first to take a missing one — all against what the start read
  * (readSandboxReads); the ports only where the sandbox ran when they were read (`warmed`), since a
  * stopped one lists none. Not `sbx run -p` for the ports: `run --name` drops `-p` on an existing
@@ -809,11 +681,8 @@ async function alignAtStart(
   const refused = await alignSandbox(
     name,
     {
-      projectId,
       settings,
       organization,
-      secretValues: request.secretValues,
-      changedSecrets: new Set(),
       live: reads,
       mcp: { load: plan.load, unload: plan.unload },
     },
@@ -855,7 +724,7 @@ interface SbxCheck {
   settings: SbxProjectSettings;
   skills: SbxSkillsSettings;
   /** The env names holding a value here: stored, or typed at this Save. */
-  values: { secrets: ReadonlySet<string>; variables: ReadonlySet<string> };
+  values: { variables: ReadonlySet<string> };
   /** Whose skills is mounted: every agent at Save, the starting one at its spawn. */
   agents: readonly SandboxedAgent[];
   /** readPolicy's. */
@@ -883,7 +752,6 @@ interface SbxCheck {
  * - paths and skills: must exist, and sbx's filesystem rules allow the mount with its access
  *   (sbx-policy.ts's prediction: sbx has no `policy check` for them).
  * - ports: the host port is free, unless one of the project's sandboxes holds it.
- * - secrets: a value here, and every host reachable; an Allowed host counts without governance.
  * - variables: a value here.
  * - mcp: a server sbx has registered is the row's, by its URL; one it has not needs a URL to be
  *   registered from (registerMcp). What sbx then refuses is told when it is.
@@ -896,19 +764,9 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
   const problems: SbxProblems = {};
   const add = (option: SbxOption, row: string, reason: string): void => addProblems(problems, option, { [row]: reason });
   const kinds = SBX_SKILLS_KINDS.filter((kind) => skills[kind] !== false);
-  const secretHosts = [...new Set(settings.secrets.flatMap((secret) => secret.hosts))];
-  // A host both allowed and a secret's is asked once.
-  const asked = new Map<string, Promise<boolean>>();
-  const allowed = (host: string): Promise<boolean> => {
-    const pending = asked.get(host) ?? readHostAllowed(host);
-    asked.set(host, pending);
-    return pending;
-  };
-  const reachable = async (host: string): Promise<boolean> => (!organization && settings.hosts.includes(host)) || (await allowed(host));
-  const [rules, hostsAllowed, secretHostsAllowed, published, own] = await Promise.all([
+  const [rules, hostsAllowed, published, own] = await Promise.all([
     settings.paths.length > 0 || kinds.length > 0 ? (check.rules ?? readPolicy().then((policy) => policy?.rules)) : Promise.resolve([]),
-    organization ? Promise.all(settings.hosts.map(allowed)) : Promise.resolve(settings.hosts.map(() => true)),
-    Promise.all(secretHosts.map(reachable)),
+    organization ? Promise.all(settings.hosts.map(readHostAllowed)) : Promise.resolve(settings.hosts.map(() => true)),
     check.published ??
       (check.ports && settings.ports.length > 0 ? readProjectPorts(check.projectId, check.sandboxes).then(portKeys) : new Set<string>()),
     Promise.all(check.agents.map((agent) => sandboxSkillsFor(agent, skills.skillsFolder))),
@@ -940,13 +798,6 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     }
   }
   settings.hosts.forEach((host, index) => hostsAllowed[index] || add("hosts", host, forbidden));
-  for (const secret of settings.secrets) {
-    if (!values.secrets.has(secret.env)) {
-      add("secrets", secret.env, SBX_PROBLEM.noValue);
-    } else if (secret.hosts.some((host) => !secretHostsAllowed[secretHosts.indexOf(host)])) {
-      add("secrets", secret.env, forbidden);
-    }
-  }
   for (const variable of settings.variables) {
     if (!values.variables.has(variable.env)) {
       add("variables", variable.env, SBX_PROBLEM.noValue);

@@ -16,7 +16,6 @@ import type {
   SbxPort,
   SbxProblems,
   SbxProjectSettings,
-  SbxSecret,
   SbxVariable,
 } from "./types/sbx";
 
@@ -29,44 +28,21 @@ export function isPort(value: string): boolean {
   return /^\d{1,5}$/.test(trimmed) && Number(trimmed) >= 1 && Number(trimmed) <= 65535;
 }
 
-/** A scheme or port, which `sbx secret set-custom` rejects, or a leading "-", which sbx would read
- *  as an option of its own. */
-function isBadHost(host: string): boolean {
-  return /^-|[/:]/.test(host);
-}
-
 /** Why a port row cannot be saved, or undefined. */
 export function sbxPortRefusal({ host, container }: SbxPort): string | undefined {
   return isPort(host) && isPort(container) ? undefined : "Both ports must be whole numbers from 1 to 65535";
 }
 
-/** Why a secret row cannot be saved beside the `others`, or undefined: it needs a variable name of
- *  its own, not one of TET's (isReservedName), and hosts, none with a scheme or port (isBadHost). */
-export function sbxSecretRefusal({ env, hosts }: SbxSecret, others: SbxSecret[]): string | undefined {
-  return !isEnvName(env) || isReservedName(env) || others.some((other) => other.env === env) || hosts.length === 0 || hosts.some(isBadHost)
-    ? "Needs a variable name of its own, not PATH or TET_*, and hosts without scheme or port"
-    : undefined;
-}
-
 /**
- * Why a variable row cannot be saved beside the `others` and the secrets, or undefined: it needs a
- * name no secret or other variable holds — the sandbox sees one value per name, and `sbx run -e
- * NAME` reads a variable's from this machine's environment, which on win32 ignores case
- * (`ignoreCase`, the machine's) — and not one of TET's own (isReservedName): its value is set on
- * `sbx run` itself (sbx.ts's sandboxEnv).
+ * Why a variable row cannot be saved beside the `others`, or undefined: it needs a name no other
+ * variable holds — the sandbox sees one value per name, and `sbx run -e NAME` reads a variable's
+ * from this machine's environment, which on win32 ignores case (`ignoreCase`, the machine's) — and
+ * not one of TET's own (isReservedName): its value is set on `sbx run` itself (sbx.ts's sandboxEnv).
  */
-export function sbxVariableRefusal(
-  { env }: SbxVariable,
-  others: SbxVariable[],
-  secrets: SbxSecret[],
-  ignoreCase: boolean,
-): string | undefined {
+export function sbxVariableRefusal({ env }: SbxVariable, others: SbxVariable[], ignoreCase: boolean): string | undefined {
   const same = (name: string): string => envNameKey(name, ignoreCase);
-  return !isEnvName(env) ||
-    isReservedName(env) ||
-    others.some((other) => same(other.env) === same(env)) ||
-    secrets.some((secret) => secret.env === env)
-    ? "Needs a variable name no secret or other variable holds, not PATH or TET_*"
+  return !isEnvName(env) || isReservedName(env) || others.some((other) => same(other.env) === same(env))
+    ? "Needs a variable name no other variable holds, not PATH or TET_*"
     : undefined;
 }
 
@@ -97,9 +73,8 @@ export function sameMcpUrl(first: string, second: string): boolean {
 /**
  * Whether going from `loaded` and `loadedSkills` to `settings` and `skills` reaches a running
  * tab only once it restarts: a mount is added at a tab's start (a removed one goes at Save), and
- * `sbx run -e` sets a variable, a new secret's placeholder included, only there (sbx.ts's
- * prepareSbxRun), as a changed setup script runs there. Ports, hosts and a secret's value or hosts
- * apply at Save; an emptied setup script applies to nothing.
+ * `sbx run -e` sets a variable only there (sbx.ts's prepareSbxRun), as a changed setup script runs
+ * there. Ports and hosts apply at Save; an emptied setup script applies to nothing.
  */
 export function sbxNeedsRestart(
   loaded: SbxProjectSettings,
@@ -112,7 +87,6 @@ export function sbxNeedsRestart(
     SBX_SKILLS_KINDS.some((kind) => skills[kind] !== false && skills[kind] !== loadedSkills[kind]) ||
     (skills.skills !== false && skills.skillsFolder !== loadedSkills.skillsFolder) ||
     settings.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
-    settings.secrets.some((secret) => !loaded.secrets.some((old) => old.env === secret.env)) ||
     names(settings.variables) !== names(loaded.variables) ||
     (settings.setup.length > 0 && settings.setup.join("\n") !== loaded.setup.join("\n"))
   );
@@ -126,7 +100,6 @@ export const SBX_PROBLEM = {
   portInUse: "In use on this machine",
   refused: "Refused by sbx",
   notStarted: "Its sandbox could not be started",
-  secretsUnlisted: "sbx did not list the sandbox's secrets",
   hostsUnlisted: "sbx did not list the sandbox's allowed hosts",
   mcpUnlisted: "sbx did not list its registered MCP servers",
   mcpOtherUrl: "Already registered with sbx under another URL",
@@ -153,7 +126,7 @@ export function forbiddenBy(organization: string | undefined): string {
 }
 
 /** In the dialog's tab order. */
-const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "mcp", "secrets", "variables", "setup"];
+const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "mcp", "variables", "setup"];
 
 /**
  * What a sandboxed session's start could not apply, one notice per option and reason, its rows
@@ -227,7 +200,6 @@ export function withoutProblems(
       ports: settings.ports.filter((port) => fine("ports", sbxPortKey(port))),
       paths: settings.paths.filter((entry) => fine("paths", entry.path)),
       hosts: settings.hosts.filter((host) => fine("hosts", host)),
-      secrets: settings.secrets.filter((secret) => fine("secrets", secret.env)),
       variables: settings.variables.filter((variable) => fine("variables", variable.env)),
       mcp: settings.mcp.filter((server) => fine("mcp", server.name)),
     },

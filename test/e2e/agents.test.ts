@@ -348,12 +348,11 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
     return sbx("exec", "-i", NAME, "sh", "-c", script);
   }
 
-  /** `sbx ls --json`'s sandboxes: a bare array, or under `sandboxes` as an older sbx prints them. */
+  /** `sbx ls --json`'s sandboxes. */
   function listedSandboxes(): { name?: string; workspaces?: string[] }[] {
     const listed = sbx("ls", "--json");
     assert.equal(listed.status, 0, `signed in: ${listed.stderr}`);
-    const parsed = JSON.parse(listed.stdout) as { name?: string }[] | { sandboxes?: { name?: string }[] };
-    const sandboxes = Array.isArray(parsed) ? parsed : parsed.sandboxes;
+    const sandboxes = JSON.parse(listed.stdout) as { name?: string; workspaces?: string[] }[];
     assert.ok(Array.isArray(sandboxes), `sandboxes in ${listed.stdout}`);
     return sandboxes;
   }
@@ -656,7 +655,6 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
           sandboxes,
           paths: { agentDir: AGENT_DIR },
           agentArgs: [],
-          secretValues: new Map(),
           variableValues: new Map(),
           onData: (data) => (output += data),
         });
@@ -678,7 +676,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
       const sandboxes = await listSandboxes();
       assert.ok(sandboxes, "sbx lists the sandboxes");
       const next = rows({ hosts: ["example.org"], ports: [port(58125, 8081), port(58126, 8082)], mcp: [{ name: stray, url: "" }] });
-      const saved = await saveSbxSettings({ ref, path: PROJECT }, [], next, NO_SKILLS, new Map(), new Set(), undefined, sandboxes);
+      const saved = await saveSbxSettings({ ref, path: PROJECT }, [], next, NO_SKILLS, undefined, sandboxes);
       assert.deepEqual([saved.refused, saved.failures], [{}, []]);
       assert.deepEqual(await readSbxSettings(PROJECT), next);
       assert.equal((await listSandboxes())?.get(other)?.running, false, "the stopped sandbox is left stopped");

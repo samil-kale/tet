@@ -14,8 +14,8 @@ import { alignSandbox, applyProjectPorts, inSandboxTurns, readSandboxReads, remo
 
 /**
  * The agent of a sandbox TET made (sandboxName) for this workspace under another id, as for a
- * copied folder given a new one. Nothing reaches it, yet it keeps grants, rules and secrets of its
- * own; undefined for any other sandbox.
+ * copied folder given a new one. Nothing reaches it, yet it keeps grants and rules of its own;
+ * undefined for any other sandbox.
  */
 function orphanAgent(name: string, workspaces: string[], target: SbxSaveTarget): AgentId | undefined {
   const agentId = SANDBOXED_AGENTS.find((candidate) => new RegExp(`^tet-${candidate.id}-[0-9a-f]{12}$`).test(name))?.id;
@@ -31,16 +31,11 @@ export interface SbxSaveTarget {
 
 /**
  * Rejects a Save sbx cannot answer for, before it changes anything (saveSbxSettings): what a kept
- * sandbox holds must be readable, or a row sbx merely could not list would go as refused — a
- * secret with its stored value, which sbx never gives back — and be taken back from every sandbox.
- * Ports are listed only by a running sandbox (readSandboxPorts), and only those are asked: a Save
- * starts none.
+ * sandbox holds must be readable, or a row sbx merely could not list would go as refused and be
+ * taken back from every sandbox. Ports are listed only by a running sandbox (readSandboxPorts),
+ * and only those are asked: a Save starts none.
  */
-function assertReadable(
-  reads: SandboxReads,
-  kept: boolean,
-  { secrets, ports, hosts, mcp }: { secrets: boolean; ports: boolean; hosts: boolean; mcp: boolean },
-): void {
+function assertReadable(reads: SandboxReads, kept: boolean, { ports, hosts, mcp }: { ports: boolean; hosts: boolean; mcp: boolean }): void {
   const unsaved = "Nothing was saved; try again.";
   // Registered at Save whether or not a sandbox exists yet.
   if (mcp && reads.mcp === undefined) {
@@ -48,9 +43,6 @@ function assertReadable(
   }
   if (!kept) {
     return;
-  }
-  if (secrets && reads.secrets === undefined) {
-    throw new Error(`SBX could not list the sandboxes' secrets. ${unsaved}`);
   }
   if (hosts && reads.hosts === undefined) {
     throw new Error(`SBX could not list the sandboxes' allowed hosts. ${unsaved}`);
@@ -72,9 +64,9 @@ export interface SbxRemoved {
  * tab), and one another id of the project left (orphanAgent). The others are brought in line as a
  * tab's start does it (alignSandbox, applyProjectPorts), each against the sandboxes' own
  * (readSandboxReads), so a hand-set rule deleted as a row
- * goes too and a port never published is tried again — but none is started for it: hosts and
- * secrets reach a stopped sandbox too, ports and MCP servers only one that runs, and a stopped one
- * takes them at its next tab's start (prepareSbxRun). A row sbx refuses in any sandbox is
+ * goes too and a port never published is tried again — but none is started for it: hosts reach a
+ * stopped sandbox too, ports and MCP servers only one that runs, and a stopped one takes them at
+ * its next tab's start (prepareSbxRun). A row sbx refuses in any sandbox is
  * `refused`, left out of tet.json and taken back where it went through — a port it would not
  * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
  * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
@@ -91,8 +83,6 @@ export async function saveSbxSettings(
   worktrees: readonly SbxSaveTarget[],
   request: SbxProjectSettings,
   skills: { previous: SbxSkillsSettings; current: SbxSkillsSettings },
-  secretValues: ReadonlyMap<string, string>,
-  changedSecrets: ReadonlySet<string>,
   organization: string | undefined,
   /** listSandboxes', which the caller took for its check. */
   sandboxes: SandboxList,
@@ -120,7 +110,7 @@ export async function saveSbxSettings(
       }
     }
   }
-  const kept: { agent: SandboxedAgent; name: string; projectId: string; ports: boolean; running: boolean }[] = [];
+  const kept: { agent: SandboxedAgent; name: string; ports: boolean; running: boolean }[] = [];
   const dropped: (SbxRemoved & { name: string })[] = [];
   for (const target of targets) {
     for (const agent of SANDBOXED_AGENTS) {
@@ -131,7 +121,7 @@ export async function saveSbxSettings(
         continue;
       }
       if (settings.enabled && sameSet(existing.workspaces, [target.path])) {
-        kept.push({ agent, name, projectId: target.ref.projectId, ports: target === project, running: existing.running });
+        kept.push({ agent, name, ports: target === project, running: existing.running });
       } else {
         dropped.push({ name, ref: target.ref, agentId });
       }
@@ -156,7 +146,6 @@ export async function saveSbxSettings(
       const portsOf = anyPorts ? kept.filter(({ ports, running }) => ports && running).map(({ name }) => name) : [];
       const reads = await readSandboxReads(portsOf);
       assertReadable(reads, kept.length > 0, {
-        secrets: settings.secrets.length > 0 || previous.secrets.length > 0,
         ports: anyPorts,
         hosts: !organization,
         mcp: anyMcp,
@@ -203,15 +192,12 @@ export async function saveSbxSettings(
         }
         const told = new Set(mcpRows.map((server) => server.name));
         // One by one: sbx's own lock queues them anyway.
-        for (const { name, projectId, running } of kept) {
+        for (const { name, running } of kept) {
           mergeProblems(
             refused,
             await alignSandbox(name, {
-              projectId,
               settings: target,
               organization,
-              secretValues,
-              changedSecrets,
               live,
               mcp: running && plan ? { load: plan.load, unload: plan.unload, told } : undefined,
             }),
@@ -228,7 +214,6 @@ export async function saveSbxSettings(
           ...previous.ports.filter((port) => refusedPort(port) && !settings.ports.some((next) => sbxPortKey(next) === sbxPortKey(port))),
         ],
         hosts: settings.hosts.filter((host) => problemOf(refused, "hosts", host) === undefined),
-        secrets: settings.secrets.filter((secret) => problemOf(refused, "secrets", secret.env) === undefined),
         mcp: [
           ...settings.mcp.filter((server) => problemOf(refused, "mcp", server.name) === undefined),
           // One sbx would not unload is still loaded: its row stays, as a port it would not unpublish.
