@@ -330,7 +330,7 @@ textarea:focus,
      `.dialog`'s width. */
   --dialog-wide-width: 620px;
   /* The SBX Settings' tabs need more than the other tabbed dialogs. */
-  --dialog-sbx-width: 660px;
+  --dialog-sbx-width: 620px;
   /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
      not resize them. Capped to the window. */
   --dialog-tall-height: 450px;
