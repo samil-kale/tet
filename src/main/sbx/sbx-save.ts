@@ -150,14 +150,19 @@ export async function saveSbxSettings(
         hosts: !organization,
         mcp: anyMcp,
       });
-      for (const { name, ref, agentId } of orphaned) {
-        if (!(await removeSandbox(name))) {
+      // All at once; the first, in this order, that could not be removed rejects.
+      const [orphanedGone, droppedGone] = await Promise.all([
+        Promise.all(orphaned.map(({ name }) => removeSandbox(name))),
+        Promise.all(dropped.map(({ name }) => removeSandbox(name))),
+      ]);
+      for (const [index, { name, ref, agentId }] of orphaned.entries()) {
+        if (!orphanedGone[index]) {
           throw new Error(`An earlier ${getAgent(agentId).displayName} sandbox (${name}) could not be removed.`);
         }
         orphans.push({ ref, agentId });
       }
-      for (const { name, ref, agentId } of dropped) {
-        if (!(await removeSandbox(name))) {
+      for (const [index, { ref, agentId }] of dropped.entries()) {
+        if (!droppedGone[index]) {
           throw new Error(`The ${getAgent(agentId).displayName} sandbox could not be removed.`);
         }
         removed.push({ ref, agentId });
@@ -191,17 +196,19 @@ export async function saveSbxSettings(
           );
         }
         const told = new Set(mcpRows.map((server) => server.name));
-        // One by one: sbx's own lock queues them anyway.
-        for (const { name, running } of kept) {
-          mergeProblems(
-            refused,
-            await alignSandbox(name, {
+        // Every sandbox at once, merged in their order.
+        const aligned = await Promise.all(
+          kept.map(({ name, running }) =>
+            alignSandbox(name, {
               settings: target,
               organization,
               live,
               mcp: running && plan ? { load: plan.load, unload: plan.unload, told } : undefined,
             }),
-          );
+          ),
+        );
+        for (const problems of aligned) {
+          mergeProblems(refused, problems);
         }
         return refused;
       };
@@ -226,13 +233,21 @@ export async function saveSbxSettings(
         Object.keys(refused).length > 0
           ? sbxProblemNotices(await apply(applied, await readSandboxReads(portsOf))).map((notice) => `Not taken back: ${notice}`)
           : [];
+      // Every sandbox at once, merged in their order.
+      const unrevokedBy = await Promise.all(
+        kept.map(async ({ agent, name }) => {
+          const own: SbxProblems = {};
+          const current = new Set((await grantsOf(agent, skills.current, applied.paths)).map((grant) => grant.mount));
+          const stale = (await grantsOf(agent, skills.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
+          if (stale.length > 0) {
+            await revokeMounts(name, stale, own);
+          }
+          return own;
+        }),
+      );
       const unrevoked: SbxProblems = {};
-      for (const { agent, name } of kept) {
-        const current = new Set((await grantsOf(agent, skills.current, applied.paths)).map((grant) => grant.mount));
-        const stale = (await grantsOf(agent, skills.previous, previous.paths)).filter((grant) => !current.has(grant.mount));
-        if (stale.length > 0) {
-          await revokeMounts(name, stale, unrevoked);
-        }
+      for (const own of unrevokedBy) {
+        mergeProblems(unrevoked, own);
       }
       // A grant sbx would not take back is still there: its row stays as it was.
       const stays = new Set(Object.keys(unrevoked.paths ?? {}).map(normalizeHostPath));

@@ -74,34 +74,28 @@ async function registerMcp(
  * Loads each server into a running sandbox: its MCP gateway is up only while it runs, a stopped one
  * answers 409 "no MCP gateway is running", so the callers hold a running one (a tab's start, a Save
  * for the sandboxes `sbx ls` lists as running). sbx keeps a load across a stop, and loading one that
- * is loaded is no error. Returns what sbx refused, by name.
+ * is loaded is no error. All at once: sbx takes concurrent loads into one sandbox. Returns what sbx
+ * refused, by name.
  */
 export async function loadMcp(sandbox: string, names: readonly string[], onData?: OnData): Promise<Record<string, string>> {
-  const refused: Record<string, string> = {};
-  for (const name of names) {
-    const result = await runSbx(["mcp", "load", name, "--sandbox", sandbox], { onData });
-    if (!result.ok) {
-      refused[name] = sbxRefusal(result);
-    }
-  }
-  return refused;
+  const results = await Promise.all(names.map((name) => runSbx(["mcp", "load", name, "--sandbox", sandbox], { onData })));
+  return Object.fromEntries(names.flatMap((name, index) => (results[index].ok ? [] : [[name, sbxRefusal(results[index])]])));
 }
 
 /**
  * Unloads each server from a running sandbox (as loadMcp), ending its tools *now*, as a revoked
  * mount does. Unloading one that is not loaded answers 404 with exit 1 and no code of its own, so
  * that answer is told by its words — the one place that does: it is what the row was removed for.
- * The registration stays.
+ * The registration stays. All at once, as loadMcp.
  */
 export async function unloadMcp(sandbox: string, names: readonly string[], onData?: OnData): Promise<Record<string, string>> {
-  const refused: Record<string, string> = {};
-  for (const name of names) {
-    const result = await runSbx(["mcp", "unload", name, "--sandbox", sandbox], { onData });
-    if (!result.ok && !sbxRefusal(result).includes("is not loaded")) {
-      refused[name] = sbxRefusal(result);
-    }
-  }
-  return refused;
+  const results = await Promise.all(names.map((name) => runSbx(["mcp", "unload", name, "--sandbox", sandbox], { onData })));
+  return Object.fromEntries(
+    names.flatMap((name, index) => {
+      const result = results[index];
+      return result.ok || sbxRefusal(result).includes("is not loaded") ? [] : [[name, sbxRefusal(result)]];
+    }),
+  );
 }
 
 /** `sbx mcp auth`, which opens the browser and waits on the server's OAuth flow; what sbx said on

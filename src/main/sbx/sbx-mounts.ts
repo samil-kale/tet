@@ -7,7 +7,7 @@ import type { SbxSkillsSettings, SbxSkillsEntry, SbxSkillsKind, SbxSkillsSource,
 import { agentInstalled, SANDBOXED_AGENTS } from "../agents";
 import type { AgentPaths, SandboxedAgent } from "../agents/agent";
 import { readLinkedGitDir } from "../util/linked-git-dir";
-import { inTurn, mapLimited } from "../util/async";
+import { inTurn } from "../util/async";
 import { assertInside, normalizeHostPath, openInside, relativeInside } from "../util/path-inside";
 import { toContainerPath } from "../agents/hook-target";
 import { runSbx, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
@@ -160,8 +160,6 @@ export async function ensureRunning(name: string, onData?: OnData): Promise<bool
   return (await runSbx(["exec", "-i", name, "true"], { onData })).ok;
 }
 
-const MOUNT_CONCURRENCY = 6;
-
 /** One live mount as `sbx inspect` lists it. */
 interface RuntimeBind {
   host: string;
@@ -252,7 +250,7 @@ export async function mountDropped(name: string, seen: string[], hostPaths: stri
   return inTurn(mountSetups, name, async (): Promise<DropMount[]> => {
     const [binds, policy] = await Promise.all([readRuntimeBinds(name), readPolicy()]);
     const answers: DropMount[] = [];
-    // One by one: sbx's own lock refuses mounts side by side.
+    // In order: a path under one mounted just before is seen through that mount (`binds`), not mounted again.
     for (const host of hosts) {
       const mountedAt = (root: string): boolean => within(host, root);
       if (seen.some(mountedAt) || binds?.some((bind) => bind.target === toContainerPath(bind.host) && mountedAt(bind.host))) {
@@ -287,9 +285,9 @@ export async function mountDropped(name: string, seen: string[], hostPaths: stri
  *   start.
  * - another access is refused while one is held, so the unmounts run first.
  *
- * Concurrent up to MOUNT_CONCURRENCY, as sbx's own lock refuses more. One sandbox's tabs take turns
- * (`mountSetups`): two tabs starting together would both mount what is missing, the second failing
- * on a read-only file; in turn, the second finds it all there.
+ * All at once, the unmounts and then the mounts: sbx takes concurrent mounts into one sandbox. One
+ * sandbox's tabs take turns (`mountSetups`): two tabs starting together would both mount what is
+ * missing, the second failing on a read-only file; in turn, the second finds it all there.
  *
  * `started` is a start already underway (`SbxRunRequest.warm`), waited for before unmounting and
  * joined instead of started again — but only its *success* counts: it may have run before the
@@ -304,19 +302,18 @@ export function mountAll(name: string, specs: MountSpec[], onData?: OnData, star
     // refused, which the caller tells.
     const [live = [], running] = await Promise.all([readRuntimeMounts(name), started]);
     const wanted = new Set(specs.map((spec) => spec.mount));
-    // One by one: rare (a change since the last start).
-    for (const mount of live.filter((entry) => !wanted.has(entry.mount))) {
-      await runSbx(["umount", name, mount.unmount], { onData });
-    }
+    await Promise.all(live.filter((entry) => !wanted.has(entry.mount)).map((mount) => runSbx(["umount", name, mount.unmount], { onData })));
     if (!running) {
       await ensureRunning(name, onData);
     }
     const held = new Set(live.map((mount) => mount.mount));
     const missing = specs.filter((spec) => !held.has(spec.mount));
-    const refused = await mapLimited(missing, MOUNT_CONCURRENCY, async (spec) => {
-      const result = await runSbx(["mount", name, spec.mount], { onData });
-      return result.ok ? undefined : sbxRefusal(result);
-    });
+    const refused = await Promise.all(
+      missing.map(async (spec) => {
+        const result = await runSbx(["mount", name, spec.mount], { onData });
+        return result.ok ? undefined : sbxRefusal(result);
+      }),
+    );
     return new Map(missing.flatMap((spec, index) => (refused[index] === undefined ? [] : [[spec.mount, refused[index]] as const])));
   });
 }
@@ -325,17 +322,18 @@ export function mountAll(name: string, specs: MountSpec[], onData?: OnData, star
  * Narrows grants at Save, not at the next start: a dropped or rw→ro path or skills kind must
  * stop being accessible *now* in a running sandbox, and a stopped one would bind it again at its
  * start. Only a grant the sandbox holds (readRuntimeMounts; every one when sbx cannot say): one it
- * does not hold is gone already. A stopped sandbox takes the `umount`. Adds what sbx would not take
- * back to `refused`.
+ * does not hold is gone already. A stopped sandbox takes the `umount`. All at once, as mountAll's.
+ * Adds what sbx would not take back to `refused`.
  */
 export async function revokeMounts(name: string, grants: Grant[], refused: SbxProblems): Promise<void> {
   const live = (await readRuntimeMounts(name))?.map((mount) => mount.mount);
-  for (const grant of grants.filter((entry) => live?.includes(entry.mount) ?? true)) {
-    const result = await runSbx(["umount", name, grant.unmount]);
-    if (!result.ok) {
-      addProblems(refused, grant.option, { [grant.row]: sbxRefusal(result) });
+  const held = grants.filter((entry) => live?.includes(entry.mount) ?? true);
+  const results = await Promise.all(held.map((grant) => runSbx(["umount", name, grant.unmount])));
+  held.forEach((grant, index) => {
+    if (!results[index].ok) {
+      addProblems(refused, grant.option, { [grant.row]: sbxRefusal(results[index]) });
     }
-  }
+  });
 }
 
 /** A `SandboxSessionMount` with an absolute host side, for `sessionMountSpecs`. */

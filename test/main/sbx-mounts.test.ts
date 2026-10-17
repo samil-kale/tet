@@ -136,7 +136,11 @@ describe("narrowing a sandbox's grants at Save", () => {
     const { calls } = await withSbx({ live: [liveOf(held), liveOf(stuck)], refuseUnmount: [stuck.unmount] }, () =>
       revokeMounts("tet-r-1", [grant(held, "held"), grant(gone, "gone"), grant(stuck, "stuck")], refused),
     );
-    assert.deepEqual(calls, ["inspect tet-r-1 --json", `umount tet-r-1 ${held.unmount}`, `umount tet-r-1 ${stuck.unmount}`]);
+    // The umounts run at once, in any order.
+    assert.deepEqual(
+      [calls[0], calls.slice(1).sort()],
+      ["inspect tet-r-1 --json", [`umount tet-r-1 ${held.unmount}`, `umount tet-r-1 ${stuck.unmount}`].sort()],
+    );
     assert.deepEqual(Object.keys(refused.paths ?? {}), ["stuck"]);
     assert.match(refused.paths?.stuck ?? "", /busy/);
   });
@@ -144,7 +148,10 @@ describe("narrowing a sandbox's grants at Save", () => {
   it("takes out every grant where sbx cannot say what it holds", async () => {
     const [one, two] = [folder("tet-one-"), folder("tet-two-")];
     const { calls } = await withSbx({}, () => revokeMounts("tet-r-2", [grant(one, "one"), grant(two, "two")], {}));
-    assert.deepEqual(calls, ["inspect tet-r-2 --json", `umount tet-r-2 ${one.unmount}`, `umount tet-r-2 ${two.unmount}`]);
+    assert.deepEqual(
+      [calls[0], calls.slice(1).sort()],
+      ["inspect tet-r-2 --json", [`umount tet-r-2 ${one.unmount}`, `umount tet-r-2 ${two.unmount}`].sort()],
+    );
   });
 });
 

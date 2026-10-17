@@ -272,12 +272,14 @@ export async function readSandboxHosts(): Promise<Map<string, string[]> | undefi
  * Removes dropped hosts, ending the allowance *now* (as revokeMounts). One `rm` per host: the
  * comma-list form removes nothing if any entry is missing, and one removed by hand answers "rule
  * not found", exit 1, while the others still go. `--force`: `rm` asks first, which a closed stdin
- * (runSbx) would fail.
+ * (runSbx) would fail. All at once: sbx takes concurrent removals.
  */
 async function revokeStaleHosts(name: string, previous: string[], current: string[], onData?: OnData): Promise<void> {
-  for (const host of previous.filter((old) => !current.includes(old))) {
-    await runSbx(["policy", "rm", "network", "--sandbox", name, "--resource", host, "--force"], { onData });
-  }
+  await Promise.all(
+    previous
+      .filter((old) => !current.includes(old))
+      .map((host) => runSbx(["policy", "rm", "network", "--sandbox", name, "--resource", host, "--force"], { onData })),
+  );
 }
 
 /**
@@ -342,25 +344,25 @@ export function parsePublishedPorts(stdout: string): SbxPort[] {
  * Publishes and unpublishes the ports given: only what the sandbox does not have as asked, since
  * re-publishing errors ("already published") — applyProjectPorts works that out. Returns what sbx
  * refused, by `host:container`, with its last line (sbx's `ERROR: …`). Publishing starts a stopped
- * sandbox; `--unpublish` does not, and succeeds for a port never published.
+ * sandbox; `--unpublish` does not, and succeeds for a port never published. The unpublishes first,
+ * then the publishes, each all at once: sbx takes concurrent port changes to one sandbox.
  */
 async function applyPortChanges(
   name: string,
   delta: { removed: SbxPort[]; added: SbxPort[] },
   onData?: OnData,
 ): Promise<Record<string, string>> {
-  const changes = [
-    ...delta.removed.map((port) => ["--unpublish", sbxPortKey(port)]),
-    ...delta.added.map((port) => ["--publish", sbxPortKey(port)]),
-  ];
-  const refused: Record<string, string> = {};
-  for (const [flag, key] of changes) {
-    const result = await runSbx(["ports", name, flag, key], { onData });
-    if (!result.ok) {
-      refused[key] = sbxRefusal(result);
-    }
-  }
-  return refused;
+  const change = (flag: string, ports: SbxPort[]) =>
+    Promise.all(
+      ports.map(async (port) => {
+        const key = sbxPortKey(port);
+        const result = await runSbx(["ports", name, flag, key], { onData });
+        return result.ok ? [] : [[key, sbxRefusal(result)] as const];
+      }),
+    );
+  const unpublished = await change("--unpublish", delta.removed);
+  const published = await change("--publish", delta.added);
+  return Object.fromEntries([...unpublished, ...published].flat());
 }
 
 /**
@@ -383,9 +385,7 @@ export async function applyProjectPorts(
   const { dropped = [], read, onData } = options;
   const wanted = new Set(ports.map(sbxPortKey));
   const unseen = [...ports, ...dropped.filter((port) => !wanted.has(sbxPortKey(port)))];
-  for (const name of stopped) {
-    await applyPortChanges(name, { removed: unseen, added: [] });
-  }
+  await Promise.all(stopped.map((name) => applyPortChanges(name, { removed: unseen, added: [] })));
   if (running.length === 0) {
     return {};
   }
@@ -393,12 +393,14 @@ export async function applyProjectPorts(
   const published = read
     ? running.map((name) => read.get(name) ?? [])
     : await Promise.all(running.map(async (name) => (await readSandboxPorts(name)) ?? []));
+  const unpublished = await Promise.all(
+    running.map((name, index) =>
+      applyPortChanges(name, { removed: published[index].filter((port) => !wanted.has(sbxPortKey(port))), added: [] }, onData),
+    ),
+  );
   const refused: Record<string, string> = {};
-  for (const [index, name] of running.entries()) {
-    Object.assign(
-      refused,
-      await applyPortChanges(name, { removed: published[index].filter((port) => !wanted.has(sbxPortKey(port))), added: [] }, onData),
-    );
+  for (const refusals of unpublished) {
+    Object.assign(refused, refusals);
   }
   const forwarded = new Set(published.flat().map(sbxPortKey));
   // The first sandbox that takes it; sbx's last refusal otherwise.
@@ -413,12 +415,15 @@ export async function applyProjectPorts(
     }
     return reason;
   };
-  for (const port of ports.filter((entry) => !forwarded.has(sbxPortKey(entry)))) {
-    const reason = await publish(port);
+  // Each port on its own, all at once; within one, the sandboxes in turn.
+  const missing = ports.filter((entry) => !forwarded.has(sbxPortKey(entry)));
+  const reasons = await Promise.all(missing.map(publish));
+  missing.forEach((port, index) => {
+    const reason = reasons[index];
     if (reason !== undefined) {
       refused[sbxPortKey(port)] = reason;
     }
-  }
+  });
   return refused;
 }
 

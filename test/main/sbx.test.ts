@@ -368,10 +368,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     const { dir, repoFolder } = fakeSbx({ published: [], stopped: true });
     await writeSbxSettings(repoFolder, settings([port(4000)]));
     const { result, calls } = await saveIn(dir, repoFolder, { ...settings([port(3000)]), hosts: ["example.com"], mcp: [notion] });
-    assert.deepEqual(
-      calls.filter((call) => call.startsWith("ports ") || call.startsWith("exec ") || call.startsWith("mcp load")),
-      [`ports ${name} --unpublish 3000:3000`, `ports ${name} --unpublish 4000:4000`],
-    );
+    // The unpublishes run at once, in any order.
+    assert.deepEqual(calls.filter((call) => call.startsWith("ports ") || call.startsWith("exec ") || call.startsWith("mcp load")).sort(), [
+      `ports ${name} --unpublish 3000:3000`,
+      `ports ${name} --unpublish 4000:4000`,
+    ]);
     assert.ok(calls.includes(`policy allow network --sandbox ${name} example.com`));
     assert.ok(calls.includes(`mcp add notion --url ${notion.url} --skip-auth`), "registered all the same");
     assert.deepEqual(result.refused, {}, "what waits for the next tab is not refused");
