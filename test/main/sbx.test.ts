@@ -213,6 +213,18 @@ describe("saving SBX settings", () => {
       dir,
       "sbx",
       `const fs = require("node:fs");
+// One call at a time, as sbx's daemon answers them: TET runs several at once, and a port change
+// rewrites the answers another call is reading.
+const lock = ${JSON.stringify(`${answerFile}.lock`)};
+for (;;) {
+  try {
+    fs.mkdirSync(lock);
+    break;
+  } catch {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 5);
+  }
+}
+process.on("exit", () => fs.rmdirSync(lock));
 const answers = JSON.parse(fs.readFileSync(${JSON.stringify(answerFile)}, "utf8"));
 const args = process.argv.slice(2);
 fs.appendFileSync(answers.log, args.join(" ") + "\\n");

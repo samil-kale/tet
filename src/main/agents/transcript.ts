@@ -252,7 +252,7 @@ interface TailScan<T> {
   merge: (tail: T, previous: T) => void;
 }
 
-/** A tail scan's answer, with the file's size and mtime from its own fstat — a listing stats no further. */
+/** A tail scan's answer, with the file's size and mtime from its own stat — a listing stats no further. */
 export interface ScannedTail<T> {
   tail: T;
   size: number;
@@ -260,7 +260,8 @@ export interface ScannedTail<T> {
 }
 
 /**
- * Reads a transcript backwards for the agent's `read`, answering an unchanged file from `cache`.
+ * Reads a transcript backwards for the agent's `read`, answering an unchanged file from `cache` by
+ * a stat, without opening it: an open costs far more than a stat, and most files are unchanged.
  * A grown file is read only down to a chunk below the previous scan's end, the rest merged from
  * the old answer — the overlap covers a line caught half-written. The caller owns and evicts the cache.
  *
@@ -272,6 +273,11 @@ export async function scanTranscriptTail<T>(
   cache: Map<string, { size: number; tail: T }>,
   scan: TailScan<T>,
 ): Promise<ScannedTail<T>> {
+  const known = await fs.promises.stat(filePath);
+  const hit = cache.get(filePath);
+  if (hit?.size === known.size) {
+    return { tail: hit.tail, size: known.size, mtimeMs: known.mtimeMs };
+  }
   const handle = await fs.promises.open(filePath, "r");
   try {
     const { size, mtimeMs } = await handle.stat();
