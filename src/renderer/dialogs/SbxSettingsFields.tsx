@@ -77,7 +77,7 @@ export interface FieldsState {
   hosts: Row<{ host: string }>[];
   /** `value` only what was typed since opening — a stored one never reaches the renderer; `from`
    *  the name a row was opened under (SbxLocalEdits). */
-  variables: Row<{ env: string; value: string; from?: string }>[];
+  environment: Row<{ env: string; value: string; from?: string }>[];
   mcp: McpRow[];
   /** The setup script as typed. */
   setup: string;
@@ -101,8 +101,8 @@ export function fromSettings(settings: SbxProjectSettings, stored: SbxStoredLoca
       settings.hosts.map((host) => withId({ host })),
       BLANK_HOST,
     ),
-    variables: atLeastOne(
-      settings.variables.map((variable) => withId({ env: variable, value: "", from: variable })),
+    environment: atLeastOne(
+      settings.environment.map((variable) => withId({ env: variable, value: "", from: variable })),
       BLANK_VARIABLE,
     ),
     mcp: atLeastOne(
@@ -153,7 +153,7 @@ function mcpMark(
   );
 }
 
-type VariableRow = FieldsState["variables"][number];
+type VariableRow = FieldsState["environment"][number];
 
 function isEmptyVariableRow(row: VariableRow): boolean {
   return row.env.trim() === "" && row.value === "";
@@ -163,7 +163,7 @@ function isEmptyVariableRow(row: VariableRow): boolean {
 function variableRefusal(row: VariableRow, state: FieldsState): string | undefined {
   return isEmptyVariableRow(row)
     ? undefined
-    : sbxVariableRefusal(named(row), state.variables.filter((other) => other.id !== row.id).map(named), PLATFORM.envNamesIgnoreCase);
+    : sbxVariableRefusal(named(row), state.environment.filter((other) => other.id !== row.id).map(named), PLATFORM.envNamesIgnoreCase);
 }
 
 /** Why Save waits, or `undefined`: every port row two ports or empty, every variable row complete
@@ -172,8 +172,8 @@ export function saveBlocked(state: FieldsState): string | undefined {
   if (state.ports.some((row) => portRefusal(row) !== undefined)) {
     return "A port on the Ports tab is not a whole number from 1 to 65535";
   }
-  if (state.variables.some((row) => variableRefusal(row, state) !== undefined)) {
-    return "A variable on the Variables tab needs a name no other variable holds, not PATH or TET_*";
+  if (state.environment.some((row) => variableRefusal(row, state) !== undefined)) {
+    return "A variable on the Environment tab needs a name no other variable holds, not PATH or TET_*";
   }
   if (state.mcp.some((row) => mcpRefusal(row, state.mcp) !== undefined)) {
     return "A server on the MCP tab needs a name no other server holds and a URL starting with https:// or http://";
@@ -193,13 +193,13 @@ export function toSettings(state: FieldsState): Omit<SbxProjectSettings, "enable
       .filter((port) => port.host && port.container),
     paths: state.paths.map(({ path, access }) => ({ path, access })),
     hosts: state.hosts.map(({ host }) => host.trim()).filter(Boolean),
-    variables: state.variables.filter((row) => !isEmptyVariableRow(row)).map(named),
+    environment: state.environment.filter((row) => !isEmptyVariableRow(row)).map(named),
     mcp: state.mcp.filter((row) => !isEmptyMcpRow(row)).map((row) => ({ name: row.name.trim(), url: row.url.trim() })),
     setup: setupLines(state.setup),
   };
 }
 
-/** The variables' rows as Save stores them on this machine; a row left without a name holds nothing. */
+/** The environment rows as Save stores them on this machine; a row left without a name holds nothing. */
 function toLocalEdits(rows: { env: string; value: string; from?: string }[]): SbxLocalEdits {
   const kept = rows.filter((row) => row.env.trim() !== "");
   return {
@@ -219,7 +219,7 @@ function toSkills(skills: SbxSkillsSettings): SbxSkillsSettings {
  *  skills, for Save. */
 export function toLocalSave(state: FieldsState): SbxLocalSave {
   return {
-    variables: toLocalEdits(state.variables),
+    environment: toLocalEdits(state.environment),
     skills: toSkills(state.skills),
   };
 }
@@ -242,7 +242,7 @@ function holdsValue(row: { from?: string }, stored: readonly string[]): boolean 
  *  a variable's value is set by `sbx run -e` too. */
 export function needsRestart(loaded: SbxProjectSettings, loadedSkills: SbxSkillsSettings, state: FieldsState): boolean {
   return (
-    sbxNeedsRestart(loaded, loadedSkills, toSettings(state), toSkills(state.skills)) || state.variables.some((row) => row.value !== "")
+    sbxNeedsRestart(loaded, loadedSkills, toSettings(state), toSkills(state.skills)) || state.environment.some((row) => row.value !== "")
   );
 }
 
@@ -269,7 +269,7 @@ export function useSbxProblems(
   const [problems, setProblems] = useState<SbxProblems>({});
   const settings = { enabled: true, ...toSettings(state) };
   const skills = toSkills(state.skills);
-  const values = { variables: valueNames(state.variables, stored.variables) };
+  const values = { environment: valueNames(state.environment, stored.environment) };
   const key = JSON.stringify([settings, skills, values, organization]);
   /** The loaded rows go at once; an edit waits (CHECK_DELAY_MS). */
   const opened = useRef(true);
@@ -308,7 +308,7 @@ function portMark(row: FieldsState["ports"][number], problems: SbxProblems): str
 
 /** A variable row's mark, or `undefined`, likewise. */
 function variableMark(row: VariableRow, state: FieldsState, problems: SbxProblems): string | undefined {
-  return variableRefusal(row, state) ?? problemOf(problems, "variables", row.env.trim());
+  return variableRefusal(row, state) ?? problemOf(problems, "environment", row.env.trim());
 }
 
 /** Each tab's mark: its first marked row's, repeated on the tab so it shows from any tab. */
@@ -323,7 +323,7 @@ export function tabMarks(
     paths: firstMark(state.paths.map((row) => problemOf(problems, "paths", row.path))),
     hosts: firstMark(state.hosts.map((row) => problemOf(problems, "hosts", row.host.trim()))),
     mcp: firstMark(state.mcp.map((row) => mcpMark(row, state.mcp, problems, registered))),
-    variables: firstMark(state.variables.map((row) => variableMark(row, state, problems))),
+    environment: firstMark(state.environment.map((row) => variableMark(row, state, problems))),
     // A script as typed has no row to refuse.
     setup: undefined,
   };
@@ -523,15 +523,15 @@ export function SbxSettingsFields({
     );
   }
 
-  if (section === "variables") {
-    const variables = typedRows("variable", BLANK_VARIABLE, (change) => update("variables", change));
+  if (section === "environment") {
+    const variables = typedRows("variable", BLANK_VARIABLE, (change) => update("environment", change));
     return (
       <RowSection
-        label="Variables"
-        rows={state.variables}
+        label="Environment"
+        rows={state.environment}
         renderRow={(row) => {
-          const setVariable = (change: Partial<typeof row>): void => update("variables", (rows) => patched(rows, row.id, change));
-          const valueStored = holdsValue(row, stored.variables);
+          const setVariable = (change: Partial<typeof row>): void => update("environment", (rows) => patched(rows, row.id, change));
+          const valueStored = holdsValue(row, stored.environment);
           return (
             <EditRow key={row.id} mark={variableMark(row, state, problems)} {...variables.remove(row.id)}>
               <RowInput

@@ -527,7 +527,7 @@ interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentSandbox.env` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
-  /** This machine's values of `settings.variables`, by env name (SbxLocalStore.variableValues). */
+  /** This machine's values of `settings.environment`, by env name (SbxLocalStore.variableValues). */
   variableValues: ReadonlyMap<string, string>;
   /** Where this agent's sessions land on the host; created if missing, rw, re-applied per spawn. */
   sessionMounts?: SbxSessionMount[];
@@ -549,7 +549,7 @@ export function sandboxEnv({ settings, env: agentEnv = [], variableValues }: Pic
 } {
   const taken = new Set([...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))), ...Object.values(CONTROL_ENV)]);
   const passed: Record<string, string> = {};
-  for (const name of settings.variables.filter((variable) => !taken.has(variable))) {
+  for (const name of settings.environment.filter((variable) => !taken.has(variable))) {
     const value = variableValues.get(name);
     if (value !== undefined) {
       passed[name] = value;
@@ -596,7 +596,7 @@ export async function prepareSbxRun(
       projectId,
       settings: request.settings,
       skills: request.skills,
-      values: { variables: new Set(variableValues.keys()) },
+      values: { environment: new Set(variableValues.keys()) },
       agents: [agent],
       organization: request.organization,
       rules: request.rules,
@@ -724,7 +724,7 @@ interface SbxCheck {
   settings: SbxProjectSettings;
   skills: SbxSkillsSettings;
   /** The env names holding a value here: stored, or typed at this Save. */
-  values: { variables: ReadonlySet<string> };
+  values: { environment: ReadonlySet<string> };
   /** Whose skills is mounted: every agent at Save, the starting one at its spawn. */
   agents: readonly SandboxedAgent[];
   /** readPolicy's. */
@@ -752,7 +752,7 @@ interface SbxCheck {
  * - paths and skills: must exist, and sbx's filesystem rules allow the mount with its access
  *   (sbx-policy.ts's prediction: sbx has no `policy check` for them).
  * - ports: the host port is free, unless one of the project's sandboxes holds it.
- * - variables: a value here.
+ * - environment: a value here.
  * - mcp: a server sbx has registered is the row's, by its URL; one it has not needs a URL to be
  *   registered from (registerMcp). What sbx then refuses is told when it is.
  * The policy questions are sbx processes, asked together. Rejects where sbx cannot say: a row it
@@ -798,9 +798,9 @@ export async function readSbxProblems(check: SbxCheck): Promise<SbxProblems> {
     }
   }
   settings.hosts.forEach((host, index) => hostsAllowed[index] || add("hosts", host, forbidden));
-  for (const variable of settings.variables) {
-    if (!values.variables.has(variable)) {
-      add("variables", variable, SBX_PROBLEM.noValue);
+  for (const variable of settings.environment) {
+    if (!values.environment.has(variable)) {
+      add("environment", variable, SBX_PROBLEM.noValue);
     }
   }
   if (check.ports && settings.mcp.length > 0) {

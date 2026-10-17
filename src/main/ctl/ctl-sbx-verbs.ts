@@ -87,7 +87,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       found,
       request,
       {
-        variables: { ...keptValues(request.variables), values: next.variableValues ?? {} },
+        environment: { ...keptValues(request.environment), values: next.variableValues ?? {} },
         skills: nextSkills,
       },
       reading,
@@ -205,12 +205,12 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       return editSbx(args, caller, ({ settings }) => ({ settings: { ...settings, hosts } }));
     },
 
-    "sbx-set-variables": (args, caller) => {
+    "sbx-set-environment": (args, caller) => {
       // `NAME=value` types a value as the dialog's field does (an empty one keeps the stored one);
       // the first `=` splits, so a value may hold more. Typing one here is no hole, from a sandbox
       // either: an agent there can already set any variable for its own processes, and these reach
       // only its project's sandboxes.
-      const entries = list(args, "variables").map((entry) => {
+      const entries = list(args, "environment").map((entry) => {
         const at = entry.indexOf("=");
         return at < 0 ? { env: entry.trim(), value: "" } : { env: entry.slice(0, at).trim(), value: entry.slice(at + 1) };
       });
@@ -218,7 +218,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       const variableValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
       return editSbx(args, caller, ({ settings }) => {
         refuseVariables(variables);
-        return { settings: { ...settings, variables }, variableValues };
+        return { settings: { ...settings, environment: variables }, variableValues };
       });
     },
 

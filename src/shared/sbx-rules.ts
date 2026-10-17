@@ -81,12 +81,12 @@ export function sbxNeedsRestart(
   settings: Omit<SbxProjectSettings, "enabled">,
   skills: SbxSkillsSettings,
 ): boolean {
-  const names = (variables: SbxProjectSettings["variables"]): string => JSON.stringify([...variables].sort());
+  const names = (variables: SbxProjectSettings["environment"]): string => JSON.stringify([...variables].sort());
   return (
     SBX_SKILLS_KINDS.some((kind) => skills[kind] !== false && skills[kind] !== loadedSkills[kind]) ||
     (skills.skills !== false && skills.skillsFolder !== loadedSkills.skillsFolder) ||
     settings.paths.some((entry) => !loaded.paths.some((old) => old.path === entry.path && old.access === entry.access)) ||
-    names(settings.variables) !== names(loaded.variables) ||
+    names(settings.environment) !== names(loaded.environment) ||
     (settings.setup.length > 0 && settings.setup.join("\n") !== loaded.setup.join("\n"))
   );
 }
@@ -125,7 +125,7 @@ export function forbiddenBy(organization: string | undefined): string {
 }
 
 /** In the dialog's tab order. */
-const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "mcp", "variables", "setup"];
+const SBX_OPTIONS: SbxOption[] = ["skills", "ports", "paths", "hosts", "mcp", "environment", "setup"];
 
 /**
  * What a sandboxed session's start could not apply, one notice per option and reason, its rows
@@ -199,7 +199,7 @@ export function withoutProblems(
       ports: settings.ports.filter((port) => fine("ports", sbxPortKey(port))),
       paths: settings.paths.filter((entry) => fine("paths", entry.path)),
       hosts: settings.hosts.filter((host) => fine("hosts", host)),
-      variables: settings.variables.filter((variable) => fine("variables", variable)),
+      environment: settings.environment.filter((variable) => fine("environment", variable)),
       mcp: settings.mcp.filter((server) => fine("mcp", server.name)),
     },
     skills: next,

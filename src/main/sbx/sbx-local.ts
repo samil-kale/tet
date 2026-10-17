@@ -4,15 +4,15 @@ import type { SbxAccess, SbxSkillsSettings, SbxLocalSave, SbxStoredLocal } from 
 import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
 import { seal, unseal } from "../util/sealed";
 
-/** What the file holds per project id: the variables' values by env name, encrypted by the OS and
+/** What the file holds per project id: the Environment's values by env name, encrypted by the OS and
  *  base64-wrapped, and the skills unless it is all off (EMPTY_SBX_SKILLS). */
 interface StoredSbxLocal {
-  variables: Record<string, string>;
+  environment: Record<string, string>;
   skills?: SbxSkillsSettings;
 }
 
 function emptyLocal(): StoredSbxLocal {
-  return { variables: {} };
+  return { environment: {} };
 }
 
 function stringsOf(value: unknown): Record<string, string> {
@@ -43,7 +43,10 @@ function isEmptySkills(skills: SbxSkillsSettings): boolean {
 
 /** A project's entry as read. */
 function toLocal(project: Record<string, unknown>): StoredSbxLocal {
-  const local: StoredSbxLocal = { variables: stringsOf(project.variables) };
+  const local: StoredSbxLocal = {
+    // Legacy: the key was `variables`. Remove this fallback after 2026-11-17.
+    environment: stringsOf(project.environment ?? project.variables),
+  };
   const skills = toSkills(project.skills);
   if (skills) {
     local.skills = skills;
@@ -52,7 +55,7 @@ function toLocal(project: Record<string, unknown>): StoredSbxLocal {
 }
 
 /**
- * The values of the SBX Settings' Variables, which tet.json never holds (its rows are only names),
+ * The values of the SBX Settings' Environment, which tet.json never holds (its rows are only names),
  * and its Skills, which names this machine's folders. A value leaves this class only decrypted into
  * a sandboxed tab's `sbx run` (sbx.ts's sandboxEnv); the renderer never sees one.
  */
@@ -69,7 +72,7 @@ export class SbxLocalStore {
    *  applies, so the dialog asks again for the others. */
   stored(projectId: string): SbxStoredLocal {
     return {
-      variables: [...this.variableValues(projectId).keys()],
+      environment: [...this.variableValues(projectId).keys()],
       skills: this.skills(projectId),
     };
   }
@@ -87,15 +90,15 @@ export class SbxLocalStore {
   update(projectId: string, local: SbxLocalSave): void {
     const current = this.projects[projectId] ?? emptyLocal();
     const next = emptyLocal();
-    const { values, from } = local.variables;
+    const { values, from } = local.environment;
     for (const [env, name] of Object.entries(from)) {
-      const stored = current.variables[name];
+      const stored = current.environment[name];
       if (stored !== undefined) {
-        next.variables[env] = stored;
+        next.environment[env] = stored;
       }
     }
     for (const [env, value] of Object.entries(values)) {
-      next.variables[env] = seal(value);
+      next.environment[env] = seal(value);
     }
     const skills = toSkills(local.skills);
     if (skills) {
@@ -107,7 +110,7 @@ export class SbxLocalStore {
   /** The decrypted values by env name; one that cannot be decrypted is left out. */
   variableValues(projectId: string): Map<string, string> {
     const values = new Map<string, string>();
-    for (const [env, encrypted] of Object.entries(this.projects[projectId]?.variables ?? {})) {
+    for (const [env, encrypted] of Object.entries(this.projects[projectId]?.environment ?? {})) {
       const value = unseal(encrypted);
       if (value !== undefined) {
         values.set(env, value);
@@ -139,7 +142,7 @@ export class SbxLocalStore {
       return;
     }
     const next = { ...this.projects, [projectId]: local };
-    if (Object.keys(local.variables).length === 0 && !local.skills) {
+    if (Object.keys(local.environment).length === 0 && !local.skills) {
       delete next[projectId];
     }
     // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.

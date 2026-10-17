@@ -408,7 +408,7 @@ function deps(): ControlDeps {
       status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
       settings: async () => structuredClone(sbxSettings),
-      stored: () => ({ variables: ["API_KEY"], skills: structuredClone(sbxSkills) }),
+      stored: () => ({ environment: ["API_KEY"], skills: structuredClone(sbxSkills) }),
       problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);
@@ -541,7 +541,7 @@ describe("tet-ctl against the control server", () => {
     envNames = ["GITLAB_TOKEN"];
     dialogAnswer = undefined;
     sbxStatus = { installed: true, signedIn: true, policyInitialized: true, blockers: [] };
-    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, variables: ["API_KEY"] };
+    sbxSettings = { ...EMPTY_SBX_SETTINGS, enabled: true, environment: ["API_KEY"] };
     mcpRegistered = [];
     mcpRefusal = {};
     sbxSkills = EMPTY_SBX_SKILLS;
@@ -1157,11 +1157,11 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(request, {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
-      variables: ["API_KEY"],
+      environment: ["API_KEY"],
       hosts: ["example.com", "*.example.org:8080"],
     });
     assert.deepEqual(local, {
-      variables: { values: {}, from: { API_KEY: "API_KEY" } },
+      environment: { values: {}, from: { API_KEY: "API_KEY" } },
       skills: EMPTY_SBX_SKILLS,
     });
     const folder = path.resolve("/data/one");
@@ -1170,13 +1170,13 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(sbxSettings.paths, [{ path: folder, access: "ro" }]);
     assert.equal((await tetCtl(["sbx-set-ports", "8080:80"])).status, EXIT_CODES.ok);
     assert.deepEqual(sbxSettings.ports, [{ host: "8080", container: "80" }]);
-    assert.equal((await tetCtl(["sbx-set-variables", "DB_URL"])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxSettings.variables, ["DB_URL"]);
-    assert.deepEqual(calls.sbxSaved.at(-1)?.[2].variables, { values: {}, from: { DB_URL: "DB_URL" } }, "a bare name types no value");
-    assert.equal((await tetCtl(["sbx-set-variables", "DB_URL=a=b", "MODE="])).status, EXIT_CODES.ok);
-    assert.deepEqual(sbxSettings.variables, ["DB_URL", "MODE"]);
+    assert.equal((await tetCtl(["sbx-set-environment", "DB_URL"])).status, EXIT_CODES.ok);
+    assert.deepEqual(sbxSettings.environment, ["DB_URL"]);
+    assert.deepEqual(calls.sbxSaved.at(-1)?.[2].environment, { values: {}, from: { DB_URL: "DB_URL" } }, "a bare name types no value");
+    assert.equal((await tetCtl(["sbx-set-environment", "DB_URL=a=b", "MODE="])).status, EXIT_CODES.ok);
+    assert.deepEqual(sbxSettings.environment, ["DB_URL", "MODE"]);
     assert.deepEqual(
-      calls.sbxSaved.at(-1)?.[2].variables,
+      calls.sbxSaved.at(-1)?.[2].environment,
       { values: { DB_URL: "a=b" }, from: { DB_URL: "DB_URL", MODE: "MODE" } },
       "NAME=value types a value, split at the first =, an empty one none",
     );
@@ -1218,7 +1218,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { variables: ["API_KEY"], skills: sbxSkills },
+      stored: { environment: ["API_KEY"], skills: sbxSkills },
       problems: {},
     });
   });
@@ -1229,9 +1229,9 @@ describe("tet-ctl against the control server", () => {
       ["sbx-set-ports", "8080:0"],
       ["sbx-set-paths", "relative:ro"],
       ["sbx-set-paths", `${path.resolve("/data")}:x`],
-      ["sbx-set-variables", "PATH"],
-      ["sbx-set-variables", "1X"],
-      ["sbx-set-variables", "DB_URL", "DB_URL=x"],
+      ["sbx-set-environment", "PATH"],
+      ["sbx-set-environment", "1X"],
+      ["sbx-set-environment", "DB_URL", "DB_URL=x"],
       ["sbx-set-skills", "memory", "ro"],
       ["sbx-set-enabled", "maybe"],
     ];
@@ -1251,7 +1251,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { variables: ["API_KEY"], skills: sbxSkills },
+      stored: { environment: ["API_KEY"], skills: sbxSkills },
       problems: sbxProblems,
     });
   });
@@ -1276,7 +1276,7 @@ describe("tet-ctl against the control server", () => {
   it("answers a sandboxed tab for its own project only", async () => {
     // editor-get: its own test below, since a sandbox reads only a file inside the repository.
     assertRefused(await tetCtl(["editor-get", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-get");
-    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-variables", "MODE=1"]]) {
+    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-environment", "MODE=1"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own project/, args[0]);
       assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }

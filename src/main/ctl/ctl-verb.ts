@@ -196,7 +196,7 @@ export interface ControlDeps {
       project: Project,
       settings: SbxProjectSettings,
       skills: SbxSkillsSettings,
-      values: Pick<SbxStoredLocal, "variables">,
+      values: Pick<SbxStoredLocal, "environment">,
       reading?: SbxReading,
     ): Promise<SbxProblems>;
     /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */

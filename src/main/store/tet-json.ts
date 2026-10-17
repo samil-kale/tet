@@ -441,7 +441,7 @@ function toSbxSetup(value: unknown): string[] {
 /** An entry needs an env name, trimmed (an earlier file's `{ "env": NAME }` row is read as NAME); a
  *  repeated one (on win32 in any case, as the environment `sbx run -e NAME` reads it from) or one
  *  of TET's own dropped — the sandbox sees one value per name (sbx.ts's sandboxEnv). */
-function toSbxVariables(value: unknown): string[] {
+function toSbxEnvironment(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -488,7 +488,7 @@ function toSbxPaths(value: unknown): StoredSbxPath[] {
   });
 }
 
-/** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the variables' names,
+/** The SBX settings: ports, allowed paths (a folder or a single file), hosts, the environment's names,
  *  the MCP servers and the setup script. Never holds a token: each sandboxed agent signs in with
  *  its own `/login` inside the sandbox, and a variable's value stays on this machine, as does the
  *  skills (sbx-local.ts). A worktree forwards no ports: a port of this
@@ -508,7 +508,8 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
     ports: worktree ? [] : toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
-    variables: toSbxVariables(sbx.variables),
+    // Legacy: the key was `variables`. Remove this fallback after 2026-11-17.
+    environment: toSbxEnvironment(sbx.environment ?? sbx.variables),
     mcp: toSbxMcp(sbx.mcp),
     setup: toSbxSetup(sbx.setup),
   };
@@ -527,7 +528,7 @@ export function writeSbxSettings(root: string, config: SbxProjectSettings): Prom
           ports: config.ports,
           paths: [...others, ...mine],
           hosts: config.hosts,
-          variables: config.variables,
+          environment: config.environment,
           mcp: config.mcp,
           setup: config.setup,
         },

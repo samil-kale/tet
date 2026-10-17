@@ -22,7 +22,7 @@
     "ports": [],
     "paths": [],
     "hosts": [],
-    "variables": [
+    "environment": [
       "CLAUDE_CODE_SCROLL_SPEED"
     ],
     "mcp": [],

@@ -538,7 +538,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             projectId,
             settings: { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows },
             skills: EMPTY_SBX_SKILLS,
-            values: { variables: new Set() },
+            values: { environment: new Set() },
             agents: [claudeAgent],
             organization: "acme",
             ports: true,
@@ -564,10 +564,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
             { path: missing, access: "ro" },
             { path: repoFolder, access: "rw" },
           ],
-          variables: ["SET", "UNSET"],
+          environment: ["SET", "UNSET"],
         },
         skills: EMPTY_SBX_SKILLS,
-        values: { variables: new Set(["SET"]) },
+        values: { environment: new Set(["SET"]) },
         agents: [claudeAgent],
         organization: "acme",
         ports: false,
@@ -576,7 +576,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     assert.deepEqual(problems.result, {
       hosts: { "closed.example.com": "Forbidden by governance" },
       paths: { [missing]: "Does not exist on this machine", [repoFolder]: "Forbidden by governance" },
-      variables: { UNSET: "No value on this machine" },
+      environment: { UNSET: "No value on this machine" },
     });
   });
 
@@ -672,10 +672,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
     it("tells a row left out at every start", async () => {
       const { dir, repoFolder } = fakeSbx({ published: [], filesystemRules: ALLOW_ALL });
-      const rows = { variables: ["TOKEN"] };
+      const rows = { environment: ["TOKEN"] };
       await writeSbxSettings(repoFolder, { ...EMPTY_SBX_SETTINGS, enabled: true, ...rows });
       const first = await withSbx(dir, () => start(dir, repoFolder, rows));
-      assert.deepEqual(first.result.problems, { variables: { TOKEN: SBX_PROBLEM.noValue } });
+      assert.deepEqual(first.result.problems, { environment: { TOKEN: SBX_PROBLEM.noValue } });
       fs.rmSync(path.join(dir, "calls.log"));
       const second = await withSbx(dir, () => start(dir, repoFolder, rows));
       assert.deepEqual(second.result.problems, first.result.problems, "told at every start all the same");
@@ -697,7 +697,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
 
   describe("through the project's Save", () => {
     const noLocal = (variables: Record<string, string> = {}): SbxLocalSave => ({
-      variables: { values: variables, from: {} },
+      environment: { values: variables, from: {} },
       skills: EMPTY_SBX_SKILLS,
     });
     const projectOf = (repoFolder: string): Project => ({ id: projectId, path: repoFolder, name: "repo", worktrees: [] });
@@ -714,7 +714,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       }));
       assert.ok(result && !result.ok);
       assert.match(result.error ?? "", /could not list the sandboxes\. Nothing was saved/);
-      assert.deepEqual(sbxLocal.stored(projectId).variables, ["OLD"], "the typed value is not kept for a Save that did not happen");
+      assert.deepEqual(sbxLocal.stored(projectId).environment, ["OLD"], "the typed value is not kept for a Save that did not happen");
     });
 
     it("tells the user of a sandbox it removed when SBX is switched off", async () => {
@@ -838,7 +838,7 @@ describe("a sandboxed tab's variables", () => {
       ...EMPTY_SBX_SETTINGS,
       enabled: true,
       // A hand-edited tet.json: one the agent sets, one without a value here.
-      variables: ["NPM_TOKEN", "AGENT_SET", "MISSING"],
+      environment: ["NPM_TOKEN", "AGENT_SET", "MISSING"],
     };
     const result = sandboxEnv({
       settings,
@@ -860,18 +860,28 @@ describe("what sbx keeps on this machine", () => {
     const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
-      variables: { NPM_TOKEN: base64("sealed:npm"), LOST: base64("under another keychain") },
+      environment: { NPM_TOKEN: base64("sealed:npm"), LOST: base64("under another keychain") },
     });
-    assert.deepEqual(store.stored("p"), { variables: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual(store.stored("p"), { environment: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
     assert.deepEqual([...store.variableValues("p")], [["NPM_TOKEN", "npm"]]);
+  });
+
+  it("reads a file written under the legacy `variables` key", () => {
+    fakeSafeStorage();
+    const dir = tempDir("tet-sbx-local-");
+    fs.writeFileSync(
+      path.join(dir, "sbx-local.json"),
+      JSON.stringify({ p: { variables: { NPM_TOKEN: Buffer.from("sealed:npm").toString("base64") } } }),
+    );
+    assert.deepEqual([...new SbxLocalStore(dir).variableValues("p")], [["NPM_TOKEN", "npm"]]);
   });
 
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
     fakeSafeStorage();
     const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
-    store.update("p", { variables: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
+    store.update("p", { environment: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
-    store.update("p", { variables: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
+    store.update("p", { environment: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual([...store.variableValues("p")], [["NEW", "kept"]]);
   });
 
@@ -881,9 +891,9 @@ describe("what sbx keeps on this machine", () => {
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
     const skills = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
-    store.update("p", { variables: none, skills });
+    store.update("p", { environment: none, skills });
     assert.deepEqual(new SbxLocalStore(root).skills("p"), skills, "read back, with no keyring needed");
-    store.update("p", { variables: none, skills: EMPTY_SBX_SKILLS });
+    store.update("p", { environment: none, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "all off leaves no entry");
   });
 });

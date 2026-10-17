@@ -81,9 +81,9 @@ export interface SbxProjectSettings {
   /** "Allowed hosts" in sbx's grammar — exact host, wildcard (`*.example.com`), optional port.
    *  Unvalidated: sbx accepts anything, and a scheme then matches nothing. */
   hosts: string[];
-  /** The "Variables" rows: env names set in the sandbox with their real values, which the sandbox
+  /** The "Environment" rows: env names set in the sandbox with their real values, which the sandbox
    *  sees (sbx.ts's sandboxEnv). Never a value, which stays on this machine (sbx-local.ts). */
-  variables: string[];
+  environment: string[];
   /** Loaded into every running sandbox of the project at Save and into any other at its next tab's
    *  start, where a row removed is unloaded too (sbx.ts's alignSandbox). The registration stays. */
   mcp: SbxMcpServer[];
@@ -93,15 +93,15 @@ export interface SbxProjectSettings {
   setup: string[];
 }
 
-/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Variables
+/** What the SBX Settings keep on this machine, never in tet.json (sbx-local.ts): which Environment
  *  rows hold a value here — never a value — and the skills. */
 export interface SbxStoredLocal {
-  variables: string[];
+  environment: string[];
   skills: SbxSkillsSettings;
 }
 
 /**
- * Save's part of the Variables for this machine, both by the row's env name: the values typed since
+ * Save's part of the Environment for this machine, both by the row's env name: the values typed since
  * opening, and the name each row was opened under — its stored value follows a renamed row, and a
  * row added under a stored name does not inherit that value.
  */
@@ -111,7 +111,7 @@ export interface SbxLocalEdits {
 }
 
 export interface SbxLocalSave {
-  variables: SbxLocalEdits;
+  environment: SbxLocalEdits;
   skills: SbxSkillsSettings;
 }
 
@@ -169,7 +169,7 @@ export interface SbxSignInResult {
 }
 
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
-export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "variables" | "mcp" | "setup";
+export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "environment" | "mcp" | "setup";
 
 /**
  * What of the SBX Settings cannot be applied here, per option: each row's key (the host, the path
@@ -191,7 +191,7 @@ export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {
   ports: [],
   paths: [],
   hosts: [],
-  variables: [],
+  environment: [],
   mcp: [],
   setup: [],
 };

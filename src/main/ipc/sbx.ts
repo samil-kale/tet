@@ -68,7 +68,7 @@ export function registerSbxIpc({
       projectId: string,
       settings: SbxProjectSettings,
       skills: SbxSkillsSettings,
-      values: Pick<SbxStoredLocal, "variables">,
+      values: Pick<SbxStoredLocal, "environment">,
       status: Pick<SbxStatus, "organization">,
     ): Promise<SbxProblems> => {
       const project = store.get(projectId);
@@ -81,7 +81,7 @@ export function registerSbxIpc({
     const project = store.get(projectId);
     return project ? readSbxSettings(project.path) : EMPTY_SBX_SETTINGS;
   });
-  // The Variables rows holding a value on this machine, never the values; the skills.
+  // The Environment rows holding a value on this machine, never the values; the skills.
   handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
   // The Skills tab's agents; asked fresh, as agents are installed outside TET.
   handle("sbx:skills-sources", (): Promise<SbxSkillsSource[]> => readSkillsSources());

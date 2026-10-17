@@ -96,7 +96,7 @@ export interface TETApi {
       projectId: string,
       settings: SbxProjectSettings,
       skills: SbxSkillsSettings,
-      values: Pick<SbxStoredLocal, "variables">,
+      values: Pick<SbxStoredLocal, "environment">,
       status: Pick<SbxStatus, "organization">,
     ) => Promise<SbxProblems>;
   };

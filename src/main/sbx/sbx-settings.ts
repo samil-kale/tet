@@ -28,7 +28,7 @@ interface SaveDeps {
 
 /** The env names holding a value. */
 interface ValueNames {
-  variables: Iterable<string>;
+  environment: Iterable<string>;
 }
 
 /** A Save's check, for every agent's sandbox: all of it is applied now. */
@@ -45,7 +45,7 @@ function checkProject(
     projectId: project.id,
     settings,
     skills,
-    values: { variables: new Set(values.variables) },
+    values: { environment: new Set(values.environment) },
     agents: SANDBOXED_AGENTS,
     organization,
     ports: true,
@@ -142,7 +142,7 @@ async function saveNow(
       organization,
       sandboxes,
     );
-    sbxLocal.update(project.id, { variables: keptValues(settings.variables), skills: applied });
+    sbxLocal.update(project.id, { environment: keptValues(settings.environment), skills: applied });
     for (const { ref, agentId } of removed) {
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed and is rebuilt when its next tab starts.`
