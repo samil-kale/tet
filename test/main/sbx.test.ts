@@ -600,7 +600,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
           sandboxes: new Map([[name, { workspaces: [repoFolder], running: true }]]),
           paths: { agentDir: sandboxDir(dir, main, "claude") },
           agentArgs: [],
-          variableValues: new Map(),
+          environmentValues: new Map(),
           warm,
         }),
       );
@@ -843,7 +843,7 @@ describe("a sandboxed tab's variables", () => {
     const result = sandboxEnv({
       settings,
       env: ["AGENT_SET=agent"],
-      variableValues: new Map([
+      environmentValues: new Map([
         ["NPM_TOKEN", "npm-real"],
         ["AGENT_SET", "variable"],
       ]),
@@ -863,7 +863,7 @@ describe("what sbx keeps on this machine", () => {
       environment: { NPM_TOKEN: base64("sealed:npm"), LOST: base64("under another keychain") },
     });
     assert.deepEqual(store.stored("p"), { environment: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
-    assert.deepEqual([...store.variableValues("p")], [["NPM_TOKEN", "npm"]]);
+    assert.deepEqual([...store.environmentValues("p")], [["NPM_TOKEN", "npm"]]);
   });
 
   it("reads a file written under the legacy `variables` key", () => {
@@ -873,7 +873,7 @@ describe("what sbx keeps on this machine", () => {
       path.join(dir, "sbx-local.json"),
       JSON.stringify({ p: { variables: { NPM_TOKEN: Buffer.from("sealed:npm").toString("base64") } } }),
     );
-    assert.deepEqual([...new SbxLocalStore(dir).variableValues("p")], [["NPM_TOKEN", "npm"]]);
+    assert.deepEqual([...new SbxLocalStore(dir).environmentValues("p")], [["NPM_TOKEN", "npm"]]);
   });
 
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
@@ -882,7 +882,7 @@ describe("what sbx keeps on this machine", () => {
     store.update("p", { environment: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
     store.update("p", { environment: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
-    assert.deepEqual([...store.variableValues("p")], [["NEW", "kept"]]);
+    assert.deepEqual([...store.environmentValues("p")], [["NEW", "kept"]]);
   });
 
   it("keeps the skills on this machine, and no entry once it is all off", () => {

@@ -655,7 +655,7 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
           sandboxes,
           paths: { agentDir: AGENT_DIR },
           agentArgs: [],
-          variableValues: new Map(),
+          environmentValues: new Map(),
           onData: (data) => (output += data),
         });
         assert.deepEqual([started.problems, started.savedOver], [{}, false], output);

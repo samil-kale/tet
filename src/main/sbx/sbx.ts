@@ -527,8 +527,8 @@ interface SbxRunRequest {
   agentArgs: string[];
   /** `AgentSandbox.env` — "KEY=VALUE" entries for `sbx run -e`. */
   env?: string[];
-  /** This machine's values of `settings.environment`, by env name (SbxLocalStore.variableValues). */
-  variableValues: ReadonlyMap<string, string>;
+  /** This machine's values of `settings.environment`, by env name (SbxLocalStore.environmentValues). */
+  environmentValues: ReadonlyMap<string, string>;
   /** Where this agent's sessions land on the host; created if missing, rw, re-applied per spawn. */
   sessionMounts?: SbxSessionMount[];
   /** Setup output, forwarded live to the tab (see `RunOptions.onData`). */
@@ -543,14 +543,18 @@ interface SbxRunRequest {
  * one, a hand-edited file may not — as is a variable without a value on this machine (a problem,
  * readSbxProblems).
  */
-export function sandboxEnv({ settings, env: agentEnv = [], variableValues }: Pick<SbxRunRequest, "settings" | "env" | "variableValues">): {
+export function sandboxEnv({
+  settings,
+  env: agentEnv = [],
+  environmentValues,
+}: Pick<SbxRunRequest, "settings" | "env" | "environmentValues">): {
   env: string[];
   passed: Record<string, string>;
 } {
   const taken = new Set([...agentEnv.map((entry) => entry.slice(0, entry.indexOf("="))), ...Object.values(CONTROL_ENV)]);
   const passed: Record<string, string> = {};
   for (const name of settings.environment.filter((variable) => !taken.has(variable))) {
-    const value = variableValues.get(name);
+    const value = environmentValues.get(name);
     if (value !== undefined) {
       passed[name] = value;
     }
@@ -576,7 +580,7 @@ export function sandboxEnv({ settings, env: agentEnv = [], variableValues }: Pic
 export async function prepareSbxRun(
   request: SbxRunRequest,
 ): Promise<{ args: string[]; env: Record<string, string>; problems: SbxProblems; savedOver: boolean }> {
-  const { agent, name, onData, variableValues } = request;
+  const { agent, name, onData, environmentValues } = request;
   const { projectId } = request.ref;
   const created = await ensureSandboxExists(agent, request.projectRefPath, name, request.sandboxes, onData);
   // One turn per sandbox, which a Save holds too (inSandboxTurns): what is read is what is applied,
@@ -596,7 +600,7 @@ export async function prepareSbxRun(
       projectId,
       settings: request.settings,
       skills: request.skills,
-      values: { environment: new Set(variableValues.keys()) },
+      values: { environment: new Set(environmentValues.keys()) },
       agents: [agent],
       organization: request.organization,
       rules: request.rules,

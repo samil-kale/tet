@@ -212,7 +212,7 @@ export interface SbxStart {
   theme: AgentPaths["theme"];
   /** This machine's SBX settings for the project (SbxLocalStore). */
   skills: SbxSkillsSettings;
-  variableValues: ReadonlyMap<string, string>;
+  environmentValues: ReadonlyMap<string, string>;
 }
 
 /**
@@ -360,7 +360,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
         agentArgs: [...hooks.args, ...input.agentArgs(files)],
         env: agent.sandbox.env ?? [],
         sessionMounts: this.sessionMounts(),
-        variableValues: start.variableValues,
+        environmentValues: start.environmentValues,
         onData: input.onData,
       });
       for (const notice of sbxProblemNotices(problems)) {

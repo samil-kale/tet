@@ -72,7 +72,7 @@ export class SbxLocalStore {
    *  applies, so the dialog asks again for the others. */
   stored(projectId: string): SbxStoredLocal {
     return {
-      environment: [...this.variableValues(projectId).keys()],
+      environment: [...this.environmentValues(projectId).keys()],
       skills: this.skills(projectId),
     };
   }
@@ -108,7 +108,7 @@ export class SbxLocalStore {
   }
 
   /** The decrypted values by env name; one that cannot be decrypted is left out. */
-  variableValues(projectId: string): Map<string, string> {
+  environmentValues(projectId: string): Map<string, string> {
     const values = new Map<string, string>();
     for (const [env, encrypted] of Object.entries(this.projects[projectId]?.environment ?? {})) {
       const value = unseal(encrypted);

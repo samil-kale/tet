@@ -63,7 +63,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
     edit: (loaded: { settings: SbxProjectSettings; skills: SbxSkillsSettings }) => {
       settings?: SbxProjectSettings;
       skills?: SbxSkillsSettings;
-      variableValues?: Record<string, string>;
+      environmentValues?: Record<string, string>;
     },
     switching = false,
   ): Promise<Answer> => {
@@ -87,7 +87,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       found,
       request,
       {
-        environment: { ...keptValues(request.environment), values: next.variableValues ?? {} },
+        environment: { ...keptValues(request.environment), values: next.environmentValues ?? {} },
         skills: nextSkills,
       },
       reading,
@@ -215,10 +215,10 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
         return at < 0 ? { env: entry.trim(), value: "" } : { env: entry.slice(0, at).trim(), value: entry.slice(at + 1) };
       });
       const variables = entries.map(({ env }) => env);
-      const variableValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
+      const environmentValues = Object.fromEntries(entries.filter(({ value }) => value !== "").map(({ env, value }) => [env, value]));
       return editSbx(args, caller, ({ settings }) => {
         refuseVariables(variables);
-        return { settings: { ...settings, environment: variables }, variableValues };
+        return { settings: { ...settings, environment: variables }, environmentValues };
       });
     },
 
