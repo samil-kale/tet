@@ -285,13 +285,11 @@ export function CommitGraph({
   return (
     <div className="commit-graph">
       <FilterField placeholder="Search commits..." value={search.text} onChange={(text) => onSearch({ ...search, text })}>
-        <span className="filter-toggles">
-          {SEARCH_FIELDS.map(({ field, title, Icon }) => (
-            <IconButton key={field} active={search.field === field} title={title} onClick={() => onSearch({ ...search, field })}>
-              <Icon />
-            </IconButton>
-          ))}
-        </span>
+        {SEARCH_FIELDS.map(({ field, title, Icon }) => (
+          <IconButton key={field} active={search.field === field} title={title} onClick={() => onSearch({ ...search, field })}>
+            <Icon />
+          </IconButton>
+        ))}
       </FilterField>
       <div className={state.head === "" ? "graph-tree tree pending" : "graph-tree tree"} onScroll={scrolled}>
         {commits.map((commit, index) => (

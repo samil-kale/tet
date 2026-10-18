@@ -448,7 +448,7 @@ export function ExpandAllIcon(props: IconProps) {
   return <Lucide {...props} icon={ChevronsUpDown} extent={17.38} />;
 }
 
-/** Both files-lane headers' "Clear": Lucide's `list-x`. */
+/** Every filter field's "Clear" (FilterField): Lucide's `list-x`. */
 export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} />;
 }

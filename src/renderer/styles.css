@@ -742,19 +742,13 @@ textarea:focus,
   min-width: 0;
 }
 
-/* The label matters more: a narrower row takes the room from what follows it first, down to
-   nothing, and only then from the label. */
-.list-main > .list-extra,
-.tree-row > .tree-extra {
-  flex-shrink: 100000;
-  min-width: 0;
-}
-
-/* A command's variables, a repository's branch, a worktree's base, a closed tab's date. Declared
-   together so they cannot drift. */
+/* What follows a row's label: a command's variables, a repository's branch, a worktree's base, a
+   closed tab's date, a file's folder, a commit's author. Declared together so they cannot drift.
+   The label matters more: a narrower row takes the room from this first, down to nothing, and
+   only then from the label. */
 .list-extra,
 .tree-extra {
-  flex: 0 1 auto;
+  flex: 0 100000 auto;
   font-size: var(--tiny-font-size);
   color: var(--tet-descriptionForeground);
 }
@@ -775,8 +769,7 @@ textarea:focus,
   opacity: 0.5;
 }
 
-/* Shared by the changes', the branch tree's and the Explorer's filter and by the SEARCH and GRAPH sections' box,
-   which adds its toggles below. */
+/* The box every filter and search is typed into (FilterField). */
 .filter-field {
   position: relative;
   padding: 7px;
@@ -802,15 +795,25 @@ textarea:focus,
   padding: 0;
 }
 
-/* The SEARCH and GRAPH sections' box, VS Code's: room for the three toggles standing inside the field
-   (`.filter-toggles`: 20px each, --action-gap apart, 4px off the edge), and 4px before the text. */
+/* Room for what stands inside the field (`.filter-toggles`: 20px each, --action-gap apart, 4px off
+   the edge), and 4px before the text: the clear button, and before it the SEARCH and GRAPH
+   sections' three toggles, VS Code's. */
+.filter-field input {
+  padding-right: calc(20px + 8px);
+}
+
 .filter-field.with-toggles input {
-  padding-right: calc(3 * 20px + 2 * var(--action-gap) + 8px);
+  padding-right: calc(4 * 20px + 3 * var(--action-gap) + 8px);
 }
 
 /* Here the field lacks the 6px the branch tree's icon is placed against. */
 .remote-main > .filter-field .filter-icon {
   left: 7px;
+}
+
+/* The clear button likewise, 4px off the input's edge. */
+.remote-main > .filter-field .filter-toggles {
+  right: 4px;
 }
 
 /* `.icon-button` in every other respect, `active` included: only the box shrinks, since VS Code's

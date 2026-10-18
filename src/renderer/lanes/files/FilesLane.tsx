@@ -9,7 +9,7 @@ import { useFileAct } from "../../git/run-action";
 import { useFileSearch } from "./use-file-search";
 import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
-import { ClearIcon, NewFileIcon, NewFolderIcon } from "../../ui/icons";
+import { NewFileIcon, NewFolderIcon } from "../../ui/icons";
 import { CollapseExpandAllButton } from "../../ui/CollapseExpandAllButton";
 import { Section } from "../../ui/Section";
 
@@ -55,7 +55,6 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
   const explorerRef = useRef<ExplorerHandle>(null);
   const searchRef = useRef<FileSearchHandle>(null);
   /** What the sections' header buttons stand for, reported by the views that hold the state. */
-  const [filtering, setFiltering] = useState(false);
   const [explorerExpanded, setExplorerExpanded] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
   // A file action shows at once, as the git lane's changes list does.
@@ -83,9 +82,6 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
             <IconButton title="New Folder..." disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFolder()}>
               <NewFolderIcon />
             </IconButton>
-            <IconButton title="Clear Filter" disabled={!filtering} onClick={() => explorerRef.current?.clearFilter()}>
-              <ClearIcon />
-            </IconButton>
             <CollapseExpandAllButton expanded={explorerExpanded} disabled={!explorerListing} tree={explorerRef} />
           </>
         }
@@ -103,7 +99,6 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
           ask={ask}
           act={act}
           onExplorerChanged={refreshExplorer}
-          onFiltering={setFiltering}
           onExpanded={setExplorerExpanded}
         />
       </Section>
@@ -123,16 +118,11 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
         busy={searchBusy}
         height={searchHeight}
         actions={
-          <>
-            <IconButton title="Clear Search Results" disabled={searchResult === undefined} onClick={() => searchRef.current?.clear()}>
-              <ClearIcon />
-            </IconButton>
-            <CollapseExpandAllButton
-              expanded={searchExpanded}
-              disabled={searchResult === undefined || searchResult.files.length === 0}
-              tree={searchRef}
-            />
-          </>
+          <CollapseExpandAllButton
+            expanded={searchExpanded}
+            disabled={searchResult === undefined || searchResult.files.length === 0}
+            tree={searchRef}
+          />
         }
       >
         {/* Its own query — the tree above filters by name, this looks inside the files. */}

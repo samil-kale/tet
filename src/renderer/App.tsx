@@ -448,7 +448,7 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                     />
                   )}
                   {lane === "closed" && activeResolved && (
-                    // Keyed by repository or worktree: each has its own closed.
+                    // Keyed by repository or worktree: each has its own closed tabs.
                     <ClosedList key={activeResolved.refKey} resolved={activeResolved} shown={shown} onOpenTab={showTab} />
                   )}
                   {lane === "git" && activeResolved && (

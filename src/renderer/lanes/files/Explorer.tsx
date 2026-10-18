@@ -104,8 +104,6 @@ interface ExplorerProps {
   /** A create, rename or delete settled: an empty new folder never touches git status, so nothing
    *  else triggers a re-read. */
   onExplorerChanged: () => void;
-  /** What the header's clear button stands for, reported as it changes: the tree holds the filter. */
-  onFiltering: (filtering: boolean) => void;
   /** What the header's collapse/expand button does next, reported as it changes: collapse while a
    *  folder at the top is expanded — any expanded folder shows under one — else expand. */
   onExpanded: (expanded: boolean) => void;
@@ -116,7 +114,6 @@ interface ExplorerProps {
 export interface ExplorerHandle extends CollapseExpandAll {
   newFile(): void;
   newFolder(): void;
-  clearFilter(): void;
 }
 
 /**
@@ -134,7 +131,6 @@ export const Explorer = memo(function Explorer({
   ask,
   act,
   onExplorerChanged,
-  onFiltering,
   onExpanded,
   ref,
 }: ExplorerProps) {
@@ -150,8 +146,6 @@ export const Explorer = memo(function Explorer({
   // every keystroke.
   const query = useDeferredValue(filter.trim().toLowerCase());
   const filtering = query.length > 0;
-  // The clear button is the header's; only the tree knows whether there is a filter to clear.
-  useEffect(() => onFiltering(filtering), [filtering, onFiltering]);
   // Compacted after filtering: a folder pruned to one subfolder is compacted with it.
   const shown = useMemo(() => {
     const filtered = query ? filterTree(tree, query) : tree;
@@ -310,7 +304,6 @@ export const Explorer = memo(function Explorer({
     newFolder: () => void askNew("folder", ""),
     expandAll: () => setAll(foldersIn(tree), true),
     collapseAll,
-    clearFilter: () => setFilter(""),
   }));
 
   /** Unasked, as a move is taken back by moving again; what refuses it is told in a notice. */

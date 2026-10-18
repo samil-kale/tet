@@ -1,8 +1,9 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import type { TabDescriptor } from "../../../shared/types/terminals";
 import { AgentIcon } from "../../ui/agent-icons";
 import { useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed } from "../../ui/Dialog";
+import { FilterField } from "../../ui/FilterField";
 import { notify } from "../../ui/Notices";
 import { IconButton } from "../../ui/IconButton";
 import { CloseIcon, ReopenIcon } from "../../ui/icons";
@@ -38,6 +39,9 @@ function lastActive({ updatedAt, createdAt }: TabDescriptor) {
 export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab }: ClosedListProps) {
   const agents = useAgents();
   const tabs = useClosed(resolved);
+  const [filter, setFilter] = useState("");
+  const query = filter.trim().toLowerCase();
+  const shownTabs = tabs.filter((tab) => labelOf(tab).toLowerCase().includes(query));
   const menu = useContextMenu<TabDescriptor>();
 
   const reopen = async (tab: TabDescriptor): Promise<void> => {
@@ -72,27 +76,32 @@ export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       <Section title="CLOSED" count={tabs.length}>
-        {tabs.map((tab) => (
-          <div
-            key={tab.tabId}
-            className="list-row closed-row"
-            title={`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`}
-            onDoubleClick={() => void reopen(tab)}
-            onContextMenu={(event) => menu.open(event, tab)}
-          >
-            <AgentIcon agentId={tab.agentId} className="tree-icon" />
-            <span className="list-main">
-              <span className="list-label">{labelOf(tab)}</span>
-              {lastActive(tab)}
-            </span>
-            <IconButton title="Reopen" isolated onClick={() => void reopen(tab)}>
-              <ReopenIcon />
-            </IconButton>
-            <IconButton title="Delete session..." isolated onClick={() => void askDelete(tab)}>
-              <CloseIcon />
-            </IconButton>
+        <div className="explorer-tree">
+          <FilterField placeholder="Filter closed..." value={filter} onChange={setFilter} />
+          <div className="tree">
+            {shownTabs.map((tab) => (
+              <div
+                key={tab.tabId}
+                className="list-row closed-row"
+                title={`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`}
+                onDoubleClick={() => void reopen(tab)}
+                onContextMenu={(event) => menu.open(event, tab)}
+              >
+                <AgentIcon agentId={tab.agentId} className="tree-icon" />
+                <span className="list-main">
+                  <span className="list-label">{labelOf(tab)}</span>
+                  {lastActive(tab)}
+                </span>
+                <IconButton title="Reopen" isolated onClick={() => void reopen(tab)}>
+                  <ReopenIcon />
+                </IconButton>
+                <IconButton title="Delete session..." isolated onClick={() => void askDelete(tab)}>
+                  <CloseIcon />
+                </IconButton>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
         {menu.render(menuEntries)}
       </Section>
     </div>

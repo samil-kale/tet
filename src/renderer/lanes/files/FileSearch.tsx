@@ -36,9 +36,7 @@ export function searchSummary(result: FileSearchResult): string {
 }
 
 /** For the SEARCH header's title-bar buttons. */
-export interface FileSearchHandle extends CollapseExpandAll {
-  clear(): void;
-}
+export type FileSearchHandle = CollapseExpandAll;
 
 interface FileSearchProps {
   /** Whose files are searched: a row dragged onto a terminal carries its path under that folder. */
@@ -78,8 +76,6 @@ export const FileSearch = memo(function FileSearch({ resolved, result, runSearch
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
   useImperativeHandle(ref, () => ({
-    // The text alone: the toggles are the field's own, as VS Code keeps them.
-    clear: () => setSearch((current) => ({ ...current, text: "" })),
     expandAll: () => setExpandedFiles(Object.fromEntries(files.map((file) => [file.path, true]))),
     collapseAll: () => setExpandedFiles({}),
   }));
@@ -87,13 +83,11 @@ export const FileSearch = memo(function FileSearch({ resolved, result, runSearch
   return (
     <div className="explorer-tree">
       <FilterField placeholder="Search" value={search.text} onChange={(text) => setSearch({ ...search, text })}>
-        <span className="filter-toggles">
-          {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
-            <IconButton key={key} active={search[key]} title={title} onClick={() => setSearch({ ...search, [key]: !search[key] })}>
-              <Icon />
-            </IconButton>
-          ))}
-        </span>
+        {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
+          <IconButton key={key} active={search[key]} title={title} onClick={() => setSearch({ ...search, [key]: !search[key] })}>
+            <Icon />
+          </IconButton>
+        ))}
       </FilterField>
       <div className="tree">
         {files.map((file) => {
