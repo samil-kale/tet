@@ -461,7 +461,7 @@ textarea:focus,
   flex: none;
   width: 41px;
   gap: 10px;
-  padding: 10px 0;
+  padding: 8px 0;
   border-right: 1px solid var(--tet-panel-border);
   background: var(--tet-sideBar-background);
   --icon-size: 17px;
@@ -1366,8 +1366,6 @@ textarea:focus,
   position: relative;
   flex: 1;
   min-height: 0;
-  /* The 6px gutter rows keep from their pane elsewhere. */
-  padding: 6px;
   background: var(--tet-terminal-background);
 }
 
@@ -1377,8 +1375,7 @@ textarea:focus,
    `theme.ts` reads, so the two cannot drift. */
 .terminal-host {
   position: absolute;
-  /* The stack's padding: an absolute child is placed against the padding box. */
-  inset: 6px;
+  inset: 6px 10px 10px;
   background: var(--tet-terminal-background);
   /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. No
      `paint`: it would clip the drag-over frame reaching past the host. */
@@ -1396,7 +1393,7 @@ textarea:focus,
   content: "";
   /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
      edges, where no line is drawn. */
-  inset: -6px -5px -5px -6px;
+  inset: -6px -9px -9px -10px;
 }
 
 /*
