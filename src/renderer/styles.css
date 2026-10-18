@@ -146,13 +146,10 @@ textarea:focus,
 /* Text cut short with an ellipsis rather than wrapped or pushing its row wider: the label, name or
    path that shares a row with something that keeps its room. */
 .titlebar-name,
-.project-label,
-.command-label,
-.command-extra,
-.project-extra,
+.list-label,
+.list-extra,
 .tree-extra,
 .section-title,
-.tree-dir,
 .tree-label,
 .tab-label,
 .dialog-title,
@@ -425,6 +422,12 @@ textarea:focus,
   padding: calc((100% - var(--icon-size)) / 2);
 }
 
+/* Sets the closed lane's and the settings drawing half a pixel lower, level with the other toggles. */
+.icon-button svg.closed-icon,
+.icon-button svg.gear-icon {
+  margin-top: 0.5px;
+}
+
 /* Never the list hover colour: invisible on a hovered row, a patch on a selected one. */
 .icon-button:hover:not(:disabled) {
   background: var(--tet-toolbar-hoverBackground);
@@ -598,21 +601,17 @@ textarea:focus,
 
 /* Every list row is one height. Stated rather than padded, so a row with a 22px action button
    stands no taller than one holding only text. */
-.project-row,
-.worktree-row,
-.command-row,
+.list-row,
 .tree-header,
 .tree-row {
   height: var(--list-row-height);
   flex: none;
 }
 
-/* One row shape for both of the projects lane's lists. The icon buttons ending a row stand apart
-   as everywhere else; the label before them needs no more, the buttons carrying 4px around a
+/* One row shape for the projects, the commands and the closed tabs. The icon buttons ending a row stand
+   apart as everywhere else; the label before them needs no more, the buttons carrying 4px around a
    14px drawing in a 22px box. */
-.project-row,
-.worktree-row,
-.command-row {
+.list-row {
   display: flex;
   align-items: center;
   gap: var(--action-gap);
@@ -622,7 +621,8 @@ textarea:focus,
 }
 
 .project-row,
-.worktree-row {
+.worktree-row,
+.closed-row {
   cursor: pointer;
 }
 
@@ -724,8 +724,7 @@ textarea:focus,
 }
 
 /* Takes the leftover width, so the row's buttons stay at its right edge. */
-.command-main,
-.project-main {
+.list-main {
   flex: 1;
   display: flex;
   align-items: baseline;
@@ -733,16 +732,14 @@ textarea:focus,
   min-width: 0;
 }
 
-.project-label,
-.command-label {
+.list-label {
   flex: 0 1 auto;
   min-width: 0;
 }
 
-/* A command's variables, a repository's branch, a worktree's base. Declared together so they
-   cannot drift. */
-.command-extra,
-.project-extra,
+/* A command's variables, a repository's branch, a worktree's base, a closed tab's date. Declared
+   together so they cannot drift. */
+.list-extra,
 .tree-extra {
   flex: 0 1 auto;
   font-size: var(--tiny-font-size);
@@ -855,16 +852,21 @@ textarea:focus,
   margin-right: 4px;
 }
 
-/* What trails a branch tree's label, spaced as `.tree-dir`. */
+/* What trails a tree row's label: a file's folder, a worktree's base, a commit's author. */
 .tree-row > .tree-extra,
 .tree-row > .count-badge {
   margin-left: 6px;
 }
 
+/* Centered in the row, the smaller text sits above the label's baseline; this puts it on it. */
+.tree-row > .tree-extra {
+  position: relative;
+  top: 0.5px;
+}
+
 /* Every list's rows, one hover and one selection. */
-.command-row:hover,
-.project-row:hover,
-.worktree-row:not(.made-elsewhere):hover,
+/* `:where` keeps the specificity of the selection rule below, which must win while hovered. */
+.list-row:where(:not(.made-elsewhere)):hover,
 .tree-header:hover,
 .tree-row:hover,
 /* The Explorer's rows inside the folder a dragged row would be moved into. */
@@ -957,14 +959,6 @@ textarea:focus,
 /* A regex that will not parse takes the SEARCH summary's place. */
 .count-badge.error {
   color: var(--tet-errorForeground);
-}
-
-/* The folder a file sits in, after its name as VS Code's result rows show it: SEARCH's results,
-   the flat LOCAL CHANGES. */
-.tree-dir {
-  margin-left: 6px;
-  color: var(--tet-descriptionForeground);
-  font-size: var(--tiny-font-size);
 }
 
 /* Pushed to the right edge, where a branch row's counts sit. */

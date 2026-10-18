@@ -21,6 +21,7 @@ import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-or
 
 const NO_CALLBACKS: SessionManagerCallbacks = {
   onTabs: () => undefined,
+  onClosed: () => undefined,
   onOutput: () => undefined,
   onStatus: () => undefined,
   onStartupProgress: () => undefined,
@@ -120,6 +121,25 @@ describe("a tab's reported session", () => {
       manager.hookEvent(tabId, "session-start", '{"session_id":"s2"}', at + 2000, HOST_CALLER);
       manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 1000, HOST_CALLER);
       assert.equal(manager.inspect().find((tab) => tab.tabId === tabId)?.reportedSessionId, "s2");
+    });
+  });
+});
+
+describe("the window closing a tab", () => {
+  it("closes one with no session for good, keeping nothing", async () => {
+    await withEmptyPath({}, async (manager) => {
+      const { tabId } = manager.createTab("claude");
+      await manager.closeKeepingSessions([tabId]);
+      assert.deepEqual(manager.snapshot(), []);
+      assert.deepEqual(manager.closedSnapshot(), []);
+    });
+  });
+
+  it("answers nothing for a tab that is not there", async () => {
+    await withEmptyPath({}, async (manager) => {
+      await manager.closeKeepingSessions(["new-gone"]);
+      assert.equal(await manager.reopenClosed("new-gone"), undefined);
+      assert.equal(await manager.deleteClosed("new-gone"), undefined);
     });
   });
 });

@@ -197,12 +197,10 @@ const CommitEntry = memo(function CommitEntry({ commit, row, isOpen, files, togg
         dragName={{ kind: "commit", name: commit.sha }}
         onClick={() => toggle(commit)}
         icon={row ? <Lanes row={row} expanded={isOpen} /> : <CommitIcon className="tree-icon" />}
-        label={
-          <>
-            {commit.subject} <span className="tree-dir">{commit.author}</span>
-          </>
-        }
-      />
+        label={commit.subject}
+      >
+        <span className="tree-extra">{commit.author}</span>
+      </TreeRow>
       {isOpen &&
         (files ?? []).map((file) => (
           <TreeRow
@@ -221,7 +219,7 @@ const CommitEntry = memo(function CommitEntry({ commit, row, isOpen, files, togg
             }
             label={baseName(file.path)}
           >
-            {parentOf(file.path) && <span className="tree-dir">{parentOf(file.path)}</span>}
+            {parentOf(file.path) && <span className="tree-extra">{parentOf(file.path)}</span>}
           </TreeRow>
         ))}
     </div>

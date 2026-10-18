@@ -22,8 +22,9 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return manager.createTab(agentId);
   });
 
+  // The window's close keeps a tab's session; `tet-ctl tabs-close` deletes it.
   handle("tabs:close", async (_event, ref: ProjectRef, tabIds: string[]): Promise<void> => {
-    await tabManagers.get(ref)?.closeTabs(tabIds);
+    await tabManagers.get(ref)?.closeKeepingSessions(tabIds);
   });
 
   handle("tabs:rename", async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
@@ -34,6 +35,20 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
   handle("tabs:handover", async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> => {
     const handed = (await tabManagers.get(ref)?.handOver(tabId, agentId)) ?? notOpenMessage(store, ref);
     return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
+  });
+
+  handle("closed:list", (_event, ref: ProjectRef): TabDescriptor[] => {
+    return tabManagers.get(ref)?.closedSnapshot() ?? [];
+  });
+
+  handle("closed:reopen", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
+    const refused = await tabManagers.get(ref)?.reopenClosed(tabId);
+    return refused === undefined ? { ok: true } : { ok: false, error: refused };
+  });
+
+  handle("closed:delete", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
+    const refused = await tabManagers.get(ref)?.deleteClosed(tabId);
+    return refused === undefined ? { ok: true } : { ok: false, error: refused };
   });
 
   // The window's restart (the tab menu, the environment dialog): a running tab quits first.

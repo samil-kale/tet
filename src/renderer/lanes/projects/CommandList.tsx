@@ -335,7 +335,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
           <div
             // The position, as in the hook's payload above.
             key={index}
-            className={["command-row", ...rowClasses(index)].join(" ")}
+            className={["list-row", "command-row", ...rowClasses(index)].join(" ")}
             title={describe(command)}
             {...(editable ? rowProps(index) : {})}
             // Names the row to a terminal, in a worktree too, where nothing reorders it.
@@ -349,12 +349,12 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
             onContextMenu={(event) => menu.open(event, command)}
           >
             {/* Its name if any; the line is in the tooltip. */}
-            <span className="command-main">
-              <span className="command-label" style={command.color ? { color: colorVariable(command.color) } : undefined}>
+            <span className="list-main">
+              <span className="list-label command-label" style={command.color ? { color: colorVariable(command.color) } : undefined}>
                 {command.name ?? command.command}
               </span>
               {/* `env` on unnamed rows only: it changes what the command does, the folder does not. */}
-              {!command.name && formatEnv(command.env) && <span className="command-extra">({formatEnv(command.env)})</span>}
+              {!command.name && formatEnv(command.env) && <span className="list-extra">({formatEnv(command.env)})</span>}
             </span>
             <IconButton title={`Run ${command.command} in a new tab`} onClick={() => run(command)}>
               <PlayIcon />

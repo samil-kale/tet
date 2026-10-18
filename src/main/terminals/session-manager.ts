@@ -14,6 +14,7 @@ import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
+import { closedIds, setClosed } from "../store/closed";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";
@@ -81,6 +82,8 @@ interface AgentRuntime {
 
 export interface SessionManagerCallbacks {
   onTabs: (ref: ProjectRef, tabs: TabDescriptor[]) => void;
+  /** The closed tabs of this repository or worktree, whole, on every change. */
+  onClosed: (ref: ProjectRef, tabs: TabDescriptor[]) => void;
   onOutput: (ref: ProjectRef, tabId: string, data: string) => void;
   onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus) => void;
   /** Whether anything in this repository or worktree is still starting — drives the tab strip's
@@ -122,11 +125,16 @@ export interface InspectedTab extends TabDescriptor {
 
 /**
  * The terminal tabs of a project's repository or one of its worktrees, mirroring the
- * agents' persisted sessions: each session found at open becomes a tab, and closing a tab deletes
- * its session.
+ * agents' persisted sessions: each session found at open becomes a tab. Closing a tab deletes its
+ * session (`closeTabs`, `tet-ctl`); the window's close keeps it (`closeKeepingSessions`), and a
+ * session kept closed (store/closed.ts) is a closed tab, with no process, until it is reopened or
+ * deleted.
  */
 export class TabSessionManager {
   private tabs: TabState[] = [];
+  private closedTabs: TabState[] = [];
+  /** A closed tab's process still stopping: its session is reopened or deleted only after. */
+  private readonly stoppingClosed = new Map<string, Promise<void>>();
   private readonly sessions = new Map<string, TerminalSession>();
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
   /** Tabs whose session is being constructed; a second resize must not start a second one. */
@@ -222,6 +230,20 @@ export class TabSessionManager {
       return;
     }
     this.callbacks.onTabs(this.at.ref, this.snapshot());
+  }
+
+  /** The closed tabs, the latest activity first. */
+  closedSnapshot(): TabDescriptor[] {
+    return this.closedTabs
+      .map((tab) => this.descriptorOf(tab))
+      .sort((a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0));
+  }
+
+  private postClosed(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.callbacks.onClosed(this.at.ref, this.closedSnapshot());
   }
 
   /** What onStartupProgress last said — a bootstrap at app start runs before the window exists. */
@@ -361,15 +383,24 @@ export class TabSessionManager {
     // Runs again for an agent startable later (sbxSettingsChanged): skip sessions already on screen,
     // reported but unclaimed, or still being deleted (as in reconcile). A tab's id too: a restored
     // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
-    const known = new Set([...this.tabs.flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]), ...this.deletingSessionIds]);
+    const known = new Set([
+      ...[...this.tabs, ...this.closedTabs].flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
+      ...this.deletingSessionIds,
+    ]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
-    for (const info of fresh) {
-      this.tabs.push({ tabId: info.id, agentId: agent.id, ...sessionFieldsOf(info), status: "ready" });
-    }
-    if (fresh.length > 0) {
+    const closed = closedIds(this.dataRoot, this.at.ref);
+    const asTab = (info: AgentSessionInfo): TabState => ({ tabId: info.id, agentId: agent.id, ...sessionFieldsOf(info), status: "ready" });
+    const opened = fresh.filter((info) => !closed.has(info.id)).map(asTab);
+    const kept = fresh.filter((info) => closed.has(info.id)).map(asTab);
+    if (opened.length > 0) {
+      this.tabs.push(...opened);
       // Every agent brings its sessions up on its own: oldest first overall, a tab not listed yet last.
       this.tabs.sort((a, b) => (a.createdAt ?? Infinity) - (b.createdAt ?? Infinity));
       this.postTabs();
+    }
+    if (kept.length > 0) {
+      this.closedTabs.push(...kept);
+      this.postClosed();
     }
     // After the listing, so its first event can't race the bootstrap.
     this.startWatching(runtime);
@@ -985,6 +1016,117 @@ export class TabSessionManager {
   }
 
   /**
+   * The window's close: a tab with a session is kept closed, its session with it (keepClosed);
+   * any other closes as `closeTabs` closes it. One whose session cannot be kept stays, said in a
+   * notice.
+   */
+  async closeKeepingSessions(tabIds: string[]): Promise<void> {
+    const others: string[] = [];
+    for (const tabId of tabIds) {
+      const tab = this.tabOf(tabId);
+      if (tab?.sessionId === undefined) {
+        others.push(tabId);
+        continue;
+      }
+      const refused = this.keepClosed(tab, tab.sessionId);
+      if (refused !== undefined) {
+        this.callbacks.onNotice("error", refused);
+      }
+    }
+    await this.closeTabs(others);
+  }
+
+  /**
+   * Takes the tab off the strip and stops its process, keeping its session. Written down before
+   * anything changes, so a refused write leaves the tab as it is.
+   */
+  private keepClosed(tab: TabState, sessionId: string): string | undefined {
+    const { tabId } = tab;
+    const { agent } = this.runtimeFor(tab.agentId);
+    // Moved on to a session its hooks named (`/clear`) that no listing has shown yet.
+    if (awaitsClaim(tab)) {
+      return `The ${agent.displayName} session is not listed yet: close the tab again in a moment`;
+    }
+    try {
+      setClosed(this.dataRoot, this.at.ref, sessionId, true);
+    } catch (error) {
+      return `Could not keep the ${agent.displayName} session: ${errorMessage(error)}`;
+    }
+    this.record({ tabId, kind: "closed", sessionId });
+    this.tabs = this.tabs.filter((candidate) => candidate !== tab);
+    Object.assign(tab, { status: "ready", inTurn: false, waitingAt: undefined, finishedAt: undefined });
+    this.closedTabs.push(tab);
+    this.postTabs();
+    this.postClosed();
+    this.lastSizes.delete(tabId);
+    const session = this.sessions.get(tabId);
+    if (session) {
+      const stopped = session.stop().then(() => {
+        this.sessions.delete(tabId);
+        this.stoppingClosed.delete(tabId);
+      });
+      this.stoppingClosed.set(tabId, stopped);
+    }
+    return undefined;
+  }
+
+  /** Brings a closed tab back at the end of the strip; its session resumes at its first resize,
+   *  as a restored tab's does. */
+  async reopenClosed(tabId: string): Promise<string | undefined> {
+    const tab = this.closedTabs.find((candidate) => candidate.tabId === tabId);
+    if (!tab?.sessionId) {
+      return undefined;
+    }
+    await this.stoppingClosed.get(tabId);
+    if (!this.closedTabs.includes(tab)) {
+      return undefined;
+    }
+    try {
+      setClosed(this.dataRoot, this.at.ref, tab.sessionId, false);
+    } catch (error) {
+      return `Could not reopen the ${this.runtimeFor(tab.agentId).agent.displayName} session: ${errorMessage(error)}`;
+    }
+    this.closedTabs = this.closedTabs.filter((candidate) => candidate !== tab);
+    this.tabs.push(tab);
+    this.postTabs();
+    this.postClosed();
+    return undefined;
+  }
+
+  /** Deletes a closed tab's session, once its process is gone. Answers what refused it: the
+   *  tab stays closed. */
+  async deleteClosed(tabId: string): Promise<string | undefined> {
+    const tab = this.closedTabs.find((candidate) => candidate.tabId === tabId);
+    const sessionId = tab?.sessionId;
+    if (!tab || !sessionId) {
+      return undefined;
+    }
+    const { agent } = this.runtimeFor(tab.agentId);
+    const stopping = this.stoppingClosed.get(tabId);
+    this.deletingSessionIds.add(sessionId);
+    try {
+      if (stopping) {
+        await stopping;
+        // See SESSION_REMOVE_DELAY_MS.
+        await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
+      }
+      await this.placeOf(tab).sessionActions()?.remove(sessionId);
+      setClosed(this.dataRoot, this.at.ref, sessionId, false);
+    } catch (error) {
+      return `Could not delete the ${agent.displayName} session: ${errorMessage(error)}`;
+    } finally {
+      this.deletingSessionIds.delete(sessionId);
+    }
+    this.closedTabs = this.closedTabs.filter((candidate) => candidate !== tab);
+    // As destroyTab: the copy goes with the tab.
+    if (tab.handoverDir !== undefined) {
+      this.removeHandoverCopy(tab.handoverDir);
+    }
+    this.postClosed();
+    return undefined;
+  }
+
+  /**
    * A saved command respawns in place (`TerminalSession.restart`). An agent tab with no process
    * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: the sandbox and
    * its mounts may have changed outside TET, so checks, sandbox and mounts are redone and the
@@ -1191,6 +1333,7 @@ export class TabSessionManager {
     this.disposed = true;
     // A start still underway spawns only if its tab is still known.
     this.tabs = [];
+    this.closedTabs = [];
     this.starting.clear();
     this.lastSizes.clear();
     this.indicators.dispose();

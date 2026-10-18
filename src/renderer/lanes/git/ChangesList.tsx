@@ -352,8 +352,8 @@ export const ChangesList = memo(function ChangesList({
                 }
                 label={node.name}
               >
-                {node.id === ROOT_ID && <span className="tree-dir">{fileCount(shownFiles.length)}</span>}
-                {change && !asTree && parentOf(change.path) && <span className="tree-dir">{parentOf(change.path)}</span>}
+                {node.id === ROOT_ID && <span className="tree-extra">{fileCount(shownFiles.length)}</span>}
+                {change && !asTree && parentOf(change.path) && <span className="tree-extra">{parentOf(change.path)}</span>}
               </TreeRow>
             );
           })}

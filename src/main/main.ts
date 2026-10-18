@@ -210,6 +210,7 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
     send("tabs:changed", { ref, tabs });
     awaitedNotificationTab(ref);
   },
+  onClosed: (ref, tabs) => send("closed:changed", { ref, tabs }),
   onOutput: (ref, tabId, data) => {
     appWindow.queueOutput(ref, tabId, data);
   },

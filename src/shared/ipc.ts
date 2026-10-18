@@ -108,6 +108,9 @@ export interface InvokeChannels {
   "tabs:handover": TETApi["tabs"]["handOver"];
   "tabs:restart": TETApi["tabs"]["restart"];
   "tabs:starting": TETApi["tabs"]["starting"];
+  "closed:list": TETApi["closed"]["list"];
+  "closed:reopen": TETApi["closed"]["reopen"];
+  "closed:delete": TETApi["closed"]["delete"];
   "agents:list": TETApi["agents"]["list"];
   "agents:askable": TETApi["agents"]["askable"];
   "agents:ask-models": TETApi["agents"]["askModels"];
@@ -157,6 +160,7 @@ export interface EventChannels {
   "editor:open": Payload<TETApi["repository"]["onOpenEditor"]>;
   "commands:changed": Payload<TETApi["commands"]["onChanged"]>;
   "tabs:changed": Payload<TETApi["tabs"]["onTabs"]>;
+  "closed:changed": Payload<TETApi["closed"]["onChanged"]>;
   "tabs:output": Payload<TETApi["tabs"]["onOutput"]>;
   "tabs:status": Payload<TETApi["tabs"]["onStatus"]>;
   "tabs:startup-progress": Payload<TETApi["tabs"]["onStartupProgress"]>;

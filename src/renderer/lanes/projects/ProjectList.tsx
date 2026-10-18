@@ -279,7 +279,7 @@ export const ProjectList = memo(function ProjectList({
     // HEAD, as context rather than name; for a worktree, whose branch is its name, the branch it
     // was made from.
     const extra = worktree ? heads[refKey]?.base : heads[refKey]?.head;
-    const classes = [worktree ? "worktree-row" : "project-row", ...(refKey === activeRefKey ? ["active"] : [])];
+    const classes = ["list-row", worktree ? "worktree-row" : "project-row", ...(refKey === activeRefKey ? ["active"] : [])];
     return (
       <div
         key={refKey}
@@ -296,9 +296,9 @@ export const ProjectList = memo(function ProjectList({
         }
         onContextMenu={(event) => menu.open(event, { kind: "ref", resolved })}
       >
-        <span className="project-main">
-          <span className="project-label">{worktree ? worktreeName(worktree) : resolved.name}</span>
-          {extra && <span className="project-extra">{extra}</span>}
+        <span className="list-main">
+          <span className="list-label">{worktree ? worktreeName(worktree) : resolved.name}</span>
+          {extra && <span className="list-extra">{extra}</span>}
         </span>
         {/* All three session states can hold at once, each a button to a session. No ranking as
             on a tab: a row has no single icon to replace. */}
@@ -330,14 +330,14 @@ export const ProjectList = memo(function ProjectList({
   const madeElsewhereRow = (worktree: ProjectWorktree): ReactNode => (
     <div
       key={worktree.path}
-      className="worktree-row made-elsewhere"
+      className="list-row worktree-row made-elsewhere"
       title={`${worktree.path}\nA worktree ${MADE_ELSEWHERE}`}
       draggable
       onDragStart={(event) => setDragName(event.dataTransfer, { kind: "worktree", name: worktreeName(worktree) })}
       onContextMenu={(event) => menu.open(event, { kind: "madeElsewhere", worktree })}
     >
-      <span className="project-main">
-        <span className="project-label">{worktreeName(worktree)}</span>
+      <span className="list-main">
+        <span className="list-label">{worktreeName(worktree)}</span>
       </span>
     </div>
   );

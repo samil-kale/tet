@@ -19,7 +19,7 @@ import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHos
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
 import { useDragReorder } from "../ui/drag-reorder";
-import { CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
+import { ClosedIcon, CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -58,6 +58,7 @@ const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => Rea
   projects: { noun: "projects", Icon: ProjectsIcon },
   git: { noun: "git", Icon: GitIcon },
   files: { noun: "files", Icon: FilesIcon },
+  closed: { noun: "closed", Icon: ClosedIcon },
 };
 
 /** A toggle's drag, its own so no tab strip or terminal takes the drop. */
@@ -221,7 +222,7 @@ export const Pane = memo(function Pane({
 
   /**
    * Editor tabs close in the renderer, terminals in main. Their unsaved-edit question may keep them
-   * open while the same "Close All"'s terminals go.
+   * open while the same "Close All"'s terminals go — those with a session to the CLOSED lane.
    */
   const closeTabs = useCallback(
     (tabIds: string[]) => {
@@ -333,7 +334,7 @@ export const Pane = memo(function Pane({
             ),
           sandboxed: terminal.sandboxed === true,
           inactive: terminal.status === "stopped",
-          closeTitle: terminal.sessionId !== undefined ? "Close tab and delete its session" : "Close tab",
+          closeTitle: "Close tab",
         };
       }
     }
@@ -482,7 +483,7 @@ export const Pane = memo(function Pane({
         {chrome && (
           <div className="tab-strip-actions">
             <LaneToggles chrome={chrome} />
-            <IconButton title="Settings" onClick={chrome.onOpenSettings}>
+            <IconButton title="Show settings" onClick={chrome.onOpenSettings}>
               <GearIcon />
             </IconButton>
           </div>

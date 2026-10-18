@@ -11,6 +11,7 @@ import { onDisk, relativeInside } from "../util/path-inside";
  *
  * ```
  * projects/<id>/                   id: `tet.id` in the repository's git config
+ *   closed.json                    the sessions kept closed, per repository and worktree (closed.ts)
  *   drops/                         pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
@@ -26,7 +27,8 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * copy here.
  *
  * Never anything a sandbox must not see (settings, tokens, SBX settings): an organization governing
- * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers).
+ * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `closed.json` is the
+ * one file, session ids alone.
  */
 export function projectsDir(dataRoot: string): string {
   return path.join(dataRoot, "projects");
@@ -34,6 +36,11 @@ export function projectsDir(dataRoot: string): string {
 
 export function projectDir(dataRoot: string, projectId: string): string {
   return path.join(projectsDir(dataRoot), projectId);
+}
+
+/** The project's closed session ids (closed.ts). */
+export function closedFile(dataRoot: string, projectId: string): string {
+  return path.join(projectDir(dataRoot, projectId), "closed.json");
 }
 
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs

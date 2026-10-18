@@ -86,7 +86,8 @@ Not for Hans. Hans can go to hell.
 - **Claude Code**, **Codex** and **pi** run in terminal tabs. TET
   shows when a turn is working, waiting or finished out of sight.
 - A project's tabs can be split into up to four panes. Files and images can be dropped into
-  an agent session. So you can burn through tokens even faster.
+  an agent session. So you can burn through tokens even faster. Closing a tab with a session
+  keeps the session: the tab leaves the strip for the closed lane, which reopens or deletes it.
 - The git lane handles branches, tags, stashes, merge, rebase, fetch, pull, push, commit, discard
   and `.gitignore`. A changed file opens in an editor tab as an inline diff you can edit.
 - A files lane with an Explorer and a search sits next to git. Saved commands in `tet.json` travel

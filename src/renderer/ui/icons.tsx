@@ -10,6 +10,7 @@ import {
   ChevronsUpDown,
   CircleAlert,
   CircleX,
+  ClockArrowUp,
   Columns2,
   File,
   FileCode,
@@ -23,6 +24,7 @@ import {
   GitCompare,
   Globe,
   GripVertical,
+  History,
   Info,
   Landmark,
   List,
@@ -407,12 +409,22 @@ export function RemoteIcon(props: IconProps) {
 
 /** Lucide's `settings`. */
 export function GearIcon(props: IconProps) {
-  return <Lucide {...props} icon={Settings} />;
+  return <Lucide className="gear-icon" {...props} icon={Settings} />;
 }
 
 /** Lucide's `file-code` — the files lane. */
 export function FilesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileCode} />;
+}
+
+/** Lucide's `history` — the closed lane, drawn a little larger: its circle reads small beside the other lanes. */
+export function ClosedIcon(props: IconProps) {
+  return <Lucide className="closed-icon" {...props} icon={History} extent={18.5} />;
+}
+
+/** Lucide's `clock-arrow-up` — a closed tab's reopen. */
+export function ReopenIcon(props: IconProps) {
+  return <Lucide {...props} icon={ClockArrowUp} />;
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus`. */

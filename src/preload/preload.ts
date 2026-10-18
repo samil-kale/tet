@@ -164,6 +164,12 @@ const api: TETApi = {
       }),
     starting: (ref) => invoke("tabs:starting", ref),
   },
+  closed: {
+    list: (ref) => invoke("closed:list", ref),
+    reopen: (ref, tabId) => invoke("closed:reopen", ref, tabId),
+    delete: (ref, tabId) => invoke("closed:delete", ref, tabId),
+    onChanged: (listener) => subscribe("closed:changed", listener),
+  },
   agents: {
     list: () => invoke("agents:list"),
     askable: () => invoke("agents:askable"),

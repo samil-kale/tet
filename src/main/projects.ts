@@ -15,6 +15,7 @@ import type { RepositoryManager } from "./git/repository";
 import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
 import { onDisk } from "./util/path-inside";
+import { forgetClosed } from "./store/closed";
 import { newWorktreeKey, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./store/project-dirs";
 import { removeRefSandboxes } from "./sbx/sbx";
 import { releaseDropped } from "./sbx/sbx-mounts";
@@ -218,6 +219,7 @@ async function deleteRefData(refs: ProjectRef[], folders: string[]): Promise<voi
  *  that still holds another's. */
 async function deleteWorktreeData(dataRoot: string, refs: ProjectRef[], projectId: string, key: string): Promise<void> {
   const folders = worktreeFolders(dataRoot, projectId, key);
+  forgetClosed(dataRoot, projectRef(projectId, key));
   await deleteRefData(refs, folders);
   for (const folder of folders) {
     await fs.promises.rmdir(path.dirname(folder)).catch(() => undefined);

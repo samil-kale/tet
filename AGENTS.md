@@ -70,7 +70,7 @@ project's tabs.
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
      (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
-     Explorer tree, the SEARCH section, Seti's file icons) — and imports no other lane; beside them,
+     Explorer tree, the SEARCH section, Seti's file icons), `closed/` (the CLOSED) — and imports no other lane; beside them,
      their state (`use-lanes.ts`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the
@@ -122,6 +122,7 @@ own profile stays in Electron's `userData` (`data-root.ts`).
   update/
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
+    closed.json                    the sessions kept closed in the repository and its worktrees
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
@@ -133,7 +134,7 @@ own profile stays in Electron's `userData` (`data-root.ts`).
 
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see — never a setting, a
-  token or an sbx value. Removing a project deletes its folder.
+  token or an sbx value — and `closed.json`, session ids alone. Removing a project deletes its folder.
 - **A sandbox sees its agent folder, and nothing else of `~/.tet`** — but the worktree it runs in,
   and a worktree or path handed to it (dropped, or by `worktree-agent-merge`), mounted as a drop.
   What a sandboxed tab needs from TET lies in `sandboxes/<repository|key>/<agent>/`, mounted whole;
@@ -167,7 +168,9 @@ own profile stays in Electron's `userData` (`data-root.ts`).
   `config/<agent>`: one set of files serves every repository and worktree, rewritten once when a
   setting in it changes.
 - **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
-  worktree (`SessionProvider`), and keeps no list of them of its own.
+  worktree (`SessionProvider`), and keeps no list of them of its own. The one thing it keeps is which
+  are kept closed (`closed.json`, ids alone): such a session is shown by the CLOSED lane instead of
+  as a tab, until reopened or deleted.
 - **A sandbox is read without starting it.** Its setup lies in its `sandboxes/…/<agent>` folder,
   its sessions reach the host through `SandboxSessions.mounts` into `sessions/`, listed by the same
   code as the host's.
@@ -272,8 +275,8 @@ per-line decision is for an agent.
 
 ## UI rules
 
-- **Layout**: the lanes on the left: the projects (each with its worktrees, and the COMMANDS), git
-  and files — none of them a tab. The strip's toggles drive the one free lane, one at a time; a
+- **Layout**: the lanes on the left: the projects (each with its worktrees, and the COMMANDS), git,
+  files and the closed tabs (taken off the strip, their sessions kept) — none of them a tab. The strip's toggles drive the one free lane, one at a time; a
   lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
   by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
   the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
@@ -281,9 +284,9 @@ per-line decision is for an agent.
   worktree — VS Code's preview rule, one preview tab each (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`),
-  LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`; each title heads a
-  `Section`, drawn by `ProjectList` and `CommandList` themselves and by `GitLane` and `FilesLane`
-  around the others, never a "pane".
+  LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`, CLOSED `ClosedList`; each
+  title heads a `Section`, drawn by `ProjectList`, `CommandList` and `ClosedList` themselves and by
+  `GitLane` and `FilesLane` around the others, never a "pane".
 - **A section's rows drag onto a terminal**, which types what was dropped: a file's or folder's
   path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a

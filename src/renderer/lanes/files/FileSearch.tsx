@@ -117,7 +117,7 @@ export const FileSearch = memo(function FileSearch({ resolved, result, runSearch
                 }
                 label={name}
               >
-                {dir && <span className="tree-dir">{dir}</span>}
+                {dir && <span className="tree-extra">{dir}</span>}
                 <span className="count-badge search-count">{file.matches.length}</span>
               </TreeRow>
               {expanded &&
