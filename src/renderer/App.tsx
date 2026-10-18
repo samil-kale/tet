@@ -28,6 +28,7 @@ import { disposeRefTerminals } from "./tabs/terminal-views";
 import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { PlusIcon } from "./ui/icons";
+import { ActivityBar } from "./lanes/ActivityBar";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
@@ -338,6 +339,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       </div>
 
       <div className="body">
+        <ActivityBar shownLane={shownLane} onToggleLane={toggleLane} onOpenSettings={openSettings} />
         {/* Every lane, in a fixed order, each in the DOM at width 0 while not shown (so a slide
             has a box to transition) and mounted throughout, so hiding one keeps selection, filter,
             open folders and a running action's bar. */}
@@ -432,8 +434,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               resolved={resolved}
               tabs={stripTabs[resolved.refKey] ?? NO_TABS}
               visible={resolved.refKey === activeRefKey}
-              shownLane={shownLane}
-              onToggleLane={toggleLane}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={(starting[resolved.refKey] ?? false) && (marks[resolved.refKey]?.starting ?? NO_IDS).length === 0}
@@ -442,7 +442,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               onActivateTab={activateTab}
               onSnapTab={snapTab}
               onFocusPane={focusPane}
-              onOpenSettings={openSettings}
               finishedTabIds={marks[resolved.refKey]?.finished ?? NO_IDS}
               waitingTabIds={marks[resolved.refKey]?.waiting ?? NO_IDS}
               startingTabIds={marks[resolved.refKey]?.starting ?? NO_IDS}

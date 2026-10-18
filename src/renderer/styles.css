@@ -452,6 +452,27 @@ textarea:focus,
   border-top: 1px solid var(--tet-panel-border);
 }
 
+/* The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar),
+   its own fixed width, its icons 1.2x the rest of the app's (`--icon-size`, `--action-size`). */
+.activity-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: none;
+  width: 41px;
+  gap: 10px;
+  padding: 10px 0;
+  border-right: 1px solid var(--tet-panel-border);
+  background: var(--tet-sideBar-background);
+  --icon-size: 17px;
+  --action-size: 26px;
+}
+
+/* Settings sits at the strip's bottom, apart from the lane toggles above it. */
+.activity-bar-settings {
+  margin-top: auto;
+}
+
 .content {
   position: relative;
   display: flex;
@@ -1129,10 +1150,9 @@ textarea:focus,
   box-shadow: inset 0 -1px 0 var(--tet-tab-activeBorder);
 }
 
-/* Plain icon buttons at the strip's start, none tab-shaped; boxed like `.new-tab` at the other
-   end. The panel's border, not the tabs': a theme may hide the line between tabs (Dark IntelliJ),
-   but this one marks the chrome off. The editor tab's bar boxes its actions the same way. */
-.tab-strip-actions,
+/* The editor tab's bar boxes its actions at the strip's start, none tab-shaped; boxed like
+   `.new-tab` at the other end. The panel's border, not the tabs': a theme may hide the line
+   between tabs (Dark IntelliJ), but this one marks the chrome off. */
 .editor-bar-actions {
   display: flex;
   align-items: center;
@@ -1576,7 +1596,7 @@ textarea:focus,
   border-bottom: 1px solid var(--tet-panel-border);
 }
 
-/* Boxed with `.tab-strip-actions`; the bar's full height. */
+/* The editor bar's full height. */
 .editor-bar-actions {
   align-self: stretch;
 }

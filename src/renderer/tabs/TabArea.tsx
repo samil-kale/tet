@@ -9,8 +9,7 @@ import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } fro
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
-import { Pane, type DragPosition, type PaneChrome } from "./Pane";
-import type { Lane } from "../../shared/types/settings";
+import { Pane, type DragPosition } from "./Pane";
 import { paneTabKind, type PaneTab } from "./pane-tab";
 import { NO_TABS } from "./layout-state";
 
@@ -59,9 +58,6 @@ interface TabAreaProps {
    *  list needs all. */
   tabs: PaneTab[];
   visible: boolean;
-  /** For the strip's toggles (`PaneChrome`). */
-  shownLane: Lane | null;
-  onToggleLane: (lane: Lane) => void;
   agents: AgentInfo[];
   /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
@@ -71,7 +67,6 @@ interface TabAreaProps {
   onActivateTab: (refKey: string, tabId: string, paneId?: PaneId) => void;
   onSnapTab: (refKey: string, tabId: string, transition: SnapTransition) => void;
   onFocusPane: (refKey: string, paneId: PaneId) => void;
-  onOpenSettings: () => void;
   /** Tabs whose finished turn is not yet seen — App decides, this draws. */
   finishedTabIds: string[];
   /** Tabs stopped on an unanswered question — App decides, this draws. */
@@ -85,8 +80,6 @@ export const TabArea = memo(function TabArea({
   resolved,
   tabs,
   visible,
-  shownLane,
-  onToggleLane,
   agents,
   externalBusy,
   onCloseEditors,
@@ -94,7 +87,6 @@ export const TabArea = memo(function TabArea({
   onActivateTab,
   onSnapTab,
   onFocusPane,
-  onOpenSettings,
   finishedTabIds,
   waitingTabIds,
   startingTabIds,
@@ -151,7 +143,6 @@ export const TabArea = memo(function TabArea({
     previousPreset.current = layout.preset;
   }, [layout.preset, resetSashFractions]);
 
-  const chrome = useMemo<PaneChrome>(() => ({ shownLane, onToggleLane, onOpenSettings }), [shownLane, onToggleLane, onOpenSettings]);
   const onActivate = useCallback(
     (tabId: string, paneId: PaneId) => onActivateTab(resolved.refKey, tabId, paneId),
     [onActivateTab, resolved.refKey],
@@ -242,7 +233,7 @@ export const TabArea = memo(function TabArea({
     return next;
   }, [tabs, tabPane, focusedPane]);
 
-  // Whether a pane's *own* tab is starting, apart from `first`/`chrome`.
+  // Whether a pane's *own* tab is starting, apart from pane "a"'s strip-wide reason (`first`).
   const startingHere = useMemo(() => {
     const ids = new Set(startingTabIds);
     const next: Partial<Record<PaneId, boolean>> = {};
@@ -282,7 +273,6 @@ export const TabArea = memo(function TabArea({
       onCloseEditors={onCloseEditorsHere}
       finishedTabIds={finishedTabIds}
       waitingTabIds={waitingTabIds}
-      chrome={first ? chrome : undefined}
       // Pane "a" also carries the strip-wide reason.
       busy={(first && externalBusy) || (startingHere[paneId] ?? false)}
       dragOver={dragOverPane === paneId}

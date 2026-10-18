@@ -71,7 +71,7 @@ project's tabs.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
      (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
      Explorer tree, the SEARCH section, Seti's file icons), `archive/` (the ARCHIVE) — and imports no other lane; beside them,
-     their state (`use-lanes.ts`).
+     their state (`use-lanes.ts`) and the Activity Bar that toggles them (`ActivityBar.tsx`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the
      fonts the app ships with their licenses (`fonts/`).
@@ -275,13 +275,14 @@ per-line decision is for an agent.
 
 ## UI rules
 
-- **Layout**: the lanes on the left: the projects (each with its worktrees, and the COMMANDS), git,
+- **Layout**: the Activity Bar at the window's left edge (`ActivityBar.tsx`), full height, settings
+  at its bottom; beside it the lanes: the projects (each with its worktrees, and the COMMANDS), git,
   files and the archived tabs (taken off the strip, their sessions kept) — none of them a tab. Only
-  one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`); the strip's toggles
-  swap it, each closing it back on its own click (`use-lanes.ts`). No pinning, no reordering. Which
-  lane is shown and its width are the window's layout storage. The tab strip is the agent, shell and
-  editor tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
-  (`editor-tab.ts`).
+  one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`); the Activity Bar's
+  toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning, no
+  reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
+  the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
+  preview tab each (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`),
   LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`, ARCHIVE `ArchiveList`; each

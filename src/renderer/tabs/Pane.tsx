@@ -1,12 +1,10 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { isWorking } from "../../shared/types/terminals";
-import type { Lane } from "../../shared/types/settings";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
-import { LANES } from "../../shared/types/settings";
 import { AgentIcon } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
 import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -19,7 +17,7 @@ import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab"
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
-import { ArchiveIcon, CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
+import { CloseIcon, FilesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 
@@ -39,41 +37,6 @@ function formatIso(ms: number): string {
 /** An agent as a menu entry: its icon, then its name. */
 function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
   return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="tab-icon" />, run };
-}
-
-/** The one row of icon buttons, on pane "a" alone whatever the preset. */
-export interface PaneChrome {
-  /** The one lane shown, or none. */
-  shownLane: Lane | null;
-  onToggleLane: (lane: Lane) => void;
-  onOpenSettings: () => void;
-}
-
-/** The lanes' toggles, drawn in a fixed order. */
-const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
-  projects: { noun: "projects", Icon: ProjectsIcon },
-  git: { noun: "git", Icon: GitIcon },
-  files: { noun: "files", Icon: FilesIcon },
-  archive: { noun: "archive", Icon: ArchiveIcon },
-};
-
-/** The strip's toggles: each shows its lane, swapping out whichever was shown; the one shown
- *  closes back on its own click. */
-function LaneToggles({ chrome }: { chrome: PaneChrome }) {
-  const { shownLane, onToggleLane } = chrome;
-  return LANES.map((lane) => {
-    const { noun, Icon } = LANE_TOGGLES[lane];
-    return (
-      <IconButton
-        key={lane}
-        active={shownLane === lane}
-        onClick={() => onToggleLane(lane)}
-        title={`${shownLane === lane ? "Hide" : "Show"} ${noun}`}
-      >
-        <Icon />
-      </IconButton>
-    );
-  });
 }
 
 interface PaneProps {
@@ -96,9 +59,7 @@ interface PaneProps {
   onCloseEditors: (tabIds: string[]) => void;
   finishedTabIds: string[];
   waitingTabIds: string[];
-  /** Only on pane "a". */
-  chrome?: PaneChrome;
-  /** One of this pane's tabs starting, or — only where `chrome` is — a project-wide reason. */
+  /** One of this pane's tabs starting, or — only on pane "a" — a project-wide reason. */
   busy: boolean;
   /**
    * Pixels: one of the two for a sash-sized pane, neither for the filling one. Numbers, not a
@@ -155,7 +116,6 @@ export const Pane = memo(function Pane({
   onCloseEditors,
   finishedTabIds,
   waitingTabIds,
-  chrome,
   busy,
   dragOver,
   onDragStart,
@@ -464,15 +424,6 @@ export const Pane = memo(function Pane({
       onDragEnd={onDragEnd}
     >
       <div className="tab-strip">
-        {/* Window chrome, on pane "a" alone. */}
-        {chrome && (
-          <div className="tab-strip-actions">
-            <LaneToggles chrome={chrome} />
-            <IconButton title="Show settings" onClick={chrome.onOpenSettings}>
-              <GearIcon />
-            </IconButton>
-          </div>
-        )}
         <div className="tabs" ref={strip}>
           {tabs.map((tab) => {
             const face = faceOf(tab);
