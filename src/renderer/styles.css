@@ -869,7 +869,8 @@ textarea:focus,
 }
 
 /* Centered in the row, the smaller text sits above the label's baseline; this puts it on it. */
-.tree-row > .tree-extra {
+.tree-row > .tree-extra,
+.tree-row > .count-badge {
   position: relative;
   top: 0.5px;
 }
@@ -1001,6 +1002,7 @@ textarea:focus,
 .count-badge {
   color: var(--tet-descriptionForeground);
   font-weight: 400;
+  font-size: var(--tiny-font-size);
 }
 
 /* Ahead/behind on a local branch row, non-zero directions only. Pushed right by a margin: a
