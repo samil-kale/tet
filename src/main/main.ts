@@ -411,7 +411,6 @@ if (!app.requestSingleInstanceLock()) {
   logError(`start: ${app.getVersion()}, pid ${process.pid} from ${process.execPath}, another instance runs, quitting`);
   app.quit();
 } else {
-  logError(`start: ${app.getVersion()}, pid ${process.pid} from ${process.execPath}`);
   // A second start brings the running window to the front.
   app.on("second-instance", appWindow.reveal);
 

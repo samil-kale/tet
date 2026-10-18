@@ -626,6 +626,11 @@ textarea:focus,
   cursor: pointer;
 }
 
+/* A closed tab's agent icon stands further from its label than the 4px gap of the other rows. */
+.closed-row > .tree-icon {
+  margin-right: 4px;
+}
+
 /* A worktree under its project's row, a column in (COLUMN_STEP in ui/tree-row.tsx). */
 .worktree-row {
   padding-left: 27px;

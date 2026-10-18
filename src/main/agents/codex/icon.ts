@@ -3,11 +3,13 @@ import type { AgentIcon } from "../../../shared/types/agents";
 /**
  * Codex's own icon (not OpenAI's mark): a prompt in a circle, redrawn in the shell icon's
  * stroke style since no first-party SVG exists. Drawn two pixels over the shared size: an outline
- * circle reads smaller than the filled marks beside it at the same extent.
+ * circle reads smaller than the filled marks beside it at the same extent. Set half a pixel higher (`cy`):
+ * its circle sits low beside them.
  */
 export const codexIcon: AgentIcon = {
   kind: "stroke",
   extent: 11.33,
+  cy: 8.5,
   stroke: 1.6,
   shapes: [
     { element: "circle", attributes: { cx: 8, cy: 8, r: 6 } },
