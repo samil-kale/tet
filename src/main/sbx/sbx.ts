@@ -599,7 +599,8 @@ export async function prepareSbxRun(
     // it ran are the ports read the ones alignAtStart works against.
     const warmed = created || (!savedOver && (await request.warm) === true);
     // The repository's sandboxes, ports configured or not: one may still publish a port dropped since.
-    const forwarding = request.ref.worktree === undefined ? projectSandboxes(projectId, request.sandboxes) : [];
+    // Its own too, which the listing misses where another start created it meanwhile.
+    const forwarding = request.ref.worktree === undefined ? [...new Set([...projectSandboxes(projectId, request.sandboxes), name])] : [];
     const reads = savedOver ? undefined : await readSandboxReads(forwarding);
     const problems = await readSbxProblems({
       projectId,

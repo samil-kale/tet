@@ -690,4 +690,106 @@ describe("sbx as installed", { skip: !SBX && "TET_SBX_TEST=1 only" }, () => {
       assert.deepEqual(await publishedBy(other), []);
     });
   });
+
+  describe("two tabs of one agent starting together", () => {
+    /** Only ever this test's: its sandbox is removed before and after. */
+    const ref = { projectId: "tet-sbx-test-together" };
+    const PROJECT = path.join(os.tmpdir(), "tet-sbx-test-together");
+    const AGENT_DIR = path.join(os.tmpdir(), "tet-sbx-test-together-agent");
+    const name = sandboxName(ref, "claude");
+    const settings: SbxProjectSettings = {
+      ...EMPTY_SBX_SETTINGS,
+      enabled: true,
+      hosts: ["example.com"],
+      ports: [{ host: "58127", container: "8080" }],
+    };
+
+    async function clear(): Promise<void> {
+      await runSbx(["rm", name, "--force"]);
+      for (const dir of [PROJECT, AGENT_DIR]) {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
+      }
+    }
+
+    /** Two starts at once, each with its own warm-up, as two tabs' spawns run them. */
+    async function startTogether(runAgent = false): Promise<void> {
+      const sandboxes = await listSandboxes();
+      assert.ok(sandboxes, "sbx lists the sandboxes");
+      const outputs = ["", ""];
+      const starts = outputs.map((_, index) =>
+        prepareSbxRun({
+          agent: claudeAgent,
+          name,
+          ref,
+          projectRefPath: PROJECT,
+          settings,
+          skills: EMPTY_SBX_SKILLS,
+          sandboxes,
+          warm: ensureRunning(name),
+          paths: { agentDir: AGENT_DIR },
+          agentArgs: runAgent ? ["--version"] : [],
+          environmentValues: new Map(),
+          onData: (data) => (outputs[index] += data),
+        }),
+      );
+      const results = await Promise.allSettled(starts);
+      results.forEach((result, index) => {
+        assert.equal(
+          result.status,
+          "fulfilled",
+          `start ${index}: ${result.status === "rejected" ? String(result.reason) : ""}\n${outputs[index]}`,
+        );
+        if (result.status === "fulfilled") {
+          assert.deepEqual([result.value.problems, result.value.savedOver], [{}, false], outputs[index]);
+        }
+      });
+      assert.equal((await listSandboxes())?.get(name)?.running, true, "the sandbox runs");
+      assert.deepEqual(
+        ((await readSandboxPorts(name)) ?? []).map((entry) => `${entry.host}:${entry.container}`),
+        ["58127:8080"],
+      );
+      assert.deepEqual((await readSandboxHosts())?.get(name), ["example.com"]);
+      if (runAgent) {
+        // `sbx run` of both at once, the agent asked only for its version, which
+        // sbx prints to a terminal only: the exit code is what tells.
+        const ran = await Promise.all(
+          results.map((result) => (result.status === "fulfilled" ? runSbx(result.value.args) : Promise.reject(new Error("not prepared")))),
+        );
+        ran.forEach((result, index) => {
+          assert.equal(
+            result.ok,
+            true,
+            `run ${index}: ${result.code}
+${result.stdout}${result.stderr}`,
+          );
+        });
+      }
+    }
+
+    before(async () => {
+      await clear();
+      fs.mkdirSync(PROJECT, { recursive: true });
+      fs.mkdirSync(AGENT_DIR, { recursive: true });
+      await writeSbxSettings(PROJECT, settings);
+    });
+
+    after(clear);
+
+    it("create one sandbox and both start", { timeout: CREATE_MS }, async () => {
+      await startTogether();
+    });
+
+    it("start a stopped sandbox once and both start", { timeout: CREATE_MS }, async () => {
+      assert.equal((await runSbx(["stop", name])).ok, true);
+      await startTogether();
+    });
+
+    it("attach to a running sandbox and both start", { timeout: CREATE_MS }, async () => {
+      await startTogether();
+    });
+
+    it("run the agent in both at once", { timeout: CREATE_MS }, async () => {
+      await startTogether(true);
+    });
+  });
 });
