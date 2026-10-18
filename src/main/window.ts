@@ -3,7 +3,6 @@ import { app, BrowserWindow, shell } from "electron";
 import { WINDOW_ARGS } from "../shared/api";
 import type { EventChannels, WindowReply } from "../shared/ipc";
 import type { ThemeDefinition } from "../shared/themes";
-import type { LaneSettings } from "../shared/types/settings";
 import { refKeyOf } from "../shared/types/project";
 import type { Notice, NoticeProgress, NoticeSeverity } from "../shared/types/app";
 import type { ProjectRef } from "../shared/types/project";
@@ -202,11 +201,6 @@ export class AppWindow {
       window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
     }
     this.send("app:theme", theme.id);
-  }
-
-  /** Hands the window the lanes as stored; a window still loading reads them at its start. */
-  showLanes(lanes: LaneSettings): void {
-    this.send("app:lanes", lanes);
   }
 
   /** Per window: a theme the running window could not take (showTheme) reaches later windows. */

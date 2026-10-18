@@ -1,4 +1,4 @@
-import { createContext, useContext, type HTMLAttributes, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ProgressBar } from "./ProgressBar";
 
 interface SectionProps {
@@ -16,19 +16,14 @@ interface SectionProps {
   children: ReactNode;
 }
 
-/** What drags the lane a section stands in by its header, where it can be dragged (a pinned
- *  lane's `handleProps`). */
-export const SectionHandle = createContext<HTMLAttributes<HTMLElement> | undefined>(undefined);
-
 /**
  * A titled section of a lane — the projects lane's, the git lane's, the files lane's: a header
  * with its title, count and actions, then what it holds, a filter field included where it has one.
  */
 export function Section({ title, count, countError, busy, height, actions, children }: SectionProps) {
-  const handle = useContext(SectionHandle);
   return (
     <div className={`section${height === undefined ? " grows" : ""}`} style={height === undefined ? undefined : { height }}>
-      <div className="section-header" {...handle}>
+      <div className="section-header">
         <span className="section-title">
           {title}
           {count !== undefined && (

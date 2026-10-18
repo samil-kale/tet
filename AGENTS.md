@@ -276,12 +276,12 @@ per-line decision is for an agent.
 ## UI rules
 
 - **Layout**: the lanes on the left: the projects (each with its worktrees, and the COMMANDS), git,
-  files and the archived tabs (taken off the strip, their sessions kept) — none of them a tab. The strip's toggles drive the one free lane, one at a time; a
-  lane pinned from its headers' menu stays out beside it, its toggle gone until unpinned, and moves
-  by dragging its header (`use-lanes.ts`). Pins and order are settings (`appearance.lanes`), set in
-  the window or by `tet-ctl`, never in the dialog; widths and the free lane are the window's
-  layout storage. The tab strip is the agent, shell and editor tabs of the repository or a
-  worktree — VS Code's preview rule, one preview tab each (`editor-tab.ts`).
+  files and the archived tabs (taken off the strip, their sessions kept) — none of them a tab. Only
+  one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`); the strip's toggles
+  swap it, each closing it back on its own click (`use-lanes.ts`). No pinning, no reordering. Which
+  lane is shown and its width are the window's layout storage. The tab strip is the agent, shell and
+  editor tabs of the repository or a worktree — VS Code's preview rule, one preview tab each
+  (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`),
   LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`, ARCHIVE `ArchiveList`; each

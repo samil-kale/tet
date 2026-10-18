@@ -1,6 +1,6 @@
 import { SBX_SKILLS_KINDS } from "./sbx-rules";
 import { EXPLORER_SORT_ORDERS } from "./types/files";
-import { COLOR_SCHEMES, GIT_SETTING_IDS, LANES, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
+import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
 
 /**
@@ -209,21 +209,6 @@ const VERBS = [
     usage: `settings-set-color-scheme <${COLOR_SCHEMES.join("|")}>`,
     summary: "Set light or dark, system following the OS.",
     positionals: ["scheme"],
-  },
-  {
-    verb: "settings-set-lane-pin",
-    group: "Settings",
-    usage: `settings-set-lane-pin <${LANES.join("|")}> <on|off>`,
-    summary: "Pin a lane beside the tab area, after the other pinned ones, or unpin it back behind its toggle. Shown at once.",
-    positionals: ["lane", "value"],
-  },
-  {
-    verb: "settings-set-lane-order",
-    group: "Settings",
-    usage: `settings-set-lane-order <${LANES.join("|")}>...`,
-    summary: "Set the lanes' order, left to right; one left out goes to the end, the pinned ones stand first. Shown at once.",
-    positionals: ["lanes"],
-    variadic: true,
   },
   {
     verb: "settings-set-prompt",

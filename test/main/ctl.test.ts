@@ -30,7 +30,7 @@ import {
   type SbxRegisteredMcp,
   type SbxStatus,
 } from "../../src/shared/types/sbx";
-import { type AppSettings, laneOrders, laneSettings, withSettings } from "../../src/shared/types/settings";
+import { type AppSettings, withSettings } from "../../src/shared/types/settings";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
 import { spawn } from "node:child_process";
@@ -515,7 +515,6 @@ describe("tet-ctl against the control server", () => {
         colorScheme: "system",
         darkTheme: "dark-modern",
         lightTheme: "light-modern",
-        lanes: laneSettings(["projects"], ["git", "files"]),
       },
       notifications: { finished: true, waiting: true, idleReminder: false },
       files: { editorKeybindingPreset: "tet", excludeGitIgnore: false, compactFolders: true, sortOrder: "default" },
@@ -707,38 +706,6 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["settings-set-color-scheme", "sepia"]), /unknown color scheme: sepia/);
     assert.equal(settings.appearance.colorScheme, "light");
     assert.deepEqual(calls.shutdown, []);
-  });
-
-  it("pins and unpins a lane as the window does, and refuses an unknown one", async () => {
-    assert.deepEqual((await tetCtl(["settings-set-lane-pin", "files", "on"])).result, { saved: true, restartRequired: false });
-    assert.deepEqual(settings.appearance.lanes, laneSettings(["projects", "files"], ["git"]));
-    await tetCtl(["settings-set-lane-pin", "projects", "off"]);
-    assert.deepEqual(settings.appearance.lanes, laneSettings(["files"], ["projects", "git"]));
-    assertUsage(await tetCtl(["settings-set-lane-pin", "terminals", "on"]), /unknown lane: terminals/);
-    assert.deepEqual(laneOrders(settings.appearance.lanes).pinned, ["files"]);
-  });
-
-  it("sets the lanes' order, keeps the pins, and refuses an unknown, a doubled or no lane", async () => {
-    assert.deepEqual((await tetCtl(["settings-set-lane-order", "files", "git", "projects"])).result, {
-      saved: true,
-      restartRequired: false,
-    });
-    assert.deepEqual(settings.appearance.lanes, [
-      { lane: "files", pinned: false },
-      { lane: "git", pinned: false },
-      { lane: "projects", pinned: true },
-    ]);
-    for (const [args, refusal] of [
-      [["files", "terminals"], /unknown lane: terminals/],
-      [["git", "git"], /lane named twice: git/],
-      [[], /missing lanes/],
-    ] as const) {
-      assertUsage(await tetCtl(["settings-set-lane-order", ...args]), refusal);
-    }
-    assert.deepEqual(
-      settings.appearance.lanes.map((entry) => entry.lane),
-      ["files", "git", "projects"],
-    );
   });
 
   it("sets a prompt's text, puts TET's own back without one, and refuses an unknown id", async () => {

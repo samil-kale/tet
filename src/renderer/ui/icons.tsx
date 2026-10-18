@@ -15,7 +15,6 @@ import {
   File,
   FileCode,
   FilePlus,
-  FolderCode,
   FolderGit2,
   FolderPlus,
   GitBranch,
@@ -46,6 +45,7 @@ import {
   Search,
   Settings,
   Shield,
+  SquareCode,
   SquareSplitHorizontal,
   Tag,
   Undo2,
@@ -257,9 +257,10 @@ export function GraphIcon(props: IconProps) {
   return <Lucide {...props} icon={GitGraph} />;
 }
 
-/** Lucide's `folder-code` — the projects lane. */
+/** Lucide's `square-code` — the projects lane, drawn a little larger: its box reads small beside
+ *  the other lanes. */
 export function ProjectsIcon(props: IconProps) {
-  return <Lucide {...props} icon={FolderCode} />;
+  return <Lucide {...props} icon={SquareCode} extent={17.5} />;
 }
 
 /** Lucide's `folder-git-2` — a worktree. */

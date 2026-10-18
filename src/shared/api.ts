@@ -28,7 +28,7 @@ import type {
   SbxStatus,
   SbxStoredLocal,
 } from "./types/sbx";
-import type { AppSettings, LaneSettings, SettingsEdits } from "./types/settings";
+import type { AppSettings, SettingsEdits } from "./types/settings";
 import type { HandoverResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
@@ -369,9 +369,6 @@ export interface TETApi {
   initialTheme: string;
   /** From main.ts's `applyTheme`, and after every page load. */
   onTheme: (listener: (themeId: string) => void) => Unsubscribe;
-  /** The lanes as stored, from main.ts's settings patch whenever one sets them: `tet-ctl`, or the
-   *  window's own change coming back. */
-  onLanes: (listener: (lanes: LaneSettings) => void) => Unsubscribe;
   /** window.ts's `isWaylandSession`, handed in the same way; terminals stay off WebGL there. */
   waylandSession: boolean;
 }

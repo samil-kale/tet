@@ -11,7 +11,6 @@ import { ArchiveList } from "./lanes/archive/ArchiveList";
 import { CommandList } from "./lanes/projects/CommandList";
 import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
-import { useContextMenu } from "./ui/ContextMenu";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesLane } from "./lanes/files/FilesLane";
 import { GitLane } from "./lanes/git/GitLane";
@@ -22,9 +21,7 @@ import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projec
 import { SettingsDialog } from "./dialogs/SettingsDialog";
 import { useStoredSize } from "./ui/layout-storage";
 import { useLanes } from "./lanes/use-lanes";
-import { LANES, type Lane, type LaneSettings } from "../shared/types/settings";
-import { useDragReorder } from "./ui/drag-reorder";
-import { SectionHandle } from "./ui/Section";
+import { LANES } from "../shared/types/settings";
 import { MIN_CONTENT_WIDTH, MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "./ui/Sash";
 import { TabArea } from "./tabs/TabArea";
 import { disposeRefTerminals } from "./tabs/terminal-views";
@@ -48,12 +45,8 @@ import { useWindowFocused } from "./ui/use-window-focused";
 import { useWindowShortcuts } from "./ui/use-window-shortcuts";
 import { useRefFeeds } from "./use-ref-feeds";
 
-/** A lane's drag, its own so no list or terminal takes the drop. */
-const LANE_DRAG_TYPE = "application/x-tet-lane";
-
-/** `worktreesSupported`: git creates them (Requirements.worktrees); `lanes` as the settings held
- *  them at the start. */
-export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean; lanes: LaneSettings }) {
+/** `worktreesSupported`: git creates them (Requirements.worktrees). */
+export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useLatest(projects);
@@ -100,37 +93,21 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeRefKey);
-  /** Pin and Unpin, on a right-click on any of a lane's section headers. */
-  const laneMenu = useContextMenu<Lane>();
   // Section defaults and limits.
   const [branchTreeHeight, setBranchTreeHeight] = useStoredSize("branch-tree", 260, MIN_AREA_HEIGHT);
   const [fileSearchHeight, setFileSearchHeight] = useStoredSize("file-search", 260, MIN_AREA_HEIGHT);
   // 40% of the window it first opens in.
   const [commandsHeight, setCommandsHeight] = useStoredSize("commands", Math.round(window.innerHeight * 0.4), MIN_AREA_HEIGHT);
-  /** The lanes out and pinned, their widths and slide (use-lanes.ts). */
+  /** The one lane shown, its width and slide (use-lanes.ts). */
   const {
-    openLanes,
-    pinnedLanes,
-    pinnedOrder,
-    toggleOrder,
-    freeLane,
-    widthOf,
+    shownLane,
+    width: laneWidth,
+    setWidth: setLaneWidth,
     slidingLanes,
     stopSliding,
     toggleLane,
-    togglePin,
-    movePinned,
-    moveToggle,
     showChanges,
-  } = useLanes(lanes, activeRefKeyRef, setActiveRefKey);
-  /** A pinned lane moves by its headers, among the pinned ones. */
-  const laneDrag = useDragReorder({
-    dragType: LANE_DRAG_TYPE,
-    count: pinnedOrder.length,
-    payloadOf: (index) => pinnedOrder[index],
-    indexOf: (lane) => pinnedOrder.indexOf(lane as Lane),
-    onMove: movePinned,
-  });
+  } = useLanes(activeRefKeyRef, setActiveRefKey);
   const [addOpen, setAddOpen] = useState(false);
   /** Window-wide, not per project. */
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -326,20 +303,9 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
   });
 
   const activeState = (activeRefKey ? states[activeRefKey] : undefined) ?? EMPTY_REPOSITORY_STATE;
-  /** Git and files need an active repository or worktree; without one the projects stand in. */
-  const shownLanes: ReadonlySet<Lane> = activeResolved ? openLanes : new Set(openLanes.size > 0 ? ["projects"] : []);
-  /** The pinned lanes in the user's order, then one sliding in, then the free one, then those
-   *  in, unseen at width 0. A lane sliding in stays where it stood until its slide ends: moving
-   *  its node would cancel the transition and snap it shut. */
-  const slidingIn = (lane: Lane) => !shownLanes.has(lane) && slidingLanes.has(lane);
-  const laneOrder = [
-    ...pinnedOrder.filter((lane) => shownLanes.has(lane)),
-    ...LANES.filter(slidingIn),
-    ...LANES.filter((lane) => shownLanes.has(lane) && !pinnedLanes.has(lane)),
-    ...LANES.filter((lane) => !shownLanes.has(lane) && !slidingIn(lane)),
-  ];
-  /** What the lanes out take together; a sash leaves the tab area its floor beside it. */
-  const lanesWidth = LANES.reduce((sum, lane) => (shownLanes.has(lane) ? sum + widthOf(lane)[0] : sum), 0);
+  /** Git, files and archive need an active repository or worktree; without one, projects stands
+   *  in for whichever lane was shown. */
+  const effectiveLane = activeResolved ? shownLane : shownLane ? "projects" : null;
 
   // Stable handles, so memoized views re-render only for what they show.
   const openAdd = useCallback(() => setAddOpen(true), []);
@@ -372,112 +338,90 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
       </div>
 
       <div className="body">
-        {/* Every lane, each in the DOM at width 0 while in (so a slide has a box to
-            transition) and mounted throughout, so hiding one keeps selection, filter, open folders
-            and a running action's bar. Pinned ones stand first, in the user's order. */}
-        {laneOrder.map((lane) => {
-          const [width, setWidth] = widthOf(lane);
-          const shown = shownLanes.has(lane);
-          const pinIndex = shown ? pinnedOrder.indexOf(lane) : -1;
-          /** A pinned lane out drags by its headers (`SectionHandle`): a row inside has a drag of its own. */
-          const drag =
-            pinIndex < 0
-              ? undefined
-              : { target: laneDrag.targetProps(pinIndex), handle: laneDrag.handleProps(pinIndex), classes: laneDrag.rowClasses(pinIndex) };
+        {/* Every lane, in a fixed order, each in the DOM at width 0 while not shown (so a slide
+            has a box to transition) and mounted throughout, so hiding one keeps selection, filter,
+            open folders and a running action's bar. */}
+        {LANES.map((lane) => {
+          const shown = lane === effectiveLane;
           return (
             <Fragment key={lane}>
               <div
-                {...drag?.target}
-                className={["lane", slidingLanes.has(lane) && "sliding", ...(drag?.classes ?? [])].filter(Boolean).join(" ")}
-                style={{ width: shown ? width : 0 }}
+                className={["lane", slidingLanes.has(lane) && "sliding"].filter(Boolean).join(" ")}
+                style={{ width: shown ? laneWidth : 0 }}
                 // Its own width's alone: a child's transition (a sash's hover) bubbles here too.
                 onTransitionEnd={(event) => {
                   if (event.target === event.currentTarget && event.propertyName === "width") {
                     stopSliding(lane);
                   }
                 }}
-                onContextMenu={(event) => {
-                  if ((event.target as Element).closest(".section-header")) {
-                    laneMenu.open(event, lane);
-                  }
-                }}
               >
-                <SectionHandle.Provider value={drag?.handle}>
-                  {lane === "projects" && (
-                    <div className={`lane-content${shown ? "" : " hidden"}`}>
-                      <ProjectList
-                        projects={projects}
-                        resolvedRefs={resolvedRefs}
-                        activeRefKey={activeRefKey}
-                        onActivateRef={activateRef}
-                        onRemove={removeProject}
-                        onReorder={reorderProjects}
-                        onAdd={openAdd}
-                        heads={heads}
-                        marks={marks}
-                        sandboxed={sandboxed}
-                        onShowChanges={showChanges}
-                        onOpenShellTab={openShellTab}
-                        onShowWorking={showWorking}
-                        onShowFinished={showFinished}
-                        onShowWaiting={showWaiting}
-                        onSbxSettings={openSbxSettings}
-                        runIn={runIn}
-                        busy={projectListBusy}
-                        worktreesSupported={worktreesSupported}
-                      />
-                      <Sash
-                        orientation="horizontal"
-                        size={commandsHeight}
-                        min={MIN_AREA_HEIGHT}
-                        minOther={MIN_AREA_HEIGHT}
-                        reverse
-                        onResize={setCommandsHeight}
-                      />
-                      <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
-                    </div>
-                  )}
-                  {lane === "files" && activeResolved && (
-                    <FilesLane
-                      resolved={activeResolved}
-                      shown={shown}
-                      openPath={workingTreePathOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
-                      onOpenFile={openEditor}
-                      searchHeight={fileSearchHeight}
-                      onSearchHeight={setFileSearchHeight}
-                    />
-                  )}
-                  {lane === "archive" && activeResolved && (
-                    // Keyed by repository or worktree: each has its own archived tabs.
-                    <ArchiveList key={activeResolved.refKey} resolved={activeResolved} shown={shown} onOpenTab={showTab} />
-                  )}
-                  {lane === "git" && activeResolved && (
-                    <GitLane
-                      resolved={activeResolved}
-                      state={activeState}
-                      shown={shown}
-                      branch={activeBranch}
-                      treeHeight={branchTreeHeight}
-                      onTreeHeight={setBranchTreeHeight}
-                      onOpenDiff={openActiveDiff}
+                {lane === "projects" && (
+                  <div className={`lane-content${shown ? "" : " hidden"}`}>
+                    <ProjectList
+                      projects={projects}
+                      resolvedRefs={resolvedRefs}
+                      activeRefKey={activeRefKey}
                       onActivateRef={activateRef}
+                      onRemove={removeProject}
+                      onReorder={reorderProjects}
+                      onAdd={openAdd}
+                      heads={heads}
+                      marks={marks}
+                      sandboxed={sandboxed}
+                      onShowChanges={showChanges}
+                      onOpenShellTab={openShellTab}
+                      onShowWorking={showWorking}
+                      onShowFinished={showFinished}
+                      onShowWaiting={showWaiting}
+                      onSbxSettings={openSbxSettings}
+                      runIn={runIn}
+                      busy={projectListBusy}
+                      worktreesSupported={worktreesSupported}
                     />
-                  )}
-                </SectionHandle.Provider>
+                    <Sash
+                      orientation="horizontal"
+                      size={commandsHeight}
+                      min={MIN_AREA_HEIGHT}
+                      minOther={MIN_AREA_HEIGHT}
+                      reverse
+                      onResize={setCommandsHeight}
+                    />
+                    <CommandList resolved={activeResolved} height={commandsHeight} onOpenTab={showTab} />
+                  </div>
+                )}
+                {lane === "files" && activeResolved && (
+                  <FilesLane
+                    resolved={activeResolved}
+                    shown={shown}
+                    openPath={workingTreePathOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
+                    onOpenFile={openEditor}
+                    searchHeight={fileSearchHeight}
+                    onSearchHeight={setFileSearchHeight}
+                  />
+                )}
+                {lane === "archive" && activeResolved && (
+                  // Keyed by repository or worktree: each has its own archived tabs.
+                  <ArchiveList key={activeResolved.refKey} resolved={activeResolved} shown={shown} onOpenTab={showTab} />
+                )}
+                {lane === "git" && activeResolved && (
+                  <GitLane
+                    resolved={activeResolved}
+                    state={activeState}
+                    shown={shown}
+                    branch={activeBranch}
+                    treeHeight={branchTreeHeight}
+                    onTreeHeight={setBranchTreeHeight}
+                    onOpenDiff={openActiveDiff}
+                    onActivateRef={activateRef}
+                  />
+                )}
               </div>
               {shown && (
-                <Sash
-                  orientation="vertical"
-                  size={width}
-                  min={MIN_AREA_WIDTH}
-                  minOther={MIN_CONTENT_WIDTH + lanesWidth - width}
-                  onResize={setWidth}
-                />
+                <Sash orientation="vertical" size={laneWidth} min={MIN_AREA_WIDTH} minOther={MIN_CONTENT_WIDTH} onResize={setLaneWidth} />
               )}
             </Fragment>
           );
         })}
-        {laneMenu.render((lane) => [{ label: pinnedLanes.has(lane) ? "Unpin" : "Pin", run: () => togglePin(lane) }])}
 
         <main className="content">
           {/* Every repository's and worktree's terminals stay mounted, so switching keeps buffers
@@ -488,10 +432,8 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
               resolved={resolved}
               tabs={stripTabs[resolved.refKey] ?? NO_TABS}
               visible={resolved.refKey === activeRefKey}
-              freeLane={freeLane}
-              toggleOrder={toggleOrder}
+              shownLane={shownLane}
               onToggleLane={toggleLane}
-              onMoveToggle={moveToggle}
               agents={agents}
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={(starting[resolved.refKey] ?? false) && (marks[resolved.refKey]?.starting ?? NO_IDS).length === 0}

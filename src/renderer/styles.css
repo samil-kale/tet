@@ -630,13 +630,10 @@ textarea:focus,
   padding-left: 27px;
 }
 
-/* Being dragged; it stays in place until the drop. A project moves with its worktrees, a pinned
-   lane by its headers. */
+/* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
 .project-group.dragging,
 .command-row.dragging,
-.edit-row.dragging,
-.lane.dragging,
-.lane-toggle.dragging {
+.edit-row.dragging {
   opacity: 0.5;
 }
 
@@ -651,35 +648,19 @@ textarea:focus,
   box-shadow: inset 0 -1px 0 var(--tet-focusBorder);
 }
 
-/* A group's, a lane's and a toggle's line is drawn over what it holds, whose hover and
-   selection would paint over a shadow: across a group, down a lane or a toggle. */
-.project-group,
-.lane,
-.lane-toggle {
+/* A group's line is drawn over what it holds, whose hover and selection would paint over a
+   shadow. */
+.project-group {
   position: relative;
 }
 
 .project-group.drop-before::before,
-.lane.drop-before::before,
-.lane-toggle.drop-before::before,
-.project-group.drop-after::after,
-.lane.drop-after::after,
-.lane-toggle.drop-after::after {
+.project-group.drop-after::after {
   content: "";
   position: absolute;
   pointer-events: none;
   z-index: 1;
-}
-
-.project-group.drop-before::before,
-.lane-toggle.drop-before::before,
-.project-group.drop-after::after,
-.lane-toggle.drop-after::after {
   background: var(--tet-focusBorder);
-}
-
-.project-group.drop-before::before,
-.project-group.drop-after::after {
   left: 0;
   right: 0;
   height: 1px;
@@ -691,35 +672,6 @@ textarea:focus,
 
 .project-group.drop-after::after {
   bottom: 0;
-}
-
-.lane.drop-before::before,
-.lane-toggle.drop-before::before,
-.lane.drop-after::after,
-.lane-toggle.drop-after::after {
-  top: 0;
-  bottom: 0;
-}
-
-.lane-toggle.drop-before::before,
-.lane-toggle.drop-after::after {
-  width: 1px;
-}
-
-/* A border as the split view's drop frames, 2px as theirs. */
-.lane.drop-before::before,
-.lane.drop-after::after {
-  border-left: 2px solid var(--tet-focusBorder);
-}
-
-.lane.drop-before::before,
-.lane-toggle.drop-before::before {
-  left: 0;
-}
-
-.lane.drop-after::after,
-.lane-toggle.drop-after::after {
-  right: 0;
 }
 
 /* Takes the leftover width, so the row's buttons stay at its right edge. */

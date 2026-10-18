@@ -60,10 +60,8 @@ interface TabAreaProps {
   tabs: PaneTab[];
   visible: boolean;
   /** For the strip's toggles (`PaneChrome`). */
-  freeLane: Lane | null;
-  toggleOrder: readonly Lane[];
+  shownLane: Lane | null;
   onToggleLane: (lane: Lane) => void;
-  onMoveToggle: (from: number, to: number) => void;
   agents: AgentInfo[];
   /** Bootstrap's session listing: strip-wide, with no tab to show on, so it falls to pane "a". */
   externalBusy: boolean;
@@ -87,10 +85,8 @@ export const TabArea = memo(function TabArea({
   resolved,
   tabs,
   visible,
-  freeLane,
-  toggleOrder,
+  shownLane,
   onToggleLane,
-  onMoveToggle,
   agents,
   externalBusy,
   onCloseEditors,
@@ -155,10 +151,7 @@ export const TabArea = memo(function TabArea({
     previousPreset.current = layout.preset;
   }, [layout.preset, resetSashFractions]);
 
-  const chrome = useMemo<PaneChrome>(
-    () => ({ freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings }),
-    [freeLane, toggleOrder, onToggleLane, onMoveToggle, onOpenSettings],
-  );
+  const chrome = useMemo<PaneChrome>(() => ({ shownLane, onToggleLane, onOpenSettings }), [shownLane, onToggleLane, onOpenSettings]);
   const onActivate = useCallback(
     (tabId: string, paneId: PaneId) => onActivateTab(resolved.refKey, tabId, paneId),
     [onActivateTab, resolved.refKey],

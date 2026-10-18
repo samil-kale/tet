@@ -6,6 +6,7 @@ import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
+import { LANES } from "../../shared/types/settings";
 import { AgentIcon } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
 import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -18,7 +19,6 @@ import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab"
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
-import { useDragReorder } from "../ui/drag-reorder";
 import { ArchiveIcon, CloseIcon, FilesIcon, GearIcon, GitIcon, PlusIcon, ProjectsIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
@@ -43,17 +43,13 @@ function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
 
 /** The one row of icon buttons, on pane "a" alone whatever the preset. */
 export interface PaneChrome {
-  /** The strip toggles the free lane alone; a pinned one is out, its toggle gone. */
-  freeLane: Lane | null;
-  /** The lanes not pinned, in the user's order. */
-  toggleOrder: readonly Lane[];
+  /** The one lane shown, or none. */
+  shownLane: Lane | null;
   onToggleLane: (lane: Lane) => void;
-  /** A toggle dragged from `from` to insertion index `to` of `toggleOrder`. */
-  onMoveToggle: (from: number, to: number) => void;
   onOpenSettings: () => void;
 }
 
-/** The lanes' toggles, drawn in `toggleOrder`. */
+/** The lanes' toggles, drawn in a fixed order. */
 const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
   projects: { noun: "projects", Icon: ProjectsIcon },
   git: { noun: "git", Icon: GitIcon },
@@ -61,29 +57,18 @@ const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => Rea
   archive: { noun: "archive", Icon: ArchiveIcon },
 };
 
-/** A toggle's drag, its own so no tab strip or terminal takes the drop. */
-const TOGGLE_DRAG_TYPE = "application/x-tet-lane-toggle";
-
-/** The strip's toggles, each dragged elsewhere among them. */
+/** The strip's toggles: each shows its lane, swapping out whichever was shown; the one shown
+ *  closes back on its own click. */
 function LaneToggles({ chrome }: { chrome: PaneChrome }) {
-  const { toggleOrder, freeLane, onToggleLane, onMoveToggle } = chrome;
-  const { rowProps, rowClasses } = useDragReorder({
-    dragType: TOGGLE_DRAG_TYPE,
-    count: toggleOrder.length,
-    payloadOf: (index) => toggleOrder[index],
-    indexOf: (lane) => toggleOrder.indexOf(lane as Lane),
-    onMove: onMoveToggle,
-  });
-  return toggleOrder.map((lane, index) => {
+  const { shownLane, onToggleLane } = chrome;
+  return LANES.map((lane) => {
     const { noun, Icon } = LANE_TOGGLES[lane];
     return (
       <IconButton
         key={lane}
-        {...rowProps(index)}
-        className={["lane-toggle", ...rowClasses(index)].join(" ")}
-        active={freeLane === lane}
+        active={shownLane === lane}
         onClick={() => onToggleLane(lane)}
-        title={`${freeLane === lane ? "Hide" : "Show"} ${noun}`}
+        title={`${shownLane === lane ? "Hide" : "Show"} ${noun}`}
       >
         <Icon />
       </IconButton>

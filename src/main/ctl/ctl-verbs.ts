@@ -5,15 +5,7 @@ import { THEMES, themeKey } from "../../shared/themes";
 import type { SuggesterEntry } from "../../shared/types/agents";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
-import {
-  COLOR_SCHEMES,
-  GIT_SETTING_IDS,
-  LANES,
-  laneOrders,
-  NOTIFICATION_IDS,
-  PROMPT_IDS,
-  withLanePinned,
-} from "../../shared/types/settings";
+import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
@@ -143,29 +135,6 @@ export function verbs(deps: ControlDeps): Handlers {
       const colorScheme = oneOf(args, "scheme", "color scheme", COLOR_SCHEMES);
       // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
       return { result: { saved: true, restartRequired: settings.patch({ appearance: { colorScheme } }) } };
-    },
-
-    "settings-set-lane-pin": (args) => {
-      const lane = oneOf(args, "lane", "lane", LANES);
-      const lanes = withLanePinned(settings.get().appearance.lanes, lane, onOff(args, "value"));
-      // Shown at once (main.ts hands the window what the store then holds).
-      settings.patch({ appearance: { lanes } });
-      return { result: { saved: true, restartRequired: false } };
-    },
-
-    "settings-set-lane-order": (args) => {
-      const order = list(args, "lanes").map((name) => oneOf({ lane: name }, "lane", "lane", LANES));
-      if (order.length === 0) {
-        throw new ControlError("bad_args", "missing lanes");
-      }
-      const twice = order.find((lane, index) => order.indexOf(lane) !== index);
-      if (twice !== undefined) {
-        throw new ControlError("bad_args", `lane named twice: ${twice}`);
-      }
-      // One left out joins at the end (settings.ts's normalize).
-      const pinned = laneOrders(settings.get().appearance.lanes).pinned;
-      settings.patch({ appearance: { lanes: order.map((lane) => ({ lane, pinned: pinned.includes(lane) })) } });
-      return { result: { saved: true, restartRequired: false } };
     },
 
     "settings-set-prompt": (args) => {

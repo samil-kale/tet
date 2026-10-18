@@ -2,14 +2,12 @@ import * as path from "node:path";
 import { DEFAULT_THEME_IDS, type ThemeKind } from "../../shared/themes";
 import { DEFAULT_PROMPTS } from "../../shared/prompts";
 import { EXPLORER_SORT_ORDERS } from "../../shared/types/files";
-import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, LANES, PROMPT_IDS, withSettings } from "../../shared/types/settings";
+import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
 import type { SuggesterEntry } from "../../shared/types/agents";
 import type {
   AppearanceSettings,
   AppSettings,
   FilesSettings,
-  Lane,
-  LaneSettings,
   PromptSettings,
   PromptTexts,
   SettingsEdits,
@@ -21,7 +19,6 @@ const DEFAULTS: AppSettings = {
     colorScheme: "system",
     darkTheme: DEFAULT_THEME_IDS.dark,
     lightTheme: DEFAULT_THEME_IDS.light,
-    lanes: LANES.map((lane) => ({ lane, pinned: lane === "projects" })),
   },
   notifications: {
     finished: true,
@@ -115,24 +112,7 @@ function appearance(value: Record<string, unknown>): AppearanceSettings {
     colorScheme: COLOR_SCHEMES.find((scheme) => scheme === value.colorScheme) ?? DEFAULTS.appearance.colorScheme,
     darkTheme: themeId(value.darkTheme, "dark"),
     lightTheme: themeId(value.lightTheme, "light"),
-    lanes: lanes(value.lanes),
   };
-}
-
-/** What isn't a list is the default; in one, what names no lane and a lane named twice drop out,
- *  a lane it misses is added at its end, unpinned. */
-function lanes(value: unknown): LaneSettings {
-  if (!Array.isArray(value)) {
-    return DEFAULTS.appearance.lanes;
-  }
-  const entries: LaneSettings = [];
-  for (const item of value) {
-    const entry = recordOf(item);
-    if (LANES.includes(entry.lane as Lane) && !entries.some((kept) => kept.lane === entry.lane)) {
-      entries.push({ lane: entry.lane as Lane, pinned: entry.pinned === true });
-    }
-  }
-  return [...entries, ...LANES.filter((lane) => !entries.some((kept) => kept.lane === lane)).map((lane) => ({ lane, pinned: false }))];
 }
 
 /** A switch that isn't a boolean in the file takes its default. */

@@ -5,43 +5,10 @@ export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
-/** The lanes left of the tab area, in their order until the user moves one. */
+/** The lanes left of the tab area, in their fixed order. */
 export const LANES = ["projects", "git", "files", "archive"] as const;
 
 export type Lane = (typeof LANES)[number];
-
-/** One lane and whether it stands pinned. */
-export interface LaneEntry {
-  lane: Lane;
-  pinned: boolean;
-}
-
-/** Every lane once, in its order: the pinned lanes in it, then the strip's toggles in it. */
-export type LaneSettings = LaneEntry[];
-
-/** The order split: the pinned lanes, then the strip's toggles; `laneSettings` joins them again. */
-export function laneOrders(lanes: LaneSettings): { pinned: Lane[]; toggles: Lane[] } {
-  return {
-    pinned: lanes.filter((entry) => entry.pinned).map((entry) => entry.lane),
-    toggles: lanes.filter((entry) => !entry.pinned).map((entry) => entry.lane),
-  };
-}
-
-/** `pinned` standing pinned in that order, then `toggles`. */
-export function laneSettings(pinned: readonly Lane[], toggles: readonly Lane[]): LaneSettings {
-  return [...pinned.map((lane) => ({ lane, pinned: true })), ...toggles.map((lane) => ({ lane, pinned: false }))];
-}
-
-/** `lanes` with `lane` pinned at the end of the pinned ones, beside the free lane where it stood,
- *  or unpinned to the front of the toggles; one already so stays where it is. */
-export function withLanePinned(lanes: LaneSettings, lane: Lane, pin: boolean): LaneSettings {
-  if (lanes.some((entry) => entry.lane === lane && entry.pinned === pin)) {
-    return lanes;
-  }
-  const others = (list: readonly Lane[]) => list.filter((entry) => entry !== lane);
-  const { pinned, toggles } = laneOrders(lanes);
-  return pin ? laneSettings([...others(pinned), lane], others(toggles)) : laneSettings(others(pinned), [lane, ...others(toggles)]);
-}
 
 /** The Appearance tab. */
 export interface AppearanceSettings {
@@ -51,8 +18,6 @@ export interface AppearanceSettings {
   /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
   darkTheme: string;
   lightTheme: string;
-  /** Set in the window alone (a header's menu, a drag) or by `tet-ctl`; written whole. */
-  lanes: LaneSettings;
 }
 
 /** The Notifications tab: what every agent notifies the OS about. */
