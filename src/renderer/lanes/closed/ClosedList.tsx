@@ -68,6 +68,25 @@ export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab 
     }
   };
 
+  const askDeleteAll = async (): Promise<void> => {
+    const answer = await confirmed({
+      title: "Delete all sessions",
+      message:
+        tabs.length === 1
+          ? "Are you sure you want to delete the closed session?"
+          : `Are you sure you want to delete all ${tabs.length} closed sessions?`,
+      detail: "Every closed session is deleted for good.",
+      confirmLabel: "Delete all",
+    });
+    if (answer) {
+      const results = await Promise.all(tabs.map((tab) => window.tet.closed.delete(resolved.ref, tab.tabId)));
+      const failed = results.filter((result) => !result.ok).length;
+      if (failed > 0) {
+        notify("error", `Could not delete ${failed} session${failed === 1 ? "" : "s"}`);
+      }
+    }
+  };
+
   const menuEntries = (tab: TabDescriptor): ContextMenuEntry[] => [
     { label: "Reopen", run: () => void reopen(tab) },
     { label: "Delete...", run: () => void askDelete(tab) },
@@ -75,7 +94,15 @@ export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab 
 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>
-      <Section title="CLOSED" count={tabs.length}>
+      <Section
+        title="CLOSED"
+        count={tabs.length}
+        actions={
+          <IconButton title="Delete all sessions..." disabled={tabs.length === 0} onClick={() => void askDeleteAll()}>
+            <CloseIcon />
+          </IconButton>
+        }
+      >
         <div className="explorer-tree">
           <FilterField placeholder="Filter closed..." value={filter} onChange={setFilter} />
           <div className="tree">
