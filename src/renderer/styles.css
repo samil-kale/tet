@@ -742,6 +742,14 @@ textarea:focus,
   min-width: 0;
 }
 
+/* The label matters more: a narrower row takes the room from what follows it first, down to
+   nothing, and only then from the label. */
+.list-main > .list-extra,
+.tree-row > .tree-extra {
+  flex-shrink: 100000;
+  min-width: 0;
+}
+
 /* A command's variables, a repository's branch, a worktree's base, a closed tab's date. Declared
    together so they cannot drift. */
 .list-extra,
