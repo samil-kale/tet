@@ -287,7 +287,7 @@ export interface TETApi {
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
     /** The session starts on first resize. */
     create: (ref: ProjectRef, agentId: AgentId) => Promise<TabDescriptor>;
-    /** A tab with a session is kept closed with it (`closed`); any other is closed for good. */
+    /** A tab with a session is kept archived with it (`archive`); any other is closed for good. */
     close: (ref: ProjectRef, tabIds: string[]) => Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
     rename: (ref: ProjectRef, tabId: string, title: string) => Promise<GitActionResult>;
@@ -318,14 +318,14 @@ export interface TETApi {
     starting: (ref: ProjectRef) => Promise<boolean>;
   };
   /** Tabs closed with their sessions kept (`tabs.close`), per repository or worktree. */
-  closed: {
-    /** The closed tabs, most recent first. */
+  archive: {
+    /** The archived tabs, most recent first. */
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
-    /** Brings the closed tab back to the strip, resuming its session. */
+    /** Brings the archived tab back to the strip, resuming its session. */
     reopen: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
-    /** Deletes the session behind a closed tab. */
+    /** Deletes the session behind an archived tab. */
     delete: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
-    /** The repository's or worktree's full list of closed tabs on every change. */
+    /** The repository's or worktree's full list of archived tabs on every change. */
     onChanged: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
   };
   agents: {

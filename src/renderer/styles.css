@@ -422,12 +422,6 @@ textarea:focus,
   padding: calc((100% - var(--icon-size)) / 2);
 }
 
-/* Sets the closed lane's and the settings drawing half a pixel lower, level with the other toggles. */
-.icon-button svg.closed-icon,
-.icon-button svg.gear-icon {
-  margin-top: 0.5px;
-}
-
 /* Never the list hover colour: invisible on a hovered row, a patch on a selected one. */
 .icon-button:hover:not(:disabled) {
   background: var(--tet-toolbar-hoverBackground);
@@ -608,7 +602,7 @@ textarea:focus,
   flex: none;
 }
 
-/* One row shape for the projects, the commands and the closed tabs. The icon buttons ending a row stand
+/* One row shape for the projects, the commands and the archived tabs. The icon buttons ending a row stand
    apart as everywhere else; the label before them needs no more, the buttons carrying 4px around a
    14px drawing in a 22px box. */
 .list-row {
@@ -622,12 +616,12 @@ textarea:focus,
 
 .project-row,
 .worktree-row,
-.closed-row {
+.archive-row {
   cursor: pointer;
 }
 
-/* A closed tab's agent icon stands further from its label than the 4px gap of the other rows. */
-.closed-row > .tree-icon {
+/* An archived tab's agent icon stands further from its label than the 4px gap of the other rows. */
+.archive-row > .tree-icon {
   margin-right: 4px;
 }
 
@@ -743,7 +737,7 @@ textarea:focus,
 }
 
 /* What follows a row's label: a command's variables, a repository's branch, a worktree's base, a
-   closed tab's date, a file's folder, a commit's author. Declared together so they cannot drift.
+   archived tab's date, a file's folder, a commit's author. Declared together so they cannot drift.
    The label matters more: a narrower row takes the room from this first, down to nothing, and
    only then from the label. */
 .list-extra,

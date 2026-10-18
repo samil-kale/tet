@@ -37,17 +37,17 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
   });
 
-  handle("closed:list", (_event, ref: ProjectRef): TabDescriptor[] => {
-    return tabManagers.get(ref)?.closedSnapshot() ?? [];
+  handle("archive:list", (_event, ref: ProjectRef): TabDescriptor[] => {
+    return tabManagers.get(ref)?.archivedSnapshot() ?? [];
   });
 
-  handle("closed:reopen", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
-    const refused = await tabManagers.get(ref)?.reopenClosed(tabId);
+  handle("archive:reopen", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
+    const refused = await tabManagers.get(ref)?.reopenArchived(tabId);
     return refused === undefined ? { ok: true } : { ok: false, error: refused };
   });
 
-  handle("closed:delete", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
-    const refused = await tabManagers.get(ref)?.deleteClosed(tabId);
+  handle("archive:delete", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
+    const refused = await tabManagers.get(ref)?.deleteArchived(tabId);
     return refused === undefined ? { ok: true } : { ok: false, error: refused };
   });
 

@@ -6,13 +6,13 @@ import { confirmed } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
 import { notify } from "../../ui/Notices";
 import { IconButton } from "../../ui/IconButton";
-import { CloseIcon, ReopenIcon } from "../../ui/icons";
+import { ArrowUpIcon, CloseIcon } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { agentName, useAgents } from "../../ui/use-agents";
 import type { ResolvedRef } from "../../resolved-ref";
-import { useClosed } from "./use-closed";
+import { useArchive } from "./use-archive";
 
-interface ClosedListProps {
+interface ArchiveListProps {
   /** The active repository or worktree. */
   resolved: ResolvedRef;
   /** False while another lane stands in its place; hidden, not unmounted, to keep its state. */
@@ -36,16 +36,16 @@ function lastActive({ updatedAt, createdAt }: TabDescriptor) {
  * The tabs taken off the strip with their sessions kept (`tabs.close`). A row reopens its tab at
  * the end of the strip, or deletes its session for good. Keyed by repository or worktree by the app.
  */
-export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab }: ClosedListProps) {
+export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTab }: ArchiveListProps) {
   const agents = useAgents();
-  const tabs = useClosed(resolved);
+  const tabs = useArchive(resolved);
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
   const shownTabs = tabs.filter((tab) => labelOf(tab).toLowerCase().includes(query));
   const menu = useContextMenu<TabDescriptor>();
 
   const reopen = async (tab: TabDescriptor): Promise<void> => {
-    const result = await window.tet.closed.reopen(resolved.ref, tab.tabId);
+    const result = await window.tet.archive.reopen(resolved.ref, tab.tabId);
     if (result.ok) {
       onOpenTab(resolved.refKey, tab.tabId);
     } else {
@@ -61,7 +61,7 @@ export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab 
       confirmLabel: "Delete",
     });
     if (answer) {
-      const result = await window.tet.closed.delete(resolved.ref, tab.tabId);
+      const result = await window.tet.archive.delete(resolved.ref, tab.tabId);
       if (!result.ok) {
         notify("error", result.error ?? "Could not delete the session");
       }
@@ -75,14 +75,14 @@ export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab 
 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>
-      <Section title="CLOSED" count={tabs.length}>
+      <Section title="ARCHIVE" count={tabs.length}>
         <div className="explorer-tree">
-          <FilterField placeholder="Filter closed..." value={filter} onChange={setFilter} />
+          <FilterField placeholder="Filter archive..." value={filter} onChange={setFilter} />
           <div className="tree">
             {shownTabs.map((tab) => (
               <div
                 key={tab.tabId}
-                className="list-row closed-row"
+                className="list-row archive-row"
                 title={`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`}
                 onDoubleClick={() => void reopen(tab)}
                 onContextMenu={(event) => menu.open(event, tab)}
@@ -93,7 +93,7 @@ export const ClosedList = memo(function ClosedList({ resolved, shown, onOpenTab 
                   {lastActive(tab)}
                 </span>
                 <IconButton title="Reopen" isolated onClick={() => void reopen(tab)}>
-                  <ReopenIcon />
+                  <ArrowUpIcon />
                 </IconButton>
                 <IconButton title="Delete session..." isolated onClick={() => void askDelete(tab)}>
                   <CloseIcon />

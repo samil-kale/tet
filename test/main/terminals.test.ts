@@ -21,7 +21,7 @@ import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-or
 
 const NO_CALLBACKS: SessionManagerCallbacks = {
   onTabs: () => undefined,
-  onClosed: () => undefined,
+  onArchived: () => undefined,
   onOutput: () => undefined,
   onStatus: () => undefined,
   onStartupProgress: () => undefined,
@@ -131,15 +131,15 @@ describe("the window closing a tab", () => {
       const { tabId } = manager.createTab("claude");
       await manager.closeKeepingSessions([tabId]);
       assert.deepEqual(manager.snapshot(), []);
-      assert.deepEqual(manager.closedSnapshot(), []);
+      assert.deepEqual(manager.archivedSnapshot(), []);
     });
   });
 
   it("answers nothing for a tab that is not there", async () => {
     await withEmptyPath({}, async (manager) => {
       await manager.closeKeepingSessions(["new-gone"]);
-      assert.equal(await manager.reopenClosed("new-gone"), undefined);
-      assert.equal(await manager.deleteClosed("new-gone"), undefined);
+      assert.equal(await manager.reopenArchived("new-gone"), undefined);
+      assert.equal(await manager.deleteArchived("new-gone"), undefined);
     });
   });
 });

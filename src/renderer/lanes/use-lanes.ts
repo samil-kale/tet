@@ -72,7 +72,7 @@ export function useLanes(
     projects: useStoredSize("lane-width-projects", 300, MIN_AREA_WIDTH),
     git: useStoredSize("lane-width-git", 300, MIN_AREA_WIDTH),
     files: useStoredSize("lane-width-files", 300, MIN_AREA_WIDTH),
-    closed: useStoredSize("lane-width-closed", 300, MIN_AREA_WIDTH),
+    archive: useStoredSize("lane-width-archive", 300, MIN_AREA_WIDTH),
   };
   const freeWidth = useStoredSize("lane-width-free", 300, MIN_AREA_WIDTH);
   const widthOf = (lane: Lane): LaneWidth => (pinnedLanes.has(lane) ? pinnedWidths[lane] : freeWidth);

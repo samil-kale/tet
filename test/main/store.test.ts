@@ -10,9 +10,9 @@ import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
 import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir } from "../../src/main/store/data-root";
-import { closedIds, forgetClosed, setClosed } from "../../src/main/store/closed";
+import { archivedIds, forgetArchived, setArchived } from "../../src/main/store/archive";
 import {
-  closedFile,
+  archiveFile,
   newWorktreeKey,
   ownedWorktreeKeys,
   sandboxDir,
@@ -61,48 +61,48 @@ describe("a project's folder under ~/.tet", () => {
   });
 });
 
-describe("the closed sessions", () => {
+describe("the archived sessions", () => {
   const repository = { projectId: "p" };
   const worktree = { projectId: "p", worktree: "k1" };
 
   it("are kept per repository and worktree, in the project's folder", () => {
-    const root = tempDir("tet-closed-");
-    assert.deepEqual([...closedIds(root, repository)], [], "none before the first");
-    setClosed(root, repository, "s1", true);
-    setClosed(root, repository, "s2", true);
-    setClosed(root, worktree, "s3", true);
-    assert.deepEqual([...closedIds(root, repository)], ["s1", "s2"]);
-    assert.deepEqual([...closedIds(root, worktree)], ["s3"]);
-    assert.deepEqual([...closedIds(root, { projectId: "q" })], [], "another project's");
-    assert.equal(fs.existsSync(closedFile(root, "p")), true);
+    const root = tempDir("tet-archive-");
+    assert.deepEqual([...archivedIds(root, repository)], [], "none before the first");
+    setArchived(root, repository, "s1", true);
+    setArchived(root, repository, "s2", true);
+    setArchived(root, worktree, "s3", true);
+    assert.deepEqual([...archivedIds(root, repository)], ["s1", "s2"]);
+    assert.deepEqual([...archivedIds(root, worktree)], ["s3"]);
+    assert.deepEqual([...archivedIds(root, { projectId: "q" })], [], "another project's");
+    assert.equal(fs.existsSync(archiveFile(root, "p")), true);
 
-    setClosed(root, repository, "s1", false);
-    assert.deepEqual([...closedIds(root, repository)], ["s2"]);
-    assert.deepEqual(fs.readdirSync(path.dirname(closedFile(root, "p"))), ["closed.json"], "renamed into place, no temporary file left");
+    setArchived(root, repository, "s1", false);
+    assert.deepEqual([...archivedIds(root, repository)], ["s2"]);
+    assert.deepEqual(fs.readdirSync(path.dirname(archiveFile(root, "p"))), ["archive.json"], "renamed into place, no temporary file left");
   });
 
   it("leave no file once the last is released, and forgetting a worktree keeps the rest", () => {
-    const root = tempDir("tet-closed-");
-    setClosed(root, repository, "s1", true);
-    setClosed(root, worktree, "s2", true);
-    forgetClosed(root, worktree);
-    assert.deepEqual([...closedIds(root, worktree)], []);
-    assert.deepEqual([...closedIds(root, repository)], ["s1"]);
-    setClosed(root, repository, "s1", false);
-    assert.equal(fs.existsSync(closedFile(root, "p")), false);
-    forgetClosed(root, worktree);
+    const root = tempDir("tet-archive-");
+    setArchived(root, repository, "s1", true);
+    setArchived(root, worktree, "s2", true);
+    forgetArchived(root, worktree);
+    assert.deepEqual([...archivedIds(root, worktree)], []);
+    assert.deepEqual([...archivedIds(root, repository)], ["s1"]);
+    setArchived(root, repository, "s1", false);
+    assert.equal(fs.existsSync(archiveFile(root, "p")), false);
+    forgetArchived(root, worktree);
   });
 
   it("are read field by field from a hand-edited file", () => {
-    const root = tempDir("tet-closed-");
-    fs.mkdirSync(path.dirname(closedFile(root, "p")), { recursive: true });
-    fs.writeFileSync(closedFile(root, "p"), "{ nope");
-    assert.deepEqual([...closedIds(root, repository)], []);
-    fs.writeFileSync(closedFile(root, "p"), JSON.stringify({ repository: ["s1", 3, null], k1: "junk", other: ["s9"] }));
-    assert.deepEqual([...closedIds(root, repository)], ["s1"]);
-    assert.deepEqual([...closedIds(root, worktree)], []);
-    setClosed(root, repository, "s2", true);
-    assert.deepEqual([...closedIds(root, repository)], ["s1", "s2"]);
+    const root = tempDir("tet-archive-");
+    fs.mkdirSync(path.dirname(archiveFile(root, "p")), { recursive: true });
+    fs.writeFileSync(archiveFile(root, "p"), "{ nope");
+    assert.deepEqual([...archivedIds(root, repository)], []);
+    fs.writeFileSync(archiveFile(root, "p"), JSON.stringify({ repository: ["s1", 3, null], k1: "junk", other: ["s9"] }));
+    assert.deepEqual([...archivedIds(root, repository)], ["s1"]);
+    assert.deepEqual([...archivedIds(root, worktree)], []);
+    setArchived(root, repository, "s2", true);
+    assert.deepEqual([...archivedIds(root, repository)], ["s1", "s2"]);
   });
 });
 
@@ -272,7 +272,7 @@ describe("the stores", () => {
       { lane: "projects", pinned: true },
       { lane: "git", pinned: false },
       { lane: "files", pinned: false },
-      { lane: "closed", pinned: false },
+      { lane: "archive", pinned: false },
     ]);
     fs.writeFileSync(
       file,
@@ -316,7 +316,7 @@ describe("the stores", () => {
         { lane: "files", pinned: false },
         { lane: "git", pinned: true },
         { lane: "projects", pinned: false },
-        { lane: "closed", pinned: false },
+        { lane: "archive", pinned: false },
       ],
       "no lane named twice or unknown, the ones it misses join at its end",
     );

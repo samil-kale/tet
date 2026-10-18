@@ -7,7 +7,7 @@ import type { Project, ProjectRef } from "../shared/types/project";
 import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
-import { ClosedList } from "./lanes/closed/ClosedList";
+import { ArchiveList } from "./lanes/archive/ArchiveList";
 import { CommandList } from "./lanes/projects/CommandList";
 import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
@@ -447,9 +447,9 @@ export function App({ worktreesSupported, lanes }: { worktreesSupported: boolean
                       onSearchHeight={setFileSearchHeight}
                     />
                   )}
-                  {lane === "closed" && activeResolved && (
-                    // Keyed by repository or worktree: each has its own closed tabs.
-                    <ClosedList key={activeResolved.refKey} resolved={activeResolved} shown={shown} onOpenTab={showTab} />
+                  {lane === "archive" && activeResolved && (
+                    // Keyed by repository or worktree: each has its own archived tabs.
+                    <ArchiveList key={activeResolved.refKey} resolved={activeResolved} shown={shown} onOpenTab={showTab} />
                   )}
                   {lane === "git" && activeResolved && (
                     <GitLane

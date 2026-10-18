@@ -164,11 +164,11 @@ const api: TETApi = {
       }),
     starting: (ref) => invoke("tabs:starting", ref),
   },
-  closed: {
-    list: (ref) => invoke("closed:list", ref),
-    reopen: (ref, tabId) => invoke("closed:reopen", ref, tabId),
-    delete: (ref, tabId) => invoke("closed:delete", ref, tabId),
-    onChanged: (listener) => subscribe("closed:changed", listener),
+  archive: {
+    list: (ref) => invoke("archive:list", ref),
+    reopen: (ref, tabId) => invoke("archive:reopen", ref, tabId),
+    delete: (ref, tabId) => invoke("archive:delete", ref, tabId),
+    onChanged: (listener) => subscribe("archive:changed", listener),
   },
   agents: {
     list: () => invoke("agents:list"),

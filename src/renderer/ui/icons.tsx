@@ -1,4 +1,5 @@
 import {
+  Archive,
   ArrowDown,
   ArrowUp,
   BookOpen,
@@ -10,7 +11,6 @@ import {
   ChevronsUpDown,
   CircleAlert,
   CircleX,
-  ClockArrowUp,
   Columns2,
   File,
   FileCode,
@@ -24,7 +24,6 @@ import {
   GitCompare,
   Globe,
   GripVertical,
-  History,
   Info,
   Landmark,
   List,
@@ -407,9 +406,9 @@ export function RemoteIcon(props: IconProps) {
   return <Lucide {...props} icon={Globe} />;
 }
 
-/** Lucide's `settings`. */
+/** Lucide's `settings`, drawn a little larger: its teeth read thin beside the other lanes. */
 export function GearIcon(props: IconProps) {
-  return <Lucide className="gear-icon" {...props} icon={Settings} />;
+  return <Lucide {...props} icon={Settings} extent={17.5} />;
 }
 
 /** Lucide's `file-code` — the files lane. */
@@ -417,14 +416,10 @@ export function FilesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileCode} />;
 }
 
-/** Lucide's `history` — the closed lane, drawn a little larger: its circle reads small beside the other lanes. */
-export function ClosedIcon(props: IconProps) {
-  return <Lucide className="closed-icon" {...props} icon={History} extent={18.5} />;
-}
-
-/** Lucide's `clock-arrow-up` — a closed tab's reopen. */
-export function ReopenIcon(props: IconProps) {
-  return <Lucide {...props} icon={ClockArrowUp} />;
+/** Lucide's `archive` — the archive lane, drawn a little larger: its box reads small beside the
+ *  other lanes. */
+export function ArchiveIcon(props: IconProps) {
+  return <Lucide {...props} icon={Archive} extent={18.5} />;
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus`. */
