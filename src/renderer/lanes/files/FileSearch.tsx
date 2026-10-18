@@ -82,7 +82,7 @@ export const FileSearch = memo(function FileSearch({ resolved, result, runSearch
 
   return (
     <div className="explorer-tree">
-      <FilterField placeholder="Search" value={search.text} onChange={(text) => setSearch({ ...search, text })}>
+      <FilterField placeholder="Search files..." value={search.text} onChange={(text) => setSearch({ ...search, text })}>
         {SEARCH_TOGGLES.map(({ key, title, Icon }) => (
           <IconButton key={key} active={search[key]} title={title} onClick={() => setSearch({ ...search, [key]: !search[key] })}>
             <Icon />

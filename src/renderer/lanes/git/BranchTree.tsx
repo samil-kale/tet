@@ -441,7 +441,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
 
   return (
     <div className={`branch-tree${branch.locked ? " locked" : ""}`}>
-      <FilterField placeholder="Search branches..." value={filter} onChange={setFilter} />
+      <FilterField placeholder="Filter branches..." value={filter} onChange={setFilter} />
 
       <div className="tree">
         <TreeGroup

@@ -92,7 +92,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
                   <span className="list-label">{labelOf(tab)}</span>
                   {lastActive(tab)}
                 </span>
-                <IconButton title="Reopen" isolated onClick={() => void reopen(tab)}>
+                <IconButton title="Reopen session" isolated onClick={() => void reopen(tab)}>
                   <ArrowUpIcon />
                 </IconButton>
                 <IconButton title="Delete session..." isolated onClick={() => void askDelete(tab)}>

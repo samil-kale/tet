@@ -76,10 +76,10 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
         busy={explorerBusy}
         actions={
           <>
-            <IconButton title="New File..." disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFile()}>
+            <IconButton title="New File" disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFile()}>
               <NewFileIcon />
             </IconButton>
-            <IconButton title="New Folder..." disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFolder()}>
+            <IconButton title="New Folder" disabled={acting || !explorerListing} onClick={() => explorerRef.current?.newFolder()}>
               <NewFolderIcon />
             </IconButton>
             <CollapseExpandAllButton expanded={explorerExpanded} disabled={!explorerListing} tree={explorerRef} />
