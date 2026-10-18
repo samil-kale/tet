@@ -3,6 +3,19 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.20.0 (2026-10-19)
+
+- **Activity Bar.** The lane toggles and settings move into an Activity Bar at the window's left
+  edge; only one lane shows at a time, in a fixed order, with no pinning.
+- **Archive lane.** Closing a tab keeps its session archived instead of deleting it, to reopen or
+  delete later; the CLOSED lane is now ARCHIVE.
+- **Environment, not SBX Variables.** The SBX dialog's Variables tab is now Environment.
+- **Fixes.** Count badges center at the tiny size; filter fields share a clear button; a row's
+  label keeps its room before its extra text shrinks; Codex's icon is centered and the ARCHIVE
+  rows' icons spaced; sandbox ports are read from the right repository when two tabs start
+  together; unchanged transcripts are answered from a stat without opening them; SBX mounts,
+  ports and MCP loads run concurrently.
+
 ## 0.19.2 (2026-10-17)
 
 - **SBX variables only.** The SBX dialog no longer handles secrets; variables are kept in
