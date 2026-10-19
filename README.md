@@ -49,7 +49,7 @@ applications together in a tool designed around working with agents.
 ---
 
 <p align="center">
-  <img src="docs/tet.gif" alt="TET; terminals and git for several projects at once" width="860" />
+  <img src="docs/tet.png" alt="TET; terminals and git for several projects at once" width="860" />
 </p>
 
 ---

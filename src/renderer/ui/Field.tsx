@@ -67,6 +67,12 @@ export function FieldColumn({ className, fill, children }: { className?: string;
  *  it describes this window's use, not a project. */
 const LAST_DIRECTORY_KEY = "tet.dialog.lastDirectory";
 
+/** The last directory a picker returned, or where a repository added there remembers its parent —
+ *  for a field that starts there instead of empty (the clone tab's destination). */
+export function lastDirectory(): string {
+  return localStorage.getItem(LAST_DIRECTORY_KEY) ?? "";
+}
+
 interface PathInputProps {
   value: string;
   /** The native picker's window title. */

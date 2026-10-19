@@ -10,7 +10,7 @@ import { ActionLink } from "../ui/ActionLink";
 import { confirmed } from "../ui/Dialog";
 import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { DialogError, FieldColumn, FieldGroup, PathField, TextField } from "../ui/Field";
+import { DialogError, FieldColumn, FieldGroup, lastDirectory, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon } from "../ui/icons";
@@ -347,8 +347,9 @@ interface AddRepositoryDialogProps {
 export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");
-  /** The parent of the new folder. Apart from the add tab's path, which is the folder itself. */
-  const [cloneDirectory, setCloneDirectory] = useState("");
+  /** The parent of the new folder, starting at the last one remembered. Apart from the add tab's
+   *  path, which is the folder itself. */
+  const [cloneDirectory, setCloneDirectory] = useState(lastDirectory);
   const [addDirectory, setAddDirectory] = useState("");
   /** null follows the url; a string is the user's and stays. */
   const [name, setName] = useState<string | null>(null);
