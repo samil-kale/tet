@@ -318,7 +318,7 @@ export const ChangesList = memo(function ChangesList({
   };
 
   return (
-    <div className="explorer-tree">
+    <div className="dense-tree">
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
       <div className="tree">
         {changes.length > 0 &&

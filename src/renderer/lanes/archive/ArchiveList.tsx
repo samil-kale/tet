@@ -76,7 +76,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       <Section title="ARCHIVE" count={tabs.length}>
-        <div className="explorer-tree">
+        <div className="dense-tree">
           <FilterField placeholder="Filter archive..." value={filter} onChange={setFilter} />
           <div className="tree">
             {shownTabs.map((tab) => (

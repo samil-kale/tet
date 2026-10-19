@@ -47,10 +47,14 @@
   --tet-list-activeSelectionForeground: #f8f8f2;
   --tet-list-hoverBackground: #44475a75;
 
-  --tet-input-background: #282a36;
+  /* Not the theme's #282a36, same as the dialog's ground (the terminal's), which leaves the input
+     unseen but for its border: the theme's own BGLight, its dropdown and menu background. */
+  --tet-input-background: #343746;
   --tet-input-foreground: #f8f8f2;
   --tet-input-border: #191a21;
-  --tet-input-placeholderForeground: #6272a4;
+  /* Not the theme's #6272a4, Dracula's own comment tint: it reads as a different color from the
+     filter icon beside it, drawn from foreground at the same opacity. */
+  --tet-input-placeholderForeground: #f8f8f299;
 
   --tet-radio-activeForeground: #ffffff;
   --tet-radio-activeBackground: #6272a466;

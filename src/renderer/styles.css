@@ -339,7 +339,7 @@ textarea:focus,
 .lane-content,
 .branch-tree,
 .commit-graph,
-.explorer-tree,
+.dense-tree,
 .editor-body,
 .image-diff {
   display: flex;
@@ -894,9 +894,11 @@ textarea:focus,
   color: var(--tet-list-activeSelectionForeground);
 }
 
-/* The files lane's EXPLORER tree, and the SEARCH section under it, whose rows are of the same shape.
-   It nests arbitrarily deep, so rows set `padding-left` inline. */
-.explorer-tree .tree-row {
+/* Rows shaped the same across lanes: the files lane's EXPLORER tree and the SEARCH section under
+   it, the git lane's LOCAL CHANGES and BRANCHES, and the ARCHIVE. It nests arbitrarily deep, so
+   rows set `padding-left` inline. */
+.dense-tree .tree-header,
+.dense-tree .tree-row {
   height: var(--tree-row-height);
 }
 
@@ -910,7 +912,7 @@ textarea:focus,
   font-style: normal;
 }
 
-.explorer-tree .file-icon,
+.dense-tree .file-icon,
 .change-status {
   display: flex;
   align-items: center;
@@ -918,7 +920,7 @@ textarea:focus,
   margin-right: 4px;
 }
 
-.explorer-tree .file-icon {
+.dense-tree .file-icon {
   font-family: "seti";
   font-size: calc(var(--icon-size) * 14.6 / 12);
   line-height: 1;
@@ -926,31 +928,31 @@ textarea:focus,
 
 /* Seti's palette (FileIconColor in lanes/files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
-.explorer-tree .tree-icon.blue {
+.dense-tree .tree-icon.blue {
   color: var(--tet-terminal-ansiBlue);
 }
 
-.explorer-tree .tree-icon.yellow {
+.dense-tree .tree-icon.yellow {
   color: var(--tet-terminal-ansiYellow);
 }
 
-.explorer-tree .tree-icon.green {
+.dense-tree .tree-icon.green {
   color: var(--tet-terminal-ansiGreen);
 }
 
-.explorer-tree .tree-icon.red {
+.dense-tree .tree-icon.red {
   color: var(--tet-terminal-ansiRed);
 }
 
-.explorer-tree .tree-icon.orange {
+.dense-tree .tree-icon.orange {
   color: var(--tet-terminal-ansiBrightRed);
 }
 
-.explorer-tree .tree-icon.purple {
+.dense-tree .tree-icon.purple {
   color: var(--tet-terminal-ansiMagenta);
 }
 
-.explorer-tree .tree-icon.pink {
+.dense-tree .tree-icon.pink {
   color: var(--tet-terminal-ansiBrightMagenta);
 }
 
@@ -1982,7 +1984,7 @@ textarea:focus,
   align-items: center;
   gap: 4px;
   border-bottom: 1px solid var(--tet-input-border);
-  padding: 4px 0;
+  padding: 4px 2px 4px 0;
 }
 
 .edit-row:first-child {

@@ -70,9 +70,11 @@ maps id to variable.
      reads on all of them.
    - `tab.activeBorder` is the accent, `focusBorder`, not the theme's `tab.activeBorder`; a theme
      with a mark color of its own (`tab.activeBorderTop`) takes that instead.
-5. **Deviate from the theme only where its value fails in TET** — unreadable, invisible on its
-   ground, or drawing a line TET does not want — and comment it at the value, saying what it is
-   instead and why: `Not the theme's <value>: …`. A token rule the theme file lacks goes at the
+5. **Deviate from the theme where its value doesn't fit alongside TET's other themes** —
+   unreadable, invisible on its ground, drawing a line TET does not want, or reading differently
+   from how the same thing looks in the themes already here — and comment it at the value, saying
+   what it is instead and why: `Not the theme's <value>: …`. A token rule the theme file lacks
+   goes at the
    end of its `tokenColors`, in a color of the theme's own, and is named in the stylesheet's header
    comment, since the JSON holds none.
 6. **Wire it up**:

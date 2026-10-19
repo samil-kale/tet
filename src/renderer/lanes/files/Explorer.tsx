@@ -371,7 +371,7 @@ export const Explorer = memo(function Explorer({
   };
 
   return (
-    <div className="explorer-tree">
+    <div className="dense-tree">
       <FilterField placeholder="Filter files..." value={filter} onChange={setFilter} />
       <div
         className="tree"
