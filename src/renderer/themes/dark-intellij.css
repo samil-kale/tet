@@ -32,8 +32,6 @@
   --tet-titleBar-activeForeground: #cccccc;
 
   --tet-panel-background: #2b2d30;
-  /* A step darker than the panel, so a row of fields reads as sunken rather than flush with it. */
-  --tet-editRow-background: #1e1f22;
   /* The sidebar's own surface, not the terminal's ground: a dialog needs no flat-tabs reading. */
   --tet-dialog-background: #2b2d30;
   /* A step darker than that body, as every other theme's dialog header is of its own; the theme

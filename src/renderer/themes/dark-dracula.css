@@ -47,9 +47,7 @@
   --tet-list-activeSelectionForeground: #f8f8f2;
   --tet-list-hoverBackground: #44475a75;
 
-  /* Not the theme's own input.background (#282a36): on TET's own dialog surface, the same color
-     as the terminal background, it would vanish. Current Line/Selection instead. */
-  --tet-input-background: #44475a;
+  --tet-input-background: #282a36;
   --tet-input-foreground: #f8f8f2;
   --tet-input-border: #191a21;
   --tet-input-placeholderForeground: #6272a4;

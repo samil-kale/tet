@@ -48,7 +48,6 @@ maps id to variable.
 | `--tet-settings-checkboxForeground`  | `--tet-input-foreground`                                 | Dark IntelliJ     |
 | `--tet-dialog-background`            | `--tet-terminal-background`                              | Dark IntelliJ     |
 | `--tet-dialogHeader-background`      | `--tet-tab-inactiveBackground`                           | Dark IntelliJ     |
-| `--tet-editRow-background`           | `--tet-panel-background`                                 | Dark IntelliJ     |
 
 ## From a VS Code theme to a TET theme
 

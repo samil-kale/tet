@@ -1915,7 +1915,6 @@ textarea:focus,
 .row-section-rows {
   display: flex;
   flex-direction: column;
-  gap: 1px;
   max-height: 245px;
   overflow-y: auto;
 }
@@ -1975,12 +1974,12 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 4px;
-  /* A theme overrides it only where its panel background is too close to the row's own fields to
-     read as a row (Dark IntelliJ's). */
-  background: var(--tet-editRow-background, var(--tet-panel-background));
-  border: 1px solid var(--tet-panel-border);
-  border-radius: 3px;
-  padding: 4px;
+  border-bottom: 1px solid var(--tet-input-border);
+  padding: 4px 0;
+}
+
+.edit-row:first-child {
+  border-top: 1px solid var(--tet-input-border);
 }
 
 /* A row of fixed-width fields (ports) leaves room, and its remove button still sits right. */
