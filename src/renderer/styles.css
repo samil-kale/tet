@@ -2075,6 +2075,7 @@ textarea:focus,
   display: flex;
   flex: none;
   color: var(--tet-errorForeground);
+  padding-left: 4px;
 }
 
 /* EditRow's promise: the field before the mark gives up the mark's room (icon plus the row's gap),

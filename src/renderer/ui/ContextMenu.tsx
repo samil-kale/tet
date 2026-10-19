@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ChevronIcon } from "./icons";
 import { useEscape } from "./use-escape";
 import { useLatest } from "./use-latest";
+import { useTopDialog } from "./window-covered";
 
 /** One entry of a context menu; an action with neither `run` nor `entries` renders disabled. */
 interface ContextMenuAction {
@@ -89,6 +91,10 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   const menu = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Opened on a field inside a dialog, it must render inside the dialog's node (as Notices does)
+  // to clear a modal dialog's top layer; inline it would also sit between the field and whatever
+  // CSS sibling selector follows it (e.g. a row's `:has(+ .row-mark)`), changing that field's layout.
+  const dialog = useTopDialog();
 
   // Clamped into the window, written to the node rather than state so nothing paints unclamped.
   useLayoutEffect(() => {
@@ -150,7 +156,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
 
   const opened = submenu && entries[submenu.index];
 
-  return (
+  const content = (
     <div ref={menu} className={`context-menu${className ? ` ${className}` : ""}`} style={{ left: x, top: y, width, maxHeight }}>
       {header && <div className="context-menu-header">{header}</div>}
       {entries.map((entry, index) =>
@@ -204,4 +210,5 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
       )}
     </div>
   );
+  return dialog ? createPortal(content, dialog) : content;
 }
