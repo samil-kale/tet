@@ -50,15 +50,12 @@
   --tet-list-activeSelectionForeground: #e6edf3;
   --tet-list-hoverBackground: #6e76811a;
 
-  --tet-input-background: #0d1117;
+  /* Not the theme's own input.background (#0d1117): on TET's own dialog surface, the same color
+     as the terminal background, it would vanish. Its settings.dropdownBackground instead. */
+  --tet-input-background: #161b22;
   --tet-input-foreground: #e6edf3;
   --tet-input-border: #30363d;
   --tet-input-placeholderForeground: #6e7681;
-
-  --tet-settings-dropdownBackground: #161b22;
-  --tet-settings-checkboxBackground: #161b22;
-  --tet-settings-checkboxBorder: #30363d;
-  --tet-settings-checkboxForeground: #e6edf3;
 
   --tet-radio-activeForeground: #ffffff;
   --tet-radio-activeBackground: #1f6feb66;

@@ -32,6 +32,13 @@
   --tet-titleBar-activeForeground: #cccccc;
 
   --tet-panel-background: #2b2d30;
+  /* A step darker than the panel, so a row of fields reads as sunken rather than flush with it. */
+  --tet-editRow-background: #1e1f22;
+  /* The sidebar's own surface, not the terminal's ground: a dialog needs no flat-tabs reading. */
+  --tet-dialog-background: #2b2d30;
+  /* A step darker than that body, as every other theme's dialog header is of its own; the theme
+     has no darker neutral of its own, so a step down by the same amount. */
+  --tet-dialogHeader-background: #17181b;
   /* Not the theme's #1e1f22, which is also the tabs' and the terminal's ground, so the line under
      the tab strip vanishes: its editorGroupHeader.tabsBorder and editorGroup.border, what VS Code
      draws under tabs and between split editors. */
@@ -41,6 +48,8 @@
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #3574f0;
   --tet-tab-activeForeground: #dfe1e5;
+  /* The theme's own tab.inactiveBackground: flat, as its real tab strip, matching the terminal
+     ground it sits over. */
   --tet-tab-inactiveBackground: #1e1f22;
   --tet-tab-inactiveForeground: #bbbdc0;
   --tet-tab-border: #1e1f22;
@@ -57,7 +66,7 @@
   --tet-input-border: #393b40;
   --tet-input-placeholderForeground: #cccccc80;
 
-  --tet-settings-dropdownBackground: #393b40;
+  /* Its own filled, accent checkbox (checkbox.background/Border), not a plain field's. */
   --tet-settings-checkboxBackground: #3574f0;
   --tet-settings-checkboxBorder: #3574f0;
   --tet-settings-checkboxForeground: #ffffff;

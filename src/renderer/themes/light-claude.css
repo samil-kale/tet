@@ -66,11 +66,6 @@
   /* Not the theme's #b0b0a8: claude.ai's dimmed text. */
   --tet-input-placeholderForeground: #898781;
 
-  --tet-settings-dropdownBackground: #ffffff;
-  --tet-settings-checkboxBackground: #ffffff;
-  --tet-settings-checkboxBorder: #b0b0a8;
-  --tet-settings-checkboxForeground: #2a2a28;
-
   --tet-radio-activeForeground: #2a2a28;
   --tet-radio-activeBackground: #c2613a20;
   --tet-radio-activeBorder: #c2613a;

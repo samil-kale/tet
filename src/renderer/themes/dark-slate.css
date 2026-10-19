@@ -51,15 +51,12 @@
   --tet-list-activeSelectionForeground: #dde2e9;
   --tet-list-hoverBackground: #1f232b;
 
-  --tet-input-background: #14171c;
+  /* Not the theme's own input.background (#14171c): too close to the dialog's own terminal
+     background (#1b1f27) to read as a field. The list's active selection instead. */
+  --tet-input-background: #232830;
   --tet-input-foreground: #dde2e9;
   --tet-input-border: #2a2d35;
   --tet-input-placeholderForeground: #7b8391;
-
-  --tet-settings-dropdownBackground: #14171c;
-  --tet-settings-checkboxBackground: #161b22;
-  --tet-settings-checkboxBorder: #30363d;
-  --tet-settings-checkboxForeground: #dde2e9;
 
   --tet-radio-activeForeground: #ffffff;
   --tet-radio-activeBackground: #58a6f066;

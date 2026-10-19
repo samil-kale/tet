@@ -38,11 +38,17 @@ maps id to variable.
   (`test/lint.test.ts`). It is the exception, not the way to theme: a theme sets one only where
   its own mark color differs from the accent.
 
-| Optional variable                  | Falls back to                                            | Set by            |
-| ---------------------------------- | -------------------------------------------------------- | ----------------- |
-| `--tet-tabMark-workingForeground`  | `--tet-focusBorder`                                      | Dark/Light GitHub |
-| `--tet-tabMark-finishedForeground` | `--tet-focusBorder`                                      | Dark/Light GitHub |
-| `--tet-tabMark-activeForeground`   | the working or finished mark's, then `--tet-focusBorder` | Light GameBoy     |
+| Optional variable                    | Falls back to                                            | Set by            |
+| ------------------------------------- | -------------------------------------------------------- | ----------------- |
+| `--tet-tabMark-workingForeground`    | `--tet-focusBorder`                                      | Dark/Light GitHub |
+| `--tet-tabMark-finishedForeground`   | `--tet-focusBorder`                                      | Dark/Light GitHub |
+| `--tet-tabMark-activeForeground`     | the working or finished mark's, then `--tet-focusBorder` | Light GameBoy     |
+| `--tet-settings-checkboxBackground`  | `--tet-input-background`                                 | Dark IntelliJ     |
+| `--tet-settings-checkboxBorder`      | `--tet-input-border`                                     | Dark IntelliJ     |
+| `--tet-settings-checkboxForeground`  | `--tet-input-foreground`                                 | Dark IntelliJ     |
+| `--tet-dialog-background`            | `--tet-terminal-background`                              | Dark IntelliJ     |
+| `--tet-dialogHeader-background`      | `--tet-tab-inactiveBackground`                           | Dark IntelliJ     |
+| `--tet-editRow-background`           | `--tet-panel-background`                                 | Dark IntelliJ     |
 
 ## From a VS Code theme to a TET theme
 

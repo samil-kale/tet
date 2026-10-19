@@ -75,8 +75,8 @@ button:focus-visible {
   outline-offset: -1px;
 }
 
-/* One box for fields and dropdowns: a dropdown looks like a field but for its chevron. The
-   background is VS Code's settings editor's dropdown, for the fields too. */
+/* One box for fields and dropdowns: a dropdown looks like a field but for its chevron. One
+   variable for every field's background and border alike, input.background and input.border. */
 input,
 textarea,
 .code-field,
@@ -86,7 +86,7 @@ textarea,
   outline: none;
   padding: 3px 6px;
   color: var(--tet-input-foreground);
-  background: var(--tet-settings-dropdownBackground);
+  background: var(--tet-input-background);
   border: 1px solid var(--tet-input-border);
 }
 
@@ -198,9 +198,9 @@ textarea:focus,
   height: var(--field-height);
   padding: 0 11px;
   color: var(--tet-radio-inactiveForeground);
-  /* No background: VS Code's registry has no `radio.inactiveBackground`, and the button reset
-     above leaves none. Not radio.inactiveBorder: the fields' border, so the group reads as one of
-     them. */
+  /* The fields' own background and border, so the group reads as one of them: VS Code's registry
+     has no `radio.inactiveBackground`/`radio.inactiveBorder` of its own. */
+  background: var(--tet-input-background);
   border: 1px solid var(--tet-input-border);
 }
 
@@ -1399,7 +1399,8 @@ textarea:focus,
    `theme.ts` reads, so the two cannot drift. */
 .terminal-host {
   position: absolute;
-  inset: 6px 12px;
+  /* Right inset is narrower than left: no scrollbar sits there to leave room for. */
+  inset: 6px 6px 6px 12px;
   background: var(--tet-terminal-background);
   /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. No
      `paint`: it would clip the drag-over frame reaching past the host. */
@@ -1417,7 +1418,7 @@ textarea:focus,
   content: "";
   /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
      edges, where no line is drawn. */
-  inset: -6px -11px -5px -12px;
+  inset: -6px -5px -5px -12px;
 }
 
 /*
@@ -1849,8 +1850,9 @@ textarea:focus,
   padding: 16px;
   font-size: var(--tet-font-size);
   /* The terminal's ground, a step off the header's tab-strip color as the terminal is off the
-     tab strip; not the editor widget's. */
-  background: var(--tet-terminal-background);
+     tab strip; not the editor widget's. A theme overrides it only where its terminal's own ground
+     reads too dark for a dialog (Dark IntelliJ's). */
+  background: var(--tet-dialog-background, var(--tet-terminal-background));
   border: 1px solid var(--tet-editorWidget-border);
   border-radius: 5px;
   box-shadow: 0 4px 12px var(--tet-widget-shadow);
@@ -1865,7 +1867,9 @@ textarea:focus,
   height: var(--bar-height);
   margin: -16px -16px 0;
   border-radius: 5px 5px 0 0;
-  background: var(--tet-tab-inactiveBackground);
+  /* A theme overrides it only where its own inactive tab color reads wrong on a dialog (Dark
+     IntelliJ's, equal to its own dialog background). */
+  background: var(--tet-dialogHeader-background, var(--tet-tab-inactiveBackground));
   border-bottom: 1px solid var(--tet-panel-border);
 }
 
@@ -1971,7 +1975,9 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 4px;
-  background: var(--tet-panel-background);
+  /* A theme overrides it only where its panel background is too close to the row's own fields to
+     read as a row (Dark IntelliJ's). */
+  background: var(--tet-editRow-background, var(--tet-panel-background));
   border: 1px solid var(--tet-panel-border);
   border-radius: 3px;
   padding: 4px;
@@ -2251,8 +2257,8 @@ textarea:focus,
 .sbx-governance-icon {
   display: grid;
   place-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex: none;
   margin: 4px 3px 2px 4px;
 }
@@ -2263,20 +2269,22 @@ textarea:focus,
 }
 
 /* Drawn by TET, as VS Code's settings editor's checkbox: Chrome's own box takes only light or
-   dark, never a theme's colors. A tree row's (ui/tree-row.tsx) is the same box. */
+   dark, never a theme's colors. A tree row's (ui/tree-row.tsx) is the same box. The same field
+   variables as everything else, a theme overriding them only where its checkbox is its own
+   control (Dark IntelliJ's filled accent). */
 .dialog-checkbox input,
 .tree-checkbox {
   appearance: none;
   padding: 0;
-  background: var(--tet-settings-checkboxBackground);
-  border: 1px solid var(--tet-settings-checkboxBorder);
+  background: var(--tet-settings-checkboxBackground, var(--tet-input-background));
+  border: 1px solid var(--tet-settings-checkboxBorder, var(--tet-input-border));
   border-radius: 3px;
   cursor: pointer;
 }
 
 /* Not the fields' focus border on a click: only the keyboard's, as a button's. */
 .dialog-checkbox input:focus {
-  border-color: var(--tet-settings-checkboxBorder);
+  border-color: var(--tet-settings-checkboxBorder, var(--tet-input-border));
 }
 
 .dialog-checkbox input:focus-visible {
@@ -2290,7 +2298,7 @@ textarea:focus,
   content: "";
   width: 14px;
   height: 14px;
-  background: var(--tet-settings-checkboxForeground);
+  background: var(--tet-settings-checkboxForeground, var(--tet-input-foreground));
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
@@ -2300,7 +2308,7 @@ textarea:focus,
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3C/svg%3E");
 }
 
-/* In a 22px row, before the status letter: a size smaller than the dialogs'. */
+/* Before the status letter, the dialogs' own size. */
 .tree-checkbox {
   display: grid;
   place-content: center;
