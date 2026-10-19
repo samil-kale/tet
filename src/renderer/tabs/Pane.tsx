@@ -167,7 +167,7 @@ export const Pane = memo(function Pane({
 
   /**
    * Editor tabs close in the renderer, terminals in main. Their unsaved-edit question may keep them
-   * open while the same "Close All"'s terminals go — those with a session to the ARCHIVE lane.
+   * open while the same "Close All"'s terminals go — deleting their sessions for good.
    */
   const closeTabs = useCallback(
     (tabIds: string[]) => {
@@ -186,6 +186,9 @@ export const Pane = memo(function Pane({
   );
 
   const restartTab = useCallback((tabId: string) => void window.tet.tabs.restart(at, tabId), [at]);
+
+  /** The tab menu's Archive: keeps the session, to the ARCHIVE lane. */
+  const archiveTab = useCallback((tabId: string) => void window.tet.tabs.archive(at, [tabId]), [at]);
 
   /** The new tab opens beside this one; no question is up to show a refusal, so it is a notice. */
   const handOver = useCallback(
@@ -288,9 +291,9 @@ export const Pane = memo(function Pane({
   const siblingPanes = PRESET_PANES[preset].filter((id) => id !== paneId);
 
   /**
-   * Restart, Clear for the shell, the close actions, rename and hand-over for an agent with sessions, and the moves
-   * to sibling panes. A close with nothing to close is disabled. An editor tab gets "Keep Open" while a preview, the close actions and the
-   * moves.
+   * Restart, Clear for the shell, the close actions, rename, archive and hand-over for an agent
+   * with sessions, and the moves to sibling panes. A close with nothing to close is disabled. An
+   * editor tab gets "Keep Open" while a preview, the close actions and the moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
@@ -315,7 +318,6 @@ export const Pane = memo(function Pane({
         "Close Others",
         ids.filter((id) => id !== tabId),
       ),
-      closeAction("Close to the Right", ids.slice(ids.indexOf(tabId) + 1)),
       closeAction("Close All", ids),
     ];
     const kinded = menuTab && kindOf(menuTab);
@@ -370,6 +372,8 @@ export const Pane = memo(function Pane({
               label: "Rename...",
               run: withSession ? () => void askRename(withSession) : undefined,
             },
+            // Unlike Close, keeps the session.
+            { label: "Archive", run: () => archiveTab(tabId) },
           ] satisfies ContextMenuEntry[])
         : []),
       ...handOverEntries,

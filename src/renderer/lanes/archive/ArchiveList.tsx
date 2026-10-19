@@ -33,7 +33,7 @@ function lastActive({ updatedAt, createdAt }: TabDescriptor) {
 }
 
 /**
- * The tabs taken off the strip with their sessions kept (`tabs.close`). A row reopens its tab at
+ * The tabs taken off the strip with their sessions kept (`tabs.archive`). A row reopens its tab at
  * the end of the strip, or deletes its session for good. Keyed by repository or worktree by the app.
  */
 export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTab }: ArchiveListProps) {

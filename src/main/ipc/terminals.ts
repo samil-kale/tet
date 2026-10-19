@@ -22,8 +22,13 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return manager.createTab(agentId);
   });
 
-  // The window's close keeps a tab's session; `tet-ctl tabs-close` deletes it.
+  // The tab menu's Close: the same as `tet-ctl tabs-close`, no archive.
   handle("tabs:close", async (_event, ref: ProjectRef, tabIds: string[]): Promise<void> => {
+    await tabManagers.get(ref)?.closeTabs(tabIds);
+  });
+
+  // The tab menu's Archive: keeps the tab's session; the window's close does the same.
+  handle("tabs:archive", async (_event, ref: ProjectRef, tabIds: string[]): Promise<void> => {
     await tabManagers.get(ref)?.closeKeepingSessions(tabIds);
   });
 

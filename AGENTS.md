@@ -389,6 +389,8 @@ per-line decision is for an agent.
   control gets that state with it.
 - When two things that should look identical don't, measure them (`getComputedStyle` on the built
   stylesheet) instead of guessing.
+- **Every text field or textarea gets `useTextContextMenu`** (`ui/use-text-context-menu.ts`)'s
+  Cut/Copy/Paste/Select All on right click, since Electron shows none of its own.
 
 ## Turns and tab marks
 

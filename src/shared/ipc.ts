@@ -104,6 +104,7 @@ export interface InvokeChannels {
   "tabs:list": TETApi["tabs"]["list"];
   "tabs:create": TETApi["tabs"]["create"];
   "tabs:close": TETApi["tabs"]["close"];
+  "tabs:archive": TETApi["tabs"]["archive"];
   "tabs:rename": TETApi["tabs"]["rename"];
   "tabs:handover": TETApi["tabs"]["handOver"];
   "tabs:restart": TETApi["tabs"]["restart"];

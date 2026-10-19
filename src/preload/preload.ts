@@ -146,6 +146,7 @@ const api: TETApi = {
     list: (ref) => invoke("tabs:list", ref),
     create: (ref, agentId) => invoke("tabs:create", ref, agentId),
     close: (ref, tabIds) => invoke("tabs:close", ref, tabIds),
+    archive: (ref, tabIds) => invoke("tabs:archive", ref, tabIds),
     rename: (ref, tabId, title) => invoke("tabs:rename", ref, tabId, title),
     handOver: (ref, tabId, agentId) => invoke("tabs:handover", ref, tabId, agentId),
     restart: (ref, tabId) => invoke("tabs:restart", ref, tabId),
