@@ -271,8 +271,8 @@ textarea:focus,
 
 /* Scrollbars: no arrows, no track, a translucent slider. A view wanting none hides them itself. */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track,
@@ -1920,9 +1920,9 @@ textarea:focus,
 }
 
 /* 2px between the rows and the scrollbar, there only while the scrollbar is: a transparent strip
-   on the bar's left, the thumb keeping the usual 10px. */
+   on the bar's left, the thumb keeping the usual 7px. */
 .row-section-rows::-webkit-scrollbar {
-  width: 12px;
+  width: 9px;
 }
 
 .row-section-rows::-webkit-scrollbar-thumb {
