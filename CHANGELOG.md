@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.20.1 (2026-10-19)
+
+- **Status bar.** A status bar across the window's bottom shows the project, its branch and change
+  count, and the archived count; settings move beside the lane toggles in the Activity Bar.
+- **Text field context menu.** Text fields and textareas get a Cut, Copy and Paste menu on right
+  click.
+- **Archive from the tab menu.** The tab menu gains an Archive entry; Close to the Right is gone.
+- **Fixes.** Scrollbars shrink to 7px, except the editor tab's, which stays wider; dropdowns and
+  checkboxes are drawn in the field colors across the themes; edit rows are ruled lines instead of
+  boxes; a change-marking drop target shows as a lighter, tinted outline.
+
 ## 0.20.0 (2026-10-19)
 
 - **Activity Bar.** The lane toggles and settings move into an Activity Bar at the window's left
