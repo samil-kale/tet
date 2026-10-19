@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { IconButton } from "./IconButton";
 import { ClearIcon, SearchIcon } from "./icons";
+import { useTextContextMenu } from "./use-text-context-menu";
 
 interface FilterFieldProps {
   placeholder: string;
@@ -21,6 +22,7 @@ interface FilterFieldProps {
  */
 export function FilterField({ placeholder, value, onChange, autoFocus, onEnter, children }: FilterFieldProps) {
   const input = useRef<HTMLInputElement>(null);
+  const textMenu = useTextContextMenu(onChange);
   return (
     <div className={children ? "filter-field with-toggles" : "filter-field"}>
       <SearchIcon className="filter-icon" />
@@ -32,7 +34,9 @@ export function FilterField({ placeholder, value, onChange, autoFocus, onEnter, 
         autoFocus={autoFocus}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onEnter && ((event) => event.key === "Enter" && onEnter())}
+        onContextMenu={textMenu.onContextMenu}
       />
+      {textMenu.menu}
       <span className="filter-toggles">
         {children}
         <IconButton

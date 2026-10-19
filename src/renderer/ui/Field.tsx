@@ -3,6 +3,7 @@ import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
 import { SparkleIcon } from "./icons";
 import { useBusy } from "./use-busy";
+import { useTextContextMenu } from "./use-text-context-menu";
 
 /**
  * What refused an answer, where the answer was given: under the field to blame (`Field`), in a
@@ -88,6 +89,7 @@ export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder 
       onChange(picked);
     }
   };
+  const textMenu = useTextContextMenu(onChange);
   return (
     <FieldRow>
       <input
@@ -97,7 +99,9 @@ export function PathInput({ value, pickTitle, onChange, pickedOnly, placeholder 
         readOnly={pickedOnly}
         title={pickedOnly ? value : undefined}
         onChange={(event) => onChange(event.target.value)}
+        onContextMenu={textMenu.onContextMenu}
       />
+      {textMenu.menu}
       <button type="button" className="button secondary" onClick={() => void browse()}>
         Browse...
       </button>
@@ -131,6 +135,7 @@ interface TextFieldProps {
 
 /** A `Field` holding the one-line input the dialogs' fields are built from. */
 export function TextField({ label, value, onChange, type = "text", placeholder, maxLength, disabled, ref, error }: TextFieldProps) {
+  const textMenu = useTextContextMenu(onChange);
   return (
     <Field label={label} error={error}>
       <input
@@ -140,8 +145,10 @@ export function TextField({ label, value, onChange, type = "text", placeholder, 
         maxLength={maxLength}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
+        onContextMenu={textMenu.onContextMenu}
         ref={ref}
       />
+      {textMenu.menu}
     </Field>
   );
 }
@@ -170,6 +177,7 @@ interface SuggestFieldProps {
 export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
   const { busy: suggesting, run } = useBusy();
   const [refused, setRefused] = useState<string>();
+  const textMenu = useTextContextMenu(onChange);
   useEffect(() => onSuggesting?.(suggesting), [suggesting, onSuggesting]);
 
   const suggest = async (): Promise<void> => {
@@ -208,8 +216,10 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
             setRefused(undefined);
             onChange(event.target.value);
           }}
+          onContextMenu={textMenu.onContextMenu}
           ref={ref}
         />
+        {textMenu.menu}
         {suggestion && (
           <button
             type="button"

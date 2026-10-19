@@ -5,6 +5,7 @@ import { useDragReorder } from "./drag-reorder";
 import { FieldGroup } from "./Field";
 import { IconButton } from "./IconButton";
 import { CircleAlertIcon, CloseIcon, GripIcon } from "./icons";
+import { useTextContextMenu } from "./use-text-context-menu";
 
 /** A row as a dialog's fields hold it: the saved shape plus a local React key, never sent anywhere. */
 export type Row<T> = T & { id: string };
@@ -114,17 +115,22 @@ export function RowInput({
   /** Left out for a field that only shows (`readOnly`). */
   onChange?: (value: string) => void;
 }) {
+  const textMenu = useTextContextMenu(onChange ?? (() => {}));
   return (
-    <input
-      className={width === "port" ? "sbx-port-input" : `row-${width}-input`}
-      type="text"
-      inputMode={width === "port" ? "numeric" : undefined}
-      placeholder={placeholder}
-      title={title}
-      readOnly={readOnly}
-      value={value}
-      onChange={onChange && ((event) => onChange(event.target.value))}
-    />
+    <>
+      <input
+        className={width === "port" ? "sbx-port-input" : `row-${width}-input`}
+        type="text"
+        inputMode={width === "port" ? "numeric" : undefined}
+        placeholder={placeholder}
+        title={title}
+        readOnly={readOnly}
+        value={value}
+        onChange={onChange && ((event) => onChange(event.target.value))}
+        onContextMenu={textMenu.onContextMenu}
+      />
+      {textMenu.menu}
+    </>
   );
 }
 
@@ -151,16 +157,21 @@ export function SecretInput({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const textMenu = useTextContextMenu(onChange);
   return (
-    <input
-      className={`row-${width}-input`}
-      type="password"
-      autoComplete="off"
-      placeholder={stored ? "••••••••" : placeholder}
-      title={stored ? storedTitle : emptyTitle}
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <>
+      <input
+        className={`row-${width}-input`}
+        type="password"
+        autoComplete="off"
+        placeholder={stored ? "••••••••" : placeholder}
+        title={stored ? storedTitle : emptyTitle}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onContextMenu={textMenu.onContextMenu}
+      />
+      {textMenu.menu}
+    </>
   );
 }
 

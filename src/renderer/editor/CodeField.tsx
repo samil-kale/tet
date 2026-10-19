@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Editor from "react-simple-code-editor";
 import type { HighlighterCore } from "shiki/core";
+import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { highlighter, highlightTheme, loadGrammar, subscribeHighlightTheme } from "./diff-highlight";
 
 interface CodeFieldProps {
@@ -20,6 +21,7 @@ interface CodeFieldProps {
 export function CodeField({ language, value, onChange, placeholder, className }: CodeFieldProps) {
   const [shiki, setShiki] = useState<HighlighterCore | null>(null);
   const theme = useSyncExternalStore(subscribeHighlightTheme, highlightTheme);
+  const textMenu = useTextContextMenu(onChange);
   useEffect(() => {
     let current = true;
     void highlighter().then(async (loaded) => {
@@ -33,7 +35,8 @@ export function CodeField({ language, value, onChange, placeholder, className }:
     };
   }, [language]);
   return (
-    <div className={className ? `code-field ${className}` : "code-field"}>
+    <div className={className ? `code-field ${className}` : "code-field"} onContextMenu={textMenu.onContextMenu}>
+      {textMenu.menu}
       <Editor
         className="code-field-editor"
         value={value}

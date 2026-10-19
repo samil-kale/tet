@@ -17,6 +17,7 @@ import { Checkbox, DialogError, Field, FieldColumn, FieldGroup, FieldRow } from 
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { useBusy } from "../ui/use-busy";
+import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { PLATFORM } from "../platform";
 import {
   atLeastOne,
@@ -244,6 +245,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   /** TET's own text is stored as "", as in settings.ts; the reset button reads that. */
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { texts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } } });
+  const promptTextMenu = useTextContextMenu((text) => applyPrompt(promptId, text));
 
   /** A model not offered any more is shown replaced by the default, not saved: another machine may
    *  offer it. */
@@ -418,7 +420,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
             spellCheck={false}
             value={effectivePrompt(settings.prompts.texts, promptId)}
             onChange={(event) => applyPrompt(promptId, event.target.value)}
+            onContextMenu={promptTextMenu.onContextMenu}
           />
+          {promptTextMenu.menu}
         </>
       )}
       {shown === "environment" && (
