@@ -8,6 +8,8 @@ interface StatusBarProps {
   project: Project | undefined;
   /** Its branch, or the short commit id while detached; absent while none is open. */
   branch: string | undefined;
+  /** Its uncommitted changes, by the branch. */
+  changesCount: number;
   /** How many of its tabs are taken off the strip, their sessions kept. */
   archivedCount: number;
   /** A field's click opens the lane it names. */
@@ -15,9 +17,9 @@ interface StatusBarProps {
 }
 
 /** The window's bottom edge (VS Code's status bar): the active repository or worktree, its
- *  branch and its archived tab count, each opening its lane. Its icons read smaller than the
- *  rest of the app's. */
-export const StatusBar = memo(function StatusBar({ project, branch, archivedCount, onSelectLane }: StatusBarProps) {
+ *  branch with its change count, and its archived tab count, each opening its lane. Its icons
+ *  read smaller than the rest of the app's. */
+export const StatusBar = memo(function StatusBar({ project, branch, changesCount, archivedCount, onSelectLane }: StatusBarProps) {
   return (
     <div className="status-bar">
       {project && (
@@ -33,7 +35,7 @@ export const StatusBar = memo(function StatusBar({ project, branch, archivedCoun
       {branch && (
         <button type="button" className="status-bar-item" title="Show git" onClick={() => onSelectLane("git")}>
           <BranchIcon className="tree-icon" />
-          {branch}
+          {branch} {changesCount}
         </button>
       )}
     </div>

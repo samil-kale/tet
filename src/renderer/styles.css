@@ -1399,7 +1399,7 @@ textarea:focus,
    `theme.ts` reads, so the two cannot drift. */
 .terminal-host {
   position: absolute;
-  inset: 6px 10px 10px;
+  inset: 6px 12px;
   background: var(--tet-terminal-background);
   /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. No
      `paint`: it would clip the drag-over frame reaching past the host. */
@@ -1417,7 +1417,7 @@ textarea:focus,
   content: "";
   /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
      edges, where no line is drawn. */
-  inset: -6px -9px -9px -10px;
+  inset: -6px -11px -5px -12px;
 }
 
 /*

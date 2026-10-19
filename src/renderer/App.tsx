@@ -244,13 +244,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
   const heads = useRefHeads(states);
 
-  /** The status bar's project, branch and archived tab count: the active repository's or worktree's. */
+  /** The status bar's project, branch, change count and archived tab count: the active
+   *  repository's or worktree's. */
   const activeProject = activeResolved ? projects.find((project) => project.id === activeResolved.ref.projectId) : undefined;
   const activeBranchName = activeResolved
     ? activeResolved.worktree
       ? worktreeName(activeResolved.worktree)
       : heads[activeResolved.refKey]?.head
     : undefined;
+  const activeChangesCount = activeResolved ? (states[activeResolved.refKey]?.changes.length ?? 0) : 0;
   const archivedTabs = useArchive(activeResolved);
 
   /** A shell tab, for a project row's "New shell tab" entry. */
@@ -470,7 +472,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         </main>
       </div>
 
-      <StatusBar project={activeProject} branch={activeBranchName} archivedCount={archivedTabs.length} onSelectLane={toggleLane} />
+      <StatusBar
+        project={activeProject}
+        branch={activeBranchName}
+        changesCount={activeChangesCount}
+        archivedCount={archivedTabs.length}
+        onSelectLane={toggleLane}
+      />
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
