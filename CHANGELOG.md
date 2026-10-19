@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.20.3 (2026-10-19)
+
+- **Fixes.** The git and archive lanes' rows are as dense as the Explorer's; the dark Dracula
+  theme's inactive radio hover matches its palette; clicking a Windows notification brings TET's
+  window forward while it runs.
+
 ## 0.20.2 (2026-10-19)
 
 - **Fixes.** Archived sessions deleted outside TET are pruned and reopened safely; the clone
