@@ -59,7 +59,9 @@
   --tet-input-background: #c4bebb;
   --tet-input-foreground: #494786;
   --tet-input-border: #494786;
-  --tet-input-placeholderForeground: #75706d;
+  /* Not the theme's #75706d: matches the filter icon's foreground-based color instead, the same
+     as Dracula. */
+  --tet-input-placeholderForeground: #49478699;
 
   --tet-radio-activeForeground: #c4bebb;
   --tet-radio-activeBackground: #5855a0;

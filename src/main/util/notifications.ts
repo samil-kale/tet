@@ -56,9 +56,8 @@ function repeatedNotification(title: string, body: string, target?: Notification
 }
 
 /**
- * Clickable notifications, held so their click handlers are not garbage-collected — outside win32, where
- * clicks arrive through `Notification.handleActivation`. Not released on `close`: that can be the
- * move to the notification center, where a click still arrives. Capped.
+ * Clickable notifications, held so their click handlers are not garbage-collected. Not released on
+ * `close`: that can be the move to the notification center, where a click still arrives. Capped.
  */
 const LIVE_NOTIFICATIONS_MAX = 50;
 const liveNotifications = new Set<Notification>();
@@ -150,8 +149,11 @@ function windowsToastXml(id: string, title: string, body: string, target?: Notif
  * The desktop notification behind the `hook` and `notify` verbs — this process holds the desktop session
  * (a sandboxed hook has none). No `icon`: Windows takes TET's (APP_USER_MODEL_ID).
  *
- * A click brings the window and the notification's tab to the front — on win32 via
- * `Notification.handleActivation` (also after TET quit), elsewhere via the notification's `click`.
+ * A click brings the window and the notification's tab to the front, through the notification's own
+ * `click` — measured to reach Windows' foreground grant while TET runs, unlike the COM activator
+ * (`Notification.handleActivation`), which on win32 carries the same click once TET has quit and
+ * started again, but does not get that grant on its own: a window it reveals while TET already runs
+ * only flashes the taskbar.
  */
 export function showDesktopNotification(title: string, body: string, target?: NotificationTarget): void {
   if (repeatedNotification(title, body, target)) {
@@ -165,16 +167,14 @@ export function showDesktopNotification(title: string, body: string, target?: No
   const notification = new Notification(
     PLATFORM.windowsNotifications ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body },
   );
-  if (!PLATFORM.windowsNotifications) {
-    holdNotification(notification);
-    notification.on("click", () => {
-      liveNotifications.delete(notification);
-      deps.revealWindow();
-      if (target) {
-        deps.showTab(target);
-      }
-    });
-  }
+  holdNotification(notification);
+  notification.on("click", () => {
+    liveNotifications.delete(notification);
+    deps.revealWindow();
+    if (target) {
+      deps.showTab(target);
+    }
+  });
   // The only trace of notifications being off in Windows' settings: "Settings prevent the
   // notification from being delivered".
   notification.on("failed", (_event, error) => {

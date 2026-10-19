@@ -5,9 +5,12 @@ import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { Notification } from "electron";
 import { LINUX, MAC, WINDOWS } from "../../src/shared/platform";
+import { projectRef } from "../../src/shared/types/project";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { shellSingleQuote } from "../../src/main/util/generated-file";
+import { showDesktopNotification, startNotifications } from "../../src/main/util/notifications";
 import { onDisk, openInside, relativeInside, removeInside } from "../../src/main/util/path-inside";
 import { sameSet } from "../../src/main/util/same-set";
 import { killProcessTree, resolveCommand } from "../../src/main/util/process";
@@ -339,5 +342,29 @@ describe("a module served to another process", () => {
     handle({ id: 7, method: "wait", args: ["search", undefined], signalAt: 1 });
     handle({ id: 7, abort: true });
     assert.deepEqual(await answered, { id: 7, value: "search aborted" });
+  });
+});
+
+describe("a desktop notification", () => {
+  it("brings the window and its tab forward when clicked, found while TET already runs", () => {
+    const revealed: boolean[] = [];
+    const shown: unknown[] = [];
+    startNotifications({
+      installed: false,
+      revealWindow: () => revealed.push(true),
+      attractAttention: () => undefined,
+      showTab: (target) => {
+        shown.push(target);
+        return true;
+      },
+      sessionIdOf: () => undefined,
+    });
+    const target = { ref: projectRef("p1"), tabId: "tab-1" };
+    showDesktopNotification("a desktop notification clicked", "", target);
+    // electron-stub.js's fake tracks every instance made, an event emitter as the real one is.
+    const made = (Notification as unknown as { instances: { emit(event: string): void }[] }).instances;
+    made[made.length - 1].emit("click");
+    assert.equal(revealed.length, 1);
+    assert.deepEqual(shown, [target]);
   });
 });

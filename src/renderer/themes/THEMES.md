@@ -70,6 +70,9 @@ maps id to variable.
      reads on all of them.
    - `tab.activeBorder` is the accent, `focusBorder`, not the theme's `tab.activeBorder`; a theme
      with a mark color of its own (`tab.activeBorderTop`) takes that instead.
+   - `input.placeholderForeground` is `foreground` at the filter icon's opacity (`99`, 0.6 alpha),
+     not the theme's own value: a filter field's icon is drawn the same way, and the two must read
+     as one color.
 5. **Deviate from the theme where its value doesn't fit alongside TET's other themes** —
    unreadable, invisible on its ground, drawing a line TET does not want, or reading differently
    from how the same thing looks in the themes already here — and comment it at the value, saying
