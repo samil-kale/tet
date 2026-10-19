@@ -146,7 +146,7 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
     hideCursorInOverviewRuler: true,
     renderLineHighlight: "line",
     scrollBeyondLastLine: false,
-    scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10 },
+    scrollbar: { verticalScrollbarSize: 11, horizontalScrollbarSize: 11 },
     quickSuggestions: false,
     wordBasedSuggestions: "off",
   };

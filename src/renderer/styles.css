@@ -1393,6 +1393,13 @@ textarea:focus,
   background: var(--tet-terminal-background);
 }
 
+/* A tab's own content (the editor, its Markdown preview) keeps the wider 10px scrollbar; the
+   rest of the app uses the narrower one above. */
+.pane-body ::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
 /* Where one xterm mounts. `-host`, never `terminal`: xterm's own element has class "terminal",
    so a rule on the plain word lands on both (xterm's classes: `xterm`, `xterm-viewport`,
    `xterm-screen`, `terminal`). Paints the terminal background from the variable
