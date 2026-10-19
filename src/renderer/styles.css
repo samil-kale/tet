@@ -452,34 +452,6 @@ textarea:focus,
   border-top: 1px solid var(--tet-panel-border);
 }
 
-/* The window's bottom edge (VS Code's status bar): the active repository or worktree, its branch
-   and its archived tab count. Its icons read smaller than the rest of the app's. */
-.status-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 24px;
-  flex: none;
-  padding: 0 8px;
-  background: var(--tet-statusBar-background);
-  color: var(--tet-statusBar-foreground);
-  border-top: 1px solid var(--tet-panel-border);
-  font-size: var(--tiny-font-size);
-  --icon-size: 12px;
-}
-
-.status-bar-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 100%;
-  padding: 0 6px;
-}
-
-.status-bar-item:hover {
-  background: var(--tet-toolbar-hoverBackground);
-}
-
 /* The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar),
    its own fixed width, its icons 1.2x the rest of the app's (`--icon-size`, `--action-size`). */
 .activity-bar {
@@ -496,17 +468,40 @@ textarea:focus,
   --action-size: 26px;
 }
 
-/* Settings sits at the strip's bottom, apart from the lane toggles above it. */
-.activity-bar-settings {
-  margin-top: auto;
-}
-
 .content {
   position: relative;
   display: flex;
   flex: 1;
   min-width: var(--content-min-width);
   background: var(--tet-editor-background);
+}
+
+/* The window's bottom edge (VS Code's status bar), after `.body`: the active repository or
+   worktree, its branch and its archived tab count. Its icons read smaller than the rest of the
+   app's. The Activity Bar's own background: both sit on the window's edge. */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  flex: none;
+  padding: 0 8px;
+  background: var(--tet-sideBar-background);
+  border-top: 1px solid var(--tet-panel-border);
+  font-size: var(--tiny-font-size);
+  --icon-size: 12px;
+}
+
+.status-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  padding: 0 6px;
+}
+
+.status-bar-item:hover {
+  background: var(--tet-toolbar-hoverBackground);
 }
 
 /* Project list --------------------------------------------------------------------------- */

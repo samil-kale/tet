@@ -12,7 +12,7 @@ const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => Rea
 };
 
 /** The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar);
- *  settings sits at the bottom. */
+ *  settings sits right after the lane toggles. */
 export const ActivityBar = memo(function ActivityBar({
   shownLane,
   onToggleLane,
@@ -37,7 +37,7 @@ export const ActivityBar = memo(function ActivityBar({
           </IconButton>
         );
       })}
-      <IconButton className="activity-bar-settings" title="Show settings" onClick={onOpenSettings}>
+      <IconButton title="Show settings" onClick={onOpenSettings}>
         <GearIcon />
       </IconButton>
     </div>

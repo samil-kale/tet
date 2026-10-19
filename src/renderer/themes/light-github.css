@@ -33,9 +33,6 @@
   --tet-panel-background: #f6f8fa;
   --tet-panel-border: #d0d7de;
 
-  --tet-statusBar-background: #ffffff;
-  --tet-statusBar-foreground: #656d76;
-
   --tet-tab-activeBackground: #ffffff;
   /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
   --tet-tab-activeBorder: #fd8c73;

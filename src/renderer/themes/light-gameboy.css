@@ -34,9 +34,6 @@
   --tet-panel-background: #c4bebb;
   --tet-panel-border: #494786;
 
-  --tet-statusBar-background: #c4bebb;
-  --tet-statusBar-foreground: #272929;
-
   --tet-tab-activeBackground: #494786;
   --tet-tab-activeForeground: #c4bebb;
   /* Not the theme's #9a2257: the tab's own background, so the active tab has no line under it. */

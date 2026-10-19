@@ -276,11 +276,11 @@ per-line decision is for an agent.
 ## UI rules
 
 - **Layout**: the Activity Bar at the window's left edge (`ActivityBar.tsx`), full height, settings
-  at its bottom; beside it the lanes: the projects (each with its worktrees, and the COMMANDS), git,
-  files and the archived tabs (taken off the strip, their sessions kept) — none of them a tab. Only
-  one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`); the Activity Bar's
-  toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning, no
-  reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
+  right after the lane toggles; beside it the lanes: the projects (each with its worktrees, and the
+  COMMANDS), git, files and the archived tabs (taken off the strip, their sessions kept) — none of
+  them a tab. Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`); the
+  Activity Bar's toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
+  no reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
   the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
   preview tab each (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
