@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.20.2 (2026-10-19)
+
+- **Fixes.** Archived sessions deleted outside TET are pruned and reopened safely; the clone
+  dialog's destination starts at the last directory used.
+
 ## 0.20.1 (2026-10-19)
 
 - **Status bar.** A status bar across the window's bottom shows the project, its branch and change
