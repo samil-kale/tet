@@ -1074,12 +1074,13 @@ textarea:focus,
    shares, `PANE_BOXES`) and a terminal a file is held over. Overlays all: a border would shrink the
    box its children measure, an inset box-shadow's top edge paints behind the opaque tab strip, and
    panes keep their sizes until the drop, or every pty under them refits mid-drag. Above the layers
-   beneath them, which xterm's decorations reach 7 of. */
+   beneath them, which xterm's decorations reach 7 of. The veil is VS Code's drop-target wash. */
 .pane.drag-over::after,
 .snap-preview,
 .terminal-host.drag-over::after {
   position: absolute;
-  border: 2px solid var(--tet-focusBorder);
+  border: 1px solid var(--tet-focusBorder);
+  background: color-mix(in srgb, var(--tet-focusBorder) 15%, transparent);
   z-index: 10;
   pointer-events: none;
 }
