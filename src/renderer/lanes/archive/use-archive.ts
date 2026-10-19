@@ -4,10 +4,16 @@ import type { TabDescriptor } from "../../../shared/types/terminals";
 import type { ResolvedRef } from "../../resolved-ref";
 
 /** The repository's or worktree's archived tabs, latest activity first, kept current as they
- *  change. Held per repository or worktree by the caller's `key`: until the answer comes, none. */
-export function useArchive({ ref }: ResolvedRef): TabDescriptor[] {
+ *  change. Held per repository or worktree by the caller's `key`: until the answer comes, none.
+ *  None open (`resolved` absent) stays empty. */
+export function useArchive(resolved: ResolvedRef | null): TabDescriptor[] {
+  const ref = resolved?.ref;
   const [tabs, setTabs] = useState<TabDescriptor[]>([]);
   useEffect(() => {
+    if (!ref) {
+      setTabs([]);
+      return;
+    }
     let cancelled = false;
     void window.tet.archive.list(ref).then((listed) => {
       if (!cancelled) {

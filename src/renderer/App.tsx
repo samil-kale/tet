@@ -1,13 +1,14 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
-import { refKeyOf, projectRefsOf } from "../shared/types/project";
+import { refKeyOf, projectRefsOf, worktreeName } from "../shared/types/project";
 import type { EnvRequest } from "../shared/types/environment";
 import type { Project, ProjectRef } from "../shared/types/project";
 import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { ArchiveList } from "./lanes/archive/ArchiveList";
+import { useArchive } from "./lanes/archive/use-archive";
 import { CommandList } from "./lanes/projects/CommandList";
 import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
@@ -29,6 +30,7 @@ import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { PlusIcon } from "./ui/icons";
 import { ActivityBar } from "./lanes/ActivityBar";
+import { StatusBar } from "./ui/StatusBar";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
@@ -241,6 +243,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
   const heads = useRefHeads(states);
+
+  /** The status bar's project, branch and archived tab count: the active repository's or worktree's. */
+  const activeProject = activeResolved ? projects.find((project) => project.id === activeResolved.ref.projectId) : undefined;
+  const activeBranchName = activeResolved
+    ? activeResolved.worktree
+      ? worktreeName(activeResolved.worktree)
+      : heads[activeResolved.refKey]?.head
+    : undefined;
+  const archivedTabs = useArchive(activeResolved);
 
   /** A shell tab, for a project row's "New shell tab" entry. */
   const openShellTab = useCallback(
@@ -458,6 +469,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           )}
         </main>
       </div>
+
+      <StatusBar project={activeProject} branch={activeBranchName} archivedCount={archivedTabs.length} onSelectLane={toggleLane} />
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 

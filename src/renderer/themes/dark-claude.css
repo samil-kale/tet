@@ -44,6 +44,9 @@
   /* Not the theme's #3e3e38: claude.ai's border, white at 0.1 alpha — as every border below. */
   --tet-panel-border: #ffffff1a;
 
+  --tet-statusBar-background: #2a2a2a;
+  --tet-statusBar-foreground: #c3c1ba;
+
   --tet-tab-activeBackground: #151515;
   --tet-tab-activeBorder: #d87757;
   --tet-tab-activeForeground: #c3c1ba;

@@ -32,6 +32,9 @@
   /* The theme's is #bd93f9, which TET would draw along every edge; the theme's other border. */
   --tet-panel-border: #191a21;
 
+  --tet-statusBar-background: #191a21;
+  --tet-statusBar-foreground: #f8f8f2;
+
   --tet-tab-activeBackground: #282a36;
   /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
   --tet-tab-activeBorder: #ff79c680;

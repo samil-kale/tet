@@ -34,6 +34,9 @@
   --tet-panel-background: #f7f8fa;
   --tet-panel-border: #ebecf0;
 
+  --tet-statusBar-background: #f7f8fa;
+  --tet-statusBar-foreground: #000000;
+
   --tet-tab-activeBackground: #f9fef9;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #aeb3c2;

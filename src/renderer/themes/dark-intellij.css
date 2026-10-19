@@ -37,6 +37,9 @@
      draws under tabs and between split editors. */
   --tet-panel-border: #393b40;
 
+  --tet-statusBar-background: #2b2d30;
+  --tet-statusBar-foreground: #9ea0a8;
+
   --tet-tab-activeBackground: #1e1f22;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #3574f0;
