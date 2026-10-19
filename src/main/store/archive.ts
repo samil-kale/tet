@@ -66,3 +66,18 @@ export function forgetArchived(dataRoot: string, ref: ProjectRef): void {
     }
   });
 }
+
+/** Drops ids not among `present` (TabSessionManager.bootstrap, once every agent with sessions
+ *  could be listed): a session deleted outside TET left only this file's note of it behind. Left
+ *  behind it is only unused, so a failure is logged. */
+export function pruneArchived(dataRoot: string, ref: ProjectRef, present: ReadonlySet<string>): void {
+  logFailure("prune the archived sessions of a repository or worktree", () => {
+    const stored = read(dataRoot, ref.projectId);
+    const key = keyOf(ref);
+    const ids = stored[key];
+    const kept = ids?.filter((id) => present.has(id)) ?? [];
+    if (kept.length !== (ids?.length ?? 0)) {
+      write(dataRoot, ref.projectId, { ...stored, [key]: kept });
+    }
+  });
+}

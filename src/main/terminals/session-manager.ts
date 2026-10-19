@@ -14,7 +14,7 @@ import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
-import { archivedIds, setArchived } from "../store/archive";
+import { archivedIds, pruneArchived, setArchived } from "../store/archive";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";
@@ -257,9 +257,27 @@ export class TabSessionManager {
     try {
       await Promise.all(AGENTS.map((agent) => this.runtimeFor(agent.id).ready));
       this.openFirstAgentTab();
+      this.pruneArchive();
     } finally {
       this.indicators.release();
     }
+  }
+
+  /** Drops archive.json ids no agent recognizes anymore, once every agent with sessions was
+   *  listed (bringUp): skipped where one wasn't (not installed, sbx not ready yet), so a session
+   *  merely unreachable right now is never mistaken for one that is gone. */
+  private pruneArchive(): void {
+    if (this.disposed) {
+      return;
+    }
+    const sessionAgents = AGENTS.filter((agent) => agent.sessions);
+    if (!sessionAgents.every((agent) => this.runtimes.get(agent.id)?.startable)) {
+      return;
+    }
+    const present = new Set(
+      [...this.tabs, ...this.archivedTabs].map((tab) => tab.sessionId).filter((id): id is string => id !== undefined),
+    );
+    pruneArchived(this.dataRoot, this.at.ref, present);
   }
 
   /**
@@ -1071,7 +1089,8 @@ export class TabSessionManager {
   }
 
   /** Brings an archived tab back at the end of the strip; its session resumes at its first resize,
-   *  as a restored tab's does. */
+   *  as a restored tab's does. Checked first, as pruneArchive could not from here: a session
+   *  deleted outside TET is dropped instead, answered rather than left to fail at that resize. */
   async reopenArchived(tabId: string): Promise<string | undefined> {
     const tab = this.archivedTabs.find((candidate) => candidate.tabId === tabId);
     if (!tab?.sessionId) {
@@ -1081,15 +1100,24 @@ export class TabSessionManager {
     if (!this.archivedTabs.includes(tab)) {
       return undefined;
     }
+    const { agent } = this.runtimeFor(tab.agentId);
+    const sessionId = tab.sessionId;
+    const gone = (await this.placeOf(tab).sessionActions()?.files(sessionId))?.length === 0;
     try {
-      setArchived(this.dataRoot, this.at.ref, tab.sessionId, false);
+      setArchived(this.dataRoot, this.at.ref, sessionId, false);
     } catch (error) {
-      return `Could not reopen the ${this.runtimeFor(tab.agentId).agent.displayName} session: ${errorMessage(error)}`;
+      if (!gone) {
+        return `Could not reopen the ${agent.displayName} session: ${errorMessage(error)}`;
+      }
+      logError(`could not forget the ${agent.displayName} session deleted outside TET`, error);
     }
     this.archivedTabs = this.archivedTabs.filter((candidate) => candidate !== tab);
+    this.postArchived();
+    if (gone) {
+      return `The ${agent.displayName} session was deleted outside TET`;
+    }
     this.tabs.push(tab);
     this.postTabs();
-    this.postArchived();
     return undefined;
   }
 

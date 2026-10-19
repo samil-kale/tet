@@ -10,7 +10,7 @@ import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
 import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir } from "../../src/main/store/data-root";
-import { archivedIds, forgetArchived, setArchived } from "../../src/main/store/archive";
+import { archivedIds, forgetArchived, pruneArchived, setArchived } from "../../src/main/store/archive";
 import {
   archiveFile,
   newWorktreeKey,
@@ -91,6 +91,20 @@ describe("the archived sessions", () => {
     setArchived(root, repository, "s1", false);
     assert.equal(fs.existsSync(archiveFile(root, "p")), false);
     forgetArchived(root, worktree);
+  });
+
+  it("drop a session no agent recognizes anymore, and keep the rest", () => {
+    const root = tempDir("tet-archive-");
+    setArchived(root, repository, "s1", true);
+    setArchived(root, repository, "s2", true);
+    setArchived(root, worktree, "s3", true);
+    pruneArchived(root, repository, new Set(["s1"]));
+    assert.deepEqual([...archivedIds(root, repository)], ["s1"], "s2 is gone");
+    assert.deepEqual([...archivedIds(root, worktree)], ["s3"], "another ref's untouched");
+    pruneArchived(root, repository, new Set());
+    assert.deepEqual([...archivedIds(root, repository)], []);
+    pruneArchived(root, worktree, new Set(["s3"]));
+    assert.deepEqual([...archivedIds(root, worktree)], ["s3"], "nothing dropped: no write, no error");
   });
 
   it("are read field by field from a hand-edited file", () => {
