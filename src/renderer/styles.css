@@ -901,7 +901,8 @@ textarea:focus,
    it, the git lane's LOCAL CHANGES and BRANCHES, and the ARCHIVE. It nests arbitrarily deep, so
    rows set `padding-left` inline. */
 .dense-tree .tree-header,
-.dense-tree .tree-row {
+.dense-tree .tree-row,
+.dense-tree .archive-row {
   height: var(--tree-row-height);
 }
 
