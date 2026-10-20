@@ -41,7 +41,7 @@ export const StatusBar = memo(function StatusBar({ project, branch, changesCount
         onClick={() => onSelectLane("archive")}
       >
         <ArchiveIcon className="tree-icon" />
-        archived: {archivedCount}
+        archive: {archivedCount}
       </button>
       {branch && (
         <button type="button" className="status-bar-item" title={`Git (${shortcutLabel("toggleGit")})`} onClick={() => onSelectLane("git")}>
