@@ -10,6 +10,7 @@ import {
   defaultLayout,
   inOrder,
   loadLayout,
+  loadPersisted,
   moveTab,
   normalizeLayout,
   placeCommandTab,
@@ -22,7 +23,7 @@ import {
 } from "../../src/renderer/tabs/pane-layout";
 import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { nextEditorTabId, type EditorTab } from "../../src/renderer/editor/editor-tab";
+import { nextEditorTabId, type EditorEntry, type EditorTab } from "../../src/renderer/editor/editor-tab";
 import { fakeLocalStorage, keepGlobals } from "../helpers";
 
 /** The split view's rules — pure functions, needing no window. */
@@ -32,6 +33,9 @@ function tab(tabId: string, updatedAt?: number, sessionId?: string): TabDescript
 }
 
 const NONE: TabDescriptor[] = [];
+
+/** No editor tab here to describe. */
+const NO_EDITOR = (): undefined => undefined;
 
 /** A layout of `preset` as the first push of `tabs` settles it. */
 function layoutOf(
@@ -145,7 +149,7 @@ describe("the most recent tab", () => {
   it("is written under the persisted ids and read back", () => {
     const sessions = [tab("t1", 0, "s1"), tab("t2", 0, "s2"), tab("t3")];
     const layout = { ...layoutOf("single", "a", {}, sessions), recent: ["t3", "t2", "t1"] };
-    assert.deepEqual((JSON.parse(serializeLayout(layout, sessions)) as { recent: unknown }).recent, ["s2", "s1"]);
+    assert.deepEqual((JSON.parse(serializeLayout(layout, sessions, NO_EDITOR)) as { recent: unknown }).recent, ["s2", "s1"]);
   });
 });
 
@@ -530,13 +534,15 @@ describe("what is persisted", () => {
       recent: ["new-3", "new-2", "new-1"],
       commandPane: {},
     };
-    const serialized = serializeLayout(layout, [tab("new-1", 0, "s1"), tab("new-2", 0, "s2"), tab("new-3")]);
+    const serialized = serializeLayout(layout, [tab("new-1", 0, "s1"), tab("new-2", 0, "s2"), tab("new-3")], NO_EDITOR);
     assert.deepEqual(JSON.parse(serialized), {
       preset: "cols2",
       focusedPane: "b",
-      tabPane: { s1: "a", s2: "b" },
+      tabs: [
+        { id: "s2", pane: "b", kind: "session" },
+        { id: "s1", pane: "a", kind: "session" },
+      ],
       activeTab: { a: "s1" },
-      order: ["s2", "s1"],
       recent: ["s2", "s1"],
       commandPane: {},
     });
@@ -555,7 +561,7 @@ describe("what is persisted", () => {
   it("keeps a pane on its restored active tab while the sessions are listed, and lets a stale one go", () => {
     storage.set(
       "tet.layout.terminals.a.layout",
-      JSON.stringify({ preset: "single", focusedPane: "a", tabPane: {}, activeTab: { a: "s1" }, commandPane: {} }),
+      JSON.stringify({ preset: "single", focusedPane: "a", tabs: [], activeTab: { a: "s1" }, commandPane: {} }),
     );
     const restored = loadLayout("a");
     const first = [tab("s2", 20, "s2")];
@@ -569,7 +575,7 @@ describe("what is persisted", () => {
   it("drops a restored active tab of a pane the preset does not have, or not a session id", () => {
     storage.set(
       "tet.layout.terminals.b.layout",
-      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, activeTab: { a: 3, b: "s1", c: "s2", z: "s3" } }),
+      JSON.stringify({ preset: "cols2", focusedPane: "a", tabs: [], activeTab: { a: 3, b: "s1", c: "s2", z: "s3" } }),
     );
     assert.deepEqual(loadLayout("b").activeTab, { b: "s1" });
   });
@@ -585,7 +591,7 @@ describe("what is persisted", () => {
       commandPane: { "npm test": { preset: "cols2", pane: "b" }, "npm run build": { preset: "grid2x2", pane: "d" } },
     };
     const running: TabDescriptor = { ...tab("new-1"), command: "npm test" };
-    const serialized = serializeLayout(layout, [running]);
+    const serialized = serializeLayout(layout, [running], NO_EDITOR);
     const { commandPane } = JSON.parse(serialized) as { commandPane: unknown };
     assert.deepEqual(commandPane, {
       "npm test": { preset: "split-right", pane: "c" },
@@ -595,7 +601,7 @@ describe("what is persisted", () => {
     assert.deepEqual(loadLayout("r").commandPane, commandPane);
     storage.set(
       "tet.layout.terminals.r.layout",
-      JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: {}, commandPane: { x: { preset: "cols2", pane: "d" }, y: 3 } }),
+      JSON.stringify({ preset: "cols2", focusedPane: "a", tabs: [], commandPane: { x: { preset: "cols2", pane: "d" }, y: 3 } }),
     );
     assert.deepEqual(loadLayout("r").commandPane, {}, "a pane the preset does not have, or no place at all, is dropped");
   });
@@ -604,12 +610,43 @@ describe("what is persisted", () => {
     assert.deepEqual(loadLayout("none"), defaultLayout());
     storage.set("tet.layout.terminals.q.layout", "{ nope");
     assert.deepEqual(loadLayout("q"), defaultLayout());
-    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "cols9", focusedPane: "a", tabPane: {} }));
+    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "cols9", focusedPane: "a", tabs: [] }));
     assert.deepEqual(loadLayout("q"), defaultLayout());
-    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s: "z", t: "b" } }));
-    assert.deepEqual(loadLayout("q").tabPane, { t: "b" }, "an unknown pane is dropped, the rest kept");
-    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "single", focusedPane: "c", tabPane: {} }));
+    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { t: "b" } }));
+    assert.deepEqual(loadLayout("q"), defaultLayout(), "an earlier record, without its tabs, is none");
+    storage.set(
+      "tet.layout.terminals.q.layout",
+      JSON.stringify({
+        preset: "cols2",
+        focusedPane: "a",
+        tabs: [
+          { id: "s", pane: "z", kind: "session" },
+          { id: "t", pane: "b", kind: "session" },
+          { id: "u", pane: "b", kind: "saved command" },
+          { id: "e", pane: "a", kind: "editor" },
+        ],
+      }),
+    );
+    assert.deepEqual(loadLayout("q").tabPane, { t: "b" }, "an unknown pane or kind, or an editor without its file, is dropped");
+    storage.set("tet.layout.terminals.q.layout", JSON.stringify({ preset: "single", focusedPane: "c", tabs: [] }));
     assert.equal(loadLayout("q").focusedPane, "a", "a focused pane the preset does not have");
+  });
+
+  it("brings back an editor tab's file and editor, and a plain shell, beside the sessions", () => {
+    const entry: EditorEntry = { path: "a.md", preview: true, diff: false, markdownPreview: "side", viewState: { cursor: 3 } };
+    const shell: TabDescriptor = { ...tab("sh"), agentId: "shell" };
+    const editorTab: EditorTab = { tabId: "tet:editor:x-1", ref: { projectId: "p" }, path: "a.md" };
+    const tabs = [tab("t1", 0, "s1"), editorTab, shell];
+    const layout = layoutOf("cols2", "a", { t1: "a", [editorTab.tabId]: "b", sh: "b" }, tabs);
+    storage.set(
+      "tet.layout.terminals.e.layout",
+      serializeLayout(layout, tabs, () => entry),
+    );
+    assert.deepEqual(loadPersisted("e").tabs, [
+      { id: "s1", pane: "a", kind: "session" },
+      { id: editorTab.tabId, pane: "b", kind: "editor", editor: { ...entry, commit: undefined } },
+      { id: "sh", pane: "b", kind: "shell" },
+    ]);
   });
 });
 
@@ -630,11 +667,16 @@ describe("an editor tab", () => {
     const command: TabDescriptor = { ...shell, tabId: "cmd", command: "npm test" };
     const tabs = [tab("t1", 0, "s1"), editor, shell, command];
     const layout = cols2({ t1: "a", [EDITOR_TAB_ID]: "b", sh: "b", cmd: "b" }, tabs);
-    assert.deepEqual((JSON.parse(serializeLayout(layout, tabs)) as { tabPane: unknown }).tabPane, {
-      s1: "a",
-      [EDITOR_TAB_ID]: "b",
-      sh: "b",
-    });
+    const entry: EditorEntry = { path: editor.path, preview: false, diff: false, markdownPreview: "off" };
+    const { tabs: written } = JSON.parse(serializeLayout(layout, tabs, () => entry)) as { tabs: { id: string; kind: string }[] };
+    assert.deepEqual(
+      written.map(({ id, kind }) => [id, kind]),
+      [
+        ["s1", "session"],
+        [EDITOR_TAB_ID, "editor"],
+        ["sh", "shell"],
+      ],
+    );
   });
 
   it("holds its pane: closing it collapses the pane, closing a neighbour beside it does not", () => {

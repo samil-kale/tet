@@ -205,11 +205,12 @@ export const TabArea = memo(function TabArea({
   }, [setDragTarget]);
 
   /**
-   * `dragover` never sees the tab id, so the drop joins it with the zone. On a strip the tab goes
-   * where it fell (`dropOnStrip`); anywhere else a move to another pane places it as a new tab
-   * there (`moveTab`). A tab that changes its place or pane is kept (`keepMoved`).
+   * The one way a tab is moved — dropped, or its menu's "Move to". `dragover` never sees the tab
+   * id, so a drop joins it with the zone. On a strip the tab goes where it fell (`dropOnStrip`);
+   * anywhere else a move to another pane places it as a new tab there (`moveTab`). A tab that
+   * changes its place or pane is kept (`keepMoved`); outside a drag it always changes its pane.
    */
-  const onDropTab = useCallback(
+  const onMoveTab = useCallback(
     (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => {
       const target = dragTargetRef.current;
       const moved = strip !== undefined || target?.transition != null || dragSource.current !== paneId;
@@ -292,7 +293,7 @@ export const TabArea = memo(function TabArea({
       dragOver={dragOverPane === paneId}
       onDragStart={onDragStart}
       onDragOverChange={onDragOverChange}
-      onDropTab={onDropTab}
+      onMoveTab={onMoveTab}
       onDragEnd={onDragEnd}
     />
   );

@@ -88,21 +88,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     return next;
   }, [tabs, editorTabs]);
   /** The editor tabs and plain shells a restart brings back (use-tab-restore.ts). */
-  const { restored, forgetRestore } = useTabRestore(resolvedRefs, states, tabs, editorTabs, setEditorTabs);
-  /** A layout settles once its sessions are listed and its editor tabs and shells are back. */
-  const layoutStarting = useMemo(() => {
-    const next: Record<string, boolean> = {};
-    for (const [refKey, isStarting] of Object.entries(starting)) {
-      next[refKey] = isStarting || !restored.has(refKey);
-    }
-    return next;
-  }, [starting, restored]);
+  const forgetRestore = useTabRestore(resolvedRefs, states, tabs, editorTabs, setEditorTabs);
   /**
    * Split state lives here, not in `TabArea`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
    * through `onActivateTab`. See "Split view" in AGENTS.md.
    */
-  const { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab, forgetLayout } = useProjectLayouts(stripTabs, layoutStarting);
+  const { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab, forgetLayout } = useProjectLayouts(stripTabs, starting);
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */

@@ -10,8 +10,8 @@ import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-hig
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
-import type { CommitSide, EditorReveal, OpenEditor } from "./editor-tab";
-import { openFile } from "./editor-tab";
+import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
+import { MARKDOWN_PREVIEW_MODES, openFile } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
 
 /**
@@ -35,11 +35,6 @@ const SCROLL_ECHO_MS = 150;
 /** A render while typing shows only images already loaded; a new source, likely half typed
  *  (`https://exa`), is asked for once typing has stopped this long. */
 const MARKDOWN_PREVIEW_IMAGE_DELAY_MS = 1000;
-
-/** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
-export type MarkdownPreviewMode = "off" | "side" | "only";
-
-export const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "side", "only"];
 
 /**
  * How a Markdown file opens: the last answer the user gave, for every tab and the next start. A
@@ -156,7 +151,7 @@ interface EditorView {
   /** A match to select, kept until there is a model to select it in (`applyReveal`). */
   pendingReveal: EditorReveal | undefined;
   /** A restored tab's cursor, scroll and folds, kept until there is a model to put them on
-   *  (`applyViewState`), and handed back meanwhile (`editorViewState`). */
+   *  (`applyViewState`), and handed back meanwhile (`editorEntry`). */
   pendingViewState: MonacoEditor.ICodeEditorViewState | undefined;
   snapshot: EditorSnapshot;
 }
@@ -275,11 +270,16 @@ function applyViewState(view: EditorView): void {
   editor.restoreViewState(state);
 }
 
-/** The tab's cursor, scroll and folds, for a restart to bring back (`use-tab-restore.ts`): the
- *  editor's own, or what it was restored with and has yet to show. */
-export function editorViewState(tabId: string): unknown {
+/** What a restart brings back of the tab (`EditorEntry`), off its snapshot; its cursor, scroll and
+ *  folds the editor's own, or what it was restored with and has yet to show. */
+export function editorEntry(tabId: string): EditorEntry | undefined {
   const view = views.get(tabId);
-  return view?.pendingViewState ?? (view?.models && activeEditor(view)?.saveViewState()) ?? undefined;
+  if (!view) {
+    return undefined;
+  }
+  const { path, commit, preview, diff, markdownPreview } = view.snapshot;
+  const viewState = view.pendingViewState ?? (view.models && activeEditor(view)?.saveViewState()) ?? undefined;
+  return { path, commit, preview, diff, markdownPreview, viewState };
 }
 
 /** A match in a tab already open (`App.openEditor`), which needs no new read. */
@@ -506,7 +506,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   view.pendingVersion = undefined;
   view.onDisk = undefined;
   view.pendingReveal = how.reveal;
-  // monaco's own shape, as `editorViewState` gave it.
+  // monaco's own shape, as `editorEntry` gave it.
   view.pendingViewState = how.restored?.viewState as MonacoEditor.ICodeEditorViewState | undefined;
   publish(view, {
     path,

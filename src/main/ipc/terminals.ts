@@ -22,12 +22,9 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return manager.createTab(agentId);
   });
 
-  handle("tabs:restore-shell", (_event, ref: ProjectRef, tabId: string): TabDescriptor => {
-    const manager = tabManagers.get(ref);
-    if (!manager) {
-      throw new Error(notOpenMessage(store, ref));
-    }
-    return manager.restoreShell(tabId);
+  // The window's restore, once its own tabs are back: see `TabSessionManager.restore`.
+  on("tabs:restore", (_event, ref: ProjectRef, shellIds: string[]) => {
+    tabManagers.get(ref)?.restore(shellIds);
   });
 
   // The tab menu's Close: the same as `tet-ctl tabs-close`, no archive.

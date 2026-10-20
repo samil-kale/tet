@@ -145,7 +145,7 @@ const api: TETApi = {
   tabs: {
     list: (ref) => invoke("tabs:list", ref),
     create: (ref, agentId) => invoke("tabs:create", ref, agentId),
-    restoreShell: (ref, tabId) => invoke("tabs:restore-shell", ref, tabId),
+    restore: (ref, shellIds) => send("tabs:restore", ref, shellIds),
     close: (ref, tabIds) => invoke("tabs:close", ref, tabIds),
     archive: (ref, tabIds) => invoke("tabs:archive", ref, tabIds),
     rename: (ref, tabId, title) => invoke("tabs:rename", ref, tabId, title),

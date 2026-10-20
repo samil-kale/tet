@@ -144,13 +144,32 @@ describe("the window closing a tab", () => {
   });
 });
 
-describe("a shell the window brings back", () => {
-  it("comes back under its id, or a new one where a tab has it", async () => {
+describe("the window's restore", () => {
+  it("brings the shells back under their ids, once, a taken id under a new one", async () => {
     await withEmptyPath({}, async (manager) => {
-      const kept = manager.restoreShell("new-earlier-1");
-      assert.deepEqual([kept.tabId, kept.agentId], ["new-earlier-1", "shell"]);
-      const taken = manager.restoreShell("new-earlier-1");
-      assert.notEqual(taken.tabId, "new-earlier-1");
+      const { tabId: taken } = manager.createTab("shell");
+      manager.restore(["new-earlier-1", taken]);
+      const shells = manager.snapshot().map((tab) => [tab.tabId === taken ? "taken" : tab.tabId, tab.agentId]);
+      assert.equal(shells.length, 3);
+      assert.deepEqual(shells.slice(0, 2), [
+        ["taken", "shell"],
+        ["new-earlier-1", "shell"],
+      ]);
+      assert.notEqual(manager.snapshot()[2].tabId, taken);
+      manager.restore(["new-earlier-2"]);
+      assert.equal(manager.snapshot().length, 3, "a reloaded window brings nothing back twice");
+    });
+  });
+
+  it("is what the start waits for", async () => {
+    await withEmptyPath({}, async (manager) => {
+      const booted = manager.bootstrap();
+      const early = await Promise.race([booted.then(() => "done"), new Promise((resolve) => setTimeout(() => resolve("waiting"), 100))]);
+      assert.equal(early, "waiting");
+      assert.equal(manager.isStarting(), true);
+      manager.restore([]);
+      await booted;
+      assert.equal(manager.isStarting(), false);
     });
   });
 

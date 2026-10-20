@@ -1,5 +1,4 @@
 import type { ProjectRef } from "../../shared/types/project";
-import type { MarkdownPreviewMode } from "./editor-views";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview
@@ -56,17 +55,27 @@ export interface OpenEditor {
   markdownPreview?: boolean;
   /** Brought back by a restart (`use-tab-restore.ts`): its Markdown preview and the editor's view
    *  as they were left, the default left alone; a file gone meanwhile shows as such, unannounced. */
-  restored?: RestoredEditor;
+  restored?: EditorEntry;
   /** A search result's match, selected once the file's text is in the editor. */
   reveal?: EditorReveal;
   /** The file at a commit, read-only, instead of the working tree's. */
   commit?: CommitSide;
 }
 
-/** What a restart brings back of an editor beyond its file (`OpenEditor.restored`). */
-export interface RestoredEditor {
+/** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
+export type MarkdownPreviewMode = "off" | "side" | "only";
+
+export const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "side", "only"];
+
+/** What a restart brings back of an editor tab, its file and the editor as it was left — kept in
+ *  the layout (`serializeLayout`), read from the editor (`editorEntry`). */
+export interface EditorEntry {
+  path: string;
+  commit?: CommitSide;
+  preview: boolean;
+  diff: boolean;
   markdownPreview: MarkdownPreviewMode;
-  /** Cursor, scroll and folds, as monaco's `saveViewState` gave them (`editorViewState`). */
+  /** Cursor, scroll and folds, in monaco's own shape (`saveViewState`). */
   viewState?: unknown;
 }
 

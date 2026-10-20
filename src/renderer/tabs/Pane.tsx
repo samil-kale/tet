@@ -13,7 +13,7 @@ import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
-import { keepMoved, kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
+import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
@@ -72,9 +72,9 @@ interface PaneProps {
   dragOver: boolean;
   onDragStart: (paneId: PaneId) => void;
   onDragOverChange: (paneId: PaneId, position: DragPosition | null) => void;
-  /** A tab dropped on this pane: on its strip with the tab it goes before (`before`, undefined
-   *  for the end), anywhere else without (`TabArea` places it). */
-  onDropTab: (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => void;
+  /** A tab moved to a pane — dropped, or by "Move to": on the strip with the tab it goes before
+   *  (`before`, undefined for the end), anywhere else without (`TabArea` places it). */
+  onMoveTab: (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => void;
   onDragEnd: () => void;
 }
 
@@ -123,7 +123,7 @@ export const Pane = memo(function Pane({
   dragOver,
   onDragStart,
   onDragOverChange,
-  onDropTab,
+  onMoveTab,
   onDragEnd,
 }: PaneProps) {
   const plusMenu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom + 6 }));
@@ -140,8 +140,8 @@ export const Pane = memo(function Pane({
     count: tabs.length,
     payloadOf: (index) => tabs[index].tabId,
     indexOf: (tabId) => tabs.findIndex((tab) => tab.tabId === tabId),
-    onMove: (from, to) => onDropTab(paneId, tabs[from].tabId, to === from || to === from + 1 ? undefined : { before: tabs[to]?.tabId }),
-    onTake: (tabId, to) => onDropTab(paneId, tabId, { before: tabs[to]?.tabId }),
+    onMove: (from, to) => onMoveTab(paneId, tabs[from].tabId, to === from || to === from + 1 ? undefined : { before: tabs[to]?.tabId }),
+    onTake: (tabId, to) => onMoveTab(paneId, tabId, { before: tabs[to]?.tabId }),
     halves: true,
   });
 
@@ -323,10 +323,7 @@ export const Pane = memo(function Pane({
             SEPARATOR,
             ...siblingPanes.map((target): ContextMenuEntry => ({
               label: `Move to ${PANE_LABELS[preset][target]}`,
-              run: () => {
-                keepMoved(tabId);
-                onActivate(tabId, target);
-              },
+              run: () => onMoveTab(target, tabId),
             })),
           ]
         : [];
@@ -441,7 +438,7 @@ export const Pane = memo(function Pane({
         event.preventDefault();
         const dragged = event.dataTransfer.getData(TAB_DRAG_TYPE);
         if (dragged) {
-          onDropTab(paneId, dragged);
+          onMoveTab(paneId, dragged);
         } else {
           onDragOverChange(paneId, null);
         }

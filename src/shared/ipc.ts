@@ -103,7 +103,6 @@ export interface InvokeChannels {
   "commands:run": TETApi["commands"]["run"];
   "tabs:list": TETApi["tabs"]["list"];
   "tabs:create": TETApi["tabs"]["create"];
-  "tabs:restore-shell": TETApi["tabs"]["restoreShell"];
   "tabs:close": TETApi["tabs"]["close"];
   "tabs:archive": TETApi["tabs"]["archive"];
   "tabs:rename": TETApi["tabs"]["rename"];
@@ -140,6 +139,7 @@ export interface SendChannels {
   "editor:report": TETApi["repository"]["reportEditor"];
   "editor:active": TETApi["repository"]["reportActiveEditor"];
   "tabs:seen": TETApi["tabs"]["seen"];
+  "tabs:restore": TETApi["tabs"]["restore"];
   "tabs:on-screen": TETApi["tabs"]["reportOnScreen"];
   "tabs:input": TETApi["tabs"]["input"];
   "tabs:resize": TETApi["tabs"]["resize"];

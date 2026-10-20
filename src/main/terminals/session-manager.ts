@@ -54,7 +54,7 @@ const MAX_RECORDED_EVENTS = 200;
 const INDICATOR_LINGER_MS = 700;
 // Across managers, so a repository or worktree reopened in this run never reuses a closed tab's
 // id — and token; after a stamp of the run, so a shell the window brings back under its id
-// (`restoreShell`) never meets a tab of this one.
+// (`restore`) never meets a tab of this one.
 const RUN_STAMP = Date.now().toString(36);
 let newTabCounter = 0;
 
@@ -166,6 +166,13 @@ export class TabSessionManager {
   );
   /** The tabs on screen, as last reported (`setOnScreen`). */
   private onScreen: ReadonlySet<string> = new Set();
+  /** Whether the window has brought back its tabs (`restore`), and what the start phase waits on
+   *  for it (`bootstrap`); settled by `dispose` too, so a closed one stops waiting. */
+  private restoredByWindow = false;
+  private resolveWindowRestored: () => void = () => undefined;
+  private readonly windowRestored = new Promise<void>((resolve) => {
+    this.resolveWindowRestored = resolve;
+  });
 
   constructor(
     /** The repository or worktree its tabs run in. Its sandboxes take the project's SBX settings
@@ -253,16 +260,38 @@ export class TabSessionManager {
     return this.indicators.any();
   }
 
-  /** Restores one tab per persisted session of every installed agent. */
+  /**
+   * Restores one tab per persisted session of every installed agent; the start phase lasts until
+   * the window has brought back its own tabs too (`restore`), and only then is a first agent tab
+   * opened where there is none.
+   */
   async bootstrap(): Promise<void> {
     this.indicators.acquire();
     try {
       await Promise.all(AGENTS.map((agent) => this.runtimeFor(agent.id).ready));
+      await this.windowRestored;
       this.openFirstAgentTab();
       this.pruneArchive();
     } finally {
       this.indicators.release();
     }
+  }
+
+  /**
+   * The window's restore (`use-tab-restore.ts`), once per repository or worktree: the plain shells
+   * it had open when it last closed come back under their ids where free, so its saved layout finds
+   * them, and the start phase may end (`bootstrap`). A reloaded window's second call brings nothing
+   * back twice. A shell starts as any tab, at its first fit.
+   */
+  restore(shellIds: string[]): void {
+    if (this.restoredByWindow) {
+      return;
+    }
+    this.restoredByWindow = true;
+    for (const tabId of shellIds) {
+      this.addTab("shell", this.tabOf(tabId) ? {} : { tabId });
+    }
+    this.resolveWindowRestored();
   }
 
   /** Drops archive.json ids no agent recognizes anymore, once every agent with sessions was
@@ -288,7 +317,8 @@ export class TabSessionManager {
    * nothing.
    */
   private openFirstAgentTab(): void {
-    if (this.disposed || this.tabs.length > 0) {
+    // Before the window's restore, tabs may still come back.
+    if (this.disposed || !this.restoredByWindow || this.tabs.length > 0) {
       return;
     }
     const agent = AGENTS.find((candidate) => candidate.sessions && this.canStart(this.runtimeFor(candidate.id)));
@@ -493,13 +523,6 @@ export class TabSessionManager {
   /** `prompt` only for an agent with a `terminal`; the caller checks. */
   createTab(agentId: AgentId, sandboxOnly = false, prompt?: string): TabDescriptor {
     return this.addTab(agentId, { ...(sandboxOnly && { sandboxOnly }), ...(prompt !== undefined && { initialPrompt: prompt }) });
-  }
-
-  /** A plain shell the window had open when it last closed, back under its id so the saved layout
-   *  finds it (`use-tab-restore.ts`); under a new one where the id is taken. Started as any tab, at
-   *  its first fit. */
-  restoreShell(tabId: string): TabDescriptor {
-    return this.addTab("shell", this.tabOf(tabId) ? {} : { tabId });
   }
 
   /**
@@ -1383,6 +1406,7 @@ export class TabSessionManager {
   async dispose(): Promise<void> {
     // See ReconcileTarget.disposed.
     this.disposed = true;
+    this.resolveWindowRestored();
     // A start still underway spawns only if its tab is still known.
     this.tabs = [];
     this.archivedTabs = [];

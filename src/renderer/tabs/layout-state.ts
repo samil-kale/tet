@@ -10,6 +10,7 @@ import {
 } from "./pane-layout";
 import type { LayoutTab, PaneId, ProjectLayout } from "./pane-layout";
 import type { PaneTab } from "./pane-tab";
+import type { EditorEntry } from "../editor/editor-tab";
 
 /** Shared instance, so a pane's props stay identical for a repository or worktree that has none. */
 export const NO_TABS: PaneTab[] = [];
@@ -114,11 +115,17 @@ export function newLayoutPersistence(): LayoutPersistence {
   return { saved: {}, serialized: {}, settled: new Set() };
 }
 
-/** Writes every settled layout whose serialization changed since it was last written. */
+/**
+ * Writes every settled layout whose serialization changed since it was last written, an editor
+ * tab's file and editor read through `editorEntry`. Those change beside the layout, so only
+ * `everything` — the window closing — serializes a layout and tab list met before again.
+ */
 export function persistLayouts(
   layouts: Record<string, ProjectLayout>,
   tabs: Record<string, LayoutTab[]>,
   persistence: LayoutPersistence,
+  editorEntry: (tabId: string) => EditorEntry | undefined,
+  everything = false,
 ): void {
   for (const [refKey, layout] of Object.entries(layouts)) {
     if (!persistence.settled.has(refKey)) {
@@ -126,11 +133,11 @@ export function persistLayouts(
     }
     const list = tabs[refKey] ?? NO_TABS;
     const last = persistence.serialized[refKey];
-    if (last?.layout === layout && last.tabs === list) {
+    if (!everything && last?.layout === layout && last.tabs === list) {
       continue;
     }
     persistence.serialized[refKey] = { layout, tabs: list };
-    const serialized = serializeLayout(layout, list);
+    const serialized = serializeLayout(layout, list, editorEntry);
     if (persistence.saved[refKey] !== serialized) {
       persistence.saved[refKey] = serialized;
       saveLayout(refKey, serialized);

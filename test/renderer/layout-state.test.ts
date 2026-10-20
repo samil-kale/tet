@@ -34,9 +34,14 @@ function twoColumns(): ProjectLayout {
 
 let storage: Map<string, string>;
 
-/** What was written for project "p". */
-const written = (): { preset: string; tabPane: Record<string, string> } =>
-  JSON.parse(storage.get(KEY)!) as { preset: string; tabPane: Record<string, string> };
+/** What was written for project "p": its preset, and each tab's pane by its persisted id. */
+function written(): { preset: string; panes: Record<string, string> } {
+  const { preset, tabs } = JSON.parse(storage.get(KEY)!) as { preset: string; tabs: { id: string; pane: string }[] };
+  return { preset, panes: Object.fromEntries(tabs.map(({ id, pane }) => [id, pane])) };
+}
+
+/** No editor tab here to describe. */
+const NO_EDITOR = (): undefined => undefined;
 
 beforeEach(() => {
   storage = fakeLocalStorage();
@@ -48,13 +53,13 @@ const KEY = layoutStorageKey("p", "layout");
 
 describe("a layout at its first sight", () => {
   it("is what the last run saved, not a default written over it", () => {
-    storage.set(KEY, JSON.stringify({ preset: "cols2", focusedPane: "b", tabPane: {}, activeTab: {}, commandPane: {} }));
+    storage.set(KEY, JSON.stringify({ preset: "cols2", focusedPane: "b", tabs: [], activeTab: {}, commandPane: {} }));
     assert.equal(layoutOf({}, "p").preset, "cols2");
     assert.equal(storage.get(KEY) !== undefined, true, "and what was saved is still there");
   });
 
   it("is the one already held, whatever is stored", () => {
-    storage.set(KEY, JSON.stringify({ preset: "cols2", focusedPane: "b", tabPane: {}, activeTab: {}, commandPane: {} }));
+    storage.set(KEY, JSON.stringify({ preset: "cols2", focusedPane: "b", tabs: [], activeTab: {}, commandPane: {} }));
     const held = defaultLayout();
     assert.equal(layoutOf({ p: held }, "p"), held);
   });
@@ -98,7 +103,19 @@ describe("reconciling every layout with its tabs", () => {
   });
 
   it("loads a project's layout at its first tabs, reconciled against them", () => {
-    storage.set(KEY, JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s1: "a", s2: "b" }, activeTab: {}, commandPane: {} }));
+    storage.set(
+      KEY,
+      JSON.stringify({
+        preset: "cols2",
+        focusedPane: "a",
+        tabs: [
+          { id: "s1", pane: "a", kind: "session" },
+          { id: "s2", pane: "b", kind: "session" },
+        ],
+        activeTab: {},
+        commandPane: {},
+      }),
+    );
     const result = reconcileLayouts({}, { p: [tab("s1", "s1"), tab("s2", "s2")] }, {}, new WeakMap(), new Set());
     assert.equal(result.p.preset, "cols2");
     assert.deepEqual(result.p.tabPane, { s1: "a", s2: "b" });
@@ -171,22 +188,22 @@ describe("writing the layouts", () => {
 
   it("writes nothing for a project whose bootstrap has not finished", () => {
     const persistence = newLayoutPersistence();
-    persistLayouts({ p: twoColumns() }, tabs, persistence);
+    persistLayouts({ p: twoColumns() }, tabs, persistence, NO_EDITOR);
     assert.equal(storage.has(KEY), false);
   });
 
   it("writes a settled project's layout under its sessions", () => {
     const persistence = newLayoutPersistence();
     persistence.settled.add("p");
-    persistLayouts({ p: twoColumns() }, tabs, persistence);
-    assert.deepEqual(written().tabPane, { s1: "a", s2: "b" });
+    persistLayouts({ p: twoColumns() }, tabs, persistence, NO_EDITOR);
+    assert.deepEqual(written().panes, { s1: "a", s2: "b" });
     assert.equal(written().preset, "cols2");
   });
 
   it("writes only a settled project's, among several", () => {
     const persistence = newLayoutPersistence();
     persistence.settled.add("p");
-    persistLayouts({ p: twoColumns(), q: twoColumns() }, { ...tabs, q: tabs.p }, persistence);
+    persistLayouts({ p: twoColumns(), q: twoColumns() }, { ...tabs, q: tabs.p }, persistence, NO_EDITOR);
     assert.equal(storage.has(KEY), true);
     assert.equal(storage.has(layoutStorageKey("q", "layout")), false);
   });
@@ -195,9 +212,9 @@ describe("writing the layouts", () => {
     const persistence = newLayoutPersistence();
     persistence.settled.add("p");
     const layouts = { p: twoColumns() };
-    persistLayouts(layouts, tabs, persistence);
+    persistLayouts(layouts, tabs, persistence, NO_EDITOR);
     storage.delete(KEY);
-    persistLayouts(layouts, tabs, persistence);
+    persistLayouts(layouts, tabs, persistence, NO_EDITOR);
     assert.equal(storage.has(KEY), false, "the same pair serializes the same");
   });
 
@@ -205,9 +222,9 @@ describe("writing the layouts", () => {
     const persistence = newLayoutPersistence();
     persistence.settled.add("p");
     const layouts = { p: twoColumns() };
-    persistLayouts(layouts, tabs, persistence);
+    persistLayouts(layouts, tabs, persistence, NO_EDITOR);
     storage.delete(KEY);
-    persistLayouts(layouts, { p: tabs.p.map((entry) => ({ ...entry })) }, persistence);
+    persistLayouts(layouts, { p: tabs.p.map((entry) => ({ ...entry })) }, persistence, NO_EDITOR);
     assert.equal(storage.has(KEY), false);
   });
 
@@ -215,22 +232,22 @@ describe("writing the layouts", () => {
     const persistence = newLayoutPersistence();
     persistence.settled.add("p");
     const layouts = { p: twoColumns() };
-    persistLayouts(layouts, { p: [tab("x", "s1"), tab("y")] }, persistence);
-    assert.deepEqual(written().tabPane, { s1: "a" });
-    persistLayouts(layouts, { p: [tab("x", "s1"), tab("y", "s2")] }, persistence);
-    assert.deepEqual(written().tabPane, { s1: "a", s2: "b" });
+    persistLayouts(layouts, { p: [tab("x", "s1"), tab("y")] }, persistence, NO_EDITOR);
+    assert.deepEqual(written().panes, { s1: "a" });
+    persistLayouts(layouts, { p: [tab("x", "s1"), tab("y", "s2")] }, persistence, NO_EDITOR);
+    assert.deepEqual(written().panes, { s1: "a", s2: "b" });
   });
 
   it("forgets a removed project, so one added again under its key is written anew", () => {
     const persistence = newLayoutPersistence();
     persistence.settled.add("p");
     const layouts = { p: twoColumns() };
-    persistLayouts(layouts, tabs, persistence);
+    persistLayouts(layouts, tabs, persistence, NO_EDITOR);
     forgetPersistence(persistence, "p");
     assert.deepEqual(persistence, newLayoutPersistence());
     persistence.settled.add("p");
     storage.delete(KEY);
-    persistLayouts(layouts, tabs, persistence);
+    persistLayouts(layouts, tabs, persistence, NO_EDITOR);
     assert.equal(storage.has(KEY), true);
   });
 });

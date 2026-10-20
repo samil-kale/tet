@@ -12,6 +12,7 @@ import {
   settleLayout,
 } from "./layout-state";
 import { forget } from "../identity";
+import { editorEntry } from "../editor/editor-views";
 
 /** Every repository's and worktree's split state, and the callbacks `App` hands the panes. */
 interface ProjectLayouts {
@@ -27,7 +28,8 @@ interface ProjectLayouts {
 /**
  * Each repository's or worktree's split state, by `refKey`. Held in `App`: the shortcuts and
  * marks/seen need what is on screen across panes (AGENTS.md, "Split view"). Reconciled against
- * `tabs`, persisted once `starting` first reports a repository or worktree not starting.
+ * `tabs`, persisted once `starting` first reports a repository or worktree not starting — which
+ * main holds until the window has brought back its tabs too (`TabSessionManager.restore`).
  */
 export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: Record<string, boolean>): ProjectLayouts {
   const [layouts, setLayouts] = useState<Record<string, ProjectLayout>>({});
@@ -72,8 +74,16 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     }
   }, [starting, tabsRef]);
   useEffect(() => {
-    persistLayouts(layouts, tabs, persistence.current);
+    persistLayouts(layouts, tabs, persistence.current, editorEntry);
   }, [layouts, tabs, starting]);
+  // As the window goes, everything once more: the editors' state changes beside the layout, and
+  // their cursor and scroll are read only then.
+  const layoutsRef = useLatest(layouts);
+  useEffect(() => {
+    const onUnload = (): void => persistLayouts(layoutsRef.current, tabsRef.current, persistence.current, editorEntry, true);
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [layoutsRef, tabsRef]);
 
   /** Makes a tab a pane's active one (`activateIn`). */
   const activateTab = useCallback(

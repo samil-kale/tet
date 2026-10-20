@@ -2,7 +2,7 @@ import { ownValue } from "../../shared/own-value";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { sameList, sameRecord } from "../identity";
 import { layoutKey } from "../ui/layout-storage";
-import { isEditorTabId } from "../editor/editor-tab";
+import { isEditorTabId, MARKDOWN_PREVIEW_MODES, type EditorEntry } from "../editor/editor-tab";
 
 /**
  * The tab area's split view: fixed presets, not a nestable tree (AGENTS.md, "Split view"). At most
@@ -49,7 +49,7 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
 /**
  * What the layout reads of a tab: id, session and agent (persistence), saved command
  * (`placeCommandTab`), last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id,
- * written as it is (`persistedIdOf`).
+ * written under it (`persistedOf`).
  */
 export type LayoutTab = Pick<TabDescriptor, "tabId" | "sessionId" | "command" | "updatedAt"> & Partial<Pick<TabDescriptor, "agentId">>;
 
@@ -699,63 +699,90 @@ export function layoutStorageKey(refKey: string, suffix: string): string {
 }
 
 /**
- * What survives a restart: preset, focused pane, each tab's pane and place — an agent's tab keyed
- * by its *session id*, an editor tab and a plain shell by their own ids, which they keep
- * (`use-tab-restore.ts`). An agent's new tab returns, if at all, under its session id, so both are
- * one entry; what cannot return (a saved command, an agent's tab with no session persisted) is
- * dropped. The sash shares are persisted beside it (`useSashFraction`).
+ * What survives a restart, the one record of a repository or worktree, as VS Code keeps its
+ * editors': preset, focused pane, and every tab that comes back (`PersistedTab`) in the strip's
+ * order. An agent's tab is keyed by its *session id* — a new one returns, if at all, under it — an
+ * editor tab and a plain shell by their own ids, which they keep (`use-tab-restore.ts`); what cannot
+ * return (a saved command, an agent's tab with no session yet) is left out. A shell's output is kept
+ * beside it (`use-tab-restore.ts`), as are the sash shares (`useSashFraction`).
  */
 interface PersistedLayout {
   preset: SplitPreset;
   focusedPane: PaneId;
-  tabPane: Record<string, PaneId>;
+  tabs: PersistedTab[];
   /**
-   * Each pane's active tab, by session id. Its pane waits for it while the sessions are listed; a
+   * Each pane's active tab, by the same ids. Its pane waits for it while the sessions are listed; a
    * stale one (session deleted between runs) gives way once they are (`collapseEmpty`).
    */
   activeTab: Partial<Record<PaneId, string>>;
-  /** The strip's order, by the same ids. */
-  order: string[];
   /** The tabs last made active, by the same ids. */
   recent: string[];
   /** Where each saved command last lay — the closed ones as recorded, the open ones as they are. */
   commandPane: Record<string, CommandPlace>;
 }
 
+/** A tab that comes back, by what brings it back: its agent's session, or the window. */
+export interface PersistedTab {
+  id: string;
+  pane: PaneId;
+  kind: "session" | "editor" | "shell";
+  /** An editor tab's file and editor (`editorEntry`). */
+  editor?: EditorEntry;
+}
+
+/** A stored editor entry, read defensively: none where its file is not named. */
+function readEditorEntry(value: unknown): EditorEntry | undefined {
+  const { path, commit, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<string, unknown>;
+  if (typeof path !== "string") {
+    return undefined;
+  }
+  const { sha, parent, origPath } = (commit ?? {}) as Record<string, unknown>;
+  return {
+    path,
+    commit:
+      typeof sha === "string"
+        ? { sha, parent: typeof parent === "string" ? parent : undefined, origPath: typeof origPath === "string" ? origPath : undefined }
+        : undefined,
+    preview: preview === true,
+    diff: diff === true,
+    markdownPreview: MARKDOWN_PREVIEW_MODES.find((mode) => mode === markdownPreview) ?? "off",
+    viewState: viewState !== null && typeof viewState === "object" ? viewState : undefined,
+  };
+}
+
 /**
- * Read defensively: a bad shape falls back to a fresh layout. Entries of vanished sessions stay
- * (`normalizeLayout`). Session ids come back as tab ids, hence the editor tab's unlike id.
+ * The stored record, read defensively: a bad shape — or one without `tabs` — is no record. Gives the
+ * layout (`loadLayout`) and the tabs to bring back (`use-tab-restore.ts`); an entry of the wrong
+ * shape is dropped, one of a vanished session stays (`normalizeLayout`). Session ids come back as tab
+ * ids, hence the editor tab's unlike id.
  */
-export function loadLayout(refKey: string): ProjectLayout {
-  const fallback = defaultLayout();
+export function loadPersisted(refKey: string): { layout: ProjectLayout; tabs: PersistedTab[] } {
+  const fallback = { layout: defaultLayout(), tabs: [] };
   try {
-    const raw = localStorage.getItem(layoutStorageKey(refKey, "layout"));
-    if (raw === null) {
-      return fallback;
-    }
-    const parsed: unknown = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(localStorage.getItem(layoutStorageKey(refKey, "layout")) ?? "null");
     if (typeof parsed !== "object" || parsed === null) {
       return fallback;
     }
-    const { preset, focusedPane, tabPane, activeTab, order, recent, commandPane } = parsed as Record<string, unknown>;
-    const ids = (value: unknown): string[] =>
-      Array.isArray(value) ? value.filter((tabId): tabId is string => typeof tabId === "string") : NO_IDS;
-    if (!isSplitPreset(preset) || !isPaneId(focusedPane)) {
+    const { preset, focusedPane, tabs, activeTab, recent, commandPane } = parsed as Record<string, unknown>;
+    if (!isSplitPreset(preset) || !isPaneId(focusedPane) || !Array.isArray(tabs)) {
       return fallback;
     }
-    const restored: Record<string, PaneId> = {};
-    if (tabPane !== null && typeof tabPane === "object") {
-      for (const [sessionId, paneId] of Object.entries(tabPane)) {
-        if (isPaneId(paneId)) {
-          restored[sessionId] = paneId;
-        }
+    const kept = tabs.flatMap((entry: unknown): PersistedTab[] => {
+      const { id, pane, kind, editor } = (entry ?? {}) as Record<string, unknown>;
+      if (typeof id !== "string" || !isPaneId(pane)) {
+        return [];
       }
-    }
+      if (kind === "editor") {
+        const read = readEditorEntry(editor);
+        return read ? [{ id, pane, kind, editor: read }] : [];
+      }
+      return kind === "session" || kind === "shell" ? [{ id, pane, kind }] : [];
+    });
     const active: Partial<Record<PaneId, string>> = {};
     if (activeTab !== null && typeof activeTab === "object") {
-      for (const [paneId, sessionId] of Object.entries(activeTab)) {
-        if (isPaneId(paneId) && PRESET_PANES[preset].includes(paneId) && typeof sessionId === "string") {
-          active[paneId] = sessionId;
+      for (const [paneId, tabId] of Object.entries(activeTab)) {
+        if (isPaneId(paneId) && PRESET_PANES[preset].includes(paneId) && typeof tabId === "string") {
+          active[paneId] = tabId;
         }
       }
     }
@@ -768,47 +795,57 @@ export function loadLayout(refKey: string): ProjectLayout {
         }
       }
     }
-    return {
+    const layout: ProjectLayout = {
       preset,
       // Read before any tab list normalizes it (`paneOf`).
       focusedPane: PRESET_PANES[preset].includes(focusedPane) ? focusedPane : PRESET_PANES[preset][0],
-      tabPane: restored,
+      tabPane: Object.fromEntries(kept.map((tab) => [tab.id, tab.pane])),
       activeTab: active,
-      order: ids(order),
-      recent: ids(recent),
+      order: kept.map((tab) => tab.id),
+      recent: Array.isArray(recent) ? recent.filter((tabId): tabId is string => typeof tabId === "string") : NO_IDS,
       commandPane: places,
     };
+    return { layout, tabs: kept };
   } catch {
     return fallback;
   }
 }
 
-/** The id a tab comes back under next run (`PersistedLayout`): a terminal's session's, an editor
- *  tab's or a plain shell's own; none for a saved command, which does not come back. */
-function persistedIdOf(tab: LayoutTab): string | undefined {
-  return tab.sessionId ?? (isEditorTabId(tab.tabId) || isPlainShell(tab) ? tab.tabId : undefined);
+export function loadLayout(refKey: string): ProjectLayout {
+  return loadPersisted(refKey).layout;
+}
+
+/** How a tab comes back next run, under which id (`PersistedTab`); none for one that does not. */
+function persistedOf(tab: LayoutTab, editorEntry: (tabId: string) => EditorEntry | undefined): Omit<PersistedTab, "pane"> | undefined {
+  if (tab.sessionId !== undefined) {
+    return { id: tab.sessionId, kind: "session" };
+  }
+  if (isEditorTabId(tab.tabId)) {
+    const editor = editorEntry(tab.tabId);
+    return editor && { id: tab.tabId, kind: "editor", editor };
+  }
+  return isPlainShell(tab) ? { id: tab.tabId, kind: "shell" } : undefined;
 }
 
 /**
- * Only tabs that come back are written, under their persisted id (`persistedIdOf`), so disk never
- * names an id the next run could hand to another tab.
+ * Only tabs that come back are written, under their persisted id (`persistedOf`), so disk never
+ * names an id the next run could hand to another tab. `editorEntry` reads an editor tab's file and
+ * editor, which the layout does not hold.
  */
-export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): string {
-  const tabPane: Record<string, PaneId> = {};
+export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[], editorEntry: (tabId: string) => EditorEntry | undefined): string {
   // The open command tabs' panes over the recorded ones.
   const commandPane = { ...layout.commandPane };
   const activeTab: Partial<Record<PaneId, string>> = {};
-  const order: string[] = [];
+  const persistedTabs: PersistedTab[] = [];
   const persistedIds = new Map<string, string>();
   for (const tab of inOrder(layout.order, tabs)) {
-    const paneId = layout.tabPane[tab.tabId];
-    const persistedId = persistedIdOf(tab);
-    if (persistedId !== undefined && paneId !== undefined) {
-      tabPane[persistedId] = paneId;
-      order.push(persistedId);
-      persistedIds.set(tab.tabId, persistedId);
-      if (layout.activeTab[paneId] === tab.tabId) {
-        activeTab[paneId] = persistedId;
+    const pane = layout.tabPane[tab.tabId];
+    const persisted = pane !== undefined ? persistedOf(tab, editorEntry) : undefined;
+    if (persisted !== undefined && pane !== undefined) {
+      persistedTabs.push({ ...persisted, pane });
+      persistedIds.set(tab.tabId, persisted.id);
+      if (layout.activeTab[pane] === tab.tabId) {
+        activeTab[pane] = persisted.id;
       }
     }
     if (tab.command !== undefined) {
@@ -818,9 +855,8 @@ export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): strin
   const persisted: PersistedLayout = {
     preset: layout.preset,
     focusedPane: layout.focusedPane,
-    tabPane,
+    tabs: persistedTabs,
     activeTab,
-    order,
     recent: layout.recent.flatMap((tabId) => persistedIds.get(tabId) ?? []),
     commandPane,
   };

@@ -67,6 +67,13 @@ const MAX_EARLY_OUTPUT = 64 * 1024;
  *  `terminal.integrated.persistentSessionScrollback` does. */
 const RESTORED_SCROLLBACK = 100;
 
+/**
+ * A restored shell's output from before the restart (`restoreHistory`), apart from what it prints
+ * anew: `createView` lays it ahead, a `[TET]` line between; a shell never drawn hands it on as it
+ * was (`shellHistory`), so the line is never kept twice.
+ */
+const restoredOutput = new Map<string, string>();
+
 // Output arrives batched: one message, and one flush, for every terminal.
 window.tet.tabs.onOutput((batch) => {
   for (const { ref, tabId, data } of batch) {
@@ -90,7 +97,7 @@ window.tet.tabs.onTextRequest((ref, tabId) => shownText(ref, tabId));
  */
 async function shownText(ref: ProjectRef, tabId: string): Promise<string> {
   const key = viewKey(ref, tabId);
-  const view = views.get(key) ?? (earlyOutput.has(key) ? createView(ref, tabId, CONTROL_START_SIZE) : undefined);
+  const view = views.get(key) ?? (earlyOutput.has(key) || restoredOutput.has(key) ? createView(ref, tabId, CONTROL_START_SIZE) : undefined);
   if (!view) {
     return "";
   }
@@ -114,12 +121,14 @@ async function shownText(ref: ProjectRef, tabId: string): Promise<string> {
 }
 
 /** The screen and the last lines of a shell's scrollback with their colors, for a restart to
- *  bring back (`restoreHistory`); for a tab never drawn, what waits to be (`earlyOutput`). */
+ *  bring back (`restoreHistory`); for a tab never drawn, what waits to be. */
 export function shellHistory(ref: ProjectRef, tabId: string): string | undefined {
   const key = viewKey(ref, tabId);
   const view = views.get(key);
   if (!view) {
-    return earlyOutput.get(key);
+    const before = restoredOutput.get(key);
+    const after = earlyOutput.get(key);
+    return before === undefined && after === undefined ? undefined : `${before ?? ""}${after ?? ""}`;
   }
   const serializer = new SerializeAddon();
   view.term.loadAddon(serializer);
@@ -130,11 +139,10 @@ export function shellHistory(ref: ProjectRef, tabId: string): string | undefined
   }
 }
 
-/** What a restored shell showed when TET last closed, ahead of all its new process prints, and a
- *  `[TET]` line between the two. Before its view exists, which replays it (`earlyOutput`). */
+/** What a restored shell showed when TET last closed, ahead of all its new process prints
+ *  (`restoredOutput`). Before its view exists. */
 export function restoreHistory(ref: ProjectRef, tabId: string, history: string): void {
-  const key = viewKey(ref, tabId);
-  earlyOutput.set(key, `${history}\x1b[0m\r\n[TET] History restored\r\n${earlyOutput.get(key) ?? ""}`);
+  restoredOutput.set(viewKey(ref, tabId), history);
 }
 
 // Leaving the window is the focus loss a terminal is told of (`FOCUS_OUT`).
@@ -413,6 +421,11 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
   const view: TerminalView = { ref, tabId, term, fit };
   const key = viewKey(ref, tabId);
   views.set(key, view);
+  const restored = restoredOutput.get(key);
+  if (restored !== undefined) {
+    restoredOutput.delete(key);
+    term.write(`${restored}\x1b[0m\r\n[TET] History restored\r\n`);
+  }
   const buffered = earlyOutput.get(key);
   if (buffered) {
     earlyOutput.delete(key);
@@ -612,6 +625,7 @@ export function clearTerminalOutput(ref: ProjectRef, tabId: string): void {
 export function disposeTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
   earlyOutput.delete(key);
+  restoredOutput.delete(key);
   const view = views.get(key);
   if (!view) {
     return;
@@ -641,9 +655,11 @@ export function disposeRefTerminals(ref: ProjectRef): void {
   // A repository's or worktree's refKey holds no space: no other refKey starts with it plus the separator
   // (shared/types/project.ts's refKeyOf).
   const prefix = viewKey(ref, "");
-  for (const key of [...earlyOutput.keys()]) {
-    if (key.startsWith(prefix)) {
-      earlyOutput.delete(key);
+  for (const held of [earlyOutput, restoredOutput]) {
+    for (const key of [...held.keys()]) {
+      if (key.startsWith(prefix)) {
+        held.delete(key);
+      }
     }
   }
   for (const [key, view] of [...views]) {
