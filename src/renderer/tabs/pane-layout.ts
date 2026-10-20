@@ -47,11 +47,17 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
 };
 
 /**
- * What the layout reads of a tab: id, session (persistence), saved command (`placeCommandTab`),
- * last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id, written as it is
- * (`persistedIdOf`).
+ * What the layout reads of a tab: id, session and agent (persistence), saved command
+ * (`placeCommandTab`), last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id,
+ * written as it is (`persistedIdOf`).
  */
-export type LayoutTab = Pick<TabDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
+export type LayoutTab = Pick<TabDescriptor, "tabId" | "sessionId" | "command" | "updatedAt"> & Partial<Pick<TabDescriptor, "agentId">>;
+
+/** A shell of its own, no saved command: what the window brings back after a restart under its id
+ *  (`use-tab-restore.ts`), as VS Code its terminals — a command is never run again unasked. */
+export function isPlainShell(tab: LayoutTab): boolean {
+  return tab.agentId === "shell" && tab.command === undefined;
+}
 
 /** A project's split state — held in `App`, not in `TabArea` (see AGENTS.md). */
 export interface ProjectLayout {
@@ -693,11 +699,11 @@ export function layoutStorageKey(refKey: string, suffix: string): string {
 }
 
 /**
- * What survives a restart: preset, focused pane, each tab's pane and place — a terminal keyed by
- * its *session id*, an editor tab by its own id, which it keeps (`use-editor-restore.ts`). A new
- * tab's `new-N` id restarts from zero each run and returns, if at all, under its session id. So
- * both are one entry, and what cannot return (a shell tab, no session persisted) is dropped.
- * The sash shares are persisted beside it (`useSashFraction`).
+ * What survives a restart: preset, focused pane, each tab's pane and place — an agent's tab keyed
+ * by its *session id*, an editor tab and a plain shell by their own ids, which they keep
+ * (`use-tab-restore.ts`). An agent's new tab returns, if at all, under its session id, so both are
+ * one entry; what cannot return (a saved command, an agent's tab with no session persisted) is
+ * dropped. The sash shares are persisted beside it (`useSashFraction`).
  */
 interface PersistedLayout {
   preset: SplitPreset;
@@ -778,9 +784,9 @@ export function loadLayout(refKey: string): ProjectLayout {
 }
 
 /** The id a tab comes back under next run (`PersistedLayout`): a terminal's session's, an editor
- *  tab's own; none for a terminal without a session, which does not come back. */
+ *  tab's or a plain shell's own; none for a saved command, which does not come back. */
 function persistedIdOf(tab: LayoutTab): string | undefined {
-  return tab.sessionId ?? (isEditorTabId(tab.tabId) ? tab.tabId : undefined);
+  return tab.sessionId ?? (isEditorTabId(tab.tabId) || isPlainShell(tab) ? tab.tabId : undefined);
 }
 
 /**

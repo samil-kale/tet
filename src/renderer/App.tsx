@@ -42,7 +42,7 @@ import { workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import type { PaneTab } from "./tabs/pane-tab";
 import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
-import { useEditorRestore } from "./tabs/use-editor-restore";
+import { useTabRestore } from "./tabs/use-tab-restore";
 import { useEditorSync } from "./tabs/use-editor-sync";
 import { useRefHeads } from "./lanes/projects/use-ref-heads";
 import { useWindowFocused } from "./ui/use-window-focused";
@@ -87,9 +87,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     stripTabsRef.current = next;
     return next;
   }, [tabs, editorTabs]);
-  /** The editor tabs a restart brings back (use-editor-restore.ts). */
-  const { restored, forgetRestore } = useEditorRestore(resolvedRefs, states, editorTabs, editorTabsRef, setEditorTabs);
-  /** A layout settles once its sessions are listed and its editor tabs are back. */
+  /** The editor tabs and plain shells a restart brings back (use-tab-restore.ts). */
+  const { restored, forgetRestore } = useTabRestore(resolvedRefs, states, tabs, editorTabs, setEditorTabs);
+  /** A layout settles once its sessions are listed and its editor tabs and shells are back. */
   const layoutStarting = useMemo(() => {
     const next: Record<string, boolean> = {};
     for (const [refKey, isStarting] of Object.entries(starting)) {

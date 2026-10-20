@@ -28,7 +28,7 @@ import { fakeLocalStorage, keepGlobals } from "../helpers";
 /** The split view's rules — pure functions, needing no window. */
 
 function tab(tabId: string, updatedAt?: number, sessionId?: string): TabDescriptor {
-  return { tabId, agentId: "shell", title: "", status: "running", updatedAt, sessionId };
+  return { tabId, agentId: "claude", title: "", status: "running", updatedAt, sessionId };
 }
 
 const NONE: TabDescriptor[] = [];
@@ -625,11 +625,15 @@ describe("an editor tab", () => {
     assert.equal(layout.activeTab.b, EDITOR_TAB_ID);
   });
 
-  it("is written to disk under its own id, having no session", () => {
-    const tabs = [tab("t1", 0, "s1"), editor];
-    assert.deepEqual((JSON.parse(serializeLayout(cols2({ t1: "a", [EDITOR_TAB_ID]: "b" }, tabs), tabs)) as { tabPane: unknown }).tabPane, {
+  it("is written to disk under its own id, having no session, as a plain shell is and a saved command is not", () => {
+    const shell: TabDescriptor = { ...tab("sh"), agentId: "shell" };
+    const command: TabDescriptor = { ...shell, tabId: "cmd", command: "npm test" };
+    const tabs = [tab("t1", 0, "s1"), editor, shell, command];
+    const layout = cols2({ t1: "a", [EDITOR_TAB_ID]: "b", sh: "b", cmd: "b" }, tabs);
+    assert.deepEqual((JSON.parse(serializeLayout(layout, tabs)) as { tabPane: unknown }).tabPane, {
       s1: "a",
       [EDITOR_TAB_ID]: "b",
+      sh: "b",
     });
   });
 

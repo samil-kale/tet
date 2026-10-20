@@ -103,6 +103,7 @@ export interface InvokeChannels {
   "commands:run": TETApi["commands"]["run"];
   "tabs:list": TETApi["tabs"]["list"];
   "tabs:create": TETApi["tabs"]["create"];
+  "tabs:restore-shell": TETApi["tabs"]["restoreShell"];
   "tabs:close": TETApi["tabs"]["close"];
   "tabs:archive": TETApi["tabs"]["archive"];
   "tabs:rename": TETApi["tabs"]["rename"];

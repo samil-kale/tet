@@ -53,7 +53,9 @@ const MAX_RECORDED_EVENTS = 200;
 // Readiness fires on the CLI's first full frame, a moment before the terminal looks settled.
 const INDICATOR_LINGER_MS = 700;
 // Across managers, so a repository or worktree reopened in this run never reuses a closed tab's
-// id — and token.
+// id — and token; after a stamp of the run, so a shell the window brings back under its id
+// (`restoreShell`) never meets a tab of this one.
+const RUN_STAMP = Date.now().toString(36);
 let newTabCounter = 0;
 
 /** Per-agent state within one repository or worktree. */
@@ -493,6 +495,13 @@ export class TabSessionManager {
     return this.addTab(agentId, { ...(sandboxOnly && { sandboxOnly }), ...(prompt !== undefined && { initialPrompt: prompt }) });
   }
 
+  /** A plain shell the window had open when it last closed, back under its id so the saved layout
+   *  finds it (`use-tab-restore.ts`); under a new one where the id is taken. Started as any tab, at
+   *  its first fit. */
+  restoreShell(tabId: string): TabDescriptor {
+    return this.addTab("shell", this.tabOf(tabId) ? {} : { tabId });
+  }
+
   /**
    * A tab of `agentId` taking over this tab's session: the session's files as the agent keeps them,
    * and a prompt to read them (prompts.ts). This tab stays as it is. Answers what went wrong
@@ -570,7 +579,7 @@ export class TabSessionManager {
     const runtime = this.runtimeFor(agentId);
     newTabCounter += 1;
     const tab: TabState = {
-      tabId: `new-${newTabCounter}`,
+      tabId: `new-${RUN_STAMP}-${newTabCounter}`,
       agentId,
       title: "",
       status: this.canStart(runtime) ? "ready" : "missing",

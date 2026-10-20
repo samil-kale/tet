@@ -22,6 +22,14 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return manager.createTab(agentId);
   });
 
+  handle("tabs:restore-shell", (_event, ref: ProjectRef, tabId: string): TabDescriptor => {
+    const manager = tabManagers.get(ref);
+    if (!manager) {
+      throw new Error(notOpenMessage(store, ref));
+    }
+    return manager.restoreShell(tabId);
+  });
+
   // The tab menu's Close: the same as `tet-ctl tabs-close`, no archive.
   handle("tabs:close", async (_event, ref: ProjectRef, tabIds: string[]): Promise<void> => {
     await tabManagers.get(ref)?.closeTabs(tabIds);

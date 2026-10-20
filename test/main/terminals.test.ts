@@ -144,6 +144,24 @@ describe("the window closing a tab", () => {
   });
 });
 
+describe("a shell the window brings back", () => {
+  it("comes back under its id, or a new one where a tab has it", async () => {
+    await withEmptyPath({}, async (manager) => {
+      const kept = manager.restoreShell("new-earlier-1");
+      assert.deepEqual([kept.tabId, kept.agentId], ["new-earlier-1", "shell"]);
+      const taken = manager.restoreShell("new-earlier-1");
+      assert.notEqual(taken.tabId, "new-earlier-1");
+    });
+  });
+
+  it("never meets an id this run hands out", async () => {
+    await withEmptyPath({}, async (manager) => {
+      const { tabId } = manager.createTab("shell");
+      assert.match(tabId, /^new-[0-9a-z]+-\d+$/);
+    });
+  });
+});
+
 describe("a question reported answered", () => {
   it("clears the mark and leaves the turn running", async () => {
     await withEmptyPath({}, (manager) => {

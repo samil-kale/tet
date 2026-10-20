@@ -7,7 +7,7 @@ import type { MarkdownPreviewMode } from "./editor-views";
  * "Keep Open" or an Explorer double-click, and the next file gets a new preview tab. Which tab is
  * the preview is the editor's own state (`editor-views.ts`), decided where an edit lands. A path
  * is open in at most one tab per repository or worktree, and a commit's file in one per commit.
- * Renderer-only: no pty, no session; a restart brings it back under its id (`use-editor-restore.ts`,
+ * Renderer-only: no pty, no session; a restart brings it back under its id (`use-tab-restore.ts`,
  * `serializeLayout`).
  *
  * Ids count up within a run, after a stamp of the run, so the preview tab keeps its id, pane and
@@ -54,7 +54,7 @@ export interface OpenEditor {
   background?: boolean;
   /** A Markdown file with its preview beside the editor, and the default for the ones after. */
   markdownPreview?: boolean;
-  /** Brought back by a restart (`use-editor-restore.ts`): its Markdown preview and the editor's view
+  /** Brought back by a restart (`use-tab-restore.ts`): its Markdown preview and the editor's view
    *  as they were left, the default left alone; a file gone meanwhile shows as such, unannounced. */
   restored?: RestoredEditor;
   /** A search result's match, selected once the file's text is in the editor. */

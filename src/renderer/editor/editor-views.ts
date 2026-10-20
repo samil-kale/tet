@@ -275,7 +275,7 @@ function applyViewState(view: EditorView): void {
   editor.restoreViewState(state);
 }
 
-/** The tab's cursor, scroll and folds, for a restart to bring back (`use-editor-restore.ts`): the
+/** The tab's cursor, scroll and folds, for a restart to bring back (`use-tab-restore.ts`): the
  *  editor's own, or what it was restored with and has yet to show. */
 export function editorViewState(tabId: string): unknown {
   const view = views.get(tabId);

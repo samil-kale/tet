@@ -287,6 +287,8 @@ export interface TETApi {
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
     /** The session starts on first resize. */
     create: (ref: ProjectRef, agentId: AgentId) => Promise<TabDescriptor>;
+    /** A plain shell the window had open when it last closed, back under its id where free. */
+    restoreShell: (ref: ProjectRef, tabId: string) => Promise<TabDescriptor>;
     /** Closes the tab and deletes its session for good, no archive. */
     close: (ref: ProjectRef, tabIds: string[]) => Promise<void>;
     /** Keeps the tab's session, archived until reopened (`archive.reopen`). */

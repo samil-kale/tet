@@ -1,5 +1,6 @@
 import { ClipboardAddon } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
@@ -62,6 +63,10 @@ function viewKey(ref: ProjectRef, tabId: string): string {
 const earlyOutput = new Map<string, string>();
 const MAX_EARLY_OUTPUT = 64 * 1024;
 
+/** How many lines of a shell's scrollback a restart brings back, as many as VS Code's
+ *  `terminal.integrated.persistentSessionScrollback` does. */
+const RESTORED_SCROLLBACK = 100;
+
 // Output arrives batched: one message, and one flush, for every terminal.
 window.tet.tabs.onOutput((batch) => {
   for (const { ref, tabId, data } of batch) {
@@ -106,6 +111,30 @@ async function shownText(ref: ProjectRef, tabId: string): Promise<string> {
     }
   }
   return lines.join("\n").trimEnd();
+}
+
+/** The screen and the last lines of a shell's scrollback with their colors, for a restart to
+ *  bring back (`restoreHistory`); for a tab never drawn, what waits to be (`earlyOutput`). */
+export function shellHistory(ref: ProjectRef, tabId: string): string | undefined {
+  const key = viewKey(ref, tabId);
+  const view = views.get(key);
+  if (!view) {
+    return earlyOutput.get(key);
+  }
+  const serializer = new SerializeAddon();
+  view.term.loadAddon(serializer);
+  try {
+    return serializer.serialize({ scrollback: RESTORED_SCROLLBACK });
+  } finally {
+    serializer.dispose();
+  }
+}
+
+/** What a restored shell showed when TET last closed, ahead of all its new process prints, and a
+ *  `[TET]` line between the two. Before its view exists, which replays it (`earlyOutput`). */
+export function restoreHistory(ref: ProjectRef, tabId: string, history: string): void {
+  const key = viewKey(ref, tabId);
+  earlyOutput.set(key, `${history}\x1b[0m\r\n[TET] History restored\r\n${earlyOutput.get(key) ?? ""}`);
 }
 
 // Leaving the window is the focus loss a terminal is told of (`FOCUS_OUT`).
