@@ -89,7 +89,7 @@ export const GitLane = memo(function GitLane({
         height={treeHeight}
         actions={
           <>
-            <IconButton title={showGraph ? "Show Branches" : "Show Graph"} onClick={() => setShowGraph(!showGraph)}>
+            <IconButton title={showGraph ? "Branches" : "Graph"} onClick={() => setShowGraph(!showGraph)}>
               {showGraph ? <BranchIcon /> : <GraphIcon />}
             </IconButton>
             <IconButton

@@ -148,7 +148,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
               changes has; without any it shows off and comes back with them (`diffShown`). */}
           <IconButton
             active={shown}
-            title={`${shown ? "Hide" : "Show"} Changes`}
+            title="Changes"
             disabled={kind !== "text" || !hasChanges(snapshot)}
             onClick={() => showDiff(tabId, !diff)}
           >
@@ -158,7 +158,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
               has one when both versions exist: next to each other, or the current one alone. */}
           <IconButton
             active={layoutAvailable && sideBySide}
-            title={sideBySide ? "Show Inline" : "Show Changes Side by Side"}
+            title={sideBySide ? "Inline" : "Side by Side"}
             disabled={!layoutAvailable}
             onClick={() => setDiffOption(tabId, "sideBySide", !sideBySide)}
           >
@@ -177,7 +177,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
             <>
               <IconButton
                 active={markdownPreviewSide}
-                title={`Show Preview Side by Side (${PLATFORM.modifierLabel}+Shift+V)`}
+                title={`Preview Side by Side (${PLATFORM.modifierLabel}+Shift+V)`}
                 disabled={withheld}
                 onClick={() => showMarkdownPreview(tabId, markdownPreviewSide ? "off" : "side")}
               >
@@ -185,7 +185,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
               </IconButton>
               <IconButton
                 active={markdownPreviewOnly}
-                title="Show Preview Only"
+                title="Preview Only"
                 disabled={withheld}
                 onClick={() => showMarkdownPreview(tabId, markdownPreviewOnly ? "off" : "only")}
               >

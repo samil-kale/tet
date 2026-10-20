@@ -23,17 +23,17 @@ export const StatusBar = memo(function StatusBar({ project, branch, changesCount
   return (
     <div className="status-bar">
       {project && (
-        <button type="button" className="status-bar-item" title="Show projects" onClick={() => onSelectLane("projects")}>
+        <button type="button" className="status-bar-item" title="Projects" onClick={() => onSelectLane("projects")}>
           <ProjectsIcon className="tree-icon" />
           {project.name}
         </button>
       )}
-      <button type="button" className="status-bar-item" title="Show archive" onClick={() => onSelectLane("archive")}>
+      <button type="button" className="status-bar-item" title="Archive" onClick={() => onSelectLane("archive")}>
         <ArchiveIcon className="tree-icon" />
         archived: {archivedCount}
       </button>
       {branch && (
-        <button type="button" className="status-bar-item" title="Show git" onClick={() => onSelectLane("git")}>
+        <button type="button" className="status-bar-item" title="Git" onClick={() => onSelectLane("git")}>
           <BranchIcon className="tree-icon" />
           {branch}: {changesCount}
         </button>

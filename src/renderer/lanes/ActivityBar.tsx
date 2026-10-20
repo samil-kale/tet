@@ -4,11 +4,11 @@ import { IconButton } from "../ui/IconButton";
 import { ArchiveIcon, FilesIcon, GearIcon, GitIcon, ProjectsIcon, type IconProps } from "../ui/icons";
 
 /** The lane toggles' icons and labels, drawn in `LANES`' fixed order. */
-const LANE_TOGGLES: Record<Lane, { noun: string; Icon: (props: IconProps) => React.ReactNode }> = {
-  projects: { noun: "projects", Icon: ProjectsIcon },
-  git: { noun: "git", Icon: GitIcon },
-  files: { noun: "files", Icon: FilesIcon },
-  archive: { noun: "archive", Icon: ArchiveIcon },
+const LANE_TOGGLES: Record<Lane, { title: string; Icon: (props: IconProps) => React.ReactNode }> = {
+  projects: { title: "Projects", Icon: ProjectsIcon },
+  git: { title: "Git", Icon: GitIcon },
+  files: { title: "Files", Icon: FilesIcon },
+  archive: { title: "Archive", Icon: ArchiveIcon },
 };
 
 /** The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar);
@@ -25,19 +25,14 @@ export const ActivityBar = memo(function ActivityBar({
   return (
     <div className="activity-bar">
       {LANES.map((lane) => {
-        const { noun, Icon } = LANE_TOGGLES[lane];
+        const { title, Icon } = LANE_TOGGLES[lane];
         return (
-          <IconButton
-            key={lane}
-            active={shownLane === lane}
-            onClick={() => onToggleLane(lane)}
-            title={`${shownLane === lane ? "Hide" : "Show"} ${noun}`}
-          >
+          <IconButton key={lane} active={shownLane === lane} onClick={() => onToggleLane(lane)} title={title}>
             <Icon />
           </IconButton>
         );
       })}
-      <IconButton title="Show settings" onClick={onOpenSettings}>
+      <IconButton title="Settings" onClick={onOpenSettings}>
         <GearIcon />
       </IconButton>
     </div>
