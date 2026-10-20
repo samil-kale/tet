@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.21.0 (2026-10-20)
+
+- **Tabs survive restarts.** Editor tabs and plain shells, with their output, come back after TET
+  restarts, in the strip's order; tabs in the strip can be reordered by dragging.
+- **Filters and reordering.** The projects and commands lists filter by name, and archived
+  sessions can be reordered by dragging in the archive lane.
+- **Fixes.** Denser rows in the archive lane, a faint blue active selection in the light Modern
+  theme, context menus stay inside open dialogs, and the split view's sash highlights on hover.
+
 ## 0.20.3 (2026-10-19)
 
 - **Fixes.** The git and archive lanes' rows are as dense as the Explorer's; the dark Dracula
