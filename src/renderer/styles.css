@@ -2407,7 +2407,6 @@ textarea:focus,
 .settings-info-columns {
   display: flex;
   align-items: flex-start;
-  gap: 60px;
 }
 
 /* A column wide enough for "Ctrl+Shift+" plus a letter, shared by the Info tab's two lists. */

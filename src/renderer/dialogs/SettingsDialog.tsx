@@ -452,7 +452,7 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
       )}
       {shown === "info" && info && (
         <div className="settings-info-columns">
-          <FieldColumn>
+          <FieldColumn fill>
             <p className="dialog-detail">Versions</p>
             {INFO_ROWS.map(({ key, label }) => (
               <div key={key} className="settings-info-row">
