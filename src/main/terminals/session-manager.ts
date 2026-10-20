@@ -14,7 +14,7 @@ import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
-import { archivedIds, pruneArchived, setArchived } from "../store/archive";
+import { archivedIds, pruneArchived, setArchived, setArchivedOrder } from "../store/archive";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
 import { ensureRunning } from "../sbx/sbx-mounts";
@@ -232,11 +232,11 @@ export class TabSessionManager {
     this.callbacks.onTabs(this.at.ref, this.snapshot());
   }
 
-  /** The archived tabs, the latest activity first. */
+  /** The archived tabs in the archive's own order: newest archived, or dragged, first. */
   archivedSnapshot(): TabDescriptor[] {
-    return this.archivedTabs
-      .map((tab) => this.descriptorOf(tab))
-      .sort((a, b) => (b.updatedAt ?? b.createdAt ?? 0) - (a.updatedAt ?? a.createdAt ?? 0));
+    const order = archivedIds(this.dataRoot, this.at.ref);
+    const position = (sessionId: string | undefined): number => (sessionId === undefined ? -1 : order.indexOf(sessionId));
+    return this.archivedTabs.map((tab) => this.descriptorOf(tab)).sort((a, b) => position(a.sessionId) - position(b.sessionId));
   }
 
   private postArchived(): void {
@@ -406,7 +406,7 @@ export class TabSessionManager {
       ...this.deletingSessionIds,
     ]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
-    const archived = archivedIds(this.dataRoot, this.at.ref);
+    const archived = new Set(archivedIds(this.dataRoot, this.at.ref));
     const asTab = (info: AgentSessionInfo): TabState => ({ tabId: info.id, agentId: agent.id, ...sessionFieldsOf(info), status: "ready" });
     const opened = fresh.filter((info) => !archived.has(info.id)).map(asTab);
     const kept = fresh.filter((info) => archived.has(info.id)).map(asTab);
@@ -1118,6 +1118,21 @@ export class TabSessionManager {
     }
     this.tabs.push(tab);
     this.postTabs();
+    return undefined;
+  }
+
+  /** A drag in the ARCHIVE lane: the tabs named by `tabIds`, in that order, become the stored
+   *  order. Answers what refused it; the list stays as it was. */
+  reorderArchived(tabIds: string[]): string | undefined {
+    const order = tabIds
+      .map((tabId) => this.archivedTabs.find((candidate) => candidate.tabId === tabId)?.sessionId)
+      .filter((id): id is string => id !== undefined);
+    try {
+      setArchivedOrder(this.dataRoot, this.at.ref, order);
+    } catch (error) {
+      return `Could not reorder the archived sessions: ${errorMessage(error)}`;
+    }
+    this.postArchived();
     return undefined;
   }
 

@@ -3,9 +3,9 @@ import { refKeyOf } from "../../../shared/types/project";
 import type { TabDescriptor } from "../../../shared/types/terminals";
 import type { ResolvedRef } from "../../resolved-ref";
 
-/** The repository's or worktree's archived tabs, latest activity first, kept current as they
- *  change. Held per repository or worktree by the caller's `key`: until the answer comes, none.
- *  None open (`resolved` absent) stays empty. */
+/** The repository's or worktree's archived tabs, newest archived or dragged first, kept current
+ *  as they change. Held per repository or worktree by the caller's `key`: until the answer comes,
+ *  none. None open (`resolved` absent) stays empty. */
 export function useArchive(resolved: ResolvedRef | null): TabDescriptor[] {
   const ref = resolved?.ref;
   const [tabs, setTabs] = useState<TabDescriptor[]>([]);

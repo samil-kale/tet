@@ -10,7 +10,7 @@ import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
 import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir } from "../../src/main/store/data-root";
-import { archivedIds, forgetArchived, pruneArchived, setArchived } from "../../src/main/store/archive";
+import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
 import {
   archiveFile,
   newWorktreeKey,
@@ -65,13 +65,13 @@ describe("the archived sessions", () => {
   const repository = { projectId: "p" };
   const worktree = { projectId: "p", worktree: "k1" };
 
-  it("are kept per repository and worktree, in the project's folder", () => {
+  it("are kept per repository and worktree, newest archived on top, in the project's folder", () => {
     const root = tempDir("tet-archive-");
     assert.deepEqual([...archivedIds(root, repository)], [], "none before the first");
     setArchived(root, repository, "s1", true);
     setArchived(root, repository, "s2", true);
     setArchived(root, worktree, "s3", true);
-    assert.deepEqual([...archivedIds(root, repository)], ["s1", "s2"]);
+    assert.deepEqual([...archivedIds(root, repository)], ["s2", "s1"]);
     assert.deepEqual([...archivedIds(root, worktree)], ["s3"]);
     assert.deepEqual([...archivedIds(root, { projectId: "q" })], [], "another project's");
     assert.equal(fs.existsSync(archiveFile(root, "p")), true);
@@ -116,7 +116,21 @@ describe("the archived sessions", () => {
     assert.deepEqual([...archivedIds(root, repository)], ["s1"]);
     assert.deepEqual([...archivedIds(root, worktree)], []);
     setArchived(root, repository, "s2", true);
-    assert.deepEqual([...archivedIds(root, repository)], ["s1", "s2"]);
+    assert.deepEqual([...archivedIds(root, repository)], ["s2", "s1"]);
+  });
+
+  it("take a manual reorder, dropping an id no longer archived", () => {
+    const root = tempDir("tet-archive-");
+    setArchived(root, repository, "s1", true);
+    setArchived(root, repository, "s2", true);
+    setArchived(root, repository, "s3", true);
+    assert.deepEqual([...archivedIds(root, repository)], ["s3", "s2", "s1"]);
+    setArchivedOrder(root, repository, ["s1", "s3", "s2"]);
+    assert.deepEqual([...archivedIds(root, repository)], ["s1", "s3", "s2"]);
+    // s2 released since, s9 never archived: both dropped rather than resurrected.
+    setArchived(root, repository, "s2", false);
+    setArchivedOrder(root, repository, ["s2", "s1", "s9", "s3"]);
+    assert.deepEqual([...archivedIds(root, repository)], ["s1", "s3"]);
   });
 });
 

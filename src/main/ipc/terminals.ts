@@ -56,6 +56,11 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return refused === undefined ? { ok: true } : { ok: false, error: refused };
   });
 
+  handle("archive:reorder", (_event, ref: ProjectRef, tabIds: string[]): GitActionResult => {
+    const refused = tabManagers.get(ref)?.reorderArchived(tabIds);
+    return refused === undefined ? { ok: true } : { ok: false, error: refused };
+  });
+
   // The window's restart (the tab menu, the environment dialog): a running tab quits first.
   handle("tabs:restart", (_event, ref: ProjectRef, tabId: string): void => {
     tabManagers.get(ref)?.restartTab(tabId, true);

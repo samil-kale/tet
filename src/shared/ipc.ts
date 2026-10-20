@@ -112,6 +112,7 @@ export interface InvokeChannels {
   "archive:list": TETApi["archive"]["list"];
   "archive:reopen": TETApi["archive"]["reopen"];
   "archive:delete": TETApi["archive"]["delete"];
+  "archive:reorder": TETApi["archive"]["reorder"];
   "agents:list": TETApi["agents"]["list"];
   "agents:askable": TETApi["agents"]["askable"];
   "agents:ask-models": TETApi["agents"]["askModels"];

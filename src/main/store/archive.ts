@@ -36,25 +36,33 @@ function write(dataRoot: string, projectId: string, stored: Record<string, strin
   writeJson(file, kept);
 }
 
-/** The sessions kept archived in the repository or worktree: kept by the agent, shown by TET as an
- *  archived tab until reopened or deleted. */
-export function archivedIds(dataRoot: string, ref: ProjectRef): Set<string> {
-  return new Set(read(dataRoot, ref.projectId)[keyOf(ref)]);
+/** The sessions kept archived in the repository or worktree, in the ARCHIVE lane's own order
+ *  (newest archived, or dragged, first): kept by the agent, shown by TET as an archived tab until
+ *  reopened or deleted. */
+export function archivedIds(dataRoot: string, ref: ProjectRef): string[] {
+  return read(dataRoot, ref.projectId)[keyOf(ref)] ?? [];
 }
 
-/** Keeps one session archived, or releases it. Throws when the file cannot be written, nothing changed. */
+/** Keeps one session archived, placed on top as the newest, or releases it. Throws when the file
+ *  cannot be written, nothing changed. */
 export function setArchived(dataRoot: string, ref: ProjectRef, sessionId: string, archived: boolean): void {
   const stored = read(dataRoot, ref.projectId);
-  const ids = new Set(stored[keyOf(ref)]);
-  if (archived === ids.has(sessionId)) {
+  const key = keyOf(ref);
+  const ids = stored[key] ?? [];
+  if (archived === ids.includes(sessionId)) {
     return;
   }
-  if (archived) {
-    ids.add(sessionId);
-  } else {
-    ids.delete(sessionId);
-  }
-  write(dataRoot, ref.projectId, { ...stored, [keyOf(ref)]: [...ids] });
+  const next = archived ? [sessionId, ...ids] : ids.filter((id) => id !== sessionId);
+  write(dataRoot, ref.projectId, { ...stored, [key]: next });
+}
+
+/** A drag in the ARCHIVE lane: `order` becomes the stored order, any id no longer archived
+ *  dropped. Throws when the file cannot be written, nothing changed. */
+export function setArchivedOrder(dataRoot: string, ref: ProjectRef, order: string[]): void {
+  const stored = read(dataRoot, ref.projectId);
+  const key = keyOf(ref);
+  const current = new Set(stored[key]);
+  write(dataRoot, ref.projectId, { ...stored, [key]: order.filter((id) => current.has(id)) });
 }
 
 /** A deleted worktree's entries. Left behind they are only unused, so a failure is logged. */

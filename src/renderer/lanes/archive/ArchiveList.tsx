@@ -9,8 +9,11 @@ import { IconButton } from "../../ui/IconButton";
 import { ArrowUpIcon, CloseIcon } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { agentName, useAgents } from "../../ui/use-agents";
+import { reorder, useDragReorder } from "../../ui/drag-reorder";
 import type { ResolvedRef } from "../../resolved-ref";
 import { useArchive } from "./use-archive";
+
+const DRAG_TYPE = "application/x-tet-archive";
 
 interface ArchiveListProps {
   /** The active repository or worktree. */
@@ -34,15 +37,37 @@ function lastActive({ updatedAt, createdAt }: TabDescriptor) {
 
 /**
  * The tabs taken off the strip with their sessions kept (`tabs.archive`). A row reopens its tab at
- * the end of the strip, or deletes its session for good. Keyed by repository or worktree by the app.
+ * the end of the strip, or deletes its session for good. A row drags to reorder the list, newest
+ * archived on top otherwise; disabled while filtering. Keyed by repository or worktree by the app.
  */
 export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTab }: ArchiveListProps) {
   const agents = useAgents();
   const tabs = useArchive(resolved);
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
-  const shownTabs = tabs.filter((tab) => labelOf(tab).toLowerCase().includes(query));
+  const shownTabs = tabs.map((tab, index) => ({ tab, index })).filter(({ tab }) => labelOf(tab).toLowerCase().includes(query));
   const menu = useContextMenu<TabDescriptor>();
+
+  const reorderTabs = async (next: TabDescriptor[]): Promise<void> => {
+    const result = await window.tet.archive.reorder(
+      resolved.ref,
+      next.map((tab) => tab.tabId),
+    );
+    if (!result.ok) {
+      notify("error", result.error ?? "Could not reorder the archive");
+    }
+  };
+
+  // Disabled while filtering: a drag's index is the full list's, and a filtered-out row no longer sits there.
+  const reorderable = query === "";
+  const { rowProps, listProps, rowClasses } = useDragReorder({
+    dragType: DRAG_TYPE,
+    count: tabs.length,
+    // The id, not the position: it survives a list change mid-drag.
+    payloadOf: (index) => tabs[index].tabId,
+    indexOf: (tabId) => tabs.findIndex((tab) => tab.tabId === tabId),
+    onMove: (from, to) => void reorderTabs(reorder(tabs, from, to)),
+  });
 
   const reopen = async (tab: TabDescriptor): Promise<void> => {
     const result = await window.tet.archive.reopen(resolved.ref, tab.tabId);
@@ -78,14 +103,15 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
       <Section title="ARCHIVE" count={tabs.length}>
         <div className="dense-tree">
           <FilterField placeholder="Filter archive..." value={filter} onChange={setFilter} />
-          <div className="tree">
-            {shownTabs.map((tab) => (
+          <div className="tree" {...(reorderable ? listProps : {})}>
+            {shownTabs.map(({ tab, index }) => (
               <div
                 key={tab.tabId}
-                className="list-row archive-row"
+                className={["list-row", "archive-row", ...(reorderable ? rowClasses(index) : [])].join(" ")}
                 title={`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`}
                 onDoubleClick={() => void reopen(tab)}
                 onContextMenu={(event) => menu.open(event, tab)}
+                {...(reorderable ? rowProps(index) : {})}
               >
                 <AgentIcon agentId={tab.agentId} className="tree-icon" />
                 <span className="list-main">

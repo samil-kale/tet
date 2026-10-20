@@ -321,12 +321,14 @@ export interface TETApi {
   };
   /** Tabs closed with their sessions kept (`tabs.archive`), per repository or worktree. */
   archive: {
-    /** The archived tabs, most recent first. */
+    /** The archived tabs, newest archived or dragged first. */
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
     /** Brings the archived tab back to the strip, resuming its session. */
     reopen: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
     /** Deletes the session behind an archived tab. */
     delete: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
+    /** A drag in the ARCHIVE lane: the tabs take `tabIds`' order, written down so it persists. */
+    reorder: (ref: ProjectRef, tabIds: string[]) => Promise<GitActionResult>;
     /** The repository's or worktree's full list of archived tabs on every change. */
     onChanged: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
   };
