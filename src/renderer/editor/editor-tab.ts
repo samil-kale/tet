@@ -1,4 +1,5 @@
 import type { ProjectRef } from "../../shared/types/project";
+import type { MarkdownPreviewMode } from "./editor-views";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview
@@ -6,18 +7,21 @@ import type { ProjectRef } from "../../shared/types/project";
  * "Keep Open" or an Explorer double-click, and the next file gets a new preview tab. Which tab is
  * the preview is the editor's own state (`editor-views.ts`), decided where an edit lands. A path
  * is open in at most one tab per repository or worktree, and a commit's file in one per commit.
- * Renderer-only: no pty, no session, never persisted
- * (`serializeLayout` writes only tabs with a session id).
+ * Renderer-only: no pty, no session; a restart brings it back under its id (`use-editor-restore.ts`,
+ * `serializeLayout`).
  *
- * Ids count up, so the preview tab keeps its id, pane and place when its file changes. The prefix
- * is shaped unlike any session id, which `loadLayout` hands back as tab ids.
+ * Ids count up within a run, after a stamp of the run, so the preview tab keeps its id, pane and
+ * place when its file changes, and a restored tab's id is never handed out again. The prefix is
+ * shaped unlike any session id, which `loadLayout` hands back as tab ids.
  */
 const EDITOR_TAB_PREFIX = "tet:editor:";
+
+const RUN_STAMP = Date.now().toString(36);
 
 let editorTabs = 0;
 
 export function nextEditorTabId(): string {
-  return `${EDITOR_TAB_PREFIX}${++editorTabs}`;
+  return `${EDITOR_TAB_PREFIX}${RUN_STAMP}-${++editorTabs}`;
 }
 
 /** Where a search result opens its file: the match, 1-based as the editor counts. */
@@ -50,10 +54,20 @@ export interface OpenEditor {
   background?: boolean;
   /** A Markdown file with its preview beside the editor, and the default for the ones after. */
   markdownPreview?: boolean;
+  /** Brought back by a restart (`use-editor-restore.ts`): its Markdown preview and the editor's view
+   *  as they were left, the default left alone; a file gone meanwhile shows as such, unannounced. */
+  restored?: RestoredEditor;
   /** A search result's match, selected once the file's text is in the editor. */
   reveal?: EditorReveal;
   /** The file at a commit, read-only, instead of the working tree's. */
   commit?: CommitSide;
+}
+
+/** What a restart brings back of an editor beyond its file (`OpenEditor.restored`). */
+export interface RestoredEditor {
+  markdownPreview: MarkdownPreviewMode;
+  /** Cursor, scroll and folds, as monaco's `saveViewState` gave them (`editorViewState`). */
+  viewState?: unknown;
 }
 
 export interface EditorTab {

@@ -13,13 +13,14 @@ import { notify } from "../ui/Notices";
 import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
-import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
+import { keepMoved, kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon, FilesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
+import { useDragReorder } from "../ui/drag-reorder";
 
 /** What VS Code's own tab rename accepts. */
 const MAX_TITLE_LENGTH = 50;
@@ -44,7 +45,7 @@ interface PaneProps {
   paneId: PaneId;
   /** The project's preset, for this pane's "move to" siblings. */
   preset: SplitPreset;
-  /** This pane's tabs in project order, the editor tabs last. */
+  /** This pane's tabs in the strip's order (`inOrder`). */
   tabs: PaneTab[];
   activeTabId: string | null;
   agents: AgentInfo[];
@@ -71,7 +72,9 @@ interface PaneProps {
   dragOver: boolean;
   onDragStart: (paneId: PaneId) => void;
   onDragOverChange: (paneId: PaneId, position: DragPosition | null) => void;
-  onDropTab: (paneId: PaneId, tabId: string) => void;
+  /** A tab dropped on this pane: on its strip with the tab it goes before (`before`, undefined
+   *  for the end), anywhere else without (`TabArea` places it). */
+  onDropTab: (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => void;
   onDragEnd: () => void;
 }
 
@@ -129,6 +132,18 @@ export const Pane = memo(function Pane({
   const strip = useRef<HTMLDivElement>(null);
   const tabElements = useRef(new Map<string, HTMLDivElement>());
   const focusHere = useCallback(() => onFocus(paneId), [onFocus, paneId]);
+  // The tab's own drag: the same type the panes and snap zones take, so the one drag reorders,
+  // moves and snaps. A drop on the strip is taken here, the pane's own handler leaving it be; one
+  // where the tab stands already only shows it.
+  const tabDrag = useDragReorder({
+    dragType: TAB_DRAG_TYPE,
+    count: tabs.length,
+    payloadOf: (index) => tabs[index].tabId,
+    indexOf: (tabId) => tabs.findIndex((tab) => tab.tabId === tabId),
+    onMove: (from, to) => onDropTab(paneId, tabs[from].tabId, to === from || to === from + 1 ? undefined : { before: tabs[to]?.tabId }),
+    onTake: (tabId, to) => onDropTab(paneId, tabId, { before: tabs[to]?.tabId }),
+    halves: true,
+  });
 
   // The wheel scrolls the strip horizontally. By hand: preventDefault needs a non-passive listener.
   useEffect(() => {
@@ -308,7 +323,10 @@ export const Pane = memo(function Pane({
             SEPARATOR,
             ...siblingPanes.map((target): ContextMenuEntry => ({
               label: `Move to ${PANE_LABELS[preset][target]}`,
-              run: () => onActivate(tabId, target),
+              run: () => {
+                keepMoved(tabId);
+                onActivate(tabId, target);
+              },
             })),
           ]
         : [];
@@ -416,6 +434,10 @@ export const Pane = memo(function Pane({
           }
           return;
         }
+        // The strip took it (`tabDrag`).
+        if (event.defaultPrevented) {
+          return;
+        }
         event.preventDefault();
         const dragged = event.dataTransfer.getData(TAB_DRAG_TYPE);
         if (dragged) {
@@ -427,10 +449,12 @@ export const Pane = memo(function Pane({
       // A cancelled drag fires neither `drop` nor `dragleave` on the previewed pane.
       onDragEnd={onDragEnd}
     >
-      <div className="tab-strip">
+      {/* The strip's free space is the end of its tabs. */}
+      <div className="tab-strip" {...tabDrag.listProps}>
         <div className="tabs" ref={strip}>
-          {tabs.map((tab) => {
+          {tabs.map((tab, index) => {
             const face = faceOf(tab);
+            const drag = tabDrag.rowProps(index);
             return (
               <div
                 key={tab.tabId}
@@ -441,12 +465,16 @@ export const Pane = memo(function Pane({
                     tabElements.current.delete(tab.tabId);
                   }
                 }}
-                className={`tab${tab.tabId === activeTabId ? " active" : ""}${face.inactive ? " inactive" : ""}`}
+                className={[
+                  "tab",
+                  ...(tab.tabId === activeTabId ? ["active"] : []),
+                  ...(face.inactive ? ["inactive"] : []),
+                  ...tabDrag.rowClasses(index),
+                ].join(" ")}
                 // Always: even the only pane has the snap zones to drop on.
-                draggable
+                {...drag}
                 onDragStart={(event) => {
-                  event.dataTransfer.setData(TAB_DRAG_TYPE, tab.tabId);
-                  event.dataTransfer.effectAllowed = "move";
+                  drag.onDragStart?.(event);
                   onDragStart(paneId);
                 }}
                 onClick={() => onActivate(tab.tabId, paneId)}

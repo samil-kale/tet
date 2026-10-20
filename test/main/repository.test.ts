@@ -426,6 +426,20 @@ describe("an editor tab's file deleted on disk", () => {
   });
 });
 
+describe("an editor tab's file that is not there", () => {
+  it("is not found where git knows nothing of it, and deleted where git does", async () => {
+    const dir = initRepository("tet-repository-not-found-");
+    const repository = await open(dir);
+    const unknown = await repository.readFile("never.txt");
+    assert.equal(unknown.notFound, true);
+    assert.ok(unknown.error);
+    fs.rmSync(path.join(dir, "a.txt"));
+    await repository.refresh();
+    const deleted = await repository.readFile("a.txt");
+    assert.deepEqual([deleted.deleted, deleted.notFound], [true, undefined]);
+  });
+});
+
 describe("the Explorer's search, VS Code's search in files", () => {
   let dir: string;
   let repository: Repository;

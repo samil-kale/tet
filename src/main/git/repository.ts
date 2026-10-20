@@ -823,7 +823,7 @@ export class Repository {
         // Missing: a file git reports deleted shows as all removed, anything else is an error.
         return change?.status === "deleted"
           ? { ...base, deleted: true, head: await this.headBlob(filePath, change) }
-          : { ...base, error: "Not a file" };
+          : { ...base, error: "Not a file", notFound: true };
       }
       if (!stat.isFile()) {
         return { ...base, error: "Not a file" };

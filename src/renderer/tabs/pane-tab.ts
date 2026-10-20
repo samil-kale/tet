@@ -1,5 +1,6 @@
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { isEditorTabId, type EditorTab } from "../editor/editor-tab";
+import { keepEditor } from "../editor/editor-views";
 
 /** What a tab strip holds: a repository's or worktree's terminals, then its
  *  editor tabs. Told apart by their ids (paneTabKind). */
@@ -19,4 +20,11 @@ export function paneTabKind(tabId: string): PaneTabKind {
 
 export function kindOf(tab: PaneTab): KindedTab {
   return { kind: paneTabKind(tab.tabId), tab } as KindedTab;
+}
+
+/** A moved editor tab is no longer the preview, as VS Code pins every editor it moves. */
+export function keepMoved(tabId: string): void {
+  if (paneTabKind(tabId) === "editor") {
+    keepEditor(tabId);
+  }
 }

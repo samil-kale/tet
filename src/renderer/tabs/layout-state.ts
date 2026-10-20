@@ -30,13 +30,15 @@ export function layoutOf(layouts: Record<string, ProjectLayout>, refKey: string)
  *
  * `reconciled` holds the tab list each layout was reconciled against: reconciling it again against
  * the same list returns it unchanged, so a push for another repository or worktree skips it. Only a
- * cache, so safe to write in the updater.
+ * cache, so safe to write in the updater. `settled` holds the ones whose bootstrap has finished:
+ * before, a new tab takes main's place for it (`normalizeLayout`'s `listing`).
  */
 export function reconcileLayouts(
   current: Record<string, ProjectLayout>,
   tabs: Record<string, LayoutTab[]>,
   previousTabs: Record<string, LayoutTab[]>,
   reconciled: WeakMap<ProjectLayout, LayoutTab[]>,
+  settled: Set<string>,
 ): Record<string, ProjectLayout> {
   let next: Record<string, ProjectLayout> | undefined;
   for (const refKey of Object.keys(tabs)) {
@@ -46,7 +48,7 @@ export function reconcileLayouts(
       continue;
     }
     // The close trigger of the collapse; the move trigger is `activateIn`.
-    const layout = collapseClosed(layoutOf(current, refKey), list, previousTabs[refKey] ?? NO_TABS);
+    const layout = collapseClosed(layoutOf(current, refKey), list, previousTabs[refKey] ?? NO_TABS, !settled.has(refKey));
     reconciled.set(layout, list);
     if (layout !== current[refKey]) {
       next ??= { ...current };

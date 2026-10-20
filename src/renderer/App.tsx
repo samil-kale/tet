@@ -35,13 +35,14 @@ import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
 import { PLATFORM } from "./platform";
-import { DEFAULT_LAYOUT, paneOf, tabsOnScreen } from "./tabs/pane-layout";
+import { DEFAULT_LAYOUT, inOrder, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS } from "./tabs/layout-state";
 import { useProjectLayouts } from "./tabs/use-project-layouts";
 import { workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import type { PaneTab } from "./tabs/pane-tab";
 import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
+import { useEditorRestore } from "./tabs/use-editor-restore";
 import { useEditorSync } from "./tabs/use-editor-sync";
 import { useRefHeads } from "./lanes/projects/use-ref-heads";
 import { useWindowFocused } from "./ui/use-window-focused";
@@ -86,12 +87,22 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     stripTabsRef.current = next;
     return next;
   }, [tabs, editorTabs]);
+  /** The editor tabs a restart brings back (use-editor-restore.ts). */
+  const { restored, forgetRestore } = useEditorRestore(resolvedRefs, states, editorTabs, editorTabsRef, setEditorTabs);
+  /** A layout settles once its sessions are listed and its editor tabs are back. */
+  const layoutStarting = useMemo(() => {
+    const next: Record<string, boolean> = {};
+    for (const [refKey, isStarting] of Object.entries(starting)) {
+      next[refKey] = isStarting || !restored.has(refKey);
+    }
+    return next;
+  }, [starting, restored]);
   /**
    * Split state lives here, not in `TabArea`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
    * through `onActivateTab`. See "Split view" in AGENTS.md.
    */
-  const { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout } = useProjectLayouts(stripTabs, starting);
+  const { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab, forgetLayout } = useProjectLayouts(stripTabs, layoutStarting);
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
   const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
@@ -201,6 +212,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const forgetProjectRef = useCallback(
     (ref: ProjectRef) => {
       const refKey = refKeyOf(ref);
+      forgetRestore(refKey);
       forgetFeeds(refKey);
       setEditorTabs((current) => forget(current, refKey));
       forgetEditorSync(refKey);
@@ -210,7 +222,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       // The xterms live outside React; this is where a repository or worktree ends for good.
       disposeRefTerminals(ref);
     },
-    [forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks],
+    [forgetRestore, forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks],
   );
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git lane's
@@ -270,7 +282,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         return;
       }
       const layout = layouts[activeRefKey] ?? DEFAULT_LAYOUT;
-      const list = (stripTabs[activeRefKey] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane);
+      const list = inOrder(
+        layout.order,
+        (stripTabs[activeRefKey] ?? []).filter((tab) => paneOf(layout, tab.tabId) === layout.focusedPane),
+      );
       if (list.length === 0) {
         return;
       }
@@ -454,6 +469,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               layout={layouts[resolved.refKey] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}
+              onDropOnStrip={dropOnStrip}
               onFocusPane={focusPane}
               finishedTabIds={marks[resolved.refKey]?.finished ?? NO_IDS}
               waitingTabIds={marks[resolved.refKey]?.waiting ?? NO_IDS}

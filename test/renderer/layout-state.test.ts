@@ -26,6 +26,8 @@ function twoColumns(): ProjectLayout {
     focusedPane: "a",
     tabPane: { x: "a", y: "b" },
     activeTab: { a: "x", b: "y" },
+    order: ["x", "y"],
+    recent: [],
     commandPane: {},
   };
 }
@@ -66,8 +68,8 @@ describe("reconciling every layout with its tabs", () => {
   it("answers the same record when nothing changed, whatever the lists' contents", () => {
     const tabs = { p: [tab("x"), tab("y")] };
     const reconciled = new WeakMap<ProjectLayout, LayoutTab[]>();
-    const first = reconcileLayouts({ p: twoColumns() }, tabs, {}, reconciled);
-    const again = reconcileLayouts(first, tabs, tabs, reconciled);
+    const first = reconcileLayouts({ p: twoColumns() }, tabs, {}, reconciled, new Set());
+    const again = reconcileLayouts(first, tabs, tabs, reconciled, new Set());
     assert.equal(again, first);
   });
 
@@ -76,7 +78,7 @@ describe("reconciling every layout with its tabs", () => {
     const layout = twoColumns();
     const reconciled = new WeakMap<ProjectLayout, LayoutTab[]>([[layout, list]]);
     const current = { p: layout };
-    assert.equal(reconcileLayouts(current, { p: list }, { p: list }, reconciled), current);
+    assert.equal(reconcileLayouts(current, { p: list }, { p: list }, reconciled, new Set()), current);
   });
 
   it("collapses the pane whose last tab closed, and leaves the other projects' layouts as they are", () => {
@@ -84,14 +86,20 @@ describe("reconciling every layout with its tabs", () => {
     const before = [tab("x"), tab("y")];
     const after = [tab("x")];
     const reconciled = new WeakMap<ProjectLayout, LayoutTab[]>();
-    const result = reconcileLayouts({ p: twoColumns(), q: other }, { p: after, q: before }, { p: before, q: before }, reconciled);
+    const result = reconcileLayouts(
+      { p: twoColumns(), q: other },
+      { p: after, q: before },
+      { p: before, q: before },
+      reconciled,
+      new Set(),
+    );
     assert.equal(result.p.preset, "single");
     assert.equal(result.q, other);
   });
 
   it("loads a project's layout at its first tabs, reconciled against them", () => {
     storage.set(KEY, JSON.stringify({ preset: "cols2", focusedPane: "a", tabPane: { s1: "a", s2: "b" }, activeTab: {}, commandPane: {} }));
-    const result = reconcileLayouts({}, { p: [tab("s1", "s1"), tab("s2", "s2")] }, {}, new WeakMap());
+    const result = reconcileLayouts({}, { p: [tab("s1", "s1"), tab("s2", "s2")] }, {}, new WeakMap(), new Set());
     assert.equal(result.p.preset, "cols2");
     assert.deepEqual(result.p.tabPane, { s1: "a", s2: "b" });
   });
@@ -99,7 +107,7 @@ describe("reconciling every layout with its tabs", () => {
   it("remembers the list a layout was reconciled against, so the same push is skipped next time", () => {
     const list = [tab("x"), tab("y")];
     const reconciled = new WeakMap<ProjectLayout, LayoutTab[]>();
-    const result = reconcileLayouts({}, { p: list }, {}, reconciled);
+    const result = reconcileLayouts({}, { p: list }, {}, reconciled, new Set());
     assert.equal(reconciled.get(result.p), list);
   });
 });

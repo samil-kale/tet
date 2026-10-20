@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState, type DragEvent, type HTMLAttributes } from "react";
 import { useLatest } from "./use-latest";
 
-/** Drag-reordering, shared by the projects lane's lists, the lanes and the strip's toggles.
+/** Drag-reordering, shared by the projects lane's lists, the lanes, the strip's toggles and the
+ *  panes' tab strips.
  *  Each supplies its own drag type (nothing else may take the drop: no other list, no terminal),
  *  its payload (an id, or the position where an entry can appear twice), and the move itself. */
 interface DragReorderOptions {
@@ -15,6 +16,12 @@ interface DragReorderOptions {
   indexOf: (payload: string) => number;
   /** The row at `from` goes to insertion index `to`. See `reorder`. */
   onMove: (from: number, to: number) => void;
+  /** A payload of the same drag type that no row here carries — a tab from another pane's strip —
+   *  dropped at insertion index `to`. Without it such a drop moves nothing. */
+  onTake?: (payload: string, to: number) => void;
+  /** The drop goes before or after the row by the half of it under the pointer, left or right,
+   *  as VS Code's tabs take one; else it takes the row's place (`insertionIndex`). */
+  halves?: boolean;
 }
 
 /** Any element: a row, a lane, a button. */
@@ -42,7 +49,7 @@ export function reorder<T>(items: readonly T[], from: number, to: number): T[] {
   return moved;
 }
 
-export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: DragReorderOptions): DragReorder {
+export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove, onTake, halves }: DragReorderOptions): DragReorder {
   const [dragged, setDragged] = useState<number | null>(null);
   /** The insertion index the dragged row would take. */
   const [dropAt, setDropAt] = useState<number | null>(null);
@@ -63,6 +70,8 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
     // NaN and -1 both fail this, so an unresolvable drop moves nothing.
     if (from >= 0 && from < count) {
       onMove(from, to);
+    } else if (from === -1 && payload !== "") {
+      onTake?.(payload, to);
     }
   };
 
@@ -82,8 +91,12 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
   );
   const handleProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => handles[index];
 
-  /** What takes this list's drag where `takes` says so, dropping it at insertion index `to`. */
-  const dropProps = (to: number, takes: (event: DragEvent<RowElement>) => boolean = () => true): HTMLAttributes<RowElement> => ({
+  /** What takes this list's drag where `takes` says so, dropping it at insertion index `at`, read
+   *  off the event where the pointer decides it. */
+  const dropProps = (
+    at: number | ((event: DragEvent<RowElement>) => number),
+    takes: (event: DragEvent<RowElement>) => boolean = () => true,
+  ): HTMLAttributes<RowElement> => ({
     onDragOver: (event) => {
       // Read off the drag, not state: it also rejects a file dragged in from outside.
       if (!takes(event) || !event.dataTransfer.types.includes(dragType)) {
@@ -92,7 +105,7 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       // Only a prevented dragover makes an element a drop target.
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-      setDropAt(to);
+      setDropAt(typeof at === "number" ? at : at(event));
     },
     onDrop: (event) => {
       // A file still lands here (main.tsx prevents every file's dragover); its getData is "", and
@@ -102,11 +115,19 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
       }
       event.preventDefault();
       // Not the dragover state: it only draws the line, and a drop must not wait on it.
-      move(event.dataTransfer.getData(dragType), to);
+      move(event.dataTransfer.getData(dragType), typeof at === "number" ? at : at(event));
     },
   });
 
-  const targetProps = (index: number): HTMLAttributes<RowElement> => dropProps(insertionIndex(index));
+  /** Before the row over its left half, after it over its right one (`halves`). */
+  const byHalf =
+    (index: number) =>
+    (event: DragEvent<RowElement>): number => {
+      const box = event.currentTarget.getBoundingClientRect();
+      return event.clientX - box.left <= box.width / 2 ? index : index + 1;
+    };
+
+  const targetProps = (index: number): HTMLAttributes<RowElement> => dropProps(halves ? byHalf(index) : insertionIndex(index));
 
   const rowProps = (index: number): HTMLAttributes<RowElement> & { draggable: true } => ({
     ...targetProps(index),
@@ -116,7 +137,15 @@ export function useDragReorder({ dragType, count, payloadOf, indexOf, onMove }: 
   /** The empty space below the last row. Row drags bubble here too, and are left to the row. */
   const isBelowList = (event: DragEvent<RowElement>): boolean => event.target === event.currentTarget;
 
-  const listProps = dropProps(count, isBelowList);
+  const listProps: HTMLAttributes<RowElement> = {
+    ...dropProps(count, isBelowList),
+    // A drag that leaves for another list ends there, never here: its line goes as it leaves.
+    onDragLeave: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+        setDropAt(null);
+      }
+    },
+  };
 
   const rowClasses = (index: number): string[] => {
     const classes: string[] = [];

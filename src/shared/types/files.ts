@@ -36,6 +36,9 @@ export interface FileContent {
   /** A commit's file against its parent (`CommitSide`): never saved. */
   readOnly?: boolean;
   error?: string;
+  /** With `error`: nothing at the path, and nothing git knows deleted there — a file the tab can
+   *  create (`createMissingFile`). */
+  notFound?: boolean;
 }
 
 /** The mtime of a file that is not there: what a save expects of one deleted on disk, which it

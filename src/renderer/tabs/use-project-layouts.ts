@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
-import { dropStoredLayout, placeCommandTab, snapTab as snapTabLayout } from "./pane-layout";
+import { dropOnStrip as dropOnStripLayout, dropStoredLayout, placeCommandTab, snapTab as snapTabLayout } from "./pane-layout";
 import type { LayoutTab, PaneId, ProjectLayout, SnapTransition } from "./pane-layout";
 import {
   activateIn,
@@ -18,6 +18,7 @@ interface ProjectLayouts {
   layouts: Record<string, ProjectLayout>;
   activateTab: (refKey: string, tabId: string, paneId?: PaneId) => void;
   snapTab: (refKey: string, tabId: string, transition: SnapTransition) => void;
+  dropOnStrip: (refKey: string, tabId: string, paneId: PaneId, before: string | undefined) => void;
   focusPane: (refKey: string, paneId: PaneId) => void;
   placeTab: (refKey: string, tabId: string, command?: string) => void;
   forgetLayout: (refKey: string) => void;
@@ -41,6 +42,8 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
   const reconciledRef = useRef(new WeakMap<ProjectLayout, LayoutTab[]>());
   /** Read by the callbacks: depending on `tabs` would remake every pane's props on every push. */
   const tabsRef = useLatest(tabs);
+  /** What was last written, and whose bootstrap has finished (`LayoutPersistence`). */
+  const persistence = useRef(newLayoutPersistence());
 
   /**
    * Reconciles every layout with its tab list (`collapseClosed`).
@@ -54,11 +57,11 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     const previousTabs = previousTabsRef.current;
     previousTabsRef.current = tabs;
     const reconciled = reconciledRef.current;
-    setLayouts((current) => reconcileLayouts(current, tabs, previousTabs, reconciled));
+    // As settled at this push: the updater may run once a project has settled since.
+    const settled = new Set(persistence.current.settled);
+    setLayouts((current) => reconcileLayouts(current, tabs, previousTabs, reconciled, settled));
   }, [tabs]);
 
-  /** What was last written, and whose bootstrap has finished (`LayoutPersistence`). */
-  const persistence = useRef(newLayoutPersistence());
   useEffect(() => {
     for (const [refKey, isStarting] of Object.entries(starting)) {
       if (isStarting || persistence.current.settled.has(refKey)) {
@@ -86,6 +89,17 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
       setLayouts((current) => ({
         ...current,
         [refKey]: snapTabLayout(layoutOf(current, refKey), tabId, transition, tabsRef.current[refKey] ?? []),
+      }));
+    },
+    [tabsRef],
+  );
+
+  /** A tab dropped on a pane's strip — see `dropOnStrip`. */
+  const dropOnStrip = useCallback(
+    (refKey: string, tabId: string, paneId: PaneId, before: string | undefined) => {
+      setLayouts((current) => ({
+        ...current,
+        [refKey]: dropOnStripLayout(layoutOf(current, refKey), tabId, paneId, before, tabsRef.current[refKey] ?? []),
       }));
     },
     [tabsRef],
@@ -127,5 +141,5 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     forgetPersistence(persistence.current, refKey);
   }, []);
 
-  return { layouts, activateTab, snapTab, focusPane, placeTab, forgetLayout };
+  return { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab, forgetLayout };
 }

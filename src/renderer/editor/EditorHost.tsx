@@ -5,6 +5,7 @@ import { isMarkdown } from "./diff-highlight";
 import {
   attachEditor,
   attachMarkdownPreview,
+  createMissingFile,
   diffShown,
   editorKind,
   focusEditor,
@@ -198,7 +199,18 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       </div>
       <div className="editor-body">
         {/* Why is the notice's (editor-views.ts); the tab says only what it is, like the rest. */}
-        {kind === "error" && <div className="placeholder">Could not read the file.</div>}
+        {/* A file that is not there: VS Code's words and offer. */}
+        {kind === "error" &&
+          (file?.notFound ? (
+            <div className="placeholder editor-not-found">
+              <p>The editor could not be opened because the file was not found.</p>
+              <button className="button" onClick={() => void createMissingFile(tabId)}>
+                Create File
+              </button>
+            </div>
+          ) : (
+            <div className="placeholder">Could not read the file.</div>
+          ))}
         {kind === "image" && <ImageView image={{ before: file?.head?.image, after: file?.image }} sideBySide={sideBySide} />}
         {kind === "binary" && <div className="placeholder">Binary file.</div>}
         {kind === "tooLarge" && <div className="placeholder">File too large to edit.</div>}

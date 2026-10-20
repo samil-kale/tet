@@ -677,6 +677,7 @@ textarea:focus,
 
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
 .project-group.dragging,
+.tab.dragging,
 .command-row.dragging,
 .archive-row.dragging,
 .edit-row.dragging {
@@ -720,6 +721,28 @@ textarea:focus,
 
 .project-group.drop-after::after {
   bottom: 0;
+}
+
+/* A tab's line stands between tabs, drawn over the active tab's own line (a shadow); 2px, as VS
+   Code draws its tabs' drop target. */
+.tab.drop-before::before,
+.tab.drop-after::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  background: var(--tet-focusBorder);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+}
+
+.tab.drop-before::before {
+  left: 0;
+}
+
+.tab.drop-after::after {
+  right: 0;
 }
 
 /* Takes the leftover width, so the row's buttons stay at its right edge. */
@@ -1164,6 +1187,8 @@ textarea:focus,
 }
 
 .tab {
+  /* For the drop line (`.tab.drop-before`). */
+  position: relative;
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 6px 0 12px;
@@ -1790,6 +1815,19 @@ textarea:focus,
   padding: 12px;
   color: var(--tet-descriptionForeground);
   font-size: var(--tet-font-size);
+}
+
+/* A file that is not there: what is wrong, then the offer to create it; the gap the empty
+   workspace's. */
+.editor-not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.editor-not-found p {
+  margin: 0;
 }
 
 .empty-workspace {

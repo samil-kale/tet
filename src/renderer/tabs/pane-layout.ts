@@ -1,7 +1,8 @@
 import { ownValue } from "../../shared/own-value";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { sameRecord } from "../identity";
+import { sameList, sameRecord } from "../identity";
 import { layoutKey } from "../ui/layout-storage";
+import { isEditorTabId } from "../editor/editor-tab";
 
 /**
  * The tab area's split view: fixed presets, not a nestable tree (AGENTS.md, "Split view"). At most
@@ -47,7 +48,8 @@ export const PANE_LABELS: Record<SplitPreset, Partial<Record<PaneId, string>>> =
 
 /**
  * What the layout reads of a tab: id, session (persistence), saved command (`placeCommandTab`),
- * last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id, so is never written.
+ * last use (`pickActive`). The editor tab (`editor-tab.ts`) has only the id, written as it is
+ * (`persistedIdOf`).
  */
 export type LayoutTab = Pick<TabDescriptor, "tabId" | "sessionId" | "command" | "updatedAt">;
 
@@ -64,6 +66,17 @@ export interface ProjectLayout {
   /** Each pane's own active tab. */
   activeTab: Partial<Record<PaneId, string | null>>;
   /**
+   * Every tab's place in its strip, by tab id, all panes in one list (`inOrder`): moved by a drag
+   * (`dropOnStrip`), a new tab placed beside its pane's active one as VS Code does (`normalizeLayout`).
+   */
+  order: string[];
+  /**
+   * The tabs last made active, the most recent first, all panes in one list: a pane whose active
+   * tab closes or moves away shows its most recent other one, as VS Code does
+   * (`workbench.editor.focusRecentEditorAfterClose`).
+   */
+  recent: string[];
+  /**
    * Where each saved command's tab last lay, by command line — written on close (`normalizeLayout`),
    * read on rerun (`placeCommandTab`), persisted with the open ones merged (`serializeLayout`).
    * With the preset: a pane is a position only within its preset.
@@ -77,8 +90,43 @@ interface CommandPlace {
   pane: PaneId;
 }
 
+/** Shared instance, so an empty `order` or `recent` keeps its identity. */
+const NO_IDS: string[] = [];
+
 export function defaultLayout(): ProjectLayout {
-  return { preset: "single", focusedPane: "a", tabPane: {}, activeTab: {}, commandPane: {} };
+  return { preset: "single", focusedPane: "a", tabPane: {}, activeTab: {}, order: NO_IDS, recent: NO_IDS, commandPane: {} };
+}
+
+/** `tabs` as the strip shows them, by `order`; one it does not hold yet keeps its place behind. */
+export function inOrder<T extends { tabId: string }>(order: readonly string[], tabs: T[]): T[] {
+  const rank = new Map(order.map((tabId, index) => [tabId, index]));
+  const rankOf = (tab: T): number => rank.get(tab.tabId) ?? order.length;
+  return [...tabs].sort((a, b) => rankOf(a) - rankOf(b));
+}
+
+/** `order` with `tabId` taken out and put back before `before`, or at the end without one. */
+function insertBefore(order: readonly string[], tabId: string, before: string | undefined): string[] {
+  const rest = order.filter((id) => id !== tabId);
+  const index = before === undefined ? -1 : rest.indexOf(before);
+  rest.splice(index < 0 ? rest.length : index, 0, tabId);
+  return rest;
+}
+
+/** `order` with `tabId` taken out and put back right after `after`, or at the end without one. */
+function insertAfter(order: readonly string[], tabId: string, after: string | null | undefined): string[] {
+  const rest = order.filter((id) => id !== tabId);
+  const index = after == null ? -1 : rest.indexOf(after);
+  return insertBefore(rest, tabId, index < 0 ? undefined : rest[index + 1]);
+}
+
+/** `recent` with `tabIds` made the most recent, the first of them most. */
+function madeRecent(recent: readonly string[], tabIds: string[]): string[] {
+  return [...tabIds, ...recent.filter((tabId) => !tabIds.includes(tabId))];
+}
+
+/** `sameList` for `order` and `recent`, an empty one kept as it is too. */
+function sameIds(previous: string[], next: string[]): string[] {
+  return sameList(previous, next, previous.length === 0 ? previous : NO_IDS);
 }
 
 /** Shared instance, read where a repository or worktree has no layout yet: stable for memoized views. */
@@ -108,8 +156,11 @@ export function activeEditorTab(layout: ProjectLayout, editorTabIds: string[], p
   return [layout.activeTab[layout.focusedPane], ...visibleTabIds(layout), previous].find(open) ?? editorTabIds.at(-1);
 }
 
-/** The tab a pane keeps active once `wanted` (its previous active tab) is gone from `list`. */
-function pickActive(list: LayoutTab[], previousList: LayoutTab[], wanted: string | null | undefined): string | null {
+/**
+ * The tab a pane keeps active once `wanted` (its previous active tab) is gone from `list`, the
+ * pane's tabs in the strip's order; `recent` is the layout's.
+ */
+function pickActive(list: LayoutTab[], previousList: LayoutTab[], wanted: string | null | undefined, recent: string[]): string | null {
   if (wanted && list.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
@@ -126,23 +177,31 @@ function pickActive(list: LayoutTab[], previousList: LayoutTab[], wanted: string
     // The pane's first: the session last worked in.
     return [...list].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0].tabId;
   }
-  // Closed: VS Code's rule, the neighbour on the right, else the left.
+  // Closed: the pane's most recently active other tab, as VS Code picks it; where none was ever
+  // active, the neighbour on the right, else the left.
+  const mostRecent = recent.find((tabId) => list.some((tab) => tab.tabId === tabId));
+  if (mostRecent !== undefined) {
+    return mostRecent;
+  }
   const index = previousList.findIndex((tab) => tab.tabId === wanted);
   return list[Math.min(Math.max(index, 0), list.length - 1)].tabId;
 }
 
 /**
  * The one place a layout is reconciled with the tab list: a tab seen for the first time goes to
- * the focused pane, each pane's active tab still exists, moves to a neighbour
- * in its pane, or becomes null. `tabPane` entries of closed tabs are dropped; `previousTabs` tells
+ * the focused pane, each pane's active tab still exists, moves to the pane's most recent other
+ * one, or becomes null. `tabPane` entries of closed tabs are dropped; `previousTabs` tells
  * "closed" from "not created yet" (`pickActive`).
  *
  * An entry for a tab in neither list is kept: sessions arrive agent by agent at startup. One that
  * never comes lasts until the next `serializeLayout`, which writes only what exists.
  *
+ * A tab new to `order` goes right of its pane's active tab, as VS Code opens one; while `listing`
+ * (the bootstrap's sessions arriving), where main lists it among the others instead.
+ *
  * Returns `layout` itself when nothing changed: a new object re-renders every memoized view.
  */
-export function normalizeLayout(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[]): ProjectLayout {
+export function normalizeLayout(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[], listing: boolean): ProjectLayout {
   const panes = PRESET_PANES[layout.preset];
   const previousIds = new Set(previousTabs.map((tab) => tab.tabId));
   const currentIds = new Set(tabs.map((tab) => tab.tabId));
@@ -159,12 +218,50 @@ export function normalizeLayout(layout: ProjectLayout, tabs: LayoutTab[], previo
   for (const tab of tabs) {
     tabPane[tab.tabId] ??= focusedPane;
   }
-  // The previous list by the previous assignment: a closed tab's is dropped above.
-  const listOf = (source: LayoutTab[], assignment: Record<string, PaneId>, paneId: PaneId): LayoutTab[] =>
-    source.filter((tab) => (assignment[tab.tabId] ?? layout.focusedPane) === paneId);
+  // Kept as `tabPane` is: still open, or not confirmed closed.
+  const kept = (tabId: string): boolean => currentIds.has(tabId) || !previousIds.has(tabId);
+  let order = layout.order.filter(kept);
+  let recent = layout.recent.filter(kept);
+  const placed = new Set(order);
+  /** Per pane, the tab the next new one goes right of: its active one, then the one placed last. */
+  const anchors: Partial<Record<PaneId, string | null>> = {};
+  for (const [index, tab] of tabs.entries()) {
+    if (placed.has(tab.tabId)) {
+      continue;
+    }
+    if (listing) {
+      order = insertBefore(order, tab.tabId, tabs.slice(index + 1).find((later) => placed.has(later.tabId))?.tabId);
+    } else {
+      const paneId = tabPane[tab.tabId];
+      const active = layout.activeTab[paneId];
+      const anchor = paneId in anchors ? anchors[paneId] : active && placed.has(active) ? active : null;
+      order = insertAfter(order, tab.tabId, anchor);
+      anchors[paneId] = tab.tabId;
+    }
+    placed.add(tab.tabId);
+  }
+  // Each list in the strip's order, the previous one by the previous order and assignment: a closed
+  // tab's is dropped above.
+  const listOf = (source: LayoutTab[], assignment: Record<string, PaneId>, sequence: string[], paneId: PaneId): LayoutTab[] =>
+    inOrder(
+      sequence,
+      source.filter((tab) => (assignment[tab.tabId] ?? layout.focusedPane) === paneId),
+    );
   const activeTab: Partial<Record<PaneId, string | null>> = {};
   for (const paneId of panes) {
-    activeTab[paneId] = pickActive(listOf(tabs, tabPane, paneId), listOf(previousTabs, layout.tabPane, paneId), layout.activeTab[paneId]);
+    activeTab[paneId] = pickActive(
+      listOf(tabs, tabPane, order, paneId),
+      listOf(previousTabs, layout.tabPane, layout.order, paneId),
+      layout.activeTab[paneId],
+      recent,
+    );
+  }
+  // A tab that became a pane's active one here is its most recent.
+  const activated = panes
+    .map((paneId) => activeTab[paneId])
+    .filter((tabId, index): tabId is string => tabId != null && tabId !== layout.activeTab[panes[index]]);
+  if (activated.length > 0) {
+    recent = madeRecent(recent, activated);
   }
   // A closing saved command's tab records its pane under its command line.
   let commandPane = layout.commandPane;
@@ -180,15 +277,27 @@ export function normalizeLayout(layout: ProjectLayout, tabs: LayoutTab[], previo
   }
   const nextTabPane = sameRecord(layout.tabPane, tabPane);
   const nextActiveTab = sameRecord(layout.activeTab, activeTab);
+  const nextOrder = sameIds(layout.order, order);
+  const nextRecent = sameIds(layout.recent, recent);
   if (
     focusedPane === layout.focusedPane &&
     nextTabPane === layout.tabPane &&
     nextActiveTab === layout.activeTab &&
+    nextOrder === layout.order &&
+    nextRecent === layout.recent &&
     commandPane === layout.commandPane
   ) {
     return layout;
   }
-  return { preset: layout.preset, focusedPane, tabPane: nextTabPane, activeTab: nextActiveTab, commandPane };
+  return {
+    preset: layout.preset,
+    focusedPane,
+    tabPane: nextTabPane,
+    activeTab: nextActiveTab,
+    order: nextOrder,
+    recent: nextRecent,
+    commandPane,
+  };
 }
 
 /** Which pane of the new preset each pane of the old one becomes; one left out keeps its letter. */
@@ -214,32 +323,78 @@ function retarget(layout: ProjectLayout, preset: SplitPreset, remap: PaneRemap, 
     }
   }
   return normalizeLayout(
-    { preset, focusedPane: paneFor(layout.focusedPane), tabPane, activeTab, commandPane: layout.commandPane },
+    {
+      preset,
+      focusedPane: paneFor(layout.focusedPane),
+      tabPane,
+      activeTab,
+      order: layout.order,
+      recent: layout.recent,
+      commandPane: layout.commandPane,
+    },
     tabs,
     tabs,
+    false,
   );
 }
 
 /**
  * A tab becomes `target`'s active one — a click, a move, a new tab — written whether or not it has
- * arrived in `tabs` (`normalizeLayout` leaves a pending one alone). Focus follows. The source pane
- * falls back to the tab before it, else the first, else null.
+ * arrived in `tabs` (`normalizeLayout` leaves a pending one alone), and its most recent. Focus
+ * follows. The source pane falls back as on a close (`pickActive`). A tab new to `order`, or moved
+ * to another pane, goes right of `target`'s active one, as VS Code opens one (`normalizeLayout`
+ * places one arriving first); a drop on a strip puts it where it fell (`dropOnStrip`).
  */
 export function moveTab(layout: ProjectLayout, tabId: string, target: PaneId, tabs: LayoutTab[]): ProjectLayout {
   const source = paneOf(layout, tabId);
   let activeTab = layout.activeTab;
+  const shown = [tabId];
   if (target !== source && layout.activeTab[source] === tabId) {
-    const sourceTabs = tabs.filter((tab) => paneOf(layout, tab.tabId) === source);
-    const index = sourceTabs.findIndex((tab) => tab.tabId === tabId);
-    const remaining = sourceTabs.filter((tab) => tab.tabId !== tabId);
-    activeTab = { ...activeTab, [source]: remaining.length > 0 ? remaining[Math.max(index - 1, 0)].tabId : null };
+    const sourceTabs = inOrder(
+      layout.order,
+      tabs.filter((tab) => paneOf(layout, tab.tabId) === source),
+    );
+    const next = pickActive(
+      sourceTabs.filter((tab) => tab.tabId !== tabId),
+      sourceTabs,
+      tabId,
+      layout.recent,
+    );
+    activeTab = { ...activeTab, [source]: next };
+    if (next !== null) {
+      shown.push(next);
+    }
   }
+  const placed = layout.order.includes(tabId) && target === source;
   return {
     ...layout,
     focusedPane: target,
     tabPane: layout.tabPane[tabId] === target ? layout.tabPane : { ...layout.tabPane, [tabId]: target },
     activeTab: { ...activeTab, [target]: tabId },
+    order: placed ? layout.order : insertAfter(layout.order, tabId, layout.activeTab[target]),
+    recent: sameIds(layout.recent, madeRecent(layout.recent, shown)),
   };
+}
+
+/**
+ * A tab dropped on `paneId`'s strip: shown there as `activateTab` shows it, and put right before
+ * `before`, or behind the pane's last tab without one. The last is found first, as the drop's pane
+ * may change its letter when the source pane collapses.
+ */
+export function dropOnStrip(
+  layout: ProjectLayout,
+  tabId: string,
+  paneId: PaneId,
+  before: string | undefined,
+  tabs: LayoutTab[],
+): ProjectLayout {
+  const last = inOrder(
+    layout.order,
+    tabs.filter((tab) => tab.tabId !== tabId && paneOf(layout, tab.tabId) === paneId),
+  ).at(-1)?.tabId;
+  const shown = activateTab(layout, tabId, paneId, tabs);
+  const order = before !== undefined ? insertBefore(shown.order, tabId, before) : insertAfter(shown.order, tabId, last);
+  return { ...shown, order: sameIds(shown.order, order) };
 }
 
 /** The panes holding at least one of `tabs`, in reading order. */
@@ -308,10 +463,10 @@ export function activateTab(layout: ProjectLayout, tabId: string, target: PaneId
  * `normalizeLayout` for a tab list push, plus the collapse of every pane that held a tab of
  * `previousTabs` and holds none of `tabs`.
  */
-export function collapseClosed(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[]): ProjectLayout {
+export function collapseClosed(layout: ProjectLayout, tabs: LayoutTab[], previousTabs: LayoutTab[], listing: boolean): ProjectLayout {
   const occupied = occupiedPanes(layout, tabs);
   const emptied = occupiedPanes(layout, previousTabs).filter((paneId) => !occupied.includes(paneId));
-  return collapsePanes(normalizeLayout(layout, tabs, previousTabs), emptied, tabs);
+  return collapsePanes(normalizeLayout(layout, tabs, previousTabs, listing), emptied, tabs);
 }
 
 /**
@@ -325,7 +480,7 @@ export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): Project
     layout.activeTab,
     Object.fromEntries(Object.entries(layout.activeTab).filter(([, tabId]) => tabId == null || open.has(tabId))),
   );
-  const settled = activeTab === layout.activeTab ? layout : normalizeLayout({ ...layout, activeTab }, tabs, tabs);
+  const settled = activeTab === layout.activeTab ? layout : normalizeLayout({ ...layout, activeTab }, tabs, tabs, false);
   const occupied = occupiedPanes(settled, tabs);
   return collapsePanes(
     settled,
@@ -538,7 +693,8 @@ export function layoutStorageKey(refKey: string, suffix: string): string {
 }
 
 /**
- * What survives a restart: preset, focused pane, each tab's pane — keyed by *session id*. A new
+ * What survives a restart: preset, focused pane, each tab's pane and place — a terminal keyed by
+ * its *session id*, an editor tab by its own id, which it keeps (`use-editor-restore.ts`). A new
  * tab's `new-N` id restarts from zero each run and returns, if at all, under its session id. So
  * both are one entry, and what cannot return (a shell tab, no session persisted) is dropped.
  * The sash shares are persisted beside it (`useSashFraction`).
@@ -552,6 +708,10 @@ interface PersistedLayout {
    * stale one (session deleted between runs) gives way once they are (`collapseEmpty`).
    */
   activeTab: Partial<Record<PaneId, string>>;
+  /** The strip's order, by the same ids. */
+  order: string[];
+  /** The tabs last made active, by the same ids. */
+  recent: string[];
   /** Where each saved command last lay — the closed ones as recorded, the open ones as they are. */
   commandPane: Record<string, CommandPlace>;
 }
@@ -571,7 +731,9 @@ export function loadLayout(refKey: string): ProjectLayout {
     if (typeof parsed !== "object" || parsed === null) {
       return fallback;
     }
-    const { preset, focusedPane, tabPane, activeTab, commandPane } = parsed as Record<string, unknown>;
+    const { preset, focusedPane, tabPane, activeTab, order, recent, commandPane } = parsed as Record<string, unknown>;
+    const ids = (value: unknown): string[] =>
+      Array.isArray(value) ? value.filter((tabId): tabId is string => typeof tabId === "string") : NO_IDS;
     if (!isSplitPreset(preset) || !isPaneId(focusedPane)) {
       return fallback;
     }
@@ -606,6 +768,8 @@ export function loadLayout(refKey: string): ProjectLayout {
       focusedPane: PRESET_PANES[preset].includes(focusedPane) ? focusedPane : PRESET_PANES[preset][0],
       tabPane: restored,
       activeTab: active,
+      order: ids(order),
+      recent: ids(recent),
       commandPane: places,
     };
   } catch {
@@ -613,21 +777,32 @@ export function loadLayout(refKey: string): ProjectLayout {
   }
 }
 
+/** The id a tab comes back under next run (`PersistedLayout`): a terminal's session's, an editor
+ *  tab's own; none for a terminal without a session, which does not come back. */
+function persistedIdOf(tab: LayoutTab): string | undefined {
+  return tab.sessionId ?? (isEditorTabId(tab.tabId) ? tab.tabId : undefined);
+}
+
 /**
- * Only tabs with a session are written, under it (`PersistedLayout`), so disk never names an id
- * the next run could hand to another tab.
+ * Only tabs that come back are written, under their persisted id (`persistedIdOf`), so disk never
+ * names an id the next run could hand to another tab.
  */
 export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): string {
   const tabPane: Record<string, PaneId> = {};
   // The open command tabs' panes over the recorded ones.
   const commandPane = { ...layout.commandPane };
   const activeTab: Partial<Record<PaneId, string>> = {};
-  for (const tab of tabs) {
+  const order: string[] = [];
+  const persistedIds = new Map<string, string>();
+  for (const tab of inOrder(layout.order, tabs)) {
     const paneId = layout.tabPane[tab.tabId];
-    if (tab.sessionId !== undefined && paneId !== undefined) {
-      tabPane[tab.sessionId] = paneId;
+    const persistedId = persistedIdOf(tab);
+    if (persistedId !== undefined && paneId !== undefined) {
+      tabPane[persistedId] = paneId;
+      order.push(persistedId);
+      persistedIds.set(tab.tabId, persistedId);
       if (layout.activeTab[paneId] === tab.tabId) {
-        activeTab[paneId] = tab.sessionId;
+        activeTab[paneId] = persistedId;
       }
     }
     if (tab.command !== undefined) {
@@ -639,6 +814,8 @@ export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[]): strin
     focusedPane: layout.focusedPane,
     tabPane,
     activeTab,
+    order,
+    recent: layout.recent.flatMap((tabId) => persistedIds.get(tabId) ?? []),
     commandPane,
   };
   return JSON.stringify(persisted);

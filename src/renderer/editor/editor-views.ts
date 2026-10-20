@@ -39,7 +39,7 @@ const MARKDOWN_PREVIEW_IMAGE_DELAY_MS = 1000;
 /** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
 export type MarkdownPreviewMode = "off" | "side" | "only";
 
-const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "side", "only"];
+export const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "side", "only"];
 
 /**
  * How a Markdown file opens: the last answer the user gave, for every tab and the next start. A
@@ -155,6 +155,9 @@ interface EditorView {
   pendingVersion: string | undefined;
   /** A match to select, kept until there is a model to select it in (`applyReveal`). */
   pendingReveal: EditorReveal | undefined;
+  /** A restored tab's cursor, scroll and folds, kept until there is a model to put them on
+   *  (`applyViewState`), and handed back meanwhile (`editorViewState`). */
+  pendingViewState: MonacoEditor.ICodeEditorViewState | undefined;
   snapshot: EditorSnapshot;
 }
 
@@ -258,6 +261,25 @@ function applyReveal(view: EditorView): void {
     endColumn: reveal.column + reveal.length,
   });
   editor.revealLineInCenterIfOutsideViewport(reveal.line);
+}
+
+/** Puts a restored tab's view back once its model is in an editor; a match to reveal, applied
+ *  after, outranks it. */
+function applyViewState(view: EditorView): void {
+  const state = view.pendingViewState;
+  const editor = activeEditor(view);
+  if (!state || !editor) {
+    return;
+  }
+  view.pendingViewState = undefined;
+  editor.restoreViewState(state);
+}
+
+/** The tab's cursor, scroll and folds, for a restart to bring back (`use-editor-restore.ts`): the
+ *  editor's own, or what it was restored with and has yet to show. */
+export function editorViewState(tabId: string): unknown {
+  const view = views.get(tabId);
+  return view?.pendingViewState ?? (view?.models && activeEditor(view)?.saveViewState()) ?? undefined;
 }
 
 /** A match in a tab already open (`App.openEditor`), which needs no new read. */
@@ -465,6 +487,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
       version: undefined,
       pendingVersion: undefined,
       pendingReveal: undefined,
+      pendingViewState: undefined,
       snapshot: CLOSED,
     };
     views.set(tabId, view);
@@ -483,6 +506,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   view.pendingVersion = undefined;
   view.onDisk = undefined;
   view.pendingReveal = how.reveal;
+  // monaco's own shape, as `editorViewState` gave it.
+  view.pendingViewState = how.restored?.viewState as MonacoEditor.ICodeEditorViewState | undefined;
   publish(view, {
     path,
     file: null,
@@ -493,7 +518,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     preview,
     diff: how.diff === true || how.commit !== undefined,
     commit: how.commit,
-    markdownPreview: isMarkdown(path) ? markdownPreviewByDefault.get() : "off",
+    markdownPreview: isMarkdown(path) ? (how.restored?.markdownPreview ?? markdownPreviewByDefault.get()) : "off",
     sideBySide: diffDefaults.sideBySide.get(),
     unchangedCollapsed: diffDefaults.unchangedCollapsed.get(),
   });
@@ -506,7 +531,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     if (stale(current, seq)) {
       return;
     }
-    if (file.error) {
+    // A restored tab's file gone since says so in the tab alone (`notFound`), as VS Code's does.
+    if (file.error && !(how.restored && file.notFound)) {
       notify("error", `${file.path}: ${file.error}`);
     }
     const text = editorKind(file) === "text";
@@ -632,6 +658,24 @@ function foldIn(view: EditorView, result: FileContent): void {
   } else {
     // A new generation: the open may still be building models, and both would create the same two.
     void showText(view, ++view.readSeq, result);
+  }
+}
+
+/** VS Code's "Create File" for a tab whose file is not there (`FileContent.notFound`): an empty
+ *  one, opened afresh in the same tab, kept. */
+export async function createMissingFile(tabId: string): Promise<void> {
+  const view = views.get(tabId);
+  if (!view?.snapshot.file?.notFound) {
+    return;
+  }
+  const { ref, snapshot } = view;
+  const result = await window.tet.repository.writeFile(ref, snapshot.path, "", MISSING_MTIME_MS);
+  if (!result.ok) {
+    notify("error", result.error ?? "Could not create the file");
+    return;
+  }
+  if (!disposed(view)) {
+    openEditorFile(ref, tabId, snapshot.path, false, { diff: snapshot.diff });
   }
 }
 
@@ -853,6 +897,7 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   setModels(view, models);
   view.models = models;
   applyMode(view);
+  applyViewState(view);
   applyReveal(view);
   renderMarkdownPreview(view, 0);
   publish(view, { building: false });

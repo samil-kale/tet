@@ -4,13 +4,13 @@ import type { AgentInfo } from "../../shared/types/agents";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import { disposeTerminal } from "./terminal-views";
-import { PANE_IDS, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
+import { PANE_IDS, inOrder, layoutStorageKey, paneBox, snapZoneAt } from "./pane-layout";
 import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } from "./pane-layout";
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
 import { Pane, type DragPosition } from "./Pane";
-import { paneTabKind, type PaneTab } from "./pane-tab";
+import { keepMoved, paneTabKind, type PaneTab } from "./pane-tab";
 import { NO_TABS } from "./layout-state";
 
 /**
@@ -54,8 +54,8 @@ function percentStyle(box: FractionBox): { left: string; top: string; width: str
 
 interface TabAreaProps {
   resolved: ResolvedRef;
-  /** This repository's or worktree's tabs, its editor tabs last. Held by App, since the project
-   *  list needs all. */
+  /** This repository's or worktree's tabs, its editor tabs last; drawn in the layout's order.
+   *  Held by App, since the project list needs all. */
   tabs: PaneTab[];
   visible: boolean;
   agents: AgentInfo[];
@@ -66,6 +66,7 @@ interface TabAreaProps {
   layout: ProjectLayout;
   onActivateTab: (refKey: string, tabId: string, paneId?: PaneId) => void;
   onSnapTab: (refKey: string, tabId: string, transition: SnapTransition) => void;
+  onDropOnStrip: (refKey: string, tabId: string, paneId: PaneId, before: string | undefined) => void;
   onFocusPane: (refKey: string, paneId: PaneId) => void;
   /** Tabs whose finished turn is not yet seen — App decides, this draws. */
   finishedTabIds: string[];
@@ -86,6 +87,7 @@ export const TabArea = memo(function TabArea({
   layout,
   onActivateTab,
   onSnapTab,
+  onDropOnStrip,
   onFocusPane,
   finishedTabIds,
   waitingTabIds,
@@ -202,36 +204,48 @@ export const TabArea = memo(function TabArea({
     dragSource.current = null;
   }, [setDragTarget]);
 
-  // `dragover` never sees the tab id, so the drop joins it with the zone.
+  /**
+   * `dragover` never sees the tab id, so the drop joins it with the zone. On a strip the tab goes
+   * where it fell (`dropOnStrip`); anywhere else a move to another pane places it as a new tab
+   * there (`moveTab`). A tab that changes its place or pane is kept (`keepMoved`).
+   */
   const onDropTab = useCallback(
-    (paneId: PaneId, tabId: string) => {
+    (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => {
       const target = dragTargetRef.current;
+      const moved = strip !== undefined || target?.transition != null || dragSource.current !== paneId;
       onDragEnd();
-      if (target?.transition) {
+      if (moved) {
+        keepMoved(tabId);
+      }
+      if (strip) {
+        onDropOnStrip(resolved.refKey, tabId, paneId, strip.before);
+      } else if (target?.transition) {
         onSnapTab(resolved.refKey, tabId, target.transition);
       } else {
         onActivate(tabId, paneId);
       }
     },
-    [onDragEnd, onSnapTab, resolved.refKey, onActivate],
+    [onDragEnd, onSnapTab, onDropOnStrip, resolved.refKey, onActivate],
   );
 
-  // Each pane's tabs, identity kept when unchanged. Keyed on the fields `paneOf` reads, not the
-  // layout: a selection change must not hand every pane a fresh list.
-  const { tabPane, focusedPane } = layout;
+  // Each pane's tabs in the strip's order, identity kept when unchanged. Keyed on the fields
+  // `paneOf` and `inOrder` read, not the layout: a selection change must not hand every pane a
+  // fresh list.
+  const { tabPane, focusedPane, order } = layout;
   const paneTabsRef = useRef<Partial<Record<PaneId, PaneTab[]>>>({});
   const paneTabs = useMemo(() => {
     const next: Partial<Record<PaneId, PaneTab[]>> = {};
+    const ordered = inOrder(order, tabs);
     for (const paneId of PANE_IDS) {
       next[paneId] = sameList(
         paneTabsRef.current[paneId],
-        tabs.filter((tab) => (tabPane[tab.tabId] ?? focusedPane) === paneId),
+        ordered.filter((tab) => (tabPane[tab.tabId] ?? focusedPane) === paneId),
         NO_TABS,
       );
     }
     paneTabsRef.current = next;
     return next;
-  }, [tabs, tabPane, focusedPane]);
+  }, [tabs, tabPane, focusedPane, order]);
 
   // Whether a pane's *own* tab is starting, apart from pane "a"'s strip-wide reason (`first`).
   const startingHere = useMemo(() => {
