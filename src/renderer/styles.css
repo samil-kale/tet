@@ -1768,8 +1768,6 @@ textarea:focus,
   content: "";
   position: absolute;
   border: 0 solid var(--tet-panel-border);
-  /* Fades to the drag color and back, not from nothing. */
-  transition: border-color 0.1s linear;
 }
 
 .sash.vertical {
@@ -1798,8 +1796,35 @@ textarea:focus,
   border-top-width: 1px;
 }
 
-/* Only while dragged: on hover it would recolor whenever the pointer rests near a border. */
-.sash.dragging::before {
+/* The 2px highlight over the border: while dragged, and once the pointer has rested on the sash
+   for the delay, so passing over a border does not flash it. */
+.sash::after {
+  content: "";
+  position: absolute;
+  border: 0 solid transparent;
+  transition: border-color 0.1s linear;
+}
+
+.sash.vertical::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  border-left-width: 2px;
+}
+
+.sash.horizontal::after {
+  left: 0;
+  right: 0;
+  top: calc(50% - 1px);
+  border-top-width: 2px;
+}
+
+.sash:hover::after {
+  border-color: var(--tet-sash-hoverBorder);
+  transition-delay: 0.2s;
+}
+
+.sash.dragging::after {
   border-color: var(--tet-sash-hoverBorder);
 }
 
