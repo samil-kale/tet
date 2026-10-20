@@ -899,11 +899,10 @@ textarea:focus,
 }
 
 /* Rows shaped the same across lanes: the files lane's EXPLORER tree and the SEARCH section under
-   it, the git lane's LOCAL CHANGES and BRANCHES, and the ARCHIVE. It nests arbitrarily deep, so
-   rows set `padding-left` inline. */
+   it, and the git lane's LOCAL CHANGES and BRANCHES. It nests arbitrarily deep, so rows set
+   `padding-left` inline. */
 .dense-tree .tree-header,
-.dense-tree .tree-row,
-.dense-tree .archive-row {
+.dense-tree .tree-row {
   height: var(--tree-row-height);
 }
 
