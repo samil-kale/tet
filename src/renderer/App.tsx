@@ -317,6 +317,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     toggleProjects: () => toggleLane("projects"),
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
+    toggleArchive: () => toggleLane("archive"),
     jumpToWaiting,
     nextTab: () => cycleTab(1),
     previousTab: () => cycleTab(-1),

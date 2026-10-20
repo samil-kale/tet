@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { Project } from "../../shared/types/project";
 import type { Lane } from "../../shared/types/settings";
+import { shortcutLabel } from "../shortcuts";
 import { ArchiveIcon, BranchIcon, ProjectsIcon } from "./icons";
 
 interface StatusBarProps {
@@ -23,17 +24,27 @@ export const StatusBar = memo(function StatusBar({ project, branch, changesCount
   return (
     <div className="status-bar">
       {project && (
-        <button type="button" className="status-bar-item" title="Projects" onClick={() => onSelectLane("projects")}>
+        <button
+          type="button"
+          className="status-bar-item"
+          title={`Projects (${shortcutLabel("toggleProjects")})`}
+          onClick={() => onSelectLane("projects")}
+        >
           <ProjectsIcon className="tree-icon" />
           {project.name}
         </button>
       )}
-      <button type="button" className="status-bar-item" title="Archive" onClick={() => onSelectLane("archive")}>
+      <button
+        type="button"
+        className="status-bar-item"
+        title={`Archive (${shortcutLabel("toggleArchive")})`}
+        onClick={() => onSelectLane("archive")}
+      >
         <ArchiveIcon className="tree-icon" />
         archived: {archivedCount}
       </button>
       {branch && (
-        <button type="button" className="status-bar-item" title="Git" onClick={() => onSelectLane("git")}>
+        <button type="button" className="status-bar-item" title={`Git (${shortcutLabel("toggleGit")})`} onClick={() => onSelectLane("git")}>
           <BranchIcon className="tree-icon" />
           {branch}: {changesCount}
         </button>

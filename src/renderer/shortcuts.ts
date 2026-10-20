@@ -7,11 +7,19 @@ import { PLATFORM } from "./platform";
  *
  * For the next shortcut: `Ctrl+<letter>` is a control byte, `Ctrl+Shift+<letter>` sends nothing.
  * `Alt+1…9` is taken (readline's digit argument). `Ctrl+Tab`/`Ctrl+Shift+Tab` equal Tab/Shift+Tab —
- * the latter Claude Code's mode toggle. `Ctrl+,` and `Ctrl+Shift+.`/`Ctrl+Shift+,` send nothing.
+ * the latter Claude Code's mode toggle. `Ctrl+Shift+.`/`Ctrl+Shift+,` send nothing.
  * None of these close a tab.
  */
 export type ShortcutId =
-  "settings" | "toggleProjects" | "toggleGit" | "toggleFiles" | "jumpToWaiting" | "nextTab" | "previousTab" | "newShellTab";
+  | "settings"
+  | "toggleProjects"
+  | "toggleGit"
+  | "toggleFiles"
+  | "toggleArchive"
+  | "jumpToWaiting"
+  | "nextTab"
+  | "previousTab"
+  | "newShellTab";
 
 interface ShortcutDef {
   id: ShortcutId;
@@ -26,10 +34,11 @@ interface ShortcutDef {
 }
 
 export const SHORTCUT_DEFS: readonly ShortcutDef[] = [
-  { id: "settings", description: "Open settings", shift: false, key: ",", label: "," },
-  { id: "toggleProjects", description: "Show or hide projects", shift: true, key: "p", label: "P" },
-  { id: "toggleGit", description: "Show or hide git", shift: true, key: "g", label: "G" },
-  { id: "toggleFiles", description: "Show or hide files", shift: true, key: "e", label: "E" },
+  { id: "toggleProjects", description: "Show or hide projects", shift: true, key: "1", code: "Digit1", label: "1" },
+  { id: "toggleGit", description: "Show or hide git", shift: true, key: "2", code: "Digit2", label: "2" },
+  { id: "toggleFiles", description: "Show or hide files", shift: true, key: "3", code: "Digit3", label: "3" },
+  { id: "toggleArchive", description: "Show or hide archive", shift: true, key: "4", code: "Digit4", label: "4" },
+  { id: "settings", description: "Open settings", shift: true, key: "5", code: "Digit5", label: "5" },
   {
     id: "jumpToWaiting",
     description: "Jump to the waiting tab",
