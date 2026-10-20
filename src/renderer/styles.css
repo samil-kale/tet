@@ -307,7 +307,7 @@ textarea:focus,
   --area-min-width: 230px;
   --area-min-height: 120px;
   --content-min-width: 320px;
-  --list-row-height: 30px;
+  --list-row-height: 28px;
   /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
      are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
   --tree-row-height: 24px;
@@ -340,6 +340,7 @@ textarea:focus,
 .branch-tree,
 .commit-graph,
 .dense-tree,
+.filter-list,
 .editor-body,
 .image-diff {
   display: flex;

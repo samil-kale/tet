@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
 import { WORKTREES_NEED_GIT } from "../../../shared/types/git";
 import type { Project, ProjectRef, ProjectWorktree } from "../../../shared/types/project";
@@ -9,6 +9,7 @@ import { PLATFORM } from "../../platform";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { confirmed, filled, prompt, singleField } from "../../ui/Dialog";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { FilterField } from "../../ui/FilterField";
 import { named } from "../../ui/named";
 import { setDragName } from "../../ui/row-drag";
 import { Section } from "../../ui/Section";
@@ -139,6 +140,15 @@ export const ProjectList = memo(function ProjectList({
   worktreesSupported,
 }: ProjectListProps) {
   const menu = useContextMenu<RowTarget>();
+  const [filter, setFilter] = useState("");
+  const query = filter.trim().toLowerCase();
+  const matches = (name: string): boolean => name.toLowerCase().includes(query);
+  // A project matches by its own name or any of its worktrees'; shown whole, as a group.
+  const shownProjects = projects
+    .map((project, index) => ({ project, index }))
+    .filter(({ project }) => matches(project.name) || project.worktrees.some((worktree) => matches(worktreeName(worktree))));
+  // Disabled while filtering: a drag's index is the full list's, and a filtered-out group no longer sits there.
+  const reorderable = query === "";
 
   // A project's group moves as one: its worktrees never leave it.
   const { rowProps, listProps, rowClasses } = useDragReorder({
@@ -353,19 +363,26 @@ export const ProjectList = memo(function ProjectList({
         </IconButton>
       }
     >
-      <div className="project-list" {...listProps}>
-        {projects.map((project, index) => {
-          const main = resolvedRefs[refKeyOf(projectRef(project.id))];
-          return (
-            <div key={project.id} className={["project-group", ...rowClasses(index)].join(" ")} {...rowProps(index)}>
-              {main && refRow(main)}
-              {project.worktrees.map((worktree) => {
-                const own = worktree.key === undefined ? undefined : resolvedRefs[refKeyOf(projectRef(project.id, worktree.key))];
-                return own ? refRow(own) : madeElsewhereRow(worktree);
-              })}
-            </div>
-          );
-        })}
+      <div className="filter-list">
+        <FilterField placeholder="Filter projects..." value={filter} onChange={setFilter} />
+        <div className="project-list" {...(reorderable ? listProps : {})}>
+          {shownProjects.map(({ project, index }) => {
+            const main = resolvedRefs[refKeyOf(projectRef(project.id))];
+            return (
+              <div
+                key={project.id}
+                className={["project-group", ...(reorderable ? rowClasses(index) : [])].join(" ")}
+                {...(reorderable ? rowProps(index) : {})}
+              >
+                {main && refRow(main)}
+                {project.worktrees.map((worktree) => {
+                  const own = worktree.key === undefined ? undefined : resolvedRefs[refKeyOf(projectRef(project.id, worktree.key))];
+                  return own ? refRow(own) : madeElsewhereRow(worktree);
+                })}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {menu.render(menuEntries)}

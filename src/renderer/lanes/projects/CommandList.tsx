@@ -7,6 +7,7 @@ import { notifying } from "../../git/run-action";
 import { confirmed, filled, prompt, refusal, type PromptOptions } from "../../ui/Dialog";
 import { ColorField, TextField } from "../../ui/Field";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { FilterField } from "../../ui/FilterField";
 import { setDragName } from "../../ui/row-drag";
 import { IconButton } from "../../ui/IconButton";
 import { PlayIcon, PlusIcon } from "../../ui/icons";
@@ -171,6 +172,13 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
    *  counts as none, so neither Run nor a reorder acts on it in the wrong project. */
   const [held, setHeld] = useState<{ projectId: string; commands: ProjectCommand[] } | undefined>(undefined);
   const commands = held?.projectId === projectId ? held.commands : [];
+  const [filter, setFilter] = useState("");
+  const query = filter.trim().toLowerCase();
+  const shownCommands = commands
+    .map((command, index) => ({ command, index }))
+    .filter(({ command }) => (command.name ?? command.command).toLowerCase().includes(query));
+  // Disabled while filtering: a drag's index is the full list's, and a filtered-out row no longer sits there.
+  const reorderable = editable && query === "";
   const menu = useContextMenu<ProjectCommand>();
   /** The current list, for callbacks created before its last change; tagged like `held`. */
   const latest = useRef<{ projectId: string; commands: ProjectCommand[] } | undefined>(undefined);
@@ -330,37 +338,40 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
         )
       }
     >
-      <div className="command-list" {...(editable ? listProps : {})}>
-        {commands.map((command, index) => (
-          <div
-            // The position, as in the hook's payload above.
-            key={index}
-            className={["list-row", "command-row", ...rowClasses(index)].join(" ")}
-            title={describe(command)}
-            {...(editable ? rowProps(index) : {})}
-            // Names the row to a terminal, in a worktree too, where nothing reorders it.
-            draggable
-            onDragStart={(event) => {
-              if (editable) {
-                rowProps(index).onDragStart?.(event);
-              }
-              setDragName(event.dataTransfer, { kind: "tet command", name: command.name ?? command.command });
-            }}
-            onContextMenu={(event) => menu.open(event, command)}
-          >
-            {/* Its name if any; the line is in the tooltip. */}
-            <span className="list-main">
-              <span className="list-label command-label" style={command.color ? { color: colorVariable(command.color) } : undefined}>
-                {command.name ?? command.command}
+      <div className="filter-list">
+        <FilterField placeholder="Filter commands..." value={filter} onChange={setFilter} />
+        <div className="command-list" {...(reorderable ? listProps : {})}>
+          {shownCommands.map(({ command, index }) => (
+            <div
+              // The position, as in the hook's payload above.
+              key={index}
+              className={["list-row", "command-row", ...(reorderable ? rowClasses(index) : [])].join(" ")}
+              title={describe(command)}
+              {...(reorderable ? rowProps(index) : {})}
+              // Names the row to a terminal, in a worktree too, where nothing reorders it.
+              draggable
+              onDragStart={(event) => {
+                if (reorderable) {
+                  rowProps(index).onDragStart?.(event);
+                }
+                setDragName(event.dataTransfer, { kind: "tet command", name: command.name ?? command.command });
+              }}
+              onContextMenu={(event) => menu.open(event, command)}
+            >
+              {/* Its name if any; the line is in the tooltip. */}
+              <span className="list-main">
+                <span className="list-label command-label" style={command.color ? { color: colorVariable(command.color) } : undefined}>
+                  {command.name ?? command.command}
+                </span>
+                {/* `env` on unnamed rows only: it changes what the command does, the folder does not. */}
+                {!command.name && formatEnv(command.env) && <span className="list-extra">({formatEnv(command.env)})</span>}
               </span>
-              {/* `env` on unnamed rows only: it changes what the command does, the folder does not. */}
-              {!command.name && formatEnv(command.env) && <span className="list-extra">({formatEnv(command.env)})</span>}
-            </span>
-            <IconButton title={`Run ${command.command} in a new tab`} onClick={() => run(command)}>
-              <PlayIcon />
-            </IconButton>
-          </div>
-        ))}
+              <IconButton title={`Run ${command.command} in a new tab`} onClick={() => run(command)}>
+                <PlayIcon />
+              </IconButton>
+            </div>
+          ))}
+        </div>
       </div>
 
       {menu.render(menuEntries)}
