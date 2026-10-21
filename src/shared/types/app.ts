@@ -12,7 +12,9 @@ export interface AppInfo {
 }
 
 /** Decides how long a notice stands (Notices.tsx). */
-export type NoticeSeverity = "error" | "warning" | "info";
+export const NOTICE_SEVERITIES = ["error", "warning", "info"] as const;
+
+export type NoticeSeverity = (typeof NOTICE_SEVERITIES)[number];
 
 /** Which tab mark a notice shows in place of its severity's icon: the turn state it reports. */
 export type NoticeMark = "waiting" | "finished";

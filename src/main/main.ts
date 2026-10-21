@@ -330,6 +330,7 @@ async function startControl(): Promise<void> {
         terminalText: appWindow.terminalText,
         showTab: (ref, tabId) => send("tabs:show", { ref, tabId }),
         showDesktopNotification,
+        notice,
         environment,
         envRequests,
         sbx: {

@@ -3,6 +3,7 @@ import { type ControlVerbName, type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import type { SuggesterEntry } from "../../shared/types/agents";
+import { NOTICE_SEVERITIES } from "../../shared/types/app";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "../../shared/types/settings";
@@ -507,6 +508,12 @@ export function verbs(deps: ControlDeps): Handlers {
 
     notify: (args, caller) => {
       const body = args.body;
+      if (args["in-app"] === true) {
+        const severity = args.severity === undefined ? "info" : oneOf(args, "severity", "severity", NOTICE_SEVERITIES);
+        const title = text(args, "title", "title");
+        deps.notice(severity, typeof body === "string" ? `${title}\n${body}` : title);
+        return { result: { notified: true } };
+      }
       // From one of TET's terminals, the notification is about that tab.
       const own = callerRef(caller);
       const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;

@@ -98,6 +98,7 @@ interface Calls {
   handed: [string, string[]][];
   shutdown: boolean[];
   desktopNotifications: [string, string, TabRef | undefined][];
+  notices: [string, string][];
   hooks: [string, string, string][];
   /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -380,6 +381,9 @@ function deps(): ControlDeps {
     showDesktopNotification: (title, body, target) => {
       calls.desktopNotifications.push([title, body, target]);
     },
+    notice: (severity, message) => {
+      calls.notices.push([severity, message]);
+    },
     environment: {
       list: () => envNames.map((name) => ({ name, overridesMachine: name === "PATH" })),
       remove: (name) => {
@@ -488,6 +492,7 @@ describe("tet-ctl against the control server", () => {
       handed: [],
       shutdown: [],
       desktopNotifications: [],
+      notices: [],
       hooks: [],
       hookTimes: [],
       started: [],
@@ -1601,6 +1606,17 @@ describe("tet-ctl against the control server", () => {
   it("is about no tab when the caller is not one", async () => {
     assert.deepEqual((await tetCtl(["notify", "Build finished"], { [CONTROL_ENV.tabId]: undefined })).result, { notified: true });
     assert.deepEqual(calls.desktopNotifications, [["Build finished", "", undefined]], "a click then brings only the window forward");
+  });
+
+  it("shows a notice in the window instead with --in-app", async () => {
+    assert.deepEqual((await tetCtl(["notify", "Build failed", "see the log", "--in-app", "--severity", "error"])).result, { notified: true });
+    assert.deepEqual((await tetCtl(["notify", "Build finished", "--in-app"])).result, { notified: true });
+    assert.deepEqual(calls.notices, [
+      ["error", "Build failed\nsee the log"],
+      ["info", "Build finished"],
+    ]);
+    assert.deepEqual(calls.desktopNotifications, [], "no desktop notification beside it");
+    assertUsage(await tetCtl(["notify", "x", "--in-app", "--severity", "loud"]), /unknown severity/);
   });
 
   it("refuses to restart without --confirm", async () => {

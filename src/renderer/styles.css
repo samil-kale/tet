@@ -2727,13 +2727,12 @@ textarea:focus,
   border-bottom-right-radius: 0;
 }
 
-/* A toast and a notification center's entry alike: it fades in growing up from its bottom edge,
-   never sideways, and leaves the same way back while its row collapses. `LEAVE_MS` (Notices.tsx)
+/* A toast and a notification center's entry alike: it fades in rising from below,
+   never sideways, and sinks back down fading out while its row collapses. `LEAVE_MS` (Notices.tsx)
    is this duration. */
 .notice-item {
   display: grid;
   grid-template-rows: 1fr;
-  transform-origin: bottom;
   animation: notice-enter 0.2s ease-out;
   transition:
     grid-template-rows 0.2s ease-out,
@@ -2744,7 +2743,7 @@ textarea:focus,
 .notice-item.leaving {
   grid-template-rows: 0fr;
   opacity: 0;
-  transform: scaleY(0.9);
+  transform: translateY(16px);
   pointer-events: none;
 }
 
@@ -2767,7 +2766,7 @@ textarea:focus,
 @keyframes notice-enter {
   from {
     opacity: 0;
-    transform: scaleY(0.9);
+    transform: translateY(16px);
   }
 }
 
@@ -2846,7 +2845,6 @@ textarea:focus,
   background: var(--tet-sideBar-background);
   border: 1px solid var(--tet-notifications-border);
   /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
-  transform-origin: bottom;
   animation: notice-enter 0.2s ease-out;
   transition:
     opacity 0.2s ease-out,
@@ -2855,7 +2853,7 @@ textarea:focus,
 
 .notices-center.closing {
   opacity: 0;
-  transform: scaleY(0.9);
+  transform: translateY(16px);
   pointer-events: none;
 }
 

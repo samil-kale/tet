@@ -1,7 +1,7 @@
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
-import type { EditorListing, EditorReport, NoticeMark, NoticeReport } from "../../shared/types/app";
+import type { EditorListing, EditorReport, NoticeMark, NoticeReport, NoticeSeverity } from "../../shared/types/app";
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { CheckoutTarget, GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
@@ -179,6 +179,8 @@ export interface ControlDeps {
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front; the notification center lists it with `mark`'s icon. */
   showDesktopNotification(title: string, body: string, target?: TabRef, mark?: NoticeMark): void;
+  /** A notice in the window (Notices.tsx), as every other one main tells the user. */
+  notice(severity: NoticeSeverity, message: string): void;
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;

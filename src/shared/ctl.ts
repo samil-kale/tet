@@ -1,4 +1,5 @@
 import { SBX_SKILLS_KINDS } from "./sbx-rules";
+import { NOTICE_SEVERITIES } from "./types/app";
 import { EXPLORER_SORT_ORDERS } from "./types/files";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
@@ -131,6 +132,8 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   background: "switch",
   force: "switch",
   auth: "switch",
+  "in-app": "switch",
+  severity: "value",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
@@ -601,9 +604,9 @@ const VERBS = [
   {
     verb: "notify",
     group: "Notices",
-    usage: "notify <title> [body]",
+    usage: `notify <title> [body] [--in-app [--severity <${NOTICE_SEVERITIES.join("|")}>]]`,
     summary:
-      "Show a desktop notification from TET's own process, the one with a desktop session, to call the user back: a long task is done or you need an answer.",
+      "Show a desktop notification from TET's own process, the one with a desktop session, to call the user back: a long task is done or you need an answer. --in-app shows a notice in TET's window instead, info unless --severity says otherwise.",
     positionals: ["title", "body"],
     sandbox: "any",
   },
