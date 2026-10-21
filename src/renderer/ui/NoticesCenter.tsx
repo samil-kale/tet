@@ -1,7 +1,16 @@
 import { memo, useEffect, useRef } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { ClearIcon, CloseIcon } from "./icons";
-import { clearNotices, closeCenter, closeNotice, NoticeBody, useCenterClosing, useCenterOpen, useNoticeList } from "./Notices";
+import {
+  clearNotices,
+  closeCenter,
+  closeNotice,
+  enteredOpenCenter,
+  NoticeBody,
+  useCenterClosing,
+  useCenterOpen,
+  useNoticeList,
+} from "./Notices";
 
 interface NoticesCenterProps {
   /** Shows the tab a notice is about. */
@@ -45,7 +54,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
           <button type="button" className="icon-button" title="Clear All" disabled={notices.length === 0} onClick={clearNotices}>
             <ClearIcon />
           </button>
-          <button type="button" className="icon-button" title="Hide Notifications" onClick={closeCenter}>
+          <button type="button" className="icon-button" title="Hide Notifications" onClick={() => closeCenter()}>
             <CloseIcon />
           </button>
         </span>
@@ -55,7 +64,10 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
         {[...notices].reverse().map((notice) => {
           const { target } = notice;
           return (
-            <div key={notice.id} className={`notices-center-item${notice.leaving === "item" ? " leaving" : ""}`}>
+            <div
+              key={notice.id}
+              className={`notice-item${notice.leaving === "item" ? " leaving" : ""}${enteredOpenCenter(notice) ? " entering" : ""}`}
+            >
               <div
                 className={`notice ${notice.severity}${target ? " clickable" : ""}`}
                 onClick={

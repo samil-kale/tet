@@ -2697,21 +2697,77 @@ textarea:focus,
    pointer. */
 .notices {
   position: absolute;
-  right: 0;
-  bottom: 0;
+  right: 6px;
+  bottom: 29px;
   /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
   z-index: 25;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   max-width: 100%;
-  /* VS Code's: 3px off the edge, and each notice 4px around for its shadow. */
-  padding: 3px;
   pointer-events: none;
 }
 
 .notices > * {
   pointer-events: auto;
+}
+
+/* Stacked as the notification center lists them: one box, a line between. */
+.notices > .notice-item + .notice-item > .notice {
+  border-top: none;
+}
+
+.notices > .notice-item:not(:first-child) > .notice {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.notices > .notice-item:not(:last-child) > .notice {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* A toast and a notification center's entry alike: it fades in from a little smaller, and leaves
+   the same way back while its row collapses. `LEAVE_MS` (Notices.tsx) is this duration. */
+.notice-item {
+  display: grid;
+  grid-template-rows: 1fr;
+  transform-origin: bottom right;
+  animation: notice-enter 0.2s ease-out;
+  transition:
+    grid-template-rows 0.2s ease-out,
+    opacity 0.2s ease-out,
+    transform 0.2s ease-out;
+}
+
+.notice-item.leaving {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: scale(0.9);
+  pointer-events: none;
+}
+
+.notice-item > .notice {
+  min-height: 0;
+  overflow: hidden;
+  transition:
+    padding 0.2s ease-out,
+    border-width 0.2s ease-out;
+}
+
+/* A box's padding and border do not shrink with its row. */
+.notice-item.leaving > .notice {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+}
+
+@keyframes notice-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
 }
 
 .notice {
@@ -2721,28 +2777,16 @@ textarea:focus,
   align-items: flex-start;
   /* With the 14px icon, the text starts where VS Code's does beside its 16px one. */
   gap: 6px;
-  /* VS Code's fixed width: a notice sized to its text is easily missed. Capped by the window
-     minus margins. */
-  width: min(450px, 100vw - 14px);
-  margin: 4px;
-  padding: 10px 9px;
+  /* VS Code's fixed width: a notice sized to its text is easily missed. The box is the
+     notification center's (`.notices-center`). */
+  width: min(450px, 100vw);
+  padding: 10px 6px 10px 10px;
   text-align: left;
   font-size: var(--tet-font-size);
   color: var(--tet-notifications-foreground);
   background: var(--tet-sideBar-background);
   border: 1px solid var(--tet-notifications-border);
-  border-radius: 4px;
-  /* VS Code's notification shadow, all around rather than dropped. */
-  box-shadow: 0 0 8px 2px var(--tet-widget-shadow);
-  /* VS Code's slide in from below. */
-  animation: notice-slide-in 0.3s ease-out;
-}
-
-@keyframes notice-slide-in {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
+  border-radius: 2px;
 }
 
 /* Only the icon carries the severity's colour: a whole notice in red is harder to read. */
@@ -2800,13 +2844,14 @@ textarea:focus,
   color: var(--tet-notifications-foreground);
   background: var(--tet-sideBar-background);
   border: 1px solid var(--tet-notifications-border);
+  /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
   transform-origin: bottom right;
+  animation: notice-enter 0.2s ease-out;
   transition:
     opacity 0.2s ease-out,
     transform 0.2s ease-out;
 }
 
-/* The last notice leaving takes the whole center along, in `LEAVE_MS`. */
 .notices-center.closing {
   opacity: 0;
   transform: scale(0.9);
@@ -2832,47 +2877,16 @@ textarea:focus,
 
 .notices-center .notice {
   width: auto;
-  margin: 0;
   border: none;
   border-radius: 0;
-  box-shadow: none;
+}
+
+/* What was listed when the center opened comes with the center itself. */
+.notices-center .notice-item:not(.entering) {
   animation: none;
-  padding: 10px 6px 10px 10px;
 }
 
-/* An item's row collapses to nothing while it fades and shrinks; `LEAVE_MS` (Notices.tsx) is this duration. */
-.notices-center-item {
-  display: grid;
-  grid-template-rows: 1fr;
-  transition:
-    grid-template-rows 0.2s ease-out,
-    opacity 0.2s ease-out,
-    transform 0.2s ease-out;
-}
-
-.notices-center-item.leaving {
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transform: scale(0.9);
-  pointer-events: none;
-}
-
-.notices-center-item > .notice {
-  min-height: 0;
-  overflow: hidden;
-  transition:
-    padding 0.2s ease-out,
-    border-width 0.2s ease-out;
-}
-
-/* A box's padding and border do not shrink with its row. */
-.notices-center-item.leaving > .notice {
-  padding-top: 0;
-  padding-bottom: 0;
-  border-top-width: 0;
-}
-
-.notices-center-item + .notices-center-item > .notice {
+.notices-center .notice-item + .notice-item > .notice {
   border-top: 1px solid var(--tet-notifications-border);
 }
 

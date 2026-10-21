@@ -14,7 +14,7 @@ const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_0
 /** The notification center keeps this many, the oldest dropped first. */
 const CENTER_MAX = 100;
 
-/** How long a notice takes to leave the notification center; the stylesheet's `.notices-center-item` transition. */
+/** How long a notice takes to enter or leave, and the notification center to close; the stylesheet's `.notice-item` transition. */
 const LEAVE_MS = 200;
 
 export interface ShownNotice extends Omit<Notice, "toast"> {
@@ -25,6 +25,8 @@ export interface ShownNotice extends Omit<Notice, "toast"> {
   read: boolean;
   /** Fading out of the notification center, removed once it has. `center`: the last one, which takes the whole center along. */
   leaving?: "item" | "center";
+  /** Its toast fading out; the entry stays in the notification center. */
+  dismissing?: true;
   /** A progress notice's (`showProgress`). */
   progress?: { key: string; fraction: number | null };
 }
@@ -39,7 +41,13 @@ export interface ShownNotice extends Omit<Notice, "toast"> {
  */
 const shown = createStore<ShownNotice[]>([]);
 const centerOpen = createStore(false);
+/** Fading out, closed once it has. */
+const centerClosing = createStore(false);
+/** What waits for the notification center to have closed (`closeCenter`). */
+const afterClose: (() => void)[] = [];
 let nextId = 0;
+/** The newest notice when the notification center last opened: a later one enters it with its transition. */
+let newestAtOpen = 0;
 /** The notice under the pointer, kept while hovered. */
 let hovered: number | undefined;
 
@@ -52,9 +60,13 @@ export function listNotices(): ShownNotice[] {
   return shown.get();
 }
 
-/** The last notice is leaving: the notification center itself fades out. */
 export function useCenterClosing(): boolean {
-  return useStore(shown).some((notice) => notice.leaving === "center");
+  return useStore(centerClosing);
+}
+
+/** Listed after the notification center opened, so it enters with its own transition. */
+export function enteredOpenCenter(notice: ShownNotice): boolean {
+  return notice.id > newestAtOpen;
 }
 
 export function useCenterOpen(): boolean {
@@ -63,15 +75,42 @@ export function useCenterOpen(): boolean {
 
 /** Opening the center reads everything in it. */
 export function toggleCenter(): void {
-  const open = !centerOpen.get();
-  centerOpen.set(open);
-  if (open) {
-    shown.set(shown.get().map((notice) => (notice.read ? notice : { ...notice, read: true })));
+  if (centerOpen.get()) {
+    closeCenter();
+    return;
   }
+  newestAtOpen = nextId;
+  centerOpen.set(true);
+  shown.set(shown.get().map((notice) => (notice.read ? notice : { ...notice, read: true })));
 }
 
-export function closeCenter(): void {
-  centerOpen.set(false);
+/**
+ * Every way of closing the notification center fades it out whole, in `LEAVE_MS`; `then` runs once
+ * it is closed (at once, if it is not open).
+ */
+export function closeCenter(then?: () => void): void {
+  if (then) {
+    afterClose.push(then);
+  }
+  if (!centerOpen.get()) {
+    runAfterClose();
+    return;
+  }
+  if (centerClosing.get()) {
+    return;
+  }
+  centerClosing.set(true);
+  setTimeout(() => {
+    centerClosing.set(false);
+    centerOpen.set(false);
+    runAfterClose();
+  }, LEAVE_MS);
+}
+
+function runAfterClose(): void {
+  for (const run of afterClose.splice(0)) {
+    run();
+  }
 }
 
 export function notify(severity: NoticeSeverity, message: string, options: Pick<Notice, "toast" | "target" | "mark"> = {}): void {
@@ -119,7 +158,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
       scheduleDismiss(standing.id, "info");
       report("info", message);
     } else {
-      removeNotice(standing.id);
+      leaveNotice(standing.id);
     }
     return;
   }
@@ -151,13 +190,16 @@ function scheduleDismiss(id: number, severity: NoticeSeverity): void {
   }, DISMISS_MS[severity]);
 }
 
-/** Takes the toast down; the notice stays in the notification center. */
+/** Takes the toast down with its leaving transition; the notice stays in the notification center. */
 function dismissNotice(id: number): void {
   // A removed element never reports the pointer leaving it.
   if (hovered === id) {
     hovered = undefined;
   }
-  shown.set(shown.get().map((notice) => (notice.id === id ? { ...notice, toast: false } : notice)));
+  shown.set(shown.get().map((notice) => (notice.id === id ? { ...notice, dismissing: true } : notice)));
+  setTimeout(() => {
+    shown.set(shown.get().map((notice) => (notice.id === id ? { ...notice, toast: false, dismissing: undefined } : notice)));
+  }, LEAVE_MS);
 }
 
 export function removeNotice(id: number): void {
@@ -167,17 +209,14 @@ export function removeNotice(id: number): void {
   shown.set(shown.get().filter((notice) => notice.id !== id));
 }
 
-/** Removes a notice from the notification center with its leaving transition. */
+/** Removes a notice with its leaving transition; the last one closes the notification center instead. */
 export function leaveNotice(id: number): void {
   const last = shown.get().every((notice) => notice.id === id || notice.leaving);
   shown.set(shown.get().map((notice) => (notice.id === id ? { ...notice, leaving: last ? "center" : "item" } : notice)));
-  setTimeout(() => {
-    removeNotice(id);
-    // Nothing left to list.
-    if (shown.get().length === 0) {
-      closeCenter();
-    }
-  }, LEAVE_MS);
+  if (last) {
+    closeCenter();
+  }
+  setTimeout(() => removeNotice(id), LEAVE_MS);
 }
 
 /**
@@ -223,8 +262,9 @@ export function clearNotices(): void {
     }
   }
   hovered = undefined;
-  shown.set([]);
-  centerOpen.set(false);
+  // The center fades out whole, the notices in it; one arriving meanwhile stays.
+  const cleared = new Set(shown.get().map((notice) => notice.id));
+  closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
 /** A notice's icon, message and progress bar, in a toast and in the notification center alike. */
@@ -265,16 +305,17 @@ export function Notices() {
   const stack = (
     <div className="notices">
       {notices.map((notice) => (
-        <button
-          key={notice.id}
-          className={`notice ${notice.severity}`}
-          onClick={() => dismissNotice(notice.id)}
-          onMouseEnter={() => (hovered = notice.id)}
-          onMouseLeave={() => (hovered = undefined)}
-          title="Dismiss"
-        >
-          <NoticeBody notice={notice} />
-        </button>
+        <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
+          <button
+            className={`notice ${notice.severity}`}
+            onClick={() => dismissNotice(notice.id)}
+            onMouseEnter={() => (hovered = notice.id)}
+            onMouseLeave={() => (hovered = undefined)}
+            title="Dismiss"
+          >
+            <NoticeBody notice={notice} />
+          </button>
+        </div>
       ))}
     </div>
   );

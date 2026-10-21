@@ -312,9 +312,9 @@ export const ProjectList = memo(function ProjectList({
         </span>
         {/* All three session states can hold at once, each a button to a session. No ranking as
             on a tab: a row has no single icon to replace. */}
+        {marks[refKey]?.working && rowButton("Open the tab that is working", () => onShowWorking(refKey), <TabMark kind="working" />)}
         {(marks[refKey]?.waiting.length ?? 0) > 0 &&
           rowButton("Open the tab waiting for an answer", () => onShowWaiting(refKey), <TabMark kind="waiting" />)}
-        {marks[refKey]?.working && rowButton("Open the tab that is working", () => onShowWorking(refKey), <TabMark kind="working" />)}
         {/* Going to the session clears the mark. */}
         {(marks[refKey]?.finished.length ?? 0) > 0 &&
           rowButton("Open the tab that finished", () => onShowFinished(refKey), <TabMark kind="finished" />)}
