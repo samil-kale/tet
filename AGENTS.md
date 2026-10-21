@@ -299,7 +299,9 @@ per-line decision is for an agent.
   (`previewWithheld`): it is hidden, its toggle, shortcut and menu entry disabled, and its own
   setting kept.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
-  sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a
+  sends `app:notice`) — **unless a dialog on screen says it** (below). A notice outlives its toast
+  in the notification center (`NoticesCenter`, opened by the status bar's bell), and a desktop
+  notification is listed there too (`recordNotice`), its click showing the tab. No other view keeps a
   message of its own but the SEARCH section, whose failure stands in its header as VS Code's does;
   a status (marks, progress bar) is not a notice. A tab's process that
   ended unasked says so in its own terminal, as a `[TET]` line with how to go on

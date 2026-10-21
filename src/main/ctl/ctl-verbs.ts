@@ -6,7 +6,7 @@ import type { SuggesterEntry } from "../../shared/types/agents";
 import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/files";
 import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "../../shared/types/settings";
-import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
+import { isWorking, TERMINAL_STATUSES, type TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
@@ -66,10 +66,7 @@ export function verbs(deps: ControlDeps): Handlers {
    *  the tab: from a sandbox, only its own tab or one known to run in a sandbox — a host tab is this
    *  machine's, which a sandbox never reaches, and its output may print the host's control token.
    *  `own`: the caller's own tab. */
-  const ownedTab = (
-    args: Record<string, unknown>,
-    caller: Caller,
-  ): { tabs: ControlTerminals; tabId: string; ref: ProjectRef; own: boolean } => {
+  const ownedTab = (args: Record<string, unknown>, caller: Caller): TabRef & { tabs: ControlTerminals; own: boolean } => {
     const { ref } = refFrom(args, caller);
     const tabId = text(args, "tabId", "tab id");
     const tabs = terminals(ref);
@@ -528,7 +525,8 @@ export function verbs(deps: ControlDeps): Handlers {
       const where = refFrom({}, caller).ref;
       const outcome = terminals(where).hookEvent(caller.tabId, event, payload, at, caller.side);
       if (outcome.notification) {
-        deps.showDesktopNotification(outcome.notification.title, outcome.notification.body, { ref: where, tabId: caller.tabId });
+        const { title, body, mark } = outcome.notification;
+        deps.showDesktopNotification(title, body, { ref: where, tabId: caller.tabId }, mark);
       }
       return { result: { stdout: outcome.stdout } };
     },

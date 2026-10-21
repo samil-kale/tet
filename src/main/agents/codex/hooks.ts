@@ -75,7 +75,7 @@ interface HookEntry {
   /** snake_case, as in a trust key. */
   label: string;
   command: string;
-  /** Only `PreToolUse` needs one. */
+  /** Only the question tool's `PreToolUse` and `PostToolUse` need one. */
   matcher?: string;
 }
 
@@ -122,6 +122,8 @@ export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
     // Waiting: an approval about to be asked, or the question tool about to run.
     { event: "PermissionRequest", label: "permission_request", command: hookCommand("permission") },
     { event: "PreToolUse", label: "pre_tool_use", command: hookCommand("question"), matcher: "request_user_input" },
+    // Its answer ends the question; an approval's does not report one.
+    { event: "PostToolUse", label: "post_tool_use", command: hookCommand("answered"), matcher: "request_user_input" },
   ];
 
   return ["-c", buildHooksArg(entries, target)];

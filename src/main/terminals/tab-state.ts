@@ -69,8 +69,9 @@ export function titleUnsettled(tab: TabState): boolean {
  * `keepQuestion`, for AgentTurns.questionOutlivesTurn: the question stays **and the end
  * leaves no bubble beside it**, the question being the more urgent and actionable of the two.
  *
- * Only pi reports an answered question (`answered`), so another agent's permission granted
- * mid-turn keeps the mark until the tab is typed into.
+ * Only pi and the agents' question tools (Claude Code's AskUserQuestion, Codex's request_user_input)
+ * report an answered question (`answered`), so a permission granted mid-turn keeps the mark until
+ * the tab is typed into.
  */
 export function setTurn(tab: TabState, inTurn: boolean, at: number, keepQuestion = false): void {
   tab.inTurn = inTurn;
@@ -105,23 +106,17 @@ export function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolea
 }
 
 /**
- * Whether terminal input can answer a standing question — see `write`. Besides pi's `answered`,
- * this and either end of the turn (setTurn) are what clear the mark. Enter, a printable
- * character (Claude Code's permission prompt takes a digit without Enter) and an SGR mouse press
- * (`ESC [ < button ; x ; y M`). Not arrows, Tab, Shift+Tab, a bare Escape, motion (bit 32) or the
- * wheel (64+). Generous: a mark dropped early is on a tab being typed into, which hides it anyway.
+ * Whether terminal input can answer a standing question — see `write`. Besides an agent's `answered`,
+ * this and either end of the turn (setTurn) are what clear the mark. Enter and a printable
+ * character (Claude Code's permission prompt takes a digit without Enter). Not arrows, Tab,
+ * Shift+Tab, a bare Escape or the mouse (a click into the terminal answers nothing): the mark
+ * stands on the tab on screen too.
  */
 export function answersQuestion(data: string): boolean {
   if (data.includes("\r") || data.includes("\n")) {
     return true;
   }
-  // eslint-disable-next-line no-control-regex
-  const mouse = /\x1b\[<(\d+);\d+;\d+M/.exec(data);
-  if (mouse) {
-    const button = Number(mouse[1]);
-    return (button & 32) === 0 && button < 64;
-  }
-  // Arrows, function keys, a bare ESC.
+  // Arrows, function keys, a bare ESC, mouse reports.
   if (data.startsWith("\x1b")) {
     return false;
   }

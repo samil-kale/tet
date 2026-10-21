@@ -14,7 +14,6 @@ import { HOST_CALLER } from "../../src/main/ctl/caller-side";
 import { startControlServer } from "../../src/main/ctl/ctl-server";
 import { verbs } from "../../src/main/ctl/ctl-verbs";
 import { ControlError, type ControlDeps, type ControlTerminals } from "../../src/main/ctl/ctl-verb";
-import type { NotificationTarget } from "../../src/main/util/notifications";
 import type { EnvAsk } from "../../src/main/ctl/env-requests";
 import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/ctl";
@@ -31,7 +30,7 @@ import {
   type SbxStatus,
 } from "../../src/shared/types/sbx";
 import { type AppSettings, withSettings } from "../../src/shared/types/settings";
-import type { TabDescriptor } from "../../src/shared/types/terminals";
+import type { TabDescriptor, TabRef } from "../../src/shared/types/terminals";
 import { CLI, eventually, type Run, tempDir, tetCtl as runCli } from "../helpers";
 import { spawn } from "node:child_process";
 import { writeLaunchers } from "../../src/main/ctl/ctl-launcher";
@@ -98,7 +97,7 @@ interface Calls {
   /** `[tabId, hostPaths]` per path handed to a tab. */
   handed: [string, string[]][];
   shutdown: boolean[];
-  desktopNotifications: [string, string, NotificationTarget | undefined][];
+  desktopNotifications: [string, string, TabRef | undefined][];
   hooks: [string, string, string][];
   /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -268,7 +267,7 @@ function terminalsOf(key: string): ControlTerminals {
       // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifications.
       return event === "session-start" || event === "prompt-submit"
         ? { stdout }
-        : { stdout, notification: { title: "Claude: Finished", body: "Finished in one" } };
+        : { stdout, notification: { title: "Claude: Finished", body: "Finished in one", mark: "finished" } };
     },
   };
 }

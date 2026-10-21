@@ -16,6 +16,7 @@ import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesLane } from "./lanes/files/FilesLane";
 import { GitLane } from "./lanes/git/GitLane";
 import { Notices, notify, showProgress } from "./ui/Notices";
+import { NoticesCenter } from "./ui/NoticesCenter";
 import { ProjectList } from "./lanes/projects/ProjectList";
 import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-ref";
@@ -125,7 +126,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   // Before onNotice, whose subscription tells main the window listens.
   useEffect(() => window.tet.onNoticeProgress(showProgress), []);
-  useEffect(() => window.tet.onNotice(({ severity, message }) => notify(severity, message)), []);
+  useEffect(
+    () => window.tet.onNotice(({ severity, message, toast, target, mark }) => notify(severity, message, { toast, target, mark })),
+    [],
+  );
 
   /** Makes a repository or worktree active, by its `refKey`, as a row or the git lane picks it. */
   const activateRef: (refKey: string) => void = setActiveRefKey;
@@ -166,6 +170,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   // A ctl-channel tab, shown like a saved command's: drawing it starts its process.
   useEffect(() => window.tet.tabs.onShow(({ ref, tabId }) => showTab(refKeyOf(ref), tabId)), [showTab]);
+  const showNoticeTab = useCallback((ref: ProjectRef, tabId: string) => showTab(refKeyOf(ref), tabId), [showTab]);
 
   const focused = useWindowFocused();
   const covered = useWindowCovered();
@@ -496,6 +501,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 
       <Notices />
+      <NoticesCenter onShowTab={showNoticeTab} />
       <Dialogs />
     </div>
   );

@@ -20,13 +20,15 @@ export const NO_IDS: string[] = [];
 export type MarkField = "finishedAt" | "waitingAt";
 
 /**
- * Finished or waiting sessions not on screen, oldest first — the tab strip's marks and
- * what the project row steps through. Tabs on screen are left out: nothing there was out of sight.
- * Decided here, once: main holds the mark but cannot see the screen, and two views must not each
- * decide.
+ * Finished or waiting sessions, oldest first — the tab strip's marks and what the project row
+ * steps through. A finished one on screen is left out: nothing there was out of sight. A waiting one
+ * stays until it is answered, on screen or not. Decided here, once: main holds the mark but cannot
+ * see the screen, and two views must not each decide.
  */
 export function markedTabs(tabs: readonly TabDescriptor[], field: MarkField, onScreen: readonly string[]): TabDescriptor[] {
-  return tabs.filter((tab) => tab[field] !== undefined && !onScreen.includes(tab.tabId)).sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
+  return tabs
+    .filter((tab) => tab[field] !== undefined && (field === "waitingAt" || !onScreen.includes(tab.tabId)))
+    .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
 }
 
 /**
@@ -82,10 +84,15 @@ export function jumpTarget(
   tabs: Record<string, TabDescriptor[]>,
   onScreenOf: (refKey: string) => readonly string[],
 ): { refKey: string; tab: TabDescriptor } | undefined {
-  // Through `markedTabs`, so the "not on screen" rule stays in one place.
+  // A tab on screen is not a jump away, whatever its mark.
   const collect = (field: MarkField): { refKey: string; tab: TabDescriptor }[] =>
     Object.keys(tabs)
-      .flatMap((refKey) => markedTabs(tabs[refKey], field, onScreenOf(refKey)).map((tab) => ({ refKey, tab })))
+      .flatMap((refKey) => {
+        const onScreen = onScreenOf(refKey);
+        return markedTabs(tabs[refKey], field, onScreen)
+          .filter((tab) => !onScreen.includes(tab.tabId))
+          .map((tab) => ({ refKey, tab }));
+      })
       .sort((a, b) => (a.tab[field] ?? 0) - (b.tab[field] ?? 0));
   return collect("waitingAt")[0] ?? collect("finishedAt")[0];
 }

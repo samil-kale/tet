@@ -7,11 +7,15 @@ export interface HandoverResult extends GitActionResult {
   tab?: TabDescriptor;
 }
 
-/** One terminal's output since the last flush. Batched, so the message count does not grow with
- *  the number of open terminals. */
-export interface TerminalOutput {
+/** A tab, addressed by its repository or worktree and its id. */
+export interface TabRef {
   ref: ProjectRef;
   tabId: string;
+}
+
+/** One terminal's output since the last flush. Batched, so the message count does not grow with
+ *  the number of open terminals. */
+export interface TerminalOutput extends TabRef {
   data: string;
 }
 

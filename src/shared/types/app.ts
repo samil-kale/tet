@@ -1,3 +1,5 @@
+import type { TabRef } from "./terminals";
+
 /** The settings dialog's Info tab, read once. */
 export interface AppInfo {
   /** package.json's version. */
@@ -11,6 +13,9 @@ export interface AppInfo {
 
 /** Decides how long a notice stands (Notices.tsx). */
 export type NoticeSeverity = "error" | "warning" | "info";
+
+/** Which tab mark a notice shows in place of its severity's icon: the turn state it reports. */
+export type NoticeMark = "waiting" | "finished";
 
 /** A notice the window showed, reported for `tet-ctl notices-list`. */
 export interface NoticeReport extends Notice {
@@ -43,6 +48,11 @@ export interface EditorListing extends EditorReport {
 export interface Notice {
   severity: NoticeSeverity;
   message: string;
+  /** `false`: listed in the notification center only, as the desktop already shows it. */
+  toast?: false;
+  /** The tab a click on its entry shows. */
+  target?: TabRef;
+  mark?: NoticeMark;
 }
 
 /** A download's notice, updated in place by its `key` (Notices.tsx's `showProgress`). */

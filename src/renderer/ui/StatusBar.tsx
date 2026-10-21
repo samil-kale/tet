@@ -2,7 +2,8 @@ import { memo } from "react";
 import type { Project } from "../../shared/types/project";
 import type { Lane } from "../../shared/types/settings";
 import { shortcutLabel } from "../shortcuts";
-import { ArchiveIcon, BranchIcon, ProjectsIcon } from "./icons";
+import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon } from "./icons";
+import { toggleCenter, useCenterOpen, useNoticeList } from "./Notices";
 
 interface StatusBarProps {
   /** The active repository's or worktree's project; absent while none is open. */
@@ -18,9 +19,19 @@ interface StatusBarProps {
 }
 
 /** The window's bottom edge (VS Code's status bar): the active repository or worktree, its
- *  branch with its change count, and its archived tab count, each opening its lane. Its icons
- *  read smaller than the rest of the app's. */
+ *  branch with its change count, and its archived tab count, each opening its lane; at the right
+ *  edge the bell of the notification center. Its icons read smaller than the rest of the app's. */
 export const StatusBar = memo(function StatusBar({ project, branch, changesCount, archivedCount, onSelectLane }: StatusBarProps) {
+  const notices = useNoticeList();
+  const centerOpen = useCenterOpen();
+  const unread = notices.filter((notice) => !notice.read).length;
+  const bellTitle = centerOpen
+    ? "Hide Notifications"
+    : unread > 0
+      ? `${unread} New Notification${unread === 1 ? "" : "s"}`
+      : notices.length === 0
+        ? "No Notifications"
+        : "Show Notifications";
   return (
     <div className="status-bar">
       {project && (
@@ -49,6 +60,14 @@ export const StatusBar = memo(function StatusBar({ project, branch, changesCount
           {branch}: {changesCount}
         </button>
       )}
+      <button
+        type="button"
+        className={`status-bar-item status-bar-bell${unread > 0 ? " unread" : ""}`}
+        title={bellTitle}
+        onClick={toggleCenter}
+      >
+        <BellIcon className="tree-icon" />
+      </button>
     </div>
   );
 });

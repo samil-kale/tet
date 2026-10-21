@@ -1,15 +1,11 @@
 import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
+import type { Notice, NoticeMark } from "../../shared/types/app";
+import type { TabRef } from "../../shared/types/terminals";
 import { projectRef, refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { logError } from "./error-log";
 import { PLATFORM } from "./host-platform";
-
-/** The tab a notification is about, which a click shows. */
-export interface NotificationTarget {
-  ref: ProjectRef;
-  tabId: string;
-}
 
 /** What the desktop notifications need of the app around them (the window, AppWindow, and the tabs; handed in by main.ts). */
 interface NotificationDeps {
@@ -21,9 +17,11 @@ interface NotificationDeps {
   /** Flashes the taskbar until the window is focused. */
   attractAttention(): void;
   /** Brings a notification's tab to the front; false while that tab is not restored yet. */
-  showTab(target: NotificationTarget & { sessionId?: string }): boolean;
+  showTab(target: TabRef & { sessionId?: string }): boolean;
   /** The target tab's session id, which outlives a quit (see `windowsToastXml`). */
-  sessionIdOf(target: NotificationTarget): string | undefined;
+  sessionIdOf(target: TabRef): string | undefined;
+  /** Lists a shown notification in the window's notification center. */
+  recordNotice(notice: Notice): void;
 }
 
 let deps: NotificationDeps;
@@ -32,7 +30,7 @@ let deps: NotificationDeps;
  * A clicked notification's tab not yet restored (the click started TET). Looked for on each `onTabs` of
  * its repository or worktree; replaced by a later click.
  */
-let notificationTargetAwaited: (NotificationTarget & { sessionId?: string }) | undefined;
+let notificationTargetAwaited: (TabRef & { sessionId?: string }) | undefined;
 
 /** An identical notification within this span is dropped, without extending it. The target tab is
  *  part of the identity: two untitled tabs of one agent read the same, and dropping the second
@@ -40,7 +38,7 @@ let notificationTargetAwaited: (NotificationTarget & { sessionId?: string }) | u
 const NOTIFICATION_REPEAT_MS = 8000;
 const recentNotifications = new Map<string, number>();
 
-function repeatedNotification(title: string, body: string, target?: NotificationTarget): boolean {
+function repeatedNotification(title: string, body: string, target?: TabRef): boolean {
   const now = Date.now();
   for (const [seen, at] of recentNotifications) {
     if (now - at >= NOTIFICATION_REPEAT_MS) {
@@ -123,9 +121,9 @@ function escapeXml(text: string): string {
 /**
  * Electron's notification plus a `launch` string Windows hands back on a click. `type` and `tag` are
  * Electron's keys, so it still finds the Notification while TET runs; the session id outlives a
- * quit (showNotificationTarget).
+ * quit (showTabRef).
  */
-function windowsToastXml(id: string, title: string, body: string, target?: NotificationTarget): string {
+function windowsToastXml(id: string, title: string, body: string, target?: TabRef): string {
   const launch = new URLSearchParams({ type: "click", tag: id });
   if (target) {
     launch.set("project", target.ref.projectId);
@@ -155,10 +153,11 @@ function windowsToastXml(id: string, title: string, body: string, target?: Notif
  * started again, but does not get that grant on its own: a window it reveals while TET already runs
  * only flashes the taskbar.
  */
-export function showDesktopNotification(title: string, body: string, target?: NotificationTarget): void {
+export function showDesktopNotification(title: string, body: string, target?: TabRef, mark?: NoticeMark): void {
   if (repeatedNotification(title, body, target)) {
     return;
   }
+  deps.recordNotice({ severity: "info", message: `${title}\n${body}`.trim(), toast: false, target, mark });
   deps.attractAttention();
   if (!Notification.isSupported()) {
     return;

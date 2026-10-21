@@ -1,6 +1,8 @@
 const RECONCILE_DEBOUNCE_MS = 5000;
 // A watcher event is the change itself; only the few events per write need collapsing.
 const WATCH_DEBOUNCE_MS = 300;
+// An Escape typed into a working tab may have cut its turn short, which only the session record says.
+export const INTERRUPT_RECONCILE_MS = 800;
 // A CLI can persist a generated title well after its output went idle.
 const RECONCILE_RETRY_MS = 5000;
 const RECONCILE_MAX_RETRIES = 3;

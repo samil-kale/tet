@@ -1,5 +1,6 @@
 import { getAgent } from "../agents";
 import type { HookEvent } from "../../shared/ctl";
+import type { NoticeMark } from "../../shared/types/app";
 import type { NotificationSettings } from "../../shared/types/settings";
 import { endLeavesQuestion, endTurnQuietly, setTurn, type TabState } from "./tab-state";
 import { reportApplies } from "./turn-order";
@@ -8,6 +9,7 @@ import { reportApplies } from "./turn-order";
 export interface HookNotification {
   title: string;
   body: string;
+  mark: NoticeMark;
 }
 
 export type NotificationKind = "finished" | "permission" | "question" | "idle";
@@ -70,8 +72,13 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
         return UNCHANGED;
       }
       // Not through setTurn: the turn is still open, `inTurn` is untouched.
-      tab.waitingAt = at;
       tab.turnReportAt = at;
+      // One question can report twice (Claude Code's AskUserQuestion fires `question` and then
+      // `permission`): the mark and the notification are the first one's.
+      if (tab.waitingAt !== undefined) {
+        return UNCHANGED;
+      }
+      tab.waitingAt = at;
       return { changed: true, notify: event };
     case "answered":
       // The dialog closed, whatever closed it; the turn, if any, runs on.
@@ -125,12 +132,12 @@ export function notificationFor(
   const where = tab.title ? `${placeName} - ${tab.title}` : placeName;
   switch (kind) {
     case "finished":
-      return { title: `${name}: Finished`, body: `Finished in ${where}` };
+      return { title: `${name}: Finished`, body: where, mark: "finished" };
     case "permission":
-      return { title: `${name}: Waiting for an answer`, body: `Waiting for an answer in ${where}` };
+      return { title: `${name}: Waiting for an answer`, body: where, mark: "waiting" };
     case "question":
-      return { title: `${name}: Question`, body: `Waiting for an answer in ${where}` };
+      return { title: `${name}: Question`, body: where, mark: "waiting" };
     case "idle":
-      return { title: `${name}: Still waiting`, body: `No response yet in ${where}` };
+      return { title: `${name}: Still waiting`, body: where, mark: "finished" };
   }
 }

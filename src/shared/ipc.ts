@@ -1,5 +1,6 @@
 import type { TETApi, Unsubscribe } from "./api";
 import type { ProjectRef } from "./types/project";
+import type { TabRef } from "./types/terminals";
 
 /**
  * Every channel between the window and the main process, typed off `TETApi` (`api.ts`): the
@@ -169,5 +170,5 @@ export interface EventChannels {
   "tabs:startup-progress": Payload<TETApi["tabs"]["onStartupProgress"]>;
   "tabs:show": Payload<TETApi["tabs"]["onShow"]>;
   /** `onTextRequest`'s question; the answer goes back on `reply`. */
-  "tabs:text-request": { ref: ProjectRef; tabId: string; reply: WindowReply };
+  "tabs:text-request": TabRef & { reply: WindowReply };
 }

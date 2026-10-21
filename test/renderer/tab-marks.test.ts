@@ -17,10 +17,10 @@ describe("the marked tabs", () => {
     assert.deepEqual(ids(markedTabs(tabs, "finishedAt", NO_IDS)), ["old", "mid", "new"]);
   });
 
-  it("leaves out a tab on screen, which was never out of sight", () => {
+  it("leaves out a finished tab on screen, which was never out of sight, but not a waiting one", () => {
     const tabs = [tab("seen", { finishedAt: 10 }), tab("hidden", { finishedAt: 20 })];
     assert.deepEqual(ids(markedTabs(tabs, "finishedAt", ["seen"])), ["hidden"]);
-    assert.deepEqual(ids(markedTabs([tab("q", { waitingAt: 5 })], "waitingAt", ["q"])), []);
+    assert.deepEqual(ids(markedTabs([tab("q", { waitingAt: 5 })], "waitingAt", ["q"])), ["q"]);
   });
 
   it("keeps the two marks apart", () => {
@@ -48,9 +48,9 @@ describe("a repository's marks", () => {
     assert.deepEqual(marks.starting, ["a", "c"]);
   });
 
-  it("hides a question while its tab is on screen, and shows it again once it is not", () => {
+  it("keeps a question while its tab is on screen: it stands until answered", () => {
     const tabs = [tab("a", { waitingAt: 5 })];
-    assert.deepEqual(refMarks(tabs, ["a"], undefined).waiting, []);
+    assert.deepEqual(refMarks(tabs, ["a"], undefined).waiting, ["a"]);
     assert.deepEqual(refMarks(tabs, NO_IDS, undefined).waiting, ["a"]);
   });
 

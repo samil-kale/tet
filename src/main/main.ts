@@ -10,7 +10,7 @@ import { RELEASES_URL } from "../shared/release";
 import { resolveTheme, themeKey } from "../shared/themes";
 import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
-import type { TabDescriptor, TerminalStatus } from "../shared/types/terminals";
+import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readChanged, readCommands, readSbxSettings } from "./store/tet-json";
 import { prepareControl } from "./ctl/ctl-channel";
@@ -277,7 +277,7 @@ function findTab(ref: ProjectRef, tabId: string): TabDescriptor | undefined {
  * Brings a notification's tab to the front, found by tab id or by session id — the tab id of a restored
  * tab (TabDescriptor). Returns whether it was found.
  */
-function showNotificationTarget(target: { ref: ProjectRef; tabId: string; sessionId?: string }): boolean {
+function showNotificationTarget(target: TabRef & { sessionId?: string }): boolean {
   const tab = findTab(target.ref, target.tabId) ?? (target.sessionId !== undefined ? findTab(target.ref, target.sessionId) : undefined);
   if (tab) {
     send("tabs:show", { ref: target.ref, tabId: tab.tabId });
@@ -291,6 +291,7 @@ startNotifications({
   attractAttention: appWindow.attractAttention,
   showTab: showNotificationTarget,
   sessionIdOf: (target) => findTab(target.ref, target.tabId)?.sessionId,
+  recordNotice: (notice) => send("app:notice", notice),
 });
 
 /**

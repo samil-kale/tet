@@ -287,8 +287,7 @@ export const Pane = memo(function Pane({
             ) : waitingTabIds.includes(terminal.tabId) ? (
               <TabMark kind="waiting" className="tab-icon" />
             ) : isWorking(terminal) ? (
-              // A question hidden on the tab on screen (left out of `waitingTabIds`) gets no
-              // spinner: a session stopped on a question is not working.
+              // A session stopped on a question is not working (and is in `waitingTabIds`).
               <TabMark kind="working" className="tab-icon" />
             ) : finishedTabIds.includes(terminal.tabId) ? (
               <TabMark kind="finished" className="tab-icon" />

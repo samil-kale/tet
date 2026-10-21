@@ -2,6 +2,7 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
+  Bell,
   BookOpen,
   CaseSensitive,
   Check,
@@ -245,6 +246,11 @@ const SEVERITY_ICONS: Record<NoticeSeverity, LucideIcon> = {
  */
 export function SeverityIcon({ severity, ...props }: IconProps & { severity: NoticeSeverity }) {
   return <Lucide {...props} icon={SEVERITY_ICONS[severity]} />;
+}
+
+/** Lucide's `bell` — the status bar's notification center. */
+export function BellIcon(props: IconProps) {
+  return <Lucide {...props} icon={Bell} />;
 }
 
 /** Lucide's `git-branch`. */

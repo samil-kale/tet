@@ -28,8 +28,11 @@ export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TA
       { matcher: "permission_prompt|elicitation_dialog", hooks: command("permission") },
       ...(paths.idleReminder ? [{ matcher: "idle_prompt", hooks: command("idle") }] : []),
     ],
-    // `AskUserQuestion` is a tool, not a Notification event.
+    // `AskUserQuestion` is a tool, not a Notification event. Its answer ends the question, as a
+    // permission's does not: only this tool's PostToolUse is hooked, one process per question rather
+    // than one per tool call. A declined one fires nothing; that turn ends cut short (reconcile).
     PreToolUse: [{ matcher: "AskUserQuestion", hooks: command("question") }],
+    PostToolUse: [{ matcher: "AskUserQuestion", hooks: command("answered") }],
   };
 
   // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process.

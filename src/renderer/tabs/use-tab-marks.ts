@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
+import { removeStaleNotices } from "../ui/Notices";
 import { useLatest } from "../ui/use-latest";
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
@@ -78,8 +79,7 @@ export function useTabMarks(
   /**
    * Tabs on screen (`onScreenTabIds`) count as seen, so their finished mark clears — behind a dialog or
    * another window it stays until the user is back. Main holds the mark but cannot see the screen.
-   * Only the bubble: a question is hidden while on screen (`markedTabs`), not cleared, and reporting
-   * it would cost an IPC per push.
+   * Only the bubble: a question stays until it is answered (`markedTabs`).
    */
   useEffect(() => {
     if (!activeRef) {
@@ -91,6 +91,8 @@ export function useTabMarks(
       }
     }
   }, [activeRef, onScreenTabIds, tabs]);
+
+  useEffect(() => removeStaleNotices(tabs), [tabs]);
 
   /** Ctrl/Cmd+Shift+U (`jumpTarget`). */
   const jumpToWaiting = useCallback(() => {

@@ -16,6 +16,8 @@ import { CONTROL_ENV, type HookEvent } from "../../src/shared/ctl";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir, withEnv, withEnvAsync } from "../helpers";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
+import { notificationFor } from "../../src/main/terminals/turn-reports";
+import { answersQuestion, type TabState } from "../../src/main/terminals/tab-state";
 
 /** terminals/: a tab's turns and marks, its token and environment, when sessions are listed. */
 
@@ -93,6 +95,7 @@ describe("a turn's notification", () => {
         "the mark is still set: whether it shows is the renderer's call",
       );
       for (const event of waitingEvents) {
+        hook("prompt-submit");
         assert.equal(hook(event).notification, undefined, event);
       }
 
@@ -102,8 +105,13 @@ describe("a turn's notification", () => {
         hook("prompt-submit");
         assert.match(hook("stop").notification?.title ?? "", /Finished/, `on screen: [${onScreen.join(",")}]`);
         for (const event of waitingEvents) {
+          hook("prompt-submit");
           assert.notEqual(hook(event).notification, undefined, `${event}, on screen: [${onScreen.join(",")}]`);
         }
+        // A question reporting twice is told once.
+        hook("prompt-submit");
+        hook("question");
+        assert.equal(hook("permission").notification, undefined, "the same question, reported again");
       }
     } finally {
       await manager.dispose();
@@ -194,6 +202,40 @@ describe("a question reported answered", () => {
       assert.equal(inspected()?.waitingAt, undefined);
       assert.equal(inspected()?.inTurn, true);
     });
+  });
+});
+
+describe("a turn's notification", () => {
+  const tab = (title: string): TabState => ({ tabId: "t", agentId: "claude", title, status: "running" });
+  const all = { finished: true, waiting: true, idleReminder: true };
+
+  it("names the project and the session alone, and the mark it stands for", () => {
+    assert.deepEqual(notificationFor(tab("Fix the bug"), "finished", "tet", all), {
+      title: "claude: Finished",
+      body: "tet - Fix the bug",
+      mark: "finished",
+    });
+    assert.equal(notificationFor(tab(""), "finished", "tet", all)?.body, "tet", "no title yet");
+    assert.equal(notificationFor(tab("x"), "idle", "tet", all)?.mark, "finished");
+    for (const kind of ["permission", "question"] as const) {
+      assert.equal(notificationFor(tab("x"), kind, "tet", all)?.mark, "waiting", kind);
+    }
+  });
+
+  it("is none for a kind the settings switch off", () => {
+    assert.equal(notificationFor(tab("x"), "finished", "tet", { ...all, finished: false }), undefined);
+    assert.equal(notificationFor(tab("x"), "question", "tet", { ...all, waiting: false }), undefined);
+  });
+});
+
+describe("what in a tab answers a standing question", () => {
+  it("is Enter or a typed character, not the mouse, an arrow or a bare Escape", () => {
+    for (const data of ["\r", "\n", "1", "y", "text\r"]) {
+      assert.equal(answersQuestion(data), true, JSON.stringify(data));
+    }
+    for (const data of ["\x1b", "\x1b[A", "\x1b[<0;10;5M", "\t", " "]) {
+      assert.equal(answersQuestion(data), false, JSON.stringify(data));
+    }
   });
 });
 

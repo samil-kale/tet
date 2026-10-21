@@ -29,7 +29,7 @@ import type {
   SbxStoredLocal,
 } from "./types/sbx";
 import type { AppSettings, SettingsEdits } from "./types/settings";
-import type { HandoverResult, TabDescriptor, TerminalOutput, TerminalStatus } from "./types/terminals";
+import type { HandoverResult, TabDescriptor, TabRef, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
@@ -312,11 +312,11 @@ export interface TETApi {
     onTabs: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
     /** One message per flush for all terminals. */
     onOutput: (listener: (batch: TerminalOutput[]) => void) => Unsubscribe;
-    onStatus: (listener: (payload: { ref: ProjectRef; tabId: string; status: TerminalStatus }) => void) => Unsubscribe;
+    onStatus: (listener: (payload: TabRef & { status: TerminalStatus }) => void) => Unsubscribe;
     /** Anything in the project still starting (a CLI booting, sessions listing). */
     onStartupProgress: (listener: (payload: { ref: ProjectRef; show: boolean }) => void) => Unsubscribe;
     /** A tab the control channel opened, to bring to front. */
-    onShow: (listener: (payload: { ref: ProjectRef; tabId: string }) => void) => Unsubscribe;
+    onShow: (listener: (payload: TabRef) => void) => Unsubscribe;
     /** `tet-ctl tabs-output` asks for what a tab's terminal shows; the listener answers. */
     onTextRequest: (listener: (ref: ProjectRef, tabId: string) => Promise<string>) => Unsubscribe;
     /** onStartupProgress's current value. */

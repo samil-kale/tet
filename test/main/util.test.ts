@@ -7,6 +7,7 @@ import * as path from "node:path";
 import { describe, it } from "node:test";
 import { Notification } from "electron";
 import { LINUX, MAC, WINDOWS } from "../../src/shared/platform";
+import type { Notice } from "../../src/shared/types/app";
 import { projectRef } from "../../src/shared/types/project";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { shellSingleQuote } from "../../src/main/util/generated-file";
@@ -358,6 +359,7 @@ describe("a desktop notification", () => {
         return true;
       },
       sessionIdOf: () => undefined,
+      recordNotice: () => undefined,
     });
     const target = { ref: projectRef("p1"), tabId: "tab-1" };
     showDesktopNotification("a desktop notification clicked", "", target);
@@ -366,5 +368,23 @@ describe("a desktop notification", () => {
     made[made.length - 1].emit("click");
     assert.equal(revealed.length, 1);
     assert.deepEqual(shown, [target]);
+  });
+
+  it("is listed once in the notification center, with its tab, unless it repeats", () => {
+    const recorded: Notice[] = [];
+    startNotifications({
+      installed: false,
+      revealWindow: () => undefined,
+      attractAttention: () => undefined,
+      showTab: () => true,
+      sessionIdOf: () => undefined,
+      recordNotice: (notice) => recorded.push(notice),
+    });
+    const target = { ref: projectRef("p1"), tabId: "tab-2" };
+    showDesktopNotification("a desktop notification listed", "body", target, "finished");
+    showDesktopNotification("a desktop notification listed", "body", target, "finished");
+    assert.deepEqual(recorded, [
+      { severity: "info", message: "a desktop notification listed\nbody", toast: false, target, mark: "finished" },
+    ]);
   });
 });

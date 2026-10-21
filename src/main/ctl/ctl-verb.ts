@@ -1,7 +1,7 @@
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
-import type { EditorListing, EditorReport, NoticeReport } from "../../shared/types/app";
+import type { EditorListing, EditorReport, NoticeMark, NoticeReport } from "../../shared/types/app";
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { CheckoutTarget, GitActionResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
@@ -16,9 +16,8 @@ import type {
   SbxSignInResult,
   SbxStoredLocal,
 } from "../../shared/types/sbx";
-import type { TabDescriptor } from "../../shared/types/terminals";
+import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { NotificationTarget } from "../util/notifications";
 import type { SbxReading } from "../sbx/sbx-status";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
 import type { CallerSide } from "./caller-side";
@@ -178,8 +177,8 @@ export interface ControlDeps {
   showTab(ref: ProjectRef, tabId: string): void;
   /** A desktop notification from this process, which holds the desktop session (a sandboxed hook has
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
-   *  `target` to the front. */
-  showDesktopNotification(title: string, body: string, target?: NotificationTarget): void;
+   *  `target` to the front; the notification center lists it with `mark`'s icon. */
+  showDesktopNotification(title: string, body: string, target?: TabRef, mark?: NoticeMark): void;
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;

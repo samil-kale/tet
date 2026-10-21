@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { HOST_SIDE, SANDBOX_SIDE } from "../../src/shared/ctl-side";
 import * as esbuild from "esbuild";
 import { PLATFORM } from "../../src/main/util/host-platform";
+import { setupClaudeHooks } from "../../src/main/agents/claude/hooks";
 import { hookTrustedHash, setupCodexHooks } from "../../src/main/agents/codex/hooks";
 import { hookSessionId } from "../../src/main/agents/hook-payload";
 import { piStopCutShort, renderPiExtension, writePiExtension } from "../../src/main/agents/pi/extension";
@@ -26,7 +27,7 @@ import {
   win32AgentDirs,
 } from "../../src/main/agents/agent-path";
 import { listAskModels } from "../../src/main/agents";
-import type { AgentDefinition } from "../../src/main/agents/agent";
+import type { AgentDefinition, AgentPaths } from "../../src/main/agents/agent";
 import { askAgent } from "../../src/main/agents/ask";
 import { claudeAgent } from "../../src/main/agents/claude";
 import type { AskModel } from "../../src/shared/types/agents";
@@ -71,6 +72,30 @@ function reported(reports: ControlRequest[]): string[] {
 
 /** The small pieces, each one edit away from silently wrong. */
 
+describe("Claude Code's hooks", () => {
+  const hooksOf = (idleReminder: boolean): Record<string, { matcher?: string; hooks: { command: string }[] }[]> => {
+    const agentDir = tempDir("tet-claude-hooks-");
+    const paths: AgentPaths = { agentDir, idleReminder, theme: { kind: "dark" } as AgentPaths["theme"] };
+    const args = setupClaudeHooks(paths);
+    const settings = JSON.parse(fs.readFileSync(args[args.indexOf("--settings") + 1], "utf8")) as { hooks: ReturnType<typeof hooksOf> };
+    return settings.hooks;
+  };
+
+  it("report a question when its tool starts and its answer when the tool ends, one process per question", () => {
+    const hooks = hooksOf(false);
+    assert.deepEqual(
+      [hooks.PreToolUse, hooks.PostToolUse].map((groups) => groups.map((group) => [group.matcher, group.hooks[0].command])),
+      [[["AskUserQuestion", "tet-ctl hook question"]], [["AskUserQuestion", "tet-ctl hook answered"]]],
+    );
+  });
+
+  it("register the idle reminder only when it is wanted", () => {
+    const matchers = (idleReminder: boolean): (string | undefined)[] => hooksOf(idleReminder).Notification.map((group) => group.matcher);
+    assert.deepEqual(matchers(false), ["permission_prompt|elicitation_dialog"]);
+    assert.deepEqual(matchers(true), ["permission_prompt|elicitation_dialog", "idle_prompt"]);
+  });
+});
+
 describe("Codex's hook trust", () => {
   // Codex's own hash (codex/hooks.ts): a change here brings back the "Hooks need review" screen.
   it("hashes the normalized hook the way Codex does", () => {
@@ -86,19 +111,19 @@ describe("Codex's hook trust", () => {
     const args = setupCodexHooks();
     const hooks = args[args.indexOf("-c") + 1];
     assert.match(hooks, /^hooks=\{SessionStart=\[/);
-    for (const event of ["UserPromptSubmit", "Stop", "PermissionRequest", "PreToolUse"]) {
+    for (const event of ["UserPromptSubmit", "Stop", "PermissionRequest", "PreToolUse", "PostToolUse"]) {
       assert.ok(hooks.includes(`${event}=[`), event);
     }
     assert.match(hooks, /matcher='request_user_input'/);
     const trusted = hooks.match(/trusted_hash='sha256:[0-9a-f]{64}'/g) ?? [];
-    assert.equal(trusted.length, 5, "one per event, each its own handler");
+    assert.equal(trusted.length, 6, "one per event, each its own handler");
     assert.ok(!args.some((arg) => arg.startsWith("hooks.")), "one value, never key paths");
   });
 
   it("registers one plain tet-ctl call per event, host and sandbox alike", () => {
     for (const target of [HOST_TARGET, SANDBOX_TARGET]) {
       const hooks = setupCodexHooks(target)[1];
-      for (const event of ["session-start", "prompt-submit", "stop", "permission", "question"]) {
+      for (const event of ["session-start", "prompt-submit", "stop", "permission", "question", "answered"]) {
         assert.ok(hooks.includes(`command='tet-ctl hook ${event}'`), `${event} on ${target.posix ? "posix" : "win32"}`);
       }
       // No host path in a sandbox's trust key, and nothing written.

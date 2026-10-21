@@ -36,7 +36,7 @@ import {
   toDescriptor,
   type TabState,
 } from "./tab-state";
-import { ReconcileScheduler } from "./reconcile-scheduler";
+import { INTERRUPT_RECONCILE_MS, ReconcileScheduler } from "./reconcile-scheduler";
 import { StartIndicators } from "./start-indicators";
 import { currentTheme } from "../store/theme";
 import { effectivePrompt } from "../../shared/prompts";
@@ -918,6 +918,11 @@ export class TabSessionManager {
     if (tab?.waitingAt !== undefined && answersQuestion(data)) {
       tab.waitingAt = undefined;
       this.postTabs();
+    }
+    // A turn cut short is read off the session record (turnEndedAt): looked at soon, not after the
+    // output debounce.
+    if (tab?.inTurn && data === "\x1b") {
+      this.runtimeFor(tab.agentId).reconciler?.schedule(INTERRUPT_RECONCILE_MS);
     }
     if (tab && !tab.sessionId && tab.reportedSessionId === undefined && data.includes("\r")) {
       tab.submittedAt = Date.now();
