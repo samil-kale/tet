@@ -484,13 +484,13 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 24px;
+  height: 28px;
   flex: none;
   padding: 0 8px;
   background: var(--tet-sideBar-background);
   border-top: 1px solid var(--tet-panel-border);
-  font-size: var(--tiny-font-size);
-  --icon-size: 12px;
+  font-size: var(--small-font-size);
+  --icon-size: 13px;
 }
 
 .status-bar-item {
@@ -2698,7 +2698,7 @@ textarea:focus,
 .notices {
   position: absolute;
   right: 6px;
-  bottom: 29px;
+  bottom: 33px;
   /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
   z-index: 25;
   display: flex;
@@ -2835,7 +2835,7 @@ textarea:focus,
 .notices-center {
   position: absolute;
   right: 6px;
-  bottom: 29px;
+  bottom: 33px;
   z-index: 25;
   display: flex;
   flex-direction: column;
