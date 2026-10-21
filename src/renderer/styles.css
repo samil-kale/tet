@@ -484,7 +484,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 28px;
+  height: 26px;
   flex: none;
   padding: 0 8px;
   background: var(--tet-sideBar-background);
@@ -2698,7 +2698,7 @@ textarea:focus,
 .notices {
   position: absolute;
   right: 6px;
-  bottom: 33px;
+  bottom: 31px;
   /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
   z-index: 25;
   display: flex;
@@ -2834,7 +2834,7 @@ textarea:focus,
 .notices-center {
   position: absolute;
   right: 6px;
-  bottom: 33px;
+  bottom: 31px;
   z-index: 25;
   display: flex;
   flex-direction: column;
