@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.0 (2026-10-21)
+
+- **Notification center.** Every notice and desktop notification is listed in the notification
+  center, opened by the status bar's bell; a desktop notification's click shows its tab. Notices
+  fade in and out.
+- **Archive.** Archived sessions can be renamed in the archive lane, and the status bar shows the
+  archive count.
+
 ## 0.21.0 (2026-10-20)
 
 - **Tabs survive restarts.** Editor tabs and plain shells, with their output, come back after TET
