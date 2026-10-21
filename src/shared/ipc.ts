@@ -111,6 +111,7 @@ export interface InvokeChannels {
   "tabs:starting": TETApi["tabs"]["starting"];
   "archive:list": TETApi["archive"]["list"];
   "archive:reopen": TETApi["archive"]["reopen"];
+  "archive:rename": TETApi["archive"]["rename"];
   "archive:delete": TETApi["archive"]["delete"];
   "archive:reorder": TETApi["archive"]["reorder"];
   "agents:list": TETApi["agents"]["list"];

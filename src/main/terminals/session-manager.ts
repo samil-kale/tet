@@ -1168,6 +1168,27 @@ export class TabSessionManager {
     return undefined;
   }
 
+  /** Renames an archived tab's session, once its process is gone, as `renameTab` does a tab's.
+   *  Answers what the agent refused: the window's question shows it. */
+  async renameArchived(tabId: string, title: string): Promise<string | undefined> {
+    const tab = this.archivedTabs.find((candidate) => candidate.tabId === tabId);
+    const sessionId = tab?.sessionId;
+    if (!tab || !sessionId) {
+      return undefined;
+    }
+    await this.stoppingArchived.get(tabId);
+    const { agent } = this.runtimeFor(tab.agentId);
+    try {
+      await this.placeOf(tab).sessionActions()?.rename(sessionId, title);
+    } catch (error) {
+      return `Could not rename ${agent.displayName} session: ${errorMessage(error)}`;
+    }
+    tab.title = title.trim();
+    tab.provisionalTitle = false;
+    this.postArchived();
+    return undefined;
+  }
+
   /** Deletes an archived tab's session, once its process is gone. Answers what refused it: the
    *  tab stays archived. */
   async deleteArchived(tabId: string): Promise<string | undefined> {

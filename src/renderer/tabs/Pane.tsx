@@ -23,7 +23,7 @@ import { ProgressBar } from "../ui/ProgressBar";
 import { useDragReorder } from "../ui/drag-reorder";
 
 /** What VS Code's own tab rename accepts. */
-const MAX_TITLE_LENGTH = 50;
+export const MAX_TITLE_LENGTH = 50;
 
 /** Local ISO 8601 date/time to the second, space instead of "T". */
 function formatIso(ms: number): string {

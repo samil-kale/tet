@@ -328,6 +328,8 @@ export interface TETApi {
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
     /** Brings the archived tab back to the strip, resuming its session. */
     reopen: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
+    /** Renames the session behind an archived tab. */
+    rename: (ref: ProjectRef, tabId: string, title: string) => Promise<GitActionResult>;
     /** Deletes the session behind an archived tab. */
     delete: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
     /** A drag in the ARCHIVE lane: the tabs take `tabIds`' order, written down so it persists. */

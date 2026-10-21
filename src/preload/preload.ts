@@ -169,6 +169,7 @@ const api: TETApi = {
   archive: {
     list: (ref) => invoke("archive:list", ref),
     reopen: (ref, tabId) => invoke("archive:reopen", ref, tabId),
+    rename: (ref, tabId, title) => invoke("archive:rename", ref, tabId, title),
     delete: (ref, tabId) => invoke("archive:delete", ref, tabId),
     reorder: (ref, tabIds) => invoke("archive:reorder", ref, tabIds),
     onChanged: (listener) => subscribe("archive:changed", listener),

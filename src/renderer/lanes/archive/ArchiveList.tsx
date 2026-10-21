@@ -1,8 +1,8 @@
 import { memo, useState } from "react";
 import type { TabDescriptor } from "../../../shared/types/terminals";
 import { AgentIcon } from "../../ui/agent-icons";
-import { useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
-import { confirmed } from "../../ui/Dialog";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { askName, confirmed, refusal } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
 import { notify } from "../../ui/Notices";
 import { IconButton } from "../../ui/IconButton";
@@ -11,6 +11,7 @@ import { Section } from "../../ui/Section";
 import { agentName, useAgents } from "../../ui/use-agents";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
 import type { ResolvedRef } from "../../resolved-ref";
+import { MAX_TITLE_LENGTH } from "../../tabs/Pane";
 import { useArchive } from "./use-archive";
 
 const DRAG_TYPE = "application/x-tet-archive";
@@ -78,6 +79,16 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
     }
   };
 
+  const askRename = async (tab: TabDescriptor): Promise<void> => {
+    await askName({
+      title: "Rename session",
+      current: tab.title,
+      confirmLabel: "Rename",
+      maxLength: MAX_TITLE_LENGTH,
+      submit: async (name) => refusal(await window.tet.archive.rename(resolved.ref, tab.tabId, name), "Could not rename the session"),
+    });
+  };
+
   const askDelete = async (tab: TabDescriptor): Promise<void> => {
     const answer = await confirmed({
       title: "Delete session",
@@ -95,6 +106,8 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
 
   const menuEntries = (tab: TabDescriptor): ContextMenuEntry[] => [
     { label: "Reopen", run: () => void reopen(tab) },
+    { label: "Rename...", run: () => void askRename(tab) },
+    SEPARATOR,
     { label: "Delete...", run: () => void askDelete(tab) },
   ];
 

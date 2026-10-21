@@ -56,6 +56,11 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     return refused === undefined ? { ok: true } : { ok: false, error: refused };
   });
 
+  handle("archive:rename", async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
+    const refused = await tabManagers.get(ref)?.renameArchived(tabId, title);
+    return refused === undefined ? { ok: true } : { ok: false, error: refused };
+  });
+
   handle("archive:delete", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
     const refused = await tabManagers.get(ref)?.deleteArchived(tabId);
     return refused === undefined ? { ok: true } : { ok: false, error: refused };
