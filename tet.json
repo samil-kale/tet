@@ -7,8 +7,7 @@
   "commands": [
     {
       "command": "npm run compile",
-      "name": "npm compile",
-      "color": "yellow"
+      "name": "npm compile"
     },
     "npm start",
     "npm run watch",
