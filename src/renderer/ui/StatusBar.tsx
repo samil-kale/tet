@@ -58,7 +58,7 @@ export const StatusBar = memo(function StatusBar({ project, branch, changesCount
       <button
         type="button"
         className={`status-bar-item status-bar-notices${highlighted ? " highlighted" : ""}`}
-        title="Notifications"
+        title={`Notifications (${shortcutLabel("toggleNotices")})`}
         onClick={toggleCenter}
       >
         {marks.map((mark) => (

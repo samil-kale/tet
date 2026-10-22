@@ -15,7 +15,7 @@ import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesLane } from "./lanes/files/FilesLane";
 import { GitLane } from "./lanes/git/GitLane";
-import { Notices, notify, showProgress } from "./ui/Notices";
+import { Notices, notify, showProgress, toggleCenter } from "./ui/Notices";
 import { NoticesCenter } from "./ui/NoticesCenter";
 import { ProjectList } from "./lanes/projects/ProjectList";
 import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
@@ -326,6 +326,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
     toggleArchive: () => toggleLane("archive"),
+    toggleNotices: toggleCenter,
     jumpToWaiting,
     nextTab: () => cycleTab(1),
     previousTab: () => cycleTab(-1),

@@ -16,6 +16,7 @@ export type ShortcutId =
   | "toggleGit"
   | "toggleFiles"
   | "toggleArchive"
+  | "toggleNotices"
   | "jumpToWaiting"
   | "nextTab"
   | "previousTab"
@@ -34,11 +35,12 @@ interface ShortcutDef {
 }
 
 export const SHORTCUT_DEFS: readonly ShortcutDef[] = [
-  { id: "toggleProjects", description: "Show or hide projects", shift: true, key: "1", code: "Digit1", label: "1" },
-  { id: "toggleGit", description: "Show or hide git", shift: true, key: "2", code: "Digit2", label: "2" },
-  { id: "toggleFiles", description: "Show or hide files", shift: true, key: "3", code: "Digit3", label: "3" },
-  { id: "toggleArchive", description: "Show or hide archive", shift: true, key: "4", code: "Digit4", label: "4" },
-  { id: "settings", description: "Open settings", shift: true, key: "5", code: "Digit5", label: "5" },
+  { id: "toggleProjects", description: "Show or hide projects", shift: true, key: "q", label: "Q" },
+  { id: "toggleGit", description: "Show or hide git", shift: true, key: "w", label: "W" },
+  { id: "toggleFiles", description: "Show or hide files", shift: true, key: "e", label: "E" },
+  { id: "toggleArchive", description: "Show or hide archive", shift: true, key: "r", label: "R" },
+  { id: "settings", description: "Open settings", shift: true, key: "t", label: "T" },
+  { id: "toggleNotices", description: "Show or hide notifications", shift: true, key: "x", label: "X" },
   {
     id: "jumpToWaiting",
     description: "Jump to the waiting tab",
@@ -48,7 +50,7 @@ export const SHORTCUT_DEFS: readonly ShortcutDef[] = [
   },
   { id: "nextTab", description: "Next tab", shift: true, key: ".", code: "Period", label: "." },
   { id: "previousTab", description: "Previous tab", shift: true, key: ",", code: "Comma", label: "," },
-  { id: "newShellTab", description: "New shell tab", shift: true, key: "t", label: "T" },
+  { id: "newShellTab", description: "New shell tab", shift: true, key: "s", label: "S" },
 ];
 
 /** A key press as both a DOM `KeyboardEvent` and electron's `Input` can say it. */
