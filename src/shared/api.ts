@@ -112,7 +112,8 @@ export interface TETApi {
     /** Native folder picker opening at the first of `startPaths` on disk, or its nearest folder
      *  there; null when cancelled. */
     pickDirectory: (title: string, startPaths?: string[]) => Promise<string | null>;
-    pickFile: (title: string) => Promise<string | null>;
+    /** Native file picker, opening as `pickDirectory` does; null when cancelled. */
+    pickFile: (title: string, startPaths?: string[]) => Promise<string | null>;
     /** Where the folder picker opens next: `directory`, or its parent when it is a repository root. */
     directoryToRemember: (directory: string) => Promise<string>;
     /** Opens the folder when it is a repository's root; a missing one, or one inside a repository,

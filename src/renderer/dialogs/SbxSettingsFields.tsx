@@ -340,6 +340,8 @@ interface SbxSettingsFieldsProps {
   sources: SbxSkillsSource[];
   /** Asked by the dialog from its opening (useSbxProblems), for the tabs' marks too. */
   problems: SbxProblems;
+  /** The repository's folder, where the file picker opens. */
+  projectPath: string;
   /** The MCP tab's browser sign-in, which the dialog holds the bar of. */
   signInMcp: (name: string) => Promise<string | undefined>;
   signingInMcp: boolean;
@@ -357,6 +359,7 @@ export function SbxSettingsFields({
   stored,
   sources,
   problems,
+  projectPath,
   signInMcp,
   signingInMcp,
   mcpRegistered,
@@ -513,10 +516,12 @@ export function SbxSettingsFields({
           // Two "+ Add": a folder and a file are two native pickers, which cannot be one dialog off
           // macOS (see the projects:pick-file handler).
           <FieldRow>
-            <ActionLink onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox"))}>
+            <ActionLink onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox", [projectPath]))}>
               + Add folder
             </ActionLink>
-            <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox"))}>+ Add file</ActionLink>
+            <ActionLink onClick={() => void addPath(window.tet.projects.pickFile("Allow a file in the sandbox", [projectPath]))}>
+              + Add file
+            </ActionLink>
           </FieldRow>
         }
       />

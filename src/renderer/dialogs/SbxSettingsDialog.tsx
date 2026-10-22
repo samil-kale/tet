@@ -421,6 +421,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             stored={stored}
             sources={sources}
             problems={problems}
+            projectPath={project.path}
             signInMcp={(name) => runMcpSignIn(() => window.tet.sbx.mcpSignIn(name))}
             signingInMcp={signingInMcp}
             mcpRegistered={mcpRegistered}

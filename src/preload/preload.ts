@@ -58,7 +58,7 @@ const api: TETApi = {
   projects: {
     list: () => invoke("projects:list"),
     pickDirectory: (title, startPaths) => invoke("projects:pick-directory", title, startPaths),
-    pickFile: (title) => invoke("projects:pick-file", title),
+    pickFile: (title, startPaths) => invoke("projects:pick-file", title, startPaths),
     directoryToRemember: (directory) => invoke("projects:directory-to-remember", directory),
     open: (directory) => invoke("projects:open", directory),
     clone: (url, directory, name, accountId, login) => invoke("projects:clone", url, directory, name, accountId, login),

@@ -46,18 +46,22 @@ export function registerProjectsIpc({
 }: Pick<IpcDeps, "store" | "accounts" | "repoCache" | "logins" | "projectDeps">): void {
   handle("projects:list", (): Project[] => store.list());
 
-  handle("projects:pick-directory", async (_event, title: string, startPaths: string[] = []): Promise<string | null> => {
-    // A path the picker cannot open would stand in its name field instead.
-    let defaultPath: string | undefined;
+  /** Where a picker opens: the first of `startPaths` on disk, or its nearest folder. A path the
+   *  picker cannot open would stand in its name field instead. */
+  const openingAt = async (startPaths: string[]): Promise<string | undefined> => {
     for (const start of startPaths) {
-      defaultPath = await existingFolder(start);
-      if (defaultPath !== undefined) {
-        break;
+      const folder = await existingFolder(start);
+      if (folder !== undefined) {
+        return folder;
       }
     }
+    return undefined;
+  };
+
+  handle("projects:pick-directory", async (_event, title: string, startPaths: string[] = []): Promise<string | null> => {
     const result = await dialog.showOpenDialog({
       title,
-      defaultPath,
+      defaultPath: await openingAt(startPaths),
       // macOS offers a new folder only when asked; the add tab initializes one picked that way.
       properties: ["openDirectory", "createDirectory"],
     });
@@ -66,8 +70,8 @@ export function registerProjectsIpc({
 
   // Separate handler: ["openFile", "openDirectory"] together works only on macOS; Windows and Linux
   // silently show the directory selector. Hence two buttons in the SBX Settings.
-  handle("projects:pick-file", async (_event, title: string): Promise<string | null> => {
-    const result = await dialog.showOpenDialog({ title, properties: ["openFile"] });
+  handle("projects:pick-file", async (_event, title: string, startPaths: string[] = []): Promise<string | null> => {
+    const result = await dialog.showOpenDialog({ title, defaultPath: await openingAt(startPaths), properties: ["openFile"] });
     return result.canceled ? null : (result.filePaths[0] ?? null);
   });
 
