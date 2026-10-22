@@ -21,7 +21,7 @@ export function useWorkingNotices(tabs: Record<string, TabDescriptor[]>, resolve
       }
       return refTabs.filter(isWorking).map((tab) => ({
         target: { ref: resolved.ref, tabId: tab.tabId },
-        title: `${agentName(agents, tab.agentId)}: Working`,
+        title: `Working [${agentName(agents, tab.agentId)}]`,
         message: noticePlace(resolved.name, tab.title),
       }));
     });

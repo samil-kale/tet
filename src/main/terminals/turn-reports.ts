@@ -132,12 +132,12 @@ export function notificationFor(
   const where = noticePlace(placeName, tab.title);
   switch (kind) {
     case "finished":
-      return { title: `${name}: Finished`, message: where, mark: "finished" };
+      return { title: `Finished [${name}]`, message: where, mark: "finished" };
     case "permission":
-      return { title: `${name}: Permission`, message: where, mark: "waiting" };
+      return { title: `Permission [${name}]`, message: where, mark: "waiting" };
     case "question":
-      return { title: `${name}: Question`, message: where, mark: "waiting" };
+      return { title: `Question [${name}]`, message: where, mark: "waiting" };
     case "idle":
-      return { title: `${name}: Idle`, message: where, mark: "finished" };
+      return { title: `Idle [${name}]`, message: where, mark: "finished" };
   }
 }

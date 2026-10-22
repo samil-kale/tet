@@ -268,7 +268,7 @@ function terminalsOf(key: string): ControlTerminals {
       // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifications.
       return event === "session-start" || event === "prompt-submit"
         ? { stdout }
-        : { stdout, notification: { title: "Claude: Finished", message: "Finished in one", mark: "finished" } };
+        : { stdout, notification: { title: "Finished [Claude]", message: "Finished in one", mark: "finished" } };
     },
   };
 }
@@ -1592,9 +1592,9 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("relays a notification to the process behind the control channel", async () => {
-    assert.deepEqual((await tetCtl(["notify", "Finished in repo", "--title", "Codex: Finished"])).result, { notified: true });
+    assert.deepEqual((await tetCtl(["notify", "Finished in repo", "--title", "Finished [Codex]"])).result, { notified: true });
     assert.deepEqual(calls.desktopNotifications, [
-      ["Codex: Finished", "Finished in repo", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }],
+      ["Finished [Codex]", "Finished in repo", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }],
     ]);
   });
 
@@ -1717,7 +1717,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.stdout, "{}", "Codex reads its Stop hook's stdout as JSON");
     assert.deepEqual(
       calls.desktopNotifications,
-      [["Claude: Finished", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
+      [["Finished [Claude]", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
       "about the tab that reported, which a click on it brings to the front",
     );
   });
@@ -1727,7 +1727,7 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.deepEqual(
       calls.desktopNotifications,
-      [["Claude: Finished", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
+      [["Finished [Claude]", "Finished in one", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]],
       "a tab speaks for itself, never for a tab of another project",
     );
   });

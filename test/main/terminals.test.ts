@@ -211,7 +211,7 @@ describe("a turn's notification", () => {
 
   it("names the project and the session alone, and the mark it stands for", () => {
     assert.deepEqual(notificationFor(tab("Fix the bug"), "finished", "tet", all), {
-      title: "claude: Finished",
+      title: "Finished [claude]",
       message: "tet - Fix the bug",
       mark: "finished",
     });

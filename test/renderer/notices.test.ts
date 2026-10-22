@@ -109,7 +109,7 @@ describe("a notice with a mark", () => {
 
 describe("the working sessions' notices", () => {
   it("are listed once each, renamed in place, and end with their tab's spinner", async () => {
-    const working = (tabId: string, message: string) => ({ target: { ref, tabId }, title: "Agent: Working", message });
+    const working = (tabId: string, message: string) => ({ target: { ref, tabId }, title: "Working [Agent]", message });
     syncWorkingNotices([working("a", "one"), working("b", "two")]);
     syncWorkingNotices([working("a", "one renamed"), working("b", "two")]);
     assert.deepEqual(messages(), ["one renamed", "two"]);
