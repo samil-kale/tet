@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.1 (2026-10-22)
+
+- **Working sessions in the notification center.** Each working session is listed there and
+  counted in the status bar, and a notice stays while its tab's mark stands.
+- **Notices with a title.** `tet-ctl notify` takes a `--title`, and `--in-app` shows the notice
+  in the window.
+- **Fixes.** A slimmer status bar with the notices lifted above it, and the progress bar's blue
+  for marks and modified files in the GitHub themes.
+
 ## 0.22.0 (2026-10-21)
 
 - **Notification center.** Every notice and desktop notification is listed in the notification
