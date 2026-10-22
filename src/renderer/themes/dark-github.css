@@ -39,8 +39,8 @@
   --tet-tab-inactiveBackground: #010409;
   --tet-tab-inactiveForeground: #7d8590;
   --tet-tab-border: #30363d;
-  /* TET's own: the working, waiting and finished marks in GitHub's in-progress colour, its attention.fg. */
-  --tet-tabMark-foreground: #d29922;
+  /* TET's own: the working, waiting and finished marks in the progress bar's blue. */
+  --tet-tabMark-foreground: #1f6feb;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
@@ -88,14 +88,14 @@
   --tet-notice-foreground: #e6edf3;
   --tet-notice-border: #30363d;
   --tet-noticeErrorIcon-foreground: #f85149;
-  --tet-noticeWarningIcon-foreground: #d29922;
+  --tet-noticeWarningIcon-foreground: #1f6feb;
   --tet-noticeInfoIcon-foreground: #2f81f7;
 
   --tet-scrollbarSlider-background: #8b949e33;
   --tet-scrollbarSlider-hoverBackground: #8b949e3d;
   --tet-scrollbarSlider-activeBackground: #8b949e47;
 
-  --tet-gitDecoration-modifiedResourceForeground: #d29922;
+  --tet-gitDecoration-modifiedResourceForeground: #1f6feb;
   --tet-gitDecoration-deletedResourceForeground: #f85149;
   --tet-gitDecoration-untrackedResourceForeground: #3fb950;
   --tet-gitDecoration-addedResourceForeground: #3fb950;
@@ -122,8 +122,8 @@
   --tet-editor-inactiveSelectionBackground: #3a3d41;
   /* The theme's lineHighlightBackground, as the border TET draws it with. */
   --tet-editor-lineHighlightBorder: #6e76811a;
-  --tet-editor-findMatchBackground: #9e6a03;
-  --tet-editor-findMatchHighlightBackground: #f2cc6080;
+  --tet-editor-findMatchBackground: #1f6feb;
+  --tet-editor-findMatchHighlightBackground: #1f6feb4d;
   /* The theme's editorIndentGuide.background and activeBackground, which the numbered ones
      default to. */
   --tet-editorIndentGuide-background1: #e6edf31f;
