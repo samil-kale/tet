@@ -257,7 +257,7 @@ describe("a pi turn the user cut short", () => {
   });
 });
 
-describe("a Claude Code turn leaving a background agent running", () => {
+describe("a Claude Code turn leaving a background agent or shell running", () => {
   it("keeps the tab working, without a notification, until the stop naming none", async () => {
     await withEmptyPath({}, (manager) => {
       const { tabId } = manager.createTab("claude");
@@ -272,7 +272,10 @@ describe("a Claude Code turn leaving a background agent running", () => {
       // Its end starts a turn of its own.
       manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at + 2000, HOST_CALLER);
       manager.hookEvent(tabId, "stop", stop([shell]), at + 3000, HOST_CALLER);
-      assert.equal(inTurn(), false, "a background shell alone does not count");
+      assert.equal(inTurn(), true, "a background shell runs on");
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at + 4000, HOST_CALLER);
+      manager.hookEvent(tabId, "stop", stop([{ ...shell, status: "completed" }]), at + 5000, HOST_CALLER);
+      assert.equal(inTurn(), false, "a finished one does not");
     });
   });
 });

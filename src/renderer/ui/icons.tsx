@@ -2,7 +2,6 @@ import {
   Archive,
   ArrowDown,
   ArrowUp,
-  Bell,
   BookOpen,
   CaseSensitive,
   Check,
@@ -46,6 +45,7 @@ import {
   Search,
   Settings,
   Shield,
+  SquareActivity,
   SquareCode,
   SquareSplitHorizontal,
   Tag,
@@ -248,9 +248,10 @@ export function SeverityIcon({ severity, ...props }: IconProps & { severity: Not
   return <Lucide {...props} icon={SEVERITY_ICONS[severity]} />;
 }
 
-/** Lucide's `bell` — the status bar's notification center. */
-export function BellIcon(props: IconProps) {
-  return <Lucide {...props} icon={Bell} />;
+/** Lucide's `square-activity` — the status bar's notification center, drawn a little larger as
+ *  `ProjectsIcon` is: the same box. */
+export function SquareActivityIcon(props: IconProps) {
+  return <Lucide {...props} icon={SquareActivity} extent={17.5} />;
 }
 
 /** Lucide's `git-branch`. */

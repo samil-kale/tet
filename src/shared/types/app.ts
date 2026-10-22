@@ -17,7 +17,7 @@ export const NOTICE_SEVERITIES = ["error", "warning", "info"] as const;
 export type NoticeSeverity = (typeof NOTICE_SEVERITIES)[number];
 
 /** Which tab mark a notice shows in place of its severity's icon: the turn state it reports. */
-export type NoticeMark = "waiting" | "finished";
+export type NoticeMark = "waiting" | "finished" | "working";
 
 /** A notice the window showed, reported for `tet-ctl notices-list`. */
 export interface NoticeReport extends Notice {

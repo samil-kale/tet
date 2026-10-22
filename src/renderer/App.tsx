@@ -29,6 +29,7 @@ import { TabArea } from "./tabs/TabArea";
 import { disposeRefTerminals } from "./tabs/terminal-views";
 import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
+import { useWorkingNotices } from "./tabs/use-working-notices";
 import { PlusIcon } from "./ui/icons";
 import { ActivityBar } from "./lanes/ActivityBar";
 import { StatusBar } from "./ui/StatusBar";
@@ -204,6 +205,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     jumpToWaiting,
     forgetProjectRef: forgetMarks,
   } = useTabMarks(tabs, activeRefKey, activeRef, onScreenTabIds, showTab);
+  useWorkingNotices(tabs, resolvedRefs);
 
   /** Drops everything held for a repository or worktree; the project list is the caller's. */
   const forgetProjectRef = useCallback(

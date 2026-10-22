@@ -1,7 +1,15 @@
 import * as assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { keepGlobals } from "../helpers";
-import { clearNotices, closeNotice, listNotices, notify, removeStaleNotices } from "../../src/renderer/ui/Notices";
+import {
+  centerOrder,
+  clearNotices,
+  listNotices,
+  notify,
+  removable,
+  removeStaleNotices,
+  syncWorkingNotices,
+} from "../../src/renderer/ui/Notices";
 import { projectRef, refKeyOf } from "../../src/shared/types/project";
 import type { NoticeMark } from "../../src/shared/types/app";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
@@ -19,7 +27,6 @@ function tab(tabId: string, fields: Partial<TabDescriptor> = {}): TabDescriptor 
 
 const later = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, LEFT_MS));
 const messages = (): string[] => listNotices().map((notice) => notice.message);
-const idOf = (message: string): number => listNotices().find((notice) => notice.message === message)?.id ?? -1;
 const turnNotice = (message: string, tabId: string, mark: NoticeMark): void =>
   notify("info", message, { toast: false, target: { ref, tabId }, mark });
 
@@ -33,7 +40,13 @@ beforeEach(() => {
     value: { tet: { app: { reportNotice: () => undefined }, tabs: { seen: (_ref: unknown, tabId: string) => seen.push(tabId) } } },
   });
 });
-afterEach(() => clearNotices());
+afterEach(async () => {
+  // What has a mark goes with its tabs; the rest is cleared.
+  removeStaleNotices({});
+  syncWorkingNotices([]);
+  clearNotices();
+  await later();
+});
 keepGlobals("window");
 
 describe("a turn's notice", () => {
@@ -72,30 +85,38 @@ describe("a turn's notice", () => {
   });
 });
 
-describe("closing a notice", () => {
-  it("marks the tab's finished turn seen, unless another finished notice of it is listed", () => {
-    turnNotice("one", "a", "finished");
-    turnNotice("two", "a", "finished");
-    closeNotice(idOf("one"));
-    assert.deepEqual(seen, [], "the other one still stands");
-    closeNotice(idOf("two"));
-    assert.deepEqual(seen, ["a"]);
-  });
-
-  it("leaves a question's mark standing: it goes with its answer", () => {
-    turnNotice("question", "a", "waiting");
-    closeNotice(idOf("question"));
-    assert.deepEqual(seen, []);
-  });
-});
-
-describe("clearing the notices", () => {
-  it("marks the finished turns seen, never a question, and empties the list", () => {
+describe("a notice with a mark", () => {
+  it("cannot be removed, and clearing the notices leaves it with its tab's mark", () => {
     turnNotice("done", "a", "finished");
     turnNotice("question", "b", "waiting");
     notify("info", "plain", { toast: false });
+    assert.deepEqual(listNotices().map(removable), [false, false, true]);
     clearNotices();
-    assert.deepEqual(seen, ["a"]);
-    assert.deepEqual(listNotices(), []);
+    assert.deepEqual(messages(), ["done", "question"]);
+    assert.deepEqual(seen, []);
+  });
+
+  it("is listed above the others, ranked as the tab marks are", () => {
+    turnNotice("done", "a", "finished");
+    notify("info", "plain", { toast: false });
+    turnNotice("working", "b", "working");
+    turnNotice("question", "c", "waiting");
+    assert.deepEqual(
+      centerOrder(listNotices()).map((notice) => notice.message),
+      ["question", "working", "done", "plain"],
+    );
+  });
+});
+
+describe("the working sessions' notices", () => {
+  it("follow the sessions at work, one each", async () => {
+    const working = (tabId: string, message: string) => ({ target: { ref, tabId }, message });
+    syncWorkingNotices([working("a", "one"), working("b", "two")]);
+    assert.deepEqual(messages(), ["one", "two"]);
+
+    syncWorkingNotices([working("a", "one renamed")]);
+    await later();
+    assert.deepEqual(messages(), ["one renamed"], "b stopped, a was renamed in place");
+    assert.equal(listNotices()[0].toast, false);
   });
 });

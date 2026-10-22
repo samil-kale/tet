@@ -106,10 +106,10 @@ const PROMPT_LABELS: Record<PromptId, string> = {
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished - the turn ended" },
-  { key: "waiting", label: "Waiting for an answer - a permission prompt or a question" },
+  { key: "waiting", label: "Permission or question - the agent waits for an answer" },
   // Not live: its hook is in the agent's host setup only when on, redone on a change (HostSetups),
   // so it reaches tabs started afterwards (AgentPaths.idleReminder).
-  { key: "idleReminder", label: "Still waiting - no new prompt for a while (Claude Code only)" },
+  { key: "idleReminder", label: "Idle - no new prompt for a while (Claude Code only)" },
 ];
 
 const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [

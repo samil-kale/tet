@@ -300,10 +300,11 @@ per-line decision is for an agent.
   setting kept.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). A notice outlives its toast
-  in the notification center (`NoticesCenter`, opened by the status bar's bell), and a desktop
+  in the notification center (`NoticesCenter`, opened by the status bar's button), and a desktop
   notification is listed there too (`recordNotice`), its click showing the tab. No other view keeps a
   message of its own but the SEARCH section, whose failure stands in its header as VS Code's does;
-  a status (marks, progress bar) is not a notice. A tab's process that
+  a status (marks, progress bar) is not a notice — except that the notification center lists each
+  working session (`useWorkingNotices`), without a toast, for as long as its spinner shows. A tab's process that
   ended unasked says so in its own terminal, as a `[TET]` line with how to go on
   (`terminal-session.ts`).
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the

@@ -44,18 +44,21 @@ export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TA
 }
 
 /**
- * AgentTurns.workOutlivesStop. Stop fires when the main turn ends, background agents still
- * running; its payload lists them in `background_tasks` (`type: "subagent"`, `status: "running"`)
- * and each one's end starts a turn of its own (`UserPromptSubmit` with a `<task-notification>`,
- * then Stop). Background shells (`type: "shell"`) don't count: a server never ends, and one a
- * subagent left behind ends without a turn.
+ * AgentTurns.workOutlivesStop. Stop fires when the main turn ends, background agents or shells
+ * still running; its payload lists them in `background_tasks` (`type: "subagent"` or `"shell"`,
+ * `status: "running"`) and each one's end starts a turn of its own (`UserPromptSubmit` with a
+ * `<task-notification>`, then Stop). A shell that never ends (a server) keeps the tab working
+ * until it is stopped.
  */
 export function claudeWorkOutlivesStop(payload: string): boolean {
   try {
     const tasks = (JSON.parse(payload) as { background_tasks?: unknown } | null)?.background_tasks;
     return (
       Array.isArray(tasks) &&
-      tasks.some((task: { type?: unknown; status?: unknown } | null) => task?.type === "subagent" && task.status === "running")
+      tasks.some(
+        (task: { type?: unknown; status?: unknown } | null) =>
+          (task?.type === "subagent" || task?.type === "shell") && task.status === "running",
+      )
     );
   } catch {
     return false;

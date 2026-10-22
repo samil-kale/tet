@@ -2,11 +2,13 @@ import { memo, useEffect, useRef } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { ClearIcon, CloseIcon } from "./icons";
 import {
+  centerOrder,
   clearNotices,
   closeCenter,
-  closeNotice,
+  leaveNotice,
   enteredOpenCenter,
   NoticeBody,
+  removable,
   useCenterClosing,
   useCenterOpen,
   useNoticeList,
@@ -18,9 +20,9 @@ interface NoticesCenterProps {
 }
 
 /**
- * VS Code's notification center, opened by the status bar's bell: every notice since it was last
- * cleared, newest first, toasts and desktop notifications alike. A click on one with a tab shows
- * the tab; the X removes it. Closed by the bell, its own X or a press outside it.
+ * VS Code's notification center, opened by the status bar's button: every notice since it was last
+ * cleared, newest first but for the questions and working sessions on top (`centerOrder`), toasts and desktop notifications alike. A click on one with a tab shows
+ * the tab; the X removes it, except an agent's (`removable`). Closed by that button, its own X or a press outside it.
  */
 export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesCenterProps) {
   const open = useCenterOpen();
@@ -28,14 +30,14 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
   const notices = useNoticeList();
   const center = useRef<HTMLDivElement>(null);
 
-  // A press outside closes it; the bell toggles it itself.
+  // A press outside closes it; the status bar's button toggles it itself.
   useEffect(() => {
     if (!open) {
       return;
     }
     const onMouseDown = (event: MouseEvent): void => {
       const target = event.target as Element;
-      if (!center.current?.contains(target) && !target.closest(".status-bar-bell")) {
+      if (!center.current?.contains(target) && !target.closest(".status-bar-notices")) {
         closeCenter();
       }
     };
@@ -51,7 +53,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
       <div className="section-header notices-center-header">
         <span className="section-title">NOTIFICATIONS</span>
         <span className="section-header-actions">
-          <button type="button" className="icon-button" title="Clear All" disabled={notices.length === 0} onClick={clearNotices}>
+          <button type="button" className="icon-button" title="Clear All" disabled={!notices.some(removable)} onClick={clearNotices}>
             <ClearIcon />
           </button>
           <button type="button" className="icon-button" title="Hide Notifications" onClick={() => closeCenter()}>
@@ -61,7 +63,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
       </div>
       <div className="notices-center-list">
         {notices.length === 0 && <div className="notices-center-empty">No new notifications</div>}
-        {[...notices].reverse().map((notice) => {
+        {centerOrder(notices).map((notice) => {
           const { target } = notice;
           return (
             <div
@@ -80,17 +82,19 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
                 }
               >
                 <NoticeBody notice={notice} />
-                <button
-                  type="button"
-                  className="icon-button"
-                  title="Remove"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closeNotice(notice.id);
-                  }}
-                >
-                  <CloseIcon />
-                </button>
+                {removable(notice) && (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Remove"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      leaveNotice(notice.id);
+                    }}
+                  >
+                    <CloseIcon />
+                  </button>
+                )}
               </div>
             </div>
           );

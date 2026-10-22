@@ -134,10 +134,10 @@ export function notificationFor(
     case "finished":
       return { title: `${name}: Finished`, body: where, mark: "finished" };
     case "permission":
-      return { title: `${name}: Waiting for an answer`, body: where, mark: "waiting" };
+      return { title: `${name}: Permission`, body: where, mark: "waiting" };
     case "question":
       return { title: `${name}: Question`, body: where, mark: "waiting" };
     case "idle":
-      return { title: `${name}: Still waiting`, body: where, mark: "finished" };
+      return { title: `${name}: Idle`, body: where, mark: "finished" };
   }
 }

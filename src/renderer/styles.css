@@ -505,13 +505,13 @@ textarea:focus,
   background: var(--tet-toolbar-hoverBackground);
 }
 
-/* The notification center's bell, at the right edge; in the finished mark's colour while something
-   is unread. */
-.status-bar-bell {
+/* The notification center's button, at the right edge; in the finished mark's colour while something
+   is unread or an agent's notice stands. */
+.status-bar-notices {
   margin-left: auto;
 }
 
-.status-bar-bell.unread {
+.status-bar-notices.highlighted {
   color: var(--tet-tabMark-finishedForeground, var(--tet-focusBorder));
 }
 

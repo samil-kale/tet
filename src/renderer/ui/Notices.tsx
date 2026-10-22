@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { Notice, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
+import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { refKeyOf } from "../../shared/types/project";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
 import { SeverityIcon } from "./icons";
@@ -220,31 +220,12 @@ export function leaveNotice(id: number): void {
 }
 
 /**
- * Closing a notice in the notification center clears its tab's finished mark, unless another
- * finished notice of that tab is still listed. A waiting mark stays until the question is answered.
- */
-export function closeNotice(id: number): void {
-  const notice = shown.get().find((entry) => entry.id === id);
-  leaveNotice(id);
-  if (notice?.mark === "finished" && notice.target) {
-    const { ref, tabId } = notice.target;
-    const key = targetKey(notice.target);
-    const listed = shown
-      .get()
-      .some((entry) => entry.id !== id && !entry.leaving && entry.mark === "finished" && targetKey(entry.target) === key);
-    if (!listed) {
-      window.tet.tabs.seen(ref, tabId);
-    }
-  }
-}
-
-/**
  * A turn's notice (`mark`) lives as long as its tab's mark: gone once the tab is closed, its
  * question answered or its finished turn seen (a tab on screen is, `useTabMarks`).
  */
 export function removeStaleNotices(tabs: Record<string, TabDescriptor[]>): void {
   for (const notice of shown.get()) {
-    if (!notice.mark || notice.leaving || !notice.target) {
+    if (!notice.mark || notice.mark === "working" || notice.leaving || !notice.target) {
       continue;
     }
     const { ref, tabId } = notice.target;
@@ -255,15 +236,67 @@ export function removeStaleNotices(tabs: Record<string, TabDescriptor[]>): void 
   }
 }
 
-export function clearNotices(): void {
-  for (const { mark, target } of shown.get()) {
-    if (mark === "finished" && target) {
-      window.tet.tabs.seen(target.ref, target.tabId);
+/**
+ * The working sessions' entries in the notification center, one per tab with the spinner: no toast
+ * and not reported (`report`), as a status is not a notice. Listed while the tab works and gone
+ * with its spinner, never removed in the center (`removable`).
+ */
+export function syncWorkingNotices(working: { target: TabRef; message: string }[]): void {
+  const wanted = new Map(working.map((entry) => [targetKey(entry.target), entry]));
+  const listed = new Set<string>();
+  for (const notice of shown.get()) {
+    if (notice.mark !== "working" || notice.leaving) {
+      continue;
     }
+    const key = targetKey(notice.target);
+    const entry = wanted.get(key);
+    if (!entry) {
+      leaveNotice(notice.id);
+    } else if (notice.message !== entry.message) {
+      shown.set(shown.get().map((current) => (current === notice ? { ...notice, message: entry.message } : current)));
+    }
+    listed.add(key);
   }
+  const added = [...wanted]
+    .filter(([key]) => !listed.has(key))
+    .map(([, { target, message }]): ShownNotice => ({
+      id: ++nextId,
+      severity: "info",
+      message,
+      toast: false,
+      read: centerOpen.get(),
+      target,
+      mark: "working",
+    }));
+  if (added.length > 0) {
+    shown.set([...shown.get(), ...added].slice(-CENTER_MAX));
+  }
+}
+
+/** Whether the user can remove a notice from the notification center: not one that follows its tab's state (`mark`: a finished turn, a question, a working session). */
+export function removable(notice: ShownNotice): boolean {
+  return !notice.mark;
+}
+
+/**
+ * The notification center's order: the notices that follow their tab's state first, ranked as the
+ * tab marks are (waiting, working, finished), then the rest; newest first within each.
+ */
+export function centerOrder(notices: readonly ShownNotice[]): ShownNotice[] {
+  const ranked: (NoticeMark | undefined)[] = ["waiting", "working", "finished", undefined];
+  const rank = (notice: ShownNotice): number => ranked.indexOf(notice.mark);
+  return [...notices].reverse().sort((a, b) => rank(a) - rank(b));
+}
+
+export function clearNotices(): void {
   hovered = undefined;
   // The center fades out whole, the notices in it; one arriving meanwhile stays.
-  const cleared = new Set(shown.get().map((notice) => notice.id));
+  const cleared = new Set(
+    shown
+      .get()
+      .filter(removable)
+      .map((notice) => notice.id),
+  );
   closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
