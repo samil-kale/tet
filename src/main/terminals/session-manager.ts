@@ -775,7 +775,7 @@ export class TabSessionManager {
       idleReminder: this.settings.get().notifications.idleReminder,
       theme: currentTheme(this.settings),
       skills: this.sbxLocal.skills(projectId),
-      environmentValues: this.sbxLocal.environmentValues(projectId),
+      environmentValues: await this.sbxLocal.environmentValues(projectId),
     });
   }
 

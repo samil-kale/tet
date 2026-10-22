@@ -16,49 +16,49 @@ describe("the accounts kept for the providers", () => {
     return { root, store: new AccountStore(root) };
   };
 
-  it("lists an account without its token, and gives the token back decrypted", () => {
+  it("lists an account without its token, and gives the token back decrypted", async () => {
     const { root, store } = withStore();
-    const account = store.add("github", "github.com", "octocat", "secret-token");
+    const account = await store.add("github", "github.com", "octocat", "secret-token");
     assert.equal("token" in store.list()[0], false);
     assert.equal(store.get(account.id)?.user, "octocat");
-    assert.equal(store.token(account.id), "secret-token");
+    assert.equal(await store.token(account.id), "secret-token");
     assert.ok(!fs.readFileSync(path.join(root, "provider-accounts.json"), "utf8").includes("secret-token"), "kept sealed");
   });
 
-  it("replaces the token of the same user on the same host, never adding a second row", () => {
+  it("replaces the token of the same user on the same host, never adding a second row", async () => {
     const { store } = withStore();
-    const first = store.add("github", "github.com", "octocat", "old");
-    const again = store.add("github", "github.com", "octocat", "new");
-    store.add("gitlab", "github.com", "octocat", "other");
+    const first = await store.add("github", "github.com", "octocat", "old");
+    const again = await store.add("github", "github.com", "octocat", "new");
+    await store.add("gitlab", "github.com", "octocat", "other");
     assert.equal(again.id, first.id);
     assert.equal(store.list().length, 2);
-    assert.equal(store.token(first.id), "new");
+    assert.equal(await store.token(first.id), "new");
   });
 
-  it("remembers the namespace of an account, and is a no-op for one that is gone", () => {
+  it("remembers the namespace of an account, and is a no-op for one that is gone", async () => {
     const { store } = withStore();
-    const { id } = store.add("gitlab", "gitlab.example.com", "tanuki", "t");
+    const { id } = await store.add("gitlab", "gitlab.example.com", "tanuki", "t");
     store.setNamespace(id, "my-group");
     store.setNamespace("unknown", "x");
     assert.equal(store.get(id)?.namespace, "my-group");
     assert.equal(store.list().length, 1);
   });
 
-  it("removes an account with its token, and a new store reads the file back", () => {
+  it("removes an account with its token, and a new store reads the file back", async () => {
     const { root, store } = withStore();
-    const keep = store.add("github", "github.com", "a", "ta");
-    const drop = store.add("github", "github.com", "b", "tb");
+    const keep = await store.add("github", "github.com", "a", "ta");
+    const drop = await store.add("github", "github.com", "b", "tb");
     store.remove(drop.id);
     const reopened = new AccountStore(root);
     assert.deepEqual(
       reopened.list().map((account) => account.id),
       [keep.id],
     );
-    assert.equal(reopened.token(keep.id), "ta");
-    assert.equal(reopened.token(drop.id), undefined);
+    assert.equal(await reopened.token(keep.id), "ta");
+    assert.equal(await reopened.token(drop.id), undefined);
   });
 
-  it("leaves out rows of a provider it does not know, and keeps nothing where the OS offers no encryption", () => {
+  it("leaves out rows of a provider it does not know, and keeps nothing where the OS offers no encryption", async () => {
     const root = tempDir("tet-accounts-");
     fs.writeFileSync(
       path.join(root, "provider-accounts.json"),
@@ -75,7 +75,7 @@ describe("the accounts kept for the providers", () => {
     );
     fakeSafeStorage(false);
     const store = new AccountStore(root);
-    assert.throws(() => store.add("github", "github.com", "d", "t"));
+    await assert.rejects(() => store.add("github", "github.com", "d", "t"));
     assert.equal(store.list().length, 1, "the row is not kept for a token that could not be sealed");
     assert.deepEqual(Object.keys(PROVIDERS).sort(), ["github", "gitlab"]);
   });

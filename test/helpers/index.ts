@@ -26,14 +26,14 @@ import type { GitLogin } from "../../src/shared/types/git";
  */
 export function fakeSafeStorage(available = true): void {
   Object.assign(safeStorage, {
-    isEncryptionAvailable: () => available,
-    encryptString: (text: string) => Buffer.from(`sealed:${text}`),
-    decryptString: (buffer: Buffer) => {
+    isAsyncEncryptionAvailable: () => Promise.resolve(available),
+    encryptStringAsync: (text: string) => Promise.resolve(Buffer.from(`sealed:${text}`)),
+    decryptStringAsync: (buffer: Buffer) => {
       const text = buffer.toString();
       if (!text.startsWith("sealed:")) {
-        throw new Error("Error while decrypting the ciphertext provided to safeStorage.decryptString.");
+        return Promise.reject(new Error("Error while decrypting the ciphertext provided to safeStorage.decryptStringAsync."));
       }
-      return text.slice("sealed:".length);
+      return Promise.resolve({ shouldReEncrypt: false, result: text.slice("sealed:".length) });
     },
   });
 }

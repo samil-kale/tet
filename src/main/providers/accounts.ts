@@ -42,8 +42,8 @@ export class AccountStore {
   }
 
   /** Adds the account, or replaces the token of the same user on the same host — never two rows. */
-  add(provider: ProviderId, host: string, user: string, token: string): ProviderAccount {
-    const encrypted = seal(token);
+  async add(provider: ProviderId, host: string, user: string, token: string): Promise<ProviderAccount> {
+    const encrypted = await seal(token);
     const existing = this.accounts.find((account) => account.provider === provider && account.host === host && account.user === user);
     const stored: StoredAccount = existing
       ? { ...existing, token: encrypted }
@@ -65,9 +65,9 @@ export class AccountStore {
   }
 
   /** The decrypted token; undefined when it cannot be decrypted. */
-  token(accountId: string): string | undefined {
+  async token(accountId: string): Promise<string | undefined> {
     const entry = this.find(accountId);
-    return entry && unseal(entry.token);
+    return entry && (await unseal(entry.token));
   }
 
   private find(accountId: string): StoredAccount | undefined {

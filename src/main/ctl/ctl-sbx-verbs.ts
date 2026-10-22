@@ -76,7 +76,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
     }
     const reading = await readySbx(found);
     const settings = await deps.sbx.settings(found);
-    const { skills } = deps.sbx.stored(found.id);
+    const { skills } = await deps.sbx.stored(found.id);
     if (!settings.enabled && !switching) {
       throw new ControlError("bad_args", `SBX is disabled for ${found.name}: sbx-set-enabled on first`);
     }
@@ -155,7 +155,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
 
     "sbx-get": async (args, caller) => {
       const found = refFrom(args, caller).project;
-      const stored = deps.sbx.stored(found.id);
+      const stored = await deps.sbx.stored(found.id);
       const [reading, settings] = await Promise.all([deps.sbx.status(found), deps.sbx.settings(found)]);
       const problems = await deps.sbx.problems(found, settings, stored.skills, stored, reading);
       return { result: { status: reading.status, settings, stored, problems } };

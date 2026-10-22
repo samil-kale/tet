@@ -101,14 +101,14 @@ export function registerProjectsIpc({
     return addProject(projectDeps, directory);
   };
 
-  handle("projects:clone", (_event, url: string, directory: string, name: string, accountId?: string, login?: GitLogin) => {
+  handle("projects:clone", async (_event, url: string, directory: string, name: string, accountId?: string, login?: GitLogin) => {
     const target = path.join(directory, name);
     // With an account, its token authenticates the clone, independent of any credential helper;
     // refused (revoked, expired), it asks for a login too, typed in the token's stead. Else as
     // any command reaching a remote — from the home folder, there being no repository yet to
     // read a credential helper from.
     const account = accountId !== undefined ? accounts.get(accountId) : undefined;
-    const token = accountId !== undefined ? accounts.token(accountId) : undefined;
+    const token = accountId !== undefined ? await accounts.token(accountId) : undefined;
     const action =
       account && token !== undefined
         ? git
@@ -130,7 +130,7 @@ export function registerProjectsIpc({
       .replace(/\/.*$/, "");
     try {
       const user = await PROVIDERS[provider].validate(bare, token);
-      return { account: accounts.add(provider, bare, user, token) };
+      return { account: await accounts.add(provider, bare, user, token) };
     } catch (error) {
       return { error: errorMessage(error) };
     }
@@ -154,7 +154,7 @@ export function registerProjectsIpc({
 
   handle("providers:repos", async (_event, accountId: string): Promise<ListRepositoriesResult> => {
     const account = accounts.get(accountId);
-    const token = accounts.token(accountId);
+    const token = await accounts.token(accountId);
     if (!account || token === undefined) {
       return { error: "The account's token could not be read — add the account again" };
     }

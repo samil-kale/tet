@@ -112,7 +112,7 @@ async function saveNow(
   const stored = sbxLocal.encrypted(project.id);
   const previous = sbxLocal.skills(project.id);
   try {
-    sbxLocal.update(project.id, local);
+    await sbxLocal.update(project.id, local);
     const skills = sbxLocal.skills(project.id);
     // Listed once for the check and the Save, in this turn.
     const [organization, sandboxes] = await Promise.all([organizationOf(known), listSandboxes()]);
@@ -122,7 +122,7 @@ async function saveNow(
     // Off, nothing is applied, so nothing is left out. What sbx cannot say stops the Save: a row
     // it could not be asked about is no refusal.
     const problems = request.enabled
-      ? await checkProject(project, request, skills, sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
+      ? await checkProject(project, request, skills, await sbxLocal.stored(project.id), organization, sandboxes).catch((error: unknown) => {
           throw new Error(`${errorMessage(error)} Nothing was saved; try again.`);
         })
       : {};
@@ -142,7 +142,7 @@ async function saveNow(
       organization,
       sandboxes,
     );
-    sbxLocal.update(project.id, { environment: keptValues(settings.environment), skills: applied });
+    await sbxLocal.update(project.id, { environment: keptValues(settings.environment), skills: applied });
     for (const { ref, agentId } of removed) {
       const message = request.enabled
         ? `The ${getAgent(agentId).displayName} sandbox of ${nameOf(ref)} was removed and is rebuilt when its next tab starts.`

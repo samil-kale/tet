@@ -411,7 +411,7 @@ function deps(): ControlDeps {
       status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
       settings: async () => structuredClone(sbxSettings),
-      stored: () => ({ environment: ["API_KEY"], skills: structuredClone(sbxSkills) }),
+      stored: async () => ({ environment: ["API_KEY"], skills: structuredClone(sbxSkills) }),
       problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);

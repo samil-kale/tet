@@ -70,9 +70,9 @@ export class SbxLocalStore {
 
   /** The env names holding a value for the project that can still be decrypted — the ones a spawn
    *  applies, so the dialog asks again for the others. */
-  stored(projectId: string): SbxStoredLocal {
+  async stored(projectId: string): Promise<SbxStoredLocal> {
     return {
-      environment: [...this.environmentValues(projectId).keys()],
+      environment: [...(await this.environmentValues(projectId)).keys()],
       skills: this.skills(projectId),
     };
   }
@@ -87,7 +87,7 @@ export class SbxLocalStore {
    * opened under (`from`), so it follows a rename; a removed row's goes. And the skills as
    * given. Throws before changing anything when the OS offers no encryption (`seal`).
    */
-  update(projectId: string, local: SbxLocalSave): void {
+  async update(projectId: string, local: SbxLocalSave): Promise<void> {
     const current = this.projects[projectId] ?? emptyLocal();
     const next = emptyLocal();
     const { values, from } = local.environment;
@@ -98,7 +98,7 @@ export class SbxLocalStore {
       }
     }
     for (const [env, value] of Object.entries(values)) {
-      next.environment[env] = seal(value);
+      next.environment[env] = await seal(value);
     }
     const skills = toSkills(local.skills);
     if (skills) {
@@ -108,10 +108,10 @@ export class SbxLocalStore {
   }
 
   /** The decrypted values by env name; one that cannot be decrypted is left out. */
-  environmentValues(projectId: string): Map<string, string> {
+  async environmentValues(projectId: string): Promise<Map<string, string>> {
     const values = new Map<string, string>();
     for (const [env, encrypted] of Object.entries(this.projects[projectId]?.environment ?? {})) {
-      const value = unseal(encrypted);
+      const value = await unseal(encrypted);
       if (value !== undefined) {
         values.set(env, value);
       }

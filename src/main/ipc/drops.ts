@@ -4,6 +4,8 @@ import type { ProjectRef } from "../../shared/types/project";
 import { writeDropFile } from "../store/drops";
 import type { IpcDeps } from "./deps";
 
+const PNG = "image/png";
+
 /** What a paste or drop hands a tab: bytes without a path written into its drops folder, and every
  *  path — written or dropped — as the tab sees it (hand-paths), one way for both. */
 export function registerDropsIpc({ tabManagers }: Pick<IpcDeps, "tabManagers">): void {
@@ -18,9 +20,13 @@ export function registerDropsIpc({ tabManagers }: Pick<IpcDeps, "tabManagers">):
   );
 
   /** The clipboard image as a file, so its path can be typed into a CLI. */
-  handle("drops:clipboard-image", (_event, ref: ProjectRef, tabId: string): Promise<string | null> | null => {
-    const image = clipboard.readImage();
-    return image.isEmpty() ? null : writeDrop(ref, tabId, `pasted-image-${Date.now()}.png`, image.toPNG());
+  handle("drops:clipboard-image", async (_event, ref: ProjectRef, tabId: string): Promise<string | null> => {
+    const item = (await clipboard.read()).find((entry) => entry.types.includes(PNG));
+    if (!item) {
+      return null;
+    }
+    const png = Buffer.from(await (await item.getType(PNG)).arrayBuffer());
+    return writeDrop(ref, tabId, `pasted-image-${Date.now()}.png`, png);
   });
 
   handle("drops:hand-paths", async (_event, ref: ProjectRef, tabId: string, paths: string[]): Promise<string[]> => {

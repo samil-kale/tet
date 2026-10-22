@@ -34,16 +34,16 @@ export class SbxAccountStore {
   }
 
   /** The decrypted token; undefined when there is none, or it cannot be decrypted. */
-  token(accountId: string): string | undefined {
+  async token(accountId: string): Promise<string | undefined> {
     const entry = this.accounts.find((account) => account.id === accountId);
-    return entry && unseal(entry.token);
+    return entry && (await unseal(entry.token));
   }
 
   /** Adds the account, or replaces the token of the same user — never two rows. `replacing`, the
    *  account the token was signed in from, is this one now, under the name sbx gave (signInToSbx).
    *  Throws before changing anything when the OS offers no encryption (`seal`). */
-  add(user: string, token: string, replacing?: string): SbxAccount {
-    const encrypted = seal(token);
+  async add(user: string, token: string, replacing?: string): Promise<SbxAccount> {
+    const encrypted = await seal(token);
     const existing = this.accounts.find((account) => account.user === user) ?? this.accounts.find((account) => account.id === replacing);
     const others = this.accounts.filter((account) => account === existing || account.id !== replacing);
     const stored: StoredSbxAccount = existing ? { ...existing, user, token: encrypted } : { id: randomUUID(), user, token: encrypted };
@@ -56,12 +56,12 @@ export class SbxAccountStore {
    * with neither, or without a user, is dropped, and a later row wins over an earlier one of the
    * same user. Throws before changing anything when the OS offers no encryption (`seal`).
    */
-  update(edits: SbxAccountEdit[]): void {
+  async update(edits: SbxAccountEdit[]): Promise<void> {
     const next = new Map<string, StoredSbxAccount>();
     for (const edit of edits) {
       const user = edit.user.trim();
       const opened = edit.id === undefined ? undefined : this.accounts.find((account) => account.id === edit.id);
-      const token = edit.token !== "" ? seal(edit.token) : opened?.token;
+      const token = edit.token !== "" ? await seal(edit.token) : opened?.token;
       if (user !== "" && token !== undefined) {
         next.set(user, { id: opened?.id ?? randomUUID(), user, token });
       }
@@ -99,7 +99,7 @@ export async function signInToSbx(
   accountId: string | undefined,
 ): Promise<SbxSignInResult> {
   const user = typedUser.trim();
-  const token = typed !== "" ? typed : accountId !== undefined ? store.token(accountId) : undefined;
+  const token = typed !== "" ? typed : accountId !== undefined ? await store.token(accountId) : undefined;
   if (token === undefined) {
     return { signedIn: false, error: "No access token stored for this account on this machine; enter it again" };
   }
@@ -109,7 +109,7 @@ export async function signInToSbx(
   }
   const named = (await readSbxUser(false)) ?? user;
   try {
-    return { signedIn: true, account: store.add(named, token, accountId) };
+    return { signedIn: true, account: await store.add(named, token, accountId) };
   } catch (error) {
     return { signedIn: true, error: errorMessage(error) };
   }

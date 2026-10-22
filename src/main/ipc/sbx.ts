@@ -49,9 +49,9 @@ export function registerSbxIpc({
   );
   handle("sbx:sign-out", () => runSbxSignOut());
   handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());
-  handle("sbx:save-accounts", (_event, edits: SbxAccountEdit[]): string | undefined => {
+  handle("sbx:save-accounts", async (_event, edits: SbxAccountEdit[]): Promise<string | undefined> => {
     try {
-      sbxAccounts.update(edits);
+      await sbxAccounts.update(edits);
       return undefined;
     } catch (error) {
       return errorMessage(error);
@@ -82,7 +82,7 @@ export function registerSbxIpc({
     return project ? readSbxSettings(project.path) : EMPTY_SBX_SETTINGS;
   });
   // The Environment rows holding a value on this machine, never the values; the skills.
-  handle("sbx:stored", (_event, projectId: string): SbxStoredLocal => sbxLocal.stored(projectId));
+  handle("sbx:stored", (_event, projectId: string): Promise<SbxStoredLocal> => sbxLocal.stored(projectId));
   // The Skills tab's agents; asked fresh, as agents are installed outside TET.
   handle("sbx:skills-sources", (): Promise<SbxSkillsSource[]> => readSkillsSources());
   // The MCP tab's picker; asked fresh, as servers are registered outside TET.

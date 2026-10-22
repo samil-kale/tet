@@ -191,7 +191,7 @@ export interface ControlDeps {
     /** Whether an agent runs on this machine at all: without one, SBX cannot be disabled. */
     anyAgentInstalled(): Promise<boolean>;
     settings(project: Project): Promise<SbxProjectSettings>;
-    stored(projectId: string): SbxStoredLocal;
+    stored(projectId: string): Promise<SbxStoredLocal>;
     /** sbx-settings.ts's readProjectSbxProblems. */
     problems(
       project: Project,

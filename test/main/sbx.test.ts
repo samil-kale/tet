@@ -721,13 +721,17 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       fakeSafeStorage();
       const { dir, repoFolder } = fakeSbx({ published: [], fail: ["ls"] });
       const sbxLocal = new SbxLocalStore(tempDir("tet-sbx-local-"));
-      sbxLocal.update(projectId, noLocal({ OLD: "kept" }));
+      await sbxLocal.update(projectId, noLocal({ OLD: "kept" }));
       const { result } = await saveProject(dir, repoFolder, settings([]), noLocal({ NEW: "typed" }), sbxLocal).catch(() => ({
         result: undefined,
       }));
       assert.ok(result && !result.ok);
       assert.match(result.error ?? "", /could not list the sandboxes\. Nothing was saved/);
-      assert.deepEqual(sbxLocal.stored(projectId).environment, ["OLD"], "the typed value is not kept for a Save that did not happen");
+      assert.deepEqual(
+        (await sbxLocal.stored(projectId)).environment,
+        ["OLD"],
+        "the typed value is not kept for a Save that did not happen",
+      );
     });
 
     it("tells the user of a sandbox it removed when SBX is switched off", async () => {
@@ -868,59 +872,59 @@ describe("a sandboxed tab's variables", () => {
 });
 
 describe("what sbx keeps on this machine", () => {
-  it("counts a value as stored only where it can still be decrypted", () => {
+  it("counts a value as stored only where it can still be decrypted", async () => {
     fakeSafeStorage();
     const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
       environment: { NPM_TOKEN: base64("sealed:npm"), LOST: base64("under another keychain") },
     });
-    assert.deepEqual(store.stored("p"), { environment: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
-    assert.deepEqual([...store.environmentValues("p")], [["NPM_TOKEN", "npm"]]);
+    assert.deepEqual(await store.stored("p"), { environment: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual([...(await store.environmentValues("p"))], [["NPM_TOKEN", "npm"]]);
   });
 
-  it("reads a file written under the legacy `variables` key", () => {
+  it("reads a file written under the legacy `variables` key", async () => {
     fakeSafeStorage();
     const dir = tempDir("tet-sbx-local-");
     fs.writeFileSync(
       path.join(dir, "sbx-local.json"),
       JSON.stringify({ p: { variables: { NPM_TOKEN: Buffer.from("sealed:npm").toString("base64") } } }),
     );
-    assert.deepEqual([...new SbxLocalStore(dir).environmentValues("p")], [["NPM_TOKEN", "npm"]]);
+    assert.deepEqual([...(await new SbxLocalStore(dir).environmentValues("p"))], [["NPM_TOKEN", "npm"]]);
   });
 
-  it("carries a stored value along a renamed row, and gives none to a row added under a stored name", () => {
+  it("carries a stored value along a renamed row, and gives none to a row added under a stored name", async () => {
     fakeSafeStorage();
     const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
-    store.update("p", { environment: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
+    await store.update("p", { environment: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
-    store.update("p", { environment: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
-    assert.deepEqual([...store.environmentValues("p")], [["NEW", "kept"]]);
+    await store.update("p", { environment: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual([...(await store.environmentValues("p"))], [["NEW", "kept"]]);
   });
 
-  it("keeps the skills on this machine, and no entry once it is all off", () => {
+  it("keeps the skills on this machine, and no entry once it is all off", async () => {
     fakeSafeStorage(false);
     const root = tempDir("tet-sbx-local-");
     const store = new SbxLocalStore(root);
     const none = { values: {}, from: {} };
     const skills = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
-    store.update("p", { environment: none, skills });
+    await store.update("p", { environment: none, skills });
     assert.deepEqual(new SbxLocalStore(root).skills("p"), skills, "read back, with no keyring needed");
-    store.update("p", { environment: none, skills: EMPTY_SBX_SKILLS });
+    await store.update("p", { environment: none, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "all off leaves no entry");
   });
 });
 
 describe("the Docker access tokens of the SBX Settings", () => {
-  it("keep one row per user and carry a stored token along Save", () => {
+  it("keep one row per user and carry a stored token along Save", async () => {
     fakeSafeStorage();
     const root = tempDir("tet-sbx-accounts-");
     const store = new SbxAccountStore(root);
-    const first = store.add("skale", "old");
-    assert.equal(store.add("skale", "new").id, first.id, "the same user's token is replaced, not added");
-    assert.equal(store.token(first.id), "new");
+    const first = await store.add("skale", "old");
+    assert.equal((await store.add("skale", "new")).id, first.id, "the same user's token is replaced, not added");
+    assert.equal(await store.token(first.id), "new");
     // Kept as opened, a new one typed, one without a token dropped, the later of two users winning.
-    store.update([
+    await store.update([
       { id: first.id, user: "skale", token: "" },
       { user: "other", token: "typed" },
       { user: "empty", token: "" },
@@ -931,23 +935,23 @@ describe("the Docker access tokens of the SBX Settings", () => {
       reread.list().map((account) => account.user),
       ["skale", "other"],
     );
-    assert.equal(reread.token(first.id), "new");
-    assert.equal(reread.token(reread.list()[1].id), "later");
+    assert.equal(await reread.token(first.id), "new");
+    assert.equal(await reread.token(reread.list()[1].id), "later");
     // Signed in from the row "other" under the name sbx gives: that row is renamed, never doubled.
     const other = reread.list()[1];
-    assert.equal(reread.add("Other", "renamed", other.id).id, other.id);
+    assert.equal((await reread.add("Other", "renamed", other.id)).id, other.id);
     assert.deepEqual(
       reread.list().map((account) => account.user),
       ["skale", "Other"],
     );
     // A row of another spelling beside a kept one of sbx's name: merged into the kept one.
-    const typed = reread.add("SKALE", "typed");
-    assert.equal(reread.add("skale", "merged", typed.id).id, first.id);
+    const typed = await reread.add("SKALE", "typed");
+    assert.equal((await reread.add("skale", "merged", typed.id)).id, first.id);
     assert.deepEqual(
       reread.list().map((account) => account.user),
       ["skale", "Other"],
     );
-    assert.equal(reread.token(first.id), "merged");
+    assert.equal(await reread.token(first.id), "merged");
   });
 });
 

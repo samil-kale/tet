@@ -49,7 +49,7 @@ export class GitLoginStore {
     if (!origin) {
       return command();
     }
-    const kept = typed ? undefined : this.get(url);
+    const kept = typed ? undefined : await this.get(url);
     const login = typed ?? kept;
     const result = await command(login && { ...login, askpassDir: this.askpassDir, origin });
     if (result.authRequired) {
@@ -61,31 +61,31 @@ export class GitLoginStore {
     }
     // The command went through: the git process dying on this question must not make it fail.
     if (result.ok && typed && !(await git.hasCredentialHelper(cwd, url).catch(() => false))) {
-      this.set(url, typed);
+      await this.set(url, typed);
     }
     return result;
   }
 
   /** The login for this url's origin — its username's, where the url names one, else the latest
    *  kept; undefined when none, or sealed under a keychain this machine no longer has. */
-  get(url: string): GitLogin | undefined {
+  async get(url: string): Promise<GitLogin | undefined> {
     const origin = urlOrigin(url);
     const username = urlUsername(url);
     const entry = this.logins.filter((login) => login.origin === origin && (username === "" || login.username === username)).at(-1);
-    const password = entry && unseal(entry.password);
+    const password = entry && (await unseal(entry.password));
     return entry && password !== undefined ? { username: entry.username, password } : undefined;
   }
 
   /** Keeps the login, replacing what its origin had for the same username. Where the OS offers no
    *  encryption nothing is kept, and the next command asks again. */
-  set(url: string, login: GitLogin): void {
+  async set(url: string, login: GitLogin): Promise<void> {
     const origin = urlOrigin(url);
     if (!origin) {
       return;
     }
     let password: string;
     try {
-      password = seal(login.password);
+      password = await seal(login.password);
     } catch (error) {
       logError("could not keep the git login", error);
       return;
