@@ -2719,11 +2719,11 @@ textarea:focus,
 .notice-item {
   display: grid;
   grid-template-rows: 1fr;
-  animation: notice-enter 0.2s ease-out;
+  animation: notice-enter 0.35s ease-out;
   transition:
-    grid-template-rows 0.2s ease-out,
-    opacity 0.2s ease-out,
-    transform 0.2s ease-out;
+    grid-template-rows 0.35s ease-out,
+    opacity 0.35s ease-out,
+    transform 0.35s ease-out;
 }
 
 .notice-item.leaving {
@@ -2737,8 +2737,8 @@ textarea:focus,
   min-height: 0;
   overflow: hidden;
   transition:
-    padding 0.2s ease-out,
-    border-width 0.2s ease-out;
+    padding 0.35s ease-out,
+    border-width 0.35s ease-out;
 }
 
 /* A box's padding and border do not shrink with its row. */
@@ -2836,10 +2836,10 @@ textarea:focus,
   background: var(--tet-lane-background);
   border: 1px solid var(--tet-notice-border);
   /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
-  animation: notice-enter 0.2s ease-out;
+  animation: notice-enter 0.35s ease-out;
   transition:
-    opacity 0.2s ease-out,
-    transform 0.2s ease-out;
+    opacity 0.35s ease-out,
+    transform 0.35s ease-out;
 }
 
 .notices-center.closing {

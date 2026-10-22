@@ -12,11 +12,14 @@ import { useTopDialog } from "./window-covered";
 /** VS Code's durations. */
 const DISMISS_MS: Record<NoticeSeverity, number> = { info: 10_000, warning: 12_000, error: 15_000 };
 
+/** Notices due together enter, and leave, this far apart. */
+const STAGGER_MS = 150;
+
 /** The notification center keeps this many, the oldest dropped first. */
 const CENTER_MAX = 100;
 
 /** How long a notice takes to enter or leave, and the notification center to close; the stylesheet's `.notice-item` transition. */
-const LEAVE_MS = 200;
+const LEAVE_MS = 350;
 
 export interface ShownNotice extends Omit<Notice, "toast"> {
   id: number;
@@ -51,6 +54,21 @@ let nextId = 0;
 let newestAtOpen = 0;
 /** The notice under the pointer, kept while hovered. */
 let hovered: number | undefined;
+/** When the next toast may enter, and the next may leave (`STAGGER_MS`). */
+let nextEnterAt = 0;
+let nextLeaveAt = 0;
+
+/** The wait until a slot of `next` is free, which it takes the next `STAGGER_MS` of. */
+function takeSlot(next: "enter" | "leave"): number {
+  const now = Date.now();
+  const wait = Math.max(0, (next === "enter" ? nextEnterAt : nextLeaveAt) - now);
+  if (next === "enter") {
+    nextEnterAt = now + wait + STAGGER_MS;
+  } else {
+    nextLeaveAt = now + wait + STAGGER_MS;
+  }
+  return wait;
+}
 
 export function useNoticeList(): ShownNotice[] {
   return useStore(shown);
@@ -115,6 +133,15 @@ function runAfterClose(): void {
 }
 
 export function notify(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark"> = {}): void {
+  const wait = options.toast === false ? 0 : takeSlot("enter");
+  if (wait > 0) {
+    setTimeout(() => add(severity, message, options), wait);
+  } else {
+    add(severity, message, options);
+  }
+}
+
+function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark">): void {
   const { title, toast, target, mark } = options;
   const same = shown
     .get()
@@ -199,7 +226,12 @@ function scheduleDismiss(id: number, severity: NoticeSeverity): void {
     } else if (!document.hasFocus()) {
       window.addEventListener("focus", () => scheduleDismiss(id, severity), { once: true });
     } else {
-      dismissNotice(id);
+      const wait = takeSlot("leave");
+      if (wait > 0) {
+        setTimeout(() => dismissNotice(id), wait);
+      } else {
+        dismissNotice(id);
+      }
     }
   }, DISMISS_MS[severity]);
 }
