@@ -19,7 +19,7 @@ import type { TabDescriptor } from "../../src/shared/types/terminals";
 const ref = projectRef("p1");
 const refKey = refKeyOf(ref);
 /** Longer than the notification center's leaving transition. */
-const LEFT_MS = 300;
+const LEFT_MS = 400;
 
 function tab(tabId: string, fields: Partial<TabDescriptor> = {}): TabDescriptor {
   return { tabId, agentId: "claude", title: "", status: "running", ...fields };
