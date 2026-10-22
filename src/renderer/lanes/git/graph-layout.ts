@@ -3,14 +3,7 @@ import type { CheckoutTarget, GraphCommit, GraphRef, RepositoryState } from "../
 
 /** A lane's color: a name of the `--tet-graph-*` variables, named after VS Code's `scmGraph.*` colors. */
 export type GraphColor =
-  | "foreground1"
-  | "foreground2"
-  | "foreground3"
-  | "foreground4"
-  | "foreground5"
-  | "refColor"
-  | "remoteRefColor"
-  | "baseRefColor";
+  "foreground1" | "foreground2" | "foreground3" | "foreground4" | "foreground5" | "refColor" | "remoteRefColor" | "baseRefColor";
 
 /** The colors lanes take in turn when no ref colors them. */
 const FOREGROUNDS: GraphColor[] = ["foreground1", "foreground2", "foreground3", "foreground4", "foreground5"];
