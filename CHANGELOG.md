@@ -7,6 +7,7 @@ changed for the user, not the commit list.
 
 - **Notices removed by an X.** A notice is dismissed with its X button instead of a click on the
   whole box, and several notices now enter and leave one after another, more slowly.
+- **Notice titles.** A title names the kind first and the agent in brackets after it.
 - **Fixes.** The status bar's height lines up with the notices above it.
 
 ## 0.22.1 (2026-10-22)
