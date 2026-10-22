@@ -207,6 +207,10 @@ export class AppWindow {
   create(theme: ThemeDefinition): void {
     this.theme = theme;
     const window = new BrowserWindow({
+      // The last session's size, position and maximized state, kept in Electron's own profile; the
+      // size below is only the first start's.
+      name: "main",
+      windowStatePersistence: true,
       width: 1400,
       height: 900,
       // The areas' floors summed (--area-min-width twice, --content-min-width, the stacked sections,

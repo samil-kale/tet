@@ -413,6 +413,16 @@ if (!app.requestSingleInstanceLock()) {
   // A second start brings the running window to the front.
   app.on("second-instance", appWindow.reveal);
 
+  // The GPU or a utility process dying leaves no other trace; the renderer's death is the window's
+  // (window.ts).
+  app.on("child-process-gone", (_event, details) => {
+    if (details.reason !== "clean-exit") {
+      const named = details.name ? ` ${details.name}` : "";
+      const launch = details.systemErrorCode === undefined ? "" : `, system error ${details.systemErrorCode}`;
+      logError(`${details.type} process${named} gone (${details.reason}, exit code ${details.exitCode}${launch})`);
+    }
+  });
+
   void app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
