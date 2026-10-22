@@ -3,7 +3,7 @@ import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../s
 import { refKeyOf } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
-import { SeverityIcon } from "./icons";
+import { CloseIcon, SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
 import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
@@ -176,7 +176,7 @@ function report(severity: NoticeSeverity, message: string, title?: string): void
 
 /**
  * A download's progress, one notice per `key` updated in place: it stands, with a bar along its
- * bottom edge as VS Code's, until the progress ends or a click dismisses its toast. Ended on `done`,
+ * bottom edge as VS Code's, until the progress ends or the X dismisses its toast. Ended on `done`,
  * it stays in its place as a plain info with its toast anew; ended otherwise, it goes.
  */
 export function showProgress({ key, message, fraction, done }: NoticeProgress): void {
@@ -390,7 +390,7 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
 }
 
 /**
- * Stacked in the bottom right corner, newest at the bottom, dismissed by a click. Inside the dialog
+ * Stacked in the bottom right corner, newest at the bottom, removed by their X. Inside the dialog
  * on top while one is up (`useTopDialog`): outside it they would lie under its dim, inert. None
  * while the notification center is open, which lists them.
  */
@@ -405,15 +405,27 @@ export function Notices() {
     <div className="notices">
       {notices.map((notice) => (
         <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
-          <button
+          <div
             className={`notice ${notice.severity}`}
-            onClick={() => dismissNotice(notice.id)}
             onMouseEnter={() => (hovered = notice.id)}
             onMouseLeave={() => (hovered = undefined)}
-            title="Dismiss"
           >
             <NoticeBody notice={notice} />
-          </button>
+            <button
+              type="button"
+              className="icon-button"
+              title={removable(notice) && !notice.progress ? "Remove" : "Dismiss"}
+              onClick={() => {
+                if (removable(notice) && !notice.progress) {
+                  leaveNotice(notice.id);
+                } else {
+                  dismissNotice(notice.id);
+                }
+              }}
+            >
+              <CloseIcon />
+            </button>
+          </div>
         </div>
       ))}
     </div>

@@ -2692,7 +2692,6 @@ textarea:focus,
 .notices > * {
   pointer-events: auto;
 }
-
 /* Stacked as the notification center lists them: one box, a line between. */
 .notices > .notice-item + .notice-item > .notice {
   border-top: none;
@@ -2883,6 +2882,6 @@ textarea:focus,
   background: var(--tet-list-hoverBackground);
 }
 
-.notices-center .notice .icon-button {
+.notice .icon-button {
   margin-left: auto;
 }
