@@ -326,9 +326,11 @@ per-line decision is for an agent.
   buttons (`DialogFrame`'s `error`) where the fields are several or across tabs — what was typed
   is held so it can be corrected, and it is git's own words for a name it will not take, never
   TET's guess at them. A list that could not be loaded shows its failure in its place
-  (`DialogError`). What the unsaved edits as a whole lead to goes in the same place
+  (`DialogError`), but for Add Repository's remote listing, whose failure goes in the button row.
+  What the unsaved edits as a whole lead to goes in the same place
   (`DialogFrame`'s `message`), e.g. `RestartNote` while they reach running tabs only once
-  restarted. A `confirm` has no field, so it notifies.
+  restarted. A `confirm` has no field, so it notifies. Where a new failure message goes is the
+  user's call: propose the places above and ask before building it.
 - To get this, **a question runs its own answer** (`useSubmit`; a prompt's `PromptOptions.submit`):
   the dialog stays up while the action runs, so what runs it hands the failure back instead of
   notifying it (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than

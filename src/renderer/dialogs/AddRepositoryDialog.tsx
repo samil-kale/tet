@@ -10,7 +10,7 @@ import { ActionLink } from "../ui/ActionLink";
 import { confirmed } from "../ui/Dialog";
 import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { DialogError, FieldColumn, FieldGroup, lastDirectory, PathField, TextField } from "../ui/Field";
+import { FieldColumn, FieldGroup, lastDirectory, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon } from "../ui/icons";
@@ -146,9 +146,11 @@ interface RemoteTabProps {
   runHeld: <T>(work: () => Promise<T>) => Promise<T>;
   /** A held run (the account form's): its rows cannot be picked, as picking one unmounts the form. */
   locked: boolean;
+  /** Why the selected account's listing failed, for the frame's button row; undefined once listed. */
+  onError: (message: string | undefined) => void;
 }
 
-function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
+function RemoteTab({ onClone, hold, onForm, runHeld, locked, onError }: RemoteTabProps) {
   /** null while loading. */
   const [accounts, setAccounts] = useState<ProviderAccount[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -156,10 +158,14 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
   const [repos, setRepos] = useState<Record<string, RemoteRepository[]>>({});
   /** The accounts whose list was fetched in this dialog; a kept list in `repos` alone is still stale. */
   const [listed, setListed] = useState<Record<string, true>>({});
-  /** Why the list is empty, in the list's own place. Tagged with its account: another account's
-   *  failure is not this one's. */
+  /** Why the last listing failed, reported on the button row (`onError`). Tagged with its account:
+   *  another account's failure is not this one's. */
   const [listFailure, setListFailure] = useState<{ accountId: string; message: string } | undefined>(undefined);
   const listError = listFailure?.accountId === selectedId ? listFailure.message : undefined;
+  useEffect(() => {
+    onError(listError);
+    return () => onError(undefined);
+  }, [listError, onError]);
   /** Why an account could not be removed, beside its row until the next try. */
   const [removeError, setRemoveError] = useState<{ accountId: string; message: string } | undefined>(undefined);
   const [filter, setFilter] = useState("");
@@ -328,7 +334,6 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked }: RemoteTabProps) {
                   </button>
                 </div>
               ))}
-              <DialogError message={listError} />
               {listError === undefined && list && filtered.length === 0 && <div className="placeholder">No repositories.</div>}
             </div>
           </>
@@ -363,6 +368,8 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [uninitialized, setUninitialized] = useState<string | null>(null);
   /** The remote tab's listing underway, on the header's bar. */
   const [listing, setListing] = useState(false);
+  /** Why the remote tab's listing failed; beside the buttons, as `refused` is for the other tabs. */
+  const [listError, setListError] = useState<string | undefined>(undefined);
   /** The account form while it is up: the frame's primary button and Enter are its
    *  (AccountSubmission). */
   const [accountForm, setAccountForm] = useState<AccountSubmission | null>(null);
@@ -454,7 +461,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   return (
     <DialogFrame
       header={{ tabs: MODES, active: mode, onSelect: switchMode }}
-      error={refused}
+      error={mode === "remote" ? listError : refused}
       className="add-repository-dialog"
       busy={busy}
       locked={locked}
@@ -462,7 +469,14 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
       primary={primary}
     >
       {mode === "remote" && (
-        <RemoteTab onClone={cloneFromRemote} hold={setListing} onForm={setAccountForm} runHeld={runRemoval} locked={locked} />
+        <RemoteTab
+          onClone={cloneFromRemote}
+          hold={setListing}
+          onForm={setAccountForm}
+          runHeld={runRemoval}
+          locked={locked}
+          onError={setListError}
+        />
       )}
       {mode === "clone" && (
         <>
