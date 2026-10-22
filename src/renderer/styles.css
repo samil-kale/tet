@@ -455,7 +455,7 @@ textarea:focus,
 
 /* The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar),
    its own fixed width, its icons 1.2x the rest of the app's (`--icon-size`, `--action-size`). */
-.activity-bar {
+.navigation-bar {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -479,7 +479,7 @@ textarea:focus,
 
 /* The window's bottom edge (VS Code's status bar), after `.body`: the active repository or
    worktree, its branch and its archived tab count. Its icons read smaller than the rest of the
-   app's. The Activity Bar's own background: both sit on the window's edge. */
+   app's. The Navigation Bar's own background: both sit on the window's edge. */
 .status-bar {
   display: flex;
   align-items: center;

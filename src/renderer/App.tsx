@@ -31,7 +31,7 @@ import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { useWorkingNotices } from "./tabs/use-working-notices";
 import { PlusIcon } from "./ui/icons";
-import { ActivityBar } from "./lanes/ActivityBar";
+import { NavigationBar } from "./lanes/NavigationBar";
 import { StatusBar } from "./ui/StatusBar";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
@@ -367,7 +367,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       </div>
 
       <div className="body">
-        <ActivityBar shownLane={shownLane} onToggleLane={toggleLane} onOpenSettings={openSettings} />
+        <NavigationBar shownLane={shownLane} onToggleLane={toggleLane} onOpenSettings={openSettings} />
         {/* Every lane, in a fixed order, each in the DOM at width 0 while not shown (so a slide
             has a box to transition) and mounted throughout, so hiding one keeps selection, filter,
             open folders and a running action's bar. */}

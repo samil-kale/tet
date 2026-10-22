@@ -14,7 +14,7 @@ const LANE_TOGGLES: Record<Lane, { title: string; shortcut?: ShortcutId; Icon: (
 
 /** The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar);
  *  settings sits right after the lane toggles. */
-export const ActivityBar = memo(function ActivityBar({
+export const NavigationBar = memo(function NavigationBar({
   shownLane,
   onToggleLane,
   onOpenSettings,
@@ -24,7 +24,7 @@ export const ActivityBar = memo(function ActivityBar({
   onOpenSettings: () => void;
 }) {
   return (
-    <div className="activity-bar">
+    <div className="navigation-bar">
       {LANES.map((lane) => {
         const { title, shortcut, Icon } = LANE_TOGGLES[lane];
         return (
