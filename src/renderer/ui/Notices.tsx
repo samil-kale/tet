@@ -114,22 +114,28 @@ function runAfterClose(): void {
   }
 }
 
-export function notify(severity: NoticeSeverity, message: string, options: Pick<Notice, "toast" | "target" | "mark"> = {}): void {
-  const { toast, target, mark } = options;
+export function notify(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark"> = {}): void {
+  const { title, toast, target, mark } = options;
   const same = shown
     .get()
-    .find((notice) => notice.severity === severity && notice.message === message && targetKey(notice.target) === targetKey(target));
+    .find(
+      (notice) =>
+        notice.severity === severity &&
+        notice.message === message &&
+        notice.title === title &&
+        targetKey(notice.target) === targetKey(target),
+    );
   // An identical notice's toast already standing is not stacked.
   if (same?.toast && toast !== false) {
     return;
   }
   const id = ++nextId;
-  const entry: ShownNotice = { id, severity, message, toast: toast !== false, read: centerOpen.get(), target, mark };
+  const entry: ShownNotice = { id, severity, title, message, toast: toast !== false, read: centerOpen.get(), target, mark };
   shown.set([...shown.get().filter((notice) => notice !== same), entry].slice(-CENTER_MAX));
   if (entry.toast) {
     scheduleDismiss(id, severity);
   }
-  report(severity, message);
+  report(severity, message, title);
 }
 
 function targetKey(target: TabRef | undefined): string {
@@ -137,8 +143,8 @@ function targetKey(target: TabRef | undefined): string {
 }
 
 /** Every notice shown, for `tet-ctl notices-list`. */
-function report(severity: NoticeSeverity, message: string): void {
-  window.tet.app.reportNotice({ severity, message, at: Date.now() });
+function report(severity: NoticeSeverity, message: string, title?: string): void {
+  window.tet.app.reportNotice({ severity, title, message, at: Date.now() });
 }
 
 /**
@@ -167,7 +173,14 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
     shown.set(shown.get().map((notice) => (notice === standing ? { ...notice, message, progress: { key, fraction } } : notice)));
     return;
   }
-  const entry: ShownNotice = { id: ++nextId, severity: "info", message, toast: true, read: centerOpen.get(), progress: { key, fraction } };
+  const entry: ShownNotice = {
+    id: ++nextId,
+    severity: "info",
+    message,
+    toast: true,
+    read: centerOpen.get(),
+    progress: { key, fraction },
+  };
   shown.set([...shown.get(), entry].slice(-CENTER_MAX));
   report("info", message);
 }
@@ -258,7 +271,7 @@ export function removeStaleNotices(tabs: Record<string, TabDescriptor[]>): void 
  * and not reported (`report`), as a status is not a notice. Listed here, renamed with the tab and
  * ended by `removeStaleNotices` with the spinner.
  */
-export function syncWorkingNotices(working: { target: TabRef; message: string }[]): void {
+export function syncWorkingNotices(working: { target: TabRef; title: string; message: string }[]): void {
   const wanted = new Map(working.map((entry) => [targetKey(entry.target), entry]));
   const listed = new Set<string>();
   for (const notice of shown.get()) {
@@ -267,16 +280,17 @@ export function syncWorkingNotices(working: { target: TabRef; message: string }[
     }
     const key = targetKey(notice.target);
     const entry = wanted.get(key);
-    if (entry && notice.message !== entry.message) {
-      shown.set(shown.get().map((current) => (current === notice ? { ...notice, message: entry.message } : current)));
+    if (entry && (notice.title !== entry.title || notice.message !== entry.message)) {
+      shown.set(shown.get().map((current) => (current === notice ? { ...notice, title: entry.title, message: entry.message } : current)));
     }
     listed.add(key);
   }
   const added = [...wanted]
     .filter(([key]) => !listed.has(key))
-    .map(([, { target, message }]): ShownNotice => ({
+    .map(([, { target, title, message }]): ShownNotice => ({
       id: ++nextId,
       severity: "info",
+      title,
       message,
       toast: false,
       read: centerOpen.get(),
@@ -317,7 +331,7 @@ export function clearNotices(): void {
   closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
-/** A notice's icon, message and progress bar, in a toast and in the notification center alike. */
+/** A notice's icon, title, message and progress bar, in a toast and in the notification center alike. */
 export function NoticeBody({ notice }: { notice: ShownNotice }) {
   return (
     <>
@@ -326,7 +340,10 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
       ) : (
         <SeverityIcon className="notice-icon" severity={notice.severity} />
       )}
-      <span className="notice-message">{notice.message}</span>
+      <span className="notice-text">
+        {notice.title && <span className="notice-title">{notice.title}</span>}
+        <span className="notice-message">{notice.message}</span>
+      </span>
       {notice.progress && (
         <span className="notice-progress">
           {notice.progress.fraction === null ? (

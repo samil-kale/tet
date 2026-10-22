@@ -507,17 +507,20 @@ export function verbs(deps: ControlDeps): Handlers {
     },
 
     notify: (args, caller) => {
-      const body = args.body;
-      if (args["in-app"] === true) {
+      const message = text(args, "message", "message");
+      const title = typeof args.title === "string" ? args.title : undefined;
+      if (args.toast === true) {
         const severity = args.severity === undefined ? "info" : oneOf(args, "severity", "severity", NOTICE_SEVERITIES);
-        const title = text(args, "title", "title");
-        deps.notice(severity, typeof body === "string" ? `${title}\n${body}` : title);
+        deps.notice(severity, message, title);
         return { result: { notified: true } };
+      }
+      if (title === undefined) {
+        throw new ControlError("bad_args", "a desktop notification needs a --title");
       }
       // From one of TET's terminals, the notification is about that tab.
       const own = callerRef(caller);
       const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;
-      deps.showDesktopNotification(text(args, "title", "title"), typeof body === "string" ? body : "", target);
+      deps.showDesktopNotification(title, message, target);
       return { result: { notified: true } };
     },
 
@@ -532,8 +535,8 @@ export function verbs(deps: ControlDeps): Handlers {
       const where = refFrom({}, caller).ref;
       const outcome = terminals(where).hookEvent(caller.tabId, event, payload, at, caller.side);
       if (outcome.notification) {
-        const { title, body, mark } = outcome.notification;
-        deps.showDesktopNotification(title, body, { ref: where, tabId: caller.tabId }, mark);
+        const { title, message, mark } = outcome.notification;
+        deps.showDesktopNotification(title, message, { ref: where, tabId: caller.tabId }, mark);
       }
       return { result: { stdout: outcome.stdout } };
     },

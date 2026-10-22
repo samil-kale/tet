@@ -212,10 +212,10 @@ describe("a turn's notification", () => {
   it("names the project and the session alone, and the mark it stands for", () => {
     assert.deepEqual(notificationFor(tab("Fix the bug"), "finished", "tet", all), {
       title: "claude: Finished",
-      body: "tet - Fix the bug",
+      message: "tet - Fix the bug",
       mark: "finished",
     });
-    assert.equal(notificationFor(tab(""), "finished", "tet", all)?.body, "tet", "no title yet");
+    assert.equal(notificationFor(tab(""), "finished", "tet", all)?.message, "tet", "no title yet");
     assert.equal(notificationFor(tab("x"), "idle", "tet", all)?.mark, "finished");
     for (const kind of ["permission", "question"] as const) {
       assert.equal(notificationFor(tab("x"), kind, "tet", all)?.mark, "waiting", kind);

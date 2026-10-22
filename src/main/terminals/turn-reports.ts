@@ -9,7 +9,7 @@ import { reportApplies } from "./turn-order";
 /** What a hook shows the user (ctl-verb.ts's ControlTerminals.hookEvent). */
 export interface HookNotification {
   title: string;
-  body: string;
+  message: string;
   mark: NoticeMark;
 }
 
@@ -132,12 +132,12 @@ export function notificationFor(
   const where = noticePlace(placeName, tab.title);
   switch (kind) {
     case "finished":
-      return { title: `${name}: Finished`, body: where, mark: "finished" };
+      return { title: `${name}: Finished`, message: where, mark: "finished" };
     case "permission":
-      return { title: `${name}: Permission`, body: where, mark: "waiting" };
+      return { title: `${name}: Permission`, message: where, mark: "waiting" };
     case "question":
-      return { title: `${name}: Question`, body: where, mark: "waiting" };
+      return { title: `${name}: Question`, message: where, mark: "waiting" };
     case "idle":
-      return { title: `${name}: Idle`, body: where, mark: "finished" };
+      return { title: `${name}: Idle`, message: where, mark: "finished" };
   }
 }

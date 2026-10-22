@@ -55,6 +55,8 @@ export interface EditorListing extends EditorReport {
 /** Anything the user is told — not a *status*, which a view draws itself. */
 export interface Notice {
   severity: NoticeSeverity;
+  /** A first line above `message`; without it the notice is one line. */
+  title?: string;
   message: string;
   /** `false`: listed in the notification center only, as the desktop already shows it. */
   toast?: false;

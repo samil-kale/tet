@@ -2796,11 +2796,16 @@ textarea:focus,
 }
 
 /* Long paths break anywhere; a multi-line git message keeps its lines. */
+.notice-title,
 .notice-message {
   overflow-wrap: anywhere;
   white-space: pre-line;
   /* VS Code's notification line. */
   line-height: 22px;
+}
+
+.notice-title {
+  display: block;
 }
 
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */

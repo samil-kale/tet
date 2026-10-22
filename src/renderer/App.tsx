@@ -128,7 +128,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   // Before onNotice, whose subscription tells main the window listens.
   useEffect(() => window.tet.onNoticeProgress(showProgress), []);
   useEffect(
-    () => window.tet.onNotice(({ severity, message, toast, target, mark }) => notify(severity, message, { toast, target, mark })),
+    () =>
+      window.tet.onNotice(({ severity, title, message, toast, target, mark }) => notify(severity, message, { title, toast, target, mark })),
     [],
   );
 

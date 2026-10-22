@@ -132,7 +132,8 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   background: "switch",
   force: "switch",
   auth: "switch",
-  "in-app": "switch",
+  toast: "switch",
+  title: "value",
   severity: "value",
 };
 
@@ -604,10 +605,10 @@ const VERBS = [
   {
     verb: "notify",
     group: "Notices",
-    usage: `notify <title> [body] [--in-app [--severity <${NOTICE_SEVERITIES.join("|")}>]]`,
+    usage: `notify <message> [--title <text>] [--toast [--severity <${NOTICE_SEVERITIES.join("|")}>]]`,
     summary:
-      "Show a desktop notification from TET's own process, the one with a desktop session, to call the user back: a long task is done or you need an answer. --in-app shows a notice in TET's window instead, info unless --severity says otherwise.",
-    positionals: ["title", "body"],
+      "Show a desktop notification from TET's own process, the one with a desktop session, to call the user back: a long task is done or you need an answer. A desktop notification needs a --title. --toast shows a notice in TET's window instead, info unless --severity says otherwise; without a --title it is one line, with one two.",
+    positionals: ["message"],
     sandbox: "any",
   },
   {

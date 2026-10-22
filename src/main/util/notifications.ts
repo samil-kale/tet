@@ -38,14 +38,14 @@ let notificationTargetAwaited: (TabRef & { sessionId?: string }) | undefined;
 const NOTIFICATION_REPEAT_MS = 8000;
 const recentNotifications = new Map<string, number>();
 
-function repeatedNotification(title: string, body: string, target?: TabRef): boolean {
+function repeatedNotification(title: string, message: string, target?: TabRef): boolean {
   const now = Date.now();
   for (const [seen, at] of recentNotifications) {
     if (now - at >= NOTIFICATION_REPEAT_MS) {
       recentNotifications.delete(seen);
     }
   }
-  const key = `${title}\u0000${body}\u0000${target ? refKeyOf(target.ref) : ""}\u0000${target?.tabId ?? ""}`;
+  const key = `${title}\u0000${message}\u0000${target ? refKeyOf(target.ref) : ""}\u0000${target?.tabId ?? ""}`;
   if (recentNotifications.has(key)) {
     return true;
   }
@@ -123,7 +123,7 @@ function escapeXml(text: string): string {
  * Electron's keys, so it still finds the Notification while TET runs; the session id outlives a
  * quit (showTabRef).
  */
-function windowsToastXml(id: string, title: string, body: string, target?: TabRef): string {
+function windowsToastXml(id: string, title: string, message: string, target?: TabRef): string {
   const launch = new URLSearchParams({ type: "click", tag: id });
   if (target) {
     launch.set("project", target.ref.projectId);
@@ -138,7 +138,7 @@ function windowsToastXml(id: string, title: string, body: string, target?: TabRe
   }
   return (
     `<toast launch="${escapeXml(launch.toString())}"><visual><binding template="ToastGeneric">` +
-    `<text>${escapeXml(title)}</text><text>${escapeXml(body)}</text>` +
+    `<text>${escapeXml(title)}</text><text>${escapeXml(message)}</text>` +
     `</binding></visual></toast>`
   );
 }
@@ -153,18 +153,20 @@ function windowsToastXml(id: string, title: string, body: string, target?: TabRe
  * started again, but does not get that grant on its own: a window it reveals while TET already runs
  * only flashes the taskbar.
  */
-export function showDesktopNotification(title: string, body: string, target?: TabRef, mark?: NoticeMark): void {
-  if (repeatedNotification(title, body, target)) {
+export function showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark): void {
+  if (repeatedNotification(title, message, target)) {
     return;
   }
-  deps.recordNotice({ severity: "info", message: `${title}\n${body}`.trim(), toast: false, target, mark });
+  deps.recordNotice({ severity: "info", ...(message ? { title, message } : { message: title }), toast: false, target, mark });
   deps.attractAttention();
   if (!Notification.isSupported()) {
     return;
   }
   const id = crypto.randomUUID();
   const notification = new Notification(
-    PLATFORM.windowsNotifications ? { id, title, body, toastXml: windowsToastXml(id, title, body, target) } : { title, body },
+    PLATFORM.windowsNotifications
+      ? { id, title, body: message, toastXml: windowsToastXml(id, title, message, target) }
+      : { title, body: message },
   );
   holdNotification(notification);
   notification.on("click", () => {

@@ -98,7 +98,7 @@ interface Calls {
   handed: [string, string[]][];
   shutdown: boolean[];
   desktopNotifications: [string, string, TabRef | undefined][];
-  notices: [string, string][];
+  notices: [string, string, string | undefined][];
   hooks: [string, string, string][];
   /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -268,7 +268,7 @@ function terminalsOf(key: string): ControlTerminals {
       // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifications.
       return event === "session-start" || event === "prompt-submit"
         ? { stdout }
-        : { stdout, notification: { title: "Claude: Finished", body: "Finished in one", mark: "finished" } };
+        : { stdout, notification: { title: "Claude: Finished", message: "Finished in one", mark: "finished" } };
     },
   };
 }
@@ -378,11 +378,11 @@ function deps(): ControlDeps {
     showTab: (ref, tabId) => {
       calls.shown.push([refKeyOf(ref), tabId]);
     },
-    showDesktopNotification: (title, body, target) => {
-      calls.desktopNotifications.push([title, body, target]);
+    showDesktopNotification: (title, message, target) => {
+      calls.desktopNotifications.push([title, message, target]);
     },
-    notice: (severity, message) => {
-      calls.notices.push([severity, message]);
+    notice: (severity, message, title) => {
+      calls.notices.push([severity, message, title]);
     },
     environment: {
       list: () => envNames.map((name) => ({ name, overridesMachine: name === "PATH" })),
@@ -1592,31 +1592,39 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("relays a notification to the process behind the control channel", async () => {
-    assert.deepEqual((await tetCtl(["notify", "Codex: Finished", "Finished in repo"])).result, { notified: true });
+    assert.deepEqual((await tetCtl(["notify", "Finished in repo", "--title", "Codex: Finished"])).result, { notified: true });
     assert.deepEqual(calls.desktopNotifications, [
       ["Codex: Finished", "Finished in repo", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }],
     ]);
   });
 
-  it("takes a notification that is a title and nothing more", async () => {
-    assert.deepEqual((await tetCtl(["notify", "Build finished"])).result, { notified: true });
-    assert.deepEqual(calls.desktopNotifications, [["Build finished", "", { ref: { projectId: PROJECT.id }, tabId: OWN_TAB }]]);
+  it("refuses a desktop notification without a --title", async () => {
+    assertUsage(await tetCtl(["notify", "Build finished"]), /needs a --title/);
+    assert.deepEqual(calls.desktopNotifications, []);
   });
 
   it("is about no tab when the caller is not one", async () => {
-    assert.deepEqual((await tetCtl(["notify", "Build finished"], { [CONTROL_ENV.tabId]: undefined })).result, { notified: true });
-    assert.deepEqual(calls.desktopNotifications, [["Build finished", "", undefined]], "a click then brings only the window forward");
+    assert.deepEqual((await tetCtl(["notify", "see the log", "--title", "Build finished"], { [CONTROL_ENV.tabId]: undefined })).result, {
+      notified: true,
+    });
+    assert.deepEqual(
+      calls.desktopNotifications,
+      [["Build finished", "see the log", undefined]],
+      "a click then brings only the window forward",
+    );
   });
 
-  it("shows a notice in the window instead with --in-app", async () => {
-    assert.deepEqual((await tetCtl(["notify", "Build failed", "see the log", "--in-app", "--severity", "error"])).result, { notified: true });
-    assert.deepEqual((await tetCtl(["notify", "Build finished", "--in-app"])).result, { notified: true });
+  it("shows a notice in the window instead with --toast", async () => {
+    assert.deepEqual((await tetCtl(["notify", "see the log", "--title", "Build failed", "--toast", "--severity", "error"])).result, {
+      notified: true,
+    });
+    assert.deepEqual((await tetCtl(["notify", "Build finished", "--toast"])).result, { notified: true });
     assert.deepEqual(calls.notices, [
-      ["error", "Build failed\nsee the log"],
-      ["info", "Build finished"],
+      ["error", "see the log", "Build failed"],
+      ["info", "Build finished", undefined],
     ]);
     assert.deepEqual(calls.desktopNotifications, [], "no desktop notification beside it");
-    assertUsage(await tetCtl(["notify", "x", "--in-app", "--severity", "loud"]), /unknown severity/);
+    assertUsage(await tetCtl(["notify", "x", "--toast", "--severity", "loud"]), /unknown severity/);
   });
 
   it("refuses to restart without --confirm", async () => {

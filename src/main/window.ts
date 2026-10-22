@@ -83,8 +83,8 @@ export class AppWindow {
   };
 
   /** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
-  notice = (severity: NoticeSeverity, message: string): void => {
-    this.send("app:notice", { severity, message });
+  notice = (severity: NoticeSeverity, message: string, title?: string): void => {
+    this.send("app:notice", { severity, title, message });
   };
 
   noticeProgress = (progress: NoticeProgress): void => {
