@@ -304,9 +304,10 @@ per-line decision is for an agent.
   notification is listed there too (`recordNotice`), its click showing the tab. No other view keeps a
   message of its own but the SEARCH section, whose failure stands in its header as VS Code's does;
   a status (marks, progress bar) is not a notice — except that the notification center lists each
-  working session (`useWorkingNotices`), without a toast, for as long as its spinner shows. A tab's process that
-  ended unasked says so in its own terminal, as a `[TET]` line with how to go on
-  (`terminal-session.ts`).
+  working session (`useWorkingNotices`), without a toast. A notice with a `mark` (working, waiting,
+  finished) follows its tab's mark: it cannot be removed (`removable`) and goes with the mark
+  (`removeStaleNotices`). A tab's process that ended unasked says so in its own terminal, as a
+  `[TET]` line with how to go on (`terminal-session.ts`).
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
   action; the main process asks nothing, no native message boxes. Ask only before something
   irreversible — removing a project asks only when it takes worktrees along; its own data goes

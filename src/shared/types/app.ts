@@ -19,6 +19,12 @@ export type NoticeSeverity = (typeof NOTICE_SEVERITIES)[number];
 /** Which tab mark a notice shows in place of its severity's icon: the turn state it reports. */
 export type NoticeMark = "waiting" | "finished" | "working";
 
+/** Where a turn's notice says its tab is: the repository or worktree, then the tab's title, which
+ *  tells two tabs of one agent apart. */
+export function noticePlace(placeName: string, tabTitle: string): string {
+  return tabTitle ? `${placeName} - ${tabTitle}` : placeName;
+}
+
 /** A notice the window showed, reported for `tet-ctl notices-list`. */
 export interface NoticeReport extends Notice {
   /** ms since epoch. */

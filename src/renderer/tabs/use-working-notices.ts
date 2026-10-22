@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { noticePlace } from "../../shared/types/app";
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../resolved-ref";
@@ -20,7 +21,7 @@ export function useWorkingNotices(tabs: Record<string, TabDescriptor[]>, resolve
       }
       return refTabs.filter(isWorking).map((tab) => ({
         target: { ref: resolved.ref, tabId: tab.tabId },
-        message: `${agentName(agents, tab.agentId)}: Working\n${tab.title ? `${resolved.name} - ${tab.title}` : resolved.name}`,
+        message: `${agentName(agents, tab.agentId)}: Working\n${noticePlace(resolved.name, tab.title)}`,
       }));
     });
     syncWorkingNotices(working);

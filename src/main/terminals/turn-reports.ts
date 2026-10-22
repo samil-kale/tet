@@ -1,5 +1,6 @@
 import { getAgent } from "../agents";
 import type { HookEvent } from "../../shared/ctl";
+import { noticePlace } from "../../shared/types/app";
 import type { NoticeMark } from "../../shared/types/app";
 import type { NotificationSettings } from "../../shared/types/settings";
 import { endLeavesQuestion, endTurnQuietly, setTurn, type TabState } from "./tab-state";
@@ -128,8 +129,7 @@ export function notificationFor(
     return undefined;
   }
   const name = getAgent(tab.agentId).displayName;
-  // The tab's title too, or two tabs of one agent would read alike.
-  const where = tab.title ? `${placeName} - ${tab.title}` : placeName;
+  const where = noticePlace(placeName, tab.title);
   switch (kind) {
     case "finished":
       return { title: `${name}: Finished`, body: where, mark: "finished" };

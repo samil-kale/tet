@@ -2,8 +2,9 @@ import { memo } from "react";
 import type { Project } from "../../shared/types/project";
 import type { Lane } from "../../shared/types/settings";
 import { shortcutLabel } from "../shortcuts";
-import { ArchiveIcon, BranchIcon, ProjectsIcon, SquareActivityIcon } from "./icons";
-import { removable, toggleCenter, useCenterOpen, useNoticeList } from "./Notices";
+import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon } from "./icons";
+import { MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
+import { TabMark } from "./TabMark";
 
 interface StatusBarProps {
   /** The active repository's or worktree's project; absent while none is open. */
@@ -23,20 +24,9 @@ interface StatusBarProps {
  *  edge the button of the notification center. Its icons read smaller than the rest of the app's. */
 export const StatusBar = memo(function StatusBar({ project, branch, changesCount, archivedCount, onSelectLane }: StatusBarProps) {
   const notices = useNoticeList();
-  const centerOpen = useCenterOpen();
   // An agent's notice stands in the center until its tab's state ends, read or not.
   const highlighted = notices.some((notice) => !notice.read || !removable(notice));
-  const counts: [number, string][] = [
-    [notices.filter((notice) => notice.mark === "waiting").length, "waiting"],
-    [notices.filter((notice) => notice.mark === "working").length, "working"],
-    [notices.filter((notice) => notice.mark === "finished").length, "finished"],
-    [notices.filter((notice) => !notice.read && removable(notice)).length, "new"],
-  ];
-  const summary = counts
-    .filter(([count]) => count > 0)
-    .map(([count, what]) => `${count} ${what}`)
-    .join(", ");
-  const centerTitle = centerOpen ? "Hide Notifications" : notices.length === 0 ? "No Notifications" : "Show Notifications";
+  const marks = MARK_ORDER.filter((mark) => notices.some((notice) => notice.mark === mark));
   return (
     <div className="status-bar">
       {project && (
@@ -68,11 +58,13 @@ export const StatusBar = memo(function StatusBar({ project, branch, changesCount
       <button
         type="button"
         className={`status-bar-item status-bar-notices${highlighted ? " highlighted" : ""}`}
-        title={centerTitle}
+        title="Notifications"
         onClick={toggleCenter}
       >
-        {summary}
-        <SquareActivityIcon className="tree-icon" />
+        {marks.map((mark) => (
+          <TabMark key={mark} kind={mark} />
+        ))}
+        <BellIcon className="tree-icon" />
       </button>
     </div>
   );

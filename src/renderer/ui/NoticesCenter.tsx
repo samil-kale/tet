@@ -5,8 +5,8 @@ import {
   centerOrder,
   clearNotices,
   closeCenter,
-  leaveNotice,
   enteredOpenCenter,
+  leaveNotice,
   NoticeBody,
   removable,
   useCenterClosing,
@@ -21,8 +21,10 @@ interface NoticesCenterProps {
 
 /**
  * VS Code's notification center, opened by the status bar's button: every notice since it was last
- * cleared, newest first but for the questions and working sessions on top (`centerOrder`), toasts and desktop notifications alike. A click on one with a tab shows
- * the tab; the X removes it, except an agent's (`removable`). Closed by that button, its own X or a press outside it.
+ * cleared, toasts and desktop notifications alike, those that follow their tab's state first
+ * (`centerOrder`), else newest first. A click on one with a tab shows the tab; the X removes it,
+ * except one that follows its tab (`removable`). Closed by that button, its own X or a press
+ * outside it.
  */
 export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesCenterProps) {
   const open = useCenterOpen();

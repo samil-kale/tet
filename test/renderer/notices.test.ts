@@ -43,7 +43,6 @@ beforeEach(() => {
 afterEach(async () => {
   // What has a mark goes with its tabs; the rest is cleared.
   removeStaleNotices({});
-  syncWorkingNotices([]);
   clearNotices();
   await later();
 });
@@ -96,27 +95,32 @@ describe("a notice with a mark", () => {
     assert.deepEqual(seen, []);
   });
 
-  it("is listed above the others, ranked as the tab marks are", () => {
+  it("is listed above the others, in the order of the status bar's marks", () => {
     turnNotice("done", "a", "finished");
     notify("info", "plain", { toast: false });
     turnNotice("working", "b", "working");
     turnNotice("question", "c", "waiting");
     assert.deepEqual(
       centerOrder(listNotices()).map((notice) => notice.message),
-      ["question", "working", "done", "plain"],
+      ["working", "question", "done", "plain"],
     );
   });
 });
 
 describe("the working sessions' notices", () => {
-  it("follow the sessions at work, one each", async () => {
+  it("are listed once each, renamed in place, and end with their tab's spinner", async () => {
     const working = (tabId: string, message: string) => ({ target: { ref, tabId }, message });
     syncWorkingNotices([working("a", "one"), working("b", "two")]);
-    assert.deepEqual(messages(), ["one", "two"]);
-
-    syncWorkingNotices([working("a", "one renamed")]);
-    await later();
-    assert.deepEqual(messages(), ["one renamed"], "b stopped, a was renamed in place");
+    syncWorkingNotices([working("a", "one renamed"), working("b", "two")]);
+    assert.deepEqual(messages(), ["one renamed", "two"]);
     assert.equal(listNotices()[0].toast, false);
+
+    removeStaleNotices({ [refKey]: [tab("a", { inTurn: true }), tab("b")] });
+    await later();
+    assert.deepEqual(messages(), ["one renamed"], "b's turn ended");
+
+    removeStaleNotices({ [refKey]: [tab("a", { inTurn: true, waitingAt: 1 })] });
+    await later();
+    assert.deepEqual(messages(), [], "a stopped on a question: it does not work");
   });
 });

@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { refKeyOf } from "../../shared/types/project";
+import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
 import { SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
@@ -219,18 +220,34 @@ export function leaveNotice(id: number): void {
   setTimeout(() => removeNotice(id), LEAVE_MS);
 }
 
+/** Whether the tab still shows the mark a notice reports. */
+function markStands(mark: NoticeMark, tab: TabDescriptor | undefined): boolean {
+  switch (mark) {
+    case "finished":
+      return tab?.finishedAt !== undefined;
+    case "waiting":
+      return tab?.waitingAt !== undefined;
+    case "working":
+      return tab !== undefined && isWorking(tab);
+  }
+}
+
 /**
- * A turn's notice (`mark`) lives as long as its tab's mark: gone once the tab is closed, its
- * question answered or its finished turn seen (a tab on screen is, `useTabMarks`).
+ * A notice with a `mark` lives as long as its tab's mark: gone once the tab is closed, its question
+ * answered, its turn ended or its finished turn seen (a tab on screen is, `useTabMarks`).
  */
 export function removeStaleNotices(tabs: Record<string, TabDescriptor[]>): void {
   for (const notice of shown.get()) {
-    if (!notice.mark || notice.mark === "working" || notice.leaving || !notice.target) {
+    if (!notice.mark || notice.leaving || !notice.target) {
       continue;
     }
     const { ref, tabId } = notice.target;
-    const tab = tabs[refKeyOf(ref)]?.find((entry) => entry.tabId === tabId);
-    if ((notice.mark === "finished" ? tab?.finishedAt : tab?.waitingAt) === undefined) {
+    if (
+      !markStands(
+        notice.mark,
+        tabs[refKeyOf(ref)]?.find((entry) => entry.tabId === tabId),
+      )
+    ) {
       leaveNotice(notice.id);
     }
   }
@@ -238,8 +255,8 @@ export function removeStaleNotices(tabs: Record<string, TabDescriptor[]>): void 
 
 /**
  * The working sessions' entries in the notification center, one per tab with the spinner: no toast
- * and not reported (`report`), as a status is not a notice. Listed while the tab works and gone
- * with its spinner, never removed in the center (`removable`).
+ * and not reported (`report`), as a status is not a notice. Listed here, renamed with the tab and
+ * ended by `removeStaleNotices` with the spinner.
  */
 export function syncWorkingNotices(working: { target: TabRef; message: string }[]): void {
   const wanted = new Map(working.map((entry) => [targetKey(entry.target), entry]));
@@ -250,9 +267,7 @@ export function syncWorkingNotices(working: { target: TabRef; message: string }[
     }
     const key = targetKey(notice.target);
     const entry = wanted.get(key);
-    if (!entry) {
-      leaveNotice(notice.id);
-    } else if (notice.message !== entry.message) {
+    if (entry && notice.message !== entry.message) {
       shown.set(shown.get().map((current) => (current === notice ? { ...notice, message: entry.message } : current)));
     }
     listed.add(key);
@@ -278,13 +293,15 @@ export function removable(notice: ShownNotice): boolean {
   return !notice.mark;
 }
 
+/** The marks left to right in the status bar's button and top to bottom in the notification center. */
+export const MARK_ORDER: readonly NoticeMark[] = ["working", "waiting", "finished"];
+
 /**
- * The notification center's order: the notices that follow their tab's state first, ranked as the
- * tab marks are (waiting, working, finished), then the rest; newest first within each.
+ * The notification center's order: the notices that follow their tab's state first, in
+ * `MARK_ORDER`, then the rest; newest first within each.
  */
 export function centerOrder(notices: readonly ShownNotice[]): ShownNotice[] {
-  const ranked: (NoticeMark | undefined)[] = ["waiting", "working", "finished", undefined];
-  const rank = (notice: ShownNotice): number => ranked.indexOf(notice.mark);
+  const rank = (notice: ShownNotice): number => (notice.mark ? MARK_ORDER.indexOf(notice.mark) : MARK_ORDER.length);
   return [...notices].reverse().sort((a, b) => rank(a) - rank(b));
 }
 

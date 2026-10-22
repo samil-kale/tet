@@ -39,9 +39,8 @@
   --tet-tab-inactiveBackground: #010409;
   --tet-tab-inactiveForeground: #7d8590;
   --tet-tab-border: #30363d;
-  /* TET's own: the working and finished marks in GitHub's in-progress colour, its attention.fg. */
-  --tet-tabMark-workingForeground: #d29922;
-  --tet-tabMark-finishedForeground: #d29922;
+  /* TET's own: the working, waiting and finished marks in GitHub's in-progress colour, its attention.fg. */
+  --tet-tabMark-foreground: #d29922;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
