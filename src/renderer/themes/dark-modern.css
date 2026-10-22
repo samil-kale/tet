@@ -24,13 +24,13 @@
   --tet-terminal-background: #1f1f1f;
   --tet-terminal-foreground: #cccccc;
 
-  --tet-sideBar-background: #181818;
-  --tet-sideBarSectionHeader-foreground: #cccccc;
+  --tet-lane-background: #181818;
+  --tet-sectionHeader-foreground: #cccccc;
   --tet-titleBar-activeBackground: #181818;
   --tet-titleBar-activeForeground: #cccccc;
 
-  --tet-panel-background: #181818;
-  --tet-panel-border: #2b2b2b;
+  --tet-app-background: #181818;
+  --tet-app-border: #2b2b2b;
 
   --tet-tab-activeBackground: #1f1f1f;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
@@ -67,9 +67,9 @@
   --tet-button-secondaryForeground: #cccccc;
   --tet-button-secondaryHoverBackground: #3c3c3c;
 
-  --tet-editorWidget-background: #202020;
-  --tet-editorWidget-border: #454545;
-  --tet-widget-shadow: #0000005c;
+  --tet-popup-background: #202020;
+  --tet-popup-border: #454545;
+  --tet-popup-shadow: #0000005c;
 
   --tet-menu-background: #1f1f1f;
   --tet-menu-foreground: #cccccc;
@@ -80,12 +80,12 @@
 
   --tet-progressBar-background: #0078d4;
 
-  --tet-notifications-background: #1f1f1f;
-  --tet-notifications-foreground: #cccccc;
-  --tet-notifications-border: #2b2b2b;
-  --tet-notificationsErrorIcon-foreground: #f85149;
-  --tet-notificationsWarningIcon-foreground: #cca700;
-  --tet-notificationsInfoIcon-foreground: #3794ff;
+  --tet-notice-background: #1f1f1f;
+  --tet-notice-foreground: #cccccc;
+  --tet-notice-border: #2b2b2b;
+  --tet-noticeErrorIcon-foreground: #f85149;
+  --tet-noticeWarningIcon-foreground: #cca700;
+  --tet-noticeInfoIcon-foreground: #3794ff;
 
   --tet-scrollbarSlider-background: #79797966;
   --tet-scrollbarSlider-hoverBackground: #646464b3;
@@ -96,14 +96,14 @@
   --tet-gitDecoration-untrackedResourceForeground: #73c991;
   --tet-gitDecoration-addedResourceForeground: #81b88b;
   --tet-gitDecoration-conflictingResourceForeground: #e4676b;
-  --tet-scmGraph-foreground1: #ffb000;
-  --tet-scmGraph-foreground2: #dc267f;
-  --tet-scmGraph-foreground3: #994f00;
-  --tet-scmGraph-foreground4: #40b0a6;
-  --tet-scmGraph-foreground5: #b66dff;
-  --tet-scmGraph-historyItemRefColor: #3794ff;
-  --tet-scmGraph-historyItemRemoteRefColor: #b180d7;
-  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #3794ff;
+  --tet-graph-remoteRefColor: #b180d7;
+  --tet-graph-baseRefColor: #ea5c00;
 
   /* Three weights of two hues: a changed line's ground, the changed words on it, and the 15px
      overview ruler, which disappears against the editor background at anything lighter. */

@@ -23,7 +23,7 @@ const CIRCLE_RADIUS = 4;
 const CIRCLE_STROKE_WIDTH = 2;
 /** Lane `index`'s line, one lane in from the left so a node never touches the edge. */
 const laneX = (index: number): number => LANE_WIDTH * (index + 1);
-const colorOf = (color: GraphColor): string => `var(--tet-scmGraph-${color})`;
+const colorOf = (color: GraphColor): string => `var(--tet-graph-${color})`;
 
 /** What the search field's toggles pick between, one at a time. */
 const SEARCH_FIELDS: { field: CommitSearch["field"]; title: string; Icon: (props: IconProps) => ReactNode }[] = [
@@ -64,7 +64,7 @@ function Lanes({ row, expanded }: { row: GraphRow; expanded: boolean }) {
   const { commit, input, output } = row;
   const circleLane = nodeLane(row);
   const circleColor: GraphColor =
-    circleLane < output.length ? output[circleLane].color : circleLane < input.length ? input[circleLane].color : "historyItemRefColor";
+    circleLane < output.length ? output[circleLane].color : circleLane < input.length ? input[circleLane].color : "refColor";
   const half = ROW_HEIGHT / 2;
   const paths: ReactNode[] = [];
 

@@ -24,13 +24,13 @@
   --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #3b3b3b;
 
-  --tet-sideBar-background: #f8f8f8;
-  --tet-sideBarSectionHeader-foreground: #3b3b3b;
+  --tet-lane-background: #f8f8f8;
+  --tet-sectionHeader-foreground: #3b3b3b;
   --tet-titleBar-activeBackground: #f8f8f8;
   --tet-titleBar-activeForeground: #1e1e1e;
 
-  --tet-panel-background: #f8f8f8;
-  --tet-panel-border: #e5e5e5;
+  --tet-app-background: #f8f8f8;
+  --tet-app-border: #e5e5e5;
 
   --tet-tab-activeBackground: #ffffff;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
@@ -66,10 +66,10 @@
   --tet-button-secondaryForeground: #3b3b3b;
   --tet-button-secondaryHoverBackground: #cccccc;
 
-  --tet-editorWidget-background: #f8f8f8;
+  --tet-popup-background: #f8f8f8;
   /* The registry's transparent(foreground, 0.2), as is the menu separator below. */
-  --tet-editorWidget-border: #3b3b3b33;
-  --tet-widget-shadow: #00000029;
+  --tet-popup-border: #3b3b3b33;
+  --tet-popup-shadow: #00000029;
 
   /* The registry points menu.background/foreground at dropdown.background/foreground. */
   --tet-menu-background: #ffffff;
@@ -81,15 +81,15 @@
 
   --tet-progressBar-background: #005fb8;
 
-  --tet-notifications-background: #ffffff;
-  --tet-notifications-foreground: #3b3b3b;
-  --tet-notifications-border: #e5e5e5;
+  --tet-notice-background: #ffffff;
+  --tet-notice-foreground: #3b3b3b;
+  --tet-notice-border: #e5e5e5;
   /* The error icon is errorForeground rather than the registry's editorError.foreground, as in
      Dark Modern; the other two are editorWarning.foreground and editorInfo.foreground, which the
      icon colors default to. */
-  --tet-notificationsErrorIcon-foreground: #f85149;
-  --tet-notificationsWarningIcon-foreground: #bf8803;
-  --tet-notificationsInfoIcon-foreground: #0063d3;
+  --tet-noticeErrorIcon-foreground: #f85149;
+  --tet-noticeWarningIcon-foreground: #bf8803;
+  --tet-noticeInfoIcon-foreground: #0063d3;
 
   --tet-scrollbarSlider-background: #64646466;
   --tet-scrollbarSlider-hoverBackground: #646464b3;
@@ -101,14 +101,14 @@
   --tet-gitDecoration-untrackedResourceForeground: #007100;
   --tet-gitDecoration-addedResourceForeground: #587c0c;
   --tet-gitDecoration-conflictingResourceForeground: #ad0707;
-  --tet-scmGraph-foreground1: #ffb000;
-  --tet-scmGraph-foreground2: #dc267f;
-  --tet-scmGraph-foreground3: #994f00;
-  --tet-scmGraph-foreground4: #40b0a6;
-  --tet-scmGraph-foreground5: #b66dff;
-  --tet-scmGraph-historyItemRefColor: #1a85ff;
-  --tet-scmGraph-historyItemRemoteRefColor: #652d90;
-  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #1a85ff;
+  --tet-graph-remoteRefColor: #652d90;
+  --tet-graph-baseRefColor: #ea5c00;
 
   /* The registry's defaultInsertColor/defaultRemoveColor serve both grounds. */
   --tet-diffEditor-insertedLineBackground: #2ea04326;

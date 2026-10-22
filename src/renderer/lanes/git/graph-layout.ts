@@ -1,16 +1,16 @@
 import { refName } from "../../../shared/types/git";
 import type { CheckoutTarget, GraphCommit, GraphRef, RepositoryState } from "../../../shared/types/git";
 
-/** A lane's color: a name of the `--tet-scmGraph-*` variables, VS Code's `scmGraph.*` colors. */
+/** A lane's color: a name of the `--tet-graph-*` variables, named after VS Code's `scmGraph.*` colors. */
 export type GraphColor =
   | "foreground1"
   | "foreground2"
   | "foreground3"
   | "foreground4"
   | "foreground5"
-  | "historyItemRefColor"
-  | "historyItemRemoteRefColor"
-  | "historyItemBaseRefColor";
+  | "refColor"
+  | "remoteRefColor"
+  | "baseRefColor";
 
 /** The colors lanes take in turn when no ref colors them. */
 const FOREGROUNDS: GraphColor[] = ["foreground1", "foreground2", "foreground3", "foreground4", "foreground5"];
@@ -40,13 +40,13 @@ export function graphRefColors(state: RepositoryState): Map<string, GraphColor> 
   const targetKey = (target: CheckoutTarget): string =>
     refKey({ kind: target.remote === undefined ? "local" : "remote", name: refName(target) });
   if (state.defaultBranch) {
-    colors.set(targetKey(state.defaultBranch), "historyItemBaseRefColor");
+    colors.set(targetKey(state.defaultBranch), "baseRefColor");
   }
   if (state.upstream) {
-    colors.set(targetKey(state.upstream), "historyItemRemoteRefColor");
+    colors.set(targetKey(state.upstream), "remoteRefColor");
   }
   if (!state.detached) {
-    colors.set(refKey({ kind: "local", name: state.head }), "historyItemRefColor");
+    colors.set(refKey({ kind: "local", name: state.head }), "refColor");
   }
   return colors;
 }

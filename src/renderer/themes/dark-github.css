@@ -24,13 +24,13 @@
   --tet-terminal-background: #0d1117;
   --tet-terminal-foreground: #e6edf3;
 
-  --tet-sideBar-background: #010409;
-  --tet-sideBarSectionHeader-foreground: #e6edf3;
+  --tet-lane-background: #010409;
+  --tet-sectionHeader-foreground: #e6edf3;
   --tet-titleBar-activeBackground: #0d1117;
   --tet-titleBar-activeForeground: #7d8590;
 
-  --tet-panel-background: #010409;
-  --tet-panel-border: #30363d;
+  --tet-app-background: #010409;
+  --tet-app-border: #30363d;
 
   --tet-tab-activeBackground: #0d1117;
   /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
@@ -70,10 +70,10 @@
   --tet-button-secondaryForeground: #c9d1d9;
   --tet-button-secondaryHoverBackground: #30363d;
 
-  --tet-editorWidget-background: #161b22;
-  --tet-editorWidget-border: #30363d;
+  --tet-popup-background: #161b22;
+  --tet-popup-border: #30363d;
   /* Dark Modern's. */
-  --tet-widget-shadow: #0000005c;
+  --tet-popup-shadow: #0000005c;
 
   --tet-menu-background: #161b22;
   --tet-menu-foreground: #e6edf3;
@@ -84,12 +84,12 @@
 
   --tet-progressBar-background: #1f6feb;
 
-  --tet-notifications-background: #161b22;
-  --tet-notifications-foreground: #e6edf3;
-  --tet-notifications-border: #30363d;
-  --tet-notificationsErrorIcon-foreground: #f85149;
-  --tet-notificationsWarningIcon-foreground: #d29922;
-  --tet-notificationsInfoIcon-foreground: #2f81f7;
+  --tet-notice-background: #161b22;
+  --tet-notice-foreground: #e6edf3;
+  --tet-notice-border: #30363d;
+  --tet-noticeErrorIcon-foreground: #f85149;
+  --tet-noticeWarningIcon-foreground: #d29922;
+  --tet-noticeInfoIcon-foreground: #2f81f7;
 
   --tet-scrollbarSlider-background: #8b949e33;
   --tet-scrollbarSlider-hoverBackground: #8b949e3d;
@@ -100,14 +100,14 @@
   --tet-gitDecoration-untrackedResourceForeground: #3fb950;
   --tet-gitDecoration-addedResourceForeground: #3fb950;
   --tet-gitDecoration-conflictingResourceForeground: #db6d28;
-  --tet-scmGraph-foreground1: #ffb000;
-  --tet-scmGraph-foreground2: #dc267f;
-  --tet-scmGraph-foreground3: #994f00;
-  --tet-scmGraph-foreground4: #40b0a6;
-  --tet-scmGraph-foreground5: #b66dff;
-  --tet-scmGraph-historyItemRefColor: #3794ff;
-  --tet-scmGraph-historyItemRemoteRefColor: #b180d7;
-  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #3794ff;
+  --tet-graph-remoteRefColor: #b180d7;
+  --tet-graph-baseRefColor: #ea5c00;
 
   --tet-diffEditor-insertedLineBackground: #23863626;
   --tet-diffEditor-removedLineBackground: #da363326;

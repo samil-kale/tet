@@ -81,13 +81,13 @@ const EDITOR_CSS_VARS: Record<string, string> = {
   "editor.findMatchHighlightBackground": "--tet-editor-findMatchHighlightBackground",
   "editorIndentGuide.background1": "--tet-editorIndentGuide-background1",
   "editorIndentGuide.activeBackground1": "--tet-editorIndentGuide-activeBackground1",
-  "editorWidget.background": "--tet-editorWidget-background",
+  "editorWidget.background": "--tet-popup-background",
   // The find widget's text, its buttons the same variable in `styles.css`: unset, monaco falls back
   // to the shiki theme's own foreground, which is the one color in the widget not from TET's
   // stylesheet.
   "editorWidget.foreground": "--tet-foreground",
-  "editorWidget.border": "--tet-editorWidget-border",
-  "widget.shadow": "--tet-widget-shadow",
+  "editorWidget.border": "--tet-popup-border",
+  "widget.shadow": "--tet-popup-shadow",
 };
 
 /** The editor surface's colors, read for shiki's theme — see `EDITOR_CSS_VARS`. */

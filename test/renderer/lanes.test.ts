@@ -95,11 +95,11 @@ describe("the GRAPH's lanes", () => {
   });
 
   it("colors a lane by the ref at its commit, else by the next of the repeating colors", () => {
-    const colors = new Map([["local:main", "historyItemRefColor" as const]]);
+    const colors = new Map([["local:main", "refColor" as const]]);
     const rows = layoutGraph([commit("m", ["a", "b"], [{ name: "main", kind: "local" }]), commit("a"), commit("b")], colors);
     assert.deepEqual(
       rows[0].output.map((lane) => lane.color),
-      ["historyItemRefColor", "foreground1"],
+      ["refColor", "foreground1"],
     );
   });
 
@@ -113,9 +113,9 @@ describe("the GRAPH's lanes", () => {
     assert.deepEqual(
       [...graphRefColors(state)],
       [
-        ["remote:origin/develop", "historyItemBaseRefColor"],
-        ["remote:origin/feature", "historyItemRemoteRefColor"],
-        ["local:feature", "historyItemRefColor"],
+        ["remote:origin/develop", "baseRefColor"],
+        ["remote:origin/feature", "remoteRefColor"],
+        ["local:feature", "refColor"],
       ],
     );
     assert.equal(graphRefColors({ ...state, detached: true }).has("local:feature"), false, "a detached HEAD is no branch");

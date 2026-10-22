@@ -35,14 +35,14 @@
 
   /* Not the theme's #2a2a2a, lighter than the content: claude.ai's sidebar, darker than it — as
      the title bar and the inactive tabs. */
-  --tet-sideBar-background: #111111;
-  --tet-sideBarSectionHeader-foreground: #c3c1ba;
+  --tet-lane-background: #111111;
+  --tet-sectionHeader-foreground: #c3c1ba;
   --tet-titleBar-activeBackground: #111111;
   --tet-titleBar-activeForeground: #c3c1ba;
 
-  --tet-panel-background: #151515;
+  --tet-app-background: #151515;
   /* Not the theme's #3e3e38: claude.ai's border, white at 0.1 alpha — as every border below. */
-  --tet-panel-border: #ffffff1a;
+  --tet-app-border: #ffffff1a;
 
   --tet-tab-activeBackground: #151515;
   --tet-tab-activeBorder: #d87757;
@@ -83,9 +83,9 @@
   --tet-button-secondaryForeground: #c3c1ba;
   --tet-button-secondaryHoverBackground: #3e3e38;
 
-  --tet-editorWidget-background: #20201f;
-  --tet-editorWidget-border: #ffffff1a;
-  --tet-widget-shadow: #00000050;
+  --tet-popup-background: #20201f;
+  --tet-popup-border: #ffffff1a;
+  --tet-popup-shadow: #00000050;
 
   --tet-menu-background: #20201f;
   --tet-menu-foreground: #c3c1ba;
@@ -96,12 +96,12 @@
 
   --tet-progressBar-background: #d87757;
 
-  --tet-notifications-background: #20201f;
-  --tet-notifications-foreground: #c3c1ba;
-  --tet-notifications-border: #ffffff1a;
-  --tet-notificationsErrorIcon-foreground: #f14444;
-  --tet-notificationsWarningIcon-foreground: #e1a035;
-  --tet-notificationsInfoIcon-foreground: #4492e7;
+  --tet-notice-background: #20201f;
+  --tet-notice-foreground: #c3c1ba;
+  --tet-notice-border: #ffffff1a;
+  --tet-noticeErrorIcon-foreground: #f14444;
+  --tet-noticeWarningIcon-foreground: #e1a035;
+  --tet-noticeInfoIcon-foreground: #4492e7;
 
   --tet-scrollbarSlider-background: #3e3e3850;
   --tet-scrollbarSlider-hoverBackground: #51504a60;
@@ -112,14 +112,14 @@
   --tet-gitDecoration-untrackedResourceForeground: #3e8343;
   --tet-gitDecoration-addedResourceForeground: #3e8343;
   --tet-gitDecoration-conflictingResourceForeground: #f14444;
-  --tet-scmGraph-foreground1: #ffb000;
-  --tet-scmGraph-foreground2: #dc267f;
-  --tet-scmGraph-foreground3: #994f00;
-  --tet-scmGraph-foreground4: #40b0a6;
-  --tet-scmGraph-foreground5: #b66dff;
-  --tet-scmGraph-historyItemRefColor: #3794ff;
-  --tet-scmGraph-historyItemRemoteRefColor: #b180d7;
-  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #3794ff;
+  --tet-graph-remoteRefColor: #b180d7;
+  --tet-graph-baseRefColor: #ea5c00;
 
   --tet-diffEditor-insertedLineBackground: #1e332030;
   --tet-diffEditor-removedLineBackground: #3d202030;

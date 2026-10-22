@@ -26,12 +26,12 @@
   --tet-terminal-background: #1e1f22;
   --tet-terminal-foreground: #bcbec3;
 
-  --tet-sideBar-background: #2b2d30;
-  --tet-sideBarSectionHeader-foreground: #dfe1e5;
+  --tet-lane-background: #2b2d30;
+  --tet-sectionHeader-foreground: #dfe1e5;
   --tet-titleBar-activeBackground: #2b2d30;
   --tet-titleBar-activeForeground: #cccccc;
 
-  --tet-panel-background: #2b2d30;
+  --tet-app-background: #2b2d30;
   /* The sidebar's own surface, not the terminal's ground: a dialog needs no flat-tabs reading. */
   --tet-dialog-background: #2b2d30;
   /* A step darker than that body, as every other theme's dialog header is of its own; the theme
@@ -40,7 +40,7 @@
   /* Not the theme's #1e1f22, which is also the tabs' and the terminal's ground, so the line under
      the tab strip vanishes: its editorGroupHeader.tabsBorder and editorGroup.border, what VS Code
      draws under tabs and between split editors. */
-  --tet-panel-border: #393b40;
+  --tet-app-border: #393b40;
 
   --tet-tab-activeBackground: #1e1f22;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
@@ -83,9 +83,9 @@
   --tet-button-secondaryForeground: #dfe1e5;
   --tet-button-secondaryHoverBackground: #42454a;
 
-  --tet-editorWidget-background: #2b2d30;
-  --tet-editorWidget-border: #42454a;
-  --tet-widget-shadow: #0000005c;
+  --tet-popup-background: #2b2d30;
+  --tet-popup-border: #42454a;
+  --tet-popup-shadow: #0000005c;
 
   --tet-menu-background: #2b2d30;
   --tet-menu-foreground: #dfe1e5;
@@ -96,12 +96,12 @@
 
   --tet-progressBar-background: #0e70c0;
 
-  --tet-notifications-background: #393b40;
-  --tet-notifications-foreground: #dfe1e5;
-  --tet-notifications-border: #1e1f22;
-  --tet-notificationsErrorIcon-foreground: #d64d5b;
-  --tet-notificationsWarningIcon-foreground: #c29e49;
-  --tet-notificationsInfoIcon-foreground: #3574f0;
+  --tet-notice-background: #393b40;
+  --tet-notice-foreground: #dfe1e5;
+  --tet-notice-border: #1e1f22;
+  --tet-noticeErrorIcon-foreground: #d64d5b;
+  --tet-noticeWarningIcon-foreground: #c29e49;
+  --tet-noticeInfoIcon-foreground: #3574f0;
 
   --tet-scrollbarSlider-background: #3f4043a6;
   --tet-scrollbarSlider-hoverBackground: #535455a6;
@@ -112,14 +112,14 @@
   --tet-gitDecoration-untrackedResourceForeground: #d1675a;
   --tet-gitDecoration-addedResourceForeground: #629755;
   --tet-gitDecoration-conflictingResourceForeground: #d5756c;
-  --tet-scmGraph-foreground1: #ffb000;
-  --tet-scmGraph-foreground2: #dc267f;
-  --tet-scmGraph-foreground3: #994f00;
-  --tet-scmGraph-foreground4: #40b0a6;
-  --tet-scmGraph-foreground5: #b66dff;
-  --tet-scmGraph-historyItemRefColor: #3794ff;
-  --tet-scmGraph-historyItemRemoteRefColor: #b180d7;
-  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #3794ff;
+  --tet-graph-remoteRefColor: #b180d7;
+  --tet-graph-baseRefColor: #ea5c00;
 
   --tet-diffEditor-insertedLineBackground: #3a60834d;
   --tet-diffEditor-removedLineBackground: #6868684d;

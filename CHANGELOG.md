@@ -34,7 +34,7 @@ changed for the user, not the commit list.
 ## 0.20.1 (2026-10-19)
 
 - **Status bar.** A status bar across the window's bottom shows the project, its branch and change
-  count, and the archived count; settings move beside the lane toggles in the Activity Bar.
+  count, and the archived count; settings move beside the lane toggles in the Navigation Bar.
 - **Text field context menu.** Text fields and textareas get a Cut, Copy and Paste menu on right
   click.
 - **Archive from the tab menu.** The tab menu gains an Archive entry; Close to the Right is gone.
@@ -44,7 +44,7 @@ changed for the user, not the commit list.
 
 ## 0.20.0 (2026-10-19)
 
-- **Activity Bar.** The lane toggles and settings move into an Activity Bar at the window's left
+- **Navigation Bar.** The lane toggles and settings move into a Navigation Bar at the window's left
   edge; only one lane shows at a time, in a fixed order, with no pinning.
 - **Archive lane.** Closing a tab keeps its session archived instead of deleting it, to reopen or
   delete later; the CLOSED lane is now ARCHIVE.

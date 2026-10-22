@@ -17,17 +17,28 @@ a TET theme. A rule that fits one value is a comment at that value, not an entry
 
 ## Names
 
-A variable is `--tet-` and VS Code's color id, its dots made dashes:
+A variable is `--tet-` and a color name, its dots made dashes (`tab.activeBackground` is
+`--tet-tab-activeBackground`). The name is VS Code's color id, so the id is what to look up in a VS
+Code theme file or its color registry — except where TET calls a part of the window by its own
+name:
 
-| VS Code color id         | TET variable                   |
-| ------------------------ | ------------------------------ |
-| `foreground`             | `--tet-foreground`             |
-| `tab.activeBackground`   | `--tet-tab-activeBackground`   |
-| `terminal.ansiBrightRed` | `--tet-terminal-ansiBrightRed` |
+| TET name                                                        | VS Code color id                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `navigationBar.*`, `navigationBarBadge.*`, `navigationBarTop.*` | `activityBar.*`, `activityBarBadge.*`, `activityBarTop.*`          |
+| `lane.background`                                               | `sideBar.background`                                               |
+| `sectionHeader.foreground`                                      | `sideBarSectionHeader.foreground`                                  |
+| `app.background`, `app.border`                                  | `panel.background`, `panel.border`                                 |
+| `popup.background`, `popup.border`                              | `editorWidget.background`, `editorWidget.border`                   |
+| `popup.shadow`                                                  | `widget.shadow`                                                    |
+| `notice.{background,foreground,border}`                         | `notifications.{background,foreground,border}`                     |
+| `notice{Error,Warning,Info}Icon.foreground`                     | `notifications{Error,Warning,Info}Icon.foreground`                 |
+| `graph.foreground1` … `graph.foreground5`                       | `scmGraph.foreground1` … `scmGraph.foreground5`                    |
+| `graph.refColor`, `graph.remoteRefColor`, `graph.baseRefColor`  | `scmGraph.historyItemRefColor`, `…RemoteRefColor`, `…BaseRefColor` |
 
-So the id is the one name to look up in a VS Code theme file or VS Code's color registry. Where
-an API takes the id itself — monaco's `defineTheme`, shiki's `theme.colors` — `theme-colors.ts`
-maps id to variable.
+A renamed id is renamed everywhere TET holds it (variables, `<id>.json`, code), and a VS Code theme
+taken over (step 1) is renamed by this table. The exception is an API that takes the id itself —
+monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to variable, and the
+`popup.*` names stay `editorWidget.*` and `widget.shadow` in the theme files.
 
 ## Required and optional variables
 
@@ -56,29 +67,20 @@ maps id to variable.
    ships, put beside the stylesheet as `<id>.json` (comments stripped, if it has any).
 2. **Copy each required variable's value** from the theme's `colors`, by its id.
 3. **Fill what the theme leaves unset with what VS Code would draw**, read from VS Code's color
-   registry under the theme's kind (its `dark:` or `light:` branch), never eyeballed. A registry
-   default naming another id is that id's value in the same theme, and a transform (`transparent`,
-   `lighten`, `darken`) is applied to it. Where the registry gives no color:
-   - A border the registry leaves to `contrastBorder`, which only high contrast themes set, is
-     transparent: `#00000000`.
-   - Any other border takes the theme's own border color.
-   - `terminal.background` takes `editor.background`, the ground the active tab stands on.
+   registry under the theme's kind (its `dark:` or `light:` branch), never eyeballed: a default
+   naming another id is that id's value in the same theme, a transform (`transparent`, `lighten`,
+   `darken`) is applied to it, and a border it leaves to `contrastBorder` is `#00000000`.
 4. **Set TET's own values**, alike in every theme:
-   - `toolbar.hoverBackground` is `#5a5d5e50`, Dark Modern's, whatever the theme sets: an action
-     button sits on rows, on a selected row and on plain bars, and only this translucent grey
-     reads on all of them.
-   - `tab.activeBorder` is the accent, `focusBorder`, not the theme's `tab.activeBorder`; a theme
-     with a mark color of its own (`tab.activeBorderTop`) takes that instead.
-   - `input.placeholderForeground` is `foreground` at the filter icon's opacity (`99`, 0.6 alpha),
-     not the theme's own value: a filter field's icon is drawn the same way, and the two must read
-     as one color.
+   - `toolbar.hoverBackground` is `#5a5d5e50`, Dark Modern's: an action button sits on rows, on a
+     selected row and on plain bars, and only this translucent grey reads on all of them.
+   - `tab.activeBorder` is the accent, `focusBorder`, unless the theme has a mark color of its own
+     (`tab.activeBorderTop`).
 5. **Deviate from the theme where its value doesn't fit alongside TET's other themes** —
    unreadable, invisible on its ground, drawing a line TET does not want, or reading differently
    from how the same thing looks in the themes already here — and comment it at the value, saying
-   what it is instead and why: `Not the theme's <value>: …`. A token rule the theme file lacks
-   goes at the
-   end of its `tokenColors`, in a color of the theme's own, and is named in the stylesheet's header
-   comment, since the JSON holds none.
+   what it is instead and why: `Not the theme's <value>: …`. A token rule the theme file lacks goes
+   at the end of its `tokenColors`, in a color of the theme's own, and is named in the stylesheet's
+   header comment, since the JSON holds none.
 6. **Wire it up**:
    - Its entry in `THEMES`: `id`, `label` (without Dark/Light), `kind` (the theme's `type`), and
      `shikiTheme`. `windowBackground` and `titleBarSymbolColor` copy `--tet-titleBar-activeBackground`
@@ -100,8 +102,7 @@ What draws on a canvas or takes colors through an API reads the resolved values 
 - **shiki** (`EDITOR_CSS_VARS`): the editor surface, patched into the shiki theme at load
   (`diff-highlight.ts`).
 - **monaco** (`MONACO_CSS_VARS`): its chrome and the diff, through `defineTheme`. monaco writes
-  its own `--vscode-*` block from them onto its elements (`.monaco-editor`, `.monaco-diff-editor`,
-  `.monaco-component`); TET's stylesheets never read it, only their own `--tet-*`.
+  its own `--vscode-*` block from them onto its elements; TET's stylesheets never read it.
 - **The window**: the four values `THEMES` copies (step 6), for the window's first paint, the
   Windows title bar overlay and an agent reading colors off the console.
 
@@ -109,6 +110,5 @@ What draws on a canvas or takes colors through an API reads the resolved values 
 
 - **Syntax colors**: shiki's token colors, from the theme's token rules.
 - **The dialog overlay's dim**: `rgb(0 0 0 / 40%)`, the same over every theme.
-- **The four copies in `THEMES`** (step 6).
 - **xterm's hidden scrollbar and ruler**: `#00000000` in `theme-colors.ts`, invisible in every
   theme.

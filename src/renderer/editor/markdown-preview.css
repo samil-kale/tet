@@ -1,7 +1,7 @@
 /* The Markdown preview, inside its shadow root (`markdown.ts`): nothing of the page's stylesheet
    reaches the file's HTML, nothing here reaches the page; the --tet-* variables inherit through.
    VS Code's (markdown-language-features' markdown.css over the webview's defaults), sizes and colors
-   alike — but the separators, fixed values per theme kind there, are the panel border here. */
+   alike — but the separators, fixed values per theme kind there, are the app border here. */
 .markdown-body {
   padding: 1em 26px 0;
   font-size: 14px;
@@ -28,7 +28,7 @@
 
 .markdown-body :is(h1, h2) {
   padding-bottom: 0.3em;
-  border-bottom: 1px solid var(--tet-panel-border);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 .markdown-body h2 {
@@ -89,7 +89,7 @@
 .markdown-body hr {
   border: 0;
   height: 1px;
-  border-bottom: 1px solid var(--tet-panel-border);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 .markdown-body table {
@@ -99,7 +99,7 @@
 
 .markdown-body th {
   text-align: left;
-  border-bottom: 1px solid var(--tet-panel-border);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 .markdown-body :is(th, td) {
@@ -107,7 +107,7 @@
 }
 
 .markdown-body tbody tr + tr > td {
-  border-top: 1px solid var(--tet-panel-border);
+  border-top: 1px solid var(--tet-app-border);
 }
 
 .markdown-body blockquote {

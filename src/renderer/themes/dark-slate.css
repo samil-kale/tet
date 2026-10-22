@@ -26,13 +26,13 @@
   --tet-terminal-background: #1b1f27;
   --tet-terminal-foreground: #dde2e9;
 
-  --tet-sideBar-background: #14171c;
-  --tet-sideBarSectionHeader-foreground: #dde2e9;
+  --tet-lane-background: #14171c;
+  --tet-sectionHeader-foreground: #dde2e9;
   --tet-titleBar-activeBackground: #14171c;
   --tet-titleBar-activeForeground: #dde2e9;
 
-  --tet-panel-background: #14171c;
-  --tet-panel-border: #24272c;
+  --tet-app-background: #14171c;
+  --tet-app-border: #24272c;
 
   --tet-tab-activeBackground: #1b1f27;
   /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
@@ -74,10 +74,10 @@
 
   /* Raised off the editor the way GitHub Dark Default's widget sits over its editor — at the
      editor's own tone find/replace shows only its border. */
-  --tet-editorWidget-background: #232830;
-  --tet-editorWidget-border: #2a2d35;
+  --tet-popup-background: #232830;
+  --tet-popup-border: #2a2d35;
   /* Dark Modern's. */
-  --tet-widget-shadow: #0000005c;
+  --tet-popup-shadow: #0000005c;
 
   --tet-menu-background: #1b1f27;
   --tet-menu-foreground: #dde2e9;
@@ -88,12 +88,12 @@
 
   --tet-progressBar-background: #58a6f0;
 
-  --tet-notifications-background: #1b1f27;
-  --tet-notifications-foreground: #dde2e9;
-  --tet-notifications-border: #2a2d35;
-  --tet-notificationsErrorIcon-foreground: #db5761;
-  --tet-notificationsWarningIcon-foreground: #d9b45c;
-  --tet-notificationsInfoIcon-foreground: #58a6f0;
+  --tet-notice-background: #1b1f27;
+  --tet-notice-foreground: #dde2e9;
+  --tet-notice-border: #2a2d35;
+  --tet-noticeErrorIcon-foreground: #db5761;
+  --tet-noticeWarningIcon-foreground: #d9b45c;
+  --tet-noticeInfoIcon-foreground: #58a6f0;
 
   /* GitHub Dark Default's. */
   --tet-scrollbarSlider-background: #8b949e33;
@@ -105,14 +105,14 @@
   --tet-gitDecoration-untrackedResourceForeground: #82b65d;
   --tet-gitDecoration-addedResourceForeground: #82b65d;
   --tet-gitDecoration-conflictingResourceForeground: #db5761;
-  --tet-scmGraph-foreground1: #ffb000;
-  --tet-scmGraph-foreground2: #dc267f;
-  --tet-scmGraph-foreground3: #994f00;
-  --tet-scmGraph-foreground4: #40b0a6;
-  --tet-scmGraph-foreground5: #b66dff;
-  --tet-scmGraph-historyItemRefColor: #3794ff;
-  --tet-scmGraph-historyItemRemoteRefColor: #b180d7;
-  --tet-scmGraph-historyItemBaseRefColor: #ea5c00;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #3794ff;
+  --tet-graph-remoteRefColor: #b180d7;
+  --tet-graph-baseRefColor: #ea5c00;
 
   --tet-diffEditor-insertedLineBackground: #82b65d26;
   --tet-diffEditor-removedLineBackground: #db576126;

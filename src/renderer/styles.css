@@ -51,7 +51,7 @@ body {
   font-family: var(--tet-font-family);
   font-size: var(--tet-font-size);
   color: var(--tet-foreground);
-  background: var(--tet-panel-background);
+  background: var(--tet-app-background);
   overflow: hidden;
   user-select: none;
 }
@@ -299,7 +299,7 @@ textarea:focus,
   height: 100%;
   /* Shared measurements, checked against the neighbouring view before inventing one: a bar along
      an edge is --bar-height (tab strip, title bar, `.section-header`, the editor tab's bar); the
-     border between panes is 1px --tet-panel-border; anything that marks or points at something
+     border between panes is 1px --tet-app-border; anything that marks or points at something
      is 1px --tet-focusBorder. */
   --bar-height: 35px;
   /* Pane floors, as MIN_AREA_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
@@ -450,7 +450,7 @@ textarea:focus,
   display: flex;
   flex: 1;
   min-height: 0;
-  border-top: 1px solid var(--tet-panel-border);
+  border-top: 1px solid var(--tet-app-border);
 }
 
 /* The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar),
@@ -463,8 +463,8 @@ textarea:focus,
   width: 41px;
   gap: 10px;
   padding: 8px 0;
-  border-right: 1px solid var(--tet-panel-border);
-  background: var(--tet-sideBar-background);
+  border-right: 1px solid var(--tet-app-border);
+  background: var(--tet-lane-background);
   --icon-size: 17px;
   --action-size: 26px;
 }
@@ -487,8 +487,8 @@ textarea:focus,
   height: 26px;
   flex: none;
   padding: 0 8px;
-  background: var(--tet-sideBar-background);
-  border-top: 1px solid var(--tet-panel-border);
+  background: var(--tet-lane-background);
+  border-top: 1px solid var(--tet-app-border);
   font-size: var(--small-font-size);
   --icon-size: 13px;
 }
@@ -556,14 +556,14 @@ textarea:focus,
 /* Until the state has landed (its `head` is "") the lanes know no ref colors, which they take from
    it: they stay muted rather than show colors that change once it arrives. */
 .graph-tree.pending {
-  --tet-scmGraph-foreground1: var(--tet-descriptionForeground);
-  --tet-scmGraph-foreground2: var(--tet-descriptionForeground);
-  --tet-scmGraph-foreground3: var(--tet-descriptionForeground);
-  --tet-scmGraph-foreground4: var(--tet-descriptionForeground);
-  --tet-scmGraph-foreground5: var(--tet-descriptionForeground);
-  --tet-scmGraph-historyItemRefColor: var(--tet-descriptionForeground);
-  --tet-scmGraph-historyItemRemoteRefColor: var(--tet-descriptionForeground);
-  --tet-scmGraph-historyItemBaseRefColor: var(--tet-descriptionForeground);
+  --tet-graph-foreground1: var(--tet-descriptionForeground);
+  --tet-graph-foreground2: var(--tet-descriptionForeground);
+  --tet-graph-foreground3: var(--tet-descriptionForeground);
+  --tet-graph-foreground4: var(--tet-descriptionForeground);
+  --tet-graph-foreground5: var(--tet-descriptionForeground);
+  --tet-graph-refColor: var(--tet-descriptionForeground);
+  --tet-graph-remoteRefColor: var(--tet-descriptionForeground);
+  --tet-graph-baseRefColor: var(--tet-descriptionForeground);
 }
 
 .graph-tree.pending .graph-lanes {
@@ -573,12 +573,12 @@ textarea:focus,
 /* A node's circles are stroked in what lies behind them, which cuts a gap round each from the lines
    it crosses; the row's own background while it has one. HEAD's inner circle is a hole in its ring. */
 .graph-lanes circle {
-  stroke: var(--tet-sideBar-background);
+  stroke: var(--tet-lane-background);
   transition: fill 0.3s;
 }
 
 .graph-lanes.head circle:last-child {
-  fill: var(--tet-sideBar-background);
+  fill: var(--tet-lane-background);
 }
 
 .graph-tree .tree-row:hover .graph-lanes circle:first-of-type {
@@ -606,7 +606,7 @@ textarea:focus,
 }
 
 .section ~ .section {
-  border-top: 1px solid var(--tet-panel-border);
+  border-top: 1px solid var(--tet-app-border);
 }
 
 .section-header-actions {
@@ -630,7 +630,7 @@ textarea:focus,
 .tree-header {
   font-size: var(--small-font-size);
   letter-spacing: 0.3px;
-  color: var(--tet-sideBarSectionHeader-foreground);
+  color: var(--tet-sectionHeader-foreground);
 }
 
 /* The tab strip's 35px, border included, so titles and tabs line up. The line above is drawn by
@@ -645,7 +645,7 @@ textarea:focus,
   height: var(--bar-height);
   flex: none;
   padding: 0 6px 0 10px;
-  border-bottom: 1px solid var(--tet-panel-border);
+  border-bottom: 1px solid var(--tet-app-border);
   font-weight: 600;
 }
 
@@ -1143,7 +1143,7 @@ textarea:focus,
   height: var(--bar-height);
   flex: none;
   background: var(--tet-tab-inactiveBackground);
-  border-bottom: 1px solid var(--tet-panel-border);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
@@ -1229,7 +1229,7 @@ textarea:focus,
   align-items: center;
   gap: var(--action-gap);
   flex: none;
-  border-right: 1px solid var(--tet-panel-border);
+  border-right: 1px solid var(--tet-app-border);
   padding: 0 6px;
 }
 
@@ -1323,7 +1323,7 @@ textarea:focus,
   color: var(--tet-menu-foreground);
   border: 1px solid var(--tet-menu-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px var(--tet-widget-shadow);
+  box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
 .context-menu-item {
@@ -1485,7 +1485,7 @@ textarea:focus,
      laid out under the clip. */
   min-width: 0;
   overflow: hidden;
-  background: var(--tet-sideBar-background);
+  background: var(--tet-lane-background);
 }
 
 /* Only while sliding: left on, it would animate sash drags too. */
@@ -1648,8 +1648,8 @@ textarea:focus,
   flex: none;
   height: var(--bar-height);
   padding: 0 2px 0 0;
-  background: var(--tet-panel-background);
-  border-bottom: 1px solid var(--tet-panel-border);
+  background: var(--tet-app-background);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 /* The editor bar's full height. */
@@ -1673,7 +1673,7 @@ textarea:focus,
 
 /* The checkerboard an image viewer puts behind transparency. */
 .image-diff {
-  --checkerboard: repeating-conic-gradient(var(--tet-panel-border) 0% 25%, var(--tet-editor-background) 0% 50%) 50% / 16px 16px;
+  --checkerboard: repeating-conic-gradient(var(--tet-app-border) 0% 25%, var(--tet-editor-background) 0% 50%) 50% / 16px 16px;
 }
 
 /* Two columns split at the middle: before hugs it from the left, after from the right, a caption
@@ -1723,7 +1723,7 @@ textarea:focus,
   max-width: 100%;
   max-height: var(--image-max-height);
   background: var(--checkerboard);
-  border: 1px solid var(--tet-panel-border);
+  border: 1px solid var(--tet-app-border);
 }
 
 /* A side that would not decode, at the other side's size until that is known. */
@@ -1756,14 +1756,14 @@ textarea:focus,
   flex: none;
 }
 
-/* Always drawn: the 1px `--tet-panel-border` of every pane boundary, not the 4px hit area.
+/* Always drawn: the 1px `--tet-app-border` of every pane boundary, not the 4px hit area.
    A border, not a 1px background: at a fractional scale Chromium snaps a box's edges, so 1px
    paints one or two device pixels depending on where the sash sits, but rounds a border's width
    to whole device pixels. */
 .sash::before {
   content: "";
   position: absolute;
-  border: 0 solid var(--tet-panel-border);
+  border: 0 solid var(--tet-app-border);
 }
 
 .sash.vertical {
@@ -1925,9 +1925,9 @@ textarea:focus,
      tab strip; not the editor widget's. A theme overrides it only where its terminal's own ground
      reads too dark for a dialog (Dark IntelliJ's). */
   background: var(--tet-dialog-background, var(--tet-terminal-background));
-  border: 1px solid var(--tet-editorWidget-border);
+  border: 1px solid var(--tet-popup-border);
   border-radius: 5px;
-  box-shadow: 0 4px 12px var(--tet-widget-shadow);
+  box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
 /* A card dialog's header (tab strip or title bar), drawn by `DialogFrame` as its first child:
@@ -1942,7 +1942,7 @@ textarea:focus,
   /* A theme overrides it only where its own inactive tab color reads wrong on a dialog (Dark
      IntelliJ's, equal to its own dialog background). */
   background: var(--tet-dialogHeader-background, var(--tet-tab-inactiveBackground));
-  border-bottom: 1px solid var(--tet-panel-border);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 .dialog-tabs {
@@ -2172,7 +2172,7 @@ textarea:focus,
 .sbx-account {
   margin-top: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--tet-panel-border);
+  border-top: 1px solid var(--tet-app-border);
 }
 
 .sbx-account-status {
@@ -2497,7 +2497,7 @@ textarea:focus,
 /* Edits a running tab takes up only once restarted (RestartNote): words alone, in the warning's
    colour, as .dialog-error in the error's. */
 .restart-note {
-  color: var(--tet-notificationsWarningIcon-foreground);
+  color: var(--tet-noticeWarningIcon-foreground);
 }
 
 /* A prompt's color swatches, in the 22px of every action button. The colors themselves come from
@@ -2510,7 +2510,7 @@ textarea:focus,
 .dialog-color {
   width: var(--action-size);
   height: var(--action-size);
-  border: 1px solid var(--tet-panel-border);
+  border: 1px solid var(--tet-app-border);
   border-radius: 2px;
 }
 
@@ -2609,7 +2609,7 @@ textarea:focus,
   flex: none;
   overflow-y: auto;
   padding-right: 12px;
-  border-right: 1px solid var(--tet-panel-border);
+  border-right: 1px solid var(--tet-app-border);
 }
 
 .account-add {
@@ -2769,9 +2769,9 @@ textarea:focus,
   padding: 10px 6px 10px 10px;
   text-align: left;
   font-size: var(--tet-font-size);
-  color: var(--tet-notifications-foreground);
-  background: var(--tet-sideBar-background);
-  border: 1px solid var(--tet-notifications-border);
+  color: var(--tet-notice-foreground);
+  background: var(--tet-lane-background);
+  border: 1px solid var(--tet-notice-border);
   border-radius: 2px;
 }
 
@@ -2784,15 +2784,15 @@ textarea:focus,
 
 /* A turn's mark (`.tab-mark`) keeps its own colour, as on a tab. */
 .notice.error .notice-icon:not(.tab-mark) {
-  color: var(--tet-notificationsErrorIcon-foreground);
+  color: var(--tet-noticeErrorIcon-foreground);
 }
 
 .notice.warning .notice-icon:not(.tab-mark) {
-  color: var(--tet-notificationsWarningIcon-foreground);
+  color: var(--tet-noticeWarningIcon-foreground);
 }
 
 .notice.info .notice-icon:not(.tab-mark) {
-  color: var(--tet-notificationsInfoIcon-foreground);
+  color: var(--tet-noticeInfoIcon-foreground);
 }
 
 /* Long paths break anywhere; a multi-line git message keeps its lines. */
@@ -2827,9 +2827,9 @@ textarea:focus,
   width: min(450px, 100vw);
   max-height: 60%;
   border-radius: 2px;
-  color: var(--tet-notifications-foreground);
-  background: var(--tet-sideBar-background);
-  border: 1px solid var(--tet-notifications-border);
+  color: var(--tet-notice-foreground);
+  background: var(--tet-lane-background);
+  border: 1px solid var(--tet-notice-border);
   /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
   animation: notice-enter 0.2s ease-out;
   transition:
@@ -2846,7 +2846,7 @@ textarea:focus,
 /* A `.section-header` in every respect but its line, which is the center's own. The empty line
    below it shares its height and padding. */
 .notices-center-header {
-  border-bottom-color: var(--tet-notifications-border);
+  border-bottom-color: var(--tet-notice-border);
 }
 
 .notices-center-list {
@@ -2872,7 +2872,7 @@ textarea:focus,
 }
 
 .notices-center .notice-item + .notice-item > .notice {
-  border-top: 1px solid var(--tet-notifications-border);
+  border-top: 1px solid var(--tet-notice-border);
 }
 
 .notices-center .notice.clickable {
