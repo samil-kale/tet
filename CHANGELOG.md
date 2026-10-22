@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.2 (2026-10-22)
+
+- **Notices removed by an X.** A notice is dismissed with its X button instead of a click on the
+  whole box, and several notices now enter and leave one after another, more slowly.
+- **Fixes.** The status bar's height lines up with the notices above it.
+
 ## 0.22.1 (2026-10-22)
 
 - **Working sessions in the notification center.** Each working session is listed there and
