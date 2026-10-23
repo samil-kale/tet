@@ -10,10 +10,9 @@ import { agentInfo, agentName } from "../ui/use-agents";
 import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
-import { baseName } from "../paths";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput } from "./terminal-views";
-import { kindOf, paneTabKind, type PaneTab, type PaneTabKind } from "./pane-tab";
+import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
@@ -250,10 +249,9 @@ export const Pane = memo(function Pane({
     switch (kinded.kind) {
       case "editor": {
         const { path, commit } = kinded.tab;
-        const suffix = commit ? ` (${commit.sha.slice(0, 7)})` : "";
         return {
-          label: <EditorTabLabel tabId={tab.tabId} label={baseName(path) + suffix} />,
-          tooltip: path + suffix,
+          label: <EditorTabLabel tabId={tab.tabId} label={editorLabel(kinded.tab)} />,
+          tooltip: path + (commit ? ` (${commit.sha.slice(0, 7)})` : ""),
           icon: <FilesIcon className="tab-icon" />,
           sandboxed: false,
           inactive: false,
@@ -275,11 +273,7 @@ export const Pane = memo(function Pane({
         }
         return {
           // The session title; a session-less agent's name.
-          label: (
-            <span className="tab-label">
-              {terminal.title || (agentInfo(agents, terminal.agentId)?.hasSessions === false ? name : "New session")}
-            </span>
-          ),
+          label: <span className="tab-label">{terminalLabel(terminal, agents)}</span>,
           tooltip: tooltip.join("\n"),
           icon:
             terminal.status === "missing" || terminal.status === "error" ? (

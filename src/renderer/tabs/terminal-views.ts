@@ -494,6 +494,10 @@ export function attachTerminal(
     }
   });
   container.addEventListener("drop", (event) => {
+    // A tab's drop is the pane's (`Pane.tsx` skips a prevented one).
+    if (!holdsRow(event) && !event.dataTransfer?.types.includes("Files")) {
+      return;
+    }
     event.preventDefault();
     frame(false);
     // What was dropped is typed here, so the next key goes here too.

@@ -505,6 +505,13 @@ textarea:focus,
   background: var(--tet-toolbar-hoverBackground);
 }
 
+.status-bar-session {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* The notification center's button, at the right edge; its marks and icon set wider apart than a
    field's, and in the finished mark's colour while something is unread or an agent's notice stands. */
 .status-bar-notices {
@@ -2815,8 +2822,10 @@ textarea:focus,
 }
 
 /* The notification center: over the right edge, above the status bar (`.status-bar`'s height).
-   Its notices are `.notice`s, laid flat in a list. */
-.notices-center {
+   Its notices are `.notice`s, laid flat in a list. The status bar's sessions list has its box,
+   over the left edge. */
+.notices-center,
+.sessions-center {
   position: absolute;
   right: 6px;
   bottom: 32px;
@@ -2842,14 +2851,51 @@ textarea:focus,
   pointer-events: none;
 }
 
+.sessions-center {
+  right: auto;
+  left: 6px;
+}
+
 /* A `.section-header` in every respect but its line, which is the center's own. The empty line
    below it shares its height and padding. */
-.notices-center-header {
+.notices-center-header,
+.sessions-center-header {
   border-bottom-color: var(--tet-notice-border);
 }
 
-.notices-center-list {
+.notices-center-list,
+.sessions-center-list {
   overflow-y: auto;
+}
+
+/* A session: its icon, then its name, in a notice's size and padding. */
+.sessions-center-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: var(--tet-font-size);
+  line-height: 22px;
+  cursor: pointer;
+}
+
+.sessions-center-item + .sessions-center-item {
+  border-top: 1px solid var(--tet-notice-border);
+}
+
+.sessions-center-item:hover {
+  background: var(--tet-list-hoverBackground);
+}
+
+.sessions-center-item.active {
+  background: var(--tet-list-activeSelectionBackground);
+  color: var(--tet-list-activeSelectionForeground);
+}
+
+.sessions-center-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .notices-center-empty {

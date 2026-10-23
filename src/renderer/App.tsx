@@ -30,9 +30,11 @@ import { disposeRefTerminals } from "./tabs/terminal-views";
 import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { useWorkingNotices } from "./tabs/use-working-notices";
-import { PlusIcon } from "./ui/icons";
+import { FilesIcon, PlusIcon } from "./ui/icons";
+import { AgentIcon } from "./ui/agent-icons";
 import { NavigationBar } from "./lanes/NavigationBar";
 import { StatusBar } from "./ui/StatusBar";
+import type { StatusSession } from "./ui/SessionsCenter";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
@@ -41,7 +43,7 @@ import { DEFAULT_LAYOUT, inOrder, paneOf, tabsOnScreen } from "./tabs/pane-layou
 import { NO_TABS } from "./tabs/layout-state";
 import { useProjectLayouts } from "./tabs/use-project-layouts";
 import { workingTreePathOf, type EditorTab } from "./editor/editor-tab";
-import type { PaneTab } from "./tabs/pane-tab";
+import { editorLabel, kindOf, terminalLabel, type PaneTab } from "./tabs/pane-tab";
 import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
 import { useTabRestore } from "./tabs/use-tab-restore";
@@ -267,6 +269,35 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const activeChangesCount = activeResolved ? (states[activeResolved.refKey]?.changes.length ?? 0) : 0;
   const archivedTabs = useArchive(activeResolved);
 
+  /** The status bar's sessions: the active repository's or worktree's tabs in the strip's order, and the focused pane's
+   *  active one. */
+  const agents = useAgents();
+  const activeLayout = activeRefKey ? (layouts[activeRefKey] ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT;
+  const activeStripTabs = activeRefKey ? stripTabs[activeRefKey] : undefined;
+  const statusSessions = useMemo(
+    () =>
+      inOrder(activeLayout.order, activeStripTabs ?? NO_TABS).map((tab): StatusSession => {
+        const kinded = kindOf(tab);
+        return kinded.kind === "editor"
+          ? { tabId: tab.tabId, label: editorLabel(kinded.tab), icon: <FilesIcon className="tab-icon" /> }
+          : {
+              tabId: tab.tabId,
+              label: terminalLabel(kinded.tab, agents),
+              icon: <AgentIcon agentId={kinded.tab.agentId} className="tab-icon" />,
+            };
+      }),
+    [activeLayout.order, activeStripTabs, agents],
+  );
+  const activeSessionId = activeLayout.activeTab[activeLayout.focusedPane] ?? undefined;
+  const selectSession = useCallback(
+    (tabId: string) => {
+      if (activeRefKeyRef.current) {
+        activateTab(activeRefKeyRef.current, tabId);
+      }
+    },
+    [activeRefKeyRef, activateTab],
+  );
+
   /** A shell tab, for a project row's "New shell tab" entry. */
   const openShellTab = useCallback(
     (ref: ProjectRef) => {
@@ -359,7 +390,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     };
   }, []);
   const closeEnvRequest = useCallback(() => setEnvRequest(null), []);
-  const agents = useAgents();
   return (
     <div className="app">
       {/* The drag region and the window controls' space. */}
@@ -492,6 +522,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       <StatusBar
         project={activeProject}
+        sessions={statusSessions}
+        activeSessionId={activeSessionId}
+        onSelectSession={selectSession}
         branch={activeBranchName}
         changesCount={activeChangesCount}
         archivedCount={archivedTabs.length}
