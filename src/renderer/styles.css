@@ -2834,7 +2834,7 @@ textarea:focus,
 /* In the notification center it is a `.status-list-item` in padding: the two lists sit side by side
    and read alike. */
 .notices-center .notice.session {
-  padding: 4px 10px;
+  padding: 3px 10px;
 }
 
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
@@ -2901,7 +2901,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: 3px 10px;
   font-size: var(--tet-font-size);
   line-height: 22px;
   cursor: pointer;
