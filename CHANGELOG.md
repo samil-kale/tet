@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.3 (2026-10-23)
+
+- **Status bar.** It shows the projects and branches with their marks, and lists the active
+  repository's sessions to switch between them.
+- **Window state.** The window's size and position are kept between starts, and a crashed child
+  process is logged.
+- **Fixes.** Remote listing errors show beside the dialog buttons, and the SBX file and folder
+  pickers open in the project folder.
+
 ## 0.22.2 (2026-10-22)
 
 - **Notices removed by an X.** A notice is dismissed with its X button instead of a click on the
