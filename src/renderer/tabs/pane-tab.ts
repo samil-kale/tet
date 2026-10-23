@@ -32,7 +32,9 @@ export function editorLabel({ path, commit }: EditorTab): string {
 
 /** A terminal's name: the session title; a session-less agent's name, else a placeholder. */
 export function terminalLabel(terminal: TabDescriptor, agents: readonly AgentInfo[]): string {
-  return terminal.title || (agentInfo(agents, terminal.agentId)?.hasSessions === false ? agentName(agents, terminal.agentId) : "New session");
+  return (
+    terminal.title || (agentInfo(agents, terminal.agentId)?.hasSessions === false ? agentName(agents, terminal.agentId) : "New session")
+  );
 }
 
 /** A moved editor tab is no longer the preview, as VS Code pins every editor it moves. */
