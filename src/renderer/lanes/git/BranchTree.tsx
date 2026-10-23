@@ -257,16 +257,15 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
     }
   };
 
-  const askDropStash = async (stash: StashEntry): Promise<void> => {
+  const askDiscardStash = async (stash: StashEntry): Promise<void> => {
     if (
       await confirmed({
-        title: "Drop stash",
-        message: named`Are you sure you want to drop ${stash.ref}?`,
-        detail: stash.message,
-        confirmLabel: "Drop stash",
+        title: "Discard stash?",
+        message: "Are you sure you want to discard these stashed changes?",
+        confirmLabel: "Discard stash",
       })
     ) {
-      branch.run(`Dropping ${stash.ref}...`, () => repository.stash(at, "drop", stash.sha));
+      branch.run(`Discarding ${stash.ref}...`, () => repository.stash(at, "drop", stash.sha));
     }
   };
 
@@ -353,7 +352,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       label: "Pop",
       run: () => branch.run(`Popping ${stash.ref}...`, () => repository.stash(at, "pop", stash.sha)),
     },
-    { label: "Drop...", run: () => void askDropStash(stash) },
+    { label: "Discard...", run: () => void askDiscardStash(stash) },
   ];
 
   /**
