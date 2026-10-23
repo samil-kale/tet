@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
+import { ARCHIVABLE_TAB_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
@@ -41,6 +41,8 @@ function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
 
 interface PaneProps {
   at: ProjectRef;
+  /** The repository's or worktree's folder, where the mount pickers open. */
+  folder: string;
   paneId: PaneId;
   /** The project's preset, for this pane's "move to" siblings. */
   preset: SplitPreset;
@@ -104,6 +106,7 @@ const EditorTabLabel = memo(function EditorTabLabel({ tabId, label }: { tabId: s
 
 export const Pane = memo(function Pane({
   at,
+  folder,
   paneId,
   preset,
   tabs,
@@ -204,6 +207,21 @@ export const Pane = memo(function Pane({
   /** The tab menu's Archive: keeps the session, to the ARCHIVE lane. */
   const archiveTab = useCallback((tabId: string) => void window.tet.tabs.archive(at, [tabId]), [at]);
 
+  /** The tab menu's Mount File and Mount Folder: the picked path is mounted like a dropped one
+   *  (handPaths says the mount or its refusal as a notice); nothing is typed into the tab. */
+  const mountPath = useCallback(
+    async (tabId: string, kind: "file" | "folder") => {
+      const title = `Mount a ${kind} into the sandbox`;
+      const picked = await (kind === "file"
+        ? window.tet.projects.pickFile(title, [folder])
+        : window.tet.projects.pickDirectory(title, [folder]));
+      if (picked !== null) {
+        await window.tet.drops.handPaths(at, tabId, [picked]);
+      }
+    },
+    [at, folder],
+  );
+
   /** The new tab opens beside this one; no question is up to show a refusal, so it is a notice. */
   const handOver = useCallback(
     async (tabId: string, agentId: AgentId) => {
@@ -288,9 +306,10 @@ export const Pane = memo(function Pane({
   const siblingPanes = PRESET_PANES[preset].filter((id) => id !== paneId);
 
   /**
-   * Restart, Clear for the shell, the close actions, rename, archive and hand-over for an agent
-   * with sessions, and the moves to sibling panes. A close with nothing to close is disabled. An
-   * editor tab gets "Keep Open" while a preview, the close actions and the moves.
+   * Restart, Clear for the shell, the close actions, rename and archive and hand-over for an agent
+   * with sessions, the mounts for a sandboxed tab, and the moves to sibling panes. A close with
+   * nothing to close is disabled. An editor tab gets "Keep Open" while a preview, the close actions
+   * and the moves.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
@@ -347,9 +366,17 @@ export const Pane = memo(function Pane({
             SEPARATOR,
             ...handOverAgents.map((agent): ContextMenuEntry => ({
               label: `Hand over to ${agent.displayName}`,
-              icon: <AgentIcon agentId={agent.id} className="tab-icon" />,
               run: withSession ? () => void handOver(withSession.tabId, agent.id) : undefined,
             })),
+          ]
+        : [];
+    // Two entries, as the SBX Settings has two buttons: one native picker cannot offer both.
+    const mountEntries: ContextMenuEntry[] =
+      terminal.sandboxed === true
+        ? [
+            SEPARATOR,
+            { label: "Mount File...", run: () => void mountPath(tabId, "file") },
+            { label: "Mount Folder...", run: () => void mountPath(tabId, "folder") },
           ]
         : [];
     return [
@@ -369,10 +396,11 @@ export const Pane = memo(function Pane({
               label: "Rename...",
               run: withSession ? () => void askRename(withSession) : undefined,
             },
-            // Unlike Close, keeps the session.
-            { label: "Archive", run: () => archiveTab(tabId) },
+            // Unlike Close, keeps the session; without one it would only close (closeKeepingSessions).
+            { label: "Archive", run: withSession ? () => archiveTab(tabId) : undefined },
           ] satisfies ContextMenuEntry[])
         : []),
+      ...mountEntries,
       ...handOverEntries,
       ...moveEntries,
     ];
@@ -454,6 +482,11 @@ export const Pane = memo(function Pane({
                 {...drag}
                 onDragStart={(event) => {
                   drag.onDragStart?.(event);
+                  // Only a session to keep: the drop would close any other tab (closeKeepingSessions).
+                  const kinded = kindOf(tab);
+                  if (kinded.kind === "terminal" && kinded.tab.sessionId !== undefined) {
+                    event.dataTransfer.setData(ARCHIVABLE_TAB_DRAG_TYPE, tab.tabId);
+                  }
                   onDragStart(paneId);
                 }}
                 onClick={() => onActivate(tab.tabId, paneId)}

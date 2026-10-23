@@ -1118,13 +1118,15 @@ textarea:focus,
 }
 
 /* The frames of a drag: the pane a dragged tab would land in, the pane it would add (at even
-   shares, `PANE_BOXES`) and a terminal a file is held over. Overlays all: a border would shrink the
-   box its children measure, an inset box-shadow's top edge paints behind the opaque tab strip, and
-   panes keep their sizes until the drop, or every pty under them refits mid-drag. Above the layers
-   beneath them, which xterm's decorations reach 7 of. The veil is VS Code's drop-target wash. */
+   shares, `PANE_BOXES`), a terminal a file is held over and the ARCHIVE lane a tab is held over.
+   Overlays all: a border would shrink the box its children measure, an inset box-shadow's top edge
+   paints behind the opaque tab strip, and panes keep their sizes until the drop, or every pty under
+   them refits mid-drag. Above the layers beneath them, which xterm's decorations reach 7 of. The
+   veil is VS Code's drop-target wash. */
 .pane.drag-over::after,
 .snap-preview,
-.terminal-host.drag-over::after {
+.terminal-host.drag-over::after,
+.lane-content.drag-over::after {
   position: absolute;
   border: 1px solid var(--tet-focusBorder);
   background: color-mix(in srgb, var(--tet-focusBorder) 15%, transparent);
@@ -1497,6 +1499,8 @@ textarea:focus,
 }
 
 .lane-content {
+  /* For `.drag-over`'s overlay. */
+  position: relative;
   min-width: var(--area-min-width);
   /* Replays on every view switch: leaving `display: none` restarts an animation. */
   animation: lane-fade-in 0.1s ease-out;
@@ -1511,6 +1515,11 @@ textarea:focus,
 /* The other view, kept mounted for its state; `display` is safe, nothing in it measures itself. */
 .lane-content.hidden {
   display: none;
+}
+
+.lane-content.drag-over::after {
+  content: "";
+  inset: 0;
 }
 
 /* git's letter for the change, in the theme's SCM colour, in a file icon's place and gap

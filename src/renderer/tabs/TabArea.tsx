@@ -274,6 +274,7 @@ export const TabArea = memo(function TabArea({
     <Pane
       key={paneId}
       at={resolved.ref}
+      folder={resolved.path}
       paneId={paneId}
       preset={layout.preset}
       tabs={paneTabs[paneId] ?? NO_TABS}

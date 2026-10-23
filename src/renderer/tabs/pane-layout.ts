@@ -30,6 +30,10 @@ function isSplitPreset(value: unknown): value is SplitPreset {
 /** A tab dragged onto another pane — its own MIME, so a dropped file is never mistaken for one. */
 export const TAB_DRAG_TYPE = "application/x-tet-tab";
 
+/** Carried too, with the tab's id, by the drag of a tab whose session can be kept archived, which the
+ *  ARCHIVE lane takes. A type of its own: `dragover` sees the types but cannot read a payload. */
+export const ARCHIVABLE_TAB_DRAG_TYPE = "application/x-tet-tab-archivable";
+
 /** Which panes exist for a preset, in reading order — also the "move to" menu's order. */
 export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
   single: ["a"],

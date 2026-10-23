@@ -13,6 +13,7 @@ import { reorder, useDragReorder } from "../../ui/drag-reorder";
 import type { ResolvedRef } from "../../resolved-ref";
 import { MAX_TITLE_LENGTH } from "../../tabs/Pane";
 import { useArchive } from "./use-archive";
+import { useArchiveDrop } from "./use-archive-drop";
 
 const DRAG_TYPE = "application/x-tet-archive";
 
@@ -39,7 +40,8 @@ function lastActive({ updatedAt, createdAt }: TabDescriptor) {
 /**
  * The tabs taken off the strip with their sessions kept (`tabs.archive`). A row reopens its tab at
  * the end of the strip, or deletes its session for good. A row drags to reorder the list, newest
- * archived on top otherwise; disabled while filtering. Keyed by repository or worktree by the app.
+ * archived on top otherwise; disabled while filtering. A tab dropped on the lane is archived. Keyed
+ * by repository or worktree by the app.
  */
 export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTab }: ArchiveListProps) {
   const agents = useAgents();
@@ -48,6 +50,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
   const query = filter.trim().toLowerCase();
   const shownTabs = tabs.map((tab, index) => ({ tab, index })).filter(({ tab }) => labelOf(tab).toLowerCase().includes(query));
   const menu = useContextMenu<TabDescriptor>();
+  const archiveDrop = useArchiveDrop(resolved.ref);
 
   const reorderTabs = async (next: TabDescriptor[]): Promise<void> => {
     const result = await window.tet.archive.reorder(
@@ -112,7 +115,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
   ];
 
   return (
-    <div className={`lane-content${shown ? "" : " hidden"}`}>
+    <div className={`lane-content${shown ? "" : " hidden"}${archiveDrop.over ? " drag-over" : ""}`} {...archiveDrop.dropProps}>
       <Section title="ARCHIVE" count={tabs.length}>
         <div className="filter-list">
           <FilterField placeholder="Filter archive..." value={filter} onChange={setFilter} />
