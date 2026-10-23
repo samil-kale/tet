@@ -384,7 +384,7 @@ describe("a desktop notification", () => {
     showDesktopNotification("a desktop notification listed", "body", target, "finished");
     showDesktopNotification("a desktop notification listed", "body", target, "finished");
     assert.deepEqual(recorded, [
-      { severity: "info", title: "a desktop notification listed", message: "body", toast: false, target, mark: "finished" },
+      { severity: "info", title: "a desktop notification listed", message: "body", toast: false, target, mark: "finished", agentId: undefined },
     ]);
   });
 });
