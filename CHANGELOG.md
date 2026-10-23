@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.4 (2026-10-23)
+
+- **Reopen by drag.** An archived tab drags onto a pane to reopen there.
+- **Fixes.** Discarding a stash asks to confirm first; a spinning mark no longer flickers the
+  scrollbar; the lane menus are trimmed.
+
 ## 0.22.3 (2026-10-23)
 
 - **Status bar.** It shows the projects and branches with their marks, and lists the active
