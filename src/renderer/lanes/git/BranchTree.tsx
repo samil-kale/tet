@@ -329,7 +329,6 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
           ]),
       SEPARATOR,
       { label: "Create tag...", run: () => void askCreateTag(branchTarget) },
-      { label: "Copy branch name", run: () => void navigator.clipboard.writeText(ref) },
     ];
   };
 
@@ -341,8 +340,6 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
       run: remote ? () => branch.run(`Pushing ${name}...`, (login) => repository.pushTag(at, name, login)) : undefined,
     },
     { label: "Delete...", run: () => void askDeleteTag(name) },
-    SEPARATOR,
-    { label: "Copy tag name", run: () => void navigator.clipboard.writeText(name) },
   ];
 
   /** Each acts on the stash's commit, not its ref, which a drop renumbers. */
@@ -392,8 +389,6 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
         own ? undefined : MADE_ELSEWHERE,
         own ? () => void askDeleteWorktree(own, name, mergedUpstream, branch) : undefined,
       ),
-      SEPARATOR,
-      { label: "Copy path", run: () => void navigator.clipboard.writeText(worktree.path) },
     ];
   };
 

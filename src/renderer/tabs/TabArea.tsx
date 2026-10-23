@@ -9,6 +9,7 @@ import type { FractionBox, PaneId, ProjectLayout, SnapTransition, SnapZone } fro
 import { usePersistedShare } from "../ui/layout-storage";
 import { useElementSize } from "../ui/use-element-size";
 import { MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "../ui/Sash";
+import { notify } from "../ui/Notices";
 import { Pane, type DragPosition } from "./Pane";
 import { keepMoved, paneTabKind, type PaneTab } from "./pane-tab";
 import { NO_TABS } from "./layout-state";
@@ -204,6 +205,25 @@ export const TabArea = memo(function TabArea({
     dragSource.current = null;
   }, [setDragTarget]);
 
+  // A cancelled drag fires neither `drop` nor `dragleave` on the previewed pane, only `dragend` at
+  // its source: a tab, or an archived tab's row beyond the panes.
+  useEffect(() => {
+    window.addEventListener("dragend", onDragEnd);
+    return () => window.removeEventListener("dragend", onDragEnd);
+  }, [onDragEnd]);
+
+  /** A tab shown in a pane, or in the pane a snap zone adds. */
+  const showIn = useCallback(
+    (paneId: PaneId, tabId: string, transition: SnapTransition | null) => {
+      if (transition) {
+        onSnapTab(resolved.refKey, tabId, transition);
+      } else {
+        onActivate(tabId, paneId);
+      }
+    },
+    [onSnapTab, resolved.refKey, onActivate],
+  );
+
   /**
    * The one way a tab is moved — dropped, or its menu's "Move to". `dragover` never sees the tab
    * id, so a drop joins it with the zone. On a strip the tab goes where it fell (`dropOnStrip`);
@@ -220,13 +240,30 @@ export const TabArea = memo(function TabArea({
       }
       if (strip) {
         onDropOnStrip(resolved.refKey, tabId, paneId, strip.before);
-      } else if (target?.transition) {
-        onSnapTab(resolved.refKey, tabId, target.transition);
       } else {
-        onActivate(tabId, paneId);
+        showIn(paneId, tabId, target?.transition ?? null);
       }
     },
-    [onDragEnd, onSnapTab, onDropOnStrip, resolved.refKey, onActivate],
+    [onDragEnd, onDropOnStrip, resolved.refKey, showIn],
+  );
+
+  /**
+   * An archived tab dropped on a pane: reopened, then shown as a dragged tab is, in the pane or the
+   * zone it fell on. The zone is read first — the drag's end clears it before the reopen answers.
+   */
+  const onDropArchived = useCallback(
+    (paneId: PaneId, tabId: string) => {
+      const transition = dragTargetRef.current?.transition ?? null;
+      onDragEnd();
+      void window.tet.archive.reopen(resolved.ref, tabId).then((result) => {
+        if (result.ok) {
+          showIn(paneId, tabId, transition);
+        } else {
+          notify("error", result.error ?? "Could not reopen the session");
+        }
+      });
+    },
+    [onDragEnd, resolved.ref, showIn],
   );
 
   // Each pane's tabs in the strip's order, identity kept when unchanged. Keyed on the fields
@@ -295,7 +332,7 @@ export const TabArea = memo(function TabArea({
       onDragStart={onDragStart}
       onDragOverChange={onDragOverChange}
       onMoveTab={onMoveTab}
-      onDragEnd={onDragEnd}
+      onDropArchived={onDropArchived}
     />
   );
 

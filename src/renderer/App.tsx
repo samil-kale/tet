@@ -327,7 +327,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The status bar's project list: a project opens as its repository. */
   const selectProject = useCallback((projectId: string) => activateRef(refKeyOf(projectRef(projectId))), [activateRef]);
 
-  /** A shell tab, for a project row's "New shell tab" entry. */
+  /** A shell tab in that repository or worktree. */
   const openShellTab = useCallback(
     (ref: ProjectRef) => {
       void window.tet.tabs.create(ref, "shell").then((tab) => showTab(refKeyOf(ref), tab.tabId));
@@ -475,7 +475,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                       marks={marks}
                       sandboxed={sandboxed}
                       onShowChanges={showChanges}
-                      onOpenShellTab={openShellTab}
                       onShowWorking={showWorking}
                       onShowFinished={showFinished}
                       onShowWaiting={showWaiting}

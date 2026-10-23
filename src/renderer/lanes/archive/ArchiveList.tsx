@@ -12,10 +12,9 @@ import { agentName, useAgents } from "../../ui/use-agents";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
 import type { ResolvedRef } from "../../resolved-ref";
 import { MAX_TITLE_LENGTH } from "../../tabs/Pane";
+import { ARCHIVED_TAB_DRAG_TYPE } from "../../tabs/pane-layout";
 import { useArchive } from "./use-archive";
 import { useArchiveDrop } from "./use-archive-drop";
-
-const DRAG_TYPE = "application/x-tet-archive";
 
 interface ArchiveListProps {
   /** The active repository or worktree. */
@@ -40,8 +39,8 @@ function lastActive({ updatedAt, createdAt }: TabDescriptor) {
 /**
  * The tabs taken off the strip with their sessions kept (`tabs.archive`). A row reopens its tab at
  * the end of the strip, or deletes its session for good. A row drags to reorder the list, newest
- * archived on top otherwise; disabled while filtering. A tab dropped on the lane is archived. Keyed
- * by repository or worktree by the app.
+ * archived on top otherwise; disabled while filtering. A row dragged onto a pane reopens its tab
+ * there, and a tab dropped on the lane is archived. Keyed by repository or worktree by the app.
  */
 export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTab }: ArchiveListProps) {
   const agents = useAgents();
@@ -62,10 +61,11 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
     }
   };
 
-  // Disabled while filtering: a drag's index is the full list's, and a filtered-out row no longer sits there.
+  // Dropping on a row is disabled while filtering: a drag's index is the full list's, and a
+  // filtered-out row no longer sits there. A row still drags out, to a pane (`TabArea`).
   const reorderable = query === "";
-  const { rowProps, listProps, rowClasses } = useDragReorder({
-    dragType: DRAG_TYPE,
+  const { rowProps, handleProps, listProps, rowClasses } = useDragReorder({
+    dragType: ARCHIVED_TAB_DRAG_TYPE,
     count: tabs.length,
     // The id, not the position: it survives a list change mid-drag.
     payloadOf: (index) => tabs[index].tabId,
@@ -123,11 +123,11 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
             {shownTabs.map(({ tab, index }) => (
               <div
                 key={tab.tabId}
-                className={["list-row", "archive-row", ...(reorderable ? rowClasses(index) : [])].join(" ")}
+                className={["list-row", "archive-row", ...rowClasses(index)].join(" ")}
                 title={`${agentName(agents, tab.agentId)}${tab.title ? `: ${tab.title}` : ""}`}
                 onDoubleClick={() => void reopen(tab)}
                 onContextMenu={(event) => menu.open(event, tab)}
-                {...(reorderable ? rowProps(index) : {})}
+                {...(reorderable ? rowProps(index) : handleProps(index))}
               >
                 <AgentIcon agentId={tab.agentId} className="tree-icon" />
                 <span className="list-main">

@@ -1136,7 +1136,8 @@ textarea:focus,
 
 .pane.drag-over::after {
   content: "";
-  inset: 0;
+  /* Right is 1px short: the window's own edge, where no line is drawn (as the terminal's below). */
+  inset: 0 1px 0 0;
 }
 
 .tab-strip {

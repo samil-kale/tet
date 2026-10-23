@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
 import { WORKTREES_NEED_GIT } from "../../../shared/types/git";
-import type { Project, ProjectRef, ProjectWorktree } from "../../../shared/types/project";
+import type { Project, ProjectWorktree } from "../../../shared/types/project";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { GitRun } from "../../git/run-action";
 import { askDeleteWorktree, askNewWorktree, askRenameWorktree, MADE_ELSEWHERE, worktreeEntry } from "../../git/worktree-questions";
@@ -68,8 +68,6 @@ interface ProjectListProps {
   marks: Record<string, RefMarks>;
   /** Which projects run their agents in sbx, by project id: a worktree runs as its project does. */
   sandboxed: Record<string, boolean>;
-  /** Opens a shell tab in that repository or worktree ("open in terminal"). */
-  onOpenShellTab: (ref: ProjectRef) => void;
   /** Opens the next working session, one per press. */
   onShowWorking: (refKey: string) => void;
   /** Opens the oldest finished session; pressing again moves to the next. */
@@ -88,9 +86,6 @@ interface ProjectListProps {
   /** git creates worktrees (Requirements.worktrees); else "Add worktree" says why not. */
   worktreesSupported: boolean;
 }
-
-/** The row a menu was opened on: the repository or a worktree TET made, or one made elsewhere. */
-type RowTarget = { kind: "ref"; resolved: ResolvedRef } | { kind: "madeElsewhere"; worktree: ProjectWorktree };
 
 /** A remote's web page, or null. Takes both git spellings: "git@host:owner/repo.git" and a url
  *  with a scheme. */
@@ -129,7 +124,6 @@ export const ProjectList = memo(function ProjectList({
   heads,
   marks,
   sandboxed,
-  onOpenShellTab,
   onShowWorking,
   onShowFinished,
   onShowWaiting,
@@ -139,7 +133,7 @@ export const ProjectList = memo(function ProjectList({
   busy,
   worktreesSupported,
 }: ProjectListProps) {
-  const menu = useContextMenu<RowTarget>();
+  const menu = useContextMenu<ResolvedRef>();
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
   const matches = (name: string): boolean => name.toLowerCase().includes(query);
@@ -256,7 +250,6 @@ export const ProjectList = memo(function ProjectList({
             label: "Change remote URL...",
             run: remoteName ? () => void askRemoteUrl(resolved, remoteName, remoteUrl) : undefined,
           },
-          SEPARATOR,
           worktreeEntry(
             "Add worktree",
             worktreesSupported ? undefined : WORKTREES_NEED_GIT,
@@ -264,11 +257,9 @@ export const ProjectList = memo(function ProjectList({
           ),
         ];
     // A worktree takes its project's (tet-json.ts's configRoot).
-    const sbx: ContextMenuEntry[] = worktree ? [] : [{ label: "SBX Settings", run: () => onSbxSettings(projectId) }, SEPARATOR];
+    const sbx: ContextMenuEntry[] = worktree ? [] : [{ label: "SBX Settings...", run: () => onSbxSettings(projectId) }, SEPARATOR];
     return [
-      { label: "New shell tab", run: () => onOpenShellTab(resolved.ref) },
       { label: PLATFORM.revealLabel, run: () => void window.tet.shell.openProject(resolved.ref) },
-      { label: worktree ? "Copy path" : "Copy repository path", run: () => void navigator.clipboard.writeText(resolved.path) },
       SEPARATOR,
       ...repository,
       ...own,
@@ -277,11 +268,6 @@ export const ProjectList = memo(function ProjectList({
       { label: worktree ? "Delete worktree..." : "Remove project", run: () => close(resolved) },
     ];
   };
-
-  const menuEntries = (target: RowTarget): ContextMenuEntry[] =>
-    target.kind === "ref"
-      ? refEntries(target.resolved)
-      : [{ label: "Copy path", run: () => void navigator.clipboard.writeText(target.worktree.path) }];
 
   const refRow = (resolved: ResolvedRef): ReactNode => {
     const { refKey, worktree } = resolved;
@@ -304,7 +290,7 @@ export const ProjectList = memo(function ProjectList({
             worktree ? { kind: "worktree", name: worktreeName(worktree) } : { kind: "tet project", name: resolved.name },
           )
         }
-        onContextMenu={(event) => menu.open(event, { kind: "ref", resolved })}
+        onContextMenu={(event) => menu.open(event, resolved)}
       >
         <span className="list-main">
           <span className="list-label">{worktree ? worktreeName(worktree) : resolved.name}</span>
@@ -344,7 +330,6 @@ export const ProjectList = memo(function ProjectList({
       title={`${worktree.path}\nA worktree ${MADE_ELSEWHERE}`}
       draggable
       onDragStart={(event) => setDragName(event.dataTransfer, { kind: "worktree", name: worktreeName(worktree) })}
-      onContextMenu={(event) => menu.open(event, { kind: "madeElsewhere", worktree })}
     >
       <span className="list-main">
         <span className="list-label">{worktreeName(worktree)}</span>
@@ -385,7 +370,7 @@ export const ProjectList = memo(function ProjectList({
         </div>
       </div>
 
-      {menu.render(menuEntries)}
+      {menu.render(refEntries)}
     </Section>
   );
 });

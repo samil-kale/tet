@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { ARCHIVABLE_TAB_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
+import { ARCHIVABLE_TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
@@ -76,7 +76,8 @@ interface PaneProps {
   /** A tab moved to a pane — dropped, or by "Move to": on the strip with the tab it goes before
    *  (`before`, undefined for the end), anywhere else without (`TabArea` places it). */
   onMoveTab: (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => void;
-  onDragEnd: () => void;
+  /** An archived tab's row dropped on a pane: reopened there (`TabArea`). */
+  onDropArchived: (paneId: PaneId, tabId: string) => void;
 }
 
 /** A dragged tab's pointer over a pane, and whether it is over the tab strip. */
@@ -126,7 +127,7 @@ export const Pane = memo(function Pane({
   onDragStart,
   onDragOverChange,
   onMoveTab,
-  onDragEnd,
+  onDropArchived,
 }: PaneProps) {
   const plusMenu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom + 6 }));
   const tabMenu = useContextMenu<string>();
@@ -416,7 +417,7 @@ export const Pane = memo(function Pane({
       // Capture: xterm's mousedown calls stopPropagation() once a TUI turns on mouse tracking.
       onMouseDownCapture={focusHere}
       onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {
+        if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE) && !event.dataTransfer.types.includes(ARCHIVED_TAB_DRAG_TYPE)) {
           return;
         }
         event.preventDefault();
@@ -434,6 +435,11 @@ export const Pane = memo(function Pane({
         }
       }}
       onDrop={(event) => {
+        if (event.dataTransfer.types.includes(ARCHIVED_TAB_DRAG_TYPE)) {
+          event.preventDefault();
+          onDropArchived(paneId, event.dataTransfer.getData(ARCHIVED_TAB_DRAG_TYPE));
+          return;
+        }
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {
           // A terminal took it and has the focus now (terminal-views.ts); its pane follows, as on a click.
           if ((event.target as Element).closest(".terminal-host") !== null) {
@@ -453,8 +459,6 @@ export const Pane = memo(function Pane({
           onDragOverChange(paneId, null);
         }
       }}
-      // A cancelled drag fires neither `drop` nor `dragleave` on the previewed pane.
-      onDragEnd={onDragEnd}
     >
       {/* The strip's free space is the end of its tabs. */}
       <div className="tab-strip" {...tabDrag.listProps}>
