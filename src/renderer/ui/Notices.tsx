@@ -369,10 +369,15 @@ export function clearNotices(): void {
   closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
+/** A notice's box, in a toast and in the notification center alike: its severity and, for a turn's notice (`agentId`), `session`. */
+export function noticeClass(notice: ShownNotice): string {
+  return `notice ${notice.severity}${notice.agentId ? " session" : ""}`;
+}
+
 /**
  * A notice's icon, title, message and progress bar, in a toast and in the notification center alike.
- * A turn's notice (`agentId`) is one line there: its mark, the agent's icon and the message, the
- * mark saying what the title would.
+ * A turn's notice (`agentId`) is one line there: its mark, the message and, at the right edge, the
+ * agent's icon, the mark saying what the title would.
  */
 export function NoticeBody({ notice }: { notice: ShownNotice }) {
   return (
@@ -382,11 +387,11 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
       ) : (
         <SeverityIcon className="notice-icon" severity={notice.severity} />
       )}
-      {notice.agentId && <AgentIcon agentId={notice.agentId} className="notice-icon notice-agent-icon" />}
       <span className="notice-text">
         {notice.title && !notice.agentId && <span className="notice-title">{notice.title}</span>}
         <span className="notice-message">{notice.message}</span>
       </span>
+      {notice.agentId && <AgentIcon agentId={notice.agentId} className="tab-icon" />}
       {notice.progress && (
         <span className="notice-progress">
           {notice.progress.fraction === null ? (
@@ -416,11 +421,7 @@ export function Notices() {
     <div className="notices">
       {notices.map((notice) => (
         <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
-          <div
-            className={`notice ${notice.severity}`}
-            onMouseEnter={() => (hovered = notice.id)}
-            onMouseLeave={() => (hovered = undefined)}
-          >
+          <div className={noticeClass(notice)} onMouseEnter={() => (hovered = notice.id)} onMouseLeave={() => (hovered = undefined)}>
             <NoticeBody notice={notice} />
             <button
               type="button"

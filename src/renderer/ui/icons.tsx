@@ -29,7 +29,6 @@ import {
   List,
   ListTree,
   ListX,
-  LoaderCircle,
   LogIn,
   MessageCircleCheck,
   MessageCircleQuestionMark,
@@ -120,8 +119,8 @@ export function FillSvg({
 }
 
 /**
- * `extent` and the centre `cx`/`cy` are the drawing's, on the 16 grid. Also the stroked agent
- * icons' box (agent-icons.tsx).
+ * `extent` and the centre `cx`/`cy` are the drawing's, on its `grid` (the 16 grid unless it says
+ * otherwise). Also the stroked agent icons' box (agent-icons.tsx).
  */
 export function Svg({
   children,
@@ -129,16 +128,18 @@ export function Svg({
   extent,
   cx = 8,
   cy = 8,
+  grid = GRID,
   stroke = 1.5,
 }: IconProps & {
   children: React.ReactNode;
   extent: number;
   cx?: number;
   cy?: number;
-  /** The drawing's own stroke on the 16 grid, scaled by the crop like everything else. */
+  grid?: number;
+  /** The drawing's own stroke on its grid, scaled by the crop like everything else. */
   stroke?: number;
 }) {
-  const { viewBox, strokeWidth } = geometry(extent, cx, cy, GRID, stroke);
+  const { viewBox, strokeWidth } = geometry(extent, cx, cy, grid, stroke);
   return (
     <svg
       className={className}
@@ -330,10 +331,18 @@ export function ChevronIcon({ expanded, ...props }: IconProps & { expanded: bool
   return <Lucide {...props} icon={expanded ? ChevronDown : ChevronRight} />;
 }
 
-/** Lucide's `loader-circle`, spun (`spinning`) about its centre as a tab's working mark
- *  (`TabMark`). */
+/** Lucide's `loader-circle` as a tab's working mark (`TabMark`), turning about its centre inside the
+ *  svg: a CSS rotation of the box wobbles wherever the box lies on a fractional pixel. */
 export function SpinnerIcon(props: IconProps) {
-  return <Lucide {...props} icon={LoaderCircle} />;
+  // The whole 24 grid at Lucide's stroke of 2, as `Lucide` draws it by default.
+  return (
+    <Svg {...props} extent={19.2} cx={12} cy={12} grid={24} stroke={2}>
+      <g>
+        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1.2s" repeatCount="indefinite" />
+        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+      </g>
+    </Svg>
+  );
 }
 
 /** Lucide's `wand` — a model's suggestion. */

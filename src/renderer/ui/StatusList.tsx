@@ -6,8 +6,6 @@ export interface StatusListItem {
   id: string;
   label: string;
   icon: ReactNode;
-  /** After the label, at the right edge: a session's mark, a project's marks. */
-  trailing?: ReactNode;
 }
 
 interface StatusListProps {
@@ -65,7 +63,6 @@ export const StatusList = memo(function StatusList({ title, items, activeId, tri
           >
             {item.icon}
             <span className="status-list-label">{item.label}</span>
-            {item.trailing && <span className="status-list-marks">{item.trailing}</span>}
           </div>
         ))}
       </div>

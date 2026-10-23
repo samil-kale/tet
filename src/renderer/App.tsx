@@ -27,11 +27,10 @@ import { LANES } from "../shared/types/settings";
 import { MIN_CONTENT_WIDTH, MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "./ui/Sash";
 import { TabArea } from "./tabs/TabArea";
 import { disposeRefTerminals } from "./tabs/terminal-views";
-import { NO_IDS, tabMarkOf } from "./tabs/tab-marks";
+import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { useWorkingNotices } from "./tabs/use-working-notices";
 import { BranchIcon, FilesIcon, PlusIcon, ProjectsIcon } from "./ui/icons";
-import { TabMark } from "./ui/TabMark";
 import { AgentIcon } from "./ui/agent-icons";
 import { NavigationBar } from "./lanes/NavigationBar";
 import { StatusBar } from "./ui/StatusBar";
@@ -276,7 +275,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const agents = useAgents();
   const activeLayout = activeRefKey ? (layouts[activeRefKey] ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT;
   const activeStripTabs = activeRefKey ? stripTabs[activeRefKey] : undefined;
-  const activeMarks = activeRefKey ? marks[activeRefKey] : undefined;
   const statusSessions = useMemo(
     () =>
       inOrder(activeLayout.order, activeStripTabs ?? NO_TABS).map((tab): StatusListItem => {
@@ -285,15 +283,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           return { id: tab.tabId, label: editorLabel(kinded.tab), icon: <FilesIcon className="tab-icon" /> };
         }
         const terminal = kinded.tab;
-        const mark = tabMarkOf(terminal, activeMarks?.waiting ?? NO_IDS, activeMarks?.finished ?? NO_IDS);
         return {
           id: terminal.tabId,
           label: terminalLabel(terminal, agents),
           icon: <AgentIcon agentId={terminal.agentId} className="tab-icon" />,
-          trailing: mark && <TabMark kind={mark} />,
         };
       }),
-    [activeLayout.order, activeStripTabs, activeMarks, agents],
+    [activeLayout.order, activeStripTabs, agents],
   );
   const activeSessionId = activeLayout.activeTab[activeLayout.focusedPane] ?? undefined;
   const selectSession = useCallback(
@@ -305,26 +301,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeRefKeyRef, activateTab],
   );
 
-  /** The status bar's project list, each with the session marks its row shows in the projects lane,
-   *  over its repository and worktrees. */
+  /** The status bar's project list. */
   const projectItems = useMemo(
-    () =>
-      projects.map((entry): StatusListItem => {
-        const own = projectRefsOf(entry).map((ref) => marks[refKeyOf(ref)]);
-        return {
-          id: entry.id,
-          label: entry.name,
-          icon: <ProjectsIcon className="tab-icon" />,
-          trailing: (
-            <>
-              {own.some((mark) => mark?.working) && <TabMark kind="working" />}
-              {own.some((mark) => (mark?.waiting.length ?? 0) > 0) && <TabMark kind="waiting" />}
-              {own.some((mark) => (mark?.finished.length ?? 0) > 0) && <TabMark kind="finished" />}
-            </>
-          ),
-        };
-      }),
-    [projects, marks],
+    () => projects.map((entry): StatusListItem => ({ id: entry.id, label: entry.name, icon: <ProjectsIcon className="tab-icon" /> })),
+    [projects],
   );
   /** The status bar's project list: a project opens as its repository. */
   const selectProject = useCallback((projectId: string) => activateRef(refKeyOf(projectRef(projectId))), [activateRef]);

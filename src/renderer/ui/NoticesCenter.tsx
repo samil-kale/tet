@@ -8,6 +8,7 @@ import {
   enteredOpenCenter,
   leaveNotice,
   NoticeBody,
+  noticeClass,
   removable,
   useCenterClosing,
   useCenterOpen,
@@ -73,7 +74,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
               className={`notice-item${notice.leaving === "item" ? " leaving" : ""}${enteredOpenCenter(notice) ? " entering" : ""}`}
             >
               <div
-                className={`notice ${notice.severity}${target ? " clickable" : ""}`}
+                className={`${noticeClass(notice)}${target ? " clickable" : ""}`}
                 onClick={
                   target
                     ? () => {

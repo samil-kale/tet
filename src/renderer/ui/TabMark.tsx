@@ -6,15 +6,15 @@ export type TabMarkKind = NoticeMark | "error";
 
 /** A session's mark; which one wins where several hold is the site's to rank. */
 export function TabMark({ kind, className }: { kind: TabMarkKind; className?: string }) {
-  const classes = (extra?: string) => [className, "tab-mark", `tab-mark-${kind}`, extra].filter(Boolean).join(" ");
+  const classes = [className, "tab-mark", `tab-mark-${kind}`].filter(Boolean).join(" ");
   switch (kind) {
     case "error":
-      return <TabErrorIcon className={classes()} />;
+      return <TabErrorIcon className={classes} />;
     case "waiting":
-      return <QuestionIcon className={classes()} />;
+      return <QuestionIcon className={classes} />;
     case "working":
-      return <SpinnerIcon className={classes("spinning")} />;
+      return <SpinnerIcon className={classes} />;
     case "finished":
-      return <CommentIcon className={classes()} />;
+      return <CommentIcon className={classes} />;
   }
 }

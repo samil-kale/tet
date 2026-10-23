@@ -429,19 +429,6 @@ textarea:focus,
   opacity: 1;
 }
 
-/* Measure a spinning element by its layout size, not `getBoundingClientRect`: the rotation grows
-   its bounding box. */
-.spinning {
-  transform-origin: 50% 50%;
-  animation: spin 1.2s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* Body ----------------------------------------------------------------------------------- */
 
 /* Carries the line under the title bar: on `.titlebar` (border-box) it would sit inside the 35px
@@ -1257,7 +1244,6 @@ textarea:focus,
 
 /* On the active tab or row's selection background, else in the mark's own colour. */
 .tab.active .tab-mark:not(.tab-mark-error),
-.status-list-item.active .tab-mark:not(.tab-mark-error),
 .project-row.active .tab-mark:not(.tab-mark-error),
 .worktree-row.active .tab-mark:not(.tab-mark-error) {
   color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-foreground, var(--tet-focusBorder)));
@@ -2790,7 +2776,7 @@ textarea:focus,
 /* Only the icon carries the severity's colour: a whole notice in red is harder to read. */
 .notice-icon {
   flex: none;
-  /* An integer box of its own, as `.tab-icon`: a spinning mark turns about its middle. */
+  /* An integer box of its own, as `.tab-icon`. */
   width: var(--icon-size);
   height: var(--icon-size);
   /* Optical: half the gap between the first line's height and the icon's own. */
@@ -2810,12 +2796,6 @@ textarea:focus,
   color: var(--tet-noticeInfoIcon-foreground);
 }
 
-/* The agent's icon of a turn's notice (always info) takes the text's colour: the selector outweighs
-   the info rule above, which colours every `.notice-icon` but a mark. */
-.notice.info .notice-icon.notice-agent-icon:not(.tab-mark) {
-  color: var(--tet-notice-foreground);
-}
-
 /* Long paths break anywhere; a multi-line git message keeps its lines. */
 .notice-title,
 .notice-message {
@@ -2827,6 +2807,34 @@ textarea:focus,
 
 .notice-title {
   display: block;
+}
+
+/* A turn's notice stays one line, cut short with an ellipsis; its text takes the room, so its agent's
+   icon sits at the right edge, beside the X where there is one. */
+.notice.session {
+  align-items: center;
+}
+
+.notice.session .notice-icon {
+  margin-top: 0;
+}
+
+.notice.session .notice-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice.session .notice-message {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* In the notification center it is a `.status-list-item` in padding: the two lists sit side by side
+   and read alike. */
+.notices-center .notice.session {
+  padding: 4px 10px;
 }
 
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
@@ -2916,24 +2924,6 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* The marks at the right edge, each in the box and gap an action button has in the projects lane
-   (`.icon-button svg`'s padding insets the drawing to --icon-size). Clipped: a spinning mark's
-   rotated box reaches past the row's padding, and on the last row that would flicker the list's
-   scrollbar in and out. */
-.status-list-marks {
-  display: flex;
-  align-items: center;
-  gap: var(--action-gap);
-  margin-left: auto;
-  overflow: clip;
-}
-
-.status-list-marks .tab-mark {
-  width: var(--action-size);
-  height: var(--action-size);
-  padding: calc((var(--action-size) - var(--icon-size)) / 2);
 }
 
 .notices-center-empty {
