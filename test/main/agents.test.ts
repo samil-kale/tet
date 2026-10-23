@@ -366,10 +366,7 @@ describe("pi's model listing", () => {
       "anthropic   claude-haiku                     200K     64K      yes       yes   ",
       "",
     ].join("\n");
-    assert.deepEqual(piModelsFrom(output), [
-      { id: "openrouter/~anthropic/claude-sonnet-latest" },
-      { id: "anthropic/claude-haiku" },
-    ]);
+    assert.deepEqual(piModelsFrom(output), [{ id: "openrouter/~anthropic/claude-sonnet-latest" }, { id: "anthropic/claude-haiku" }]);
   });
 
   it("lists nothing without its table", () => {

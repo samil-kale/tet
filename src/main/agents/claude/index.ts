@@ -20,12 +20,7 @@ const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prom
  */
 const FULLSCREEN_ENV = { CLAUDE_CODE_NO_FLICKER: "1" };
 
-const MODEL_ALIASES: AskModel[] = [
-  { id: "fable" },
-  { id: "opus" },
-  { id: "sonnet" },
-  { id: "haiku" },
-];
+const MODEL_ALIASES: AskModel[] = [{ id: "fable" }, { id: "opus" }, { id: "sonnet" }, { id: "haiku" }];
 
 export const claudeAgent: SandboxedAgent = {
   id: "claude",
