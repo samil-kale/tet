@@ -71,13 +71,9 @@ async function settledLog(file: string): Promise<string[]> {
 }
 
 describe("codex app-server's models", () => {
-  it("lists the models its picker offers, page by page, labelled by display name where it has one", async () => {
+  it("lists the models its picker offers, page by page, by their ids", async () => {
     const { result, log } = await withCodex({}, (executable) => listModels(executable, process.cwd()));
-    assert.deepEqual(result, [
-      { id: "gpt-a", label: "GPT A" },
-      { id: "gpt-b", label: "gpt-b" },
-      { id: "gpt-c", label: "C" },
-    ]);
+    assert.deepEqual(result, [{ id: "gpt-a" }, { id: "gpt-b" }, { id: "gpt-c" }]);
     const methods = log.flatMap((line) => (JSON.parse(line) as { method?: string }).method ?? []);
     assert.deepEqual(methods, ["initialize", "model/list", "initialize", "model/list"], "a server of its own per page, initialized first");
     assert.deepEqual(

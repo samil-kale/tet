@@ -367,8 +367,8 @@ describe("pi's model listing", () => {
       "",
     ].join("\n");
     assert.deepEqual(piModelsFrom(output), [
-      { id: "openrouter/~anthropic/claude-sonnet-latest", label: "openrouter/~anthropic/claude-sonnet-latest" },
-      { id: "anthropic/claude-haiku", label: "anthropic/claude-haiku" },
+      { id: "openrouter/~anthropic/claude-sonnet-latest" },
+      { id: "anthropic/claude-haiku" },
     ]);
   });
 
@@ -407,7 +407,7 @@ describe("the models the commit prompt offers", () => {
   });
 
   it("are the agent's own where it is installed", async () => {
-    const models = [{ id: "m1", label: "M1" }];
+    const models = [{ id: "m1" }];
     assert.deepEqual(
       await listAskModels(
         asking(process.execPath, async () => models),
@@ -420,7 +420,7 @@ describe("the models the commit prompt offers", () => {
   it("are none, with why, from an agent not installed", async () => {
     const missing = path.join(tempDir("tet-ask-models-"), "no-such-agent");
     const result = await listAskModels(
-      asking(missing, async () => [{ id: "m1", label: "M1" }]),
+      asking(missing, async () => [{ id: "m1" }]),
       os.tmpdir(),
     );
     assert.deepEqual(result.models, []);

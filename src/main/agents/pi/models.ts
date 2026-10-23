@@ -19,8 +19,7 @@ export function piModelsFrom(output: string): AskModel[] {
     if (!provider || !model) {
       return [];
     }
-    const id = `${provider}/${model}`;
-    return [{ id, label: id }];
+    return [{ id: `${provider}/${model}` }];
   });
 }
 

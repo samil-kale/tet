@@ -9,7 +9,7 @@ const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };
 /**
  * The models `agentId` can be asked with, as a `Dropdown`'s options, and why they could not be
  * listed. The listing runs on the view's bar (`hold`, as `fetchHeld`); until it lands a remembered
- * `model` stands by its id. `offered` is false once it has landed without `model`, for the caller
+ * `model` stands in for it.`offered` is false once it has landed without `model`, for the caller
  * to replace a model the agent no longer offers.
  */
 export function useAskModels(
@@ -33,7 +33,7 @@ export function useAskModels(
   const options = [
     DEFAULT_MODEL,
     ...(result
-      ? result.models.map((entry) => ({ value: entry.id, label: entry.label }))
+      ? result.models.map((entry) => ({ value: entry.id, label: entry.id }))
       : model !== ""
         ? [{ value: model, label: model }]
         : []),

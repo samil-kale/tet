@@ -116,7 +116,7 @@ async function callAppServerNow(executable: string, cwd: string, request: RpcReq
 
 /** `model/list`'s rows, as far as TET reads them: `model` is what `--model` takes. */
 interface ModelPage {
-  data?: { model?: unknown; displayName?: unknown }[];
+  data?: { model?: unknown }[];
   nextCursor?: unknown;
 }
 
@@ -128,7 +128,7 @@ export async function listModels(executable: string, cwd: string): Promise<AskMo
     const page = (await callAppServer(executable, cwd, { method: "model/list", params: { cursor } })) as ModelPage;
     for (const row of page.data ?? []) {
       if (typeof row.model === "string") {
-        models.push({ id: row.model, label: typeof row.displayName === "string" ? row.displayName : row.model });
+        models.push({ id: row.model });
       }
     }
     cursor = typeof page.nextCursor === "string" ? page.nextCursor : undefined;

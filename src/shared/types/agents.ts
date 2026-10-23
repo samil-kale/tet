@@ -63,10 +63,9 @@ export interface SuggestionResult {
   error?: string;
 }
 
-/** A model an agent can be asked with: `id` is what its CLI takes, `label` what the user reads. */
+/** A model an agent can be asked with: `id` is what its CLI takes, and what the user reads. */
 export interface AskModel {
   id: string;
-  label: string;
 }
 
 /** The models an agent lists (`AgentAsk.models`), or why it could not. */
