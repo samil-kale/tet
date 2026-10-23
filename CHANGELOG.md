@@ -9,8 +9,10 @@ changed for the user, not the commit list.
   repository's sessions to switch between them.
 - **Window state.** The window's size and position are kept between starts, and a crashed child
   process is logged.
-- **Fixes.** Remote listing errors show beside the dialog buttons, and the SBX file and folder
-  pickers open in the project folder.
+- **Archive by drag.** A tab dragged onto the ARCHIVE lane is archived, and the menu of a
+  sandboxed tab mounts a file or folder.
+- **Fixes.** Remote listing errors show beside the dialog buttons, the SBX file and folder
+  pickers open in the project folder, and the model pickers list models by their ids.
 
 ## 0.22.2 (2026-10-22)
 
