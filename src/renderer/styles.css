@@ -2909,12 +2909,15 @@ textarea:focus,
 }
 
 /* The marks at the right edge, each in the box and gap an action button has in the projects lane
-   (`.icon-button svg`'s padding insets the drawing to --icon-size). */
+   (`.icon-button svg`'s padding insets the drawing to --icon-size). Clipped: a spinning mark's
+   rotated box reaches past the row's padding, and on the last row that would flicker the list's
+   scrollbar in and out. */
 .status-list-marks {
   display: flex;
   align-items: center;
   gap: var(--action-gap);
   margin-left: auto;
+  overflow: clip;
 }
 
 .status-list-marks .tab-mark {
