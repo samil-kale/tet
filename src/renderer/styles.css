@@ -2790,6 +2790,9 @@ textarea:focus,
 /* Only the icon carries the severity's colour: a whole notice in red is harder to read. */
 .notice-icon {
   flex: none;
+  /* An integer box of its own, as `.tab-icon`: a spinning mark turns about its middle. */
+  width: var(--icon-size);
+  height: var(--icon-size);
   /* Optical: half the gap between the first line's height and the icon's own. */
   margin-top: calc((22px - var(--icon-size)) / 2);
 }
@@ -2805,6 +2808,12 @@ textarea:focus,
 
 .notice.info .notice-icon:not(.tab-mark) {
   color: var(--tet-noticeInfoIcon-foreground);
+}
+
+/* The agent's icon of a turn's notice (always info) takes the text's colour: the selector outweighs
+   the info rule above, which colours every `.notice-icon` but a mark. */
+.notice.info .notice-icon.notice-agent-icon:not(.tab-mark) {
+  color: var(--tet-notice-foreground);
 }
 
 /* Long paths break anywhere; a multi-line git message keeps its lines. */

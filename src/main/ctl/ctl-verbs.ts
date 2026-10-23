@@ -535,8 +535,8 @@ export function verbs(deps: ControlDeps): Handlers {
       const where = refFrom({}, caller).ref;
       const outcome = terminals(where).hookEvent(caller.tabId, event, payload, at, caller.side);
       if (outcome.notification) {
-        const { title, message, mark } = outcome.notification;
-        deps.showDesktopNotification(title, message, { ref: where, tabId: caller.tabId }, mark);
+        const { title, message, mark, agentId } = outcome.notification;
+        deps.showDesktopNotification(title, message, { ref: where, tabId: caller.tabId }, mark, agentId);
       }
       return { result: { stdout: outcome.stdout } };
     },

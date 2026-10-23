@@ -1,5 +1,6 @@
 import { getAgent } from "../agents";
 import type { HookEvent } from "../../shared/ctl";
+import type { AgentId } from "../../shared/types/agents";
 import { noticePlace } from "../../shared/types/app";
 import type { NoticeMark } from "../../shared/types/app";
 import type { NotificationSettings } from "../../shared/types/settings";
@@ -11,6 +12,7 @@ export interface HookNotification {
   title: string;
   message: string;
   mark: NoticeMark;
+  agentId: AgentId;
 }
 
 export type NotificationKind = "finished" | "permission" | "question" | "idle";
@@ -132,12 +134,12 @@ export function notificationFor(
   const where = noticePlace(placeName, tab.title);
   switch (kind) {
     case "finished":
-      return { title: `Finished [${name}]`, message: where, mark: "finished" };
+      return { title: `Finished [${name}]`, message: where, mark: "finished", agentId: tab.agentId };
     case "permission":
-      return { title: `Permission [${name}]`, message: where, mark: "waiting" };
+      return { title: `Permission [${name}]`, message: where, mark: "waiting", agentId: tab.agentId };
     case "question":
-      return { title: `Question [${name}]`, message: where, mark: "waiting" };
+      return { title: `Question [${name}]`, message: where, mark: "waiting", agentId: tab.agentId };
     case "idle":
-      return { title: `Idle [${name}]`, message: where, mark: "finished" };
+      return { title: `Idle [${name}]`, message: where, mark: "finished", agentId: tab.agentId };
   }
 }

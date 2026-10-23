@@ -1,8 +1,10 @@
 import { createPortal } from "react-dom";
+import type { AgentId } from "../../shared/types/agents";
 import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { refKeyOf } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
+import { AgentIcon } from "./agent-icons";
 import { CloseIcon, SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
 import { ProgressBar } from "./ProgressBar";
@@ -132,7 +134,11 @@ function runAfterClose(): void {
   }
 }
 
-export function notify(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark"> = {}): void {
+export function notify(
+  severity: NoticeSeverity,
+  message: string,
+  options: Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId"> = {},
+): void {
   const wait = options.toast === false ? 0 : takeSlot("enter");
   if (wait > 0) {
     setTimeout(() => add(severity, message, options), wait);
@@ -141,8 +147,8 @@ export function notify(severity: NoticeSeverity, message: string, options: Pick<
   }
 }
 
-function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark">): void {
-  const { title, toast, target, mark } = options;
+function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId">): void {
+  const { title, toast, target, mark, agentId } = options;
   const same = shown
     .get()
     .find(
@@ -157,7 +163,7 @@ function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "t
     return;
   }
   const id = ++nextId;
-  const entry: ShownNotice = { id, severity, title, message, toast: toast !== false, read: centerOpen.get(), target, mark };
+  const entry: ShownNotice = { id, severity, title, message, toast: toast !== false, read: centerOpen.get(), target, mark, agentId };
   shown.set([...shown.get().filter((notice) => notice !== same), entry].slice(-CENTER_MAX));
   if (entry.toast) {
     scheduleDismiss(id, severity);
@@ -303,7 +309,7 @@ export function removeStaleNotices(tabs: Record<string, TabDescriptor[]>): void 
  * and not reported (`report`), as a status is not a notice. Listed here, renamed with the tab and
  * ended by `removeStaleNotices` with the spinner.
  */
-export function syncWorkingNotices(working: { target: TabRef; title: string; message: string }[]): void {
+export function syncWorkingNotices(working: { target: TabRef; agentId: AgentId; message: string }[]): void {
   const wanted = new Map(working.map((entry) => [targetKey(entry.target), entry]));
   const listed = new Set<string>();
   for (const notice of shown.get()) {
@@ -312,18 +318,18 @@ export function syncWorkingNotices(working: { target: TabRef; title: string; mes
     }
     const key = targetKey(notice.target);
     const entry = wanted.get(key);
-    if (entry && (notice.title !== entry.title || notice.message !== entry.message)) {
-      shown.set(shown.get().map((current) => (current === notice ? { ...notice, title: entry.title, message: entry.message } : current)));
+    if (entry && notice.message !== entry.message) {
+      shown.set(shown.get().map((current) => (current === notice ? { ...notice, message: entry.message } : current)));
     }
     listed.add(key);
   }
   const added = [...wanted]
     .filter(([key]) => !listed.has(key))
-    .map(([, { target, title, message }]): ShownNotice => ({
+    .map(([, { target, agentId, message }]): ShownNotice => ({
       id: ++nextId,
       severity: "info",
-      title,
       message,
+      agentId,
       toast: false,
       read: centerOpen.get(),
       target,
@@ -363,7 +369,11 @@ export function clearNotices(): void {
   closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
-/** A notice's icon, title, message and progress bar, in a toast and in the notification center alike. */
+/**
+ * A notice's icon, title, message and progress bar, in a toast and in the notification center alike.
+ * A turn's notice (`agentId`) is one line there: its mark, the agent's icon and the message, the
+ * mark saying what the title would.
+ */
 export function NoticeBody({ notice }: { notice: ShownNotice }) {
   return (
     <>
@@ -372,8 +382,9 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
       ) : (
         <SeverityIcon className="notice-icon" severity={notice.severity} />
       )}
+      {notice.agentId && <AgentIcon agentId={notice.agentId} className="notice-icon notice-agent-icon" />}
       <span className="notice-text">
-        {notice.title && <span className="notice-title">{notice.title}</span>}
+        {notice.title && !notice.agentId && <span className="notice-title">{notice.title}</span>}
         <span className="notice-message">{notice.message}</span>
       </span>
       {notice.progress && (

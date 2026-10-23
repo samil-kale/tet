@@ -214,6 +214,7 @@ describe("a turn's notification", () => {
       title: "Finished [claude]",
       message: "tet - Fix the bug",
       mark: "finished",
+      agentId: "claude",
     });
     assert.equal(notificationFor(tab(""), "finished", "tet", all)?.message, "tet", "no title yet");
     assert.equal(notificationFor(tab("x"), "idle", "tet", all)?.mark, "finished");

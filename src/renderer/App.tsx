@@ -132,7 +132,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   useEffect(() => window.tet.onNoticeProgress(showProgress), []);
   useEffect(
     () =>
-      window.tet.onNotice(({ severity, title, message, toast, target, mark }) => notify(severity, message, { title, toast, target, mark })),
+      window.tet.onNotice(({ severity, title, message, toast, target, mark, agentId }) =>
+        notify(severity, message, { title, toast, target, mark, agentId }),
+      ),
     [],
   );
 

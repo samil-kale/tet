@@ -1,3 +1,4 @@
+import type { AgentId } from "./agents";
 import type { TabRef } from "./terminals";
 
 /** The settings dialog's Info tab, read once. */
@@ -63,6 +64,8 @@ export interface Notice {
   /** The tab a click on its entry shows. */
   target?: TabRef;
   mark?: NoticeMark;
+  /** A turn's notice: the notification center shows this agent's icon and `message` alone, without `title`. */
+  agentId?: AgentId;
 }
 
 /** A download's notice, updated in place by its `key` (Notices.tsx's `showProgress`). */

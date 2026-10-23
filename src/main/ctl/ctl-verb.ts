@@ -178,7 +178,7 @@ export interface ControlDeps {
   /** A desktop notification from this process, which holds the desktop session (a sandboxed hook has
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front; the notification center lists it with `mark`'s icon. */
-  showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark): void;
+  showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark, agentId?: AgentId): void;
   /** A notice in the window (Notices.tsx), as every other one main tells the user. */
   notice(severity: NoticeSeverity, message: string, title?: string): void;
   /** main.ts's, shared with ipc/environment.ts. */

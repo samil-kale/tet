@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import { app, Notification } from "electron";
+import type { AgentId } from "../../shared/types/agents";
 import type { Notice, NoticeMark } from "../../shared/types/app";
 import type { TabRef } from "../../shared/types/terminals";
 import { projectRef, refKeyOf } from "../../shared/types/project";
@@ -153,11 +154,11 @@ function windowsToastXml(id: string, title: string, message: string, target?: Ta
  * started again, but does not get that grant on its own: a window it reveals while TET already runs
  * only flashes the taskbar.
  */
-export function showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark): void {
+export function showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark, agentId?: AgentId): void {
   if (repeatedNotification(title, message, target)) {
     return;
   }
-  deps.recordNotice({ severity: "info", ...(message ? { title, message } : { message: title }), toast: false, target, mark });
+  deps.recordNotice({ severity: "info", ...(message ? { title, message } : { message: title }), toast: false, target, mark, agentId });
   deps.attractAttention();
   if (!Notification.isSupported()) {
     return;

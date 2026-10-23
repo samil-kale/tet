@@ -268,7 +268,7 @@ function terminalsOf(key: string): ControlTerminals {
       // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifications.
       return event === "session-start" || event === "prompt-submit"
         ? { stdout }
-        : { stdout, notification: { title: "Finished [Claude]", message: "Finished in one", mark: "finished" } };
+        : { stdout, notification: { title: "Finished [Claude]", message: "Finished in one", mark: "finished", agentId: "claude" } };
     },
   };
 }
