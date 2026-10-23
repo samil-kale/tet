@@ -1,15 +1,15 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
-import { refKeyOf, projectRefsOf, worktreeName } from "../shared/types/project";
+import { projectRef, refKeyOf, projectRefsOf, worktreeName } from "../shared/types/project";
 import type { EnvRequest } from "../shared/types/environment";
 import type { Project, ProjectRef } from "../shared/types/project";
 import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { ArchiveList } from "./lanes/archive/ArchiveList";
-import { useArchive } from "./lanes/archive/use-archive";
 import { CommandList } from "./lanes/projects/CommandList";
+import { checkout } from "./git/checkout";
 import { useBranchActions } from "./git/run-action";
 import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
@@ -27,14 +27,15 @@ import { LANES } from "../shared/types/settings";
 import { MIN_CONTENT_WIDTH, MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "./ui/Sash";
 import { TabArea } from "./tabs/TabArea";
 import { disposeRefTerminals } from "./tabs/terminal-views";
-import { NO_IDS } from "./tabs/tab-marks";
+import { NO_IDS, tabMarkOf } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { useWorkingNotices } from "./tabs/use-working-notices";
-import { FilesIcon, PlusIcon } from "./ui/icons";
+import { BranchIcon, FilesIcon, PlusIcon, ProjectsIcon } from "./ui/icons";
+import { TabMark } from "./ui/TabMark";
 import { AgentIcon } from "./ui/agent-icons";
 import { NavigationBar } from "./lanes/NavigationBar";
 import { StatusBar } from "./ui/StatusBar";
-import type { StatusSession } from "./ui/SessionsCenter";
+import type { StatusListItem } from "./ui/StatusList";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
@@ -258,7 +259,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
   const heads = useRefHeads(states);
 
-  /** The status bar's project, branch, change count and archived tab count: the active
+  /** The status bar's project, branch and change count: the active
    *  repository's or worktree's. */
   const activeProject = activeResolved ? projects.find((project) => project.id === activeResolved.ref.projectId) : undefined;
   const activeBranchName = activeResolved
@@ -267,26 +268,30 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       : heads[activeResolved.refKey]?.head
     : undefined;
   const activeChangesCount = activeResolved ? (states[activeResolved.refKey]?.changes.length ?? 0) : 0;
-  const archivedTabs = useArchive(activeResolved);
 
   /** The status bar's sessions: the active repository's or worktree's tabs in the strip's order, and the focused pane's
    *  active one. */
   const agents = useAgents();
   const activeLayout = activeRefKey ? (layouts[activeRefKey] ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT;
   const activeStripTabs = activeRefKey ? stripTabs[activeRefKey] : undefined;
+  const activeMarks = activeRefKey ? marks[activeRefKey] : undefined;
   const statusSessions = useMemo(
     () =>
-      inOrder(activeLayout.order, activeStripTabs ?? NO_TABS).map((tab): StatusSession => {
+      inOrder(activeLayout.order, activeStripTabs ?? NO_TABS).map((tab): StatusListItem => {
         const kinded = kindOf(tab);
-        return kinded.kind === "editor"
-          ? { tabId: tab.tabId, label: editorLabel(kinded.tab), icon: <FilesIcon className="tab-icon" /> }
-          : {
-              tabId: tab.tabId,
-              label: terminalLabel(kinded.tab, agents),
-              icon: <AgentIcon agentId={kinded.tab.agentId} className="tab-icon" />,
-            };
+        if (kinded.kind === "editor") {
+          return { id: tab.tabId, label: editorLabel(kinded.tab), icon: <FilesIcon className="tab-icon" /> };
+        }
+        const terminal = kinded.tab;
+        const mark = tabMarkOf(terminal, activeMarks?.waiting ?? NO_IDS, activeMarks?.finished ?? NO_IDS);
+        return {
+          id: terminal.tabId,
+          label: terminalLabel(terminal, agents),
+          icon: <AgentIcon agentId={terminal.agentId} className="tab-icon" />,
+          trailing: mark && <TabMark kind={mark} />,
+        };
       }),
-    [activeLayout.order, activeStripTabs, agents],
+    [activeLayout.order, activeStripTabs, activeMarks, agents],
   );
   const activeSessionId = activeLayout.activeTab[activeLayout.focusedPane] ?? undefined;
   const selectSession = useCallback(
@@ -297,6 +302,30 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     },
     [activeRefKeyRef, activateTab],
   );
+
+  /** The status bar's project list, each with the session marks its row shows in the projects lane,
+   *  over its repository and worktrees. */
+  const projectItems = useMemo(
+    () =>
+      projects.map((entry): StatusListItem => {
+        const own = projectRefsOf(entry).map((ref) => marks[refKeyOf(ref)]);
+        return {
+          id: entry.id,
+          label: entry.name,
+          icon: <ProjectsIcon className="tab-icon" />,
+          trailing: (
+            <>
+              {own.some((mark) => mark?.working) && <TabMark kind="working" />}
+              {own.some((mark) => (mark?.waiting.length ?? 0) > 0) && <TabMark kind="waiting" />}
+              {own.some((mark) => (mark?.finished.length ?? 0) > 0) && <TabMark kind="finished" />}
+            </>
+          ),
+        };
+      }),
+    [projects, marks],
+  );
+  /** The status bar's project list: a project opens as its repository. */
+  const selectProject = useCallback((projectId: string) => activateRef(refKeyOf(projectRef(projectId))), [activateRef]);
 
   /** A shell tab, for a project row's "New shell tab" entry. */
   const openShellTab = useCallback(
@@ -368,6 +397,21 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** Git, files and archive need an active repository or worktree; without one, projects stands
    *  in for whichever lane was shown. */
   const effectiveLane = activeResolved ? shownLane : shownLane ? "projects" : null;
+
+  /** The status bar's branch list: the local branches, a click switching to one as the branch tree's
+   *  double-click does. */
+  const branchItems = useMemo(
+    () => activeState.localBranches.map((name): StatusListItem => ({ id: name, label: name, icon: <BranchIcon className="tab-icon" /> })),
+    [activeState.localBranches],
+  );
+  const checkoutBranch = useCallback(
+    (name: string): void => {
+      if (activeResolved) {
+        checkout(activeResolved, activeState, activeBranch, { name }, activateRef);
+      }
+    },
+    [activeResolved, activeState, activeBranch, activateRef],
+  );
 
   // Stable handles, so memoized views re-render only for what they show.
   const openAdd = useCallback(() => setAddOpen(true), []);
@@ -522,13 +566,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       <StatusBar
         project={activeProject}
+        projects={projectItems}
+        onSelectProject={selectProject}
         sessions={statusSessions}
         activeSessionId={activeSessionId}
         onSelectSession={selectSession}
         branch={activeBranchName}
         changesCount={activeChangesCount}
-        archivedCount={archivedTabs.length}
-        onSelectLane={toggleLane}
+        branches={branchItems}
+        onSelectBranch={checkoutBranch}
       />
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}

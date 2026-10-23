@@ -2,7 +2,7 @@ import type { NoticeMark } from "../../shared/types/app";
 import { CommentIcon, QuestionIcon, TabErrorIcon, SpinnerIcon } from "./icons";
 
 /** What a tab shows on itself and on its project row ("Turns and tab marks" in AGENTS.md). */
-type TabMarkKind = NoticeMark | "error";
+export type TabMarkKind = NoticeMark | "error";
 
 /** A session's mark; which one wins where several hold is the site's to rank. */
 export function TabMark({ kind, className }: { kind: TabMarkKind; className?: string }) {

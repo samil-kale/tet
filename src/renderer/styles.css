@@ -478,7 +478,7 @@ textarea:focus,
 }
 
 /* The window's bottom edge (VS Code's status bar), after `.body`: the active repository or
-   worktree, its branch and its archived tab count. Its icons read smaller than the rest of the
+   worktree, and its branch. Its icons read smaller than the rest of the
    app's. The Navigation Bar's own background: both sit on the window's edge. */
 .status-bar {
   display: flex;
@@ -1254,6 +1254,7 @@ textarea:focus,
 
 /* On the active tab or row's selection background, else in the mark's own colour. */
 .tab.active .tab-mark:not(.tab-mark-error),
+.status-list-item.active .tab-mark:not(.tab-mark-error),
 .project-row.active .tab-mark:not(.tab-mark-error),
 .worktree-row.active .tab-mark:not(.tab-mark-error) {
   color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-foreground, var(--tet-focusBorder)));
@@ -2822,10 +2823,10 @@ textarea:focus,
 }
 
 /* The notification center: over the right edge, above the status bar (`.status-bar`'s height).
-   Its notices are `.notice`s, laid flat in a list. The status bar's sessions list has its box,
+   Its notices are `.notice`s, laid flat in a list. The status bar's lists have their box,
    over the left edge. */
 .notices-center,
-.sessions-center {
+.status-list {
   position: absolute;
   right: 6px;
   bottom: 32px;
@@ -2851,7 +2852,7 @@ textarea:focus,
   pointer-events: none;
 }
 
-.sessions-center {
+.status-list {
   right: auto;
   left: 6px;
 }
@@ -2859,17 +2860,17 @@ textarea:focus,
 /* A `.section-header` in every respect but its line, which is the center's own. The empty line
    below it shares its height and padding. */
 .notices-center-header,
-.sessions-center-header {
+.status-list-header {
   border-bottom-color: var(--tet-notice-border);
 }
 
 .notices-center-list,
-.sessions-center-list {
+.status-list-items {
   overflow-y: auto;
 }
 
 /* A session: its icon, then its name, in a notice's size and padding. */
-.sessions-center-item {
+.status-list-item {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2879,23 +2880,38 @@ textarea:focus,
   cursor: pointer;
 }
 
-.sessions-center-item + .sessions-center-item {
+.status-list-item + .status-list-item {
   border-top: 1px solid var(--tet-notice-border);
 }
 
-.sessions-center-item:hover {
+.status-list-item:hover {
   background: var(--tet-list-hoverBackground);
 }
 
-.sessions-center-item.active {
+.status-list-item.active {
   background: var(--tet-list-activeSelectionBackground);
   color: var(--tet-list-activeSelectionForeground);
 }
 
-.sessions-center-label {
+.status-list-label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The marks at the right edge, each in the box and gap an action button has in the projects lane
+   (`.icon-button svg`'s padding insets the drawing to --icon-size). */
+.status-list-marks {
+  display: flex;
+  align-items: center;
+  gap: var(--action-gap);
+  margin-left: auto;
+}
+
+.status-list-marks .tab-mark {
+  width: var(--action-size);
+  height: var(--action-size);
+  padding: calc((var(--action-size) - var(--icon-size)) / 2);
 }
 
 .notices-center-empty {

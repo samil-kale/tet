@@ -2,7 +2,7 @@ import { memo, useState } from "react";
 import type { ReactNode } from "react";
 import { ownValue } from "../../../shared/own-value";
 import { defaultRemote, refName, upstreamName, upstreamOf } from "../../../shared/types/git";
-import { projectRef, refKeyOf, worktreeName } from "../../../shared/types/project";
+import { projectRef, worktreeName } from "../../../shared/types/project";
 import type { CheckoutTarget, RepositoryState, StashEntry, WorktreeInfo } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 import { runWithFollowUp, type BranchActions } from "../../git/run-action";
@@ -15,6 +15,7 @@ import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
 import { useCollapsedGroups } from "../../ui/layout-storage";
 import { ArrowDownIcon, ArrowUpIcon, BranchIcon, RemoteIcon, StashIcon, TagIcon, ChevronIcon, WorktreeIcon } from "../../ui/icons";
+import { checkout as checkoutTarget, inLinkedWorktree, openWorktree as openWorktreeRef, WORKTREE_KEEPS_BRANCH } from "../../git/checkout";
 import { askDeleteWorktree, askRenameWorktree, MADE_ELSEWHERE, worktreeEntry } from "../../git/worktree-questions";
 
 interface BranchTreeProps {
@@ -34,7 +35,6 @@ type MenuTarget =
   | { kind: "worktree"; worktree: WorktreeInfo };
 
 const COMMITS_LOST = "Commits that exist only on this branch are lost.";
-const WORKTREE_KEEPS_BRANCH = "A worktree keeps its own branch: check out in the repository, or add a worktree";
 
 /** A row under its group's header, and a remote's branch under its remote: a column each. */
 const ROW_INDENT = INDENT_BASE + COLUMN_STEP;
@@ -96,8 +96,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   // The filter reads as "find a ref", so it covers tags and worktrees too.
   const tags = state.tags.filter(matches);
   const worktrees = linkedWorktrees.filter((worktree) => matches(worktreeName(worktree)));
-  /** A linked worktree keeps its branch: nothing here switches it (projects.ts couples the two). */
-  const inWorktree = linkedWorktrees.some((worktree) => worktree.current);
+  const inWorktree = inLinkedWorktree(state);
 
   const isCurrent = (name: string): boolean => !state.detached && name === state.head;
 
@@ -113,37 +112,9 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   const { defaultBranch } = state;
   const defaultRef = defaultBranch && refName(defaultBranch);
 
-  /** Where the local branch a checkout would switch to is checked out in another worktree. */
-  const worktreeOf = (target: CheckoutTarget): WorktreeInfo | undefined =>
-    target.remote === undefined || state.localBranches.includes(target.name)
-      ? state.worktrees.find((worktree) => !worktree.current && worktree.branch === target.name)
-      : undefined;
+  const openWorktree = (worktree: WorktreeInfo): void => openWorktreeRef(projectId, worktree, onActivateRef);
 
-  /** Makes the repository or a worktree TET made active; a worktree made elsewhere is never
-   *  opened, so it is only told. */
-  const openWorktree = (worktree: WorktreeInfo): void => {
-    // The repository's has no key, which addresses the repository.
-    if (worktree.isRepository || worktree.key !== undefined) {
-      onActivateRef(refKeyOf(projectRef(projectId, worktree.key)));
-    } else {
-      notify("info", `${worktreeName(worktree)} is checked out in ${worktree.path}, a worktree ${MADE_ELSEWHERE}`);
-    }
-  };
-
-  /** A branch checked out in another worktree is shown there, as in GitHub Desktop; git would
-   *  refuse the switch. */
-  const checkout = (target: CheckoutTarget): void => {
-    const worktree = worktreeOf(target);
-    if (worktree !== undefined) {
-      openWorktree(worktree);
-      return;
-    }
-    if (inWorktree) {
-      notify("info", WORKTREE_KEEPS_BRANCH);
-      return;
-    }
-    branch.run(`Switching to ${target.name}...`, () => repository.checkout(at, target));
-  };
+  const checkout = (target: CheckoutTarget): void => checkoutTarget(resolved, state, branch, target, onActivateRef);
 
   /** Checking out a tag leaves HEAD detached, as in git; never in a worktree, as `checkout`. */
   const checkoutTag = (name: string): void => {

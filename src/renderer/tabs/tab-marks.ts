@@ -1,5 +1,6 @@
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor } from "../../shared/types/terminals";
+import type { TabMarkKind } from "../ui/TabMark";
 import { sameList } from "../identity";
 
 /** A repository's or worktree's marked sessions by tab id, oldest first: finished out of sight,
@@ -29,6 +30,27 @@ export function markedTabs(tabs: readonly TabDescriptor[], field: MarkField, onS
   return tabs
     .filter((tab) => tab[field] !== undefined && (field === "waitingAt" || !onScreen.includes(tab.tabId)))
     .sort((a, b) => (a[field] ?? 0) - (b[field] ?? 0));
+}
+
+/**
+ * The mark a terminal tab shows on itself, ranked error/missing > waiting > working > finished;
+ * none when it has none. A session stopped on a question is not working (and is in `waitingTabIds`).
+ */
+export function tabMarkOf(
+  tab: TabDescriptor,
+  waitingTabIds: readonly string[],
+  finishedTabIds: readonly string[],
+): TabMarkKind | undefined {
+  if (tab.status === "missing" || tab.status === "error") {
+    return "error";
+  }
+  if (waitingTabIds.includes(tab.tabId)) {
+    return "waiting";
+  }
+  if (isWorking(tab)) {
+    return "working";
+  }
+  return finishedTabIds.includes(tab.tabId) ? "finished" : undefined;
 }
 
 /**

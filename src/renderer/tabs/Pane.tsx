@@ -1,5 +1,4 @@
 import { memo, useCallback, useEffect, useRef } from "react";
-import { isWorking } from "../../shared/types/terminals";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
@@ -20,6 +19,7 @@ import { CloseIcon, FilesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 import { useDragReorder } from "../ui/drag-reorder";
+import { tabMarkOf } from "./tab-marks";
 
 /** What VS Code's own tab rename accepts. */
 export const MAX_TITLE_LENGTH = 50;
@@ -260,6 +260,7 @@ export const Pane = memo(function Pane({
       }
       case "terminal": {
         const terminal = kinded.tab;
+        const mark = tabMarkOf(terminal, waitingTabIds, finishedTabIds);
         const name = agentName(agents, terminal.agentId);
         const tooltip =
           terminal.status === "missing"
@@ -275,19 +276,7 @@ export const Pane = memo(function Pane({
           // The session title; a session-less agent's name.
           label: <span className="tab-label">{terminalLabel(terminal, agents)}</span>,
           tooltip: tooltip.join("\n"),
-          icon:
-            terminal.status === "missing" || terminal.status === "error" ? (
-              <TabMark kind="error" className="tab-icon" />
-            ) : waitingTabIds.includes(terminal.tabId) ? (
-              <TabMark kind="waiting" className="tab-icon" />
-            ) : isWorking(terminal) ? (
-              // A session stopped on a question is not working (and is in `waitingTabIds`).
-              <TabMark kind="working" className="tab-icon" />
-            ) : finishedTabIds.includes(terminal.tabId) ? (
-              <TabMark kind="finished" className="tab-icon" />
-            ) : (
-              <AgentIcon agentId={terminal.agentId} className="tab-icon" />
-            ),
+          icon: mark ? <TabMark kind={mark} className="tab-icon" /> : <AgentIcon agentId={terminal.agentId} className="tab-icon" />,
           sandboxed: terminal.sandboxed === true,
           inactive: terminal.status === "stopped",
           closeTitle: "Close tab",
