@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.5 (2026-10-24)
+
+- **Turn notices.** A finished or waiting session shows its agent's icon at the notice's right edge instead of a title.
+- **Status bar.** The marks beside its entries are gone; the tabs and project rows keep theirs.
+
 ## 0.22.4 (2026-10-23)
 
 - **Reopen by drag.** An archived tab drags onto a pane to reopen there.
