@@ -6,7 +6,7 @@ import { askName, confirmed, refusal } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
 import { notify } from "../../ui/Notices";
 import { IconButton } from "../../ui/IconButton";
-import { ArrowUpIcon, CloseIcon } from "../../ui/icons";
+import { CloseIcon, ReopenIcon } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { agentName, useAgents } from "../../ui/use-agents";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
@@ -135,7 +135,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
                   {lastActive(tab)}
                 </span>
                 <IconButton title="Reopen session" isolated onClick={() => void reopen(tab)}>
-                  <ArrowUpIcon />
+                  <ReopenIcon />
                 </IconButton>
                 <IconButton title="Delete session..." isolated onClick={() => void askDelete(tab)}>
                   <CloseIcon />

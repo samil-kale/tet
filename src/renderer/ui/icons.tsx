@@ -45,6 +45,7 @@ import {
   Search,
   Settings,
   Shield,
+  SquareArrowOutUpRight,
   SquareCode,
   SquareSplitHorizontal,
   Tag,
@@ -263,6 +264,11 @@ export function BranchIcon(props: IconProps) {
 /** Lucide's `git-graph` — BRANCHES' switch to the commit graph. */
 export function GraphIcon(props: IconProps) {
   return <Lucide {...props} icon={GitGraph} />;
+}
+
+/** Lucide's `square-arrow-out-up-right` — an archived session's reopen button. */
+export function ReopenIcon(props: IconProps) {
+  return <Lucide {...props} icon={SquareArrowOutUpRight} extent={17.5} />;
 }
 
 /** Lucide's `square-code` — the projects lane, drawn a little larger: its box reads small beside
