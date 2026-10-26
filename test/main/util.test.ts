@@ -196,6 +196,30 @@ describe("the quoting helpers", () => {
   });
 });
 
+describe("an external terminal", () => {
+  it("is Windows Terminal on win32, PowerShell calling the program", () => {
+    // `;` would end Windows Terminal's tab.
+    assert.deepEqual(WINDOWS.externalTerminals("C:\\a;b", "C:\\Program Files\\claude.exe", ["--resume", "abc"], {}), [
+      {
+        command: "wt.exe",
+        args: ["-d", "C:\\a\\;b", "powershell.exe", "-NoExit", "-Command", "& 'C:\\Program Files\\claude.exe' --resume abc"],
+      },
+    ]);
+  });
+
+  it("is Terminal.app on macOS, the folder and the line in one AppleScript string", () => {
+    const [terminal] = MAC.externalTerminals("/my repo", "/opt/my agent/pi", ["--session", "abc"], {});
+    assert.equal(terminal.command, "osascript");
+    assert.equal(terminal.args[1], `tell application "Terminal" to do script "cd '/my repo' && '/opt/my agent/pi' --session abc"`);
+  });
+
+  it("is the user's $TERMINAL first on Linux, keeping the shell once the line ends", () => {
+    const [first] = LINUX.externalTerminals("/repo", "/opt/my agent/pi", ["--session", "abc"], { TERMINAL: "kitty" });
+    assert.deepEqual(first, { command: "kitty", args: ["-e", "sh", "-c", `'/opt/my agent/pi' --session abc; exec "\${SHELL:-sh}"`] });
+    assert.equal(LINUX.externalTerminals("/repo", "pi", [], {})[0].command, "x-terminal-emulator");
+  });
+});
+
 describe("a path inside a root", () => {
   const root = path.join(os.tmpdir(), "tet-root");
 

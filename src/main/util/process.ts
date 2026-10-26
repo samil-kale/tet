@@ -104,6 +104,35 @@ export function resolveCommand(executable: string, args: string[]): ResolvedComm
   return { command: executable, args };
 }
 
+/**
+ * Opens the OS's own terminal window in `cwd`, running `executable` with `args` there
+ * (Platform.externalTerminals). Each candidate is tried until one starts; false when none did.
+ * Not through `resolveCommand`: a missing terminal must fail as ENOENT for the next one to be
+ * tried, not as cmd.exe's exit. Detached, so it outlives TET; `cwd` is the spawn's too, for a
+ * candidate that takes no folder of its own.
+ */
+export async function openExternalTerminal(cwd: string, executable: string, args: string[]): Promise<boolean> {
+  for (const { command, args: terminalArgs } of PLATFORM.externalTerminals(cwd, executable, args, process.env)) {
+    const started = await new Promise<boolean>((resolve) => {
+      const child = spawn(command, terminalArgs, { cwd, detached: true, stdio: "ignore" });
+      child.once("spawn", () => {
+        child.unref();
+        resolve(true);
+      });
+      child.once("error", (error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") {
+          logError(`${command} could not start`, error);
+        }
+        resolve(false);
+      });
+    });
+    if (started) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Kills a process `resolveCommand` started, with its children: on win32 `kill()` would end only the
  *  cmd.exe in front of a shim, while the program keeps running (and its pipes open). */
 export function killProcessTree(child: ChildProcess): void {

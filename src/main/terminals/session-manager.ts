@@ -42,6 +42,7 @@ import { currentTheme } from "../store/theme";
 import { effectivePrompt } from "../../shared/prompts";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
+import { openExternalTerminal } from "../util/process";
 
 // Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
 const SESSION_REMOVE_DELAY_MS = 500;
@@ -1282,6 +1283,22 @@ export class TabSessionManager {
     // The status stays until the new process reports, so a start giving up again offers Restart.
     this.startTab(tab);
     return true;
+  }
+
+  /**
+   * The tab's session resumed in the OS's own terminal, the bare CLI: none of TET's setup, so no
+   * hooks and no `tet-ctl`. On this machine only — a sandbox's session would need TET's mounts.
+   * The tab is left as it is, running or not.
+   */
+  async openInTerminal(tabId: string): Promise<void> {
+    const tab = this.tabOf(tabId);
+    if (!tab?.sessionId || this.placeOf(tab).sandbox !== undefined) {
+      return;
+    }
+    const { agent, executable } = this.runtimeFor(tab.agentId);
+    if (!(await openExternalTerminal(tab.cwd ?? this.at.path, executable, resumeArgsOf(tab, agent)))) {
+      this.callbacks.onNotice("error", `Could not open a terminal for the ${agent.displayName} session.`);
+    }
   }
 
   /**

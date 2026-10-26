@@ -121,7 +121,8 @@ const SRC_IMPORTS = [...SHELL_EXEC, ...SPAWNS, IPC_IMPORT];
 const importsWithout = (...allowed) => ["error", { paths: SRC_IMPORTS.filter((entry) => !allowed.flat().includes(entry)) }];
 /** The files that start a process themselves, each for its reason: a new one is a decision, not a drift. */
 const SPAWN_SITES = [
-  // resolveCommand itself, and runProcess and killProcessTree on top of it.
+  // resolveCommand itself, and runProcess and killProcessTree on top of it; beside them the OS's
+  // terminal window (openExternalTerminal), by its name so a missing one fails as ENOENT.
   "src/main/util/process.ts",
   // A tab's pty, from resolveCommand.
   "src/main/terminals/pty.ts",

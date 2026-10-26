@@ -76,6 +76,10 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     tabManagers.get(ref)?.restartTab(tabId, true);
   });
 
+  handle("tabs:open-in-terminal", async (_event, ref: ProjectRef, tabId: string): Promise<void> => {
+    await tabManagers.get(ref)?.openInTerminal(tabId);
+  });
+
   /** The tab is on screen: clears its finished-turn mark. Only the renderer knows. */
   on("tabs:seen", (_event, ref: ProjectRef, tabId: string) => {
     tabManagers.get(ref)?.markSeen(tabId);

@@ -301,6 +301,8 @@ export interface TETApi {
     handOver: (ref: ProjectRef, tabId: string, agentId: AgentId) => Promise<HandoverResult>;
     /** Respawns a saved command in the same tab. */
     restart: (ref: ProjectRef, tabId: string) => Promise<void>;
+    /** Resumes the tab's session in the OS's own terminal, outside TET; the tab stays as it is. */
+    openInTerminal: (ref: ProjectRef, tabId: string) => Promise<void>;
     /** Clears `finishedAt`. */
     seen: (ref: ProjectRef, tabId: string) => void;
     /** The active repository's or worktree's tabs on screen (focused window, no dialog); a turn

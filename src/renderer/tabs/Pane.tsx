@@ -208,6 +208,8 @@ export const Pane = memo(function Pane({
   /** The tab menu's Archive: keeps the session, to the ARCHIVE lane. */
   const archiveTab = useCallback((tabId: string) => void window.tet.tabs.archive(at, [tabId]), [at]);
 
+  const openInTerminal = useCallback((tabId: string) => void window.tet.tabs.openInTerminal(at, tabId), [at]);
+
   /** The tab menu's Mount File and Mount Folder: the picked path is mounted like a dropped one
    *  (handPaths says the mount or its refusal as a notice); nothing is typed into the tab. */
   const mountPath = useCallback(
@@ -350,8 +352,7 @@ export const Pane = memo(function Pane({
         : [...closeEntries, ...moveEntries];
     }
     const terminal = kinded.tab;
-    const sessionId = terminal.sessionId;
-    const withSession = sessionId !== undefined ? terminal : undefined;
+    const withSession = terminal.sessionId !== undefined ? terminal : undefined;
     // A saved command restarts anytime; an agent once started — a running one quits first and its
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
     const restartable =
@@ -400,10 +401,8 @@ export const Pane = memo(function Pane({
             },
             // Unlike Close, keeps the session; without one it would only close (closeKeepingSessions).
             { label: "Archive", run: withSession ? () => archiveTab(tabId) : undefined },
-            {
-              label: "Copy Session ID",
-              run: sessionId !== undefined ? () => void navigator.clipboard.writeText(sessionId) : undefined,
-            },
+            // On this machine only: a sandbox's session resumes with TET's mounts alone.
+            { label: "Open in Terminal", run: withSession && terminal.sandboxed !== true ? () => openInTerminal(tabId) : undefined },
           ] satisfies ContextMenuEntry[])
         : []),
       ...mountEntries,

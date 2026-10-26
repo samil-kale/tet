@@ -151,6 +151,7 @@ const api: TETApi = {
     rename: (ref, tabId, title) => invoke("tabs:rename", ref, tabId, title),
     handOver: (ref, tabId, agentId) => invoke("tabs:handover", ref, tabId, agentId),
     restart: (ref, tabId) => invoke("tabs:restart", ref, tabId),
+    openInTerminal: (ref, tabId) => invoke("tabs:open-in-terminal", ref, tabId),
     seen: (ref, tabId) => send("tabs:seen", ref, tabId),
     reportOnScreen: (ref, tabIds) => send("tabs:on-screen", ref, tabIds),
     input: (ref, tabId, data) => send("tabs:input", ref, tabId, data),
