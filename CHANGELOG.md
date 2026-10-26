@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.7 (2026-10-26)
+
+- **Shell restart.** Restarting a shell tab from its menu clears its output.
+
 ## 0.22.6 (2026-10-26)
 
 - **Open in Terminal.** A session's tab menu opens it in the OS's own terminal (not for sandboxed tabs).
