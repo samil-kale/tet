@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import type { Project } from "../../shared/types/project";
 import { shortcutLabel } from "../shortcuts";
-import { BellIcon, BranchIcon, ProjectsIcon } from "./icons";
+import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon } from "./icons";
 import { MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
 import { StatusList, type StatusListItem } from "./StatusList";
 import { TabMark } from "./TabMark";
@@ -23,6 +23,8 @@ interface StatusBarProps {
   branch: string | undefined;
   /** Its uncommitted changes, by the branch. */
   changesCount: number;
+  /** Its archived tabs, after the branch. */
+  archivedCount: number;
   /** Its local branches in the branch tree's order, as the branch's click lists them. */
   branches: StatusListItem[];
   /** A branch's click in that list switches to it. */
@@ -41,6 +43,7 @@ export const StatusBar = memo(function StatusBar({
   onSelectSession,
   branch,
   changesCount,
+  archivedCount,
   branches,
   onSelectBranch,
 }: StatusBarProps) {
@@ -73,6 +76,12 @@ export const StatusBar = memo(function StatusBar({
             <BranchIcon className="tree-icon" />
             {branch}: {changesCount}
           </button>
+        )}
+        {project && (
+          <span className="status-bar-item status-bar-archive" title="Archive">
+            <ArchiveIcon className="tree-icon" />
+            archive: {archivedCount}
+          </span>
         )}
         <button
           type="button"

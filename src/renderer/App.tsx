@@ -8,6 +8,7 @@ import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { ArchiveList } from "./lanes/archive/ArchiveList";
+import { useArchive } from "./lanes/archive/use-archive";
 import { CommandList } from "./lanes/projects/CommandList";
 import { checkout } from "./git/checkout";
 import { useBranchActions } from "./git/run-action";
@@ -269,6 +270,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       : heads[activeResolved.refKey]?.head
     : undefined;
   const activeChangesCount = activeResolved ? (states[activeResolved.refKey]?.changes.length ?? 0) : 0;
+  const archivedCount = useArchive(activeResolved).length;
 
   /** The status bar's sessions: the active repository's or worktree's tabs in the strip's order, and the focused pane's
    *  active one. */
@@ -554,6 +556,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         onSelectSession={selectSession}
         branch={activeBranchName}
         changesCount={activeChangesCount}
+        archivedCount={archivedCount}
         branches={branchItems}
         onSelectBranch={checkoutBranch}
       />

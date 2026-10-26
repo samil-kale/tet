@@ -488,7 +488,7 @@ textarea:focus,
   padding: 0 6px;
 }
 
-.status-bar-item:hover {
+button.status-bar-item:hover {
   background: var(--tet-toolbar-hoverBackground);
 }
 
