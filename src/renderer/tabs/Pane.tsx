@@ -10,7 +10,7 @@ import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } fro
 import { askName, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { TerminalHost } from "./TerminalHost";
-import { clearTerminalOutput } from "./terminal-views";
+import { clearOnNextStart, clearTerminalOutput, resetMouseModes } from "./terminal-views";
 import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
@@ -203,7 +203,17 @@ export const Pane = memo(function Pane({
     [at, onCloseEditors],
   );
 
-  const restartTab = useCallback((tabId: string) => void window.tet.tabs.restart(at, tabId), [at]);
+  const restartTab = useCallback(
+    (tabId: string, clearable: boolean) => {
+      if (clearable) {
+        clearOnNextStart(at, tabId);
+      }
+      // The menu closing under the pointer sends a mouse move; a process already quitting echoes it as text.
+      resetMouseModes(at, tabId);
+      void window.tet.tabs.restart(at, tabId);
+    },
+    [at],
+  );
 
   /** The tab menu's Archive: keeps the session, to the ARCHIVE lane. */
   const archiveTab = useCallback((tabId: string) => void window.tet.tabs.archive(at, [tabId]), [at]);
@@ -385,7 +395,7 @@ export const Pane = memo(function Pane({
     return [
       {
         label: "Restart",
-        run: restartable ? () => restartTab(tabId) : undefined,
+        run: restartable ? () => restartTab(tabId, info?.clearable === true) : undefined,
       },
       // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
       ...(info?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),

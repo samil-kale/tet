@@ -4,7 +4,7 @@ import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { TabDescriptor } from "../shared/types/terminals";
 import { forget, stableItems } from "./identity";
-import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
+import { clearTerminal, resetMouseModes, takeClearOnStart } from "./tabs/terminal-views";
 import { useLatest } from "./ui/use-latest";
 
 /**
@@ -39,10 +39,14 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         const refKey = refKeyOf(ref);
         // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
         // it off screen (main flushes the old output before the status, the new one's has not come).
-        if (status === "running" && tabsRef.current[refKey]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
-          clearTerminal(ref, tabId);
-        } else if (status === "running") {
-          resetMouseModes(ref, tabId);
+        if (status === "running") {
+          // A restart of a clearable tab (the shell) wipes the old run's output, as a saved command's does.
+          const restarted = takeClearOnStart(ref, tabId);
+          if (restarted || tabsRef.current[refKey]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
+            clearTerminal(ref, tabId);
+          } else {
+            resetMouseModes(ref, tabId);
+          }
         }
         setTabs((current) => {
           const list = current[refKey];

@@ -67,6 +67,9 @@ const MAX_EARLY_OUTPUT = 64 * 1024;
  *  `terminal.integrated.persistentSessionScrollback` does. */
 const RESTORED_SCROLLBACK = 100;
 
+/** Turns off the mouse reporting modes and focus reporting. */
+const MOUSE_MODES_OFF = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l";
+
 /**
  * A restored shell's output from before the restart (`restoreHistory`), apart from what it prints
  * anew: `createView` lays it ahead, a `[TET]` line between; a shell never drawn hands it on as it
@@ -424,7 +427,8 @@ function createView(ref: ProjectRef, tabId: string, size?: { cols: number; rows:
   const restored = restoredOutput.get(key);
   if (restored !== undefined) {
     restoredOutput.delete(key);
-    term.write(`${restored}\x1b[0m\r\n[TET] History restored\r\n`);
+    // The serialized history carries the modes the old process left on; the new shell never asked for them.
+    term.write(`${restored}\x1b[0m${MOUSE_MODES_OFF}\r\n[TET] History restored\r\n`);
   }
   const buffered = earlyOutput.get(key);
   if (buffered) {
@@ -614,10 +618,23 @@ export function clearTerminal(ref: ProjectRef, tabId: string): void {
   views.get(viewKey(ref, tabId))?.term.write("\x1bc");
 }
 
+/** Tabs whose next start wipes the screen first: a restart asked by the window (`clearOnNextStart`). */
+const clearOnStart = new Set<string>();
+
+/** The tab's next start clears its terminal (`takeClearOnStart`), after the old process's last output. */
+export function clearOnNextStart(ref: ProjectRef, tabId: string): void {
+  clearOnStart.add(viewKey(ref, tabId));
+}
+
+/** Whether `clearOnNextStart` asked for this start; asked once. */
+export function takeClearOnStart(ref: ProjectRef, tabId: string): boolean {
+  return clearOnStart.delete(viewKey(ref, tabId));
+}
+
 /** Turns off the mouse reporting modes (and focus reporting) a killed process left on, so its
  *  successor does not get mouse moves typed at it before it asks for them itself. */
 export function resetMouseModes(ref: ProjectRef, tabId: string): void {
-  views.get(viewKey(ref, tabId))?.term.write("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l");
+  views.get(viewKey(ref, tabId))?.term.write(MOUSE_MODES_OFF);
 }
 
 /** Wipes scrollback and screen but the cursor line, for the user's Clear: the shell's prompt stays,
@@ -630,6 +647,7 @@ export function disposeTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
   earlyOutput.delete(key);
   restoredOutput.delete(key);
+  clearOnStart.delete(key);
   const view = views.get(key);
   if (!view) {
     return;
