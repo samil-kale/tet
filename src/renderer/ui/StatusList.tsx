@@ -1,5 +1,8 @@
-import { memo, useEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { CloseIcon } from "./icons";
+
+/** The gap to the window's edge, as the lists' `left` in styles.css. */
+const EDGE = 6;
 
 /** One entry of a status bar list: a project, a tab, a branch. */
 export interface StatusListItem {
@@ -23,11 +26,23 @@ interface StatusListProps {
 
 /**
  * The status bar's lists (projects, sessions, branches), laid out as the notification center is
- * (`NoticesCenter`): over the left edge, above the bar. Closed by the status bar's button, its own
+ * (`NoticesCenter`): above the bar, over the button that opens it. Closed by the status bar's button, its own
  * X or a press outside it.
  */
 export const StatusList = memo(function StatusList({ title, items, activeId, trigger, onSelect, onClose }: StatusListProps) {
   const list = useRef<HTMLDivElement>(null);
+
+  // It opens above the button that opens it, kept inside the window.
+  useLayoutEffect(() => {
+    const element = list.current;
+    const button = document.querySelector(`.${trigger}`);
+    if (!element || !button) {
+      return;
+    }
+    const origin = element.offsetParent?.getBoundingClientRect().left ?? 0;
+    const room = window.innerWidth - element.offsetWidth - EDGE;
+    element.style.left = `${Math.max(EDGE, Math.min(button.getBoundingClientRect().left, room)) - origin}px`;
+  }, [trigger]);
 
   // A press outside closes it; the status bar's button toggles it itself.
   useEffect(() => {

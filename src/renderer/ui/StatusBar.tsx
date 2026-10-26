@@ -23,8 +23,10 @@ interface StatusBarProps {
   branch: string | undefined;
   /** Its uncommitted changes, by the branch. */
   changesCount: number;
-  /** Its archived tabs, after the branch. */
-  archivedCount: number;
+  /** Its archived sessions, as the archive's click lists them. */
+  archived: StatusListItem[];
+  /** An archived session's click in that list reopens its tab. */
+  onSelectArchived: (tabId: string) => void;
   /** Its local branches in the branch tree's order, as the branch's click lists them. */
   branches: StatusListItem[];
   /** A branch's click in that list switches to it. */
@@ -43,15 +45,16 @@ export const StatusBar = memo(function StatusBar({
   onSelectSession,
   branch,
   changesCount,
-  archivedCount,
+  archived,
+  onSelectArchived,
   branches,
   onSelectBranch,
 }: StatusBarProps) {
   const notices = useNoticeList();
   /** The list shown, if any: one at a time, as they share their place. */
-  const [openList, setOpenList] = useState<"projects" | "sessions" | "branches" | null>(null);
+  const [openList, setOpenList] = useState<"projects" | "sessions" | "branches" | "archive" | null>(null);
   const closeList = useCallback(() => setOpenList(null), []);
-  const toggleList = (list: "projects" | "sessions" | "branches"): void => setOpenList((open) => (open === list ? null : list));
+  const toggleList = (list: "projects" | "sessions" | "branches" | "archive"): void => setOpenList((open) => (open === list ? null : list));
   const active = sessions.find((session) => session.id === activeSessionId);
   // An agent's notice stands in the center until its tab's state ends, read or not.
   const highlighted = notices.some((notice) => !notice.read || !removable(notice));
@@ -78,10 +81,10 @@ export const StatusBar = memo(function StatusBar({
           </button>
         )}
         {project && (
-          <span className="status-bar-item status-bar-archive" title="Archive">
+          <button type="button" className="status-bar-item status-bar-archive" title="Archive" onClick={() => toggleList("archive")}>
             <ArchiveIcon className="tree-icon" />
-            archive: {archivedCount}
-          </span>
+            archive: {archived.length}
+          </button>
         )}
         <button
           type="button"
@@ -112,6 +115,16 @@ export const StatusBar = memo(function StatusBar({
           activeId={activeSessionId}
           trigger="status-bar-sessions"
           onSelect={onSelectSession}
+          onClose={closeList}
+        />
+      )}
+      {openList === "archive" && (
+        <StatusList
+          title="Archive"
+          items={archived}
+          activeId={undefined}
+          trigger="status-bar-archive"
+          onSelect={onSelectArchived}
           onClose={closeList}
         />
       )}

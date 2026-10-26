@@ -270,7 +270,34 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       : heads[activeResolved.refKey]?.head
     : undefined;
   const activeChangesCount = activeResolved ? (states[activeResolved.refKey]?.changes.length ?? 0) : 0;
-  const archivedCount = useArchive(activeResolved).length;
+  const archivedTabs = useArchive(activeResolved);
+  /** The status bar's archive list: a click reopens the session's tab. */
+  const archiveItems = useMemo(
+    () =>
+      archivedTabs.map(
+        (tab): StatusListItem => ({
+          id: tab.tabId,
+          label: tab.title || "New session",
+          icon: <AgentIcon agentId={tab.agentId} className="tab-icon" />,
+        }),
+      ),
+    [archivedTabs],
+  );
+  const reopenArchived = useCallback(
+    (tabId: string) => {
+      if (!activeResolved) {
+        return;
+      }
+      void window.tet.archive.reopen(activeResolved.ref, tabId).then((result) => {
+        if (result.ok) {
+          showTab(activeResolved.refKey, tabId);
+        } else {
+          notify("error", result.error ?? "Could not reopen the session");
+        }
+      });
+    },
+    [activeResolved, showTab],
+  );
 
   /** The status bar's sessions: the active repository's or worktree's tabs in the strip's order, and the focused pane's
    *  active one. */
@@ -556,7 +583,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         onSelectSession={selectSession}
         branch={activeBranchName}
         changesCount={activeChangesCount}
-        archivedCount={archivedCount}
+        archived={archiveItems}
+        onSelectArchived={reopenArchived}
         branches={branchItems}
         onSelectBranch={checkoutBranch}
       />

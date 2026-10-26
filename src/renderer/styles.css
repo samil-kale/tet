@@ -488,7 +488,7 @@ textarea:focus,
   padding: 0 6px;
 }
 
-button.status-bar-item:hover {
+.status-bar-item:hover {
   background: var(--tet-toolbar-hoverBackground);
 }
 
@@ -2852,7 +2852,7 @@ button.status-bar-item:hover {
 
 /* The notification center: over the right edge, above the status bar (`.status-bar`'s height).
    Its notices are `.notice`s, laid flat in a list. The status bar's lists have their box,
-   over the left edge. */
+   over their button, as wide as their entries between 360px and 450px. */
 .notices-center,
 .status-list {
   position: absolute;
@@ -2883,6 +2883,9 @@ button.status-bar-item:hover {
 .status-list {
   right: auto;
   left: 6px;
+  width: fit-content;
+  min-width: min(360px, 100vw);
+  max-width: min(450px, 100vw);
 }
 
 /* A `.section-header` in every respect but its line, which is the center's own. The empty line
