@@ -350,7 +350,8 @@ export const Pane = memo(function Pane({
         : [...closeEntries, ...moveEntries];
     }
     const terminal = kinded.tab;
-    const withSession = terminal.sessionId !== undefined ? terminal : undefined;
+    const sessionId = terminal.sessionId;
+    const withSession = sessionId !== undefined ? terminal : undefined;
     // A saved command restarts anytime; an agent once started — a running one quits first and its
     // session resumes (restartTab), so it takes up what was saved meanwhile (RestartNote).
     const restartable =
@@ -399,6 +400,10 @@ export const Pane = memo(function Pane({
             },
             // Unlike Close, keeps the session; without one it would only close (closeKeepingSessions).
             { label: "Archive", run: withSession ? () => archiveTab(tabId) : undefined },
+            {
+              label: "Copy Session ID",
+              run: sessionId !== undefined ? () => void navigator.clipboard.writeText(sessionId) : undefined,
+            },
           ] satisfies ContextMenuEntry[])
         : []),
       ...mountEntries,
