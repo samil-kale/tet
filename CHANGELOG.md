@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.6 (2026-10-26)
+
+- **Open in Terminal.** A session's tab menu opens it in the OS's own terminal (not for sandboxed tabs).
+- **Archive in the status bar.** It shows the archive's tab count, and its list reopens an archived session; archived sessions show a reopen icon.
+
 ## 0.22.5 (2026-10-24)
 
 - **Turn notices.** A finished or waiting session shows its agent's icon at the notice's right edge instead of a title.
