@@ -274,13 +274,11 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The status bar's archive list: a click reopens the session's tab. */
   const archiveItems = useMemo(
     () =>
-      archivedTabs.map(
-        (tab): StatusListItem => ({
-          id: tab.tabId,
-          label: tab.title || "New session",
-          icon: <AgentIcon agentId={tab.agentId} className="tab-icon" />,
-        }),
-      ),
+      archivedTabs.map((tab): StatusListItem => ({
+        id: tab.tabId,
+        label: tab.title || "New session",
+        icon: <AgentIcon agentId={tab.agentId} className="tab-icon" />,
+      })),
     [archivedTabs],
   );
   const reopenArchived = useCallback(
