@@ -22,7 +22,7 @@ export const codexAgent: SandboxedAgent = {
   // Its input field is no shell: only a space needs quoting, in double quotes.
   quotePath: (filePath) => (/\s/.test(filePath) ? `"${filePath}"` : filePath),
   executable: () => "codex",
-  install: { versionArgs: ["--version"], verifiedVersion: "0.162.1" },
+  install: { versionArgs: ["--version"], verifiedVersion: "0.164.0" },
   terminal: {
     // The positional prompt of an interactive session, after the `-c` options.
     initialPromptArgs: (prompt) => [prompt],

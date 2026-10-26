@@ -36,7 +36,7 @@ export const piAgent: SandboxedAgent = {
   quotePath: (filePath) => (/\s/.test(filePath) ? `"${filePath}"` : filePath),
   executable: () => "pi",
   // On win32 a `pi.cmd` npm shim, routed through cmd.exe by resolveCommand.
-  install: { versionArgs: ["--version"], verifiedVersion: "1.1.0" },
+  install: { versionArgs: ["--version"], verifiedVersion: "1.4.0" },
   terminal: {
     // A positional message, submitted as the first prompt.
     initialPromptArgs: (prompt) => [prompt],
