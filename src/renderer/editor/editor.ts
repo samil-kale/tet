@@ -158,6 +158,8 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
  * pane too. The overview ruler beside the scrollbar is how changes are found (a click scrolls).
  * Whitespace-only changes never count; hunk boundaries are monaco's (`advanced`), not git's. TET
  * never diffs: it hands monaco two texts. The modified (right-hand) side is the editable one.
+ * Inline shows the modified side's line numbers alone, so an unchanged line's number stands once and
+ * a deleted line has none (`hideOriginalLineNumbers`, absent from monaco's typings).
  *
  * Left at default on purpose: `renderGutterMenu` and `renderMarginRevertIcon` (their reverts edit
  * the buffer, a save away from disk, never a git discard); `maxFileSize` (50 MB, beyond our 4 MB
@@ -171,5 +173,6 @@ export function diffEditorOptions(): Record<string, unknown> {
     diffAlgorithm: "advanced",
     renderOverviewRuler: true,
     originalEditable: false,
+    hideOriginalLineNumbers: true,
   };
 }
