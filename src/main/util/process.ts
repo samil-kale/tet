@@ -105,14 +105,19 @@ export function resolveCommand(executable: string, args: string[]): ResolvedComm
 }
 
 /**
- * Opens the OS's own terminal window in `cwd`, running `executable` with `args` there
- * (Platform.externalTerminals). Each candidate is tried until one starts; false when none did.
+ * Opens the OS's own terminal window in `cwd`, running `executable` with `args` there, `variables`
+ * set (Platform.externalTerminals). Each candidate is tried until one starts; false when none did.
  * Not through `resolveCommand`: a missing terminal must fail as ENOENT for the next one to be
  * tried, not as cmd.exe's exit. Detached, so it outlives TET; `cwd` is the spawn's too, for a
  * candidate that takes no folder of its own.
  */
-export async function openExternalTerminal(cwd: string, executable: string, args: string[]): Promise<boolean> {
-  for (const { command, args: terminalArgs } of PLATFORM.externalTerminals(cwd, executable, args, process.env)) {
+export async function openExternalTerminal(
+  cwd: string,
+  executable: string,
+  args: string[],
+  variables: Record<string, string>,
+): Promise<boolean> {
+  for (const { command, args: terminalArgs } of PLATFORM.externalTerminals(cwd, executable, args, process.env, variables)) {
     const started = await new Promise<boolean>((resolve) => {
       const child = spawn(command, terminalArgs, { cwd, detached: true, stdio: "ignore" });
       child.once("spawn", () => {

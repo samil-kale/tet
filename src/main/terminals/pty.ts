@@ -44,6 +44,15 @@ export function setStoredEnv(provider: () => Record<string, string>): void {
   storedEnv = provider;
 }
 
+/** The variables kept in TET that a tab of `side` gets (TabSide.storedEnv), with the one naming them
+ *  (KEPT_ENV_NAME) so a TET started from that tab does not take them for the machine's. Also what
+ *  the OS's own terminal opened for a tab is set with. */
+export function storedEnvOf(side: TabSide): Record<string, string> {
+  const stored = side.storedEnv ? storedEnv() : {};
+  const names = Object.keys(stored);
+  return names.length > 0 ? { ...stored, [KEPT_ENV_NAME]: names.join(",") } : stored;
+}
+
 /** Deletes from `env` the variables `names` replace, and returns it: on win32 names ignore case, a
  *  name in another case would be a second variable, and of the two the child sees the inherited one
  *  — so a replacement removes its name in any spelling. */
@@ -61,10 +70,11 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
  *  (ctl-token.ts), then options.envOverride. Testable without a pty. */
 export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">): Record<string, string> {
   const side = options.side ?? HOST_TAB;
-  const stored = side.storedEnv ? storedEnv() : {};
+  const stored = storedEnvOf(side);
   const inherited = withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored));
-  // Never an outer TET's caller ids (a TET started from a TET tab): only `own` names this tab.
-  for (const name of [CONTROL_ENV.projectId, CONTROL_ENV.worktree, CONTROL_ENV.tabId]) {
+  // Never an outer TET's caller ids or list of kept variables (a TET started from a TET tab): only
+  // `own` names this tab, and it got exactly `stored`.
+  for (const name of [CONTROL_ENV.projectId, CONTROL_ENV.worktree, CONTROL_ENV.tabId, KEPT_ENV_NAME]) {
     delete inherited[name];
   }
   const env: Record<string, string> = {
@@ -74,11 +84,6 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     ...controlEnv,
     ...options.own,
   };
-  // Never an outer TET's: this tab got exactly `stored`.
-  delete env[KEPT_ENV_NAME];
-  if (Object.keys(stored).length > 0) {
-    env[KEPT_ENV_NAME] = Object.keys(stored).join(",");
-  }
   const runToken = controlEnv[CONTROL_ENV.token];
   if (runToken) {
     env[CONTROL_ENV.token] = tabControlToken(

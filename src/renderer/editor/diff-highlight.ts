@@ -1,5 +1,5 @@
 import { createHighlighterCore, type HighlighterCore, type LanguageRegistration, type ThemeRegistration } from "shiki/core";
-import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import { createOnigurumaEngine } from "shiki/engine/oniguruma";
 import { resolveTheme, type ThemeDefinition } from "../../shared/themes";
 import { baseName } from "../paths";
 import { buildShikiColors } from "../themes/theme-colors";
@@ -118,6 +118,22 @@ const GRAMMARS: Record<string, () => Promise<{ default: LanguageRegistration[] }
   yaml: () => import("@shikijs/langs/yaml"),
 };
 
+/** A grammar's JSON import is typed literally, as a theme's: cast once, here. */
+const jsonGrammar = (load: () => Promise<unknown>) => load() as Promise<{ default: Omit<LanguageRegistration, "name"> }>;
+
+/** The styled-components VS Code extension's grammars, unchanged: CSS in styled-components' template
+ *  literals, injected into the JavaScript grammars (not vue's), reaching into TypeScript's and CSS's rules. */
+async function styledComponents(): Promise<LanguageRegistration[]> {
+  const [cssStyled, styled] = await Promise.all([
+    jsonGrammar(() => import("./css.styled.json")),
+    jsonGrammar(() => import("./styled-components.json")),
+  ]);
+  return [
+    { ...cssStyled.default, name: "css.styled" },
+    { ...styled.default, name: "styled-components", injectTo: ["source.js", "source.js.jsx", "source.ts", "source.tsx"] },
+  ];
+}
+
 /** Lowercased extension to grammar. */
 const EXTENSIONS: Record<string, string> = {
   bash: "shellscript",
@@ -195,14 +211,19 @@ let core: Promise<HighlighterCore> | undefined;
 /** Promises, so two files of one kind don't race the load. */
 const grammars = new Map<string, Promise<void>>();
 
-/** The one shiki instance, shared with editor.ts; grammars load lazily. */
+/**
+ * The one shiki instance, shared with editor.ts. Its grammars load lazily, but for styled-components'
+ * and the ones it colors or reaches into, all at once: a grammar takes the injections known when its
+ * scope is first asked for, by loading it or by another grammar referring to it (markdown's fences).
+ */
 export function highlighter(): Promise<HighlighterCore> {
   core ??= createHighlighterCore({
     themes: [loadTheme(theme)],
-    langs: [],
-    // Not oniguruma: its wasm would ride base64 in the single-file bundle. "forgiving" skips
-    // patterns the JS engine cannot express.
-    engine: createJavaScriptRegexEngine({ forgiving: true }),
+    langs: [GRAMMARS.javascript, GRAMMARS.jsx, GRAMMARS.typescript, GRAMMARS.tsx, GRAMMARS.css, styledComponents],
+    // Oniguruma, the engine TextMate grammars are written for: it runs them as written, and faster
+    // than shiki's JS engine. Its wasm rides base64 in the single-file bundle, compiled on first use
+    // under index.html's 'wasm-unsafe-eval'.
+    engine: createOnigurumaEngine(import("shiki/wasm")),
   });
   return core;
 }

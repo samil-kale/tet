@@ -8,7 +8,7 @@ import { HOST_CALLER, SANDBOX_CALLER } from "../../src/main/ctl/caller-side";
 import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
-import { buildEnv, setControlEnv, setStoredEnv } from "../../src/main/terminals/pty";
+import { buildEnv, setControlEnv, setStoredEnv, storedEnvOf } from "../../src/main/terminals/pty";
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
@@ -373,6 +373,12 @@ describe("a terminal's environment", () => {
         assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
         assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
         assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
+        assert.deepEqual(storedEnvOf(HOST_CALLER), {
+          TET_TEST_STORED: "first",
+          TET_TEST_MACHINE: "stored",
+          TET_KEPT_ENV: "TET_TEST_STORED,TET_TEST_MACHINE",
+        });
+        assert.deepEqual(storedEnvOf(SANDBOX_CALLER), {}, "a sandbox gets none");
         stored = { TET_TEST_STORED: "second" };
         assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
         // A TET started from a tab of another inherits that one's list; its own tabs get their own.

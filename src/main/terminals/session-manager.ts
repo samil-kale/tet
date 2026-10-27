@@ -21,6 +21,7 @@ import { ensureRunning } from "../sbx/sbx-mounts";
 import { checkSbxReady, sbxListed } from "../sbx/sbx-status";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../store/settings";
+import { storedEnvOf } from "./pty";
 import { TerminalSession } from "./terminal-session";
 import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
 import type { HandoverFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
@@ -1287,8 +1288,8 @@ export class TabSessionManager {
 
   /**
    * The tab's session resumed in the OS's own terminal, the bare CLI: none of TET's setup, so no
-   * hooks and no `tet-ctl`. On this machine only — a sandbox's session would need TET's mounts.
-   * The tab is left as it is, running or not.
+   * hooks and no `tet-ctl`, but the variables kept in TET. On this machine only — a sandbox's session
+   * would need TET's mounts. The tab is left as it is, running or not.
    */
   async openInTerminal(tabId: string): Promise<void> {
     const tab = this.tabOf(tabId);
@@ -1296,7 +1297,8 @@ export class TabSessionManager {
       return;
     }
     const { agent, executable } = this.runtimeFor(tab.agentId);
-    if (!(await openExternalTerminal(tab.cwd ?? this.at.path, executable, resumeArgsOf(tab, agent)))) {
+    const variables = storedEnvOf(this.placeOf(tab).side);
+    if (!(await openExternalTerminal(tab.cwd ?? this.at.path, executable, resumeArgsOf(tab, agent), variables))) {
       this.callbacks.onNotice("error", `Could not open a terminal for the ${agent.displayName} session.`);
     }
   }

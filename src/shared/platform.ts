@@ -40,8 +40,16 @@ export interface Platform {
   /** A path as one word for the shell: single-quoted where it holds anything the shell reads. */
   shellQuotePath(path: string): string;
   /** The OS's own terminal window running `executable` in `cwd`, then staying open on its shell, as
-   *  candidates tried in order until one starts (util/process.ts's openExternalTerminal). */
-  externalTerminals(cwd: string, executable: string, args: string[], env: Record<string, string | undefined>): ExternalTerminal[];
+   *  candidates tried in order until one starts (util/process.ts's openExternalTerminal). `variables`
+   *  are exported in the line itself: a terminal that is already running hands its windows its own
+   *  environment, not the one it was started with. */
+  externalTerminals(
+    cwd: string,
+    executable: string,
+    args: string[],
+    env: Record<string, string | undefined>,
+    variables: Record<string, string>,
+  ): ExternalTerminal[];
   /** The tar that unpacks an update (the zip too: Windows' tar is bsdtar). */
   tarExecutable(env: Record<string, string | undefined>): string;
 
@@ -95,6 +103,13 @@ const posixQuote = (path: string): string => (/^[\w./:-]+$/.test(path) ? path : 
 /** A program and its arguments as one POSIX shell line, each a word of its own. */
 const posixLine = (executable: string, args: string[]): string => [executable, ...args].map(posixQuote).join(" ");
 
+/** POSIX shell commands exporting each variable, then running the program: the shell it runs under
+ *  keeps the variables. */
+const posixCommands = (variables: Record<string, string>, executable: string, args: string[]): string[] => [
+  ...Object.entries(variables).map(([name, value]) => `export ${name}=${posixQuote(value)}`),
+  posixLine(executable, args),
+];
+
 /** POSIX shells: `$SHELL`, `-c`; a `'` closed, escaped and reopened. */
 const POSIX = {
   shellExecutable: (env: Record<string, string | undefined>) => env.SHELL ?? "/bin/bash",
@@ -104,9 +119,20 @@ const POSIX = {
   sbxFirstRunMarker: () => undefined,
 };
 
-/** No `$`, backtick, quote, space or `,` (a PowerShell array); a `'` doubled, as each typographic
- *  one PowerShell also ends the string at (‘ ’ ‚ ‛). */
-const windowsQuote = (path: string): string => (/^[\w./\\:-]+$/.test(path) ? path : `'${path.replace(/['‘-‛]/g, "$&$&")}'`);
+/** A string literal; a `'` doubled, as each typographic one PowerShell also ends the string at
+ *  (‘ ’ ‚ ‛). */
+const windowsLiteral = (value: string): string => `'${value.replace(/['‘-‛]/g, "$&$&")}'`;
+
+/** A word of its own where it holds no `$`, backtick, quote, space or `,` (a PowerShell array), else
+ *  a literal. Not for a value: a bare word is a command where one is read. */
+const windowsQuote = (path: string): string => (/^[\w./\\:-]+$/.test(path) ? path : windowsLiteral(path));
+
+/** PowerShell commands setting each variable, then calling the program with the call operator `&`, as
+ *  a quoted first word is a string, not a program. */
+const windowsCommands = (variables: Record<string, string>, executable: string, args: string[]): string[] => [
+  ...Object.entries(variables).map(([name, value]) => `$env:${name} = ${windowsLiteral(value)}`),
+  `& ${[executable, ...args].map(windowsQuote).join(" ")}`,
+];
 
 export const WINDOWS: Platform = {
   id: "win32",
@@ -125,12 +151,11 @@ export const WINDOWS: Platform = {
   // `-NoProfile`: independent of the user's profile.
   shellCommandArgs: (command) => ["-NoProfile", "-Command", command],
   shellQuotePath: windowsQuote,
-  // Windows Terminal. The call operator `&`, as a quoted first word is a string, not a program;
-  // `;` is Windows Terminal's separator between tabs, so escaped for it.
-  externalTerminals: (cwd, executable, args) => [
+  // Windows Terminal. `;` is its separator between tabs, so escaped for it.
+  externalTerminals: (cwd, executable, args, _env, variables) => [
     {
       command: "wt.exe",
-      args: ["-d", cwd, "powershell.exe", "-NoExit", "-Command", `& ${[executable, ...args].map(windowsQuote).join(" ")}`].map((arg) =>
+      args: ["-d", cwd, "powershell.exe", "-NoExit", "-Command", windowsCommands(variables, executable, args).join("; ")].map((arg) =>
         arg.replace(/;/g, "\\;"),
       ),
     },
@@ -173,17 +198,20 @@ export const MAC: Platform = {
   posixShell: true,
   // Terminal.app, told by AppleScript: `open` would hand it no command. Its window keeps the shell
   // once the command ends.
-  externalTerminals: (cwd, executable, args) => [
-    {
-      command: "osascript",
-      args: [
-        "-e",
-        `tell application "Terminal" to do script "${`cd ${posixQuote(cwd)} && ${posixLine(executable, args)}`.replace(/[\\"]/g, "\\$&")}"`,
-        "-e",
-        'tell application "Terminal" to activate',
-      ],
-    },
-  ],
+  externalTerminals: (cwd, executable, args, _env, variables) => {
+    const script = [`cd ${posixQuote(cwd)}`, ...posixCommands(variables, executable, args)].join(" && ");
+    return [
+      {
+        command: "osascript",
+        args: [
+          "-e",
+          `tell application "Terminal" to do script "${script.replace(/[\\"]/g, "\\$&")}"`,
+          "-e",
+          'tell application "Terminal" to activate',
+        ],
+      },
+    ];
+  },
   appBundle: true,
   executableInRoot: ["Contents", "MacOS", "TET"],
   assetPrefix: "TET-mac",
@@ -217,8 +245,8 @@ export const LINUX: Platform = {
   posixShell: true,
   // No terminal every desktop has: the user's `$TERMINAL`, Debian's alternative, then the common
   // ones. The shell stays once the command ends.
-  externalTerminals: (_cwd, executable, args, env) => {
-    const command = ["sh", "-c", `${posixLine(executable, args)}; exec "\${SHELL:-sh}"`];
+  externalTerminals: (_cwd, executable, args, env, variables) => {
+    const command = ["sh", "-c", `${posixCommands(variables, executable, args).join("; ")}; exec "\${SHELL:-sh}"`];
     return [
       ...(env.TERMINAL ? [{ command: env.TERMINAL, args: ["-e", ...command] }] : []),
       { command: "x-terminal-emulator", args: ["-e", ...command] },
