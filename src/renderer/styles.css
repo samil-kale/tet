@@ -492,7 +492,7 @@ textarea:focus,
   background: var(--tet-toolbar-hoverBackground);
 }
 
-.status-bar-session {
+.status-bar-tab {
   max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;

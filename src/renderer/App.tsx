@@ -297,12 +297,12 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeResolved, showTab],
   );
 
-  /** The status bar's sessions: the active repository's or worktree's tabs in the strip's order, and the focused pane's
+  /** The status bar's tabs: the active repository's or worktree's tabs in the strip's order, and the focused pane's
    *  active one. */
   const agents = useAgents();
   const activeLayout = activeRefKey ? (layouts[activeRefKey] ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT;
   const activeStripTabs = activeRefKey ? stripTabs[activeRefKey] : undefined;
-  const statusSessions = useMemo(
+  const statusTabs = useMemo(
     () =>
       inOrder(activeLayout.order, activeStripTabs ?? NO_TABS).map((tab): StatusListItem => {
         const kinded = kindOf(tab);
@@ -318,8 +318,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       }),
     [activeLayout.order, activeStripTabs, agents],
   );
-  const activeSessionId = activeLayout.activeTab[activeLayout.focusedPane] ?? undefined;
-  const selectSession = useCallback(
+  const activeTabId = activeLayout.activeTab[activeLayout.focusedPane] ?? undefined;
+  const selectTab = useCallback(
     (tabId: string) => {
       if (activeRefKeyRef.current) {
         activateTab(activeRefKeyRef.current, tabId);
@@ -576,9 +576,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         project={activeProject}
         projects={projectItems}
         onSelectProject={selectProject}
-        sessions={statusSessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={selectSession}
+        tabs={statusTabs}
+        activeTabId={activeTabId}
+        onSelectTab={selectTab}
         branch={activeBranchName}
         changesCount={activeChangesCount}
         archived={archiveItems}

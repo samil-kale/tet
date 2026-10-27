@@ -14,11 +14,11 @@ interface StatusBarProps {
   /** A project's click in that list opens its repository. */
   onSelectProject: (projectId: string) => void;
   /** Its tabs in the strip's order. */
-  sessions: StatusListItem[];
+  tabs: StatusListItem[];
   /** The tab the focused pane shows; absent while it has none. */
-  activeSessionId: string | undefined;
-  /** A session's click shows its tab. */
-  onSelectSession: (tabId: string) => void;
+  activeTabId: string | undefined;
+  /** A tab's click shows it. */
+  onSelectTab: (tabId: string) => void;
   /** Its branch, or the short commit id while detached; absent while none is open. */
   branch: string | undefined;
   /** Its uncommitted changes, by the branch. */
@@ -34,15 +34,15 @@ interface StatusBarProps {
 }
 
 /** The window's bottom edge (VS Code's status bar): the active repository or worktree with its
- *  active session, whose clicks list the projects and the sessions to pick from, and its branch with its change count, whose click lists the
+ *  active tab, whose clicks list the projects and the tabs to pick from, and its branch with its change count, whose click lists the
  *  local branches; at the right edge the button of the notification center. Its icons read smaller than the rest of the app's. */
 export const StatusBar = memo(function StatusBar({
   project,
   projects,
   onSelectProject,
-  sessions,
-  activeSessionId,
-  onSelectSession,
+  tabs,
+  activeTabId,
+  onSelectTab,
   branch,
   changesCount,
   archived,
@@ -52,10 +52,10 @@ export const StatusBar = memo(function StatusBar({
 }: StatusBarProps) {
   const notices = useNoticeList();
   /** The list shown, if any: one at a time, as they share their place. */
-  const [openList, setOpenList] = useState<"projects" | "sessions" | "branches" | "archive" | null>(null);
+  const [openList, setOpenList] = useState<"projects" | "tabs" | "branches" | "archive" | null>(null);
   const closeList = useCallback(() => setOpenList(null), []);
-  const toggleList = (list: "projects" | "sessions" | "branches" | "archive"): void => setOpenList((open) => (open === list ? null : list));
-  const active = sessions.find((session) => session.id === activeSessionId);
+  const toggleList = (list: "projects" | "tabs" | "branches" | "archive"): void => setOpenList((open) => (open === list ? null : list));
+  const active = tabs.find((tab) => tab.id === activeTabId);
   // An agent's notice stands in the center until its tab's state ends, read or not.
   const highlighted = notices.some((notice) => !notice.read || !removable(notice));
   const marks = MARK_ORDER.filter((mark) => notices.some((notice) => notice.mark === mark));
@@ -69,9 +69,9 @@ export const StatusBar = memo(function StatusBar({
           </button>
         )}
         {active && (
-          <button type="button" className="status-bar-item status-bar-sessions" title="Sessions" onClick={() => toggleList("sessions")}>
+          <button type="button" className="status-bar-item status-bar-tabs" title="Tabs" onClick={() => toggleList("tabs")}>
             {active.icon}
-            <span className="status-bar-session">{active.label}</span>
+            <span className="status-bar-tab">{active.label}</span>
           </button>
         )}
         {branch && (
@@ -108,15 +108,8 @@ export const StatusBar = memo(function StatusBar({
           onClose={closeList}
         />
       )}
-      {openList === "sessions" && (
-        <StatusList
-          title="Sessions"
-          items={sessions}
-          activeId={activeSessionId}
-          trigger="status-bar-sessions"
-          onSelect={onSelectSession}
-          onClose={closeList}
-        />
+      {openList === "tabs" && (
+        <StatusList title="Tabs" items={tabs} activeId={activeTabId} trigger="status-bar-tabs" onSelect={onSelectTab} onClose={closeList} />
       )}
       {openList === "archive" && (
         <StatusList

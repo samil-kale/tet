@@ -12,7 +12,7 @@ export interface StatusListItem {
 }
 
 interface StatusListProps {
-  /** Its header, as the status bar's button names it: "Sessions". */
+  /** Its header, as the status bar's button names it: "Tabs". */
   title: string;
   items: StatusListItem[];
   /** The entry that is open now; absent while none is. */
@@ -25,7 +25,7 @@ interface StatusListProps {
 }
 
 /**
- * The status bar's lists (projects, sessions, branches), laid out as the notification center is
+ * The status bar's lists (projects, tabs, branches), laid out as the notification center is
  * (`NoticesCenter`): above the bar, over the button that opens it. Closed by the status bar's button, its own
  * X or a press outside it.
  */
