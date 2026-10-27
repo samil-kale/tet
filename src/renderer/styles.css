@@ -2867,6 +2867,7 @@ textarea:focus,
   color: var(--tet-notice-foreground);
   background: var(--tet-lane-background);
   border: 1px solid var(--tet-notice-border);
+  box-shadow: 0 4px 12px var(--tet-popup-shadow);
   /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
   animation: notice-enter 0.35s ease-out;
   transition:
