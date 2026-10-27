@@ -2834,7 +2834,7 @@ textarea:focus,
 /* In the notification center it is a `.status-list-item` in padding: the two lists sit side by side
    and read alike. */
 .notices-center .notice.session {
-  min-height: 35px;
+  min-height: 30px;
   padding: 4px 10px;
 }
 
@@ -2906,7 +2906,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
+  height: 30px;
   padding: 0 10px;
   font-size: var(--tet-font-size);
   line-height: 22px;
