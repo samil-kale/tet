@@ -53,6 +53,9 @@ export interface TabDescriptor {
   sandboxed?: boolean;
   /** A saved command's tab; only these offer Restart. */
   savedCommand?: boolean;
+  /** Opened in the OS's terminal (`openInTerminal`), where its session runs on: no fit starts the tab,
+   *  only Restart takes it back, and closing it deletes that session, so the window asks first. */
+  openedInTerminal?: boolean;
   /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
    *  run lands where the last lay. The line, since `name` may be missing. */
   command?: string;

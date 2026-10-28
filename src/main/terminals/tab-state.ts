@@ -43,9 +43,6 @@ export interface TabState extends TabDescriptor {
   handover?: HandoverFiles;
   /** A handover's copy its start made (Launch.handoverDir), deleted with the tab. */
   handoverDir?: string;
-  /** Opened in the OS's terminal (`openInTerminal`), where the session runs on: no fit starts the tab,
-   *  closing it keeps the session, only Restart takes it back. */
-  openedInTerminal?: true;
   /** Restarted (`restartTab`): the next `running` wipes the old run's output (`clearOutput`). */
   restarted?: true;
 }
@@ -130,7 +127,7 @@ export function answersQuestion(data: string): boolean {
 
 /** `starting` comes from the caller's `indicators`, `sandboxed` from its `placeOf`. */
 export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean): TabDescriptor {
-  const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, inTurn, waitingAt, command } = tab;
+  const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, inTurn, waitingAt, command, openedInTerminal } = tab;
   return {
     tabId,
     agentId,
@@ -146,6 +143,7 @@ export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolea
     sessionId,
     savedCommand: isSavedCommandTab(tab),
     command,
+    openedInTerminal,
   };
 }
 

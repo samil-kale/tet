@@ -185,10 +185,29 @@ export const Pane = memo(function Pane({
 
   /**
    * Editor tabs close in the renderer, terminals in main. Their unsaved-edit question may keep them
-   * open while the same "Close All"'s terminals go — deleting their sessions for good.
+   * open while the same "Close All"'s terminals go — deleting their sessions for good, a session
+   * still running in a terminal (`openedInTerminal`) asked about first.
    */
   const closeTabs = useCallback(
-    (tabIds: string[]) => {
+    async (tabIds: string[]) => {
+      const opened = tabs.filter((tab) => {
+        const kinded = kindOf(tab);
+        return tabIds.includes(tab.tabId) && kinded.kind === "terminal" && kinded.tab.openedInTerminal === true;
+      }).length;
+      if (
+        opened > 0 &&
+        !(await confirmed({
+          title: "Close tab",
+          message:
+            opened === 1
+              ? "This session is open in a terminal. Close its tab?"
+              : `${opened} sessions are open in a terminal. Close their tabs?`,
+          detail: "Closing deletes the session, though a terminal is still running it.",
+          confirmLabel: opened === 1 ? "Delete session" : "Delete sessions",
+        }))
+      ) {
+        return;
+      }
       const byKind: Record<PaneTabKind, string[]> = { terminal: [], editor: [] };
       for (const tabId of tabIds) {
         byKind[paneTabKind(tabId)].push(tabId);
@@ -200,7 +219,7 @@ export const Pane = memo(function Pane({
         void window.tet.tabs.close(at, byKind.terminal);
       }
     },
-    [at, onCloseEditors],
+    [at, onCloseEditors, tabs],
   );
 
   const restartTab = useCallback(
@@ -343,7 +362,7 @@ export const Pane = memo(function Pane({
     const menuTab = tabs.find((tab) => tab.tabId === tabId);
     const closeAction = (label: string, targets: string[]): ContextMenuEntry => ({
       label,
-      run: targets.length > 0 ? () => closeTabs(targets) : undefined,
+      run: targets.length > 0 ? () => void closeTabs(targets) : undefined,
     });
     const moveEntries: ContextMenuEntry[] =
       siblingPanes.length > 0
@@ -545,7 +564,7 @@ export const Pane = memo(function Pane({
                   )}
                 </span>
                 {face.label}
-                <IconButton title={face.closeTitle} isolated onClick={() => closeTabs([tab.tabId])}>
+                <IconButton title={face.closeTitle} isolated onClick={() => void closeTabs([tab.tabId])}>
                   <CloseIcon />
                 </IconButton>
               </div>
