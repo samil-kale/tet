@@ -202,7 +202,7 @@ export const Pane = memo(function Pane({
             opened === 1
               ? "This session is open in a terminal. Close its tab?"
               : `${opened} sessions are open in a terminal. Close their tabs?`,
-          detail: "Closing deletes the session, though a terminal is still running it.",
+          detail: "Closing the tab deletes the session.",
           confirmLabel: opened === 1 ? "Delete session" : "Delete sessions",
         }))
       ) {
