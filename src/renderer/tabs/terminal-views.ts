@@ -618,19 +618,6 @@ export function clearTerminal(ref: ProjectRef, tabId: string): void {
   views.get(viewKey(ref, tabId))?.term.write("\x1bc");
 }
 
-/** Tabs whose next start wipes the screen first: a restart asked by the window (`clearOnNextStart`). */
-const clearOnStart = new Set<string>();
-
-/** The tab's next start clears its terminal (`takeClearOnStart`), after the old process's last output. */
-export function clearOnNextStart(ref: ProjectRef, tabId: string): void {
-  clearOnStart.add(viewKey(ref, tabId));
-}
-
-/** Whether `clearOnNextStart` asked for this start; asked once. */
-export function takeClearOnStart(ref: ProjectRef, tabId: string): boolean {
-  return clearOnStart.delete(viewKey(ref, tabId));
-}
-
 /** Turns off the mouse reporting modes (and focus reporting) a killed process left on, so its
  *  successor does not get mouse moves typed at it before it asks for them itself. */
 export function resetMouseModes(ref: ProjectRef, tabId: string): void {
@@ -647,7 +634,6 @@ export function disposeTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
   earlyOutput.delete(key);
   restoredOutput.delete(key);
-  clearOnStart.delete(key);
   const view = views.get(key);
   if (!view) {
     return;

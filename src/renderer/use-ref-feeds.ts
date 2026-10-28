@@ -4,8 +4,7 @@ import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { TabDescriptor } from "../shared/types/terminals";
 import { forget, stableItems } from "./identity";
-import { clearTerminal, resetMouseModes, takeClearOnStart } from "./tabs/terminal-views";
-import { useLatest } from "./ui/use-latest";
+import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
 
 /**
  * Every repository's and worktree's git state, tabs and whether something starts there, by
@@ -17,11 +16,6 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
   const [states, setStates] = useState<Record<string, RepositoryState>>({});
   /** Every repository's and worktree's tabs: the project list needs all of them at once. */
   const [tabs, setTabs] = useState<Record<string, TabDescriptor[]>>({});
-  /**
-   * For callbacks that read it only on a click: depending on `tabs` would remake them, and every
-   * pane's props, on every push.
-   */
-  const tabsRef = useLatest(tabs);
   /**
    * Repositories and worktrees with something starting (bootstrap listing, a CLI booting). Read by
    * the progress bar and the layout persistence.
@@ -35,14 +29,12 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         const refKey = refKeyOf(ref);
         setTabs((current) => ({ ...current, [refKey]: stableItems(current[refKey], list, (tab) => tab.tabId) }));
       }),
-      window.tet.tabs.onStatus(({ ref, tabId, status }) => {
+      window.tet.tabs.onStatus(({ ref, tabId, status, restarted }) => {
         const refKey = refKeyOf(ref);
-        // A saved command's restart kill writes a trailing "^C"; clearing once the respawn runs keeps
-        // it off screen (main flushes the old output before the status, the new one's has not come).
+        // A restart's kill writes a trailing "^C"; clearing once the respawn runs keeps it off screen
+        // (main flushes the old output before the status, the new one's has not come).
         if (status === "running") {
-          // A restart of a clearable tab (the shell) wipes the old run's output, as a saved command's does.
-          const restarted = takeClearOnStart(ref, tabId);
-          if (restarted || tabsRef.current[refKey]?.some((tab) => tab.tabId === tabId && tab.savedCommand)) {
+          if (restarted) {
             clearTerminal(ref, tabId);
           } else {
             resetMouseModes(ref, tabId);
@@ -89,7 +81,7 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
     })();
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
-  }, [projectsRef, tabsRef, onProjects]);
+  }, [projectsRef, onProjects]);
 
   /** Drops what is held for a closed repository or worktree. */
   const forgetRef = useCallback((refKey: string) => {

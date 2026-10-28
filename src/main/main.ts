@@ -214,11 +214,11 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onOutput: (ref, tabId, data) => {
     appWindow.queueOutput(ref, tabId, data);
   },
-  onStatus: (ref, tabId, status: TerminalStatus) => {
+  onStatus: (ref, tabId, status: TerminalStatus, restarted) => {
     // Output batched before the change goes first, so a status never overtakes it (a restart's
-    // clear in App.tsx would otherwise run before the dying process's last bytes arrive).
+    // clear in use-ref-feeds.ts would otherwise run before the dying process's last bytes arrive).
     appWindow.flushOutput();
-    send("tabs:status", { ref, tabId, status });
+    send("tabs:status", { ref, tabId, status, restarted });
   },
   onStartupProgress: (ref, show) => send("tabs:startup-progress", { ref, show }),
   onNotice: notice,

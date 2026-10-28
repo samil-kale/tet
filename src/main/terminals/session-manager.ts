@@ -89,7 +89,8 @@ export interface SessionManagerCallbacks {
   /** The archived tabs of this repository or worktree, whole, on every change. */
   onArchived: (ref: ProjectRef, tabs: TabDescriptor[]) => void;
   onOutput: (ref: ProjectRef, tabId: string, data: string) => void;
-  onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus) => void;
+  /** `restarted`: a `running` that follows a restart (`restartTab`), whoever asked for it. */
+  onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus, restarted?: true) => void;
   /** Whether anything in this repository or worktree is still starting — drives the tab strip's
    *  bar. */
   onStartupProgress: (ref: ProjectRef, show: boolean) => void;
@@ -626,8 +627,9 @@ export class TabSessionManager {
     }
     const tab = this.tabOf(tabId);
     // A failed start (`error`) waits for Restart, which reads the size kept above; retried here,
-    // every resize would rerun the whole setup, sbx's checks and notice included.
-    if (!tab || tab.status === "error") {
+    // every resize would rerun the whole setup, sbx's checks and notice included. Likewise a tab
+    // opened in a terminal before its first start.
+    if (!tab || tab.status === "error" || tab.openedInTerminal) {
       return;
     }
     this.startTab(tab);
@@ -662,8 +664,8 @@ export class TabSessionManager {
         }
         const launch = await place.launch(this.launchInput(tab));
         const dims = this.lastSizes.get(tabId);
-        if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId)) {
-          // Closed while the setup ran: nothing reads a copy it made.
+        if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId) || tab.openedInTerminal) {
+          // Closed (or opened in a terminal) while the setup ran: nothing reads a copy it made.
           if (launch.handoverDir !== undefined) {
             this.removeHandoverCopy(launch.handoverDir);
           }
@@ -693,7 +695,12 @@ export class TabSessionManager {
 
   private setTabStatus(tab: TabState, status: TerminalStatus): void {
     tab.status = status;
-    this.callbacks.onStatus(this.at.ref, tab.tabId, status);
+    // Said once, with the restarted process running: the old one's output is flushed by then.
+    const restarted = status === "running" ? tab.restarted : undefined;
+    if (restarted) {
+      tab.restarted = undefined;
+    }
+    this.callbacks.onStatus(this.at.ref, tab.tabId, status, restarted);
   }
 
   /**
@@ -1111,7 +1118,7 @@ export class TabSessionManager {
     }
     this.record({ tabId, kind: "closed", sessionId });
     this.tabs = this.tabs.filter((candidate) => candidate !== tab);
-    Object.assign(tab, { status: "ready", inTurn: false, waitingAt: undefined, finishedAt: undefined });
+    Object.assign(tab, { status: "ready", inTurn: false, waitingAt: undefined, finishedAt: undefined, openedInTerminal: undefined });
     this.archivedTabs.push(tab);
     this.postTabs();
     this.postArchived();
@@ -1250,8 +1257,12 @@ export class TabSessionManager {
         return false;
       }
       const session = this.sessions.get(tabId);
-      session?.restart();
-      return session !== undefined;
+      if (!session) {
+        return false;
+      }
+      tab.restarted = true;
+      session.restart();
+      return true;
     }
     if (!this.lastSizes.has(tabId)) {
       return false;
@@ -1271,6 +1282,7 @@ export class TabSessionManager {
           // Closed meanwhile, or started anew by something else: nothing left to start.
           if (this.tabs.includes(tab) && this.sessions.get(tabId) === session) {
             this.sessions.delete(tabId);
+            tab.restarted = true;
             this.startTab(tab);
           }
         });
@@ -1281,6 +1293,8 @@ export class TabSessionManager {
     }
     // `startTab` gives up on a tab that already has a session.
     this.sessions.delete(tabId);
+    tab.openedInTerminal = undefined;
+    tab.restarted = true;
     // The status stays until the new process reports, so a start giving up again offers Restart.
     this.startTab(tab);
     return true;
@@ -1289,7 +1303,9 @@ export class TabSessionManager {
   /**
    * The tab's session resumed in the OS's own terminal, the bare CLI: none of TET's setup, so no
    * hooks and no `tet-ctl`, but the variables kept in TET. On this machine only — a sandbox's session
-   * would need TET's mounts. The tab is left as it is, running or not.
+   * would need TET's mounts. The tab is stopped first, not closed: two processes must not write
+   * one session, and a restart takes it back. One not started yet (restored, not fitted) is held
+   * `stopped` the same way, or its first fit would resume the session beside the terminal's.
    */
   async openInTerminal(tabId: string): Promise<void> {
     const tab = this.tabOf(tabId);
@@ -1298,9 +1314,20 @@ export class TabSessionManager {
     }
     const { agent, executable } = this.runtimeFor(tab.agentId);
     const variables = storedEnvOf(this.placeOf(tab).side);
+    const session = this.sessions.get(tabId);
+    // Before the terminal opens, so no fit starts the tab meanwhile.
+    tab.openedInTerminal = session ? undefined : true;
+    await session?.stop();
     if (!(await openExternalTerminal(tab.cwd ?? this.at.path, executable, resumeArgsOf(tab, agent), variables))) {
+      tab.openedInTerminal = undefined;
       this.callbacks.onNotice("error", `Could not open a terminal for the ${agent.displayName} session.`);
+      return;
     }
+    if (tab.openedInTerminal) {
+      this.setTabStatus(tab, "stopped");
+    }
+    // An intentional `stop` prints nothing of its own, so the tab says why it stopped.
+    this.reportOutput(tab, "\r\n[TET] Opened in an external terminal. Restart the tab from its menu to take it back.\r\n");
   }
 
   /**

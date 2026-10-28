@@ -7,10 +7,10 @@ import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
 import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, refusal } from "../ui/Dialog";
+import { askName, confirmed, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { TerminalHost } from "./TerminalHost";
-import { clearOnNextStart, clearTerminalOutput, resetMouseModes } from "./terminal-views";
+import { clearTerminalOutput, resetMouseModes } from "./terminal-views";
 import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
@@ -204,10 +204,7 @@ export const Pane = memo(function Pane({
   );
 
   const restartTab = useCallback(
-    (tabId: string, clearable: boolean) => {
-      if (clearable) {
-        clearOnNextStart(at, tabId);
-      }
+    (tabId: string) => {
       // The menu closing under the pointer sends a mouse move; a process already quitting echoes it as text.
       resetMouseModes(at, tabId);
       void window.tet.tabs.restart(at, tabId);
@@ -218,7 +215,24 @@ export const Pane = memo(function Pane({
   /** The tab menu's Archive: keeps the session, to the ARCHIVE lane. */
   const archiveTab = useCallback((tabId: string) => void window.tet.tabs.archive(at, [tabId]), [at]);
 
-  const openInTerminal = useCallback((tabId: string) => void window.tet.tabs.openInTerminal(at, tabId), [at]);
+  /** The tab stops for it, so a turn still running is asked about first. */
+  const openInTerminal = useCallback(
+    async (tab: TabDescriptor) => {
+      const inTurn = tab.inTurn === true || tab.waitingAt !== undefined;
+      const answer =
+        !inTurn ||
+        (await confirmed({
+          title: "Open in Terminal",
+          message: "Open this session in a terminal?",
+          detail: "Its turn is still running. The tab stops and the turn is cut short.",
+          confirmLabel: "Open in Terminal",
+        }));
+      if (answer) {
+        await window.tet.tabs.openInTerminal(at, tab.tabId);
+      }
+    },
+    [at],
+  );
 
   /** The tab menu's Mount File and Mount Folder: the picked path is mounted like a dropped one
    *  (handPaths says the mount or its refusal as a notice); nothing is typed into the tab. */
@@ -395,7 +409,7 @@ export const Pane = memo(function Pane({
     return [
       {
         label: "Restart",
-        run: restartable ? () => restartTab(tabId, info?.clearable === true) : undefined,
+        run: restartable ? () => restartTab(tabId) : undefined,
       },
       // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
       ...(info?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
@@ -412,7 +426,10 @@ export const Pane = memo(function Pane({
             // Unlike Close, keeps the session; without one it would only close (closeKeepingSessions).
             { label: "Archive", run: withSession ? () => archiveTab(tabId) : undefined },
             // On this machine only: a sandbox's session resumes with TET's mounts alone.
-            { label: "Open in Terminal", run: withSession && terminal.sandboxed !== true ? () => openInTerminal(tabId) : undefined },
+            {
+              label: "Open in Terminal",
+              run: withSession && terminal.sandboxed !== true ? () => void openInTerminal(withSession) : undefined,
+            },
           ] satisfies ContextMenuEntry[])
         : []),
       ...mountEntries,

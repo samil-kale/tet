@@ -315,7 +315,8 @@ export interface TETApi {
     onTabs: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
     /** One message per flush for all terminals. */
     onOutput: (listener: (batch: TerminalOutput[]) => void) => Unsubscribe;
-    onStatus: (listener: (payload: TabRef & { status: TerminalStatus }) => void) => Unsubscribe;
+    /** `restarted`: a `running` after a restart, whoever asked — the window wipes the old run's output. */
+    onStatus: (listener: (payload: TabRef & { status: TerminalStatus; restarted?: true }) => void) => Unsubscribe;
     /** Anything in the project still starting (a CLI booting, sessions listing). */
     onStartupProgress: (listener: (payload: { ref: ProjectRef; show: boolean }) => void) => Unsubscribe;
     /** A tab the control channel opened, to bring to front. */
