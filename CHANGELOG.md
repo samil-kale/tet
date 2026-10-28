@@ -3,6 +3,15 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.8 (2026-10-28)
+
+- **Open in Terminal.** The external terminal gets the tab's own environment variables. Closing a
+  tab opened this way asks first, since it deletes the session while the terminal keeps running it.
+- **Inline diff.** Shows only the changed line numbers instead of every line's.
+- **Notification center.** The status bar calls them tabs instead of sessions, and its rows sit
+  tighter.
+- **Notices** get a subtle shadow.
+
 ## 0.22.7 (2026-10-26)
 
 - **Shell restart.** Restarting a shell tab from its menu clears its output.
