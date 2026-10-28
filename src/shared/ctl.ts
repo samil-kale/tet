@@ -550,7 +550,7 @@ const VERBS = [
     verb: "tabs-close",
     group: "Tabs",
     usage: "tabs-close <tab-id> [TARGET]",
-    summary: "Close a tab and delete its session.",
+    summary: "Close a tab and delete its session, unless the session runs in a terminal of the OS's: that is kept archived.",
     positionals: ["tabId"],
     sandbox: "ownProject",
   },

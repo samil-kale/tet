@@ -43,7 +43,8 @@ export interface TabState extends TabDescriptor {
   handover?: HandoverFiles;
   /** A handover's copy its start made (Launch.handoverDir), deleted with the tab. */
   handoverDir?: string;
-  /** Opened in the OS's terminal before its first start: no fit starts it, only Restart. */
+  /** Opened in the OS's terminal (`openInTerminal`), where the session runs on: no fit starts the tab,
+   *  closing it keeps the session, only Restart takes it back. */
   openedInTerminal?: true;
   /** Restarted (`restartTab`): the next `running` wipes the old run's output (`clearOutput`). */
   restarted?: true;

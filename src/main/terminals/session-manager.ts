@@ -130,7 +130,8 @@ export interface InspectedTab extends TabDescriptor {
 /**
  * The terminal tabs of a project's repository or one of its worktrees, mirroring the
  * agents' persisted sessions: each session found at open becomes a tab. Closing a tab deletes its
- * session (`closeTabs`, `tet-ctl`); the window's close keeps it (`closeKeepingSessions`), and a
+ * session (`closeTabs`, `tet-ctl`) unless it runs in a terminal of the OS's; the window's close
+ * keeps it (`closeKeepingSessions`), and a
  * session kept archived (store/archive.ts) is an archived tab, with no process, until it is
  * reopened or deleted.
  */
@@ -822,7 +823,7 @@ export class TabSessionManager {
   }
 
   /**
-   * A closed tab's session keeps printing while it quits (closeTabs lists the tab as gone first);
+   * A closed tab's session keeps printing while it quits (deleteTabs lists the tab as gone first);
    * that output reaches nobody.
    */
   private reportOutput(tab: TabState, data: string): void {
@@ -945,10 +946,38 @@ export class TabSessionManager {
   }
 
   /**
+   * Deletes the tabs' sessions, but a tab opened in a terminal keeps its: the session still runs
+   * there, so it is kept archived as the window's close keeps one (`closeKeeping`).
+   */
+  async closeTabs(tabIds: string[]): Promise<void> {
+    await this.closeKeeping(tabIds, (tab) => tab.openedInTerminal === true);
+  }
+
+  /**
+   * Keeps the sessions of the tabs `keeps` names archived (`keepArchived`), a refusal said in a
+   * notice, and deletes the rest with their tabs (`deleteTabs`).
+   */
+  private async closeKeeping(tabIds: string[], keeps: (tab: TabState) => boolean): Promise<void> {
+    const others: string[] = [];
+    for (const tabId of tabIds) {
+      const tab = this.tabOf(tabId);
+      if (tab?.sessionId === undefined || !keeps(tab)) {
+        others.push(tabId);
+        continue;
+      }
+      const refused = this.keepArchived(tab, tab.sessionId);
+      if (refused !== undefined) {
+        this.callbacks.onNotice("error", refused);
+      }
+    }
+    await this.deleteTabs(others);
+  }
+
+  /**
    * Deletes the tabs' sessions. All leave the UI at once; teardown runs one tab at a time, so
    * listing and removal never overlap.
    */
-  async closeTabs(tabIds: string[]): Promise<void> {
+  private async deleteTabs(tabIds: string[]): Promise<void> {
     const doomed = new Set(tabIds);
     const tabs = this.tabs.filter((tab) => doomed.has(tab.tabId));
     if (tabs.length === 0) {
@@ -1004,7 +1033,7 @@ export class TabSessionManager {
 
   /**
    * Deletes a removed tab's persisted session; `index` puts the tab back if that fails. `stopped`
-   * is the stop closeTabs started.
+   * is the stop deleteTabs started.
    */
   private async destroyTab(tab: TabState, index: number, stopped: Promise<void> | undefined): Promise<void> {
     const session = this.sessions.get(tab.tabId);
@@ -1086,23 +1115,11 @@ export class TabSessionManager {
 
   /**
    * The window's close: a tab with a session is kept archived, its session with it (keepArchived);
-   * any other closes as `closeTabs` closes it. One whose session cannot be kept stays, said in a
+   * any other closes as `deleteTabs` closes it. One whose session cannot be kept stays, said in a
    * notice.
    */
   async closeKeepingSessions(tabIds: string[]): Promise<void> {
-    const others: string[] = [];
-    for (const tabId of tabIds) {
-      const tab = this.tabOf(tabId);
-      if (tab?.sessionId === undefined) {
-        others.push(tabId);
-        continue;
-      }
-      const refused = this.keepArchived(tab, tab.sessionId);
-      if (refused !== undefined) {
-        this.callbacks.onNotice("error", refused);
-      }
-    }
-    await this.closeTabs(others);
+    await this.closeKeeping(tabIds, () => true);
   }
 
   /**
@@ -1321,14 +1338,14 @@ export class TabSessionManager {
     const variables = storedEnvOf(this.placeOf(tab).side);
     const session = this.sessions.get(tabId);
     // Before the terminal opens, so no fit starts the tab meanwhile.
-    tab.openedInTerminal = session ? undefined : true;
+    tab.openedInTerminal = true;
     await session?.stop();
     if (!(await openExternalTerminal(tab.cwd ?? this.at.path, executable, resumeArgsOf(tab, agent), variables))) {
       tab.openedInTerminal = undefined;
       this.callbacks.onNotice("error", `Could not open a terminal for the ${agent.displayName} session.`);
       return;
     }
-    if (tab.openedInTerminal) {
+    if (!session) {
       this.setTabStatus(tab, "stopped");
     }
     // An intentional `stop` prints nothing of its own, so the tab says why it stopped, on a screen

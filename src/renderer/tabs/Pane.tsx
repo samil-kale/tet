@@ -425,11 +425,11 @@ export const Pane = memo(function Pane({
             },
             // Unlike Close, keeps the session; without one it would only close (closeKeepingSessions).
             { label: "Archive", run: withSession ? () => archiveTab(tabId) : undefined },
-            // On this machine only: a sandbox's session resumes with TET's mounts alone.
-            {
-              label: "Open in Terminal",
-              run: withSession && terminal.sandboxed !== true ? () => void openInTerminal(withSession) : undefined,
-            },
+            // On this machine only: a sandbox's session resumes with TET's mounts alone, so a sandboxed
+            // tab has no entry, not a disabled one.
+            ...(terminal.sandboxed === true
+              ? []
+              : [{ label: "Open in Terminal", run: withSession ? () => void openInTerminal(withSession) : undefined }]),
           ] satisfies ContextMenuEntry[])
         : []),
       ...mountEntries,
