@@ -612,12 +612,6 @@ export function rethemeTerminals(): void {
   }
 }
 
-/** Wipes scrollback and screen, for a restart. Written as a reset (RIS) rather than `clear()`, so it
- *  lands after output xterm has queued but not parsed yet, and takes the cursor line too. */
-export function clearTerminal(ref: ProjectRef, tabId: string): void {
-  views.get(viewKey(ref, tabId))?.term.write("\x1bc");
-}
-
 /** Turns off the mouse reporting modes (and focus reporting) a killed process left on, so its
  *  successor does not get mouse moves typed at it before it asks for them itself. */
 export function resetMouseModes(ref: ProjectRef, tabId: string): void {

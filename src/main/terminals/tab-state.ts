@@ -45,8 +45,7 @@ export interface TabState extends TabDescriptor {
   handoverDir?: string;
   /** Opened in the OS's terminal before its first start: no fit starts it, only Restart. */
   openedInTerminal?: true;
-  /** Restarted (`restartTab`): the next `running` tells the window to wipe the old run's output
-   *  (`onStatus`). */
+  /** Restarted (`restartTab`): the next `running` wipes the old run's output (`clearOutput`). */
   restarted?: true;
 }
 

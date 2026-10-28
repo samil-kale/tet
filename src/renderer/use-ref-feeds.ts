@@ -4,7 +4,7 @@ import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { TabDescriptor } from "../shared/types/terminals";
 import { forget, stableItems } from "./identity";
-import { clearTerminal, resetMouseModes } from "./tabs/terminal-views";
+import { resetMouseModes } from "./tabs/terminal-views";
 
 /**
  * Every repository's and worktree's git state, tabs and whether something starts there, by
@@ -29,16 +29,10 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         const refKey = refKeyOf(ref);
         setTabs((current) => ({ ...current, [refKey]: stableItems(current[refKey], list, (tab) => tab.tabId) }));
       }),
-      window.tet.tabs.onStatus(({ ref, tabId, status, restarted }) => {
+      window.tet.tabs.onStatus(({ ref, tabId, status }) => {
         const refKey = refKeyOf(ref);
-        // A restart's kill writes a trailing "^C"; clearing once the respawn runs keeps it off screen
-        // (main flushes the old output before the status, the new one's has not come).
         if (status === "running") {
-          if (restarted) {
-            clearTerminal(ref, tabId);
-          } else {
-            resetMouseModes(ref, tabId);
-          }
+          resetMouseModes(ref, tabId);
         }
         setTabs((current) => {
           const list = current[refKey];

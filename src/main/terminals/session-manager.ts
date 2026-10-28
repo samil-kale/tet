@@ -89,8 +89,7 @@ export interface SessionManagerCallbacks {
   /** The archived tabs of this repository or worktree, whole, on every change. */
   onArchived: (ref: ProjectRef, tabs: TabDescriptor[]) => void;
   onOutput: (ref: ProjectRef, tabId: string, data: string) => void;
-  /** `restarted`: a `running` that follows a restart (`restartTab`), whoever asked for it. */
-  onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus, restarted?: true) => void;
+  onStatus: (ref: ProjectRef, tabId: string, status: TerminalStatus) => void;
   /** Whether anything in this repository or worktree is still starting — drives the tab strip's
    *  bar. */
   onStartupProgress: (ref: ProjectRef, show: boolean) => void;
@@ -695,12 +694,12 @@ export class TabSessionManager {
 
   private setTabStatus(tab: TabState, status: TerminalStatus): void {
     tab.status = status;
-    // Said once, with the restarted process running: the old one's output is flushed by then.
-    const restarted = status === "running" ? tab.restarted : undefined;
-    if (restarted) {
+    // With the restarted process running, the old one's output is over: its kill writes a trailing "^C".
+    if (status === "running" && tab.restarted) {
       tab.restarted = undefined;
+      this.clearOutput(tab);
     }
-    this.callbacks.onStatus(this.at.ref, tab.tabId, status, restarted);
+    this.callbacks.onStatus(this.at.ref, tab.tabId, status);
   }
 
   /**
@@ -830,6 +829,12 @@ export class TabSessionManager {
     if (this.tabs.includes(tab)) {
       this.callbacks.onOutput(this.at.ref, tab.tabId, data);
     }
+  }
+
+  /** Wipes the tab's scrollback and screen with a reset (RIS), sent as output so it lands after what
+   *  the session wrote last. */
+  private clearOutput(tab: TabState): void {
+    this.reportOutput(tab, "\x1bc");
   }
 
   private startSession(tab: TabState, place: TabPlace, launch: Launch): TerminalSession {
@@ -1326,8 +1331,10 @@ export class TabSessionManager {
     if (tab.openedInTerminal) {
       this.setTabStatus(tab, "stopped");
     }
-    // An intentional `stop` prints nothing of its own, so the tab says why it stopped.
-    this.reportOutput(tab, "\r\n[TET] Opened in an external terminal. Restart the tab from its menu to take it back.\r\n");
+    // An intentional `stop` prints nothing of its own, so the tab says why it stopped, on a screen
+    // wiped of the stopped TUI's last frame.
+    this.clearOutput(tab);
+    this.reportOutput(tab, "[TET] Opened in an external terminal. Restart the tab from its menu to take it back.\r\n");
   }
 
   /**
