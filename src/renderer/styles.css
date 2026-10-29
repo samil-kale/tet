@@ -2831,11 +2831,12 @@ textarea:focus,
   text-overflow: ellipsis;
 }
 
-/* In the notification center it is a `.status-list-item` in padding: the two lists sit side by side
-   and read alike. */
+/* A session's row in the notification center is sized as a `.status-list-item`: the two lists
+   read alike because this box is declared once, shared by both selectors. */
+.status-list-item,
 .notices-center .notice.session {
-  min-height: 30px;
-  padding: 4px 10px;
+  height: 30px;
+  padding: 0 10px;
 }
 
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
@@ -2901,13 +2902,11 @@ textarea:focus,
   overflow-y: auto;
 }
 
-/* A session: its icon, then its name, in a notice's size and padding. */
+/* A session: its icon, then its name. */
 .status-list-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 10px;
   font-size: var(--tet-font-size);
   line-height: 22px;
   cursor: pointer;
@@ -2917,7 +2916,8 @@ textarea:focus,
   border-top: 1px solid var(--tet-notice-border);
 }
 
-.status-list-item:hover {
+.status-list-item:hover,
+.notices-center .notice.clickable:hover {
   background: var(--tet-list-hoverBackground);
 }
 
@@ -2956,10 +2956,6 @@ textarea:focus,
 
 .notices-center .notice.clickable {
   cursor: pointer;
-}
-
-.notices-center .notice.clickable:hover {
-  background: var(--tet-list-hoverBackground);
 }
 
 .notice .icon-button {
