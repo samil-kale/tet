@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.22.9 (2026-10-30)
+
+- **Fixes.** A session's row in the notification center is the same height as in the status list.
+
 ## 0.22.8 (2026-10-28)
 
 - **Open in Terminal.** The external terminal gets the tab's own environment variables. Closing a
