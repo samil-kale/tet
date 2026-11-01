@@ -7,6 +7,53 @@ import type { spawnAgentProcess } from "../../src/main/terminals/pty";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { tempDir, withEnvAsync } from ".";
 
+/** A process that leaves when asked to quit or killed, or with `hang` only when the test says so. */
+export class FakeProcess {
+  exited = false;
+  private readonly exitListeners: ((exit: { exitCode: number }) => void)[] = [];
+
+  constructor(private readonly hang: boolean) {}
+
+  onData(): { dispose(): void } {
+    return { dispose: () => undefined };
+  }
+
+  onExit(listener: (exit: { exitCode: number }) => void): { dispose(): void } {
+    this.exitListeners.push(listener);
+    return { dispose: () => undefined };
+  }
+
+  resize(): void {
+    return undefined;
+  }
+
+  write(data: string): void {
+    if (data === "\x03") {
+      this.leaveUnlessHanging();
+    }
+  }
+
+  kill(): void {
+    this.leaveUnlessHanging();
+  }
+
+  exit(): void {
+    if (this.exited) {
+      return;
+    }
+    this.exited = true;
+    for (const listener of [...this.exitListeners]) {
+      listener({ exitCode: 0 });
+    }
+  }
+
+  private leaveUnlessHanging(): void {
+    if (!this.hang) {
+      setTimeout(() => this.exit(), 5);
+    }
+  }
+}
+
 export const NO_CALLBACKS: SessionManagerCallbacks = {
   onTabs: () => undefined,
   onArchived: () => undefined,

@@ -1,5 +1,4 @@
 import * as assert from "node:assert/strict";
-import * as path from "node:path";
 import { describe, it, mock } from "node:test";
 import type { IPty } from "node-pty";
 import type { SessionProvider } from "../../src/main/agents/agent";
@@ -7,67 +6,21 @@ import { claudeAgent } from "../../src/main/agents/claude";
 import { HOST_CALLER } from "../../src/main/ctl/caller-side";
 import type { TabSessionManager } from "../../src/main/terminals/session-manager";
 import { HostPlace } from "../../src/main/terminals/tab-place";
-import type { TabState } from "../../src/main/terminals/tab-state";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { deferred, eventually, sleep } from "../helpers";
-import { withEmptyPath } from "../helpers/session-manager";
+import { FakeProcess, withEmptyPath } from "../helpers/session-manager";
 
-/** terminals/session-manager.ts: a tab's process from its start to its end, and what happens when
- *  the window acts while one of them is underway. Over a pty and a session store standing in, so any
- *  race is held open on purpose. */
+/** terminals/tab-runs.ts, through its session manager: a tab's process from its start to its end,
+ *  and what happens when the window acts while one of them is underway. Over a pty and a session
+ *  store standing in, so any race is held open on purpose. */
 
+/** The tab of the one session listed: a restored tab goes by its session's id. */
+const TAB = "s1";
 /** Long enough for what a start still has underway to have spawned, were it going to. */
 const SETTLE_MS = 100;
 /** Past TerminalSession's whole stop, which a process that outlives it is waited out for. */
 const OUTLIVED_STOP_MS = 5000;
-
-/** A process that leaves when asked to quit or killed, or with `hang` only when the test says so. */
-class FakeProcess {
-  exited = false;
-  private readonly exitListeners: ((exit: { exitCode: number }) => void)[] = [];
-
-  constructor(private readonly hang: boolean) {}
-
-  onData(): { dispose(): void } {
-    return { dispose: () => undefined };
-  }
-
-  onExit(listener: (exit: { exitCode: number }) => void): { dispose(): void } {
-    this.exitListeners.push(listener);
-    return { dispose: () => undefined };
-  }
-
-  resize(): void {
-    return undefined;
-  }
-
-  write(data: string): void {
-    if (data === "\x03") {
-      this.leaveUnlessHanging();
-    }
-  }
-
-  kill(): void {
-    this.leaveUnlessHanging();
-  }
-
-  exit(): void {
-    if (this.exited) {
-      return;
-    }
-    this.exited = true;
-    for (const listener of [...this.exitListeners]) {
-      listener({ exitCode: 0 });
-    }
-  }
-
-  private leaveUnlessHanging(): void {
-    if (!this.hang) {
-      setTimeout(() => this.exit(), 5);
-    }
-  }
-}
 
 /** What a test holds over its manager. */
 interface Lifecycle {
@@ -81,11 +34,9 @@ interface Lifecycle {
   hangNext: () => void;
   /** Session deletes throw until set back. */
   failRemoves: (fails: boolean) => void;
-  /** A tab holding session `s1`, not started. */
-  sessionTab: () => string;
-  /** A tab holding session `s1`, its process running. */
+  /** `TAB`, its process running. */
   runningTab: () => Promise<string>;
-  /** A tab holding session `s1`, fitted, its start held until `open`. */
+  /** `TAB`, fitted, its start held until `open`. */
   heldTab: () => Promise<{ tabId: string; open: () => void }>;
   /** Waits for the `count`th process. */
   spawned: (count: number, ms?: number) => Promise<void>;
@@ -94,8 +45,11 @@ interface Lifecycle {
   live: () => number;
 }
 
-/** Runs `use` over a Claude Code tab's manager: its real definition for its sessions and hooks, none
- *  of it running (PATH is empty). */
+/**
+ * Runs `use` over a manager that brought up `TAB`, a Claude Code tab restored from its session: its
+ * real definition for its hooks and quitting, its sessions standing in, nothing of it running (PATH
+ * is empty) and no version check or sandbox in the way.
+ */
 async function withLifecycle(use: (lifecycle: Lifecycle) => Promise<void>): Promise<void> {
   const processes: FakeProcess[] = [];
   const log: string[] = [];
@@ -104,7 +58,7 @@ async function withLifecycle(use: (lifecycle: Lifecycle) => Promise<void>): Prom
   let launchGate: Promise<void> | undefined;
   let removesFail = false;
   const sessions: SessionProvider = {
-    list: () => Promise.resolve([]),
+    list: () => Promise.resolve([{ id: TAB, title: "session", updatedAt: 1, createdAt: 1 }]),
     resumeArgs: (id) => ["--resume", id],
     remove: async (_executable, _cwd, id) => {
       log.push(`removed ${id}`);
@@ -116,87 +70,69 @@ async function withLifecycle(use: (lifecycle: Lifecycle) => Promise<void>): Prom
     files: () => Promise.resolve(["session.jsonl"]),
   };
 
-  await withEmptyPath(
-    { onNotice: (_severity, message) => notices.push(message) },
-    async (manager, project) => {
-      const internals = manager as unknown as {
-        tabs: TabState[];
-        runtimeFor(agentId: string): { ready: Promise<void>; startable: boolean; sandbox?: unknown; host: HostPlace };
-      };
-      const runtime = internals.runtimeFor("claude");
-      await runtime.ready;
-      runtime.startable = true;
-      runtime.sandbox = undefined;
-      runtime.host = new HostPlace(
-        {
-          at: manager.at,
-          dataRoot: path.dirname(project),
-          agent: { ...claudeAgent, sessions },
-          executable: "agent",
-          onNotice: () => undefined,
-        },
-        () => undefined,
-      );
-      mock.method(runtime.host, "launch", async () => {
-        await launchGate;
-        return { executable: "agent", args: [] };
-      });
-      const terminals = mock.method(PLATFORM, "externalTerminals", () => {
-        log.push("terminal opened");
-        return [{ command: process.execPath, args: ["-e", ""] }];
-      });
-
-      const tab = (tabId: string): TabDescriptor | undefined => manager.snapshot().find((candidate) => candidate.tabId === tabId);
-      const sessionTab = (): string => {
-        const { tabId } = manager.createTab("claude");
-        Object.assign(internals.tabs.find((candidate) => candidate.tabId === tabId) ?? {}, { sessionId: "s1", reportedSessionId: "s1" });
-        return tabId;
-      };
-      try {
-        await use({
-          manager,
-          processes,
-          log,
-          notices,
-          hangNext: () => {
-            hanging = true;
-          },
-          failRemoves: (fails) => {
-            removesFail = fails;
-          },
-          sessionTab,
-          runningTab: async () => {
-            const tabId = sessionTab();
-            manager.handleResize(tabId, 80, 24);
-            await eventually("the tab runs", () => tab(tabId)?.status === "running");
-            return tabId;
-          },
-          heldTab: async () => {
-            const gate = deferred();
-            launchGate = gate.promise;
-            const tabId = sessionTab();
-            manager.handleResize(tabId, 80, 24);
-            await sleep(SETTLE_MS);
-            return { tabId, open: gate.resolve };
-          },
-          spawned: (count, ms) => eventually(`process ${count}`, () => processes.length === count, ms),
-          tab,
-          live: () => processes.filter((candidate) => !candidate.exited).length,
-        });
-      } finally {
-        terminals.mock.restore();
-        for (const process of processes) {
-          process.exit();
+  const { install, sandbox, sessions: ownSessions } = claudeAgent;
+  Object.assign(claudeAgent, { install: undefined, sandbox: undefined, sessions });
+  const launches = mock.method(HostPlace.prototype, "launch", async () => {
+    await launchGate;
+    return { executable: "agent", args: [] };
+  });
+  const terminals = mock.method(PLATFORM, "externalTerminals", () => {
+    log.push("terminal opened");
+    return [{ command: process.execPath, args: ["-e", ""] }];
+  });
+  try {
+    await withEmptyPath(
+      { onNotice: (_severity, message) => notices.push(message) },
+      async (manager) => {
+        manager.restore([]);
+        await manager.bootstrap();
+        const tab = (tabId: string): TabDescriptor | undefined => manager.snapshot().find((candidate) => candidate.tabId === tabId);
+        try {
+          await use({
+            manager,
+            processes,
+            log,
+            notices,
+            hangNext: () => {
+              hanging = true;
+            },
+            failRemoves: (fails) => {
+              removesFail = fails;
+            },
+            runningTab: async () => {
+              manager.handleResize(TAB, 80, 24);
+              await eventually("the tab runs", () => tab(TAB)?.status === "running");
+              return TAB;
+            },
+            heldTab: async () => {
+              const gate = deferred();
+              launchGate = gate.promise;
+              manager.handleResize(TAB, 80, 24);
+              await sleep(SETTLE_MS);
+              return { tabId: TAB, open: gate.resolve };
+            },
+            spawned: (count, ms) => eventually(`process ${count}`, () => processes.length === count, ms),
+            tab,
+            live: () => processes.filter((candidate) => !candidate.exited).length,
+          });
+        } finally {
+          for (const process of processes) {
+            process.exit();
+          }
         }
-      }
-    },
-    () => {
-      const process = new FakeProcess(hanging);
-      hanging = false;
-      processes.push(process);
-      return process as unknown as IPty;
-    },
-  );
+      },
+      () => {
+        const process = new FakeProcess(hanging);
+        hanging = false;
+        processes.push(process);
+        return process as unknown as IPty;
+      },
+    );
+  } finally {
+    terminals.mock.restore();
+    launches.mock.restore();
+    Object.assign(claudeAgent, { install, sandbox, sessions: ownSessions });
+  }
 }
 
 describe("a restart clicked twice", () => {
@@ -229,14 +165,13 @@ describe("a restart clicked twice", () => {
 });
 
 describe("a tab acted on while its start is underway", () => {
-  it("closed, spawns nothing and holds no run", async () => {
+  it("closed, spawns nothing", async () => {
     await withLifecycle(async ({ manager, processes, heldTab }) => {
       const { tabId, open } = await heldTab();
       await manager.closeTabs([tabId]);
       open();
       await sleep(SETTLE_MS);
       assert.equal(processes.length, 0);
-      assert.equal((manager as unknown as { runs: Map<string, unknown> }).runs.size, 0);
     });
   });
 

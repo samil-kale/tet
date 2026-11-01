@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it, type TestContext } from "node:test";
+import type { IPty } from "node-pty";
 import { HOST_SIDE, SANDBOX_SIDE } from "../../src/shared/ctl-side";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { HOST_CALLER, SANDBOX_CALLER } from "../../src/main/ctl/caller-side";
@@ -12,10 +13,10 @@ import { buildEnv, setControlEnv, setStoredEnv, storedEnvOf } from "../../src/ma
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
-import { CONTROL_ENV, type HookEvent } from "../../src/shared/ctl";
+import { CONTROL_ENV, CONTROL_START_SIZE, type HookEvent } from "../../src/shared/ctl";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir, withEnv } from "../helpers";
-import { NO_CALLBACKS, withEmptyPath } from "../helpers/session-manager";
+import { FakeProcess, NO_CALLBACKS, withEmptyPath } from "../helpers/session-manager";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 import { notificationFor } from "../../src/main/terminals/turn-reports";
 import { answersQuestion, type TabState } from "../../src/main/terminals/tab-state";
@@ -113,22 +114,30 @@ describe("the window closing a tab", () => {
 });
 
 describe("a restart asked for", () => {
-  it("of a tab that is not there starts nothing and holds no run for it", async () => {
+  it("of a tab that is not there starts nothing", async () => {
     await withEmptyPath({}, (manager) => {
       assert.equal(manager.restart("new-gone"), false);
-      const { runs } = manager as unknown as { runs: Map<string, unknown> };
-      assert.equal(runs.has("new-gone"), false);
     });
   });
 });
 
 describe("a fit reported", () => {
-  it("for a tab that is not there holds no run for it", async () => {
-    await withEmptyPath({}, (manager) => {
-      manager.handleResize("new-gone", 80, 24);
-      const { runs } = manager as unknown as { runs: Map<string, unknown> };
-      assert.equal(runs.has("new-gone"), false);
-    });
+  it("for a tab that is not there leaves nothing for one coming back under its id", async () => {
+    const sizes: { cols: number; rows: number }[] = [];
+    await withEmptyPath(
+      {},
+      async (manager) => {
+        manager.handleResize("new-gone", 10, 5);
+        manager.restore(["new-gone"]);
+        assert.equal(manager.start("new-gone"), true);
+        await eventually("its process", () => sizes.length === 1);
+        assert.deepEqual(sizes, [CONTROL_START_SIZE]);
+      },
+      (_executable, _args, { cols, rows }) => {
+        sizes.push({ cols, rows });
+        return new FakeProcess(false) as unknown as IPty;
+      },
+    );
   });
 });
 
