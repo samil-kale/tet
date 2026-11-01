@@ -36,6 +36,18 @@ const mainConfig = {
   external: ["electron", "original-fs", "node-pty"]
 };
 
+/** Fails the build where anything in a bundle imports electron: resolvable as an npm package, it
+ *  would be bundled in without a word, whatever eslint.config.mjs's list of files holds. */
+/** @type {import('esbuild').Plugin} */
+const noElectron = {
+  name: "no-electron",
+  setup(build) {
+    build.onResolve({ filter: /^electron$/ }, ({ importer }) => ({
+      errors: [{ text: `${path.relative(__dirname, importer)} imports electron, in a bundle that runs without it` }]
+    }));
+  }
+};
+
 /** A module for a utilityProcess: git's CLI wrapper or the Explorer's walk and search.
  *  These modules run without electron (eslint.config.mjs). */
 /** @returns {import('esbuild').BuildOptions} */
@@ -43,7 +55,8 @@ function hostConfig(folder, name) {
   return {
     ...node,
     entryPoints: [path.join(__dirname, "src", "main", folder, `${name}-host.ts`)],
-    outfile: path.join(dist, `${name}-host.js`)
+    outfile: path.join(dist, `${name}-host.js`),
+    plugins: [noElectron]
   };
 }
 
