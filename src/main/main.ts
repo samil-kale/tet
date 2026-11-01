@@ -483,8 +483,8 @@ function shutdown(relaunch: boolean): void {
   void Promise.race([tabManagers.disposeAll(), new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))])
     .catch((error: unknown) => logError("quit: ending tabs failed", error))
     .finally(async () => {
-      // Before the git process stops, so a command still running (a commit, a push) ends rather
-      // than dies; bounded as the tabs are.
+      // Before the git process stops, so a command still running (a commit, a push) can end;
+      // bounded as the tabs are, and one taking longer dies with the process.
       await Promise.race([repositories.disposeAll(), new Promise((resolve) => setTimeout(resolve, QUIT_TEARDOWN_TIMEOUT_MS))]);
       stopGitProcess();
       stopExplorerProcess();

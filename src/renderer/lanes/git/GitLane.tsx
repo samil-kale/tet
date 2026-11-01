@@ -35,9 +35,6 @@ interface GitLaneProps {
   /** Set by the sash between tree and changes; held by the app, like the width. */
   treeHeight: number;
   onTreeHeight: (size: number) => void;
-  /** The GRAPH's size per repository or worktree, held by the app (`useGraphLimits`). */
-  graphLimits: Record<string, number>;
-  onGraphMore: (refKey: string) => void;
   /** Opens in the repository's or worktree's preview tab, a Markdown file with its preview if
    *  asked. */
   onOpenDiff: (path: string, how?: OpenEditor) => void;
@@ -53,8 +50,6 @@ export const GitLane = memo(function GitLane({
   branch,
   treeHeight,
   onTreeHeight,
-  graphLimits,
-  onGraphMore,
   onOpenDiff,
   onActivateRef,
 }: GitLaneProps) {
@@ -76,7 +71,7 @@ export const GitLane = memo(function GitLane({
   /** What the top section holds, BRANCHES or their GRAPH: one for every project, as the lanes' toggles. */
   const [showGraph, setShowGraph] = useStoredToggle("branches-graph", false);
   // Read only while the graph is on screen: the log is a git process of its own.
-  const graph = useCommitGraph(resolved, state, graphLimits, onGraphMore, shown && showGraph, branch.busy);
+  const graph = useCommitGraph(resolved, state, shown && showGraph, branch.busy);
 
   // Fetch, pull and push share the one action slot with discard and stash.
   const { remote, canSync } = syncRemote(state);

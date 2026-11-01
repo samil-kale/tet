@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { errorMessage, failure } from "../shared/errors";
 import { removeAllSessions } from "./agents";
-import { worktreeBase, WORKTREES_NEED_GIT, worktreesSupported } from "../shared/types/git";
+import { upstreamOf, worktreeBase, WORKTREES_NEED_GIT, worktreesSupported } from "../shared/types/git";
 import { projectRef, projectRefsOf, worktreeOf } from "../shared/types/project";
 import type { NoticeSeverity } from "../shared/types/app";
 import type { GitActionResult, GitCommandResult, RepositoryState } from "../shared/types/git";
@@ -261,7 +261,7 @@ async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitComma
   const there = !directoryMissing(project.path);
   const [main, ...worktrees] = projectRefsOf(project);
   for (const ref of worktrees) {
-    const deleted = there ? await deleteWorktreeNow(deps, ref, { force: true, onRemote: false }) : undefined;
+    const deleted = there ? await deleteWorktreeNow(deps, ref, { force: true }) : undefined;
     if (deleted && !deleted.ok) {
       return deleted;
     }
@@ -338,39 +338,63 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
  * Deletes a worktree TET made and its branch, which TET couples: its changes are asked about first —
  * answered as `uncommitted` before anything is closed — and forced once confirmed; a folder already
  * gone is pruned. The branch goes after the worktree (git refuses one checked out), and with
- * `onRemote` its upstream too, as a branch's own delete does. On failure the worktree opens again;
- * its sandboxes, removed with its terminals, are made anew at its next tab.
+ * `onRemote` its upstream too, as a branch's own delete does: after the turn, so a stalled remote
+ * holds up no other change. On failure the worktree opens again; its sandboxes, removed with its
+ * terminals, are made anew at its next tab.
  */
-export function deleteWorktree(deps: ProjectDeps, ref: ProjectRef, options: { force: true; onRemote: boolean }): Promise<GitCommandResult>;
-export function deleteWorktree(
-  deps: ProjectDeps,
-  ref: ProjectRef,
-  options: { force: boolean; onRemote: boolean },
-): Promise<GitActionResult>;
-export function deleteWorktree(
-  deps: ProjectDeps,
-  ref: ProjectRef,
-  options: { force: boolean; onRemote: boolean },
-): Promise<GitActionResult> {
-  return inTurn(changes, CHANGE, () => deleteWorktreeNow(deps, ref, options));
-}
-
-/** deleteWorktree within a turn already held (removeNow). Forced, it never asks. */
-async function deleteWorktreeNow(
+export async function deleteWorktree(
   deps: ProjectDeps,
   ref: ProjectRef,
   options: { force: true; onRemote: boolean },
 ): Promise<GitCommandResult>;
-async function deleteWorktreeNow(
+export async function deleteWorktree(
   deps: ProjectDeps,
   ref: ProjectRef,
   options: { force: boolean; onRemote: boolean },
 ): Promise<GitActionResult>;
-async function deleteWorktreeNow(
+export async function deleteWorktree(
   deps: ProjectDeps,
   ref: ProjectRef,
   { force, onRemote }: { force: boolean; onRemote: boolean },
 ): Promise<GitActionResult> {
+  const { result, deleteOnRemote } = await inTurn(changes, CHANGE, async () => {
+    // Read before the branch goes, and its upstream with it.
+    const deleteOnRemote = onRemote ? remoteDelete(deps, ref) : undefined;
+    return { result: await deleteWorktreeNow(deps, ref, { force }), deleteOnRemote };
+  });
+  return result.ok && deleteOnRemote ? deleteOnRemote() : result;
+}
+
+/** What deletes a worktree's branch on the remote, once the worktree is gone; a failure says what
+ *  is left. Nothing where the worktree or its branch cannot be told. */
+function remoteDelete(deps: ProjectDeps, ref: ProjectRef): (() => Promise<GitCommandResult>) | undefined {
+  const project = deps.store.get(ref.projectId);
+  const worktree = project && worktreeOf(project, ref);
+  const repository = deps.repositories.get(projectRef(ref.projectId));
+  const branch = worktree && worktreeBranch(worktree);
+  if (!repository || branch === undefined) {
+    return undefined;
+  }
+  const upstream = upstreamOf(repository.getState(), branch);
+  if (!upstream) {
+    return () => Promise.resolve({ ok: false, error: `${branch} has no upstream to delete on a remote` });
+  }
+  return async () => {
+    const deleted = await repository.deleteRemoteBranch(upstream.remote, upstream.branch);
+    return deleted.ok ? deleted : { ...deleted, error: `${branch} was deleted, but not on ${upstream.remote}: ${deleted.error}` };
+  };
+}
+
+/** A worktree's branch as git has it now: renamed in a shell, the store's name may lag behind. */
+function worktreeBranch(worktree: ProjectWorktree): string | undefined {
+  return readHeadBranch(worktree.path) ?? worktree.branch;
+}
+
+/** deleteWorktree of everything local, within a turn already held (removeNow). Forced, it never
+ *  asks. */
+async function deleteWorktreeNow(deps: ProjectDeps, ref: ProjectRef, options: { force: true }): Promise<GitCommandResult>;
+async function deleteWorktreeNow(deps: ProjectDeps, ref: ProjectRef, options: { force: boolean }): Promise<GitActionResult>;
+async function deleteWorktreeNow(deps: ProjectDeps, ref: ProjectRef, { force }: { force: boolean }): Promise<GitActionResult> {
   const project = deps.store.get(ref.projectId);
   const worktree = project && worktreeOf(project, ref);
   const repository = deps.repositories.get(projectRef(ref.projectId));
@@ -378,8 +402,7 @@ async function deleteWorktreeNow(
     return { ok: false, error: "Worktree not found" };
   }
   const gone = !fs.existsSync(worktree.path);
-  // As git has it now: renamed in a shell, the store's name may lag behind.
-  const branch = readHeadBranch(worktree.path) ?? worktree.branch;
+  const branch = worktreeBranch(worktree);
   const uncommitted = async (): Promise<boolean> => !gone && !force && (await git.hasChanges(worktree.path));
   if (await uncommitted()) {
     return { ok: false, needsConfirmation: "uncommitted" };
@@ -417,7 +440,7 @@ async function deleteWorktreeNow(
     const left = deps.store.get(ref.projectId)?.worktrees.filter((entry) => entry.key !== ref.worktree) ?? [];
     deps.store.setWorktrees(ref.projectId, left);
     deps.projectsChanged({ removed: [ref] });
-    return branch === undefined ? result : repository.deleteBranch(branch, onRemote);
+    return branch === undefined ? result : repository.deleteBranch(branch, false);
   });
 }
 

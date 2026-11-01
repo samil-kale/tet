@@ -291,6 +291,57 @@ describe("a worktree TET makes", () => {
     );
   });
 
+  /** A worktree on a branch of `name` with an upstream, as the repository has read it. */
+  async function withUpstream(name: string) {
+    const opened = open();
+    const id = await opened.add(repository().main);
+    const key = done(await addWorktree(opened.deps, id, name)).worktree!;
+    git(worktreeDir(opened.dataRoot, id, key), "push", "-q", "-u", "origin", name);
+    const main = opened.repositories.get({ projectId: id })!;
+    await main.refresh();
+    return { ...opened, id, main, ref: { projectId: id, worktree: key } };
+  }
+
+  it("lets other changes run while its upstream is deleted on the remote", async () => {
+    const { deps, id, main, ref } = await withUpstream("stalled");
+    let pushing = (): void => undefined;
+    let pushed = (): void => undefined;
+    const reachedPush = new Promise<void>((resolve) => (pushing = resolve));
+    const push = new Promise<{ ok: true }>((resolve) => (pushed = () => resolve({ ok: true })));
+    // As a remote that does not answer.
+    Object.assign(main, {
+      deleteRemoteBranch: () => {
+        pushing();
+        return push;
+      },
+    });
+    const deleting = deleteWorktree(deps, ref, { force: false, onRemote: true });
+    await reachedPush;
+    let started = false;
+    const watched: ProjectDeps = {
+      ...deps,
+      get store() {
+        started = true;
+        return deps.store;
+      },
+    };
+    const adding = addWorktree(watched, id, "next");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(started, true, "the add has begun while the push hangs");
+    done(await adding);
+    pushed();
+    assert.deepEqual(await deleting, { ok: true });
+  });
+
+  it("says what is left where its upstream could not be deleted", async () => {
+    const { deps, store, id, main, ref } = await withUpstream("kept");
+    Object.assign(main, { deleteRemoteBranch: () => Promise.resolve({ ok: false, error: "no route" }) });
+    const result = await deleteWorktree(deps, ref, { force: false, onRemote: true });
+    assert.deepEqual(result, { ok: false, error: "kept was deleted, but not on origin: no route" });
+    assert.deepEqual(store.get(id)?.worktrees, [], "the worktree is gone all the same");
+    assert.equal(git(main.at.path, "branch", "--list", "kept"), "", "and its branch here");
+  });
+
   it("is refused up front while another command runs in its repository, and runs once it is done", async () => {
     const repo = repository();
     const closed: ProjectRef[] = [];
@@ -333,6 +384,46 @@ describe("a worktree TET makes", () => {
     assert.deepEqual(result, { ok: false, needsConfirmation: "uncommitted" });
     assert.ok(fs.existsSync(path.join(worktreeDir(dataRoot, id, key), "late.txt")), "nothing deleted without the question");
     assert.deepEqual(await deleteWorktree(opened.deps, ref, { force: true, onRemote: false }), { ok: true });
+  });
+
+  it("holds back every other change to the projects until it is over", async () => {
+    const repo = repository();
+    const { deps, add } = open();
+    const id = await add(repo.main);
+    const key = done(await addWorktree(deps, id, "first")).worktree!;
+    let closing = (): void => undefined;
+    let closeTabs = (): void => undefined;
+    const reachedClose = new Promise<void>((resolve) => (closing = resolve));
+    const tabsClosed = new Promise<void>((resolve) => (closeTabs = resolve));
+    const deleting = deleteWorktree(
+      {
+        ...deps,
+        tabManagers: {
+          close: () => {
+            closing();
+            return tabsClosed;
+          },
+        },
+      },
+      { projectId: id, worktree: key },
+      { force: true, onRemote: false },
+    );
+    await reachedClose;
+    let started = false;
+    const watched: ProjectDeps = {
+      ...deps,
+      get store() {
+        started = true;
+        return deps.store;
+      },
+    };
+    const adding = addWorktree(watched, id, "second");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(started, false, "the add has not begun while the delete closes the tabs");
+    closeTabs();
+    assert.deepEqual(await deleting, { ok: true });
+    assert.equal(done(await adding).project.id, id);
+    assert.equal(started, true);
   });
 
   it("is only one TET made: another is not found", async () => {

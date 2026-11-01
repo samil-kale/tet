@@ -152,6 +152,16 @@ describe("the window closing a tab", () => {
   });
 });
 
+describe("a restart asked for", () => {
+  it("of a tab that is not there starts nothing and holds no run for it", async () => {
+    await withEmptyPath({}, (manager) => {
+      assert.equal(manager.restart("new-gone"), false);
+      const { runs } = manager as unknown as { runs: Map<string, unknown> };
+      assert.equal(runs.has("new-gone"), false);
+    });
+  });
+});
+
 describe("the window's restore", () => {
   it("brings the shells back under their ids, once, a taken id under a new one", async () => {
     await withEmptyPath({}, async (manager) => {

@@ -194,7 +194,7 @@ export class Repository {
   private actionRunning = false;
   /** Set within `exclusive`'s steps, whose own calls to this repository's commands run in its hold. */
   private readonly holding = new AsyncLocalStorage<true>();
-  /** The action underway (runAction), for `dispose` to wait on. */
+  /** The action underway (runAction), for `dispose` and `actionEnded` to wait on. */
   private action: Promise<GitActionResult> | undefined;
   /** `start`'s reads, for `dispose` to wait on. */
   private starting: Promise<void> | undefined;
@@ -1118,9 +1118,14 @@ export class Repository {
     clearTimeout(this.watchRetryTimer);
     clearInterval(this.autoFetchTimer);
     this.closeWatchers();
-    // The git process caches per-directory answers; on quit it is stopped right after this.
+    // The git process caches per-directory answers; on quit it is stopped after this.
     void git.forget(this.at.path).catch(() => undefined);
     return Promise.allSettled([this.starting, this.inflight, this.action, this.autoFetching]).then(() => undefined);
+  }
+
+  /** Resolves once the action underway has ended, whatever else still runs. */
+  actionEnded(): Promise<void> {
+    return Promise.resolve(this.action).then(() => undefined);
   }
 }
 
@@ -1183,10 +1188,17 @@ export class RepositoryManager {
     return closing ?? Promise.resolve();
   }
 
-  /** Resolves once every one's git commands have ended (Repository.dispose); all are gone at once. */
+  /**
+   * For quitting; all are gone at once. Resolves once every one's action has ended (a commit, a
+   * push): nothing uses their folders again, and a read or a periodic fetch cut short leaves
+   * nothing behind, so unlike `close` this does not wait for those.
+   */
   disposeAll(): Promise<void> {
-    const closing = [...this.repositories.values()].map((repository) => repository.dispose());
+    const repositories = [...this.repositories.values()];
     this.repositories.clear();
-    return Promise.all(closing).then(() => undefined);
+    for (const repository of repositories) {
+      void repository.dispose();
+    }
+    return Promise.all(repositories.map((repository) => repository.actionEnded())).then(() => undefined);
   }
 }

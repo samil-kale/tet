@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import { shell } from "electron";
 import { GitLoginStore } from "../../src/main/git/git-logins";
 import * as git_ from "../../src/main/git/git";
-import { Repository } from "../../src/main/git/repository";
+import { Repository, RepositoryManager } from "../../src/main/git/repository";
 import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import type { ActionResult } from "../../src/shared/types/action";
 import { type GitCommandResult, type GitLogin, worktreeBase } from "../../src/shared/types/git";
@@ -250,6 +250,54 @@ describe("a command clicked during the periodic fetch", () => {
     await closed;
     assert.equal((await clicked).ok, false);
     assert.equal(git(dir, "branch", "--list", "late"), "", "no git started in the closed folder");
+  });
+});
+
+describe("every repository disposed on quitting", () => {
+  /** An open repository of a manager of its own, its first read done. */
+  async function openInManager(prefix: string): Promise<{ manager: RepositoryManager; repository: Repository }> {
+    const dir = initRepository(prefix);
+    const manager = new RepositoryManager(tempDir("tet-repository-data-"), new GitLoginStore(tempDir("tet-logins-")), {
+      onState: () => undefined,
+      onNotice: () => undefined,
+      onCommandsChanged: () => undefined,
+      onFilesChanged: () => undefined,
+      onFileChanged: () => undefined,
+      onMissing: () => undefined,
+    });
+    const repository = manager.open({ ref: { projectId: path.basename(dir) }, path: dir, name: () => path.basename(dir) });
+    await repository.refresh();
+    return { manager, repository };
+  }
+
+  /** Whether `promise` has settled once everything ready to run has run. */
+  async function settled(promise: Promise<unknown>): Promise<boolean> {
+    let ended = false;
+    void promise.then(() => (ended = true));
+    await new Promise((resolve) => setImmediate(resolve));
+    return ended;
+  }
+
+  it("waits for the action underway", async () => {
+    const { manager, repository } = await openInManager("tet-repository-quit-action-");
+    let release: () => void = () => undefined;
+    const action = repository.exclusive(() => new Promise<{ ok: true }>((resolve) => (release = () => resolve({ ok: true }))));
+    const quit = manager.disposeAll();
+    assert.equal(await settled(quit), false);
+    release();
+    await quit;
+    assert.deepEqual(await action, { ok: true });
+  });
+
+  it("does not wait for a periodic fetch, which leaves nothing behind", async () => {
+    const { manager, repository } = await openInManager("tet-repository-quit-fetch-");
+    let fetched: () => void = () => undefined;
+    Object.assign(repository, { autoFetching: new Promise<void>((resolve) => (fetched = resolve)) });
+    const quit = manager.disposeAll();
+    const ended = await settled(quit);
+    fetched();
+    Object.assign(repository, { autoFetching: undefined });
+    assert.equal(ended, true);
   });
 });
 

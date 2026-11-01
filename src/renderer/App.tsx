@@ -16,7 +16,6 @@ import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesLane } from "./lanes/files/FilesLane";
 import { GitLane } from "./lanes/git/GitLane";
-import { useGraphLimits } from "./lanes/git/use-commit-graph";
 import { Notices, notify, showProgress, toggleCenter } from "./ui/Notices";
 import { NoticesCenter } from "./ui/NoticesCenter";
 import { ProjectList } from "./lanes/projects/ProjectList";
@@ -107,8 +106,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeRefKey);
   // Section defaults and limits.
   const [branchTreeHeight, setBranchTreeHeight] = useStoredSize("branch-tree", 260, MIN_AREA_HEIGHT);
-  /** The GRAPH's size per repository or worktree (use-commit-graph.ts). */
-  const { limits: graphLimits, more: graphMore, forgetLimit: forgetGraphLimit } = useGraphLimits();
   const [fileSearchHeight, setFileSearchHeight] = useStoredSize("file-search", 260, MIN_AREA_HEIGHT);
   // 40% of the window it first opens in.
   const [commandsHeight, setCommandsHeight] = useStoredSize("commands", Math.round(window.innerHeight * 0.4), MIN_AREA_HEIGHT);
@@ -227,11 +224,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       disposeRefEditors(ref);
       forgetLayout(refKey);
       forgetMarks(refKey);
-      forgetGraphLimit(refKey);
       // The xterms live outside React; this is where a repository or worktree ends for good.
       disposeRefTerminals(ref);
     },
-    [forgetRestore, forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks, forgetGraphLimit],
+    [forgetRestore, forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks],
   );
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git lane's
@@ -529,8 +525,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     branch={activeBranch}
                     treeHeight={branchTreeHeight}
                     onTreeHeight={setBranchTreeHeight}
-                    graphLimits={graphLimits}
-                    onGraphMore={graphMore}
                     onOpenDiff={openActiveDiff}
                     onActivateRef={activateRef}
                   />

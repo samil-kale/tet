@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CommitSearch, GraphCommit, RepositoryState } from "../../../shared/types/git";
-import { forget } from "../../identity";
 import type { ResolvedRef } from "../../resolved-ref";
 
 /** Commits asked for at first, and added by each "load more". */
@@ -21,37 +20,18 @@ function graphVersion(state: RepositoryState): string {
 }
 
 /**
- * How many commits the GRAPH asks for, per repository or worktree — held by `App`, so a removed
- * one's goes with the rest of it (`forgetProjectRef`). `more` adds a page.
- */
-export function useGraphLimits() {
-  const [limits, setLimits] = useState<Record<string, number>>({});
-  const more = useCallback(
-    (refKey: string) => setLimits((current) => ({ ...current, [refKey]: (current[refKey] ?? GRAPH_PAGE) + GRAPH_PAGE })),
-    [],
-  );
-  const forgetLimit = useCallback((refKey: string) => setLimits((current) => forget(current, refKey)), []);
-  return { limits, more, forgetLimit };
-}
-
-/**
- * The GRAPH's commits of the repository or worktree, `limits` of them (`useGraphLimits`), read
- * again when `graphVersion` changes or a git action (`busy`) ends — a fetch moves refs the state
- * does not name — and only while the lane is `enabled` (shown, graph on screen): the log is a git
- * process of its own. `more` asks for another page.
+ * The GRAPH's commits of the repository or worktree, read again when `graphVersion` changes or a
+ * git action (`busy`) ends — a fetch moves refs the state does not name — and only while the lane
+ * is `enabled` (shown, graph on screen): the log is a git process of its own. `more` asks for
+ * another page.
  *
  * The search typed above them is held with its repository or worktree, as the commits are: another
  * one shows none. It reaches git once the typing stops, and only with text.
  */
-export function useCommitGraph(
-  resolved: ResolvedRef,
-  state: RepositoryState,
-  limits: Record<string, number>,
-  onMore: (refKey: string) => void,
-  enabled: boolean,
-  busy: boolean,
-) {
+export function useCommitGraph(resolved: ResolvedRef, state: RepositoryState, enabled: boolean, busy: boolean) {
   const { ref, refKey } = resolved;
+  /** Out of `forgetProjectRef`'s reach, in the lane: a removed one's number stays, and does nothing. */
+  const [limits, setLimits] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState<{ refKey: string; commits: GraphCommit[]; searched: boolean } | undefined>();
   const [loading, setLoading] = useState(false);
   const [typed, setTyped] = useState<{ refKey: string; search: CommitSearch } | undefined>();
@@ -97,7 +77,7 @@ export function useCommitGraph(
     commits,
     loading,
     hasMore: commits.length >= limit,
-    more: () => onMore(refKey),
+    more: () => setLimits((current) => ({ ...current, [refKey]: limit + GRAPH_PAGE })),
     search,
     setSearch,
     /** The commits shown are a search's finds, not the graph. */
