@@ -9,7 +9,8 @@ import { EnvRequests } from "../../src/main/ctl/env-requests";
 import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
 import { ProjectStore } from "../../src/main/store/project-store";
-import { agentConfigDir } from "../../src/main/store/data-root";
+import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root";
+import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
 import {
   archiveFile,
@@ -399,6 +400,29 @@ describe("the stores", () => {
     );
     assert.equal(new ProjectStore(dir).list().length, 3, "persisted");
     assert.deepEqual(fs.readdirSync(dir), ["projects.json"], "renamed into place, no temporary file left");
+  });
+});
+
+describe("what TET keeps", { skip: PLATFORM.spawnsThroughCmd && "not win32" }, () => {
+  const modeOf = (file: string): number => fs.statSync(file).mode & 0o777;
+
+  it("is written for this account alone, a file written before that too", () => {
+    const file = path.join(tempDir("tet-modes-"), "environment.json");
+    writeJson(file, []);
+    assert.equal(modeOf(file), 0o600);
+    fs.chmodSync(file, 0o644);
+    writeJson(file, []);
+    assert.equal(modeOf(file), 0o600);
+  });
+
+  it("lies in a folder for this account alone, one that was there before too", () => {
+    const fresh = path.join(tempDir("tet-modes-"), "nested", ".tet");
+    prepareDataRoot(fresh);
+    assert.equal(modeOf(fresh), 0o700);
+    const existing = tempDir("tet-modes-");
+    fs.chmodSync(existing, 0o755);
+    prepareDataRoot(existing);
+    assert.equal(modeOf(existing), 0o700);
   });
 });
 

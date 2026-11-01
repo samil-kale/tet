@@ -11,7 +11,9 @@ import {
   reconcileLayouts,
   settleLayout,
 } from "./layout-state";
+import { refKeyOf } from "../../shared/types/project";
 import { forget } from "../identity";
+import { onRefClosed } from "../ref-lifetime";
 import { editorEntry } from "../editor/editor-views";
 
 /** Every repository's and worktree's split state, and the callbacks `App` hands the panes. */
@@ -22,7 +24,6 @@ interface ProjectLayouts {
   dropOnStrip: (refKey: string, tabId: string, paneId: PaneId, before: string | undefined) => void;
   focusPane: (refKey: string, paneId: PaneId) => void;
   placeTab: (refKey: string, tabId: string, command?: string) => void;
-  forgetLayout: (refKey: string) => void;
 }
 
 /**
@@ -144,12 +145,17 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
   );
 
   /** Lets go of a removed repository's or worktree's state, what is stored of it too. */
-  const forgetLayout = useCallback((refKey: string) => {
-    setLayouts((current) => forget(current, refKey));
-    dropStoredLayout(refKey);
-    delete previousTabsRef.current[refKey];
-    forgetPersistence(persistence.current, refKey);
-  }, []);
+  useEffect(
+    () =>
+      onRefClosed((ref) => {
+        const refKey = refKeyOf(ref);
+        setLayouts((current) => forget(current, refKey));
+        dropStoredLayout(refKey);
+        delete previousTabsRef.current[refKey];
+        forgetPersistence(persistence.current, refKey);
+      }),
+    [],
+  );
 
-  return { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab, forgetLayout };
+  return { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab };
 }

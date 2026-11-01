@@ -9,6 +9,7 @@ import type { ProjectStore } from "../store/project-store";
 import type { AccountStore } from "../providers/accounts";
 import type { RepoCache } from "../providers/repo-cache";
 import type { SbxAccountStore } from "../sbx/sbx-accounts";
+import type { SandboxChannel } from "../sbx/sbx-status";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsAccess } from "../store/settings";
 import type { SessionManagerRegistry } from "../terminals/session-registry";
@@ -23,6 +24,8 @@ export interface IpcDeps {
   logins: GitLoginStore;
   sbxLocal: SbxLocalStore;
   sbxAccounts: SbxAccountStore;
+  /** What a sandboxed tab's checks read of TET, at each read. */
+  sandboxChannel: () => SandboxChannel;
   environment: EnvStore;
   /** Shared with the control channel's `env-request`. */
   envRequests: EnvRequests;

@@ -2,7 +2,14 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { checkSbxReady, listSandboxes, readSbxReading, readSbxSignedIn, sbxListed } from "../../src/main/sbx/sbx-status";
+import {
+  checkSbxReady,
+  listSandboxes,
+  readSbxReading,
+  readSbxSignedIn,
+  sbxListed,
+  type SandboxChannel,
+} from "../../src/main/sbx/sbx-status";
 import { fakeCommand, tempDir, withCommandOn } from "../helpers";
 
 /** sbx/sbx-status.ts: whether sbx is ready for a sandboxed tab, as its probe reads it. */
@@ -57,7 +64,8 @@ const REF = { projectId: "p" };
 
 describe("whether sbx is ready for a sandboxed tab", () => {
   it("names the first setup step still missing: installed, new enough, signed in, a policy", async () => {
-    const notReady = (answers: Answers) => withSbx(answers, async (folder) => (await checkSbxReady(folder, REF)) as { notReady?: string });
+    const notReady = (answers: Answers) =>
+      withSbx(answers, async (folder) => (await checkSbxReady(folder, REF, {})) as { notReady?: string });
 
     assert.equal((await notReady({})).notReady, "SBX is not installed, too old or no longer on PATH");
     assert.match(
@@ -74,13 +82,21 @@ describe("whether sbx is ready for a sandboxed tab", () => {
 
   it("says what the policy does not allow, with the rule to ask for", async () => {
     const answers: Answers = { version: "0.48.0", sandboxes: {}, filesystemRules: [] };
-    const { notReady } = await withSbx(answers, async (folder) => (await checkSbxReady(folder, REF)) as { notReady?: string });
+    const { notReady } = await withSbx(answers, async (folder) => (await checkSbxReady(folder, REF, {})) as { notReady?: string });
     assert.match(notReady ?? "", /^SBX's policy does not allow .*\(The project\)/);
+  });
+
+  it("asks for TET's own folders only where it is told where they lie", async () => {
+    const answers: Answers = { version: "0.48.0", sandboxes: {}, filesystemRules: [] };
+    const notReady = (channel: SandboxChannel): Promise<string | undefined> =>
+      withSbx(answers, async (folder) => ((await checkSbxReady(folder, REF, channel)) as { notReady?: string }).notReady);
+    assert.doesNotMatch((await notReady({})) ?? "", /TET's project data/);
+    assert.match((await notReady({ dataRoot: tempDir("tet-sbx-data-") })) ?? "", /TET's project data/);
   });
 
   it("answers the sandboxes and the rules a spawn is prepared with once everything is in place", async () => {
     const answers: Answers = { version: "0.48.0", sandboxes: { "tet-claude-abc": ["/work"] }, filesystemRules: ALLOW_ALL };
-    const ready = await withSbx(answers, (folder) => checkSbxReady(folder, REF));
+    const ready = await withSbx(answers, (folder) => checkSbxReady(folder, REF, {}));
     assert.ok(!("notReady" in ready), JSON.stringify(ready));
     assert.deepEqual([...ready.sandboxes], [["tet-claude-abc", { workspaces: ["/work"], running: true }]]);
     assert.equal(ready.rules?.length, 1);
@@ -95,7 +111,7 @@ describe("whether sbx is ready for a sandboxed tab", () => {
           .trim()
           .split("\n");
       const listed = sbxListed().then(calls);
-      await checkSbxReady(folder, REF);
+      await checkSbxReady(folder, REF, {});
       assert.equal(calls().filter((call) => call.startsWith("ls")).length, 1, "the check joins the listing begun for it");
       return listed;
     });
@@ -106,7 +122,7 @@ describe("whether sbx is ready for a sandboxed tab", () => {
 describe("what the SBX Settings read of sbx", () => {
   it("reads the status with the sandboxes and rules read on the way, and the blockers only once a policy is set up", async () => {
     const ready = await withSbx({ version: "0.48.0", sandboxes: { a: [] }, filesystemRules: ALLOW_ALL }, (folder) =>
-      readSbxReading(folder, REF, false),
+      readSbxReading(folder, REF, false, {}),
     );
     assert.equal(ready.status.installed, true);
     assert.equal(ready.status.signedIn, true);
@@ -115,7 +131,7 @@ describe("what the SBX Settings read of sbx", () => {
     assert.deepEqual([...(ready.sandboxes ?? [])], [["a", { workspaces: [], running: true }]]);
     assert.equal(ready.rules?.length, 1);
 
-    const noPolicy = await withSbx({ version: "0.48.0", sandboxes: {} }, (folder) => readSbxReading(folder, REF, false));
+    const noPolicy = await withSbx({ version: "0.48.0", sandboxes: {} }, (folder) => readSbxReading(folder, REF, false, {}));
     assert.equal(noPolicy.status.policyInitialized, false);
     assert.equal(noPolicy.rules, undefined, "no rules are asked of a policy that is not there");
   });
@@ -123,9 +139,9 @@ describe("what the SBX Settings read of sbx", () => {
   it("names the organization governing the policy, in the status and in what it does not allow", async () => {
     const policyStdout = JSON.stringify({ rules: [], organization: "Acme" });
     const answers: Answers = { version: "0.48.0", sandboxes: {}, filesystemRules: [], policyStdout };
-    const { status } = await withSbx(answers, (folder) => readSbxReading(folder, REF, false));
+    const { status } = await withSbx(answers, (folder) => readSbxReading(folder, REF, false, {}));
     assert.equal(status.organization, "Acme");
-    const { notReady } = await withSbx(answers, async (folder) => (await checkSbxReady(folder, REF)) as { notReady?: string });
+    const { notReady } = await withSbx(answers, async (folder) => (await checkSbxReady(folder, REF, {})) as { notReady?: string });
     assert.match(notReady ?? "", /^Acme's SBX policy does not allow /);
   });
 

@@ -9,14 +9,14 @@ import { HOST_CALLER, SANDBOX_CALLER } from "../../src/main/ctl/caller-side";
 import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
-import { buildEnv, setControlEnv, setStoredEnv, storedEnvOf } from "../../src/main/terminals/pty";
+import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminals/pty";
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { CONTROL_ENV, CONTROL_START_SIZE, type HookEvent } from "../../src/shared/ctl";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir, withEnv } from "../helpers";
-import { FakeProcess, NO_CALLBACKS, withEmptyPath } from "../helpers/session-manager";
+import { FakeProcess, NO_CALLBACKS, NO_TERMINAL_ENV, withEmptyPath } from "../helpers/session-manager";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 import { notificationFor } from "../../src/main/terminals/turn-reports";
 import { answersQuestion, type TabState } from "../../src/main/terminals/tab-state";
@@ -40,6 +40,7 @@ describe("a turn's notification", () => {
       settings,
       new SbxLocalStore(root),
       new HostSetups(root, settings, () => undefined),
+      NO_TERMINAL_ENV,
       { ...NO_CALLBACKS, onTabs: (_projectId, tabs) => (pushed = tabs) },
     );
     const { tabId } = manager.createTab("shell");
@@ -333,11 +334,16 @@ describe("a sandboxed tab's control token", () => {
   });
 });
 
+/** A terminal's environment under a control channel with `env` and `binDir`. */
+function terminalWith(env: Record<string, string>, binDir?: string): TerminalEnv {
+  return { ...NO_TERMINAL_ENV, control: () => ({ token: "", port: 0, cliPath: "", binDir, env }) };
+}
+
 describe("a terminal's environment", () => {
   it("puts TET's own above the machine's, and a saved command's above all", () => {
-    setControlEnv({ TET_TEST_OUTER: "inner", TET_TEST_CONTROL: "control" }, "");
+    const terminal = terminalWith({ TET_TEST_OUTER: "inner", TET_TEST_CONTROL: "control" });
     const env = withEnv({ TET_TEST_MACHINE: "machine", TET_TEST_OUTER: "outer" }, () =>
-      buildEnv({
+      buildEnv(terminal, {
         env: { TET_TEST_MACHINE: "default", TET_TEST_AGENT: "agent" },
         own: { TET_TEST_OWN: "own", TET_TEST_CONTROL: "own" },
         envOverride: { TET_TEST_OWN: "command" },
@@ -353,56 +359,48 @@ describe("a terminal's environment", () => {
 
   it("sets the variables kept in TET over the machine's own, and none in a sandbox", () => {
     let stored: Record<string, string> = { TET_TEST_STORED: "first", TET_TEST_MACHINE: "stored" };
-    setStoredEnv(() => stored);
-    try {
-      // TET_KEPT_ENV is set and unset below, and an outer TET leaves its own in process.env.
-      withEnv({ TET_TEST_MACHINE: "machine", TET_KEPT_ENV: process.env.TET_KEPT_ENV }, () => {
-        const env = buildEnv({ env: { TET_TEST_STORED: "agent" } });
-        assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
-        assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
-        assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
-        assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
-        assert.deepEqual(storedEnvOf(HOST_CALLER), {
-          TET_TEST_STORED: "first",
-          TET_TEST_MACHINE: "stored",
-          TET_KEPT_ENV: "TET_TEST_STORED,TET_TEST_MACHINE",
-        });
-        assert.deepEqual(storedEnvOf(SANDBOX_CALLER), {}, "a sandbox gets none");
-        stored = { TET_TEST_STORED: "second" };
-        assert.equal(buildEnv({}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
-        // A TET started from a tab of another inherits that one's list; its own tabs get their own.
-        process.env.TET_KEPT_ENV = "OUTER";
-        stored = {};
-        assert.equal(buildEnv({}).TET_KEPT_ENV, undefined, "none kept, none named");
-        delete process.env.TET_KEPT_ENV;
-        assert.equal(buildEnv({ side: SANDBOX_CALLER }).TET_TEST_STORED, undefined, "a sandbox gets none");
+    const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => stored };
+    // TET_KEPT_ENV is set and unset below, and an outer TET leaves its own in process.env.
+    withEnv({ TET_TEST_MACHINE: "machine", TET_KEPT_ENV: process.env.TET_KEPT_ENV }, () => {
+      const env = buildEnv(terminal, { env: { TET_TEST_STORED: "agent" } });
+      assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
+      assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
+      assert.equal(buildEnv(terminal, { side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
+      assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
+      assert.deepEqual(storedEnvOf(terminal, HOST_CALLER), {
+        TET_TEST_STORED: "first",
+        TET_TEST_MACHINE: "stored",
+        TET_KEPT_ENV: "TET_TEST_STORED,TET_TEST_MACHINE",
       });
-    } finally {
-      setStoredEnv(() => ({}));
-    }
+      assert.deepEqual(storedEnvOf(terminal, SANDBOX_CALLER), {}, "a sandbox gets none");
+      stored = { TET_TEST_STORED: "second" };
+      assert.equal(buildEnv(terminal, {}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
+      // A TET started from a tab of another inherits that one's list; its own tabs get their own.
+      process.env.TET_KEPT_ENV = "OUTER";
+      stored = {};
+      assert.equal(buildEnv(terminal, {}).TET_KEPT_ENV, undefined, "none kept, none named");
+      delete process.env.TET_KEPT_ENV;
+      assert.equal(buildEnv(terminal, { side: SANDBOX_CALLER }).TET_TEST_STORED, undefined, "a sandbox gets none");
+    });
   });
 
   it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
-    setStoredEnv(() => ({ tet_test_case: "stored" }));
-    try {
-      const env = withEnv({ TET_TEST_CASE: "machine" }, () => buildEnv({}));
-      const names = Object.keys(env).filter((name) => name.toUpperCase() === "TET_TEST_CASE");
-      assert.deepEqual(
-        names.map((name) => env[name]),
-        ["stored"],
-        "one variable, TET's",
-      );
-    } finally {
-      setStoredEnv(() => ({}));
-    }
+    const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => ({ tet_test_case: "stored" }) };
+    const env = withEnv({ TET_TEST_CASE: "machine" }, () => buildEnv(terminal, {}));
+    const names = Object.keys(env).filter((name) => name.toUpperCase() === "TET_TEST_CASE");
+    assert.deepEqual(
+      names.map((name) => env[name]),
+      ["stored"],
+      "one variable, TET's",
+    );
   });
 
   it("gives a terminal its own tab's control token, never the run's", () => {
-    setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
-    const env = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
+    const terminal = terminalWith({ [CONTROL_ENV.token]: "run-token" });
+    const env = buildEnv(terminal, { own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
     assert.equal(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-1", HOST_SIDE));
     assert.notEqual(env[CONTROL_ENV.token], tabControlToken("run-token", { projectId: "p1" }, "tab-2", HOST_SIDE), "another tab's differs");
-    const inSandbox = buildEnv({
+    const inSandbox = buildEnv(terminal, {
       own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" },
       side: SANDBOX_CALLER,
     });
@@ -411,19 +409,18 @@ describe("a terminal's environment", () => {
       tabControlToken("run-token", { projectId: "p1" }, "tab-1", SANDBOX_SIDE),
       "the sandbox is in it",
     );
-    setControlEnv({}, "");
   });
 
   it("gives a worktree's terminal a token of that worktree, and no outer TET's ids", () => {
-    setControlEnv({ [CONTROL_ENV.token]: "run-token" }, "");
+    const terminal = terminalWith({ [CONTROL_ENV.token]: "run-token" });
     const inherited = { worktree: process.env[CONTROL_ENV.worktree], tab: process.env[CONTROL_ENV.tabId] };
     // A TET started from a worktree tab of another TET inherits that tab's ids.
     process.env[CONTROL_ENV.worktree] = "outer";
     process.env[CONTROL_ENV.tabId] = "outer-tab";
     try {
-      const main = buildEnv({ own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
+      const main = buildEnv(terminal, { own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.tabId]: "tab-1" } });
       assert.equal(main[CONTROL_ENV.worktree], undefined, "the repository's tab names no worktree");
-      const env = buildEnv({
+      const env = buildEnv(terminal, {
         own: { [CONTROL_ENV.projectId]: "p1", [CONTROL_ENV.worktree]: "k3f9a2c1", [CONTROL_ENV.tabId]: "tab-1" },
       });
       assert.equal(env[CONTROL_ENV.worktree], "k3f9a2c1");
@@ -440,23 +437,22 @@ describe("a terminal's environment", () => {
           process.env[name] = value;
         }
       }
-      setControlEnv({}, "");
     }
   });
 
   it("prepends the launcher directory to PATH under whatever name PATH has", () => {
     const key = Object.keys(process.env).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
     const before = process.env[key] ?? "";
-    setControlEnv({}, "/tet/bin");
-    const env = buildEnv({});
+    const terminal = terminalWith({}, "/tet/bin");
+    const env = buildEnv(terminal, {});
     assert.equal(env[key], `/tet/bin${path.delimiter}${before}`);
     assert.equal(Object.keys(env).filter((name) => name.toUpperCase() === "PATH").length, 1, "one PATH, not two");
   });
 
   it("lets a saved command's PATH replace one spelled Path, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
-    setControlEnv({}, "");
+    const terminal = NO_TERMINAL_ENV;
     // A TET started from the desktop inherits `Path`; the spelling a tet.json uses is its own.
-    const env = buildEnv({ own: { Path: "inherited" }, envOverride: { PATH: "command" } });
+    const env = buildEnv(terminal, { own: { Path: "inherited" }, envOverride: { PATH: "command" } });
     const names = Object.keys(env).filter((name) => name.toUpperCase() === "PATH");
     assert.deepEqual(
       names.map((name) => env[name]),

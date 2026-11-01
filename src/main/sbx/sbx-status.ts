@@ -17,23 +17,19 @@ import {
 } from "./sbx-policy";
 import { projectsDir, sandboxDir } from "../store/project-dirs";
 import { augmentAgentPath } from "../agents/agent-path";
+import type { ControlChannel } from "../util/control-channel";
 import { PLATFORM } from "../util/host-platform";
 import { jsonOf, readSbxVersion, runSbx, SBX_PROBE_TIMEOUT_MS, sbxFailure, sbxVersionSupported, type RunResult } from "./sbx-cli";
 
-/** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed), set
- *  by prepareControl (ctl-channel.ts). Unset without a control channel, and then nothing of it reaches a sandbox. */
-let control: { cliPath: string; port: number } | undefined;
-/** TET's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
-let dataRoot: string | undefined;
-export function configureSandboxes(cliPath: string, port: number, root: string): void {
-  control = { cliPath, port };
-  dataRoot = root;
-}
+/** The `tet-ctl` bundle (ensureSandboxLauncher) and control port (isControlChannelAllowed). */
+export type SandboxControl = Pick<ControlChannel, "cliPath" | "port">;
 
-/** The control channel configureSandboxes was given, for a sandboxed tab's env and launcher
- *  (sbx.ts's prepareSbxRun). */
-export function sandboxControl(): { cliPath: string; port: number } | undefined {
-  return control;
+/** What a sandboxed tab's checks and start read of TET. */
+export interface SandboxChannel {
+  /** None without a control channel, and then nothing of it reaches a sandbox. */
+  control?: SandboxControl;
+  /** TET's data folder, holding its mounted folders (readSbxBlockers, project-dirs.ts). */
+  dataRoot?: string;
 }
 
 /** Whether sbx is signed in to Docker, as probeSbx tells it: its sandbox listing answers. */
@@ -60,6 +56,7 @@ export type SandboxList = Map<string, ListedSandbox>;
 export async function checkSbxReady(
   projectRefPath: string,
   ref: ProjectRef,
+  channel: SandboxChannel,
 ): Promise<{ notReady: string } | { sandboxes: SandboxList; organization?: string; rules?: FilesystemRule[] }> {
   // No PATH re-read on the spawn path: on macOS/Linux that is a login shell per call.
   const { status, sandboxes, policy } = await probeSbx(false);
@@ -68,7 +65,7 @@ export async function checkSbxReady(
   if (notReady !== undefined || !sandboxes) {
     return { notReady: notReady ?? "SBX is not signed in to Docker" };
   }
-  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref, policy?.rules);
+  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref, policy?.rules, channel);
   if (failure !== undefined) {
     return { notReady: `SBX failed: ${failure}` };
   }
@@ -91,18 +88,23 @@ export interface SbxReading {
  * What the sbx-settings dialog asks before showing its fields. PATH is re-read: "Check again"
  * follows an install. Nothing cached — sbx changes from outside TET at any time.
  */
-export async function readSbxStatus(projectRefPath: string, ref: ProjectRef): Promise<SbxStatus> {
-  return (await readSbxReading(projectRefPath, ref, true)).status;
+export async function readSbxStatus(projectRefPath: string, ref: ProjectRef, channel: SandboxChannel): Promise<SbxStatus> {
+  return (await readSbxReading(projectRefPath, ref, true, channel)).status;
 }
 
 /** readSbxStatus, with what it read on the way. `refreshPath` only where an install may have
  *  happened since (the dialog's "Check again"): on macOS/Linux that is a login shell per call. */
-export async function readSbxReading(projectRefPath: string, ref: ProjectRef, refreshPath: boolean): Promise<SbxReading> {
+export async function readSbxReading(
+  projectRefPath: string,
+  ref: ProjectRef,
+  refreshPath: boolean,
+  channel: SandboxChannel,
+): Promise<SbxReading> {
   const { status, sandboxes, policy } = await probeSbx(refreshPath);
   if (!status.policyInitialized) {
     return { status, sandboxes };
   }
-  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref, policy?.rules);
+  const { blockers, rules, failure } = await readSbxBlockers(projectRefPath, ref, policy?.rules, channel);
   status.blockers = blockers;
   status.failure = failure;
   return { status, sandboxes, rules };
@@ -129,8 +131,9 @@ async function readSbxBlockers(
   projectRefPath: string,
   ref: ProjectRef,
   rules: FilesystemRule[] | undefined,
+  { control, dataRoot }: SandboxChannel,
 ): Promise<{ blockers: SbxBlocker[]; rules?: FilesystemRule[]; failure?: string }> {
-  const channelAllowed = await isControlChannelAllowed();
+  const channelAllowed = await isControlChannelAllowed(control);
   if (channelAllowed === undefined || rules === undefined) {
     return { blockers: [], failure: "its policy could not be read" };
   }
@@ -318,7 +321,7 @@ async function isNetworkAllowed(target: string): Promise<boolean | undefined> {
  * fails, so only the organization can allow it — without a port, as the port is probed per run
  * (findControlPort). True without a control channel; undefined where sbx could not say.
  */
-async function isControlChannelAllowed(): Promise<boolean | undefined> {
+async function isControlChannelAllowed(control: SandboxControl | undefined): Promise<boolean | undefined> {
   if (!control) {
     return true;
   }

@@ -27,7 +27,6 @@ import { useLanes } from "./lanes/use-lanes";
 import { LANES } from "../shared/types/settings";
 import { MIN_CONTENT_WIDTH, MIN_AREA_HEIGHT, MIN_AREA_WIDTH, Sash } from "./ui/Sash";
 import { TabArea } from "./tabs/TabArea";
-import { disposeRefTerminals } from "./tabs/terminal-views";
 import { NO_IDS } from "./tabs/tab-marks";
 import { useTabMarks } from "./tabs/use-tab-marks";
 import { useWorkingNotices } from "./tabs/use-working-notices";
@@ -39,13 +38,14 @@ import type { StatusListItem } from "./ui/StatusList";
 import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
+import { onRefClosed, refClosed } from "./ref-lifetime";
 import { PLATFORM } from "./platform";
 import { DEFAULT_LAYOUT, inOrder, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS } from "./tabs/layout-state";
 import { useProjectLayouts } from "./tabs/use-project-layouts";
 import { workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import { editorLabel, kindOf, terminalLabel, type PaneTab } from "./tabs/pane-tab";
-import { canDiscardRefEdits, disposeRefEditors } from "./editor/editor-views";
+import { canDiscardRefEdits } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
 import { useTabRestore } from "./tabs/use-tab-restore";
 import { useEditorSync } from "./tabs/use-editor-sync";
@@ -75,7 +75,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
   /** Each repository's or worktree's git state, tabs and starting flag (use-ref-feeds.ts);
    *  everything below is by `refKey` too, but `sandboxed`. */
-  const { states, tabs, starting, forgetRef: forgetFeeds } = useRefFeeds(projectsRef, loadedProjects);
+  const { states, tabs, starting } = useRefFeeds(projectsRef, loadedProjects);
   /**
    * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
    * tabs keep their instance across updates: `stripTabs` compares items.
@@ -93,15 +93,15 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     return next;
   }, [tabs, editorTabs]);
   /** The editor tabs and plain shells a restart brings back (use-tab-restore.ts). */
-  const forgetRestore = useTabRestore(resolvedRefs, states, tabs, editorTabs, setEditorTabs);
+  useTabRestore(resolvedRefs, states, tabs, editorTabs, setEditorTabs);
   /**
    * Split state lives here, not in `TabArea`: shortcuts and marks/seen need what is on screen
    * across every pane — one tab per pane (`visibleTabIds`). A pane asks for a selection change
    * through `onActivateTab`. See "Split view" in AGENTS.md.
    */
-  const { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab, forgetLayout } = useProjectLayouts(stripTabs, starting);
+  const { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab } = useProjectLayouts(stripTabs, starting);
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
-  const { activeEditors, forgetProjectRef: forgetEditorSync } = useEditorSync(editorTabs, layouts, states);
+  const { activeEditors } = useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeRefKey);
   // Section defaults and limits.
@@ -202,32 +202,16 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, [activeRef, onScreenTabIds]);
 
   /** Finished, waiting, starting and working tabs, and the ways to them (use-tab-marks.ts). */
-  const {
-    marks,
-    showWorking,
-    showFinished,
-    showWaiting,
-    jumpToWaiting,
-    forgetProjectRef: forgetMarks,
-  } = useTabMarks(tabs, activeRefKey, activeRef, onScreenTabIds, showTab);
+  const { marks, showWorking, showFinished, showWaiting, jumpToWaiting } = useTabMarks(
+    tabs,
+    activeRefKey,
+    activeRef,
+    onScreenTabIds,
+    showTab,
+  );
   useWorkingNotices(tabs, resolvedRefs);
 
-  /** Drops everything held for a repository or worktree; the project list is the caller's. */
-  const forgetProjectRef = useCallback(
-    (ref: ProjectRef) => {
-      const refKey = refKeyOf(ref);
-      forgetRestore(refKey);
-      forgetFeeds(refKey);
-      setEditorTabs((current) => forget(current, refKey));
-      forgetEditorSync(refKey);
-      disposeRefEditors(ref);
-      forgetLayout(refKey);
-      forgetMarks(refKey);
-      // The xterms live outside React; this is where a repository or worktree ends for good.
-      disposeRefTerminals(ref);
-    },
-    [forgetRestore, forgetFeeds, forgetLayout, forgetEditorSync, forgetMarks],
-  );
+  useEffect(() => onRefClosed((ref) => setEditorTabs((current) => forget(current, refKeyOf(ref)))), []);
 
   // The one way the list changes, whoever asked — the dialog, a row's close, the git lane's
   // worktrees or the control channel (projects.ts): main announces, this follows. A project
@@ -239,7 +223,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         setProjects(list);
         setActiveRefKey((current) => activeAfterChange(current, list, removed, show));
         for (const ref of removed ?? []) {
-          forgetProjectRef(ref);
+          refClosed(ref);
           if (ref.worktree === undefined) {
             forgetSandboxed(ref.projectId);
           }
@@ -254,7 +238,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           });
         }
       }),
-    [forgetProjectRef, forgetSandboxed],
+    [forgetSandboxed],
   );
 
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */

@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
 import { HostSetups } from "../../src/main/terminals/host-setup";
-import type { spawnAgentProcess } from "../../src/main/terminals/pty";
+import type { spawnAgentProcess, TerminalEnv } from "../../src/main/terminals/pty";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { tempDir, withEnvAsync } from ".";
 
@@ -54,6 +54,9 @@ export class FakeProcess {
   }
 }
 
+/** No control channel, nothing kept. */
+export const NO_TERMINAL_ENV: TerminalEnv = { control: () => undefined, stored: () => ({}) };
+
 export const NO_CALLBACKS: SessionManagerCallbacks = {
   onTabs: () => undefined,
   onArchived: () => undefined,
@@ -83,6 +86,7 @@ export async function withEmptyPath(
       settings,
       new SbxLocalStore(root),
       new HostSetups(root, settings, () => undefined),
+      NO_TERMINAL_ENV,
       {
         ...NO_CALLBACKS,
         ...callbacks,

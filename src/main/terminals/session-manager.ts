@@ -19,7 +19,7 @@ import type { SettingsStore } from "../store/settings";
 import type { AgentRuntime } from "./agent-runtime";
 import { ArchivedTabs } from "./archived-tabs";
 import { PlaceResolver } from "./place-resolver";
-import type { spawnAgentProcess } from "./pty";
+import type { spawnAgentProcess, TerminalEnv } from "./pty";
 import { SESSION_REMOVE_DELAY_MS } from "./terminal-session";
 import { HostPlace, SandboxPlace } from "./tab-place";
 import type { PlaceContext, TabPlace } from "./tab-place";
@@ -115,6 +115,7 @@ export class TabSessionManager {
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
+    terminalEnv: TerminalEnv,
     private readonly callbacks: SessionManagerCallbacks,
     /** What starts a tab's process (TabRuns); a test's stands in for the pty. */
     spawnProcess?: typeof spawnAgentProcess,
@@ -122,6 +123,7 @@ export class TabSessionManager {
     this.places = new PlaceResolver(at, settings, sbxLocal, {
       placeContext: (agent, executable) => this.placeContext(agent, executable),
       onNotice: (severity, message) => this.callbacks.onNotice(severity, message),
+      sandboxChannel: () => ({ control: terminalEnv.control(), dataRoot }),
     });
     this.archived = new ArchivedTabs(dataRoot, at.ref, {
       agentOf: (tab) => this.runtimeFor(tab.agentId).agent,
@@ -143,6 +145,7 @@ export class TabSessionManager {
     this.runs = new TabRuns(
       at,
       settings,
+      terminalEnv,
       callbacks,
       {
         tabOf: (tabId) => this.tabOf(tabId),

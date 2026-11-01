@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
@@ -7,12 +6,11 @@ import { RepoCache } from "./providers/repo-cache";
 import { GitLoginStore } from "./git/git-logins";
 import { CONTROL_ENV } from "../shared/ctl";
 import { RELEASES_URL } from "../shared/release";
-import { resolveTheme, themeKey } from "../shared/themes";
 import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
-import { readChanged, readCommands } from "./store/tet-json";
+import { readCommands } from "./store/tet-json";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -29,6 +27,7 @@ import {
   addWorktree,
   deleteWorktree,
   openStoredProjects,
+  projectFileChanged,
   removeMissingProject,
   removeProject,
   resolveStoredIds,
@@ -38,19 +37,21 @@ import {
 import { ProjectStore } from "./store/project-store";
 import { sbxAccess } from "./sbx/sbx-access";
 import { SbxAccountStore } from "./sbx/sbx-accounts";
+import type { SandboxChannel } from "./sbx/sbx-status";
 import { SbxLocalStore } from "./sbx/sbx-local";
 import { anyAgentInstalled } from "./requirements";
-import { resolveDataRoot } from "./store/data-root";
+import { prepareDataRoot, resolveDataRoot } from "./store/data-root";
 import { augmentAgentPath } from "./agents/agent-path";
-import { setStoredEnv } from "./terminals/pty";
+import type { TerminalEnv } from "./terminals/pty";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
+import type { ControlChannel } from "./util/control-channel";
 import { logError } from "./util/error-log";
 import { awaitedNotificationTab, showDesktopNotification, startNotifications } from "./util/notifications";
 import { RepositoryManager } from "./git/repository";
 import { SessionManagerRegistry } from "./terminals/session-registry";
+import { settingsAccessOf } from "./settings-access";
 import { SettingsStore } from "./store/settings";
-import type { SettingsAccess } from "./store/settings";
 import { currentTheme } from "./store/theme";
 import { PLATFORM } from "./util/host-platform";
 
@@ -70,7 +71,7 @@ const HIDE_WINDOW = process.argv.includes("--hide-window");
 /** TET's own data; `userData` is left to Chromium's profile. */
 const dataRoot = resolveDataRoot(userDataArg);
 try {
-  fs.mkdirSync(dataRoot, { recursive: true });
+  prepareDataRoot(dataRoot);
 } catch (error) {
   logError("could not create the data folder", error);
 }
@@ -128,8 +129,6 @@ const logins = new GitLoginStore(dataRoot);
 const sbxLocal = new SbxLocalStore(dataRoot);
 const sbxAccounts = new SbxAccountStore(dataRoot);
 const environment = new EnvStore(dataRoot);
-// Read at every spawn, so a restarted tab sees what was saved meanwhile.
-setStoredEnv(() => environment.values());
 // Held until the window listens (send), like any notice this early.
 const overriding = environment
   .list()
@@ -172,35 +171,15 @@ const repositories = new RepositoryManager(dataRoot, logins, {
     syncWorktrees(projectDeps, ref.projectId, state);
   },
   onNotice: notice,
-  onCommandsChanged: (projectId) => {
-    // Written broken, it still counts as its last readable version (tet-json.ts's `read`).
-    const project = store.get(projectId);
-    if (!project) {
-      return;
-    }
-    // Read once here for every listener; the repository's file serves its worktrees too.
-    void readChanged(project.path).then(({ problem, commands, sbx }) => {
-      if (problem !== undefined) {
-        notice("warning", `${project.name} keeps its last readable tet.json until it is fixed: ${problem}`);
-      }
-      if (!commands || !sbx) {
-        return;
-      }
-      send("commands:changed", { projectId, commands, sbxEnabled: sbx.enabled });
-      // tet.json also holds whether SBX is enabled, which sbx-only agents must hear (sbxSettingsChanged) — in
-      // every repository and worktree of the project.
-      for (const manager of tabManagers.forProject(projectId)) {
-        void manager.sbxSettingsChanged(sbx.enabled).catch((error: unknown) => logError("could not apply the SBX settings change", error));
-      }
-    });
-  },
+  onCommandsChanged: (projectId) => void projectFileChanged(projectDeps, projectId),
   onFilesChanged: (ref) => send("repository:files-changed", { ref }),
   onFileChanged: (ref, filePath) => send("repository:file-changed", { ref, path: filePath }),
   onMissing: (projectId) => {
     void removeMissingProject(projectDeps, projectId).catch((error: unknown) => logError("could not remove a missing project", error));
   },
 });
-const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
+const terminalEnv: TerminalEnv = { control: () => controlChannel, stored: () => environment.values() };
+const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, terminalEnv, {
   onTabs: (ref, tabs) => {
     send("tabs:changed", { ref, tabs });
     awaitedNotificationTab(ref);
@@ -235,6 +214,7 @@ const projectDeps: ProjectDeps = {
   openProjectRef,
   dataRoot,
   projectsChanged: (change) => send("projects:changed", { projects: store.list(), ...change }),
+  commandsChanged: (projectId, commands, sbxEnabled) => send("commands:changed", { projectId, commands, sbxEnabled }),
   notice,
 };
 
@@ -257,8 +237,10 @@ function openWorkspace(): Promise<void> {
   return workspaceOpened;
 }
 
+const sandboxChannel = (): SandboxChannel => ({ control: controlChannel, dataRoot });
+
 /** Set before any terminal can spawn. */
-let controlChannel: { token: string; port: number } | undefined;
+let controlChannel: ControlChannel | undefined;
 let controlServer: { close: () => Promise<void> } | undefined;
 
 function findTab(ref: ProjectRef, tabId: string): TabDescriptor | undefined {
@@ -328,7 +310,7 @@ async function startControl(): Promise<void> {
         notice,
         environment,
         envRequests,
-        sbx: sbxAccess({ sbxLocal, sbxAccounts, notice, anyAgentInstalled }),
+        sbx: sbxAccess({ sbxLocal, sbxAccounts, notice, anyAgentInstalled, channel: sandboxChannel }),
       },
       controlChannel.token,
       controlChannel.port,
@@ -339,43 +321,7 @@ async function startControl(): Promise<void> {
   }
 }
 
-/** Every settings change, from the window or tet-ctl: stored, then handed on at once to what shows
- *  or reads it. */
-const settingsAccess: SettingsAccess = {
-  get: () => settings.get(),
-  patch(edits) {
-    settings.patch(edits);
-    const restartRequired = applyTheme();
-    if (edits.notifications?.idleReminder !== undefined) {
-      tabManagers.idleReminderChanged();
-    }
-    if (edits.files?.excludeGitIgnore !== undefined || edits.files?.compactFolders !== undefined || edits.files?.sortOrder !== undefined) {
-      repositories.announceFilesChanged();
-    }
-    return restartRequired;
-  },
-};
-
-/**
- * Applies the saved theme live and returns whether a restart is still needed. Live only within one
- * `kind`: an agent gets light or dark once at tab start (`AgentPaths.theme`).
- */
-function applyTheme(): boolean {
-  const shown = appWindow.shownTheme();
-  if (!shown) {
-    return false;
-  }
-  // The kind on screen, not the saved one: a pending kind switch must not block a change within it.
-  const { kind } = shown;
-  appWindow.showTheme(resolveTheme(settings.get().appearance[themeKey(kind)], kind));
-  const saved = currentTheme(settings);
-  // Agents get the saved theme (AgentPaths.theme), so only once it is on screen: a kind awaiting its
-  // restart is not handed to them.
-  if (saved.id === appWindow.shownTheme()?.id) {
-    tabManagers.themeChanged();
-  }
-  return saved.kind !== kind;
-}
+const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
 
 function createWindow(): void {
   appWindow.create(currentTheme(settings));
@@ -425,6 +371,7 @@ if (!app.requestSingleInstanceLock()) {
       logins,
       sbxLocal,
       sbxAccounts,
+      sandboxChannel,
       environment,
       envRequests,
       repositories,

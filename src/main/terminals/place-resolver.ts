@@ -6,7 +6,7 @@ import { readSbxSettings } from "../store/tet-json";
 import { currentTheme } from "../store/theme";
 import { ensureRunning } from "../sbx/sbx-mounts";
 import type { SbxLocalStore } from "../sbx/sbx-local";
-import { checkSbxReady, sbxListed } from "../sbx/sbx-status";
+import { checkSbxReady, sbxListed, type SandboxChannel } from "../sbx/sbx-status";
 import { CommandPlace, type HostPlace, type PlaceContext, type SandboxPlace, type StartingPlace } from "./tab-place";
 import { isSavedCommandTab, type TabState } from "./tab-state";
 
@@ -42,6 +42,8 @@ export interface PlaceTarget {
   /** What a place of this agent's tabs is built from. */
   placeContext(agent: AgentDefinition, executable: string): PlaceContext;
   onNotice(severity: NoticeSeverity, message: string): void;
+  /** What a sandboxed tab's checks and start read of TET, at this start. */
+  sandboxChannel(): SandboxChannel;
 }
 
 /** Decides at each start where a tab of one repository or worktree runs, and says so where it
@@ -96,7 +98,8 @@ export class PlaceResolver {
     // each start sbx's daemon and one fail on its lock. Not for a tab about to run on this machine,
     // which would start a sandbox nobody asked for.
     const warm = tab.sessionId && !tab.sandbox ? undefined : this.reads.sbxListed().then(() => this.reads.ensureRunning(sandbox.name));
-    const ready = await this.reads.checkSbxReady(this.at.path, this.at.ref);
+    const channel = this.target.sandboxChannel();
+    const ready = await this.reads.checkSbxReady(this.at.path, this.at.ref, channel);
     if ("notReady" in ready) {
       if (!this.sbxStranded(tab, places, ready.notReady)) {
         this.target.onNotice(
@@ -132,6 +135,7 @@ export class PlaceResolver {
     const { projectId } = this.at.ref;
     return sandbox.starting({
       settings: sbxSettings,
+      control: channel.control,
       ready,
       warm,
       idleReminder: this.settings.get().notifications.idleReminder,

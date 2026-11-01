@@ -4,6 +4,7 @@ import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { SettingsStore } from "../store/settings";
 import { HostSetups } from "./host-setup";
+import type { TerminalEnv } from "./pty";
 import { TabSessionManager, type SessionManagerCallbacks } from "./session-manager";
 
 /** A session manager per open repository and worktree, by `refKey`. */
@@ -19,6 +20,7 @@ export class SessionManagerRegistry {
     private readonly dataRoot: string,
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
+    private readonly terminalEnv: TerminalEnv,
     private readonly callbacks: SessionManagerCallbacks,
   ) {
     this.hostSetups = new HostSetups(dataRoot, settings, callbacks.onNotice);
@@ -30,7 +32,15 @@ export class SessionManagerRegistry {
     if (existing) {
       return existing;
     }
-    const manager = new TabSessionManager(resolved, this.dataRoot, this.settings, this.sbxLocal, this.hostSetups, this.callbacks);
+    const manager = new TabSessionManager(
+      resolved,
+      this.dataRoot,
+      this.settings,
+      this.sbxLocal,
+      this.hostSetups,
+      this.terminalEnv,
+      this.callbacks,
+    );
     manager.setOnScreen(refKey === this.onScreen.refKey ? this.onScreen.tabIds : []);
     this.managers.set(refKey, manager);
     manager.bootstrap().catch((error: unknown) => {

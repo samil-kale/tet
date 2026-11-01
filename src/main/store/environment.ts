@@ -30,7 +30,7 @@ interface Contents {
 }
 
 /**
- * The environment variables TET sets in the tabs it starts (pty.ts's `setStoredEnv`), global to
+ * The environment variables TET sets in the tabs it starts (pty.ts's `TerminalEnv.stored`), global to
  * every project: kept in the clear, and set over what the machine sets itself, said in a notice. A
  * value leaves this class only into a tab's environment; the renderer and `tet-ctl` never see one. A
  * running tab takes them up only when restarted: the dialog's Save restarts the asking one. None in

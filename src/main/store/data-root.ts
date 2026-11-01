@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentId } from "../../shared/types/agents";
@@ -13,6 +14,13 @@ import type { AgentId } from "../../shared/types/agents";
  */
 export function resolveDataRoot(userDataArg: string | undefined): string {
   return userDataArg ? path.resolve(userDataArg) : path.join(os.homedir(), ".tet");
+}
+
+/** Creates the data folder, for this account alone: it holds what is kept in the clear, and closing
+ *  it covers a file written before `writeJson` set a mode. Throws when it cannot. */
+export function prepareDataRoot(dataRoot: string): void {
+  fs.mkdirSync(dataRoot, { recursive: true });
+  fs.chmodSync(dataRoot, 0o700);
 }
 
 /** One agent's setup for its host tabs (AgentPaths.agentDir), the same for every project, so kept

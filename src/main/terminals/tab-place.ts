@@ -18,7 +18,7 @@ import { dropsDir, sandboxDir, sandboxDropsDir, sandboxHandoverDir, sandboxSessi
 import type { ResolvedRef } from "../store/resolved-ref";
 import { holdsWorkspace, prepareSbxRun, sandboxName } from "../sbx/sbx";
 import { mountDropped, type SbxSessionMount } from "../sbx/sbx-mounts";
-import type { checkSbxReady } from "../sbx/sbx-status";
+import type { checkSbxReady, SandboxControl } from "../sbx/sbx-status";
 import { openInside, removeInside } from "../util/path-inside";
 import { toContainerPath } from "../agents/hook-target";
 import { HOST_TAB, SANDBOX_TAB, type TabSide } from "./tab-side";
@@ -204,6 +204,8 @@ export class CommandPlace extends HostPlace {
  *  read it again. */
 export interface SbxStart {
   settings: SbxProjectSettings;
+  /** The control channel (SandboxChannel.control). */
+  control?: SandboxControl;
   ready: Exclude<Awaited<ReturnType<typeof checkSbxReady>>, { notReady: string }>;
   /** The `ensureRunning` begun alongside the readiness check (SbxRunRequest.warm). */
   warm?: Promise<boolean>;
@@ -351,6 +353,7 @@ class SandboxStart extends SandboxPlace implements StartingPlace {
         ref: at.ref,
         projectRefPath: at.path,
         settings: start.settings,
+        control: start.control,
         skills: start.skills,
         sandboxes: start.ready.sandboxes,
         organization: start.ready.organization,

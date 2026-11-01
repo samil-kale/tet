@@ -30,7 +30,7 @@ function graphVersion(state: RepositoryState): string {
  */
 export function useCommitGraph(resolved: ResolvedRef, state: RepositoryState, enabled: boolean, busy: boolean) {
   const { ref, refKey } = resolved;
-  /** Out of `forgetProjectRef`'s reach, in the lane: a removed one's number stays, and does nothing. */
+  /** Kept past its close, in the lane: a removed one's number stays, and does nothing. */
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [loaded, setLoaded] = useState<{ refKey: string; commits: GraphCommit[]; searched: boolean } | undefined>();
   const [loading, setLoading] = useState(false);

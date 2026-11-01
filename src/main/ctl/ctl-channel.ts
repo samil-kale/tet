@@ -1,8 +1,7 @@
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import { CONTROL_ENV } from "../../shared/ctl";
-import { configureSandboxes } from "../sbx/sbx-status";
-import { setControlEnv } from "../terminals/pty";
+import type { ControlChannel } from "../util/control-channel";
 import { logError } from "../util/error-log";
 import { writeLaunchers } from "./ctl-launcher";
 import { findControlPort } from "./ctl-port";
@@ -18,7 +17,7 @@ export async function prepareControl(
   appDir: string,
   installed: boolean,
   reuseToken: string | undefined,
-): Promise<{ token: string; port: number }> {
+): Promise<ControlChannel> {
   const token = reuseToken || crypto.randomBytes(24).toString("base64url");
   const port = await findControlPort(dataRoot);
   // Installed, dist/ is in app.asar, unreadable outside electron; electron-builder.yml unpacks
@@ -31,9 +30,5 @@ export async function prepareControl(
     // Not fatal: terminals then just lack `tet-ctl` on PATH.
     logError("could not write the tet-ctl launcher", error);
   }
-  setControlEnv({ [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: token }, binDir);
-  // A sandbox cannot reach the data folder's launcher, so sbx.ts writes the bundle into it
-  // (ensureSandboxLauncher).
-  configureSandboxes(cliPath, port, dataRoot);
-  return { token, port };
+  return { token, port, cliPath, binDir, env: { [CONTROL_ENV.port]: String(port), [CONTROL_ENV.token]: token } };
 }

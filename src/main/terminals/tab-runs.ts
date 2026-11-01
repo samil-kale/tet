@@ -13,7 +13,7 @@ import { logError } from "../util/error-log";
 import { openExternalTerminal } from "../util/process";
 import type { AgentRuntime } from "./agent-runtime";
 import type { AgentPlaces } from "./place-resolver";
-import { spawnAgentProcess, storedEnvOf } from "./pty";
+import { spawnAgentProcess, storedEnvOf, type TerminalEnv } from "./pty";
 import { INTERRUPT_RECONCILE_MS } from "./reconcile-scheduler";
 import type { StartIndicators } from "./start-indicators";
 import type { HandoverFiles, Launch, LaunchInput, StartingPlace, TabPlace } from "./tab-place";
@@ -98,6 +98,7 @@ export class TabRuns {
   constructor(
     private readonly at: ResolvedRef,
     private readonly settings: SettingsStore,
+    private readonly terminalEnv: TerminalEnv,
     private readonly callbacks: RunCallbacks,
     private readonly target: RunsTarget,
     /** What starts a tab's process (TerminalSession); a test's stands in for the pty. */
@@ -328,6 +329,7 @@ export class TabRuns {
           [CONTROL_ENV.tabId]: tabId,
         },
         side: place.side,
+        terminalEnv: this.terminalEnv,
       },
       {
         onOutput: (data) => {
@@ -497,7 +499,7 @@ export class TabRuns {
       return;
     }
     const { agent, executable } = this.target.runtimeFor(tab.agentId);
-    const variables = storedEnvOf(this.target.placeOf(tab).side);
+    const variables = storedEnvOf(this.terminalEnv, this.target.placeOf(tab).side);
     const session = this.sessionOf(tabId);
     // Before the terminal opens, so no fit starts the tab meanwhile.
     tab.openedInTerminal = true;

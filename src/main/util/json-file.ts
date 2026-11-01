@@ -36,9 +36,10 @@ export function readRows<T>(file: string, strings: string[], accepts: (entry: Re
 
 /** Writes one of TET's own files as indented JSON, renamed into place; throws when it cannot. For a
  *  store written from a Save someone waits on: its failure reaches them, in the dialog or `tet-ctl`'s
- *  answer, and the store changes its contents only once the file has them. */
+ *  answer, and the store changes its contents only once the file has them. For this account alone,
+ *  as a store may hold variables and accounts in the clear. */
 export function writeJson(file: string, value: unknown): void {
-  writeFileAtomic.sync(file, JSON.stringify(value, null, 2), "utf8");
+  writeFileAtomic.sync(file, JSON.stringify(value, null, 2), { encoding: "utf8", mode: 0o600 });
 }
 
 /** A store's write nobody waits on, or a cleanup that must not stop what it cleans up after: a

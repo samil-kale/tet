@@ -50,7 +50,7 @@ function resolver(reads: PlaceReads, { sbxOnly = false, sandboxed = true } = {})
     AT,
     new SettingsStore(root),
     new SbxLocalStore(root),
-    { placeContext: () => context, onNotice },
+    { placeContext: () => context, onNotice, sandboxChannel: () => ({}) },
     reads,
   );
   return { resolving, places, notices };

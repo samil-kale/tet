@@ -28,61 +28,64 @@ const IPC_MESSAGE = "Only through the typed wrappers: handle/on/once (ipc/channe
 /** By its name, or off electron's namespace; an alias is refused at its import (IPC_IMPORT). */
 const IPC_BY_NAME = {
   selector: "MemberExpression:matches([object.name=/^ipc(Main|Renderer)$/], [property.name=/^ipc(Main|Renderer)$/])",
-  message: IPC_MESSAGE
+  message: IPC_MESSAGE,
 };
 /** A message to a window, off its webContents or an event's sender, or either handed on to be sent through later. */
 const WEB_CONTENTS_SEND = [
   "CallExpression[callee.property.name=/^(send|postMessage|sendToFrame)$/]:matches([callee.object.name=/^(webContents|sender)$/], [callee.object.property.name=/^(webContents|sender)$/])",
-  ":not(MemberExpression) > MemberExpression[property.name=/^(webContents|sender)$/]"
+  ":not(MemberExpression) > MemberExpression[property.name=/^(webContents|sender)$/]",
 ].map((selector) => ({ selector, message: "Only through window.ts's typed send." }));
 const PROCESS_PLATFORM = { object: "process", property: "platform", message: "Ask PLATFORM (util/host-platform.ts)." };
 const NAVIGATOR_PLATFORM = ["platform", "userAgent", "userAgentData"].map((property) => ({
   object: "navigator",
   property,
-  message: "Ask PLATFORM (renderer/platform.ts)."
+  message: "Ask PLATFORM (renderer/platform.ts).",
 }));
 /** process.platform by another way: node:os's platform() under any name, or process off globalThis. */
 const HOST_PLATFORM = [
   "ImportDeclaration[source.value=/^(node:)?os$/] > ImportSpecifier[imported.name='platform']",
   "CallExpression[callee.property.name='platform']",
-  "MemberExpression[property.name='platform'][object.property.name='process']"
+  "MemberExpression[property.name='platform'][object.property.name='process']",
 ].map((selector) => ({ selector, message: PROCESS_PLATFORM.message }));
 /** Every spawn goes through resolveCommand; a shell joins the arguments unescaped. An object is a namespace, never the option. */
 const SHELL_OPTION = {
   selector: "Property:matches([key.name='shell'], [key.value='shell']):not([value.value=false]):not([value.type='ObjectExpression'])",
-  message: "Never a `shell` option: spawn through resolveCommand (util/process.ts)."
+  message: "Never a `shell` option: spawn through resolveCommand (util/process.ts).",
 };
 /** net.fetch throws on a redirect it is told not to follow; net.request reads one. */
 const REDIRECT_MANUAL = {
   selector: "CallExpression[callee.property.name='fetch'] > ObjectExpression > Property[key.name='redirect'][value.value='manual']",
-  message: "net.fetch throws on `redirect: \"manual\"`: read the redirect with net.request."
+  message: 'net.fetch throws on `redirect: "manual"`: read the redirect with net.request.',
 };
 
 /** An equality or a switch case against one of `values` (an esquery regex). */
 const comparedWith = (values, message) => [
   { selector: `BinaryExpression[operator=/^[!=]==?$/]:matches([left.value=${values}], [right.value=${values}])`, message },
-  { selector: `SwitchCase[test.value=${values}]`, message }
+  { selector: `SwitchCase[test.value=${values}]`, message },
 ];
 /** The platform's id is data alone: what differs between the OSes is a Platform member. */
-const PLATFORM_ID = comparedWith("/^(win32|darwin|linux)$/", "The platform's id is data: branch on a Platform member (shared/platform.ts).");
+const PLATFORM_ID = comparedWith(
+  "/^(win32|darwin|linux)$/",
+  "The platform's id is data: branch on a Platform member (shared/platform.ts).",
+);
 /** No code outside agents/ names an agent but the shell, which TET itself runs saved commands and plain terminals in. */
 const AGENT_ID = comparedWith(
   `/^(${AGENT_FOLDERS.filter((name) => name !== "shell").join("|")})$/`,
-  "No code outside agents/ names an agent: whether it can do something is whether it has the group (agent.ts)."
+  "No code outside agents/ names an agent: whether it can do something is whether it has the group (agent.ts).",
 );
 
 /** Colors come from `--tet-*` variables, set by the themes alone. */
 const COLOR = "/#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b|\\b(rgba?|hsla?)\\(/";
 const COLOR_LITERAL = [`Literal[value=${COLOR}]`, `TemplateElement[value.raw=${COLOR}]`].map((selector) => ({
   selector,
-  message: "Colors only from --tet-* variables (renderer/themes/)."
+  message: "Colors only from --tet-* variables (renderer/themes/).",
 }));
 
 /** A function, object or array literal handed to a component is new on every render: the views under App are memoized. */
 const UNSTABLE_PROP = {
   selector:
     "JSXOpeningElement[name.name=/^[A-Z]/] > JSXAttribute > JSXExpressionContainer > :matches(ArrowFunctionExpression, FunctionExpression, ObjectExpression, ArrayExpression)",
-  message: "A prop of a memoized view must be stable: useCallback, useMemo or a constant (identity.ts)."
+  message: "A prop of a memoized view must be stable: useCallback, useMemo or a constant (identity.ts).",
 };
 
 /** What every file of src/ is held to by no-restricted-syntax; the configs below leave out what a file may do. */
@@ -93,7 +96,7 @@ const syntaxWithout = (...allowed) => ["error", ...SRC_SYNTAX.filter((entry) => 
 const SHELL_EXEC = ["child_process", "node:child_process"].map((name) => ({
   name,
   importNames: ["exec", "execSync"],
-  message: "Always through a shell: spawn through resolveCommand (util/process.ts)."
+  message: "Always through a shell: spawn through resolveCommand (util/process.ts).",
 }));
 /** Starting a process; a type (`ChildProcess`, `IPty`) is no spawn. */
 const SPAWNS = [
@@ -101,20 +104,20 @@ const SPAWNS = [
     name,
     importNames: ["spawn", "spawnSync", "execFile", "execFileSync", "fork"],
     allowTypeImports: true,
-    message: "Spawn through util/process.ts (resolveCommand, runProcess); a new spawn site joins SPAWN_SITES."
+    message: "Spawn through util/process.ts (resolveCommand, runProcess); a new spawn site joins SPAWN_SITES.",
   })),
   {
     name: "node-pty",
     allowTypeImports: true,
-    message: "A tab's pty is spawned by terminals/pty.ts; a new spawn site joins SPAWN_SITES."
-  }
+    message: "A tab's pty is spawned by terminals/pty.ts; a new spawn site joins SPAWN_SITES.",
+  },
 ];
 /** IPC's own objects; a type (`IpcMainEvent`) is no channel. */
 const IPC_IMPORT = {
   name: "electron",
   importNames: ["ipcMain", "ipcRenderer", "webContents"],
   allowTypeImports: true,
-  message: IPC_MESSAGE
+  message: IPC_MESSAGE,
 };
 /** What every file of src/ is held to by @typescript-eslint/no-restricted-imports; the configs below leave out what a file may do. */
 const SRC_IMPORTS = [...SHELL_EXEC, ...SPAWNS, IPC_IMPORT];
@@ -133,27 +136,27 @@ const SPAWN_SITES = [
   // Codex's app server, from resolveCommand, held open over stdio.
   "src/main/agents/codex/app-server-client.ts",
   // The updater: the new binary by its absolute path, detached to outlive tet.
-  "src/main/update/auto-update.ts"
+  "src/main/update/auto-update.ts",
 ];
 
 /** The window runs in Chromium: node is main's, reached through TETApi. */
 const NODE_BUILTIN = {
   regex: `^(node:|(${builtinModules.filter((name) => !name.includes(":")).join("|")})(/|$))`,
-  message: "The renderer runs without node: ask main through TETApi."
+  message: "The renderer runs without node: ask main through TETApi.",
 };
 
 /** Every question is Dialog.tsx's confirm or prompt, asked by the view offering the action. */
 const NATIVE_DIALOGS = [
   // Off any object: electron's dialog is reached under any name.
   ...["showMessageBox", "showMessageBoxSync", "showErrorBox"].map((property) => ({ property })),
-  ...["window", "globalThis", "self"].flatMap((object) => ["alert", "confirm", "prompt"].map((property) => ({ object, property })))
+  ...["window", "globalThis", "self"].flatMap((object) => ["alert", "confirm", "prompt"].map((property) => ({ object, property }))),
 ].map((entry) => ({ ...entry, message: "No native message boxes: ask with Dialog.tsx's confirm or prompt, in the window." }));
 
 /** Only Chromium's stack applies the machine's proxy and certificate store: the global fetch off a global object. */
 const GLOBAL_FETCH = ["globalThis", "window", "self"].map((object) => ({
   object,
   property: "fetch",
-  message: "Use electron's net.fetch (or net.request to read a redirect)."
+  message: "Use electron's net.fetch (or net.request to read a redirect).",
 }));
 /** node's https, beside electron's net; node:http stays for the control channel on localhost. */
 const NODE_HTTPS = { regex: "^(node:)?https$", message: "Use electron's net.fetch (or net.request to read a redirect)." };
@@ -175,7 +178,7 @@ const upInto = (process) => `^(\\.{1,2}/)+((src/)?${process}/|(?!(src/)?${proces
  */
 const agentFolder = (area) => ({
   regex: `${upInto("main")}${area === "agents" ? "(agents/)?" : "agents/"}(${AGENT_FOLDERS.join("|")})(/|$)`,
-  message: "An agent's own folder; go through the registry (agents/index.ts) or agent.ts."
+  message: "An agent's own folder; go through the registry (agents/index.ts) or agent.ts.",
 });
 
 /**
@@ -185,13 +188,13 @@ const agentFolder = (area) => ({
  */
 const LANE_FOLDER = {
   regex: `^(\\.\\./|(\\.\\./)+((src/)?renderer/)?lanes/)(${LANE_FOLDERS.join("|")})(/|$)`,
-  message: "Another lane's own folder; what two lanes share lies below them (git/, ui/)."
+  message: "Another lane's own folder; what two lanes share lies below them (git/, ui/).",
 };
 
 /** Up and into another process's folder; a file of that name nearby (`./cli`) is not one. */
 const processBorder = (folder) => ({
   regex: `^(\\.\\./)+(${PROCESSES.filter((other) => other !== folder).join("|")})(/|$)`,
-  message: "Another process's code; go through src/shared."
+  message: "Another process's code; go through src/shared.",
 });
 
 /**
@@ -205,17 +208,17 @@ const MAIN_LAYERS = [
   { git: [], agents: [], sbx: ["agents"], providers: [], update: [] },
   { terminals: [] },
   { ctl: [] },
-  { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], uncaught: ["*"] }
+  { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], "settings-access": ["*"], uncaught: ["*"] },
 ];
 
 const RENDERER_LAYERS = [
-  { platform: ["*"], paths: ["*"], identity: ["*"], "resolved-ref": ["*"], shortcuts: ["*"], themes: ["*"] },
+  { platform: ["*"], paths: ["*"], identity: ["*"], "resolved-ref": ["*"], "ref-lifetime": ["*"], shortcuts: ["*"], themes: ["*"] },
   { ui: [] },
   { editor: [] },
   { tabs: [] },
   { git: [] },
   { lanes: [], dialogs: [] },
-  { App: ["*"], Startup: ["*"], main: ["*"], "use-ref-feeds": ["*"] }
+  { App: ["*"], Startup: ["*"], main: ["*"], "use-ref-feeds": ["*"] },
 ];
 
 /**
@@ -230,7 +233,7 @@ function assertLayered(process, layers) {
   const areas = fs
     .readdirSync(root, { withFileTypes: true })
     .filter((entry) =>
-      entry.isDirectory() ? holdsCode(new URL(`${entry.name}/`, root)) : /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts")
+      entry.isDirectory() ? holdsCode(new URL(`${entry.name}/`, root)) : /\.tsx?$/.test(entry.name) && !entry.name.endsWith(".d.ts"),
     )
     .map((entry) => entry.name.replace(/\.tsx?$/, ""));
   const missing = areas.filter((area) => !listed.has(area));
@@ -257,9 +260,9 @@ function layerPatterns(process, layers, area) {
           {
             // A flat area is the same file with its extension written out (`../window.js`).
             regex: `${upInto(process)}(${barred.join("|")})(\\.[jt]sx?)?(/|$)`,
-            message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`
-          }
-        ])
+            message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`,
+          },
+        ]),
   ];
 }
 
@@ -271,16 +274,16 @@ function layerConfigs(process, layers, extra = () => []) {
       return {
         files: [folder ? `src/${process}/${area}/**` : `src/${process}/${area}.{ts,tsx}`],
         rules: {
-          "no-restricted-imports": ["error", { patterns: [...layerPatterns(process, layers, area), ...extra(area)] }]
-        }
+          "no-restricted-imports": ["error", { patterns: [...layerPatterns(process, layers, area), ...extra(area)] }],
+        },
       };
-    })
+    }),
   );
 }
 
 export default tseslint.config(
   {
-    ignores: ["**/dist/**", "**/dist-test/**", "**/node_modules/**"]
+    ignores: ["**/dist/**", "**/dist-test/**", "**/node_modules/**"],
   },
   // A disable comment that no longer silences anything is a lint error, not a warning.
   { linterOptions: { reportUnusedDisableDirectives: "error" } },
@@ -296,7 +299,7 @@ export default tseslint.config(
       // node:test's test(), describe() and the like return a promise the runner itself awaits.
       "@typescript-eslint/no-floating-promises": [
         "error",
-        { allowForKnownSafeCalls: [{ from: "package", package: "node:test", name: ["test", "describe", "it", "suite"] }] }
+        { allowForKnownSafeCalls: [{ from: "package", package: "node:test", name: ["test", "describe", "it", "suite"] }] },
       ],
       "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/no-deprecated": "error",
@@ -316,8 +319,8 @@ export default tseslint.config(
       eqeqeq: ["error", "always", { null: "ignore" }],
       // typeof import("./git") types the utility process's module without loading it into main.
       "@typescript-eslint/consistent-type-imports": ["error", { fixStyle: "inline-type-imports", disallowTypeAnnotations: false }],
-      "@typescript-eslint/no-import-type-side-effects": "error"
-    }
+      "@typescript-eslint/no-import-type-side-effects": "error",
+    },
   },
   // The renderer's views are memoized and the terminals live outside React (AGENTS.md, "UI rules"),
   // so a stale closure or a dependency too many is a wrong screen, not a slow one — and every
@@ -327,8 +330,8 @@ export default tseslint.config(
     plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/rules-of-hooks": "error",
-      "react-hooks/exhaustive-deps": "error"
-    }
+      "react-hooks/exhaustive-deps": "error",
+    },
   },
   // The process borders, as lint rules rather than prose (see "Where things live" in AGENTS.md):
   // each folder under src/ is one process, and `shared/` the only thing they may import from one
@@ -340,10 +343,10 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          patterns: [processBorder("preload")]
-        }
-      ]
-    }
+          patterns: [processBorder("preload")],
+        },
+      ],
+    },
   },
   // The layers of src/main and src/renderer, each area's config repeating the process border: a
   // later config's rule replaces an earlier one's for the same file.
@@ -351,7 +354,7 @@ export default tseslint.config(
   // The registry is the one file naming the agents' folders.
   {
     files: ["src/main/agents/index.ts"],
-    rules: { "no-restricted-imports": ["error", { patterns: [...layerPatterns("main", MAIN_LAYERS, "agents"), NODE_HTTPS] }] }
+    rules: { "no-restricted-imports": ["error", { patterns: [...layerPatterns("main", MAIN_LAYERS, "agents"), NODE_HTTPS] }] },
   },
   ...layerConfigs("renderer", RENDERER_LAYERS, (area) => [NODE_BUILTIN, ...(area === "lanes" ? [LANE_FOLDER] : [])]),
   {
@@ -371,7 +374,7 @@ export default tseslint.config(
       "src/main/util/path-inside.ts",
       "src/main/util/utility-host.ts",
       "src/cli/**",
-      "src/shared/**"
+      "src/shared/**",
     ],
     rules: {
       "no-restricted-imports": [
@@ -383,12 +386,12 @@ export default tseslint.config(
             // levels up that is not `shared`, or one of the util/ files above.
             {
               regex: "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/(linked-git-dir|host-platform|path-inside|utility-host)$)",
-              message: "Only src/shared, this folder and util/'s linked-git-dir, host-platform, path-inside and utility-host."
-            }
-          ]
-        }
-      ]
-    }
+              message: "Only src/shared, this folder and util/'s linked-git-dir, host-platform, path-inside and utility-host.",
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     // A folder of shared/ (types/) reaches the rest of shared/, and nothing beyond it.
@@ -398,17 +401,17 @@ export default tseslint.config(
         "error",
         {
           paths: [{ name: "electron", message: "Runs outside electron's main process." }],
-          patterns: [{ regex: "^\\.\\./\\.\\./", message: "Only src/shared." }]
-        }
-      ]
-    }
+          patterns: [{ regex: "^\\.\\./\\.\\./", message: "Only src/shared." }],
+        },
+      ],
+    },
   },
   // Every spawn goes through resolveCommand (AGENTS.md, "Cross-platform"): the files starting a
   // process are listed, and none runs a shell. typescript-eslint's rule, not the layers' own, so an
   // allowed spawn site keeps its layer's imports and a type import passes.
   {
     files: SRC_FILES,
-    rules: { "@typescript-eslint/no-restricted-imports": importsWithout() }
+    rules: { "@typescript-eslint/no-restricted-imports": importsWithout() },
   },
   { files: SPAWN_SITES, rules: { "@typescript-eslint/no-restricted-imports": importsWithout(SPAWNS) } },
   // Every IPC channel goes through its typed wrappers (AGENTS.md, "Where things live"): a bare call
@@ -418,7 +421,7 @@ export default tseslint.config(
   // (AGENTS.md, "Look").
   {
     files: IPC_SITES,
-    rules: { "@typescript-eslint/no-restricted-imports": importsWithout(IPC_IMPORT) }
+    rules: { "@typescript-eslint/no-restricted-imports": importsWithout(IPC_IMPORT) },
   },
   { files: SRC_FILES, rules: { "no-restricted-syntax": syntaxWithout() } },
   { files: IPC_SITES, rules: { "no-restricted-syntax": syntaxWithout(IPC_BY_NAME) } },
@@ -444,16 +447,16 @@ export default tseslint.config(
     ignores: ["test/e2e/install.test.ts"],
     rules: {
       "no-restricted-properties": ["error", PROCESS_PLATFORM, ...NAVIGATOR_PLATFORM],
-      "no-restricted-syntax": ["error", ...HOST_PLATFORM, ...PLATFORM_ID]
-    }
+      "no-restricted-syntax": ["error", ...HOST_PLATFORM, ...PLATFORM_ID],
+    },
   },
   // Only Chromium's stack applies the machine's proxy and certificate store (AGENTS.md,
   // "Cross-platform"); node's https is refused among main's layers.
   {
     files: ["src/main/**"],
     rules: {
-      "no-restricted-globals": ["error", { name: "fetch", message: "Use electron's net.fetch (or net.request to read a redirect)." }]
-    }
+      "no-restricted-globals": ["error", { name: "fetch", message: "Use electron's net.fetch (or net.request to read a redirect)." }],
+    },
   },
   // A test's stub is async to fit the interface it stands in for.
   { files: ["test/**/*.ts"], rules: { "@typescript-eslint/require-await": "off" } },
@@ -462,9 +465,9 @@ export default tseslint.config(
     rules: {
       "no-restricted-globals": [
         "error",
-        ...["alert", "confirm", "prompt"].map((name) => ({ name, message: "Import Dialog.tsx's confirm or prompt." }))
-      ]
-    }
+        ...["alert", "confirm", "prompt"].map((name) => ({ name, message: "Import Dialog.tsx's confirm or prompt." })),
+      ],
+    },
   },
   {
     files: ["**/esbuild.js", "scripts/*.js", "test/helpers/electron-stub.js"],
@@ -475,11 +478,11 @@ export default tseslint.config(
         module: "readonly",
         __dirname: "readonly",
         process: "readonly",
-        console: "readonly"
-      }
+        console: "readonly",
+      },
     },
     rules: {
-      "@typescript-eslint/no-require-imports": "off"
-    }
-  }
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
 );

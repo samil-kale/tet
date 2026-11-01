@@ -14,6 +14,7 @@ import {
   addWorktree,
   deleteWorktree,
   openStoredProjects,
+  projectFileChanged,
   removeMissingProject,
   removeProject,
   resolveStoredIds,
@@ -90,12 +91,13 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
   const deps: ProjectDeps = {
     store,
     repositories,
-    tabManagers: { close: async (ref) => onClose(ref) },
+    tabManagers: { close: async (ref) => onClose(ref), forProject: () => [] },
     records: { forget: () => undefined },
     sbxLocal: new SbxLocalStore(dataRoot),
     openProjectRef: (ref) => void repositories.open(resolveProjectRef(dataRoot, store, ref)),
     dataRoot,
     projectsChanged: (change) => changes.push(change),
+    commandsChanged: () => undefined,
     notice,
   };
   /** Adds the repository and waits for its repository's first read. */
@@ -461,6 +463,59 @@ describe("a project removed", () => {
     assert.equal(tetId(repo.main), id);
     release();
     await other;
+  });
+});
+
+describe("a project's tet.json written", () => {
+  /** `open`'s deps recording what the window and each repository's or worktree's manager hear. */
+  const listening = (deps: ProjectDeps, managers = 1) => {
+    const commands: unknown[] = [];
+    const sbx: boolean[] = [];
+    const heard: ProjectDeps = {
+      ...deps,
+      commandsChanged: (projectId, written, sbxEnabled) => commands.push({ projectId, written, sbxEnabled }),
+      tabManagers: {
+        ...deps.tabManagers,
+        forProject: () =>
+          Array.from({ length: managers }, () => ({
+            sbxSettingsChanged: (enabled: boolean) => {
+              sbx.push(enabled);
+              return Promise.resolve();
+            },
+          })) as unknown as ReturnType<ProjectDeps["tabManagers"]["forProject"]>,
+      },
+    };
+    return { heard, commands, sbx };
+  };
+
+  it("tells the window its commands and every repository and worktree whether SBX is enabled", async () => {
+    const repo = repository();
+    const { deps, add, notices } = open();
+    const projectId = await add(repo.main);
+    fs.writeFileSync(path.join(repo.main, "tet.json"), JSON.stringify({ commands: ["npm test"], sbx: { enabled: true } }));
+    const { heard, commands, sbx } = listening(deps, 2);
+    await projectFileChanged(heard, projectId);
+    assert.deepEqual(commands, [{ projectId, written: [{ command: "npm test" }], sbxEnabled: true }]);
+    assert.deepEqual(sbx, [true, true]);
+    assert.deepEqual(notices, []);
+  });
+
+  it("says so where it was written broken", async () => {
+    const repo = repository();
+    const { deps, add, notices } = open();
+    const projectId = await add(repo.main);
+    fs.writeFileSync(path.join(repo.main, "tet.json"), "{");
+    await projectFileChanged(listening(deps).heard, projectId);
+    assert.equal(notices.length, 1);
+    assert.equal(notices[0]?.severity, "warning");
+    assert.match(notices[0]?.message ?? "", /keeps its last readable tet\.json until it is fixed/);
+  });
+
+  it("tells nobody of a project that is gone", async () => {
+    const { deps, notices } = open();
+    const { heard, commands, sbx } = listening(deps);
+    await projectFileChanged(heard, "gone");
+    assert.deepEqual([commands, sbx, notices], [[], [], []]);
   });
 });
 

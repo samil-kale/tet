@@ -30,8 +30,8 @@ import {
   mountableBy,
   readHostAllowed,
   readPolicy,
-  sandboxControl,
   type ListedSandbox,
+  type SandboxControl,
   type SandboxList,
 } from "./sbx-status";
 import { normalizeHostPath } from "../util/path-inside";
@@ -176,9 +176,8 @@ function ensureSandboxExists(
  * replaces PATH, never prepends. The bundle is piped in behind a `#!/usr/bin/env node` shebang;
  * every template has node. Runs after ensureSandboxExists.
  */
-async function ensureSandboxLauncher(name: string, onData?: OnData): Promise<void> {
-  const control = sandboxControl();
-  if (!control || launcherWritten.has(name)) {
+async function ensureSandboxLauncher(name: string, control: SandboxControl, onData?: OnData): Promise<void> {
+  if (launcherWritten.has(name)) {
     return;
   }
   const bundle = await fs.readFile(control.cliPath, "utf8").catch((error: unknown) => {
@@ -514,6 +513,8 @@ interface SbxRunRequest {
   ref: ProjectRef;
   projectRefPath: string;
   settings: SbxProjectSettings;
+  /** The control channel, which the sandbox then gets its env and launcher of. */
+  control?: SandboxControl;
   /** This machine's skills for the project (SbxLocalStore.skills). */
   skills: SbxSkillsSettings;
   /** What `checkSbxReady` just listed, so it is not listed again. */
@@ -659,13 +660,13 @@ export async function prepareSbxRun(
     ...env.flatMap((entry) => ["-e", entry]),
     ...Object.keys(passed).flatMap((variable) => ["-e", variable]),
   ];
-  if (sandboxControl()) {
+  if (request.control) {
     // The tab id too: a hook reports for the tab it runs in (TabSessionManager.hookEvent).
     const passThrough = [CONTROL_ENV.port, CONTROL_ENV.token, CONTROL_ENV.projectId, CONTROL_ENV.tabId];
     const worktree = request.ref.worktree === undefined ? [] : ["-e", `${CONTROL_ENV.worktree}=${request.ref.worktree}`];
     args.push(...passThrough.flatMap((variable) => ["-e", variable]), ...worktree, "-e", `${CONTROL_ENV.host}=host.docker.internal`);
     // Best-effort: a missing launcher must not keep the agent from starting.
-    await ensureSandboxLauncher(name, onData);
+    await ensureSandboxLauncher(name, request.control, onData);
   }
   args.push("--", ...request.agentArgs);
   await suppressSbxFirstRunWizard();

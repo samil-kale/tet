@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { refKeyOf, projectRefsOf } from "../shared/types/project";
 import type { RepositoryState } from "../shared/types/git";
 import type { Project } from "../shared/types/project";
 import type { TabDescriptor } from "../shared/types/terminals";
 import { forget, stableItems } from "./identity";
+import { onRefClosed } from "./ref-lifetime";
 import { resetMouseModes } from "./tabs/terminal-views";
 
 /**
@@ -77,12 +78,16 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   }, [projectsRef, onProjects]);
 
-  /** Drops what is held for a closed repository or worktree. */
-  const forgetRef = useCallback((refKey: string) => {
-    setStates((current) => forget(current, refKey));
-    setTabs((current) => forget(current, refKey));
-    setStarting((current) => forget(current, refKey));
-  }, []);
+  useEffect(
+    () =>
+      onRefClosed((ref) => {
+        const refKey = refKeyOf(ref);
+        setStates((current) => forget(current, refKey));
+        setTabs((current) => forget(current, refKey));
+        setStarting((current) => forget(current, refKey));
+      }),
+    [],
+  );
 
-  return { states, tabs, starting, forgetRef };
+  return { states, tabs, starting };
 }

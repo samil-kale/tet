@@ -4,6 +4,7 @@ import { SerializeAddon } from "@xterm/addon-serialize";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
+import { onRefClosed } from "../ref-lifetime";
 import { Terminal } from "@xterm/xterm";
 import { CONTROL_START_SIZE } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
@@ -653,7 +654,7 @@ function dropView(key: string, view: TerminalView): void {
  *
  * The ptys are already dead (the host disposed the session manager); only buffers and DOM go.
  */
-export function disposeRefTerminals(ref: ProjectRef): void {
+function disposeRefTerminals(ref: ProjectRef): void {
   // A repository's or worktree's refKey holds no space: no other refKey starts with it plus the
   // separator (shared/types/project.ts's refKeyOf).
   const prefix = viewKey(ref, "");
@@ -671,3 +672,5 @@ export function disposeRefTerminals(ref: ProjectRef): void {
   }
   webglPool.forgetPrefix(prefix);
 }
+
+onRefClosed(disposeRefTerminals);

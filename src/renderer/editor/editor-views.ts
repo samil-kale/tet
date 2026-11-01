@@ -1,4 +1,5 @@
 import type { editor as MonacoEditor } from "monaco-editor";
+import { onRefClosed } from "../ref-lifetime";
 import { refKeyOf } from "../../shared/types/project";
 import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ProjectRef } from "../../shared/types/project";
@@ -828,7 +829,7 @@ export function disposeEditor(tabId: string): void {
 }
 
 /** The repository or worktree closed. */
-export function disposeRefEditors(ref: ProjectRef): void {
+function disposeRefEditors(ref: ProjectRef): void {
   for (const view of refViews(ref)) {
     disposeEditor(view.tabId);
   }
@@ -1138,6 +1139,8 @@ function ensurePlainEditor(view: EditorView): Promise<MonacoEditor.IStandaloneCo
   })();
   return view.buildingPlain;
 }
+
+onRefClosed(disposeRefEditors);
 
 /** Builds the editor the tab's side needs; false for a tab closed while it built. */
 async function ensureEditor(view: EditorView): Promise<boolean> {

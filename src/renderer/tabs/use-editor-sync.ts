@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { refKeyOf } from "../../shared/types/project";
 import type { RepositoryState } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { forget, sameList, sameRecord } from "../identity";
+import { onRefClosed } from "../ref-lifetime";
 import type { EditorTab } from "../editor/editor-tab";
 import { activeEditorTab, DEFAULT_LAYOUT, type ProjectLayout } from "./pane-layout";
 import { editorContent, setEditorVersion } from "../editor/editor-views";
@@ -20,17 +21,17 @@ function diffVersion(state: RepositoryState | undefined, filePath: string, write
  * What App keeps the editors and main in step with, derived from the editor tabs, the layouts and
  * the repository states, each by `refKey`: each repository's or worktree's active editor tab
  * — reported to main for `tet-ctl editor-get`, and answering its content request — the open paths
- * main watches for writes, and each tab's `diffVersion`, which decides a reload. `forgetProjectRef`
- * drops a closed repository's or worktree's write counts; the tabs themselves are App's.
+ * main watches for writes, and each tab's `diffVersion`, which decides a reload. A closed repository's
+ * or worktree's write counts go with it; the tabs themselves are App's.
  */
 export function useEditorSync(
   editorTabs: Record<string, EditorTab[]>,
   layouts: Record<string, ProjectLayout>,
   states: Record<string, RepositoryState>,
-): { activeEditors: Record<string, string>; forgetProjectRef: (refKey: string) => void } {
+): { activeEditors: Record<string, string> } {
   /** Per repository or worktree, per watched path: writes on disk — see diffVersion. */
   const [fileWrites, setFileWrites] = useState<Record<string, Record<string, number>>>({});
-  const forgetProjectRef = useCallback((refKey: string) => setFileWrites((current) => forget(current, refKey)), []);
+  useEffect(() => onRefClosed((ref) => setFileWrites((current) => forget(current, refKeyOf(ref)))), []);
 
   /**
    * Each repository's or worktree's active editor tab (`activeEditorTab`) — the file the Explorer
@@ -127,5 +128,5 @@ export function useEditorSync(
       }
     }
   }, [editorTabs, states, fileWrites]);
-  return { activeEditors, forgetProjectRef };
+  return { activeEditors };
 }

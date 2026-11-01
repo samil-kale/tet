@@ -18,7 +18,7 @@ import { readSbxUser } from "./sbx-cli";
 import type { SbxLocalStore } from "./sbx-local";
 import { readRegisteredMcp, signInMcp } from "./sbx-mcp";
 import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
-import { readSbxReading, readSbxSignedIn, type SbxReading } from "./sbx-status";
+import { readSbxReading, readSbxSignedIn, type SandboxChannel, type SbxReading } from "./sbx-status";
 
 /** The SBX Settings dialog's reads and Save (ipc/sbx.ts, sbx-settings.ts), as tet-ctl's verbs take
  *  them (ControlDeps.sbx). */
@@ -61,13 +61,14 @@ export interface SbxAccessDeps {
   notice: (severity: NoticeSeverity, message: string) => void;
   /** requirements.ts's. */
   anyAgentInstalled: () => Promise<boolean>;
+  channel: () => SandboxChannel;
 }
 
 /** The SbxAccess of this machine's sbx. */
-export function sbxAccess({ sbxLocal, sbxAccounts, notice, anyAgentInstalled }: SbxAccessDeps): SbxAccess {
+export function sbxAccess({ sbxLocal, sbxAccounts, notice, anyAgentInstalled, channel }: SbxAccessDeps): SbxAccess {
   return {
     // No PATH re-read: tet-ctl follows no install, the dialog's "Check again" does.
-    status: (project) => readSbxReading(project.path, { projectId: project.id }, false),
+    status: (project) => readSbxReading(project.path, { projectId: project.id }, false, channel()),
     anyAgentInstalled,
     settings: (project) => readSbxSettings(project.path),
     stored: (projectId) => sbxLocal.stored(projectId),

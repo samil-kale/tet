@@ -5,6 +5,7 @@ import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { forget, stableRecord } from "../identity";
+import { onRefClosed } from "../ref-lifetime";
 import { jumpTarget, nextWorking, NO_IDS, refMarks, type RefMarks } from "./tab-marks";
 
 /** Every repository's and worktree's tab marks, and the project row's ways to them. */
@@ -14,13 +15,12 @@ interface TabMarks {
   showFinished: (refKey: string) => void;
   showWaiting: (refKey: string) => void;
   jumpToWaiting: () => void;
-  forgetProjectRef: (refKey: string) => void;
 }
 
 /**
  * The tab marks of every repository's and worktree's tabs, by `refKey`, decided against
  * `onScreenTabIds`, the active one's (`activeRefKey`, `activeRef`) tabs on screen; `showTab` is how
- * a mark's tab is brought there. `forgetProjectRef` drops a closed one's working cursor.
+ * a mark's tab is brought there. A closed one's working cursor goes with it.
  */
 export function useTabMarks(
   tabs: Record<string, TabDescriptor[]>,
@@ -102,9 +102,13 @@ export function useTabMarks(
     }
   }, [tabs, onScreenOf, showTab]);
 
-  const forgetProjectRef = useCallback((refKey: string) => {
-    workingCursor.current = forget(workingCursor.current, refKey);
-  }, []);
+  useEffect(
+    () =>
+      onRefClosed((ref) => {
+        workingCursor.current = forget(workingCursor.current, refKeyOf(ref));
+      }),
+    [],
+  );
 
-  return { marks, showWorking, showFinished, showWaiting, jumpToWaiting, forgetProjectRef };
+  return { marks, showWorking, showFinished, showWaiting, jumpToWaiting };
 }

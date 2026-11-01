@@ -5,7 +5,16 @@ import { CONTROL_ENV } from "../../shared/ctl";
 import { tabControlToken } from "./ctl-token";
 import { KEPT_ENV_NAME, machineName } from "../store/env-names";
 import { pathKey, resolveCommand } from "../util/process";
+import type { ControlChannel } from "../util/control-channel";
 import { HOST_TAB, type TabSide } from "./tab-side";
+
+/** What every terminal's environment takes of TET, read at each spawn. */
+export interface TerminalEnv {
+  control(): ControlChannel | undefined;
+  /** The variables the user keeps in TET (environment.ts), so a restarted tab sees what was saved
+   *  meanwhile. */
+  stored(): Record<string, string>;
+}
 
 export interface SpawnOptions {
   cwd: string;
@@ -16,39 +25,20 @@ export interface SpawnOptions {
    *  -e` passes on. */
   envOverride?: Record<string, string>;
   /** This process's project, worktree and tab for the control channel (`TET_PROJECT_ID`,
-   *  `TET_WORKTREE`, `TET_TAB_ID`). Above the machine's, like `controlEnv`. */
+   *  `TET_WORKTREE`, `TET_TAB_ID`). Above the machine's, like the control channel's. */
   own?: Record<string, string>;
   /** Where the tab runs (TabPlace): whether TET's stored variables reach it, and part of its control
    *  token, which is what the control server reads it back off (ctl-token.ts). This machine
    *  where omitted. */
   side?: TabSide;
-}
-
-/** The control channel's port and token, set by prepareControl (ctl-channel.ts). Above
- *  `process.env`, since a TET started from its own shell tab inherits the outer one's; kept out of
- *  it so git does not carry them. */
-let controlEnv: Record<string, string> = {};
-/** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
-let launcherDir: string | undefined;
-
-export function setControlEnv(vars: Record<string, string>, binDir: string | undefined): void {
-  controlEnv = vars;
-  launcherDir = binDir;
-}
-
-/** The environment variables the user keeps in TET (environment.ts), read at every spawn so a
- *  restarted tab sees what was saved meanwhile. */
-let storedEnv: () => Record<string, string> = () => ({});
-
-export function setStoredEnv(provider: () => Record<string, string>): void {
-  storedEnv = provider;
+  terminalEnv: TerminalEnv;
 }
 
 /** The variables kept in TET that a tab of `side` gets (TabSide.storedEnv), with the one naming them
  *  (KEPT_ENV_NAME) so a TET started from that tab does not take them for the machine's. Also what
  *  the OS's own terminal opened for a tab is set with. */
-export function storedEnvOf(side: TabSide): Record<string, string> {
-  const stored = side.storedEnv ? storedEnv() : {};
+export function storedEnvOf(terminalEnv: TerminalEnv, side: TabSide): Record<string, string> {
+  const stored = side.storedEnv ? terminalEnv.stored() : {};
   const names = Object.keys(stored);
   return names.length > 0 ? { ...stored, [KEPT_ENV_NAME]: names.join(",") } : stored;
 }
@@ -66,11 +56,15 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
 
 /** A terminal's env: options.env as defaults under the machine's (the user's value wins), the
  *  variables kept in TET over it where its side takes them (TabSide.storedEnv), then TET's own
- *  (controlEnv, options.own) with the tab's own control token in place of the run's
+ *  (the control channel's, options.own) with the tab's own control token in place of the run's
  *  (ctl-token.ts), then options.envOverride. Testable without a pty. */
-export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">): Record<string, string> {
+export function buildEnv(
+  terminalEnv: TerminalEnv,
+  options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">,
+): Record<string, string> {
   const side = options.side ?? HOST_TAB;
-  const stored = storedEnvOf(side);
+  const stored = storedEnvOf(terminalEnv, side);
+  const control = terminalEnv.control();
   const inherited = withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored));
   // Never an outer TET's caller ids or list of kept variables (a TET started from a TET tab): only
   // `own` names this tab, and it got exactly `stored`.
@@ -81,10 +75,10 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
     ...options.env,
     ...inherited,
     ...stored,
-    ...controlEnv,
+    ...control?.env,
     ...options.own,
   };
-  const runToken = controlEnv[CONTROL_ENV.token];
+  const runToken = control?.env[CONTROL_ENV.token];
   if (runToken) {
     env[CONTROL_ENV.token] = tabControlToken(
       runToken,
@@ -93,9 +87,9 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
       side,
     );
   }
-  if (launcherDir) {
+  if (control?.binDir) {
     const key = pathKey(env);
-    env[key] = env[key] ? `${launcherDir}${path.delimiter}${env[key]}` : launcherDir;
+    env[key] = env[key] ? `${control.binDir}${path.delimiter}${env[key]}` : control.binDir;
   }
   return Object.assign(withoutNames(env, Object.keys(options.envOverride ?? {})), options.envOverride);
 }
@@ -113,7 +107,7 @@ function guardPtyInput(spawned: IPty): void {
 }
 
 export function spawnAgentProcess(executable: string, args: string[], options: SpawnOptions): IPty {
-  const env = buildEnv(options);
+  const env = buildEnv(options.terminalEnv, options);
   // A path is the tab's folder's, as child_process takes it; node-pty looks from this process's. A
   // bare name stays a search.
   const program = path.basename(executable) === executable ? executable : path.resolve(options.cwd, executable);

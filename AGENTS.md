@@ -50,7 +50,7 @@ project's tabs.
      (`CallerSide`) extends the tab's.
   5. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
      singletons it touches) and, flat, the startup (`main.ts`, `uncaught.ts`), the window
-     (`window.ts`), `projects.ts` and `requirements.ts`.
+     (`window.ts`), `projects.ts`, `settings-access.ts` and `requirements.ts`.
 
   Files that belong together are a folder; one that stands alone stays flat in its layer. A new
   folder or flat file joins a layer in `eslint.config.mjs`, or lint refuses to run.
@@ -60,7 +60,7 @@ project's tabs.
   `webContents.send` call with a string.
 - `src/renderer/` is layered the same way (`RENDERER_LAYERS`), bottom first:
   0. Flat helpers of no view (`platform.ts`, `paths.ts`, `identity.ts`, `resolved-ref.ts`,
-     `shortcuts.ts`) and `themes/` (the stylesheets and the colors built from them).
+     `ref-lifetime.ts`, `shortcuts.ts`) and `themes/` (the stylesheets and the colors built from them).
   1. `ui/`: views and hooks of no feature — dialogs' frame, fields, menus, the tree row and the
      tree it lists, icons.
   2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.

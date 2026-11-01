@@ -31,13 +31,14 @@ export function registerSbxIpc({
   store,
   sbxLocal,
   sbxAccounts,
+  sandboxChannel,
   notice,
-}: Pick<IpcDeps, "store" | "sbxLocal" | "sbxAccounts" | "notice">): void {
+}: Pick<IpcDeps, "store" | "sbxLocal" | "sbxAccounts" | "sandboxChannel" | "notice">): void {
   // Per project: the policy has to allow the repository's folder.
   handle("sbx:status", async (_event, projectId: string): Promise<SbxStatus> => {
     const project = store.get(projectId);
     return project
-      ? readSbxStatus(project.path, { projectId })
+      ? readSbxStatus(project.path, { projectId }, sandboxChannel())
       : { installed: false, signedIn: false, policyInitialized: false, blockers: [], failure: PROJECT_NOT_FOUND };
   });
 

@@ -7,7 +7,7 @@ import { worktreeBase, WORKTREES_NEED_GIT, worktreesSupported } from "../shared/
 import { projectRef, projectRefsOf, worktreeOf } from "../shared/types/project";
 import type { NoticeSeverity } from "../shared/types/app";
 import type { GitActionResult, GitCommandResult, RepositoryState } from "../shared/types/git";
-import type { AddRepositoryResult, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
+import type { AddRepositoryResult, ProjectCommand, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
 import type { ControlRecords } from "./ctl/ctl-records";
 import { git } from "./git/git-client";
 import { readHeadBranch, readRepositoryPath } from "./util/linked-git-dir";
@@ -23,7 +23,7 @@ import type { SbxLocalStore } from "./sbx/sbx-local";
 import type { ProjectStore } from "./store/project-store";
 import type { SessionManagerRegistry } from "./terminals/session-registry";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
-import { tetJsonProblem } from "./store/tet-json";
+import { readChanged, tetJsonProblem } from "./store/tet-json";
 import { logError } from "./util/error-log";
 import { directoryMissing } from "./util/watch-dir";
 
@@ -32,7 +32,7 @@ export interface ProjectDeps {
   store: ProjectStore;
   repositories: RepositoryManager;
   /** What closing a repository or worktree takes of them. */
-  tabManagers: Pick<SessionManagerRegistry, "close">;
+  tabManagers: Pick<SessionManagerRegistry, "close" | "forProject">;
   records: Pick<ControlRecords, "forget">;
   sbxLocal: SbxLocalStore;
   /** Starts the git and terminals of the repository or a worktree; its project is the store's. */
@@ -41,6 +41,8 @@ export interface ProjectDeps {
   dataRoot: string;
   /** Tells the window, as the control channel does. */
   projectsChanged: (change: ProjectsChange) => void;
+  /** Tells the window what a project's tet.json says now. */
+  commandsChanged: (projectId: string, commands: ProjectCommand[], sbxEnabled: boolean) => void;
   /** What changed or went wrong with nobody asking. */
   notice: (severity: NoticeSeverity, message: string) => void;
 }
@@ -404,6 +406,29 @@ export async function deleteWorktree(
     deps.projectsChanged({ removed: [ref] });
     return branch === undefined ? result : repository.deleteBranch(branch, onRemote);
   });
+}
+
+/** A project's tet.json was written, by anyone. Read once here for every listener; the repository's
+ *  file serves its worktrees too. Written broken, it still counts as its last readable version
+ *  (tet-json.ts's `read`). */
+export async function projectFileChanged(deps: ProjectDeps, projectId: string): Promise<void> {
+  const project = deps.store.get(projectId);
+  if (!project) {
+    return;
+  }
+  const { problem, commands, sbx } = await readChanged(project.path);
+  if (problem !== undefined) {
+    deps.notice("warning", `${project.name} keeps its last readable tet.json until it is fixed: ${problem}`);
+  }
+  if (!commands || !sbx) {
+    return;
+  }
+  deps.commandsChanged(projectId, commands, sbx.enabled);
+  // tet.json also holds whether SBX is enabled, which sbx-only agents must hear (sbxSettingsChanged) — in
+  // every repository and worktree of the project.
+  for (const manager of deps.tabManagers.forProject(projectId)) {
+    void manager.sbxSettingsChanged(sbx.enabled).catch((error: unknown) => logError("could not apply the SBX settings change", error));
+  }
 }
 
 /**

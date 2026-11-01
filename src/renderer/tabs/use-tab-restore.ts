@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import { useLatest } from "../ui/use-latest";
+import { refKeyOf } from "../../shared/types/project";
 import type { RepositoryState } from "../../shared/types/git";
 import type { TabDescriptor } from "../../shared/types/terminals";
+import { onRefClosed } from "../ref-lifetime";
 import type { ResolvedRef } from "../resolved-ref";
 import type { EditorTab } from "../editor/editor-tab";
 import { openEditorFile, previewEditorTab } from "../editor/editor-views";
@@ -37,8 +39,8 @@ export function useTabRestore(
   tabs: Record<string, TabDescriptor[]>,
   editorTabs: Record<string, EditorTab[]>,
   setEditorTabs: Dispatch<SetStateAction<Record<string, EditorTab[]>>>,
-): (refKey: string) => void {
-  /** Brought back, so each is once; dropped when it is forgotten. */
+): void {
+  /** Brought back, so each is once; dropped when it closes. */
   const begun = useRef(new Set<string>());
   const latest = useLatest({ resolvedRefs, tabs, editorTabs });
 
@@ -94,7 +96,11 @@ export function useTabRestore(
 
   /** Lets go of a removed repository or worktree, so one added again under its key comes back
    *  anew; what is stored of it goes with its layout (`dropStoredLayout`). */
-  return useCallback((refKey: string) => {
-    begun.current.delete(refKey);
-  }, []);
+  useEffect(
+    () =>
+      onRefClosed((ref) => {
+        begun.current.delete(refKeyOf(ref));
+      }),
+    [],
+  );
 }
