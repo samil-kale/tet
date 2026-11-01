@@ -71,13 +71,15 @@ async function open(
   const repository = new Repository(
     { ref: { projectId: path.basename(dir) }, path: dir, name: () => path.basename(dir) },
     worktreeKeyOf,
-    () => undefined,
-    () => undefined,
-    () => undefined,
-    () => undefined,
-    () => undefined,
     logins,
-    () => undefined,
+    {
+      onState: () => undefined,
+      onNotice: () => undefined,
+      onCommandsChanged: () => undefined,
+      onFilesChanged: () => undefined,
+      onFileChanged: () => undefined,
+      onMissing: () => undefined,
+    },
   );
   opened.push(repository);
   await repository.start();

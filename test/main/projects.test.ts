@@ -77,16 +77,14 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
   const notice = (severity: NoticeSeverity, message: string): void => {
     notices.push({ severity, message });
   };
-  const repositories = new RepositoryManager(
-    dataRoot,
-    () => undefined,
-    notice,
-    (projectId) => told.push(projectId),
-    () => undefined,
-    () => undefined,
-    new GitLoginStore(dataRoot),
-    (projectId) => void removeMissingProject(deps, projectId),
-  );
+  const repositories = new RepositoryManager(dataRoot, new GitLoginStore(dataRoot), {
+    onState: () => undefined,
+    onNotice: notice,
+    onCommandsChanged: (projectId) => told.push(projectId),
+    onFilesChanged: () => undefined,
+    onFileChanged: () => undefined,
+    onMissing: (projectId) => void removeMissingProject(deps, projectId),
+  });
   managers.push(repositories);
   const changes: ProjectsChange[] = [];
   const deps: ProjectDeps = {

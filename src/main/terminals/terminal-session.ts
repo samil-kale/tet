@@ -23,6 +23,9 @@ const CTRL_C_GAP_MS = 250;
 const GRACEFUL_EXIT_MS = 2000;
 /** After the kill, so stopping cannot hang on a pty that never reports its exit. */
 const FORCE_KILL_MS = 1000;
+/** Between a stopped session's process and deleting its session: lets a killed CLI die first, so a
+ *  final in-flight write can't resurrect the deleted transcript. */
+export const SESSION_REMOVE_DELAY_MS = 500;
 
 /** Resolves true if the process exited within `ms`, false on timeout. */
 function exitedWithin(exited: Promise<void>, ms: number): Promise<boolean> {

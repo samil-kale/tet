@@ -137,6 +137,33 @@ function isIgnoreFile(relativePath: string): boolean {
   return /(?:^|[\\/])\.gitignore$|^\.git[\\/]info[\\/]exclude$/.test(relativePath);
 }
 
+/** What a Repository reports, about its own repository or worktree. */
+export interface RepositoryCallbacks {
+  onState: (state: RepositoryState) => void;
+  onNotice: (severity: NoticeSeverity, message: string) => void;
+  /** tet.json changed — an editor, an agent or a checkout may rewrite it. */
+  onCommandsChanged: () => void;
+  /** A path was created, deleted or renamed — for the Explorer, which also lists ignored files no
+   *  refresh reports. */
+  onFilesChanged: () => void;
+  /** A `watchFiles` file was written — an edit to an already "modified" file changes nothing a
+   *  refresh reports, so the editor tab would go stale. */
+  onFileChanged: (filePath: string) => void;
+  /** The repository's folder disappeared; closing its project belongs to the wiring. */
+  onMissing: () => void;
+}
+
+/** What a RepositoryManager reports, of every repository and worktree it opened. */
+export interface RepositoryManagerCallbacks {
+  onState: (ref: ProjectRef, state: RepositoryState) => void;
+  onNotice: (severity: NoticeSeverity, message: string) => void;
+  /** The project's tet.json changed (only the repository's counts: tet-json.ts's configRoot). */
+  onCommandsChanged: (projectId: string) => void;
+  onFilesChanged: (ref: ProjectRef) => void;
+  onFileChanged: (ref: ProjectRef, filePath: string) => void;
+  onMissing: (projectId: string) => void;
+}
+
 /** One repository's state, the single source of truth for the git lane and the terminals.
  *  Refreshed after filesystem changes, so a branch switched in a terminal shows up. */
 export class Repository {
@@ -192,20 +219,9 @@ export class Repository {
     readonly at: ResolvedRef,
     /** TET's key of a worktree of this repository, by its path (project-dirs.ts's worktreeKeyOf). */
     private readonly worktreeKeyOf: (worktreePath: string) => string | undefined,
-    private readonly onState: (state: RepositoryState) => void,
-    private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
-    /** tet.json changed — an editor, an agent or a checkout may rewrite it. */
-    private readonly onCommandsChanged: () => void,
-    /** A path was created, deleted or renamed — for the Explorer, which also lists ignored files no
-     *  refresh reports. */
-    private readonly onFilesChanged: () => void,
-    /** A `watchFiles` file was written — an edit to an already "modified" file changes nothing a
-     *  refresh reports, so the editor tab would go stale. */
-    private readonly onFileChanged: (filePath: string) => void,
     /** The logins for the remotes, typed or kept (`network`). */
     private readonly logins: GitLoginStore,
-    /** The repository's folder disappeared; closing its project belongs to the wiring. */
-    private readonly onMissing: () => void,
+    private readonly callbacks: RepositoryCallbacks,
     /** The project's other open repository and worktrees: one git directory, so the periodic fetch
      *  skips a turn while a command runs in any of them, and a command in any waits for it. */
     private readonly siblings: () => Repository[] = () => [],
@@ -220,7 +236,7 @@ export class Repository {
   /** Reports a read error, named by project, only when it changed — not again on every refresh. */
   private reportError(next: RepositoryState): void {
     if (next.error && next.error !== this.state.error) {
-      this.onNotice("error", `${this.at.name()}: ${next.error}`);
+      this.callbacks.onNotice("error", `${this.at.name()}: ${next.error}`);
     }
   }
 
@@ -382,7 +398,7 @@ export class Repository {
     if (!this.disposed && nextJson !== this.stateJson) {
       this.state = next;
       this.stateJson = nextJson;
-      this.onState(next);
+      this.callbacks.onState(next);
     }
   }
 
@@ -1004,7 +1020,7 @@ export class Repository {
     if (name === PROJECT_FILE) {
       // Debounced: the file is written in place, and a read mid-write finds half of it.
       clearTimeout(this.commandsTimer);
-      this.commandsTimer = setTimeout(this.onCommandsChanged, REFRESH_DEBOUNCE_MS);
+      this.commandsTimer = setTimeout(() => this.callbacks.onCommandsChanged(), REFRESH_DEBOUNCE_MS);
     }
     // A path appearing or going is "rename", a write only "change", so an edit never re-lists the
     // tree. Nothing under .git is in it. An ignore file's edit re-lists whatever the event, as it
@@ -1022,7 +1038,7 @@ export class Repository {
         watchedFile,
         setTimeout(() => {
           this.watchedFileTimers.delete(watchedFile);
-          this.onFileChanged(watchedFile);
+          this.callbacks.onFileChanged(watchedFile);
         }, REFRESH_DEBOUNCE_MS),
       );
     }
@@ -1035,7 +1051,7 @@ export class Repository {
       return false;
     }
     if (!this.disposed) {
-      this.onMissing();
+      this.callbacks.onMissing();
     }
     return true;
   }
@@ -1054,7 +1070,7 @@ export class Repository {
   private scheduleFilesChanged(): void {
     this.filesTimer = settle(this.filesTimer, this.lastFilesChangedAt, () => {
       this.lastFilesChangedAt = Date.now();
-      this.onFilesChanged();
+      this.callbacks.onFilesChanged();
     });
   }
 
@@ -1111,14 +1127,8 @@ export class RepositoryManager {
 
   constructor(
     private readonly dataRoot: string,
-    private readonly onState: (ref: ProjectRef, state: RepositoryState) => void,
-    private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
-    /** The project's tet.json changed (only the repository's counts: tet-json.ts's configRoot). */
-    private readonly onCommandsChanged: (projectId: string) => void,
-    private readonly onFilesChanged: (ref: ProjectRef) => void,
-    private readonly onFileChanged: (ref: ProjectRef, filePath: string) => void,
     private readonly logins: GitLoginStore,
-    private readonly onMissing: (projectId: string) => void,
+    private readonly callbacks: RepositoryManagerCallbacks,
   ) {}
 
   open(resolved: ResolvedRef): Repository {
@@ -1130,18 +1140,20 @@ export class RepositoryManager {
     const repository: Repository = new Repository(
       resolved,
       (worktreePath) => projectWorktreeKey(this.dataRoot, ref.projectId, worktreePath),
-      (state) => this.onState(ref, state),
-      this.onNotice,
-      // A worktree's own copy of tet.json counts for nothing.
-      () => {
-        if (ref.worktree === undefined) {
-          this.onCommandsChanged(ref.projectId);
-        }
-      },
-      () => this.onFilesChanged(ref),
-      (filePath) => this.onFileChanged(ref, filePath),
       this.logins,
-      () => this.onMissing(ref.projectId),
+      {
+        onState: (state) => this.callbacks.onState(ref, state),
+        onNotice: this.callbacks.onNotice,
+        // A worktree's own copy of tet.json counts for nothing.
+        onCommandsChanged: () => {
+          if (ref.worktree === undefined) {
+            this.callbacks.onCommandsChanged(ref.projectId);
+          }
+        },
+        onFilesChanged: () => this.callbacks.onFilesChanged(ref),
+        onFileChanged: (filePath) => this.callbacks.onFileChanged(ref, filePath),
+        onMissing: () => this.callbacks.onMissing(ref.projectId),
+      },
       () => [...this.repositories.values()].filter((other) => other !== repository && other.at.ref.projectId === ref.projectId),
     );
     this.repositories.set(refKeyOf(ref), repository);
@@ -1157,7 +1169,7 @@ export class RepositoryManager {
    *  listing changed. */
   announceFilesChanged(): void {
     for (const repository of this.repositories.values()) {
-      this.onFilesChanged(repository.at.ref);
+      this.callbacks.onFilesChanged(repository.at.ref);
     }
   }
 

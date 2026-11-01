@@ -200,7 +200,7 @@ export class CommandPlace extends HostPlace {
   }
 }
 
-/** What the session manager's resolvePlace read before choosing the sandbox, so the launch does not
+/** What PlaceResolver.resolvePlace read before choosing the sandbox, so the launch does not
  *  read it again. */
 export interface SbxStart {
   settings: SbxProjectSettings;

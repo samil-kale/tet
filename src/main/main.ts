@@ -12,7 +12,7 @@ import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
-import { readChanged, readCommands, readSbxSettings } from "./store/tet-json";
+import { readChanged, readCommands } from "./store/tet-json";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -36,12 +36,9 @@ import {
   type ProjectDeps,
 } from "./projects";
 import { ProjectStore } from "./store/project-store";
-import { readSbxUser } from "./sbx/sbx-cli";
-import { readRegisteredMcp, signInMcp } from "./sbx/sbx-mcp";
-import { readSbxReading, readSbxSignedIn } from "./sbx/sbx-status";
-import { SbxAccountStore, signInToSbx } from "./sbx/sbx-accounts";
+import { sbxAccess } from "./sbx/sbx-access";
+import { SbxAccountStore } from "./sbx/sbx-accounts";
 import { SbxLocalStore } from "./sbx/sbx-local";
-import { readProjectSbxProblems, saveProjectSbx } from "./sbx/sbx-settings";
 import { anyAgentInstalled } from "./requirements";
 import { resolveDataRoot } from "./store/data-root";
 import { augmentAgentPath } from "./agents/agent-path";
@@ -166,17 +163,16 @@ const envRequests = new EnvRequests(
 );
 /** What control verbs answer beyond the stores. */
 const records = new ControlRecords();
-const repositories = new RepositoryManager(
-  dataRoot,
-  (ref, state) => {
+const repositories = new RepositoryManager(dataRoot, logins, {
+  onState: (ref, state) => {
     send("repository:state-changed", { ref, state });
     // Every repository's and worktree's state lists the project's worktrees; a worktree's own is
     // the first to see a branch switched in it (the repository's watcher skips a worktree's
     // events).
     syncWorktrees(projectDeps, ref.projectId, state);
   },
-  notice,
-  (projectId) => {
+  onNotice: notice,
+  onCommandsChanged: (projectId) => {
     // Written broken, it still counts as its last readable version (tet-json.ts's `read`).
     const project = store.get(projectId);
     if (!project) {
@@ -198,13 +194,12 @@ const repositories = new RepositoryManager(
       }
     });
   },
-  (ref) => send("repository:files-changed", { ref }),
-  (ref, filePath) => send("repository:file-changed", { ref, path: filePath }),
-  logins,
-  (projectId) => {
+  onFilesChanged: (ref) => send("repository:files-changed", { ref }),
+  onFileChanged: (ref, filePath) => send("repository:file-changed", { ref, path: filePath }),
+  onMissing: (projectId) => {
     void removeMissingProject(projectDeps, projectId).catch((error: unknown) => logError("could not remove a missing project", error));
   },
-);
+});
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, {
   onTabs: (ref, tabs) => {
     send("tabs:changed", { ref, tabs });
@@ -333,21 +328,7 @@ async function startControl(): Promise<void> {
         notice,
         environment,
         envRequests,
-        sbx: {
-          // No PATH re-read: tet-ctl follows no install, the dialog's "Check again" does.
-          status: (project) => readSbxReading(project.path, { projectId: project.id }, false),
-          anyAgentInstalled,
-          settings: (project) => readSbxSettings(project.path),
-          stored: (projectId) => sbxLocal.stored(projectId),
-          problems: readProjectSbxProblems,
-          save: (project, request, local, known) => saveProjectSbx({ sbxLocal, notice }, project, request, local, known),
-          accounts: () => sbxAccounts.list(),
-          signedIn: readSbxSignedIn,
-          signedInUser: () => readSbxUser(false),
-          signIn: (account) => signInToSbx(sbxAccounts, account.user, "", account.id),
-          mcpRegistered: () => readRegisteredMcp(),
-          mcpSignIn: signInMcp,
-        },
+        sbx: sbxAccess({ sbxLocal, sbxAccounts, notice, anyAgentInstalled }),
       },
       controlChannel.token,
       controlChannel.port,

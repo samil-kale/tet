@@ -14,17 +14,16 @@ import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
-import { archivedIds, pruneArchived, setArchived, setArchivedOrder } from "../store/archive";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
-import { ensureRunning } from "../sbx/sbx-mounts";
-import { checkSbxReady, sbxListed } from "../sbx/sbx-status";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../store/settings";
+import { ArchivedTabs } from "./archived-tabs";
+import { PlaceResolver, type AgentPlaces } from "./place-resolver";
 import { storedEnvOf } from "./pty";
-import { TerminalSession } from "./terminal-session";
-import { CommandPlace, HostPlace, SandboxPlace } from "./tab-place";
-import type { HandoverFiles, Launch, LaunchInput, PlaceContext, StartingPlace, TabPlace } from "./tab-place";
+import { SESSION_REMOVE_DELAY_MS, TerminalSession } from "./terminal-session";
+import { HostPlace, SandboxPlace } from "./tab-place";
+import type { HandoverFiles, Launch, LaunchInput, PlaceContext, TabPlace } from "./tab-place";
 import { applyTurnReport, bindReportedSession, notificationFor, type HookNotification, type NotificationKind } from "./turn-reports";
 import {
   answersQuestion,
@@ -39,14 +38,11 @@ import {
 } from "./tab-state";
 import { INTERRUPT_RECONCILE_MS, ReconcileScheduler } from "./reconcile-scheduler";
 import { StartIndicators } from "./start-indicators";
-import { currentTheme } from "../store/theme";
 import { effectivePrompt } from "../../shared/prompts";
 import { logError } from "../util/error-log";
 import { PLATFORM } from "../util/host-platform";
 import { openExternalTerminal } from "../util/process";
 
-// Lets a killed CLI die first, so a final in-flight write can't resurrect the deleted transcript.
-const SESSION_REMOVE_DELAY_MS = 500;
 // How long after a fresh tab's Enter its close waits for the hook naming its session
 // (reportBeforeQuit).
 const REPORT_WAIT_MS = 3000;
@@ -61,27 +57,33 @@ const RUN_STAMP = Date.now().toString(36);
 let newTabCounter = 0;
 
 /** Per-agent state within one repository or worktree. */
-interface AgentRuntime {
-  agent: AgentDefinition;
-  executable: string;
+interface AgentRuntime extends AgentPlaces {
   /** Startable here: the host executable, or the repository's or worktree's sandbox standing in
    *  (sbxOnly). */
   startable: boolean;
-  /**
-   * No host executable — startable only through the repository's or worktree's sandbox, with
-   * nothing to fall back to. Decided with the project's SBX settings; whether the sandbox is *reachable*
-   * is resolvePlace's question, per spawn.
-   */
-  sbxOnly: boolean;
-  /** Where its tabs run on this machine (HostPlace). */
-  host: HostPlace;
-  /** Its sandbox of this repository or worktree; only for an agent that runs in one. */
-  sandbox?: SandboxPlace;
   /** Resolves once the version check, the host setup (HostSetups) and initial listing are done. */
   ready: Promise<void>;
   stopWatching?: () => void;
   /** Only for an agent with sessions: no other has any to re-list. */
   reconciler?: ReconcileScheduler;
+}
+
+/** What a tab's process holds, by tab id. Each part ends at its own point (endRun), the entry with
+ *  its last. */
+interface TabRun {
+  /** Its process; held past the tab's close until it has stopped, so a dispose meanwhile stops it. */
+  session?: TerminalSession;
+  /**
+   * The last size it was fitted to, used by every spawn — a restart comes after the fit, and no
+   * new fit follows.
+   */
+  size?: { cols: number; rows: number };
+  /** Its session is being constructed; a second resize must not start a second one. */
+  starting?: true;
+  /** Running and quitting for a restart (restartTab), so a second click starts nothing more. */
+  restarting?: true;
+  /** What ends a close's wait for the report naming its session (reportBeforeQuit). */
+  reportWaiter?: () => void;
 }
 
 export interface SessionManagerCallbacks {
@@ -136,32 +138,19 @@ export interface InspectedTab extends TabDescriptor {
  */
 export class TabSessionManager {
   private tabs: TabState[] = [];
-  private archivedTabs: TabState[] = [];
-  /** An archived tab's process still stopping: its session is reopened or deleted only after. */
-  private readonly stoppingArchived = new Map<string, Promise<void>>();
-  private readonly sessions = new Map<string, TerminalSession>();
+  private readonly archived: ArchivedTabs;
+  private readonly places: PlaceResolver;
+  /** By tab id, of the tabs on the strip, archived, or closing. */
+  private readonly runs = new Map<string, TabRun>();
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
-  /** Tabs whose session is being constructed; a second resize must not start a second one. */
-  private readonly starting = new Set<string>();
-  /**
-   * The last size each tab was fitted to, used by every spawn — a restart comes after the fit,
-   * and no new fit follows.
-   */
-  private readonly lastSizes = new Map<string, { cols: number; rows: number }>();
   /** Session ids whose removal is in flight — reconcile must not re-claim them. */
   private readonly deletingSessionIds = new Set<string>();
   /** Tabs gone from the UI whose persisted session must still be claimed for deletion. */
   private readonly detachedTabs: TabState[] = [];
-  /** Per tab id, what ends a close's wait for the report naming its session (reportBeforeQuit). */
-  private readonly reportWaiters = new Map<string, () => void>();
-  /** Running tabs quitting for a restart (restartTab), so a second click starts nothing more. */
-  private readonly restarting = new Set<string>();
   /** See `events`. */
   private readonly recorded: ControlEvent[] = [];
   /** Closed; nothing still in flight may start anything back up. */
   private disposed = false;
-  /** Said once per repository or worktree — see resolvePlace's host-session branch. */
-  private sbxPreexistingSaid = false;
   private readonly indicators = new StartIndicators(
     (show) => this.callbacks.onStartupProgress(this.at.ref, show),
     () => this.postTabs(),
@@ -185,7 +174,55 @@ export class TabSessionManager {
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
     private readonly callbacks: SessionManagerCallbacks,
-  ) {}
+  ) {
+    this.places = new PlaceResolver(at, settings, sbxLocal, {
+      placeContext: (agent, executable) => this.placeContext(agent, executable),
+      onNotice: (severity, message) => this.callbacks.onNotice(severity, message),
+    });
+    this.archived = new ArchivedTabs(dataRoot, at.ref, {
+      agentOf: (tab) => this.runtimeFor(tab.agentId).agent,
+      placeOf: (tab) => this.placeOf(tab),
+      descriptorOf: (tab) => this.descriptorOf(tab),
+      deletingSessionIds: this.deletingSessionIds,
+      takeOffStrip: (tab) => this.takeOffStrip(tab),
+      reopened: (tab) => {
+        this.tabs.push(tab);
+        this.postTabs();
+      },
+      onChanged: (tabs) => {
+        if (!this.disposed) {
+          this.callbacks.onArchived(this.at.ref, tabs);
+        }
+      },
+      removeHandoverCopy: (dir) => this.removeHandoverCopy(dir),
+    });
+  }
+
+  /** The tab's run, begun where it has none. */
+  private runOf(tabId: string): TabRun {
+    let run = this.runs.get(tabId);
+    if (!run) {
+      run = {};
+      this.runs.set(tabId, run);
+    }
+    return run;
+  }
+
+  /** Ends one part of a tab's run; the entry goes with its last. */
+  private endRun(tabId: string, part: keyof TabRun): void {
+    const run = this.runs.get(tabId);
+    if (!run) {
+      return;
+    }
+    run[part] = undefined;
+    if (Object.values(run).every((value) => value === undefined)) {
+      this.runs.delete(tabId);
+    }
+  }
+
+  private sessionOf(tabId: string): TerminalSession | undefined {
+    return this.runs.get(tabId)?.session;
+  }
 
   snapshot(): TabDescriptor[] {
     return this.tabs.map((tab) => this.descriptorOf(tab));
@@ -219,19 +256,17 @@ export class TabSessionManager {
    *  for a tab not waiting for its first start. */
   start(tabId: string): boolean {
     const tab = this.tabOf(tabId);
-    if (tab?.status !== "ready" || this.sessions.has(tabId)) {
+    if (tab?.status !== "ready" || this.sessionOf(tabId)) {
       return false;
     }
-    const size = this.lastSizes.get(tabId) ?? CONTROL_START_SIZE;
+    const size = this.runs.get(tabId)?.size ?? CONTROL_START_SIZE;
     this.handleResize(tabId, size.cols, size.rows);
     return true;
   }
 
   /** `restartTab` for `tet-ctl tabs-restart`, which may come before any window fitted the tab. */
   restart(tabId: string): boolean {
-    if (!this.lastSizes.has(tabId)) {
-      this.lastSizes.set(tabId, CONTROL_START_SIZE);
-    }
+    this.runOf(tabId).size ??= CONTROL_START_SIZE;
     return this.restartTab(tabId);
   }
 
@@ -243,18 +278,9 @@ export class TabSessionManager {
     this.callbacks.onTabs(this.at.ref, this.snapshot());
   }
 
-  /** The archived tabs in the archive's own order: newest archived, or dragged, first. */
+  /** The archived tabs in the archive's own order (ArchivedTabs.snapshot). */
   archivedSnapshot(): TabDescriptor[] {
-    const order = archivedIds(this.dataRoot, this.at.ref);
-    const position = (sessionId: string | undefined): number => (sessionId === undefined ? -1 : order.indexOf(sessionId));
-    return this.archivedTabs.map((tab) => this.descriptorOf(tab)).sort((a, b) => position(a.sessionId) - position(b.sessionId));
-  }
-
-  private postArchived(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.callbacks.onArchived(this.at.ref, this.archivedSnapshot());
+    return this.archived.snapshot();
   }
 
   /** What onStartupProgress last said — a bootstrap at app start runs before the window exists. */
@@ -308,9 +334,9 @@ export class TabSessionManager {
       return;
     }
     const present = new Set(
-      [...this.tabs, ...this.archivedTabs].map((tab) => tab.sessionId).filter((id): id is string => id !== undefined),
+      [...this.tabs, ...this.archived.all()].map((tab) => tab.sessionId).filter((id): id is string => id !== undefined),
     );
-    pruneArchived(this.dataRoot, this.at.ref, present);
+    this.archived.prune(present);
   }
 
   /**
@@ -436,11 +462,11 @@ export class TabSessionManager {
     // reported but unclaimed, or still being deleted (as in reconcile). A tab's id too: a restored
     // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
     const known = new Set([
-      ...[...this.tabs, ...this.archivedTabs].flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
+      ...[...this.tabs, ...this.archived.all()].flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
       ...this.deletingSessionIds,
     ]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
-    const archived = new Set(archivedIds(this.dataRoot, this.at.ref));
+    const archived = this.archived.storedIds();
     const asTab = (info: AgentSessionInfo): TabState => ({ tabId: info.id, agentId: agent.id, ...sessionFieldsOf(info), status: "ready" });
     const opened = fresh.filter((info) => !archived.has(info.id)).map(asTab);
     const kept = fresh.filter((info) => archived.has(info.id)).map(asTab);
@@ -450,10 +476,7 @@ export class TabSessionManager {
       this.tabs.sort((a, b) => (a.createdAt ?? Infinity) - (b.createdAt ?? Infinity));
       this.postTabs();
     }
-    if (kept.length > 0) {
-      this.archivedTabs.push(...kept);
-      this.postArchived();
-    }
+    this.archived.add(kept);
     // After the listing, so its first event can't race the bootstrap.
     this.startWatching(runtime);
   }
@@ -499,9 +522,9 @@ export class TabSessionManager {
     // nor Restart starts a `missing` one: its session goes, and the start runs as on a first fit.
     const startable = new Set(candidates.filter((runtime) => this.canStart(runtime)).map((runtime) => runtime.agent.id));
     for (const tab of this.tabs.filter((candidate) => candidate.status === "missing" && startable.has(candidate.agentId))) {
-      this.sessions.delete(tab.tabId);
+      this.endRun(tab.tabId, "session");
       this.setTabStatus(tab, "ready");
-      if (this.lastSizes.has(tab.tabId)) {
+      if (this.runs.get(tab.tabId)?.size) {
         this.startTab(tab);
       }
     }
@@ -618,8 +641,8 @@ export class TabSessionManager {
   }
 
   handleResize(tabId: string, cols: number, rows: number): void {
-    this.lastSizes.set(tabId, { cols, rows });
-    const existing = this.sessions.get(tabId);
+    this.runOf(tabId).size = { cols, rows };
+    const existing = this.sessionOf(tabId);
     if (existing) {
       existing.ensureStarted(cols, rows);
       return;
@@ -635,16 +658,17 @@ export class TabSessionManager {
   }
 
   /**
-   * A tab's first spawn: setup, sandbox, then the process at `lastSizes`, which `handleResize` and
-   * `restartTab` set first.
+   * A tab's first spawn: setup, sandbox, then the process at its run's `size`, which `handleResize`
+   * and `restartTab` set first.
    */
   private startTab(tab: TabState): void {
     const tabId = tab.tabId;
-    // Already underway; the spawn reads the newest `lastSizes`.
-    if (this.starting.has(tabId)) {
+    const run = this.runOf(tabId);
+    // Already underway; the spawn reads the newest `size`.
+    if (run.starting) {
       return;
     }
-    this.starting.add(tabId);
+    run.starting = true;
     // Released after `startSession` acquires the next one, or the bar flickers.
     this.indicators.acquire(tabId);
     const runtime = this.runtimeFor(tab.agentId);
@@ -653,7 +677,7 @@ export class TabSessionManager {
     // Before resolvePlace, which reads the `sandbox` the claim sets.
     const claimed = awaitsClaim(tab) ? runtime.ready.then(() => runtime.reconciler?.run()) : Promise.resolve();
     void claimed
-      .then(() => Promise.all([runtime.ready, this.resolvePlace(tab)]))
+      .then(() => Promise.all([runtime.ready, this.places.resolvePlace(tab, runtime)]))
       .then(async ([, place]) => {
         // Left in `error` so Restart retries: a `ready` tab gets no second fit for an unchanged
         // size (`sent` in terminal-views.ts). resolvePlace has said why.
@@ -662,8 +686,8 @@ export class TabSessionManager {
           return;
         }
         const launch = await place.launch(this.launchInput(tab));
-        const dims = this.lastSizes.get(tabId);
-        if (!dims || !this.tabs.includes(tab) || this.sessions.has(tabId) || tab.openedInTerminal) {
+        const dims = this.runs.get(tabId)?.size;
+        if (!dims || !this.tabs.includes(tab) || this.sessionOf(tabId) || tab.openedInTerminal) {
           // Closed (or opened in a terminal) while the setup ran: nothing reads a copy it made.
           if (launch.handoverDir !== undefined) {
             this.removeHandoverCopy(launch.handoverDir);
@@ -679,7 +703,7 @@ export class TabSessionManager {
       })
       .finally(() => {
         // A leftover entry would make every later resize return as "still starting".
-        this.starting.delete(tabId);
+        this.endRun(tabId, "starting");
         this.indicators.release(tabId);
       });
   }
@@ -687,7 +711,7 @@ export class TabSessionManager {
   /** A start that spawned nothing leaves its tab in `error`, unless it was closed or started anew
    *  meanwhile. */
   private failStart(tab: TabState): void {
-    if (this.tabs.includes(tab) && !this.sessions.has(tab.tabId)) {
+    if (this.tabs.includes(tab) && !this.sessionOf(tab.tabId)) {
       this.setTabStatus(tab, "error");
     }
   }
@@ -700,91 +724,6 @@ export class TabSessionManager {
       this.clearOutput(tab);
     }
     this.callbacks.onStatus(this.at.ref, tab.tabId, status);
-  }
-
-  /**
-   * Where this start runs the tab: the repository's or worktree's sandbox, or this machine; tet.json
-   * is read fresh per spawn. Only plain tabs of an agent with a sandbox (AgentRuntime.sandbox); a
-   * saved command runs on this machine as it is (CommandPlace).
-   *
-   * A session runs where it lives: a host session fails to resume in a sandbox. A tab with no
-   * `sessionId` yet is sandboxed.
-   *
-   * Sbx not ready starts nothing and says so, leaving `error` for Restart: a project with SBX enabled
-   * never runs an agent on this machine behind the user's back (past an organization's policy).
-   * Nor is `enabled: false` written back: `sbx ls` fails the same way while the daemon restarts.
-   * And never `sbx run` regardless: it prints its interactive sign-in and policy setup.
-   *
-   * "stranded" runs it nowhere, its notice already said.
-   */
-  private async resolvePlace(tab: TabState): Promise<StartingPlace | "stranded"> {
-    const runtime = this.runtimeFor(tab.agentId);
-    if (isSavedCommandTab(tab)) {
-      return new CommandPlace(this.placeContext(runtime.agent, runtime.executable), {
-        executable: runtime.executable,
-        args: tab.runArgs ?? [],
-        env: tab.env,
-      });
-    }
-    const onHost = runtime.host;
-    const { agent, sandbox } = runtime;
-    if (!sandbox) {
-      return onHost;
-    }
-    const sbxSettings = await readSbxSettings(this.at.path);
-    if (!sbxSettings.enabled) {
-      // A notice only for a tab that cannot run on this machine.
-      return this.sbxStranded(tab, "SBX is disabled for the project") ? "stranded" : onHost;
-    }
-    // Started before it is known whether it may be used, since it is the slowest step and the
-    // readiness check answers nothing it depends on (why that is safe: ensureRunning) — but only
-    // once the check's `sbx ls` has answered (sbxListed): started beside it, the two would each start
-    // sbx's daemon and one would fail on its lock, so this wait stays however early it is moved. Not
-    // for a tab about to run on this machine, which would start a sandbox nobody asked for.
-    const warm = tab.sessionId && !tab.sandbox ? undefined : sbxListed().then(() => ensureRunning(sandbox.name));
-    const ready = await checkSbxReady(this.at.path, this.at.ref);
-    if ("notReady" in ready) {
-      if (!this.sbxStranded(tab, ready.notReady)) {
-        this.callbacks.onNotice(
-          "warning",
-          `SBX is not available for ${this.at.name()}: ${ready.notReady}. The tab does not start on this machine instead; the tab menu's Restart tries again once that has changed.`,
-        );
-      }
-      return "stranded";
-    }
-    if (tab.sessionId && !tab.sandbox) {
-      if (tab.sandboxOnly) {
-        this.sbxStranded(tab, "its session was found on this machine");
-        return "stranded";
-      }
-      // A host session resumes only on the host, gone for an sbx-only agent. Not `sbxStranded`,
-      // whose "Restart tries again" could never come true here.
-      if (runtime.sbxOnly) {
-        this.callbacks.onNotice(
-          "warning",
-          `${agent.displayName} is not installed on this machine any more, and a session made here cannot be resumed in ${this.at.name()}'s SBX sandbox. A new tab runs in the sandbox; this one cannot.`,
-        );
-        return "stranded";
-      }
-      if (!this.sbxPreexistingSaid) {
-        this.sbxPreexistingSaid = true;
-        this.callbacks.onNotice(
-          "info",
-          `${agent.displayName} tabs started while SBX was disabled for ${this.at.name()} keep running on this machine; only new tabs run in its sandbox.`,
-        );
-      }
-      return onHost;
-    }
-    const { projectId } = this.at.ref;
-    return sandbox.starting({
-      settings: sbxSettings,
-      ready,
-      warm,
-      idleReminder: this.settings.get().notifications.idleReminder,
-      theme: currentTheme(this.settings),
-      skills: this.sbxLocal.skills(projectId),
-      environmentValues: await this.sbxLocal.environmentValues(projectId),
-    });
   }
 
   /** What a start hands its place: this tab's arguments, its handover, where its output goes. */
@@ -800,25 +739,6 @@ export class TabSessionManager {
   /** Not awaited: nothing reads the copy once its tab is gone. */
   private removeHandoverCopy(dir: string): void {
     fs.promises.rm(dir, { recursive: true, force: true }).catch((error: unknown) => logError("could not delete a handover's copy", error));
-  }
-
-  /**
-   * The notice for a tab that cannot run on this machine — its session lives in the sandbox, or
-   * the agent is sbx-only (AgentRuntime.sbxOnly). Returns whether it applied, so the caller skips
-   * its own. Per tab, not per project: it is about the tab just opened.
-   */
-  private sbxStranded(tab: TabState, reason: string): boolean {
-    const { agent, sbxOnly } = this.runtimeFor(tab.agentId);
-    if (!tab.sandbox && !sbxOnly && !tab.sandboxOnly) {
-      return false;
-    }
-    const what = tab.sandbox
-      ? `This ${agent.displayName} session lives in ${this.at.name()}'s SBX sandbox and cannot run on this machine`
-      : tab.sandboxOnly
-        ? `This ${agent.displayName} tab was opened from ${this.at.name()}'s SBX sandbox and cannot run on this machine`
-        : `${agent.displayName} is not installed on this machine and only runs in ${this.at.name()}'s SBX sandbox`;
-    this.callbacks.onNotice("warning", `${what}: ${reason}. The tab menu's Restart tries again once that has changed.`);
-    return true;
   }
 
   /**
@@ -899,7 +819,7 @@ export class TabSessionManager {
         onStatusChange: (status) => {
           // A process whose exit came after `stop()` gave up waiting may have been replaced by a
           // restart: its status is no longer the tab's. The indicator and reconcile are still its.
-          const current = this.sessions.get(tabId) === session;
+          const current = this.sessionOf(tabId) === session;
           if (current) {
             this.setTabStatus(tab, status);
           }
@@ -920,7 +840,7 @@ export class TabSessionManager {
       launch.args,
     );
 
-    this.sessions.set(tabId, session);
+    this.runOf(tabId).session = session;
     session.markInstalled(this.canStart(runtime));
     return session;
   }
@@ -941,7 +861,7 @@ export class TabSessionManager {
     if (tab && !tab.sessionId && tab.reportedSessionId === undefined && data.includes("\r")) {
       tab.submittedAt = Date.now();
     }
-    this.sessions.get(tabId)?.write(data);
+    this.sessionOf(tabId)?.write(data);
   }
 
   /**
@@ -965,14 +885,14 @@ export class TabSessionManager {
     // a session: detachedTabs lets a hook name it and reconcile claim it for deletion. Joined
     // before any stop — a tab closed right after its prompt reports during the stop's grace period.
     for (const tab of tabs) {
-      if (getAgent(tab.agentId).sessions && (!tab.sessionId || awaitsClaim(tab)) && this.sessions.has(tab.tabId)) {
+      if (getAgent(tab.agentId).sessions && (!tab.sessionId || awaitsClaim(tab)) && this.sessionOf(tab.tabId)) {
         this.detachedTabs.push(tab);
       }
     }
     // All stops start before any is awaited: each takes a grace period (TerminalSession.stop).
     const stops = new Map(
       tabs.map((tab) => {
-        const session = this.sessions.get(tab.tabId);
+        const session = this.sessionOf(tab.tabId);
         return [tab.tabId, this.reportBeforeQuit(tab).then(() => session?.stop())] as const;
       }),
     );
@@ -994,11 +914,11 @@ export class TabSessionManager {
     return new Promise((resolve) => {
       const done = (): void => {
         clearTimeout(timer);
-        this.reportWaiters.delete(tab.tabId);
+        this.endRun(tab.tabId, "reportWaiter");
         resolve();
       };
       const timer = setTimeout(done, REPORT_WAIT_MS - waited);
-      this.reportWaiters.set(tab.tabId, done);
+      this.runOf(tab.tabId).reportWaiter = done;
     });
   }
 
@@ -1007,8 +927,8 @@ export class TabSessionManager {
    * is the stop closeTabs started.
    */
   private async destroyTab(tab: TabState, index: number, stopped: Promise<void> | undefined): Promise<void> {
-    const session = this.sessions.get(tab.tabId);
-    this.lastSizes.delete(tab.tabId);
+    const session = this.sessionOf(tab.tabId);
+    this.endRun(tab.tabId, "size");
     const runtime = this.runtimeFor(tab.agentId);
     const { agent } = runtime;
     const detached = this.detachedTabs.includes(tab);
@@ -1017,7 +937,7 @@ export class TabSessionManager {
         // Delete only once the process is gone. Still listed while reportBeforeQuit holds the quit,
         // so a dispose meanwhile stops it.
         await stopped;
-        this.sessions.delete(tab.tabId);
+        this.endRun(tab.tabId, "session");
       }
       if (!agent.sessions) {
         return;
@@ -1085,9 +1005,9 @@ export class TabSessionManager {
   }
 
   /**
-   * The window's close: a tab with a session is kept archived, its session with it (keepArchived);
-   * any other closes as `closeTabs` closes it. One whose session cannot be kept stays, said in a
-   * notice.
+   * The window's close: a tab with a session is kept archived, its session with it
+   * (ArchivedTabs.keep); any other closes as `closeTabs` closes it. One whose session cannot be kept
+   * stays, said in a notice.
    */
   async closeKeepingSessions(tabIds: string[]): Promise<void> {
     const others: string[] = [];
@@ -1097,7 +1017,7 @@ export class TabSessionManager {
         others.push(tabId);
         continue;
       }
-      const refused = this.keepArchived(tab, tab.sessionId);
+      const refused = this.archived.keep(tab, tab.sessionId);
       if (refused !== undefined) {
         this.callbacks.onNotice("error", refused);
       }
@@ -1105,140 +1025,36 @@ export class TabSessionManager {
     await this.closeTabs(others);
   }
 
-  /**
-   * Takes the tab off the strip and stops its process, keeping its session. Written down before
-   * anything changes, so a refused write leaves the tab as it is.
-   */
-  private keepArchived(tab: TabState, sessionId: string): string | undefined {
+  /** ArchiveTarget.takeOffStrip: the tab leaves the strip as closed, its process stopping. */
+  private takeOffStrip(tab: TabState): Promise<void> | undefined {
     const { tabId } = tab;
-    const { agent } = this.runtimeFor(tab.agentId);
-    // Moved on to a session its hooks named (`/clear`) that no listing has shown yet.
-    if (awaitsClaim(tab)) {
-      return `The ${agent.displayName} session is not listed yet: close the tab again in a moment`;
-    }
-    try {
-      setArchived(this.dataRoot, this.at.ref, sessionId, true);
-    } catch (error) {
-      return `Could not keep the ${agent.displayName} session: ${errorMessage(error)}`;
-    }
-    this.record({ tabId, kind: "closed", sessionId });
+    this.record({ tabId, kind: "closed", sessionId: tab.sessionId });
     this.tabs = this.tabs.filter((candidate) => candidate !== tab);
-    Object.assign(tab, { status: "ready", inTurn: false, waitingAt: undefined, finishedAt: undefined, openedInTerminal: undefined });
-    this.archivedTabs.push(tab);
     this.postTabs();
-    this.postArchived();
-    this.lastSizes.delete(tabId);
-    const session = this.sessions.get(tabId);
-    if (session) {
-      const stopped = session.stop().then(() => {
-        this.sessions.delete(tabId);
-        this.stoppingArchived.delete(tabId);
-      });
-      this.stoppingArchived.set(tabId, stopped);
-    }
-    return undefined;
+    this.endRun(tabId, "size");
+    return this.sessionOf(tabId)
+      ?.stop()
+      .then(() => this.endRun(tabId, "session"));
   }
 
-  /** Brings an archived tab back at the end of the strip; its session resumes at its first resize,
-   *  as a restored tab's does. Checked first, as pruneArchive could not from here: a session
-   *  deleted outside TET is dropped instead, answered rather than left to fail at that resize. */
-  async reopenArchived(tabId: string): Promise<string | undefined> {
-    const tab = this.archivedTabs.find((candidate) => candidate.tabId === tabId);
-    if (!tab?.sessionId) {
-      return undefined;
-    }
-    await this.stoppingArchived.get(tabId);
-    if (!this.archivedTabs.includes(tab)) {
-      return undefined;
-    }
-    const { agent } = this.runtimeFor(tab.agentId);
-    const sessionId = tab.sessionId;
-    const gone = (await this.placeOf(tab).sessionActions()?.files(sessionId))?.length === 0;
-    try {
-      setArchived(this.dataRoot, this.at.ref, sessionId, false);
-    } catch (error) {
-      if (!gone) {
-        return `Could not reopen the ${agent.displayName} session: ${errorMessage(error)}`;
-      }
-      logError(`could not forget the ${agent.displayName} session deleted outside TET`, error);
-    }
-    this.archivedTabs = this.archivedTabs.filter((candidate) => candidate !== tab);
-    this.postArchived();
-    if (gone) {
-      return `The ${agent.displayName} session was deleted outside TET`;
-    }
-    this.tabs.push(tab);
-    this.postTabs();
-    return undefined;
+  /** ArchivedTabs.reopen. */
+  reopenArchived(tabId: string): Promise<string | undefined> {
+    return this.archived.reopen(tabId);
   }
 
-  /** A drag in the ARCHIVE lane: the tabs named by `tabIds`, in that order, become the stored
-   *  order. Answers what refused it; the list stays as it was. */
+  /** ArchivedTabs.reorder. */
   reorderArchived(tabIds: string[]): string | undefined {
-    const order = tabIds
-      .map((tabId) => this.archivedTabs.find((candidate) => candidate.tabId === tabId)?.sessionId)
-      .filter((id): id is string => id !== undefined);
-    try {
-      setArchivedOrder(this.dataRoot, this.at.ref, order);
-    } catch (error) {
-      return `Could not reorder the archived sessions: ${errorMessage(error)}`;
-    }
-    this.postArchived();
-    return undefined;
+    return this.archived.reorder(tabIds);
   }
 
-  /** Renames an archived tab's session, once its process is gone, as `renameTab` does a tab's.
-   *  Answers what the agent refused: the window's question shows it. */
-  async renameArchived(tabId: string, title: string): Promise<string | undefined> {
-    const tab = this.archivedTabs.find((candidate) => candidate.tabId === tabId);
-    const sessionId = tab?.sessionId;
-    if (!tab || !sessionId) {
-      return undefined;
-    }
-    await this.stoppingArchived.get(tabId);
-    const { agent } = this.runtimeFor(tab.agentId);
-    try {
-      await this.placeOf(tab).sessionActions()?.rename(sessionId, title);
-    } catch (error) {
-      return `Could not rename ${agent.displayName} session: ${errorMessage(error)}`;
-    }
-    tab.title = title.trim();
-    tab.provisionalTitle = false;
-    this.postArchived();
-    return undefined;
+  /** ArchivedTabs.rename. */
+  renameArchived(tabId: string, title: string): Promise<string | undefined> {
+    return this.archived.rename(tabId, title);
   }
 
-  /** Deletes an archived tab's session, once its process is gone. Answers what refused it: the
-   *  tab stays archived. */
-  async deleteArchived(tabId: string): Promise<string | undefined> {
-    const tab = this.archivedTabs.find((candidate) => candidate.tabId === tabId);
-    const sessionId = tab?.sessionId;
-    if (!tab || !sessionId) {
-      return undefined;
-    }
-    const { agent } = this.runtimeFor(tab.agentId);
-    const stopping = this.stoppingArchived.get(tabId);
-    this.deletingSessionIds.add(sessionId);
-    try {
-      if (stopping) {
-        await stopping;
-        // See SESSION_REMOVE_DELAY_MS.
-        await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
-      }
-      await this.placeOf(tab).sessionActions()?.remove(sessionId);
-      setArchived(this.dataRoot, this.at.ref, sessionId, false);
-    } catch (error) {
-      return `Could not delete the ${agent.displayName} session: ${errorMessage(error)}`;
-    } finally {
-      this.deletingSessionIds.delete(sessionId);
-    }
-    this.archivedTabs = this.archivedTabs.filter((candidate) => candidate !== tab);
-    // As destroyTab: the copy goes with the tab.
-    if (tab.handoverDir !== undefined) {
-      this.removeHandoverCopy(tab.handoverDir);
-    }
-    this.postArchived();
-    return undefined;
+  /** ArchivedTabs.delete. */
+  deleteArchived(tabId: string): Promise<string | undefined> {
+    return this.archived.delete(tabId);
   }
 
   /**
@@ -1261,7 +1077,7 @@ export class TabSessionManager {
       if (!running && tab.status === "running") {
         return false;
       }
-      const session = this.sessions.get(tabId);
+      const session = this.sessionOf(tabId);
       if (!session) {
         return false;
       }
@@ -1269,24 +1085,24 @@ export class TabSessionManager {
       session.restart();
       return true;
     }
-    if (!this.lastSizes.has(tabId)) {
+    if (!this.runs.get(tabId)?.size) {
       return false;
     }
     if (running && tab.status === "running") {
       // Asked to quit first, so its exit handlers run, then the start path below — as the
       // environment dialog's Save does it, so the tab takes up what was saved meanwhile (pty.ts).
-      if (this.restarting.has(tabId)) {
+      if (this.runs.get(tabId)?.restarting) {
         return false;
       }
-      this.restarting.add(tabId);
-      const session = this.sessions.get(tabId);
+      this.runOf(tabId).restarting = true;
+      const session = this.sessionOf(tabId);
       void this.reportBeforeQuit(tab)
         .then(() => session?.stop())
         .finally(() => {
-          this.restarting.delete(tabId);
+          this.endRun(tabId, "restarting");
           // Closed meanwhile, or started anew by something else: nothing left to start.
-          if (this.tabs.includes(tab) && this.sessions.get(tabId) === session) {
-            this.sessions.delete(tabId);
+          if (this.tabs.includes(tab) && this.sessionOf(tabId) === session) {
+            this.endRun(tabId, "session");
             tab.restarted = true;
             this.startTab(tab);
           }
@@ -1297,7 +1113,7 @@ export class TabSessionManager {
       return false;
     }
     // `startTab` gives up on a tab that already has a session.
-    this.sessions.delete(tabId);
+    this.endRun(tabId, "session");
     tab.openedInTerminal = undefined;
     tab.restarted = true;
     this.postTabs();
@@ -1320,7 +1136,7 @@ export class TabSessionManager {
     }
     const { agent, executable } = this.runtimeFor(tab.agentId);
     const variables = storedEnvOf(this.placeOf(tab).side);
-    const session = this.sessions.get(tabId);
+    const session = this.sessionOf(tabId);
     // Before the terminal opens, so no fit starts the tab meanwhile.
     tab.openedInTerminal = true;
     await session?.stop();
@@ -1378,7 +1194,7 @@ export class TabSessionManager {
     // finished and working. One tab, one clock.
     const at = typeof reportedAt === "number" && Number.isFinite(reportedAt) && reportedAt > 0 ? reportedAt : Date.now();
     if (bound && sessionId && bindReportedSession(bound, sessionId, at)) {
-      this.reportWaiters.get(bound.tabId)?.();
+      this.runs.get(bound.tabId)?.reportWaiter?.();
       if (awaitsClaim(bound)) {
         this.runtimeFor(bound.agentId).reconciler?.schedule();
       }
@@ -1491,9 +1307,11 @@ export class TabSessionManager {
     this.resolveWindowRestored();
     // A start still underway spawns only if its tab is still known.
     this.tabs = [];
-    this.archivedTabs = [];
-    this.starting.clear();
-    this.lastSizes.clear();
+    this.archived.dispose();
+    for (const tabId of [...this.runs.keys()]) {
+      this.endRun(tabId, "starting");
+      this.endRun(tabId, "size");
+    }
     this.indicators.dispose();
     for (const runtime of this.runtimes.values()) {
       runtime.reconciler?.dispose();
@@ -1501,7 +1319,7 @@ export class TabSessionManager {
       runtime.stopWatching = undefined;
     }
     // All at once: each may take a grace period (TerminalSession.stop), and quit waits on this.
-    await Promise.all([...this.sessions.values()].map((session) => session.stop()));
-    this.sessions.clear();
+    await Promise.all([...this.runs.values()].flatMap(({ session }) => (session ? [session.stop()] : [])));
+    this.runs.clear();
   }
 }
