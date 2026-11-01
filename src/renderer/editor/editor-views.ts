@@ -671,7 +671,7 @@ export async function createMissingFile(tabId: string): Promise<void> {
   const { ref, snapshot } = view;
   const result = await window.tet.repository.writeFile(ref, snapshot.path, "", MISSING_MTIME_MS);
   if (!result.ok) {
-    notify("error", result.error ?? "Could not create the file");
+    notify("error", result.error);
     return;
   }
   if (!disposed(view)) {
@@ -716,7 +716,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
             message: named`${path} changed on disk since it was opened. Overwrite it with your changes?`,
             confirmLabel: "Overwrite",
           },
-      result.error ?? "Could not save the file",
+      result.error,
     );
     if (stale(view, seq)) {
       return;
@@ -731,7 +731,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
     }
   }
   if (!result.ok) {
-    notify("error", result.error ?? "Could not save the file");
+    notify("error", result.error);
     publish(view, { saving: false });
     return;
   }
@@ -746,7 +746,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
     held?.head ??
     (original !== undefined && original !== model.getValue() ? { content: original, binary: false, missing: false } : undefined);
   publish(view, {
-    file: held ? { ...held, content, mtimeMs: result.mtimeMs ?? held.mtimeMs, head } : held,
+    file: held ? { ...held, content, mtimeMs: result.mtimeMs, head } : held,
     dirty: model.getAlternativeVersionId() !== versionId,
     saving: false,
   });

@@ -93,9 +93,9 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       reading,
     );
     if (!saved.ok) {
-      throw new ControlError("internal", saved.error ?? "could not save the SBX Settings");
+      throw new ControlError("internal", saved.error);
     }
-    const problems = saved.problems ?? {};
+    const { problems } = saved;
     const applied = withoutProblems(request, nextSkills, problems);
     const restartRequired = sbxNeedsRestart(settings, skills, applied.settings, applied.skills);
     return { result: { saved: true, restartRequired, ...(Object.keys(problems).length > 0 ? { notApplied: problems } : {}) } };
@@ -141,14 +141,14 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
         throw new ControlError("bad_args", `no access token kept for ${user}: the user adds it in TET's SBX Settings`);
       }
       const result = await deps.sbx.signIn(account);
-      if (!result.signedIn) {
-        throw new ControlError("internal", result.error ?? "sbx login failed");
+      if (!result.ok) {
+        throw new ControlError("internal", result.error);
       }
       return {
         result: {
           signedIn: true,
           account: result.account?.user ?? user,
-          ...(result.account ? {} : { notKept: result.error ?? "the access token could not be kept" }),
+          ...(result.notKept !== undefined && { notKept: result.notKept }),
         },
       };
     },
@@ -246,9 +246,9 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       const needing = (registered ?? []).filter((server) => kept.includes(server.name) && server.status === SBX_MCP_NEEDS_AUTH);
       const notSignedIn: Record<string, string> = {};
       for (const { name } of needing) {
-        const failed = await deps.sbx.mcpSignIn(name);
-        if (failed !== undefined) {
-          notSignedIn[name] = failed;
+        const signedIn = await deps.sbx.mcpSignIn(name);
+        if (!signedIn.ok) {
+          notSignedIn[name] = signedIn.error;
         }
       }
       return {

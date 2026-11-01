@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { EnvRequest } from "../../shared/types/environment";
+import { refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { EditRow, OverridesMachine, RowInput, RowSection, SecretInput } from "../ui/RowSection";
 
@@ -29,10 +30,12 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
     submit: save,
     changing,
   } = useSubmit(
-    () =>
-      window.tet.env.answer(
-        request.id,
-        rows.map((row) => ({ name: row.name, value: row.value })),
+    async () =>
+      refusal(
+        await window.tet.env.answer(
+          request.id,
+          rows.map((row) => ({ name: row.name, value: row.value })),
+        ),
       ),
     () => {
       if (tab) {

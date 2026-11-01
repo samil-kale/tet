@@ -3,8 +3,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { dialog } from "electron";
 import { handle } from "./channels";
-import { errorMessage } from "../../shared/errors";
-import type { GitActionResult, GitLogin } from "../../shared/types/git";
+import { errorMessage, failure } from "../../shared/errors";
+import type { ActionResult } from "../../shared/types/action";
+import type { GitActionResult, GitCommandResult, GitLogin } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectRef } from "../../shared/types/project";
 import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types/providers";
 import { urlOrigin } from "../../shared/git-url";
@@ -91,16 +92,16 @@ export function registerProjectsIpc({
 
   /** Clone and initialize both end with the new folder added as a project, as `projects:open`
    *  does. */
-  const addRepository = async (action: Promise<GitActionResult>, directory: string, label: string): Promise<AddRepositoryResult> => {
+  const addRepository = async (action: Promise<GitCommandResult>, directory: string, label: string): Promise<AddRepositoryResult> => {
     try {
       const result = await action;
       if (!result.ok) {
         // Kept apart from the message: the dialog asks for a login on it.
-        return { error: result.error || `${label} failed`, loginUrl: result.loginUrl };
+        return { ok: false, error: result.error || `${label} failed`, loginUrl: result.loginUrl };
       }
     } catch (error) {
       // The git process died mid-command.
-      return { error: errorMessage(error) };
+      return { ok: false, error: errorMessage(error) };
     }
     return addProject(projectDeps, directory);
   };
@@ -117,7 +118,7 @@ export function registerProjectsIpc({
       account && token !== undefined
         ? git
             .cloneWithToken(url, target, account.user, token, logins.askpassDir)
-            .then((result) => (result.authRequired && urlOrigin(url) ? { ...result, loginUrl: url } : result))
+            .then((result) => (!result.ok && result.authRequired && urlOrigin(url) ? { ...result, loginUrl: url } : result))
         : logins.run(os.homedir(), url, login, (networkLogin) => git.clone(url, target, networkLogin));
     return addRepository(action, target, "Clone");
   });
@@ -134,20 +135,20 @@ export function registerProjectsIpc({
       .replace(/\/.*$/, "");
     try {
       const user = await PROVIDERS[provider].validate(bare, token);
-      return { account: await accounts.add(provider, bare, user, token) };
+      return { ok: true, account: await accounts.add(provider, bare, user, token) };
     } catch (error) {
-      return { error: errorMessage(error) };
+      return failure(error);
     }
   });
 
-  // Why it could not be removed, for the dialog to tell; nothing once it went.
-  handle("providers:remove-account", (_event, accountId: string): string | undefined => {
+  // Why it could not be removed, for the dialog to tell.
+  handle("providers:remove-account", (_event, accountId: string): ActionResult => {
     try {
       accounts.remove(accountId);
       repoCache.remove(accountId);
-      return undefined;
+      return { ok: true };
     } catch (error) {
-      return errorMessage(error);
+      return failure(error);
     }
   });
 
@@ -178,7 +179,7 @@ export function registerProjectsIpc({
     logFailure("keep the projects' order", () => store.reorder(projectIds)),
   );
 
-  handle("projects:remove", (_event, projectId: string): Promise<GitActionResult> => removeProject(projectDeps, projectId));
+  handle("projects:remove", (_event, projectId: string): Promise<GitCommandResult> => removeProject(projectDeps, projectId));
 
   // Each announces its outcome as `projects:changed`, as the control channel's verbs do.
   handle("projects:add-worktree", (_event, projectId: string, branch: string): Promise<AddRepositoryResult> =>

@@ -1,5 +1,5 @@
 import type { AgentId } from "./agents";
-import type { GitActionResult } from "./git";
+import type { ActionDone, ActionRefused } from "./action";
 
 /** Forwards `host` to `container`. Strings as typed; validated only at `sbx run`. */
 export interface SbxPort {
@@ -160,13 +160,10 @@ export interface SbxAccountEdit {
   token: string;
 }
 
-/** A sign-in's answer: whether sbx took the token, the account kept for it, and else why not —
- *  what sbx said on refusing, or, signed in all the same, why the token could not be kept. */
-export interface SbxSignInResult {
-  signedIn: boolean;
-  account?: SbxAccount;
-  error?: string;
-}
+/** A sign-in's answer: signed in with the account kept for the token — or, signed in all the same,
+ *  why the token could not be kept (`notKept`) — or refused with what sbx said. */
+export type SbxSignInResult =
+  (ActionDone & { account: SbxAccount; notKept?: undefined }) | (ActionDone & { account?: undefined; notKept: string }) | ActionRefused;
 
 /** What the SBX Settings apply, by the dialog tab each is on: what a problem is told under. */
 export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "environment" | "mcp" | "setup";
@@ -180,10 +177,9 @@ export type SbxOption = "hosts" | "paths" | "skills" | "ports" | "environment" |
  */
 export type SbxProblems = Partial<Record<SbxOption, Record<string, string>>>;
 
-/** A Save's answer: what it left out, so the caller can say it. */
-export interface SbxSaveResult extends GitActionResult {
-  problems?: SbxProblems;
-}
+/** A Save's answer: what it left out, so the caller can say it — also beside what refused the
+ *  rest, where the Save got that far. */
+export type SbxSaveResult = (ActionDone & { problems: SbxProblems }) | (ActionRefused & { problems?: SbxProblems });
 
 /** No `sbx` section in tet.json; also the dialog's initial state. */
 export const EMPTY_SBX_SETTINGS: SbxProjectSettings = {

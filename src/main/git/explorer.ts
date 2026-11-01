@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
 import type { ExplorerListing, ExplorerSettings, FileSearchQuery, FileSearchResult } from "../../shared/types/files";
-import type { GitActionResult } from "../../shared/types/git";
+import type { ActionResult } from "../../shared/types/action";
 import { readExplorerView } from "../store/tet-json";
 import { walkExplorer } from "./explorer-read";
 import { explorerRead } from "./explorer-client";
@@ -55,11 +55,11 @@ export async function searchFiles(root: string, query: FileSearchQuery, signal: 
 export const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" } as const;
 
 /**
- * A filesystem action as a `GitActionResult`: whatever it threw becomes the failure's message, in
+ * A filesystem action as an `ActionResult`: whatever it threw becomes the failure's message, in
  * the words the OS used. For the Explorer's own edits, which run off `runAction` — they take no
  * index lock (Repository.listExplorer).
  */
-function attempt(action: () => Promise<unknown>): Promise<GitActionResult> {
+function attempt(action: () => Promise<unknown>): Promise<ActionResult> {
   return action().then(() => ({ ok: true }), failure);
 }
 
@@ -77,7 +77,7 @@ function sameEntry(a: string, b: string): boolean {
 /** A repository-relative path for a new entry, resolved, or the failure if outside or taken.
  *  `renaming` is the source: on a case-insensitive filesystem `Readme.md` → `README.md` finds the
  *  source at the target, which is no conflict. */
-function resolveNew(root: string, filePath: string, renaming?: string): { absolute: string } | GitActionResult {
+function resolveNew(root: string, filePath: string, renaming?: string): { absolute: string } | ActionResult {
   const absolute = resolveInside(root, filePath);
   if (!absolute) {
     return OUTSIDE_REPOSITORY;
@@ -89,7 +89,7 @@ function resolveNew(root: string, filePath: string, renaming?: string): { absolu
 }
 
 /** The Explorer's "New File...", creating parent directories. */
-export async function createFile(root: string, filePath: string): Promise<GitActionResult> {
+export async function createFile(root: string, filePath: string): Promise<ActionResult> {
   const target = resolveNew(root, filePath);
   if ("ok" in target) {
     return target;
@@ -101,7 +101,7 @@ export async function createFile(root: string, filePath: string): Promise<GitAct
 }
 
 /** The Explorer's "New Folder...". */
-export async function createDirectory(root: string, dirPath: string): Promise<GitActionResult> {
+export async function createDirectory(root: string, dirPath: string): Promise<ActionResult> {
   const target = resolveNew(root, dirPath);
   if ("ok" in target) {
     return target;
@@ -110,7 +110,7 @@ export async function createDirectory(root: string, dirPath: string): Promise<Gi
 }
 
 /** The Explorer's "Delete...": to the trash, like `discard`. */
-export async function deletePath(root: string, filePath: string): Promise<GitActionResult> {
+export async function deletePath(root: string, filePath: string): Promise<ActionResult> {
   const absolute = resolveInside(root, filePath);
   if (!absolute) {
     return OUTSIDE_REPOSITORY;
@@ -119,7 +119,7 @@ export async function deletePath(root: string, filePath: string): Promise<GitAct
 }
 
 /** The Explorer's "Rename...", which may also move. */
-export async function renamePath(root: string, fromPath: string, toPath: string): Promise<GitActionResult> {
+export async function renamePath(root: string, fromPath: string, toPath: string): Promise<ActionResult> {
   const from = resolveInside(root, fromPath);
   if (!from) {
     return OUTSIDE_REPOSITORY;

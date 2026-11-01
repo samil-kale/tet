@@ -237,7 +237,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
     if (!projectId || projectId !== activeProjectId.current || latest.current?.projectId !== projectId) {
       return undefined;
     }
-    const refused = refusal(await window.tet.commands.save(projectId, next), "Could not save the commands");
+    const refused = refusal(await window.tet.commands.save(projectId, next));
     // Shown only once written: a refused list on screen would be what the next try builds on.
     if (refused === undefined) {
       applyCommands(projectId, next);

@@ -1,3 +1,4 @@
+import type { ActionResult } from "../../shared/types/action";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { Project } from "../../shared/types/project";
 import type {
@@ -50,7 +51,7 @@ export interface SbxAccess {
   /** sbx-mcp.ts's readRegisteredMcp; undefined when sbx cannot say. */
   mcpRegistered(): Promise<SbxRegisteredMcp[] | undefined>;
   /** sbx-mcp.ts's signInMcp: opens the browser and waits; what sbx said on refusing. */
-  mcpSignIn(name: string): Promise<string | undefined>;
+  mcpSignIn(name: string): Promise<ActionResult>;
 }
 
 /** What sbxAccess reads from and stores into. */

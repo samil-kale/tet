@@ -4,6 +4,7 @@ import { listAskableAgents } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
 import { suggestersFor } from "../../shared/suggesters";
 import { failure } from "../../shared/errors";
+import type { ActionRefused, ActionResult } from "../../shared/types/action";
 import type { SuggestionResult } from "../../shared/types/agents";
 import type {
   CommitFileContent,
@@ -42,11 +43,10 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
     repositories.get(ref)?.refreshSoon();
   });
 
-  /** A repository command answering a GitActionResult, or an error when the repository or worktree
-   *  is not open. */
+  /** A repository command's answer, or an error when the repository or worktree is not open. */
   const inRepository =
-    <A extends unknown[]>(run: (repository: Repository, ...args: A) => Promise<GitActionResult>) =>
-    async (_event: IpcMainInvokeEvent, ref: ProjectRef, ...args: A): Promise<GitActionResult> => {
+    <A extends unknown[], R extends GitActionResult>(run: (repository: Repository, ...args: A) => Promise<R>) =>
+    async (_event: IpcMainInvokeEvent, ref: ProjectRef, ...args: A): Promise<R | ActionRefused> => {
       const repository = repositories.get(ref);
       return repository ? run(repository, ...args) : { ok: false, error: notOpenMessage(store, ref) };
     };
@@ -55,7 +55,7 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
    *  reached through the store as the commands are; the watcher sees the write and re-lists. */
   const inProjectFile =
     <A extends unknown[]>(write: (root: string, ...args: A) => Promise<void>) =>
-    async (_event: IpcMainInvokeEvent, projectId: string, ...args: A): Promise<GitActionResult> => {
+    async (_event: IpcMainInvokeEvent, projectId: string, ...args: A): Promise<ActionResult> => {
       const project = store.get(projectId);
       return project ? write(project.path, ...args).then(() => ({ ok: true }), failure) : { ok: false, error: PROJECT_NOT_FOUND };
     };

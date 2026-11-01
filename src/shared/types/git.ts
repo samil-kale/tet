@@ -1,3 +1,4 @@
+import type { ActionDone, ActionRefused } from "./action";
 import { ownValue } from "../own-value";
 
 /** A username and password (or token) typed into TET for a git host. */
@@ -142,26 +143,42 @@ export const EMPTY_REPOSITORY_STATE: RepositoryState = {
   changes: [],
 };
 
-export interface GitActionResult {
-  ok: boolean;
-  error?: string;
+/** A git command's answer: done, refused, or waiting on a question (GitQuestion). */
+export type GitActionResult = GitCommandResult | GitQuestion;
+
+/** The answer of a command that never asks: done or refused. */
+export type GitCommandResult = (ActionDone & NoQuestion) | GitRefused;
+
+/** What tells a question (GitQuestion) apart from the rest. */
+interface NoQuestion {
+  needsConfirmation?: undefined;
+}
+
+export interface GitRefused extends ActionRefused, NoQuestion {
   /** git wanted credentials; set only by network commands (git.ts's runNetwork). */
   authRequired?: boolean;
   /** The http(s) remote that wants a login, set by main from `authRequired`: the view that
    *  offered the action asks for one and runs it again with it. Never for an ssh remote or a local
    *  path, where there is nothing to type. */
   loginUrl?: string;
+}
+
+/**
+ * Nothing was done: the command waits on a question. Which one is the reason named here, and
+ * the view that offered the action puts it in its own words and runs the action again
+ * confirmed (AGENTS.md: main asks nothing). Not a refusal: `error` only where what stopped it said
+ * something the question shows.
+ */
+export interface GitQuestion {
+  ok: false;
   /**
-   * Nothing was done: the command waits on a question. Which one is the reason named here, and
-   * the view that offered the action puts it in its own words and runs the action again
-   * confirmed (AGENTS.md: main asks nothing).
-   *
    * - `trash-failed`: a discard could not move a file to the trash; nothing was reset. Confirmed,
    *   it deletes.
    * - `rewrites-pushed`: a rebase would rewrite commits already on the upstream.
    * - `uncommitted`: a worktree has changes, so neither it nor its terminals were touched.
    */
-  needsConfirmation?: "trash-failed" | "rewrites-pushed" | "uncommitted";
+  needsConfirmation: "trash-failed" | "rewrites-pushed" | "uncommitted";
+  error?: string;
 }
 
 /** A local branch, or a remote-tracking one like "origin/development". */

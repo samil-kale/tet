@@ -1,4 +1,5 @@
 import { SBX_PROBLEM } from "../../shared/sbx-rules";
+import type { ActionResult } from "../../shared/types/action";
 import type { SbxMcpServer, SbxRegisteredMcp } from "../../shared/types/sbx";
 import { runSbx, sbxFailure, sbxJson, sbxRefusal, type OnData } from "./sbx-cli";
 
@@ -100,9 +101,9 @@ export async function unloadMcp(sandbox: string, names: readonly string[], onDat
 
 /** `sbx mcp auth`, which opens the browser and waits on the server's OAuth flow; what sbx said on
  *  refusing, else undefined. Stopped by the dialog's Cancel (cancelSbxSetup). */
-export async function signInMcp(name: string): Promise<string | undefined> {
+export async function signInMcp(name: string): Promise<ActionResult> {
   const result = await runSbx(["mcp", "auth", name], { cancellable: true });
-  return result.ok ? undefined : sbxFailure(result, "sbx mcp auth");
+  return result.ok ? { ok: true } : { ok: false, error: sbxFailure(result, "sbx mcp auth") };
 }
 
 /** What the project's MCP rows ask of a sandbox, once its servers are registered (planMcp). */

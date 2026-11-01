@@ -201,7 +201,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
     changing,
   } = useSubmit(
     async () => {
-      const tokensRefused = await window.tet.sbx.saveAccounts(toAccountEdits(accounts));
+      const tokensRefused = refusal(await window.tet.sbx.saveAccounts(toAccountEdits(accounts)));
       if (tokensRefused !== undefined) {
         return tokensRefused;
       }
@@ -213,7 +213,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       // What sbx had registered before, to tell a server this Save brought in from one already known.
       const before = enabled && names.length > 0 ? await window.tet.sbx.mcpRegistered() : undefined;
       const result = await window.tet.sbx.saveSettings(project.id, { enabled, ...request }, toLocalSave(state));
-      const refused = refusal(result, "Could not save the SBX Settings");
+      const refused = refusal(result);
       staysOpen.current = false;
       if (refused !== undefined || !enabled || names.length === 0) {
         return refused;
@@ -267,7 +267,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   const signIn = (row: AccountRow): void =>
     void recheck(async () => {
       const result = await runSignIn(() => window.tet.sbx.signIn(row.user, row.token, row.account));
-      const kept = result.account;
+      const kept = result.ok ? result.account : undefined;
       setAccounts((rows) =>
         kept
           ? // A row of the same user already kept is this one now (SbxAccountStore.add).
@@ -276,7 +276,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
               row.id,
               { account: kept.id, user: kept.user, token: "", mark: undefined },
             )
-          : patched(rows, row.id, { mark: result.error }),
+          : patched(rows, row.id, { mark: result.ok ? result.notKept : result.error }),
       );
     });
   const browserSignIn = (): void =>
@@ -296,7 +296,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       return;
     }
     await recheck(async () => {
-      const failed = await runSignOut(() => window.tet.sbx.signOut());
+      const failed = refusal(await runSignOut(() => window.tet.sbx.signOut()));
       if (failed !== undefined) {
         setAccountError(`Could not sign out of Docker: ${failed}`);
       }
@@ -422,7 +422,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
             sources={sources}
             problems={problems}
             projectPath={project.path}
-            signInMcp={(name) => runMcpSignIn(() => window.tet.sbx.mcpSignIn(name))}
+            signInMcp={async (name) => refusal(await runMcpSignIn(() => window.tet.sbx.mcpSignIn(name)))}
             signingInMcp={signingInMcp}
             mcpRegistered={mcpRegistered}
             askMcp={askMcp}

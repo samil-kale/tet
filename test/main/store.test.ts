@@ -256,16 +256,17 @@ describe("the environment variables kept in TET", () => {
       { name: "AUTOCONTRACT_USER", overridesMachine: false, stored: true },
       { name: "AUTOCONTRACT_PASSWORD", overridesMachine: false, stored: false },
     ]);
-    assert.match(requests.answer(1, [row("AUTOCONTRACT_USER", "admin")]) ?? "", /needs a value/, "one missing");
-    assert.equal(
-      requests.answer(1, [row("AUTOCONTRACT_USER", "admin"), row("AUTOCONTRACT_PASSWORD", "secret"), row("OTHER", "x")]),
-      undefined,
-    );
+    const missing = requests.answer(1, [row("AUTOCONTRACT_USER", "admin")]);
+    assert.ok(!missing.ok);
+    assert.match(missing.error, /needs a value/, "one missing");
+    assert.deepEqual(requests.answer(1, [row("AUTOCONTRACT_USER", "admin"), row("AUTOCONTRACT_PASSWORD", "secret"), row("OTHER", "x")]), {
+      ok: true,
+    });
     assert.deepEqual(await first, ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"]);
     assert.deepEqual(store.values(), { AUTOCONTRACT_USER: "admin", AUTOCONTRACT_PASSWORD: "secret" }, "only what was asked for");
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(shown.length, 2);
-    assert.equal(requests.answer(2, null), undefined);
+    assert.deepEqual(requests.answer(2, null), { ok: true });
     assert.equal(await second, undefined);
   });
 
@@ -283,8 +284,10 @@ describe("the environment variables kept in TET", () => {
     caller.abort();
     assert.equal(await asked, undefined);
     assert.deepEqual(withdrawn, [1]);
-    assert.match(requests.answer(1, [row("GITHUB_TOKEN", "x")]) ?? "", /stopped waiting/);
-    assert.equal(requests.answer(1, null), undefined, "a late Cancel needs no words");
+    const late = requests.answer(1, [row("GITHUB_TOKEN", "x")]);
+    assert.ok(!late.ok);
+    assert.match(late.error, /stopped waiting/);
+    assert.deepEqual(requests.answer(1, null), { ok: true }, "a late Cancel needs no words");
     listening = false;
     await assert.rejects(requests.ask({ names: ["GITHUB_TOKEN"] }, new AbortController().signal), /not ready/);
   });

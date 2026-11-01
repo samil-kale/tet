@@ -23,7 +23,7 @@ import {
 import { ProjectStore } from "../../src/main/store/project-store";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { readCommands, readSbxSettings, writeCommands } from "../../src/main/store/tet-json";
-import type { ProjectRef, ProjectsChange } from "../../src/shared/types/project";
+import type { AddRepositoryResult, ProjectRef, ProjectsChange } from "../../src/shared/types/project";
 import type { NoticeSeverity } from "../../src/shared/types/app";
 import { eventually, forkUtilitiesInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
 
@@ -63,7 +63,7 @@ function repository(madeElsewhere: string[] = []) {
 }
 
 const managers: RepositoryManager[] = [];
-after(() => managers.forEach((manager) => manager.disposeAll()));
+after(() => Promise.all(managers.map((manager) => manager.disposeAll())));
 
 /**
  * The deps main.ts hands projects.ts. `onClose` runs as the tabs of the repository or a
@@ -100,12 +100,23 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
   };
   /** Adds the repository and waits for its repository's first read. */
   const add = async (folder: string): Promise<string> => {
-    const added = await addProject(deps, folder);
-    assert.ok(added.project, added.error);
+    const added = done(await addProject(deps, folder));
     await repositories.get({ projectId: added.project.id })!.refresh();
     return added.project.id;
   };
   return { deps, store, repositories, changes, told, notices, dataRoot, add };
+}
+
+/** What an add answered, failing the test where it was refused. */
+function done(result: AddRepositoryResult): Extract<AddRepositoryResult, { ok: true }> {
+  assert.ok(result.ok, result.ok ? undefined : result.error);
+  return result;
+}
+
+/** What an add refused, failing the test where it added. */
+function refused(result: AddRepositoryResult): Extract<AddRepositoryResult, { ok: false }> {
+  assert.ok(!result.ok, "added");
+  return result;
 }
 
 const remoteHas = (bare: string, branch: string): boolean => git(bare, "branch", "--list", branch) !== "";
@@ -119,14 +130,14 @@ describe("a project added", () => {
     assert.deepEqual(changes, [{ added: [{ projectId: id }], show: { projectId: id } }]);
     // Removed and added again, by this TET or another: the same id as long as the config keeps it.
     store.remove(id);
-    assert.equal((await addProject(deps, repo.main)).project?.id, id);
+    assert.equal(done(await addProject(deps, repo.main)).project.id, id);
   });
 
   it("is the same project when added again", async () => {
     const repo = repository();
     const { deps, store, add } = open();
     const id = await add(repo.main);
-    assert.equal((await addProject(deps, repo.main)).project?.id, id);
+    assert.equal(done(await addProject(deps, repo.main)).project.id, id);
     assert.equal(store.list().length, 1);
   });
 
@@ -134,17 +145,15 @@ describe("a project added", () => {
     const repo = repository();
     const { deps, store } = open();
     fs.mkdirSync(path.join(repo.main, "sub"));
-    const added = await addProject(deps, path.join(repo.main, "sub"));
-    assert.equal(added.project, undefined);
+    const added = refused(await addProject(deps, path.join(repo.main, "sub")));
     assert.equal(added.notRepository, undefined);
-    assert.match(added.error ?? "", /inside the repository/);
+    assert.match(added.error, /inside the repository/);
     assert.equal(store.list().length, 0);
   });
 
   it("is refused where the folder is missing, with an offer to initialize it", async () => {
     const { deps, store } = open();
-    const added = await addProject(deps, path.join(real(tempDir("tet-projects-missing-")), "missing"));
-    assert.equal(added.project, undefined);
+    const added = refused(await addProject(deps, path.join(real(tempDir("tet-projects-missing-")), "missing")));
     assert.equal(added.notRepository, true);
     assert.equal(store.list().length, 0);
   });
@@ -181,7 +190,7 @@ describe("a project added", () => {
     const { deps, store, dataRoot, add } = open();
     const tetJson = path.join(repo.main, "tet.json");
     fs.writeFileSync(tetJson, "{ not json");
-    assert.match((await addProject(deps, repo.main)).error ?? "", /was not added: tet\.json is not valid JSON/);
+    assert.match(refused(await addProject(deps, repo.main)).error, /was not added: tet\.json is not valid JSON/);
     assert.deepEqual(store.list(), []);
     fs.writeFileSync(tetJson, "{}");
     const id = await add(repo.main);
@@ -199,7 +208,7 @@ describe("a project added", () => {
       "still stored",
     );
     fs.writeFileSync(tetJson, "{}");
-    assert.equal((await addProject(later, repo.main)).project?.id, id, "added again, it is the same project");
+    assert.equal(done(await addProject(later, repo.main)).project.id, id, "added again, it is the same project");
     assert.deepEqual(
       later.store.list().map((project) => project.id),
       [id],
@@ -209,16 +218,16 @@ describe("a project added", () => {
   it("refuses a folder that is no git repository", async () => {
     const { deps, store } = open();
     const plain = tempDir("tet-projects-plain-");
-    const result = await addProject(deps, plain);
-    assert.match(result.error ?? "", /is not a git repository/);
+    const result = refused(await addProject(deps, plain));
+    assert.match(result.error, /is not a git repository/);
     assert.deepEqual(store.list(), []);
   });
 
   it("opens a worktree's folder as its project, listing a worktree made elsewhere without a key", async () => {
     const repo = repository(["picked"]);
     const { deps, store, repositories } = open();
-    const added = await addProject(deps, repo.at("picked"));
-    assert.equal(added.project?.path, repo.main);
+    const added = done(await addProject(deps, repo.at("picked")));
+    assert.equal(added.project.path, repo.main);
     assert.equal(added.worktree, undefined, "one made elsewhere is never opened");
     const id = added.project.id;
     syncWorktrees(deps, id, await repositories.get({ projectId: id })!.refresh());
@@ -231,8 +240,8 @@ describe("a worktree TET makes", () => {
     const repo = repository();
     const { deps, store, changes, dataRoot, add } = open();
     const id = await add(repo.main);
-    const added = await addWorktree(deps, id, "feature");
-    assert.ok(added.worktree, added.error);
+    const added = done(await addWorktree(deps, id, "feature"));
+    assert.ok(added.worktree);
     const ref = { projectId: id, worktree: added.worktree };
     const files = worktreeDir(dataRoot, id, added.worktree);
     assert.equal(real(files), files, "in on-disk spelling, as git lists it");
@@ -247,7 +256,7 @@ describe("a worktree TET makes", () => {
     const repo = repository();
     const { deps, store, repositories, dataRoot, add } = open();
     const id = await add(repo.main);
-    const key = (await addWorktree(deps, id, "before")).worktree!;
+    const key = done(await addWorktree(deps, id, "before")).worktree!;
     const main = repositories.get({ projectId: id })!;
     assert.deepEqual(await main.renameBranch("before", "after"), { ok: true });
     syncWorktrees(deps, id, main.getState());
@@ -260,7 +269,7 @@ describe("a worktree TET makes", () => {
     const repo = repository();
     const { deps, store, repositories, changes, dataRoot, add } = open();
     const id = await add(repo.main);
-    const key = (await addWorktree(deps, id, "target")).worktree!;
+    const key = done(await addWorktree(deps, id, "target")).worktree!;
     const ref = { projectId: id, worktree: key };
     const files = worktreeDir(dataRoot, id, key);
     git(files, "push", "-q", "-u", "origin", "target");
@@ -287,11 +296,13 @@ describe("a worktree TET makes", () => {
     const closed: ProjectRef[] = [];
     const { deps, repositories, changes, dataRoot, add } = open((ref) => closed.push(ref));
     const id = await add(repo.main);
-    const key = (await addWorktree(deps, id, "held")).worktree!;
+    const key = done(await addWorktree(deps, id, "held")).worktree!;
     const seen = changes.length;
     // As a push running in the repository.
     let release: () => void = () => undefined;
-    const other = repositories.get({ projectId: id })!.exclusive(() => new Promise((resolve) => (release = () => resolve({ ok: true }))));
+    const other = repositories
+      .get({ projectId: id })!
+      .exclusive(() => new Promise<{ ok: true }>((resolve) => (release = () => resolve({ ok: true }))));
     const ref = { projectId: id, worktree: key };
     const refused = await deleteWorktree(deps, ref, { force: true, onRemote: false });
     assert.equal(refused.ok, false);
@@ -316,7 +327,7 @@ describe("a worktree TET makes", () => {
     });
     dataRoot = opened.dataRoot;
     const id = await opened.add(repo.main);
-    key = (await addWorktree(opened.deps, id, "busy")).worktree!;
+    key = done(await addWorktree(opened.deps, id, "busy")).worktree!;
     const ref = { projectId: id, worktree: key };
     const result = await deleteWorktree(opened.deps, ref, { force: false, onRemote: false });
     assert.deepEqual(result, { ok: false, needsConfirmation: "uncommitted" });
@@ -340,7 +351,7 @@ describe("a project removed", () => {
     const closed: ProjectRef[] = [];
     const { deps, store, repositories, changes, notices, dataRoot, add } = open((ref) => closed.push(ref));
     const id = await add(repo.main);
-    const key = (await addWorktree(deps, id, "own")).worktree!;
+    const key = done(await addWorktree(deps, id, "own")).worktree!;
     const ref = { projectId: id, worktree: key };
     await repositories.get(ref)!.refresh();
     deps.sbxLocal.restore(id, { environment: { TOKEN: "encrypted" } });
@@ -419,7 +430,7 @@ describe("a project removed", () => {
     const repo = repository(["foreign"]);
     const { deps, store, changes, dataRoot, add } = open();
     const id = await add(repo.main);
-    const key = (await addWorktree(deps, id, "own")).worktree!;
+    const key = done(await addWorktree(deps, id, "own")).worktree!;
     deps.sbxLocal.restore(id, { environment: { TOKEN: "encrypted" } });
     assert.deepEqual(await removeProject(deps, id), { ok: true });
     assert.ok(!fs.existsSync(worktreeDir(dataRoot, id, key)));
@@ -440,7 +451,9 @@ describe("a project removed", () => {
     const id = await add(repo.main);
     await addWorktree(deps, id, "kept");
     let release: () => void = () => undefined;
-    const other = repositories.get({ projectId: id })!.exclusive(() => new Promise((resolve) => (release = () => resolve({ ok: true }))));
+    const other = repositories
+      .get({ projectId: id })!
+      .exclusive(() => new Promise<{ ok: true }>((resolve) => (release = () => resolve({ ok: true }))));
     const result = await removeProject(deps, id);
     assert.equal(result.ok, false);
     assert.match(result.error ?? "", /already running/);
@@ -475,7 +488,7 @@ describe("a worktree's tet.json", () => {
     const repo = repository();
     const { deps, told, dataRoot, repositories, add } = open();
     const id = await add(repo.main);
-    const key = (await addWorktree(deps, id, "told")).worktree!;
+    const key = done(await addWorktree(deps, id, "told")).worktree!;
     await repositories.get({ projectId: id, worktree: key })!.refresh();
     fs.writeFileSync(path.join(worktreeDir(dataRoot, id, key), "tet.json"), JSON.stringify({ commands: ["ignored"] }));
     fs.writeFileSync(path.join(repo.main, "tet.json"), JSON.stringify({ commands: ["npm test"] }));

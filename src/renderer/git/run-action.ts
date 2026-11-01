@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import type { GitActionResult, GitLogin } from "../../shared/types/git";
+import type { GitActionResult, GitLogin, GitQuestion } from "../../shared/types/git";
 import { refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { useBusy } from "../ui/use-busy";
@@ -57,12 +57,14 @@ function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
   return {
     run: (label, action) =>
       void onBar(() => action()).then(async (result) => {
-        const loginUrl = result.loginUrl;
-        if (loginUrl !== undefined) {
-          await askLogin(loginUrl, result.error ?? `${label} failed`, async (login) =>
-            refusal(await offBar(() => action(login)), `${label} failed`),
-          );
-        } else if (!result.ok) {
+        if (result.ok) {
+          return;
+        }
+        if (result.needsConfirmation === undefined && result.loginUrl !== undefined) {
+          const { loginUrl, error } = result;
+          await askLogin(loginUrl, error, async (login) => refusal(await offBar(() => action(login)), `${label} failed`));
+        } else {
+          // A question nobody asks (runWithFollowUp) brings no words of its own.
           notify("error", result.error ?? `${label} failed`);
         }
       }),
@@ -79,13 +81,13 @@ function gitRun(onBar: GitRunner, offBar: GitRunner): GitRun {
 export function runWithFollowUp(
   start: (action: () => Promise<GitActionResult>) => void,
   first: () => Promise<GitActionResult>,
-  needs: NonNullable<GitActionResult["needsConfirmation"]>,
-  ask: (result: GitActionResult) => Promise<boolean>,
+  needs: GitQuestion["needsConfirmation"],
+  ask: (result: GitQuestion) => Promise<boolean>,
   confirmed: () => Promise<GitActionResult>,
 ): void {
   start(async () => {
     const result = await first();
-    if (result.needsConfirmation !== needs) {
+    if (result.ok || result.needsConfirmation === undefined || result.needsConfirmation !== needs) {
       return result;
     }
     void ask(result).then((yes) => {

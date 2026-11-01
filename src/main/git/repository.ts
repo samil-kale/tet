@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
+import type { ActionRefused, ActionResult } from "../../shared/types/action";
 import { ownValue } from "../../shared/own-value";
 import { defaultRemote, EMPTY_REPOSITORY_STATE, fullRefName, headRemote, upstreamOf } from "../../shared/types/git";
 import { refKeyOf } from "../../shared/types/project";
@@ -23,6 +24,7 @@ import type {
   CommitSearch,
   FileChange,
   GitActionResult,
+  GitCommandResult,
   GitLogin,
   GraphCommit,
   RepositoryState,
@@ -416,7 +418,7 @@ export class Repository {
 
   /** One command at a time, refreshing after: two race for the index lock. Another arriving
    *  meanwhile is refused. */
-  private async runAction(action: () => Promise<GitActionResult>): Promise<GitActionResult> {
+  private async runAction<T extends GitActionResult>(action: () => Promise<T>): Promise<T | ActionRefused> {
     if (this.holding.getStore()) {
       // Within `exclusive`: its hold is this command's, and it refreshes once all have run.
       return action().catch(failure);
@@ -437,8 +439,9 @@ export class Repository {
     this.actionRunning = true;
     try {
       // A rejection is the git process gone; reported like any failure.
-      this.action = action().catch(failure);
-      const result = await this.action;
+      const running = action().catch(failure);
+      this.action = running;
+      const result = await running;
       await this.refresh();
       return result;
     } finally {
@@ -457,15 +460,15 @@ export class Repository {
    * which must not be for nothing. This repository's commands called from `steps` run in
    * the hold; a call from anywhere else meanwhile is refused as usual.
    */
-  exclusive(steps: () => Promise<GitActionResult>): Promise<GitActionResult> {
+  exclusive<T extends GitActionResult>(steps: () => Promise<T>): Promise<T | ActionRefused> {
     return this.runAction(() => this.holding.run(true, steps));
   }
 
-  checkout(target: CheckoutTarget): Promise<GitActionResult> {
+  checkout(target: CheckoutTarget): Promise<GitCommandResult> {
     return this.runAction(() => git.checkout(this.at.path, target, this.state.localBranches));
   }
 
-  fetch(login?: GitLogin): Promise<GitActionResult> {
+  fetch(login?: GitLogin): Promise<GitCommandResult> {
     return this.runAction(async () => {
       // The remote whose login is looked up, named: git's default could be another host's.
       const remote = headRemote(this.state);
@@ -477,7 +480,7 @@ export class Repository {
 
   /** Then, as GitHub Desktop does, the remote's HEAD is asked for again and the other branches only
    *  behind their upstreams are moved up. */
-  pull(login?: GitLogin): Promise<GitActionResult> {
+  pull(login?: GitLogin): Promise<GitCommandResult> {
     return this.runAction(async () => {
       const remote = headRemote(this.state);
       const pulled = await this.network(remote, login, (networkLogin) => git.pull(this.at.path, networkLogin, remote));
@@ -487,7 +490,7 @@ export class Repository {
   }
 
   /** Pushes the current branch to its upstream, or publishes it to `remote` when it has none. */
-  push(login?: GitLogin): Promise<GitActionResult> {
+  push(login?: GitLogin): Promise<GitCommandResult> {
     return this.runAction(() => {
       const upstream = upstreamOf(this.state, this.state.head);
       const remote = headRemote(this.state);
@@ -506,19 +509,19 @@ export class Repository {
   private network(
     remote: string | undefined,
     login: GitLogin | undefined,
-    command: (login?: NetworkLogin) => Promise<GitActionResult>,
-  ): Promise<GitActionResult> {
+    command: (login?: NetworkLogin) => Promise<GitCommandResult>,
+  ): Promise<GitCommandResult> {
     const url = remote === undefined ? undefined : this.remoteUrls[remote];
     return url === undefined ? command() : this.logins.run(this.at.path, url, login, command);
   }
 
   /** The config is read again by the refresh after, since only this changes a url. */
-  setRemoteUrl(remote: string, url: string): Promise<GitActionResult> {
+  setRemoteUrl(remote: string, url: string): Promise<GitCommandResult> {
     return this.configAction(() => git.setRemoteUrl(this.at.path, remote, url));
   }
 
   /** `runAction` for a command writing the config, which the refresh after then reads again. */
-  private configAction(action: () => Promise<GitActionResult>): Promise<GitActionResult> {
+  private configAction(action: () => Promise<GitCommandResult>): Promise<GitCommandResult> {
     return this.runAction(async () => {
       const result = await action();
       this.configStale = true;
@@ -526,33 +529,33 @@ export class Repository {
     });
   }
 
-  createBranch(name: string, startPoint: CheckoutTarget): Promise<GitActionResult> {
+  createBranch(name: string, startPoint: CheckoutTarget): Promise<GitCommandResult> {
     return this.runAction(() => git.createBranch(this.at.path, name, startPoint));
   }
 
   /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). The refresh after reads
    *  the config again: this is what records `branch.<name>.base`, and the new row shows it at once. */
-  addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
+  addWorktree(target: string, branch: string, base: CheckoutTarget): Promise<GitCommandResult> {
     return this.configAction(() => git.worktreeAdd(this.at.path, target, branch, base));
   }
 
-  removeWorktree(target: string, force: boolean): Promise<GitActionResult> {
+  removeWorktree(target: string, force: boolean): Promise<GitCommandResult> {
     return this.runAction(() => git.worktreeRemove(this.at.path, target, force));
   }
 
-  pruneWorktrees(): Promise<GitActionResult> {
+  pruneWorktrees(): Promise<GitCommandResult> {
     return this.runAction(() => git.worktreePrune(this.at.path));
   }
 
   /** git moves the branch's whole config section with it, `branch.<name>.base` included, so the
    *  refresh after reads the config again. */
-  renameBranch(from: string, to: string): Promise<GitActionResult> {
+  renameBranch(from: string, to: string): Promise<GitCommandResult> {
     return this.configAction(() => git.renameBranch(this.at.path, from, to));
   }
 
   /** Locally and, if asked, its upstream on the remote. Local first: it can't fail for reasons off the
    *  machine. The checked-out branch gives way to the default branch first, as in GitHub Desktop. */
-  deleteBranch(name: string, onRemote: boolean): Promise<GitActionResult> {
+  deleteBranch(name: string, onRemote: boolean): Promise<GitCommandResult> {
     return this.runAction(async () => {
       const upstream = upstreamOf(this.state, name);
       if (!this.state.detached && name === this.state.head) {
@@ -577,14 +580,14 @@ export class Repository {
 
   /** A remote branch alone: from its row under the remote, and the second try of a `deleteBranch`
    *  whose remote half wanted a login. */
-  deleteRemoteBranch(remote: string, name: string, login?: GitLogin): Promise<GitActionResult> {
+  deleteRemoteBranch(remote: string, name: string, login?: GitLogin): Promise<GitCommandResult> {
     return this.runAction(() =>
       this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.at.path, remote, name, networkLogin)),
     );
   }
 
   /** `fastForwardOnto`: see git.ts's merge. */
-  merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitActionResult> {
+  merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitCommandResult> {
     return this.runAction(() => git.merge(this.at.path, target, fastForwardOnto));
   }
 
@@ -604,18 +607,18 @@ export class Repository {
     });
   }
 
-  abort(): Promise<GitActionResult> {
+  abort(): Promise<GitCommandResult> {
     return this.runAction(() => {
       const operation = this.state.operation;
       return operation ? git.abortOperation(this.at.path, operation) : Promise.resolve({ ok: false, error: "Nothing is in progress here" });
     });
   }
 
-  createTag(name: string, target: CheckoutTarget, message: string): Promise<GitActionResult> {
+  createTag(name: string, target: CheckoutTarget, message: string): Promise<GitCommandResult> {
     return this.runAction(() => git.createTag(this.at.path, name, target, message));
   }
 
-  pushTag(name: string, login?: GitLogin): Promise<GitActionResult> {
+  pushTag(name: string, login?: GitLogin): Promise<GitCommandResult> {
     return this.runAction(() => {
       const remote = defaultRemote(this.state);
       return remote
@@ -624,7 +627,7 @@ export class Repository {
     });
   }
 
-  deleteTag(name: string, onRemote: boolean): Promise<GitActionResult> {
+  deleteTag(name: string, onRemote: boolean): Promise<GitCommandResult> {
     return this.runAction(async () => {
       const local = await git.deleteTag(this.at.path, name);
       return !local.ok || !onRemote ? local : this.deleteTagOnRemote(name, undefined);
@@ -632,18 +635,18 @@ export class Repository {
   }
 
   /** The remote half alone: the second try of a `deleteTag` that wanted a login. */
-  deleteRemoteTag(name: string, login?: GitLogin): Promise<GitActionResult> {
+  deleteRemoteTag(name: string, login?: GitLogin): Promise<GitCommandResult> {
     return this.runAction(() => this.deleteTagOnRemote(name, login));
   }
 
-  private deleteTagOnRemote(name: string, login: GitLogin | undefined): Promise<GitActionResult> {
+  private deleteTagOnRemote(name: string, login: GitLogin | undefined): Promise<GitCommandResult> {
     const remote = defaultRemote(this.state);
     return remote
       ? this.network(remote, login, (networkLogin) => git.deleteRemoteTag(this.at.path, remote, name, networkLogin))
       : Promise.resolve({ ok: false, error: "This repository has no remote to delete the tag from" });
   }
 
-  checkoutTag(name: string): Promise<GitActionResult> {
+  checkoutTag(name: string): Promise<GitCommandResult> {
     return this.runAction(() => git.checkoutTag(this.at.path, name));
   }
 
@@ -675,7 +678,7 @@ export class Repository {
   }
 
   /** Commits everything, untracked files included. */
-  commitAll(message: string): Promise<GitActionResult> {
+  commitAll(message: string): Promise<GitCommandResult> {
     return this.runAction(async () => {
       const refusal = await this.unresolvedRefusal();
       return refusal ? { ok: false, error: refusal } : git.commitAll(this.at.path, message);
@@ -683,7 +686,7 @@ export class Repository {
   }
 
   /** Commits only these files, untracked ones included. */
-  commitPaths(message: string, paths: string[]): Promise<GitActionResult> {
+  commitPaths(message: string, paths: string[]): Promise<GitCommandResult> {
     return this.runAction(async () => {
       const refusal = await this.unresolvedRefusal(paths);
       if (refusal) {
@@ -696,7 +699,7 @@ export class Repository {
   }
 
   /** Stashes everything, untracked files included. */
-  stashPush(message: string): Promise<GitActionResult> {
+  stashPush(message: string): Promise<GitCommandResult> {
     return this.runAction(() => git.stashPush(this.at.path, message));
   }
 
@@ -727,7 +730,7 @@ export class Repository {
   }
 
   /** By the stash's commit, which a stash made meanwhile doesn't move. */
-  stash(command: StashCommand, sha: string): Promise<GitActionResult> {
+  stash(command: StashCommand, sha: string): Promise<GitCommandResult> {
     return this.runAction(() => git.stash(this.at.path, command, sha));
   }
 
@@ -787,7 +790,7 @@ export class Repository {
     });
   }
 
-  ignore(filePath: string, scope: "file" | "extension"): Promise<GitActionResult> {
+  ignore(filePath: string, scope: "file" | "extension"): Promise<GitCommandResult> {
     return this.runAction(() => git.ignorePath(this.at.path, filePath, scope));
   }
 
@@ -804,22 +807,22 @@ export class Repository {
   }
 
   /** The Explorer's "New File..." (explorer.ts). */
-  createFile(filePath: string): Promise<GitActionResult> {
+  createFile(filePath: string): Promise<ActionResult> {
     return createFile(this.at.path, filePath);
   }
 
   /** The Explorer's "New Folder..." (explorer.ts). */
-  createDirectory(dirPath: string): Promise<GitActionResult> {
+  createDirectory(dirPath: string): Promise<ActionResult> {
     return createDirectory(this.at.path, dirPath);
   }
 
   /** The Explorer's "Delete..." (explorer.ts). */
-  deletePath(filePath: string): Promise<GitActionResult> {
+  deletePath(filePath: string): Promise<ActionResult> {
     return deletePath(this.at.path, filePath);
   }
 
   /** The Explorer's "Rename..." (explorer.ts). */
-  renamePath(fromPath: string, toPath: string): Promise<GitActionResult> {
+  renamePath(fromPath: string, toPath: string): Promise<ActionResult> {
     return renamePath(this.at.path, fromPath, toPath);
   }
 
@@ -937,10 +940,10 @@ export class Repository {
       const handle = await openInside(this.at.path, absolute, missing ? "wx" : "r+").catch(async (error: unknown) => {
         const code = (error as NodeJS.ErrnoException).code;
         if (!missing && code === "ENOENT") {
-          return { ok: false, error: "The file was deleted on disk since it was opened", diskMtimeMs: MISSING_MTIME_MS };
+          return { ok: false as const, error: "The file was deleted on disk since it was opened", diskMtimeMs: MISSING_MTIME_MS };
         }
         if (missing && code === "EEXIST") {
-          return { ok: false, error: changed, diskMtimeMs: (await fs.promises.stat(absolute)).mtimeMs };
+          return { ok: false as const, error: changed, diskMtimeMs: (await fs.promises.stat(absolute)).mtimeMs };
         }
         throw error;
       });
@@ -1180,10 +1183,10 @@ export class RepositoryManager {
     return closing ?? Promise.resolve();
   }
 
-  disposeAll(): void {
-    for (const repository of this.repositories.values()) {
-      void repository.dispose();
-    }
+  /** Resolves once every one's git commands have ended (Repository.dispose); all are gone at once. */
+  disposeAll(): Promise<void> {
+    const closing = [...this.repositories.values()].map((repository) => repository.dispose());
     this.repositories.clear();
+    return Promise.all(closing).then(() => undefined);
   }
 }

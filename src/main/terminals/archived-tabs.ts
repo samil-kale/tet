@@ -1,5 +1,6 @@
 import type { AgentDefinition } from "../agents/agent";
 import { errorMessage } from "../../shared/errors";
+import type { ActionResult } from "../../shared/types/action";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { archivedIds, pruneArchived, setArchived, setArchivedOrder } from "../store/archive";
@@ -83,16 +84,16 @@ export class ArchivedTabs {
    * Written down before anything changes, so a refused write leaves the tab as it is. Answers what
    * refused it.
    */
-  keep(tab: TabState, sessionId: string): string | undefined {
+  keep(tab: TabState, sessionId: string): ActionResult {
     const { displayName } = this.target.agentOf(tab);
     // Moved on to a session its hooks named (`/clear`) that no listing has shown yet.
     if (awaitsClaim(tab)) {
-      return `The ${displayName} session is not listed yet: close the tab again in a moment`;
+      return { ok: false, error: `The ${displayName} session is not listed yet: close the tab again in a moment` };
     }
     try {
       setArchived(this.dataRoot, this.ref, sessionId, true);
     } catch (error) {
-      return `Could not keep the ${displayName} session: ${errorMessage(error)}`;
+      return { ok: false, error: `Could not keep the ${displayName} session: ${errorMessage(error)}` };
     }
     const stopped = this.target.takeOffStrip(tab);
     Object.assign(tab, { status: "ready", inTurn: false, waitingAt: undefined, finishedAt: undefined, openedInTerminal: undefined });
@@ -107,20 +108,20 @@ export class ArchivedTabs {
         }),
       );
     }
-    return undefined;
+    return { ok: true };
   }
 
   /** Brings an archived tab back at the end of the strip; its session resumes at its first resize,
    *  as a restored tab's does. Checked first, as pruneArchive could not from here: a session
    *  deleted outside TET is dropped instead, answered rather than left to fail at that resize. */
-  async reopen(tabId: string): Promise<string | undefined> {
+  async reopen(tabId: string): Promise<ActionResult> {
     const tab = this.tabOf(tabId);
     if (!tab?.sessionId) {
-      return undefined;
+      return { ok: true };
     }
     await this.stopping.get(tabId);
     if (!this.tabs.includes(tab)) {
-      return undefined;
+      return { ok: true };
     }
     const agent = this.target.agentOf(tab);
     const sessionId = tab.sessionId;
@@ -129,59 +130,59 @@ export class ArchivedTabs {
       setArchived(this.dataRoot, this.ref, sessionId, false);
     } catch (error) {
       if (!gone) {
-        return `Could not reopen the ${agent.displayName} session: ${errorMessage(error)}`;
+        return { ok: false, error: `Could not reopen the ${agent.displayName} session: ${errorMessage(error)}` };
       }
       logError(`could not forget the ${agent.displayName} session deleted outside TET`, error);
     }
     this.tabs = this.tabs.filter((candidate) => candidate !== tab);
     this.post();
     if (gone) {
-      return `The ${agent.displayName} session was deleted outside TET`;
+      return { ok: false, error: `The ${agent.displayName} session was deleted outside TET` };
     }
     this.target.reopened(tab);
-    return undefined;
+    return { ok: true };
   }
 
   /** A drag in the ARCHIVE lane: the tabs named by `tabIds`, in that order, become the stored
    *  order. Answers what refused it; the list stays as it was. */
-  reorder(tabIds: string[]): string | undefined {
+  reorder(tabIds: string[]): ActionResult {
     const order = tabIds.map((tabId) => this.tabOf(tabId)?.sessionId).filter((id): id is string => id !== undefined);
     try {
       setArchivedOrder(this.dataRoot, this.ref, order);
     } catch (error) {
-      return `Could not reorder the archived sessions: ${errorMessage(error)}`;
+      return { ok: false, error: `Could not reorder the archived sessions: ${errorMessage(error)}` };
     }
     this.post();
-    return undefined;
+    return { ok: true };
   }
 
   /** Renames an archived tab's session, once its process is gone, as `renameTab` does a tab's.
    *  Answers what the agent refused: the window's question shows it. */
-  async rename(tabId: string, title: string): Promise<string | undefined> {
+  async rename(tabId: string, title: string): Promise<ActionResult> {
     const tab = this.tabOf(tabId);
     const sessionId = tab?.sessionId;
     if (!tab || !sessionId) {
-      return undefined;
+      return { ok: true };
     }
     await this.stopping.get(tabId);
     try {
       await this.target.placeOf(tab).sessionActions()?.rename(sessionId, title);
     } catch (error) {
-      return `Could not rename ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}`;
+      return { ok: false, error: `Could not rename ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}` };
     }
     tab.title = title.trim();
     tab.provisionalTitle = false;
     this.post();
-    return undefined;
+    return { ok: true };
   }
 
   /** Deletes an archived tab's session, once its process is gone. Answers what refused it: the
    *  tab stays archived. */
-  async delete(tabId: string): Promise<string | undefined> {
+  async delete(tabId: string): Promise<ActionResult> {
     const tab = this.tabOf(tabId);
     const sessionId = tab?.sessionId;
     if (!tab || !sessionId) {
-      return undefined;
+      return { ok: true };
     }
     const stopping = this.stopping.get(tabId);
     const deleting = this.target.deletingSessionIds;
@@ -195,7 +196,7 @@ export class ArchivedTabs {
       await this.target.placeOf(tab).sessionActions()?.remove(sessionId);
       setArchived(this.dataRoot, this.ref, sessionId, false);
     } catch (error) {
-      return `Could not delete the ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}`;
+      return { ok: false, error: `Could not delete the ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}` };
     } finally {
       deleting.delete(sessionId);
     }
@@ -205,7 +206,7 @@ export class ArchivedTabs {
       this.target.removeHandoverCopy(tab.handoverDir);
     }
     this.post();
-    return undefined;
+    return { ok: true };
   }
 
   /** Closed. */

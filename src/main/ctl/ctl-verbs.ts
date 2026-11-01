@@ -223,8 +223,8 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "projects-add": async (args) => {
       const added = await deps.addProject(text(args, "path", "path"));
-      if (!added.project) {
-        throw new ControlError("bad_args", added.error ?? "could not open the folder");
+      if (!added.ok) {
+        throw new ControlError("bad_args", added.error);
       }
       return { result: added.project };
     },
@@ -248,7 +248,7 @@ export function verbs(deps: ControlDeps): Handlers {
       }
       const removed = await deps.removeProject(id);
       if (!removed.ok) {
-        throw new ControlError("bad_args", removed.error ?? "could not remove the project");
+        throw new ControlError("bad_args", removed.error);
       }
       return { result: { removed: id } };
     },
@@ -447,12 +447,12 @@ export function verbs(deps: ControlDeps): Handlers {
     "tabs-hand-over": async (args, caller) => {
       const { tabs, tabId, ref } = ownedTab(args, caller);
       const handed = await tabs.handOver(tabId, openableAgent(args, caller).id, caller.side.holdsTabs);
-      if (typeof handed === "string") {
+      if (!handed.ok) {
         // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
-        throw new ControlError("internal", handed);
+        throw new ControlError("internal", handed.error);
       }
-      bringToFront(deps, args, ref, handed.tabId);
-      return { result: handed };
+      bringToFront(deps, args, ref, handed.tab.tabId);
+      return { result: handed.tab };
     },
 
     "commands-list": async (args, caller) => {
@@ -489,9 +489,9 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "tabs-rename": async (args, caller) => {
       const { tabs, tabId } = ownedTab(args, caller);
-      const refused = await tabs.renameTab(tabId, text(args, "title", "title"));
-      if (refused !== undefined) {
-        throw new ControlError("internal", refused);
+      const renamed = await tabs.renameTab(tabId, text(args, "title", "title"));
+      if (!renamed.ok) {
+        throw new ControlError("internal", renamed.error);
       }
       return { result: { renamed: tabId } };
     },

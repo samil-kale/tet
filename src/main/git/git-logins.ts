@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { urlOrigin, urlUsername } from "../../shared/git-url";
-import type { GitActionResult, GitLogin } from "../../shared/types/git";
+import type { GitCommandResult, GitLogin } from "../../shared/types/git";
 import { git } from "./git-client";
 import type { NetworkLogin } from "./git";
 import { logFailure, readRows, writeJson } from "../util/json-file";
@@ -43,8 +43,8 @@ export class GitLoginStore {
     cwd: string,
     url: string,
     typed: GitLogin | undefined,
-    command: (login?: NetworkLogin) => Promise<GitActionResult>,
-  ): Promise<GitActionResult> {
+    command: (login?: NetworkLogin) => Promise<GitCommandResult>,
+  ): Promise<GitCommandResult> {
     const origin = urlOrigin(url);
     if (!origin) {
       return command();
@@ -52,7 +52,7 @@ export class GitLoginStore {
     const kept = typed ? undefined : await this.get(url);
     const login = typed ?? kept;
     const result = await command(login && { ...login, askpassDir: this.askpassDir, origin });
-    if (result.authRequired) {
+    if (!result.ok && result.authRequired) {
       if (kept) {
         this.delete(url, kept.username);
       }

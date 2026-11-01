@@ -1,11 +1,9 @@
 import type { AgentId } from "./agents";
-import type { GitActionResult } from "./git";
+import type { ActionDone, ActionRefused } from "./action";
 import type { ProjectRef } from "./project";
 
 /** The tab taking over a session, or why there is none. */
-export interface HandoverResult extends GitActionResult {
-  tab?: TabDescriptor;
-}
+export type HandoverResult = (ActionDone & { tab: TabDescriptor }) | ActionRefused;
 
 /** A tab, addressed by its repository or worktree and its id. */
 export interface TabRef {

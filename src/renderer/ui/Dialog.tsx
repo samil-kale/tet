@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject, type SetStateAction } from "react";
+import type { ActionResult } from "../../shared/types/action";
 import type { GitActionResult } from "../../shared/types/git";
 import { DialogFrame, useSubmit } from "./DialogFrame";
 import { Checkbox, TextField } from "./Field";
@@ -154,9 +155,11 @@ export function filled(text: string): boolean {
   return text.trim().length > 0;
 }
 
-/** What a result refused, in its own words, for `submit` to hand back; `fallback` where the main
- *  process gave none. */
-export function refusal(result: GitActionResult, fallback: string): string | undefined {
+/** What a result refused, in its own words, for `submit` to hand back. A git command's question
+ *  nobody asked (GitQuestion) brings none: `fallback` stands in. */
+export function refusal(result: ActionResult): string | undefined;
+export function refusal(result: GitActionResult, fallback: string): string | undefined;
+export function refusal(result: GitActionResult, fallback?: string): string | undefined {
   return result.ok ? undefined : (result.error ?? fallback);
 }
 

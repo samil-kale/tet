@@ -496,10 +496,11 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     it("signs a server in through the browser, and says what sbx said when it would not", async () => {
       const ok = fakeSbx({ published: [] });
       const signedIn = await withSbx(ok.dir, () => signInMcp("notion"));
-      assert.deepEqual([signedIn.result, signedIn.calls], [undefined, ["mcp auth notion"]]);
+      assert.deepEqual([signedIn.result, signedIn.calls], [{ ok: true }, ["mcp auth notion"]]);
       const failing = fakeSbx({ published: [], fail: ["mcp auth"] });
       const refused = await withSbx(failing.dir, () => signInMcp("notion"));
-      assert.match(refused.result ?? "", /ensure daemon/);
+      assert.ok(!refused.result.ok);
+      assert.match(refused.result.error, /ensure daemon/);
     });
 
     it("stops a Save where sbx does not list the registered servers, changing nothing", async () => {

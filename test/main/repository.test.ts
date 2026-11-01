@@ -9,7 +9,8 @@ import { GitLoginStore } from "../../src/main/git/git-logins";
 import * as git_ from "../../src/main/git/git";
 import { Repository } from "../../src/main/git/repository";
 import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
-import { type GitLogin, worktreeBase } from "../../src/shared/types/git";
+import type { ActionResult } from "../../src/shared/types/action";
+import { type GitCommandResult, type GitLogin, worktreeBase } from "../../src/shared/types/git";
 import { MISSING_MTIME_MS, type FileSearchQuery, type FileSearchResult } from "../../src/shared/types/files";
 import {
   commitFiles,
@@ -87,6 +88,16 @@ async function open(
 }
 
 after(() => Promise.all(opened.map((repository) => repository.dispose())));
+
+/** The login a refusal asks for; none for a command that went through. */
+function loginUrlOf(result: GitCommandResult): string | undefined {
+  return result.ok ? undefined : result.loginUrl;
+}
+
+/** What a result refused; nothing for one that went through. */
+function errorOf(result: ActionResult): string | undefined {
+  return result.ok ? undefined : result.error;
+}
 
 describe("a discard, through the trash as in GitHub Desktop", () => {
   let dir: string;
@@ -418,12 +429,14 @@ describe("an editor tab's file deleted on disk", () => {
     const { mtimeMs } = await repository.readFile("a.txt");
     fs.rmSync(file);
     const refused = await repository.writeFile("a.txt", "edited\n", mtimeMs);
-    assert.deepEqual([refused.ok, refused.diskMtimeMs], [false, MISSING_MTIME_MS]);
+    assert.ok(!refused.ok);
+    assert.equal(refused.diskMtimeMs, MISSING_MTIME_MS);
     assert.equal(fs.existsSync(file), false, "nothing is made unasked");
     assert.equal((await repository.writeFile("a.txt", "edited\n", MISSING_MTIME_MS)).ok, true);
     assert.equal(fs.readFileSync(file, "utf8"), "edited\n");
     const back = await repository.writeFile("a.txt", "again\n", MISSING_MTIME_MS);
-    assert.deepEqual([back.ok, back.diskMtimeMs], [false, fs.statSync(file).mtimeMs]);
+    assert.ok(!back.ok);
+    assert.equal(back.diskMtimeMs, fs.statSync(file).mtimeMs);
     assert.equal(fs.readFileSync(file, "utf8"), "edited\n");
   });
 });
@@ -570,7 +583,7 @@ describe("a remote over http that wants a login", () => {
       assert.equal(asked.loginUrl, remote.url);
 
       const refused = await repository.push({ username: "saka", password: "wrong" });
-      assert.equal(refused.loginUrl, remote.url, "a wrong login is asked for again");
+      assert.equal(loginUrlOf(refused), remote.url, "a wrong login is asked for again");
       assert.equal(await logins.get(remote.url), undefined, "and not kept");
 
       assert.deepEqual(await repository.push(login), { ok: true });
@@ -594,7 +607,7 @@ describe("a remote over http that wants a login", () => {
       assert.deepEqual(await repository.push(), { ok: true });
       remote.login.password = "rotated";
       const asked = await repository.fetch();
-      assert.equal(asked.loginUrl, remote.url);
+      assert.equal(loginUrlOf(asked), remote.url);
       assert.equal(await logins.get(remote.url), undefined);
       assert.deepEqual(await repository.fetch({ username: "saka", password: "rotated" }), { ok: true });
       assert.equal((await logins.get(remote.url))?.password, "rotated");
@@ -609,14 +622,14 @@ describe("a remote over http that wants a login", () => {
     const helperFile = path.join(tempDir("tet-helper-"), "credentials");
     git(dir, "config", "credential.helper", `store --file=${helperFile.replace(/\\/g, "/")}`);
     try {
-      assert.equal((await repository.push()).loginUrl, remote.url);
+      assert.equal(loginUrlOf(await repository.push()), remote.url);
       assert.deepEqual(await repository.push(login), { ok: true });
       assert.equal(await logins.get(remote.url), undefined, "TET keeps nothing");
       assert.match(fs.readFileSync(helperFile, "utf8"), /saka:right@127\.0\.0\.1/, "git stored it in the helper");
       assert.deepEqual(await repository.fetch(), { ok: true }, "the helper answers from then on");
 
       remote.login.password = "rotated";
-      assert.equal((await repository.fetch()).loginUrl, remote.url);
+      assert.equal(loginUrlOf(await repository.fetch()), remote.url);
       assert.doesNotMatch(fs.readFileSync(helperFile, "utf8"), /saka:right/, "git erased the refused one from the helper");
     } finally {
       remote.close();
@@ -636,12 +649,12 @@ describe("a remote over http that wants a login", () => {
       logins.delete(remote.url, login.username);
 
       const branch = await repository.deleteBranch("gone", true);
-      assert.equal(branch.loginUrl, remote.url, "the local branch went, its upstream wants a login");
+      assert.equal(loginUrlOf(branch), remote.url, "the local branch went, its upstream wants a login");
       assert.deepEqual(await repository.deleteRemoteBranch("origin", "gone", login), { ok: true });
       assert.deepEqual(await logins.get(remote.url), login, "kept again once it worked");
       logins.delete(remote.url, login.username);
       const tag = await repository.deleteTag("v1", true);
-      assert.equal(tag.loginUrl, remote.url);
+      assert.equal(loginUrlOf(tag), remote.url);
       assert.deepEqual(await repository.deleteRemoteTag("v1", login), { ok: true });
       assert.doesNotMatch(git(bare, "for-each-ref"), /refs\/heads\/gone|refs\/tags\/v1/);
     } finally {
@@ -659,7 +672,7 @@ describe("a remote over http that wants a login", () => {
     const clone = (typed?: typeof login) =>
       logins.run(os.homedir(), remote.url, typed, (networkLogin) => git_.clone(remote.url, target, networkLogin));
     try {
-      assert.equal((await clone()).loginUrl, remote.url);
+      assert.equal(loginUrlOf(await clone()), remote.url);
       assert.deepEqual(await clone(login), { ok: true });
       assert.equal(fs.readFileSync(path.join(target, "a.txt"), "utf8"), "committed\n");
       assert.deepEqual(await logins.get(remote.url), login);
@@ -707,11 +720,11 @@ describe("the git logins kept in TET", () => {
     let offered: string | undefined;
     const refusing = async (login?: GitLogin) => {
       offered = login && `${login.username}:${login.password}`;
-      return { ok: false, error: "Authentication failed", authRequired: true };
+      return { ok: false as const, error: "Authentication failed", authRequired: true };
     };
     const result = await store.run("/nowhere", "https://saka@git.example.com/app.git", undefined, refusing);
     assert.equal(offered, "saka:revoked");
-    assert.equal(result.loginUrl, "https://saka@git.example.com/app.git");
+    assert.equal(loginUrlOf(result), "https://saka@git.example.com/app.git");
     assert.equal(await store.get("https://git.example.com/app.git"), undefined);
 
     // A url with a password of its own: git uses that one, so nothing is offered or asked.
@@ -719,17 +732,18 @@ describe("the git logins kept in TET", () => {
     offered = "untouched";
     const withPassword = await store.run("/nowhere", "https://saka:wrong@git.example.com/app.git", undefined, refusing);
     assert.equal(offered, undefined);
-    assert.equal(withPassword.loginUrl, undefined);
+    assert.equal(loginUrlOf(withPassword), undefined);
     assert.equal((await store.get("https://git.example.com/app.git"))?.password, "kept");
   });
 
   it("pass an ssh remote's command through untouched", async () => {
     const store = new GitLoginStore(tempRoot());
     const result = await store.run("/nowhere", "git@git.example.com:app.git", undefined, async (login) => ({
-      ok: login === undefined,
+      ok: false as const,
+      error: login === undefined ? "Permission denied" : "a login was offered",
       authRequired: true,
     }));
-    assert.deepEqual(result, { ok: true, authRequired: true }, "no login offered, and none asked for");
+    assert.deepEqual(result, { ok: false, error: "Permission denied", authRequired: true }, "no login offered, and none asked for");
   });
 });
 
@@ -990,7 +1004,7 @@ describe("the Explorer's own edits", () => {
     assert.equal(into.ok, false);
     assert.match(into.error ?? "", /into itself/);
     const taken = await repository.renamePath("moved", "a.txt");
-    assert.match(taken.error ?? "", /already exists/);
+    assert.match(errorOf(taken) ?? "", /already exists/);
   });
 
   it("deletes through the trash, so an edit can be had back", async () => {

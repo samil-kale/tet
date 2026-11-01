@@ -200,9 +200,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
     async () => {
       if (variablesEdited.current) {
         const rows = variables.flatMap((row) => envEdit(row) ?? []);
-        const refusal = await window.tet.env.save(rows);
-        if (refusal) {
-          return refusal;
+        const saved = await window.tet.env.save(rows);
+        if (!saved.ok) {
+          return saved.error;
         }
         variablesEdited.current = false;
       }

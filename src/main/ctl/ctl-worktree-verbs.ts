@@ -26,9 +26,12 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
     "worktree-add": async (args, caller) => {
       const branch = text(args, "branch", "branch");
       const added = await deps.addWorktree(project(args, caller).id, branch);
-      const worktree = added.project && worktreeOf(added.project, projectRef(added.project.id, added.worktree));
-      if (!added.project || !worktree) {
-        throw new ControlError("bad_args", added.error ?? "could not add the worktree");
+      if (!added.ok) {
+        throw new ControlError("bad_args", added.error);
+      }
+      const worktree = worktreeOf(added.project, projectRef(added.project.id, added.worktree));
+      if (!worktree) {
+        throw new ControlError("bad_args", "could not add the worktree");
       }
       return { result: { projectId: added.project.id, worktree: worktree.key, branch: worktree.branch ?? branch, path: worktree.path } };
     },
@@ -114,7 +117,7 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
       if (!merged.ok) {
         const conflicts = own.getState();
         if (conflicts.operation !== "merge") {
-          throw new ControlError("bad_args", `${merged.error ?? "the merge failed"} — ${branch} is unchanged`);
+          throw new ControlError("bad_args", `${merged.error} — ${branch} is unchanged`);
         }
         // Where the caller sees the worktree: mounted into its sandbox if it would not.
         const at = await seenPath(deps, caller, worktree.path);
@@ -138,7 +141,7 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
       if (!forwarded.ok) {
         throw new ControlError(
           "bad_args",
-          `${forwarded.error ?? "the fast-forward failed"} — the merge is committed in ${branch}, ${base} is unchanged: commit or stash what is in the way in the repository if anything is, then run this again`,
+          `${forwarded.error} — the merge is committed in ${branch}, ${base} is unchanged: commit or stash what is in the way in the repository if anything is, then run this again`,
         );
       }
       const deleted = await deps.deleteWorktree(ref, false);

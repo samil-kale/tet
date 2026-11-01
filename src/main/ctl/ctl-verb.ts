@@ -3,9 +3,10 @@ import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
 import type { EditorListing, EditorReport, NoticeMark, NoticeReport, NoticeSeverity } from "../../shared/types/app";
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
-import type { CheckoutTarget, GitActionResult, RepositoryState } from "../../shared/types/git";
+import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
+import type { ActionResult } from "../../shared/types/action";
+import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -125,7 +126,7 @@ export interface ControlDeps {
           at: { path: string };
           getState(): RepositoryState;
           listExplorer(settings: ExplorerSettings): Promise<ExplorerListing>;
-          merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitActionResult>;
+          merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitCommandResult>;
           conflictMarkers(base: CheckoutTarget): Promise<string[]>;
         }
       | undefined;
@@ -156,7 +157,7 @@ export interface ControlDeps {
   askModels(agent: AgentDefinition, cwd: string): Promise<AskModelsResult>;
   /** projects.ts's, which tell the window their outcome themselves (projectsChanged). */
   addProject(directory: string): Promise<AddRepositoryResult>;
-  removeProject(projectId: string): Promise<GitActionResult>;
+  removeProject(projectId: string): Promise<GitCommandResult>;
   addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
   deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
@@ -191,13 +192,13 @@ export interface ControlTerminals {
    *  for an agent that takes one. */
   createTab(agentId: AgentId, sandboxOnly: boolean, prompt?: string): TabDescriptor;
   /** The new tab taking over the tab's session, or why there is none. */
-  handOver(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<TabDescriptor | string>;
+  handOver(tabId: string, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
   createCommandTab(command: ProjectCommand): TabDescriptor;
   closeTabs(tabIds: string[]): Promise<void>;
   /** Host paths where the tab sees them, mounted into its sandbox where it would not; unquoted. */
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */
-  renameTab(tabId: string, title: string): Promise<string | undefined>;
+  renameTab(tabId: string, title: string): Promise<ActionResult>;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
    *  may have closed while its CLI ended the turn. */
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined, side: CallerSide): HookOutcome;

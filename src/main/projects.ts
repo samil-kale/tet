@@ -6,7 +6,7 @@ import { removeAllSessions } from "./agents";
 import { worktreeBase, WORKTREES_NEED_GIT, worktreesSupported } from "../shared/types/git";
 import { projectRef, projectRefsOf, worktreeOf } from "../shared/types/project";
 import type { NoticeSeverity } from "../shared/types/app";
-import type { GitActionResult, RepositoryState } from "../shared/types/git";
+import type { GitActionResult, GitCommandResult, RepositoryState } from "../shared/types/git";
 import type { AddRepositoryResult, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
 import type { ControlRecords } from "./ctl/ctl-records";
 import { git } from "./git/git-client";
@@ -46,9 +46,9 @@ export interface ProjectDeps {
 }
 
 /**
- * One change to the projects at a time — an add, a removal, a new worktree: two adds of one folder
- * would each mint an id, and an add meeting a removal of the same folder would have its id unset and
- * its folder deleted underneath it.
+ * One change to the projects at a time — an add, a removal, a new or deleted worktree: two adds of
+ * one folder would each mint an id, and an add meeting a removal of the same folder would have its
+ * id unset and its folder deleted underneath it.
  */
 const changes = new Map<string, Promise<unknown>>();
 /** The one key under `changes`: every change waits on every other. */
@@ -69,24 +69,24 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
   const stat = await fs.promises.stat(directory).catch((error: unknown) => (error as NodeJS.ErrnoException).code);
   // A missing folder is offered for initializing as well: `git init` creates it.
   if (stat === "ENOENT") {
-    return { error: `${directory} does not exist`, notRepository: true };
+    return { ok: false, error: `${directory} does not exist`, notRepository: true };
   }
   if (typeof stat !== "object" || !stat.isDirectory()) {
-    return { error: `${directory} is not a folder` };
+    return { ok: false, error: `${directory} is not a folder` };
   }
   // Only the folder itself counts: one inside a repository is no repository of its own.
   let root: string | undefined;
   try {
     root = await git.resolveRoot(directory);
   } catch (error) {
-    return { error: errorMessage(error) };
+    return { ok: false, error: errorMessage(error) };
   }
   if (root === undefined) {
-    return { error: `${directory} is not a git repository`, notRepository: true };
+    return { ok: false, error: `${directory} is not a git repository`, notRepository: true };
   }
   const rootOnDisk = onDisk(root);
   if (rootOnDisk !== onDisk(directory)) {
-    return { error: `${directory} lies inside the repository ${rootOnDisk}: add that folder instead` };
+    return { ok: false, error: `${directory} lies inside the repository ${rootOnDisk}: add that folder instead` };
   }
   const repositoryPath = readRepositoryPath(root) ?? rootOnDisk;
   let project = store.list().find((entry) => entry.path === repositoryPath);
@@ -95,7 +95,7 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
     // A project opens only with a tet.json it can use (openStoredProjects).
     const problem = await tetJsonProblem(repositoryPath);
     if (problem !== undefined) {
-      return { error: `${path.basename(repositoryPath)} was not added: ${problem}` };
+      return { ok: false, error: `${path.basename(repositoryPath)} was not added: ${problem}` };
     }
     // One held at the start comes back as it was, worktrees and sessions alike.
     project = store.release(repositoryPath);
@@ -104,13 +104,13 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
       try {
         stored = await git.readProjectId(repositoryPath);
       } catch (error) {
-        return { error: `${repositoryPath}'s git config could not be read: ${errorMessage(error)}` };
+        return { ok: false, error: `${repositoryPath}'s git config could not be read: ${errorMessage(error)}` };
       }
       const id = await resolveProjectId(deps, repositoryPath, stored);
       try {
         project = store.add(repositoryPath, id);
       } catch (error) {
-        return { error: `${path.basename(repositoryPath)} could not be added: ${errorMessage(error)}` };
+        return { ok: false, error: `${path.basename(repositoryPath)} could not be added: ${errorMessage(error)}` };
       }
     }
     added.push(...projectRefsOf(project));
@@ -118,7 +118,7 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
   }
   const worktree = worktreeKeyOf(dataRoot, project.id, rootOnDisk);
   deps.projectsChanged({ added, show: projectRef(project.id, worktree) });
-  return { project, worktree };
+  return { ok: true, project, worktree };
 }
 
 /**
@@ -233,7 +233,7 @@ async function deleteWorktreeData(dataRoot: string, refs: ProjectRef[], projectI
  * own folder stays, and so do worktrees made elsewhere. A repository whose folder is gone has no git
  * to ask: its worktrees are only closed, their folders going with TET's.
  */
-export function removeProject(deps: ProjectDeps, projectId: string): Promise<GitActionResult> {
+export function removeProject(deps: ProjectDeps, projectId: string): Promise<GitCommandResult> {
   return inTurn(changes, CHANGE, () => removeNow(deps, projectId));
 }
 
@@ -248,12 +248,12 @@ export function removeMissingProject(deps: ProjectDeps, projectId: string): Prom
     if (result.ok) {
       deps.notice("info", `${project.name} was removed. Repository folder no longer exists`);
     } else {
-      deps.notice("error", result.error ?? `${project.name} could not be removed`);
+      deps.notice("error", result.error);
     }
   });
 }
 
-async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitActionResult> {
+async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitCommandResult> {
   const project = deps.store.get(projectId);
   if (!project) {
     return { ok: false, error: PROJECT_NOT_FOUND };
@@ -261,7 +261,7 @@ async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitActio
   const there = !directoryMissing(project.path);
   const [main, ...worktrees] = projectRefsOf(project);
   for (const ref of worktrees) {
-    const deleted = there ? await deleteWorktree(deps, ref, { force: true, onRemote: false }) : undefined;
+    const deleted = there ? await deleteWorktreeNow(deps, ref, { force: true, onRemote: false }) : undefined;
     if (deleted && !deleted.ok) {
       return deleted;
     }
@@ -301,18 +301,18 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
     const branch = typed.trim();
     const repository = deps.repositories.get(projectRef(projectId));
     if (!deps.store.get(projectId)) {
-      return { error: PROJECT_NOT_FOUND };
+      return { ok: false, error: PROJECT_NOT_FOUND };
     }
     if (!repository) {
-      return { error: notOpenMessage(deps.store, projectRef(projectId)) };
+      return { ok: false, error: notOpenMessage(deps.store, projectRef(projectId)) };
     }
     const base = worktreeBase(repository.getState());
     if (!base) {
-      return { error: "There is no branch to start a worktree at" };
+      return { ok: false, error: "There is no branch to start a worktree at" };
     }
     // Asked here too, not only in the menus: `tet-ctl worktree-add` has none.
     if (!worktreesSupported(await git.version())) {
-      return { error: `Adding a worktree ${WORKTREES_NEED_GIT}` };
+      return { ok: false, error: `Adding a worktree ${WORKTREES_NEED_GIT}` };
     }
     const key = newWorktreeKey(deps.dataRoot, projectId);
     const ref = projectRef(projectId, key);
@@ -321,14 +321,16 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
     const result = await repository.addWorktree(target, branch, base);
     if (!result.ok) {
       fs.rmSync(target, { recursive: true, force: true });
-      return { error: result.error || "Creating the worktree failed" };
+      return { ok: false, error: result.error || "Creating the worktree failed" };
     }
     // As the store has them now: the add's own refresh may have listed it already (syncWorktrees).
     const others = deps.store.get(projectId)?.worktrees.filter((worktree) => worktree.key !== key) ?? [];
     deps.store.setWorktrees(projectId, [...others, { key, path: target, branch }]);
     deps.openProjectRef(ref);
     deps.projectsChanged({ added: [ref], show: ref });
-    return { project: deps.store.get(projectId), worktree: key };
+    // Read again for the worktree just stored; nothing removes the project within this turn.
+    const project = deps.store.get(projectId);
+    return project ? { ok: true, project, worktree: key } : { ok: false, error: PROJECT_NOT_FOUND };
   });
 }
 
@@ -339,7 +341,32 @@ export function addWorktree(deps: ProjectDeps, projectId: string, typed: string)
  * `onRemote` its upstream too, as a branch's own delete does. On failure the worktree opens again;
  * its sandboxes, removed with its terminals, are made anew at its next tab.
  */
-export async function deleteWorktree(
+export function deleteWorktree(deps: ProjectDeps, ref: ProjectRef, options: { force: true; onRemote: boolean }): Promise<GitCommandResult>;
+export function deleteWorktree(
+  deps: ProjectDeps,
+  ref: ProjectRef,
+  options: { force: boolean; onRemote: boolean },
+): Promise<GitActionResult>;
+export function deleteWorktree(
+  deps: ProjectDeps,
+  ref: ProjectRef,
+  options: { force: boolean; onRemote: boolean },
+): Promise<GitActionResult> {
+  return inTurn(changes, CHANGE, () => deleteWorktreeNow(deps, ref, options));
+}
+
+/** deleteWorktree within a turn already held (removeNow). Forced, it never asks. */
+async function deleteWorktreeNow(
+  deps: ProjectDeps,
+  ref: ProjectRef,
+  options: { force: true; onRemote: boolean },
+): Promise<GitCommandResult>;
+async function deleteWorktreeNow(
+  deps: ProjectDeps,
+  ref: ProjectRef,
+  options: { force: boolean; onRemote: boolean },
+): Promise<GitActionResult>;
+async function deleteWorktreeNow(
   deps: ProjectDeps,
   ref: ProjectRef,
   { force, onRemote }: { force: boolean; onRemote: boolean },

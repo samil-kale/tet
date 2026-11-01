@@ -12,6 +12,7 @@ import { isImage, toDataUrl } from "./image-type";
 import { odfText } from "./odf-text";
 import { headBranch, readLinkedGitDir } from "../util/linked-git-dir";
 import { openInside, readInside } from "../util/path-inside";
+import type { ActionResult } from "../../shared/types/action";
 import type { HeadBlob } from "../../shared/types/files";
 import type {
   BranchUpstream,
@@ -19,7 +20,7 @@ import type {
   CheckoutTarget,
   CommitSearch,
   FileChange,
-  GitActionResult,
+  GitCommandResult,
   GitLogin,
   GitOperation,
   GraphCommit,
@@ -202,12 +203,12 @@ export async function readProjectId(cwd: string): Promise<string | undefined> {
   return UUID.test(id) ? id.toLowerCase() : undefined;
 }
 
-export function writeProjectId(cwd: string, id: string): Promise<GitActionResult> {
+export function writeProjectId(cwd: string, id: string): Promise<GitCommandResult> {
   return run(cwd, ["config", "--local", "tet.id", id]);
 }
 
 /** Exit 5 is git's "no such key": already gone is gone. */
-export async function unsetProjectId(cwd: string): Promise<GitActionResult> {
+export async function unsetProjectId(cwd: string): Promise<GitCommandResult> {
   const result = await git(cwd, ["config", "--local", "--unset-all", "tet.id"]).catch(failure);
   if ("ok" in result) {
     return result;
@@ -752,7 +753,7 @@ const MAX_ERROR_CHARS = 600;
 
 /** One git command for the UI: a non-zero exit carries git's message, a failed start the error's.
  *  Unqueued: a command changing the repository may run a hook, or reach a remote. */
-async function run(cwd: string, args: string[], options?: GitOptions): Promise<GitActionResult> {
+async function run(cwd: string, args: string[], options?: GitOptions): Promise<ActionResult> {
   try {
     const result = await git(cwd, args, { ...options, unqueued: true });
     if (result.code === 0) {
@@ -864,9 +865,9 @@ async function loginEnv(cwd: string, login?: NetworkLogin, sshCommand?: string):
   return { ...(await networkEnv(cwd, sshCommand)), ...askpass };
 }
 
-async function runNetwork(cwd: string, args: string[], { login, timeoutMs, env }: NetworkOptions = {}): Promise<GitActionResult> {
+async function runNetwork(cwd: string, args: string[], { login, timeoutMs, env }: NetworkOptions = {}): Promise<GitCommandResult> {
   const result = await run(cwd, args, { env: env ?? (await loginEnv(cwd, login)), timeoutMs });
-  if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error ?? ""))) {
+  if (result.ok || !AUTH_FAILURES.some((pattern) => pattern.test(result.error))) {
     return result;
   }
   return { ...result, authRequired: true };
@@ -874,7 +875,7 @@ async function runNetwork(cwd: string, args: string[], { login, timeoutMs, env }
 
 /** `--prune`, like GitHub Desktop: a branch deleted on the remote leaves the tree. `remote` names
  *  the one whose login is given, else git's default. `timeoutMs` is for a fetch nobody waits on. */
-export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeoutMs?: number): Promise<GitActionResult> {
+export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeoutMs?: number): Promise<GitCommandResult> {
   const args = remote === undefined ? ["fetch", "--prune"] : ["fetch", "--prune", "--", remote];
   return runNetwork(cwd, args, { login, timeoutMs });
 }
@@ -884,7 +885,7 @@ export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeou
  *  how to reconcile. `core.sshCommand` is read in the same process, for networkEnv. Pulled, the
  *  HEAD of `remote` is asked for again (updateRemoteHead) with the same login: on a host that wants
  *  one, without it it always fails. */
-export async function pull(cwd: string, login?: NetworkLogin, remote?: string): Promise<GitActionResult> {
+export async function pull(cwd: string, login?: NetworkLogin, remote?: string): Promise<GitCommandResult> {
   // Exit 1 where neither is set; a broken config counts as neither, as a failed `--get` did.
   const result = await git(cwd, ["config", "--get-regexp", "^(pull\\.ff|core\\.sshcommand)$"]);
   let pullFF = false;
@@ -942,7 +943,7 @@ export function push(
   branch: string,
   upstreamBranch: string | undefined,
   login?: NetworkLogin,
-): Promise<GitActionResult> {
+): Promise<GitCommandResult> {
   return runNetwork(
     cwd,
     // Full ref names: a tag of the branch's name makes the short one ambiguous on either side.
@@ -959,7 +960,7 @@ export function push(
 
 /** Clones into `directory`, which git creates with its parents, refusing a non-empty one. The cwd
  *  only anchors a relative path. */
-export function clone(url: string, directory: string, login?: NetworkLogin): Promise<GitActionResult> {
+export function clone(url: string, directory: string, login?: NetworkLogin): Promise<GitCommandResult> {
   return runNetwork(os.homedir(), ["clone", "--", url, directory], { login });
 }
 
@@ -973,7 +974,7 @@ export async function hasCredentialHelper(cwd: string, url: string): Promise<boo
 /** `git init`, which creates the folder with its parents, like clone. Its first branch is
  *  `init.defaultBranch`'s, else "main" (readBranchConfig), as GitHub Desktop has it: git's own
  *  "master" would not be the default branch TET takes it for. */
-export async function init(directory: string): Promise<GitActionResult> {
+export async function init(directory: string): Promise<GitCommandResult> {
   const { defaultBranchName } = await readBranchConfig(os.homedir());
   return run(os.homedir(), ["init", `--initial-branch=${defaultBranchName}`, "--", directory]);
 }
@@ -1023,7 +1024,7 @@ export async function ensureAskpass(dir: string): Promise<string> {
 /** A clone with a provider account's token, handed to git as a login. `credential.helper=`
  *  empties the helper list for this command: a stale login on the machine would otherwise answer
  *  first and 403, and the token is the account's to keep, not the helper's. */
-export function cloneWithToken(url: string, directory: string, user: string, token: string, askpassDir: string): Promise<GitActionResult> {
+export function cloneWithToken(url: string, directory: string, user: string, token: string, askpassDir: string): Promise<GitCommandResult> {
   return runNetwork(os.homedir(), ["-c", "credential.helper=", "clone", "--", url, directory], {
     login: { username: user, password: token, askpassDir, origin: urlOrigin(url) },
   });
@@ -1047,19 +1048,19 @@ export async function readRemoteUrls(cwd: string): Promise<Record<string, string
   return urls;
 }
 
-export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<GitActionResult> {
+export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<GitCommandResult> {
   return run(cwd, ["remote", "set-url", "--", remote, url]);
 }
 
 /** Creates the branch and switches to it, as GitHub Desktop does: tracking nothing, since git would
  *  track a remote start point and a push would then go to that branch — the first push publishes. */
-export function createBranch(cwd: string, name: string, startPoint: CheckoutTarget): Promise<GitActionResult> {
+export function createBranch(cwd: string, name: string, startPoint: CheckoutTarget): Promise<GitCommandResult> {
   return run(cwd, ["switch", "--create", name, "--no-track", fullRefName(startPoint)]);
 }
 
 /** A rename changing only case fails where refs are files on a case-insensitive filesystem: the old
  *  one "already exists". GitHub Desktop then forces it, unless a branch of exactly that name exists. */
-export async function renameBranch(cwd: string, from: string, to: string): Promise<GitActionResult> {
+export async function renameBranch(cwd: string, from: string, to: string): Promise<GitCommandResult> {
   // `--`: a name starting with "-" is git's to refuse, not an option (`-f` would force the move).
   const moved = await run(cwd, ["branch", "--move", "--", from, to]);
   if (moved.ok || from === to || from.toLowerCase() !== to.toLowerCase()) {
@@ -1071,14 +1072,14 @@ export async function renameBranch(cwd: string, from: string, to: string): Promi
 }
 
 /** `--force`, like GitHub Desktop; the confirmation states the risk. */
-export function deleteBranch(cwd: string, name: string): Promise<GitActionResult> {
+export function deleteBranch(cwd: string, name: string): Promise<GitCommandResult> {
   return run(cwd, ["branch", "--delete", "--force", name]);
 }
 
 /** A branch already gone from the remote only loses its remote-tracking ref, as in GitHub Desktop.
  *  Gone is `ls-remote --exit-code`'s 2 ("no matching refs"), asked only after the delete failed:
  *  the push's exit code is 1 for any refusal. */
-export async function deleteRemoteBranch(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
+export async function deleteRemoteBranch(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitCommandResult> {
   const env = await loginEnv(cwd, login);
   const deleted = await runNetwork(cwd, ["push", remote, "--delete", localBranchRef(name)], { env });
   if (deleted.ok || deleted.authRequired) {
@@ -1093,7 +1094,7 @@ export async function deleteRemoteBranch(cwd: string, remote: string, name: stri
 
 /** `fastForwardOnto`: only a fast-forward, and only while that branch is checked out here — read
  *  now, not off the last refresh, so a switch since cannot take the merge onto another branch. */
-export async function merge(cwd: string, target: CheckoutTarget, fastForwardOnto?: string): Promise<GitActionResult> {
+export async function merge(cwd: string, target: CheckoutTarget, fastForwardOnto?: string): Promise<GitCommandResult> {
   const ref = fullRefName(target);
   if (fastForwardOnto === undefined) {
     return run(cwd, ["merge", ref]);
@@ -1161,7 +1162,7 @@ export async function unresolvedConflicts(cwd: string, paths?: string[]): Promis
   return conflicted.filter((filePath) => !resolved.has(filePath));
 }
 
-export function rebase(cwd: string, target: CheckoutTarget): Promise<GitActionResult> {
+export function rebase(cwd: string, target: CheckoutTarget): Promise<GitCommandResult> {
   return run(cwd, ["rebase", fullRefName(target)]);
 }
 
@@ -1172,33 +1173,33 @@ export async function rebaseRewritesPushed(cwd: string, target: CheckoutTarget):
   return result.code === 0 && Number(result.stdout.trim()) > 0;
 }
 
-export function abortOperation(cwd: string, operation: GitOperation): Promise<GitActionResult> {
+export function abortOperation(cwd: string, operation: GitOperation): Promise<GitCommandResult> {
   return run(cwd, [operation, "--abort"]);
 }
 
 /** Always annotated, with an empty message too, as in GitHub Desktop. */
-export function createTag(cwd: string, name: string, target: CheckoutTarget, message: string): Promise<GitActionResult> {
+export function createTag(cwd: string, name: string, target: CheckoutTarget, message: string): Promise<GitCommandResult> {
   return run(cwd, ["tag", "--annotate", "--message", message, "--", name, fullRefName(target)]);
 }
 
-export function pushTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
+export function pushTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitCommandResult> {
   return runNetwork(cwd, ["push", remote, tagRef(name)], { login });
 }
 
-export function deleteTag(cwd: string, name: string): Promise<GitActionResult> {
+export function deleteTag(cwd: string, name: string): Promise<GitCommandResult> {
   return run(cwd, ["tag", "--delete", name]);
 }
 
-export function deleteRemoteTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitActionResult> {
+export function deleteRemoteTag(cwd: string, remote: string, name: string, login?: NetworkLogin): Promise<GitCommandResult> {
   return runNetwork(cwd, ["push", remote, "--delete", tagRef(name)], { login });
 }
 
-export function checkoutTag(cwd: string, name: string): Promise<GitActionResult> {
+export function checkoutTag(cwd: string, name: string): Promise<GitCommandResult> {
   return run(cwd, ["switch", "--detach", tagRef(name)]);
 }
 
 /** `add --all` first: `commit --all` alone leaves out the untracked files the list shows. */
-export async function commitAll(cwd: string, message: string): Promise<GitActionResult> {
+export async function commitAll(cwd: string, message: string): Promise<GitCommandResult> {
   const added = await run(cwd, ["add", "--all"]);
   return added.ok ? run(cwd, ["commit", "--message", message]) : added;
 }
@@ -1206,7 +1207,7 @@ export async function commitAll(cwd: string, message: string): Promise<GitAction
 /** The same for these files: `commit -- <paths>` takes their working-tree state regardless of what
  *  is staged, but only for paths git knows, so untracked ones are added first. Not `add --all --
  *  <paths>`: a rename's old path is in neither index nor tree, and `add` refuses it. */
-export async function commitPaths(cwd: string, message: string, paths: string[], untracked: string[]): Promise<GitActionResult> {
+export async function commitPaths(cwd: string, message: string, paths: string[], untracked: string[]): Promise<GitCommandResult> {
   if (untracked.length > 0) {
     const added = await runOnPaths(cwd, ["add"], untracked);
     if (!added.ok) {
@@ -1225,7 +1226,7 @@ const LITERAL_PATHSPECS = "--literal-pathspecs";
 
 /** `run` with the paths on stdin, NUL-separated so any name survives: GitHub Desktop's way, for
  *  every command that reads them there. */
-function runOnPaths(cwd: string, args: string[], paths: string[]): Promise<GitActionResult> {
+function runOnPaths(cwd: string, args: string[], paths: string[]): Promise<GitCommandResult> {
   return run(cwd, [LITERAL_PATHSPECS, ...args, "--pathspec-from-file=-", "--pathspec-file-nul"], {
     input: paths.join("\0"),
   });
@@ -1330,18 +1331,18 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
 
 /** `--include-untracked`, so "stash all changes" covers the files the list shows. All only, as in
  *  GitHub Desktop: `stash push -- <paths>` mishandles a staged rename. */
-export function stashPush(cwd: string, message: string): Promise<GitActionResult> {
+export function stashPush(cwd: string, message: string): Promise<GitCommandResult> {
   return run(cwd, ["stash", "push", "--include-untracked", ...(message ? ["--message", message] : [])]);
 }
 
 /** A stash command on the entry with this commit, its ref looked up now, as GitHub Desktop does: a
  *  stash made in a terminal since the last refresh renumbers the refs the list shows. */
-export async function stash(cwd: string, command: StashCommand, sha: string): Promise<GitActionResult> {
+export async function stash(cwd: string, command: StashCommand, sha: string): Promise<GitCommandResult> {
   const found = (await readStashes(cwd)).find((entry) => entry.sha === sha);
   return found ? run(cwd, ["stash", command, found.ref]) : { ok: false, error: "The stash no longer exists" };
 }
 
-export async function checkout(cwd: string, target: CheckoutTarget, localBranches: string[]): Promise<GitActionResult> {
+export async function checkout(cwd: string, target: CheckoutTarget, localBranches: string[]): Promise<GitCommandResult> {
   // By name if a local branch of that name exists; otherwise create a tracking branch.
   if (target.remote === undefined || localBranches.includes(target.name)) {
     return run(cwd, ["switch", target.name]);
@@ -1366,7 +1367,7 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
  * git keeps no branch's origin, so the base is recorded as `branch.<name>.base`:
  * `branch -m` carries the key along and `branch -D` drops it. A failed write loses only that.
  */
-export async function worktreeAdd(cwd: string, target: string, branch: string, base: CheckoutTarget): Promise<GitActionResult> {
+export async function worktreeAdd(cwd: string, target: string, branch: string, base: CheckoutTarget): Promise<GitCommandResult> {
   const added = await run(cwd, ["worktree", "add", "--relative-paths", "--no-track", "-b", branch, "--", target, fullRefName(base)]);
   if (added.ok) {
     await git(cwd, ["config", `branch.${branch}.base`, base.name]).catch(() => undefined);
@@ -1375,12 +1376,12 @@ export async function worktreeAdd(cwd: string, target: string, branch: string, b
 }
 
 /** Without `force` git refuses a worktree with changes or untracked files; a locked one either way. */
-export function worktreeRemove(cwd: string, target: string, force: boolean): Promise<GitActionResult> {
+export function worktreeRemove(cwd: string, target: string, force: boolean): Promise<GitCommandResult> {
   return run(cwd, ["worktree", "remove", ...(force ? ["--force"] : []), "--", target]);
 }
 
 /** Forgets worktrees whose folder is gone; until then git keeps their branches checked out. */
-export function worktreePrune(cwd: string): Promise<GitActionResult> {
+export function worktreePrune(cwd: string): Promise<GitCommandResult> {
   return run(cwd, ["worktree", "prune"]);
 }
 
@@ -1430,7 +1431,7 @@ export interface DiscardTargets {
 
 /** Throws away local changes. The caller trashes files HEAD lacks first (GitHub Desktop's rule) and
  *  hands over sorted targets. */
-export async function discard(cwd: string, targets: DiscardTargets): Promise<GitActionResult> {
+export async function discard(cwd: string, targets: DiscardTargets): Promise<GitCommandResult> {
   if (targets.drop.length > 0) {
     // --ignore-unmatch: a never-staged path has no index entry, which is fine.
     const dropped = await runOnPaths(cwd, ["rm", "--cached", "--force", "--ignore-unmatch"], targets.drop);
@@ -1453,7 +1454,7 @@ function escapeIgnorePattern(pattern: string): string {
  *  place: a temp file beside it would show up in the changes list this was started from. Inside
  *  only, as the editor writes: the rule is a file's name, and a link in `.gitignore`'s place would
  *  take it as a line of any file of this machine. */
-export async function ignorePath(cwd: string, filePath: string, scope: "file" | "extension"): Promise<GitActionResult> {
+export async function ignorePath(cwd: string, filePath: string, scope: "file" | "extension"): Promise<GitCommandResult> {
   const extension = path.extname(filePath);
   if (scope === "extension" && !extension) {
     return { ok: false, error: `${filePath} has no extension to ignore` };

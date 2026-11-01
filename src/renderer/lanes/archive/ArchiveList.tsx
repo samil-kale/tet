@@ -57,7 +57,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
       next.map((tab) => tab.tabId),
     );
     if (!result.ok) {
-      notify("error", result.error ?? "Could not reorder the archive");
+      notify("error", result.error);
     }
   };
 
@@ -78,7 +78,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
     if (result.ok) {
       onOpenTab(resolved.refKey, tab.tabId);
     } else {
-      notify("error", result.error ?? "Could not reopen the session");
+      notify("error", result.error);
     }
   };
 
@@ -88,7 +88,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
       current: tab.title,
       confirmLabel: "Rename",
       maxLength: MAX_TITLE_LENGTH,
-      submit: async (name) => refusal(await window.tet.archive.rename(resolved.ref, tab.tabId, name), "Could not rename the session"),
+      submit: async (name) => refusal(await window.tet.archive.rename(resolved.ref, tab.tabId, name)),
     });
   };
 
@@ -102,7 +102,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
     if (answer) {
       const result = await window.tet.archive.delete(resolved.ref, tab.tabId);
       if (!result.ok) {
-        notify("error", result.error ?? "Could not delete the session");
+        notify("error", result.error);
       }
     }
   };

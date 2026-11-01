@@ -9,6 +9,7 @@ import { archiveFile } from "../../src/main/store/project-dirs";
 import { ArchivedTabs } from "../../src/main/terminals/archived-tabs";
 import { HostPlace } from "../../src/main/terminals/tab-place";
 import { toDescriptor, type TabState } from "../../src/main/terminals/tab-state";
+import type { ActionResult } from "../../src/shared/types/action";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { tempDir } from "../helpers";
 
@@ -16,6 +17,11 @@ import { tempDir } from "../helpers";
  *  agent's own. */
 
 const REF = { projectId: "p" };
+
+/** What a result refused, in its words; undefined where it was done. */
+function refused(result: ActionResult): string | undefined {
+  return result.ok ? undefined : result.error;
+}
 
 /** A promise and what settles it. */
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -125,7 +131,7 @@ describe("keeping a tab archived", () => {
   it("writes its session down, takes it off the strip with its marks cleared, and lists it", () => {
     const { archived, dataRoot, calls, posted, strip } = archive();
     const tab = running(strip);
-    assert.equal(archived.keep(tab, "s1"), undefined);
+    assert.equal(refused(archived.keep(tab, "s1")), undefined);
     assert.deepEqual(archivedIds(dataRoot, REF), ["s1"]);
     assert.deepEqual(strip, []);
     assert.deepEqual(calls, ["off-strip:t1"]);
@@ -141,7 +147,7 @@ describe("keeping a tab archived", () => {
   it("refuses a tab that moved on to a session no listing has shown yet, leaving it on the strip", () => {
     const { archived, dataRoot, calls, posted, strip } = archive();
     const tab = running(strip, { reportedSessionId: "s2" });
-    assert.match(archived.keep(tab, "s1") ?? "", /session is not listed yet/);
+    assert.match(refused(archived.keep(tab, "s1")) ?? "", /session is not listed yet/);
     assert.deepEqual(strip, [tab]);
     assert.deepEqual(archivedIds(dataRoot, REF), []);
     assert.deepEqual(calls, []);
@@ -153,7 +159,7 @@ describe("keeping a tab archived", () => {
     // A folder where the file goes: every write of it fails.
     fs.mkdirSync(archiveFile(dataRoot, REF.projectId), { recursive: true });
     const tab = running(strip);
-    assert.match(archived.keep(tab, "s1") ?? "", new RegExp(`^Could not keep the ${claudeAgent.displayName} session: `));
+    assert.match(refused(archived.keep(tab, "s1")) ?? "", new RegExp(`^Could not keep the ${claudeAgent.displayName} session: `));
     assert.deepEqual(strip, [tab]);
     assert.equal(tab.status, "running");
     assert.equal(tab.inTurn, true);
@@ -170,7 +176,7 @@ describe("keeping a tab archived", () => {
       archived.snapshot().map((tab) => tab.tabId),
       ["t2", "t1"],
     );
-    assert.equal(archived.reorder(["t1", "t2"]), undefined);
+    assert.equal(refused(archived.reorder(["t1", "t2"])), undefined);
     assert.deepEqual(archivedIds(dataRoot, REF), ["s1", "s2"]);
     assert.deepEqual(
       archived.snapshot().map((tab) => tab.tabId),
@@ -189,7 +195,7 @@ describe("an archived tab", () => {
     assert.equal(await settled(reopening), false, "waits for the stop");
     assert.ok(!calls.includes("files:s1"));
     stop.resolve();
-    assert.equal(await reopening, undefined);
+    assert.equal(refused(await reopening), undefined);
     assert.deepEqual(
       strip.map((tab) => tab.tabId),
       ["t1"],
@@ -202,7 +208,7 @@ describe("an archived tab", () => {
   it("whose session was deleted outside TET is dropped when reopened, said rather than put back", async () => {
     const { archived, dataRoot, calls, strip } = archive({ filesOf: () => [] });
     archived.keep(running(strip), "s1");
-    assert.match((await archived.reopen("t1")) ?? "", /session was deleted outside TET/);
+    assert.match(refused(await archived.reopen("t1")) ?? "", /session was deleted outside TET/);
     assert.deepEqual(strip, []);
     assert.deepEqual(archived.all(), []);
     assert.deepEqual(archivedIds(dataRoot, REF), []);
@@ -213,14 +219,14 @@ describe("an archived tab", () => {
     const renaming = archive();
     const tab = running(renaming.strip, { provisionalTitle: true });
     renaming.archived.keep(tab, "s1");
-    assert.equal(await renaming.archived.rename("t1", "  named "), undefined);
+    assert.equal(refused(await renaming.archived.rename("t1", "  named ")), undefined);
     assert.equal(tab.title, "named");
     assert.equal(tab.provisionalTitle, false);
 
     const refusing = archive({ refusal: "read-only" });
     const kept = running(refusing.strip);
     refusing.archived.keep(kept, "s1");
-    assert.equal(await refusing.archived.rename("t1", "named"), `Could not rename ${claudeAgent.displayName} session: read-only`);
+    assert.equal(refused(await refusing.archived.rename("t1", "named")), `Could not rename ${claudeAgent.displayName} session: read-only`);
     assert.equal(kept.title, "first");
   });
 
@@ -232,7 +238,7 @@ describe("an archived tab", () => {
     const deleting = archived.delete("t1");
     assert.equal(await settled(deleting), false, "waits for the stop");
     stop.resolve();
-    assert.equal(await deleting, undefined);
+    assert.equal(refused(await deleting), undefined);
     assert.deepEqual(calls.slice(-2), ["remove:s1 (deleting)", "handover-copy:copy"]);
     assert.deepEqual(archived.all(), []);
     assert.deepEqual(archivedIds(dataRoot, REF), []);
@@ -242,7 +248,7 @@ describe("an archived tab", () => {
   it("stays archived where its agent refuses to delete the session", async () => {
     const { archived, dataRoot, strip } = archive({ refusal: "busy" });
     archived.keep(running(strip), "s1");
-    assert.equal(await archived.delete("t1"), `Could not delete the ${claudeAgent.displayName} session: busy`);
+    assert.equal(refused(await archived.delete("t1")), `Could not delete the ${claudeAgent.displayName} session: busy`);
     assert.deepEqual(
       archived.all().map((tab) => tab.tabId),
       ["t1"],
@@ -252,8 +258,8 @@ describe("an archived tab", () => {
 
   it("answers nothing for a tab it does not hold", async () => {
     const { archived } = archive();
-    assert.equal(await archived.reopen("t9"), undefined);
-    assert.equal(await archived.rename("t9", "x"), undefined);
-    assert.equal(await archived.delete("t9"), undefined);
+    assert.equal(refused(await archived.reopen("t9")), undefined);
+    assert.equal(refused(await archived.rename("t9", "x")), undefined);
+    assert.equal(refused(await archived.delete("t9")), undefined);
   });
 });

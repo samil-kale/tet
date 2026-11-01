@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { SBX_PROBLEM } from "../../shared/sbx-rules";
+import type { ActionResult } from "../../shared/types/action";
 import { isSimulatedMissing } from "../util/simulate";
 import { runProcess, stoppable } from "../util/process";
 import { PLATFORM } from "../util/host-platform";
@@ -224,9 +225,9 @@ export async function runSbxTokenSignIn(user: string, token: string): Promise<st
 
 /** `sbx logout` stops every running local sandbox; `--force` skips its "Proceed y/N?", which a closed
  *  stdin would cancel. */
-export async function runSbxSignOut(): Promise<string | undefined> {
+export async function runSbxSignOut(): Promise<ActionResult> {
   const result = await runSbx(["logout", "--force"]);
-  return result.ok ? undefined : sbxFailure(result, "sbx logout");
+  return result.ok ? { ok: true } : { ok: false, error: sbxFailure(result, "sbx logout") };
 }
 
 /**

@@ -1,4 +1,5 @@
-import { errorMessage } from "../../shared/errors";
+import { failure } from "../../shared/errors";
+import type { ActionResult } from "../../shared/types/action";
 import type { EnvAnswer, EnvRequest } from "../../shared/types/environment";
 import type { ProjectRef } from "../../shared/types/project";
 import { machineSets } from "../store/env-names";
@@ -39,29 +40,29 @@ export class EnvRequests {
   }
 
   /** The dialog's Save (a row per variable) or Cancel (null); a string is why it could not be saved. */
-  answer(id: number, answer: EnvAnswer[] | null): string | undefined {
+  answer(id: number, answer: EnvAnswer[] | null): ActionResult {
     const open = this.open;
     if (open?.request.id !== id) {
       // Withdrawn while the user typed: nothing waits for it any more, and nothing was saved.
-      return answer ? "The agent stopped waiting, so nothing was saved; it can ask again" : undefined;
+      return answer ? { ok: false, error: "The agent stopped waiting, so nothing was saved; it can ask again" } : { ok: true };
     }
     if (!answer) {
       open.settle(undefined);
-      return undefined;
+      return { ok: true };
     }
     // Only what was asked for, and every one of it: the names are the agent's, not the dialog's.
     const asked = open.request.variables.map((variable) => variable.name);
     const rows = asked.map((name) => answer.find((row) => row.name === name));
     if (rows.some((row) => !row || row.value === "")) {
-      return "Every variable needs a value";
+      return { ok: false, error: "Every variable needs a value" };
     }
     try {
       this.store.set(rows.map((row) => ({ name: row!.name, value: row!.value })));
     } catch (error) {
-      return errorMessage(error);
+      return failure(error);
     }
     open.settle(asked);
-    return undefined;
+    return { ok: true };
   }
 
   /** The window reloaded: its dialog is gone, so the open request is answered as cancelled. */

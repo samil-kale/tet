@@ -7,7 +7,7 @@ import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
 import { forget } from "../identity";
 import { parentOf } from "../paths";
 import { ActionLink } from "../ui/ActionLink";
-import { confirmed } from "../ui/Dialog";
+import { confirmed, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
 import { FieldColumn, FieldGroup, lastDirectory, PathField, TextField } from "../ui/Field";
@@ -67,8 +67,8 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
   /** What the host refused, under the token field: that is what it checks ("Bad credentials"). */
   const { busy, refused, submit, changing } = useSubmit(async () => {
     const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
-    if (!result.account) {
-      return result.error ?? "The account could not be added";
+    if (!result.ok) {
+      return result.error;
     }
     onAdded(result.account);
     return undefined;
@@ -241,7 +241,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked, onError }: RemoteTa
     if (!answer) {
       return;
     }
-    const failed = await runHeld(() => window.tet.providers.removeAccount(account.id));
+    const failed = refusal(await runHeld(() => window.tet.providers.removeAccount(account.id)));
     setRemoveError(failed === undefined ? undefined : { accountId: account.id, message: failed });
     if (failed !== undefined) {
       return;
@@ -416,7 +416,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
           ? await window.tet.projects.initialize(addDirectory.trim())
           : await window.tet.projects.open(addDirectory.trim())
         : await cloneRepository();
-    if (result.project) {
+    if (result.ok) {
       return undefined;
     }
     // Only the first time: a second failure must not discard what was typed.
@@ -429,7 +429,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
     if (result.notRepository) {
       setUninitialized(addDirectory.trim());
     }
-    return result.error ?? "The repository could not be added";
+    return result.error;
   }, onClose);
 
   // Fields survive a tab switch.

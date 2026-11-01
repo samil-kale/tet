@@ -364,6 +364,8 @@ export default tseslint.config(
       "src/main/git/git-host.ts",
       "src/main/git/explorer-read.ts",
       "src/main/git/explorer-host.ts",
+      "src/main/git/image-type.ts",
+      "src/main/git/odf-text.ts",
       "src/main/util/linked-git-dir.ts",
       "src/main/util/host-platform.ts",
       "src/main/util/path-inside.ts",

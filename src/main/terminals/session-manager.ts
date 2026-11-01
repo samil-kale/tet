@@ -11,7 +11,8 @@ import { hasSandbox } from "../agents/agent";
 import type { AgentId } from "../../shared/types/agents";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
+import type { ActionResult } from "../../shared/types/action";
+import type { HandoverResult, TabDescriptor, TerminalStatus } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
 import { dropsDir } from "../store/project-dirs";
@@ -266,6 +267,10 @@ export class TabSessionManager {
 
   /** `restartTab` for `tet-ctl tabs-restart`, which may come before any window fitted the tab. */
   restart(tabId: string): boolean {
+    // A closed tab gets no run: nothing would end it.
+    if (!this.tabOf(tabId)) {
+      return false;
+    }
     this.runOf(tabId).size ??= CONTROL_START_SIZE;
     return this.restartTab(tabId);
   }
@@ -555,27 +560,27 @@ export class TabSessionManager {
    * and a prompt to read them (prompts.ts). This tab stays as it is. Answers what went wrong
    * rather than notifying it, as renameTab does: `tabs-hand-over` fails with it, the window notifies.
    */
-  async handOver(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<TabDescriptor | string> {
+  async handOver(tabId: string, agentId: AgentId, sandboxOnly = false): Promise<HandoverResult> {
     const tab = this.tabOf(tabId);
     if (!tab) {
-      return "The tab is closed";
+      return { ok: false, error: "The tab is closed" };
     }
     const { agent } = this.runtimeFor(tab.agentId);
     if (!tab.sessionId || !agent.sessions) {
-      return `This ${agent.displayName} tab has no session yet`;
+      return { ok: false, error: `This ${agent.displayName} tab has no session yet` };
     }
     const target = getAgent(agentId);
     if (agentId === tab.agentId || !target.terminal) {
-      return `${target.displayName} cannot take over a ${agent.displayName} session`;
+      return { ok: false, error: `${target.displayName} cannot take over a ${agent.displayName} session` };
     }
     const sessionId = tab.sessionId;
     const actions = this.placeOf(tab).sessionActions();
     const files = (await actions?.files(sessionId)) ?? [];
     if (files.length === 0) {
-      return `The ${agent.displayName} session's files were not found`;
+      return { ok: false, error: `The ${agent.displayName} session's files were not found` };
     }
     const handover = { from: tab.agentId, sessionId, files, within: actions?.root };
-    return this.addTab(agentId, { handover, ...(sandboxOnly && { sandboxOnly }) });
+    return { ok: true, tab: this.addTab(agentId, { handover, ...(sandboxOnly && { sandboxOnly }) }) };
   }
 
   /** Where this tab's pasted or dropped content without a path is written (TabPlace.dropsDir); a
@@ -981,15 +986,15 @@ export class TabSessionManager {
    * it under the field the name was typed in, and `tabs-rename` fails instead of reporting a
    * rename that did not happen.
    */
-  async renameTab(tabId: string, title: string): Promise<string | undefined> {
+  async renameTab(tabId: string, title: string): Promise<ActionResult> {
     const tab = this.tabOf(tabId);
     if (!tab) {
-      return undefined;
+      return { ok: true };
     }
     const { agent } = this.runtimeFor(tab.agentId);
     if (!tab.sessionId || !agent.sessions) {
       this.postTabs();
-      return undefined;
+      return { ok: true };
     }
     try {
       await this.placeOf(tab).sessionActions()?.rename(tab.sessionId, title);
@@ -998,10 +1003,10 @@ export class TabSessionManager {
       tab.provisionalTitle = false;
     } catch (error) {
       this.postTabs();
-      return `Could not rename ${agent.displayName} session: ${errorMessage(error)}`;
+      return { ok: false, error: `Could not rename ${agent.displayName} session: ${errorMessage(error)}` };
     }
     this.postTabs();
-    return undefined;
+    return { ok: true };
   }
 
   /**
@@ -1017,9 +1022,9 @@ export class TabSessionManager {
         others.push(tabId);
         continue;
       }
-      const refused = this.archived.keep(tab, tab.sessionId);
-      if (refused !== undefined) {
-        this.callbacks.onNotice("error", refused);
+      const kept = this.archived.keep(tab, tab.sessionId);
+      if (!kept.ok) {
+        this.callbacks.onNotice("error", kept.error);
       }
     }
     await this.closeTabs(others);
@@ -1038,22 +1043,22 @@ export class TabSessionManager {
   }
 
   /** ArchivedTabs.reopen. */
-  reopenArchived(tabId: string): Promise<string | undefined> {
+  reopenArchived(tabId: string): Promise<ActionResult> {
     return this.archived.reopen(tabId);
   }
 
   /** ArchivedTabs.reorder. */
-  reorderArchived(tabIds: string[]): string | undefined {
+  reorderArchived(tabIds: string[]): ActionResult {
     return this.archived.reorder(tabIds);
   }
 
   /** ArchivedTabs.rename. */
-  renameArchived(tabId: string, title: string): Promise<string | undefined> {
+  renameArchived(tabId: string, title: string): Promise<ActionResult> {
     return this.archived.rename(tabId, title);
   }
 
   /** ArchivedTabs.delete. */
-  deleteArchived(tabId: string): Promise<string | undefined> {
+  deleteArchived(tabId: string): Promise<ActionResult> {
     return this.archived.delete(tabId);
   }
 

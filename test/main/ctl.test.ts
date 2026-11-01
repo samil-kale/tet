@@ -239,7 +239,7 @@ function terminalsOf(key: string): ControlTerminals {
     // The caller's own tab has no session to hand over, as a fresh one has none.
     handOver: async (tabId, agentId, sandboxOnly) => {
       calls.handedOff.push([tabId, agentId, sandboxOnly]);
-      return tabId === OWN_TAB ? "This Shell tab has no session yet" : tab("tab-handover");
+      return tabId === OWN_TAB ? { ok: false, error: "This Shell tab has no session yet" } : { ok: true, tab: tab("tab-handover") };
     },
     createCommandTab: (command: ProjectCommand) => {
       calls.commands.push(command.command);
@@ -255,7 +255,7 @@ function terminalsOf(key: string): ControlTerminals {
     },
     renameTab: async (tabId, title) => {
       calls.renamed.push([tabId, title]);
-      return refuseRename;
+      return refuseRename === undefined ? { ok: true } : { ok: false, error: refuseRename };
     },
     hookEvent: (tabId, event, payload, at, side) => {
       calls.hooks.push([tabId, event, payload]);
@@ -354,8 +354,8 @@ function deps(): ControlDeps {
     addProject: async (directory) => {
       calls.added.push(directory);
       return directory === "/nowhere"
-        ? { error: "/nowhere is not a folder" }
-        : { project: { id: "p3", path: directory, name: "three", worktrees: [] } };
+        ? { ok: false, error: "/nowhere is not a folder" }
+        : { ok: true, project: { id: "p3", path: directory, name: "three", worktrees: [] } };
     },
     removeProject: async (id) => {
       calls.removed.push(id);
@@ -364,8 +364,12 @@ function deps(): ControlDeps {
     addWorktree: async (projectId, branch) => {
       calls.worktreesAdded.push([projectId, branch]);
       return branch === "taken"
-        ? { error: "fatal: a branch named 'taken' already exists" }
-        : { project: { ...PROJECT, worktrees: [...PROJECT.worktrees, { path: `/wt/${branch}`, branch, key: "k5" }] }, worktree: "k5" };
+        ? { ok: false, error: "fatal: a branch named 'taken' already exists" }
+        : {
+            ok: true,
+            project: { ...PROJECT, worktrees: [...PROJECT.worktrees, { path: `/wt/${branch}`, branch, key: "k5" }] },
+            worktree: "k5",
+          };
     },
     deleteWorktree: async (worktree, force) => {
       calls.worktreesDeleted.push([refKeyOf(worktree), force]);
@@ -425,16 +429,17 @@ function deps(): ControlDeps {
       mcpRegistered: async () => mcpRegistered,
       mcpSignIn: async (name) => {
         calls.mcpSignedIn.push(name);
-        return mcpRefusal[name];
+        const refused = mcpRefusal[name];
+        return refused === undefined ? { ok: true } : { ok: false, error: refused };
       },
       signIn: async (account) => {
         if (sbxRefusal !== undefined) {
-          return { signedIn: false, error: sbxRefusal };
+          return { ok: false, error: sbxRefusal };
         }
         calls.sbxSignedIn.push(account.user);
         sbxStatus = { ...sbxStatus, signedIn: true };
         sbxUser = account.user;
-        return sbxNotKept === undefined ? { signedIn: true, account } : { signedIn: true, error: sbxNotKept };
+        return sbxNotKept === undefined ? { ok: true, account } : { ok: true, notKept: sbxNotKept };
       },
     },
   };

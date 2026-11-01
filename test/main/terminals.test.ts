@@ -143,11 +143,11 @@ describe("the window closing a tab", () => {
     });
   });
 
-  it("answers nothing for a tab that is not there", async () => {
+  it("refuses nothing for a tab that is not there", async () => {
     await withEmptyPath({}, async (manager) => {
       await manager.closeKeepingSessions(["new-gone"]);
-      assert.equal(await manager.reopenArchived("new-gone"), undefined);
-      assert.equal(await manager.deleteArchived("new-gone"), undefined);
+      assert.deepEqual(await manager.reopenArchived("new-gone"), { ok: true });
+      assert.deepEqual(await manager.deleteArchived("new-gone"), { ok: true });
     });
   });
 });

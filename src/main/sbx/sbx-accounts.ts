@@ -101,16 +101,16 @@ export async function signInToSbx(
   const user = typedUser.trim();
   const token = typed !== "" ? typed : accountId !== undefined ? await store.token(accountId) : undefined;
   if (token === undefined) {
-    return { signedIn: false, error: "No access token stored for this account on this machine; enter it again" };
+    return { ok: false, error: "No access token stored for this account on this machine; enter it again" };
   }
   const refused = await runSbxTokenSignIn(user, token);
   if (refused !== undefined) {
-    return { signedIn: false, error: refused };
+    return { ok: false, error: refused };
   }
   const named = (await readSbxUser(false)) ?? user;
   try {
-    return { signedIn: true, account: await store.add(named, token, accountId) };
+    return { ok: true, account: await store.add(named, token, accountId) };
   } catch (error) {
-    return { signedIn: true, error: errorMessage(error) };
+    return { ok: true, notKept: errorMessage(error) };
   }
 }

@@ -1,3 +1,5 @@
+import type { ActionDone, ActionRefused } from "./action";
+
 export type ProviderId = "github" | "gitlab";
 
 /** A repository host account. Its token is kept encrypted, main-side. */
@@ -23,10 +25,7 @@ export interface RemoteRepository {
 }
 
 /** The account once its token checked out, or the API's message. */
-export interface AddAccountResult {
-  account?: ProviderAccount;
-  error?: string;
-}
+export type AddAccountResult = (ActionDone & { account: ProviderAccount }) | ActionRefused;
 
 export interface ListRepositoriesResult {
   repos?: RemoteRepository[];

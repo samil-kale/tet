@@ -272,10 +272,10 @@ export const Pane = memo(function Pane({
   const handOver = useCallback(
     async (tabId: string, agentId: AgentId) => {
       const result = await window.tet.tabs.handOver(at, tabId, agentId);
-      if (result.tab) {
+      if (result.ok) {
         onActivate(result.tab.tabId, paneId);
       } else {
-        notify("error", result.error ?? "Could not hand the session over");
+        notify("error", result.error);
       }
     },
     [at, paneId, onActivate],
@@ -297,7 +297,7 @@ export const Pane = memo(function Pane({
         current: tab.title,
         confirmLabel: "Rename",
         maxLength: MAX_TITLE_LENGTH,
-        submit: async (name) => refusal(await window.tet.tabs.rename(at, tab.tabId, name), "Could not rename the session"),
+        submit: async (name) => refusal(await window.tet.tabs.rename(at, tab.tabId, name)),
       });
     },
     [at],

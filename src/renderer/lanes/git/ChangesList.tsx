@@ -1,7 +1,7 @@
 import { memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { ownValue } from "../../../shared/own-value";
 import { syncRemote } from "../../../shared/types/git";
-import type { ChangeStatus, GitActionResult, RepositoryState } from "../../../shared/types/git";
+import type { ChangeStatus, GitCommandResult, RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { OpenEditor } from "../../editor/editor-tab";
@@ -125,7 +125,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
   const pushLabel = canSync && remote ? (state.upstream === undefined ? "Also publish branch" : named`Also push to ${remote}`) : undefined;
   /** What Commit ran, held to tell the push's failure or ask for its login once the commit's
    *  question is gone — only one question is up at a time. */
-  const running: { submitted?: Promise<{ committed: GitActionResult; pushed?: GitActionResult }> } = {};
+  const running: { submitted?: Promise<{ committed: GitCommandResult; pushed?: GitCommandResult }> } = {};
   // No wand where no agent on this machine can answer (a machine with only sbx).
   const canSuggest = (await window.tet.agents.askable()).length > 0;
   const commitAndPush = async (message: string, push: boolean) => {
@@ -172,10 +172,12 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
     },
   });
   const pushed = (await running.submitted)?.pushed;
-  if (pushed?.loginUrl !== undefined) {
-    await askLogin(pushed.loginUrl, pushed.error ?? "Push failed", (login) => ask(() => window.tet.repository.push(ref, login)));
-  } else if (pushed && !pushed.ok) {
-    notify("error", pushed.error ?? "Push failed");
+  if (pushed?.ok === false) {
+    if (pushed.loginUrl !== undefined) {
+      await askLogin(pushed.loginUrl, pushed.error, (login) => ask(() => window.tet.repository.push(ref, login)));
+    } else {
+      notify("error", pushed.error);
+    }
   }
 }
 

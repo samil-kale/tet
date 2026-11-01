@@ -1,3 +1,4 @@
+import type { ActionDone, ActionRefused } from "./action";
 import type { WorktreeInfo } from "./git";
 
 /** A repository TET has open. Stored in `projects.json` as `{id, path, name}`; `worktrees` is read off
@@ -83,16 +84,15 @@ export function projectRefName(project: Project, ref: ProjectRef): string {
 
 /** Open/clone/initialize/new worktree: the project, or git's message. `worktree` names the worktree it
  *  was about, to make active. */
-export interface AddRepositoryResult {
-  project?: Project;
-  worktree?: string;
-  error?: string;
-  /** The clone wants a login for this url; the dialog asks for one (GitActionResult). */
-  loginUrl?: string;
-  /** The folder holds no git repository or is missing; the dialog offers to initialize one
-   *  (`initialize`). */
-  notRepository?: boolean;
-}
+export type AddRepositoryResult =
+  | (ActionDone & { project: Project; worktree?: string })
+  | (ActionRefused & {
+      /** The clone wants a login for this url; the dialog asks for one (GitActionResult). */
+      loginUrl?: string;
+      /** The folder holds no git repository or is missing; the dialog offers to initialize one
+       *  (`initialize`). */
+      notRepository?: boolean;
+    });
 
 /** A command row's color, stored as the ANSI name so a theme change recolors the rows: the row is
  *  drawn in --tet-terminal-ansiBright<Name>. The six hues only — black, white and the greys are

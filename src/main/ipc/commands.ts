@@ -1,6 +1,6 @@
 import { handle } from "./channels";
 import { errorMessage } from "../../shared/errors";
-import type { GitActionResult } from "../../shared/types/git";
+import type { ActionResult } from "../../shared/types/action";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { readCommands, writeCommands } from "../store/tet-json";
@@ -16,7 +16,7 @@ export function registerCommandsIpc({ store, tabManagers }: Pick<IpcDeps, "store
 
   // The failure is answered, not notified: the dialog that asked for the command is still up and
   // shows it at its field (`prompt`'s `submit`); a reorder or a remove notifies it itself.
-  handle("commands:save", async (_event, projectId: string, commands: ProjectCommand[]): Promise<GitActionResult> => {
+  handle("commands:save", async (_event, projectId: string, commands: ProjectCommand[]): Promise<ActionResult> => {
     const project = store.get(projectId);
     if (!project) {
       return { ok: false, error: PROJECT_NOT_FOUND };

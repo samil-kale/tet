@@ -1,7 +1,7 @@
 import { handle, on } from "./channels";
 import type { AgentId } from "../../shared/types/agents";
 import type { EditorReport, NoticeReport } from "../../shared/types/app";
-import type { GitActionResult } from "../../shared/types/git";
+import type { ActionResult } from "../../shared/types/action";
 import type { ProjectRef } from "../../shared/types/project";
 import type { HandoverResult, TabDescriptor } from "../../shared/types/terminals";
 import { notOpenMessage } from "../store/resolved-ref";
@@ -37,39 +37,44 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
     await tabManagers.get(ref)?.closeKeepingSessions(tabIds);
   });
 
-  handle("tabs:rename", async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
-    const refused = await tabManagers.get(ref)?.renameTab(tabId, title);
-    return refused === undefined ? { ok: true } : { ok: false, error: refused };
-  });
+  handle(
+    "tabs:rename",
+    async (_event, ref: ProjectRef, tabId: string, title: string): Promise<ActionResult> =>
+      (await tabManagers.get(ref)?.renameTab(tabId, title)) ?? { ok: true },
+  );
 
-  handle("tabs:handover", async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> => {
-    const handed = (await tabManagers.get(ref)?.handOver(tabId, agentId)) ?? notOpenMessage(store, ref);
-    return typeof handed === "string" ? { ok: false, error: handed } : { ok: true, tab: handed };
-  });
+  handle(
+    "tabs:handover",
+    async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> =>
+      (await tabManagers.get(ref)?.handOver(tabId, agentId)) ?? { ok: false, error: notOpenMessage(store, ref) },
+  );
 
   handle("archive:list", (_event, ref: ProjectRef): TabDescriptor[] => {
     return tabManagers.get(ref)?.archivedSnapshot() ?? [];
   });
 
-  handle("archive:reopen", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
-    const refused = await tabManagers.get(ref)?.reopenArchived(tabId);
-    return refused === undefined ? { ok: true } : { ok: false, error: refused };
-  });
+  handle(
+    "archive:reopen",
+    async (_event, ref: ProjectRef, tabId: string): Promise<ActionResult> =>
+      (await tabManagers.get(ref)?.reopenArchived(tabId)) ?? { ok: true },
+  );
 
-  handle("archive:rename", async (_event, ref: ProjectRef, tabId: string, title: string): Promise<GitActionResult> => {
-    const refused = await tabManagers.get(ref)?.renameArchived(tabId, title);
-    return refused === undefined ? { ok: true } : { ok: false, error: refused };
-  });
+  handle(
+    "archive:rename",
+    async (_event, ref: ProjectRef, tabId: string, title: string): Promise<ActionResult> =>
+      (await tabManagers.get(ref)?.renameArchived(tabId, title)) ?? { ok: true },
+  );
 
-  handle("archive:delete", async (_event, ref: ProjectRef, tabId: string): Promise<GitActionResult> => {
-    const refused = await tabManagers.get(ref)?.deleteArchived(tabId);
-    return refused === undefined ? { ok: true } : { ok: false, error: refused };
-  });
+  handle(
+    "archive:delete",
+    async (_event, ref: ProjectRef, tabId: string): Promise<ActionResult> =>
+      (await tabManagers.get(ref)?.deleteArchived(tabId)) ?? { ok: true },
+  );
 
-  handle("archive:reorder", (_event, ref: ProjectRef, tabIds: string[]): GitActionResult => {
-    const refused = tabManagers.get(ref)?.reorderArchived(tabIds);
-    return refused === undefined ? { ok: true } : { ok: false, error: refused };
-  });
+  handle(
+    "archive:reorder",
+    (_event, ref: ProjectRef, tabIds: string[]): ActionResult => tabManagers.get(ref)?.reorderArchived(tabIds) ?? { ok: true },
+  );
 
   // The window's restart (the tab menu, the environment dialog): a running tab quits first.
   handle("tabs:restart", (_event, ref: ProjectRef, tabId: string): void => {

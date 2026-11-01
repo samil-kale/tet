@@ -1,3 +1,4 @@
+import type { ActionResult } from "./types/action";
 import type { AgentId, AgentInfo, AskModelsResult, Requirements, SuggestionResult } from "./types/agents";
 import type { AppInfo, EditorReport, Notice, NoticeProgress, NoticeReport } from "./types/app";
 import type { EnvAnswer, EnvEdit, EnvRequest, EnvVarInfo } from "./types/environment";
@@ -7,6 +8,7 @@ import type {
   CommitSearch,
   FileChange,
   GitActionResult,
+  GitCommandResult,
   GitLogin,
   GraphCommit,
   RepositoryState,
@@ -67,9 +69,9 @@ export interface TETApi {
      *  account is kept (or its token replaced) only once sbx took it. */
     signIn: (user: string, token: string, accountId?: string) => Promise<SbxSignInResult>;
     /** `sbx logout`, which stops every running sandbox; what sbx said on failing. */
-    signOut: () => Promise<string | undefined>;
+    signOut: () => Promise<ActionResult>;
     /** The General tab's access token rows at Save; what refused them, else undefined. */
-    saveAccounts: (edits: SbxAccountEdit[]) => Promise<string | undefined>;
+    saveAccounts: (edits: SbxAccountEdit[]) => Promise<ActionResult>;
     /** Sets the machine-wide network policy to "balanced", Docker's recommended default. */
     initPolicy: () => Promise<boolean>;
     /** Kills a running `signInInBrowser`/`signedInUser`/`initPolicy`/`mcpSignIn` — the Cancel button. */
@@ -84,7 +86,7 @@ export interface TETApi {
     mcpRegistered: () => Promise<SbxRegisteredMcp[] | undefined>;
     /** Opens the browser for a registered MCP server's OAuth and waits; what sbx said on refusing,
      *  else undefined. Killed by `cancelSetup`. */
-    mcpSignIn: (name: string) => Promise<string | undefined>;
+    mcpSignIn: (name: string) => Promise<ActionResult>;
     /** Stores `local` (the values typed at this Save, the skills) on this machine, then saves
      *  and applies the rows without a problem (sbx-settings.ts's saveProjectSbx); a sandbox whose
      *  folders changed is removed. */
@@ -127,7 +129,7 @@ export interface TETApi {
     initialize: (directory: string) => Promise<AddRepositoryResult>;
     /** Deletes the worktrees TET made with their branches, then TET's data of the project and its
      *  `tet.id`; the repository's folder stays. The caller confirms first when it has worktrees. */
-    remove: (projectId: string) => Promise<GitActionResult>;
+    remove: (projectId: string) => Promise<GitCommandResult>;
     /** A worktree under `~/.tet/projects/<id>/worktrees` with a new branch of its own, `branch` at the
      *  default branch (`worktreeBase`), opened with its project. Worktree and branch are one: deleting
      *  either does both, renaming the branch renames the worktree. Announced as `onChanged`. */
@@ -146,7 +148,7 @@ export interface TETApi {
     /** Validates the token against the host and stores it main-side. */
     addAccount: (provider: ProviderId, host: string, token: string) => Promise<AddAccountResult>;
     /** Why it could not be removed; undefined once it is gone. */
-    removeAccount: (accountId: string) => Promise<string | undefined>;
+    removeAccount: (accountId: string) => Promise<ActionResult>;
     /** The remote tab's group filter; "" (all) is a choice too. */
     setNamespace: (accountId: string, namespace: string) => Promise<void>;
     /** Most recently active first. */
@@ -158,9 +160,9 @@ export interface TETApi {
     /** Never the values. */
     list: () => Promise<EnvVarInfo[]>;
     /** The Settings' Environment tab, whole: why it could not be saved, else nothing. */
-    save: (rows: EnvEdit[]) => Promise<string | undefined>;
+    save: (rows: EnvEdit[]) => Promise<ActionResult>;
     /** The dialog's Save (a row per variable) or Cancel (null): why it could not be saved, else nothing. */
-    answer: (id: number, answer: EnvAnswer[] | null) => Promise<string | undefined>;
+    answer: (id: number, answer: EnvAnswer[] | null) => Promise<ActionResult>;
     /** An agent asked through `tet-ctl env-request`; one at a time. */
     onRequest: (listener: (request: EnvRequest) => void) => Unsubscribe;
     /** The asking agent is gone: the dialog of that request closes. */
@@ -170,72 +172,72 @@ export interface TETApi {
     state: (ref: ProjectRef) => Promise<RepositoryState>;
     /** Schedules a refresh, for changes the watcher may have missed; the state arrives as a push. */
     refresh: (ref: ProjectRef) => Promise<void>;
-    checkout: (ref: ProjectRef, target: CheckoutTarget) => Promise<GitActionResult>;
+    checkout: (ref: ProjectRef, target: CheckoutTarget) => Promise<GitCommandResult>;
     /** `git fetch --prune`. Also runs quietly every ten minutes. Each command reaching a remote
      *  takes the `login` typed after it answered `loginUrl`. */
-    fetch: (ref: ProjectRef, login?: GitLogin) => Promise<GitActionResult>;
-    pull: (ref: ProjectRef, login?: GitLogin) => Promise<GitActionResult>;
+    fetch: (ref: ProjectRef, login?: GitLogin) => Promise<GitCommandResult>;
+    pull: (ref: ProjectRef, login?: GitLogin) => Promise<GitCommandResult>;
     /** Sets the upstream when there is none ("publish"). */
-    push: (ref: ProjectRef, login?: GitLogin) => Promise<GitActionResult>;
+    push: (ref: ProjectRef, login?: GitLogin) => Promise<GitCommandResult>;
     /** The new url shows in the next state. */
-    setRemoteUrl: (ref: ProjectRef, remote: string, url: string) => Promise<GitActionResult>;
+    setRemoteUrl: (ref: ProjectRef, remote: string, url: string) => Promise<GitCommandResult>;
     /** Creates the branch off `startPoint` and switches to it. */
-    createBranch: (ref: ProjectRef, name: string, startPoint: CheckoutTarget) => Promise<GitActionResult>;
-    renameBranch: (ref: ProjectRef, from: string, to: string) => Promise<GitActionResult>;
+    createBranch: (ref: ProjectRef, name: string, startPoint: CheckoutTarget) => Promise<GitCommandResult>;
+    renameBranch: (ref: ProjectRef, from: string, to: string) => Promise<GitCommandResult>;
     /** The caller confirms first. The checked-out branch gives way to the default branch; `onRemote`
      *  deletes its upstream. */
-    deleteBranch: (ref: ProjectRef, name: string, onRemote: boolean) => Promise<GitActionResult>;
+    deleteBranch: (ref: ProjectRef, name: string, onRemote: boolean) => Promise<GitCommandResult>;
     /** A branch on a remote alone. The caller confirms first. */
-    deleteRemoteBranch: (ref: ProjectRef, remote: string, name: string, login?: GitLogin) => Promise<GitActionResult>;
+    deleteRemoteBranch: (ref: ProjectRef, remote: string, name: string, login?: GitLogin) => Promise<GitCommandResult>;
     /** Into the current branch. A conflict is reported and left in the tree. */
-    merge: (ref: ProjectRef, target: CheckoutTarget) => Promise<GitActionResult>;
+    merge: (ref: ProjectRef, target: CheckoutTarget) => Promise<GitCommandResult>;
     /** Unless `confirmed`, answers `rewrites-pushed` instead where commits on the upstream would be
      *  rewritten; the caller asks and calls again. */
     rebase: (ref: ProjectRef, target: CheckoutTarget, confirmed: boolean) => Promise<GitActionResult>;
     /** Aborts `RepositoryState.operation`. */
-    abort: (ref: ProjectRef) => Promise<GitActionResult>;
+    abort: (ref: ProjectRef) => Promise<GitCommandResult>;
     /** Always annotated, as in GitHub Desktop. */
-    createTag: (ref: ProjectRef, name: string, target: CheckoutTarget, message: string) => Promise<GitActionResult>;
-    pushTag: (ref: ProjectRef, name: string, login?: GitLogin) => Promise<GitActionResult>;
-    deleteTag: (ref: ProjectRef, name: string, onRemote: boolean) => Promise<GitActionResult>;
+    createTag: (ref: ProjectRef, name: string, target: CheckoutTarget, message: string) => Promise<GitCommandResult>;
+    pushTag: (ref: ProjectRef, name: string, login?: GitLogin) => Promise<GitCommandResult>;
+    deleteTag: (ref: ProjectRef, name: string, onRemote: boolean) => Promise<GitCommandResult>;
     /** The tag on the remote alone: a `deleteTag` whose remote half wanted a login, again. */
-    deleteRemoteTag: (ref: ProjectRef, name: string, login?: GitLogin) => Promise<GitActionResult>;
+    deleteRemoteTag: (ref: ProjectRef, name: string, login?: GitLogin) => Promise<GitCommandResult>;
     /** Leaves HEAD detached. */
-    checkoutTag: (ref: ProjectRef, name: string) => Promise<GitActionResult>;
+    checkoutTag: (ref: ProjectRef, name: string) => Promise<GitCommandResult>;
     /** Why these files, or all changes, cannot be committed — a conflict left unresolved — asked
      *  before the commit's question; nothing where they can. */
     commitRefusal: (ref: ProjectRef, paths?: string[]) => Promise<string | undefined>;
     /** Everything the changes list shows, untracked included. */
-    commitAll: (ref: ProjectRef, message: string) => Promise<GitActionResult>;
+    commitAll: (ref: ProjectRef, message: string) => Promise<GitCommandResult>;
     /** These files alone, untracked included; nothing else staged goes with them. */
-    commitPaths: (ref: ProjectRef, message: string, paths: string[]) => Promise<GitActionResult>;
+    commitPaths: (ref: ProjectRef, message: string, paths: string[]) => Promise<GitCommandResult>;
     /** The settings' `prompts.commitSuggesters` suggest one subject for all changes, or only `paths`. */
     suggestCommitMessage: (ref: ProjectRef, paths?: string[]) => Promise<SuggestionResult>;
     /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
     cancelCommitSuggestion: () => void;
     /** Everything the changes list shows, untracked included. */
-    stashPush: (ref: ProjectRef, message: string) => Promise<GitActionResult>;
+    stashPush: (ref: ProjectRef, message: string) => Promise<GitCommandResult>;
     /** By `StashEntry.sha`, looked up when it runs. */
-    stash: (ref: ProjectRef, command: StashCommand, sha: string) => Promise<GitActionResult>;
+    stash: (ref: ProjectRef, command: StashCommand, sha: string) => Promise<GitCommandResult>;
     /** The caller confirms first. Files go to the trash; where that fails the answer is `trash-failed`,
      *  and `permanently` deletes them instead. */
     discard: (ref: ProjectRef, paths: string[], permanently: boolean) => Promise<GitActionResult>;
     /** Appends the file, or its extension, to .gitignore. */
-    ignore: (ref: ProjectRef, path: string, scope: "file" | "extension") => Promise<GitActionResult>;
+    ignore: (ref: ProjectRef, path: string, scope: "file" | "extension") => Promise<GitCommandResult>;
     /** With parent directories — the Explorer's "New File...". */
-    createFile: (ref: ProjectRef, path: string) => Promise<GitActionResult>;
+    createFile: (ref: ProjectRef, path: string) => Promise<ActionResult>;
     /** The Explorer's "New Folder...". */
-    createDirectory: (ref: ProjectRef, path: string) => Promise<GitActionResult>;
+    createDirectory: (ref: ProjectRef, path: string) => Promise<ActionResult>;
     /** To the trash — the Explorer's "Delete...". */
-    deletePath: (ref: ProjectRef, path: string) => Promise<GitActionResult>;
+    deletePath: (ref: ProjectRef, path: string) => Promise<ActionResult>;
     /** The Explorer's "Rename...". */
-    renamePath: (ref: ProjectRef, from: string, to: string) => Promise<GitActionResult>;
+    renamePath: (ref: ProjectRef, from: string, to: string) => Promise<ActionResult>;
     /** tet.json's `folders` — "Add Folder to Explorer". */
-    addFolder: (projectId: string, path: string) => Promise<GitActionResult>;
+    addFolder: (projectId: string, path: string) => Promise<ActionResult>;
     /** Removing the last one restores the whole repository as one tree. */
-    removeFolder: (projectId: string, path: string) => Promise<GitActionResult>;
+    removeFolder: (projectId: string, path: string) => Promise<ActionResult>;
     /** tet.json's `exclude` — "Exclude from Explorer". */
-    excludePath: (projectId: string, path: string) => Promise<GitActionResult>;
+    excludePath: (projectId: string, path: string) => Promise<ActionResult>;
     listExplorer: (ref: ProjectRef) => Promise<ExplorerListing>;
     /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */
     searchFiles: (ref: ProjectRef, query: FileSearchQuery) => Promise<FileSearchResult>;
@@ -278,7 +280,7 @@ export interface TETApi {
     list: (projectId: string) => Promise<ProjectCommand[]>;
     /** The whole list; add, remove and reorder all go through here. Answers what refused it, for
      *  the question that is still up to show it at its field. */
-    save: (projectId: string, commands: ProjectCommand[]) => Promise<GitActionResult>;
+    save: (projectId: string, commands: ProjectCommand[]) => Promise<ActionResult>;
     /** A tab whose process is the command; null when nothing can run it. */
     run: (ref: ProjectRef, command: ProjectCommand) => Promise<TabDescriptor | null>;
     /** tet.json changed on disk, whoever wrote it: its commands and whether SBX is enabled as they now read. */
@@ -296,7 +298,7 @@ export interface TETApi {
     /** Keeps the tab's session, archived until reopened (`archive.reopen`). */
     archive: (ref: ProjectRef, tabIds: string[]) => Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
-    rename: (ref: ProjectRef, tabId: string, title: string) => Promise<GitActionResult>;
+    rename: (ref: ProjectRef, tabId: string, title: string) => Promise<ActionResult>;
     /** A tab of `agentId` taking over this tab's session; this tab stays. */
     handOver: (ref: ProjectRef, tabId: string, agentId: AgentId) => Promise<HandoverResult>;
     /** Respawns a saved command in the same tab. */
@@ -330,13 +332,13 @@ export interface TETApi {
     /** The archived tabs, newest archived or dragged first. */
     list: (ref: ProjectRef) => Promise<TabDescriptor[]>;
     /** Brings the archived tab back to the strip, resuming its session. */
-    reopen: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
+    reopen: (ref: ProjectRef, tabId: string) => Promise<ActionResult>;
     /** Renames the session behind an archived tab. */
-    rename: (ref: ProjectRef, tabId: string, title: string) => Promise<GitActionResult>;
+    rename: (ref: ProjectRef, tabId: string, title: string) => Promise<ActionResult>;
     /** Deletes the session behind an archived tab. */
-    delete: (ref: ProjectRef, tabId: string) => Promise<GitActionResult>;
+    delete: (ref: ProjectRef, tabId: string) => Promise<ActionResult>;
     /** A drag in the ARCHIVE lane: the tabs take `tabIds`' order, written down so it persists. */
-    reorder: (ref: ProjectRef, tabIds: string[]) => Promise<GitActionResult>;
+    reorder: (ref: ProjectRef, tabIds: string[]) => Promise<ActionResult>;
     /** The repository's or worktree's full list of archived tabs on every change. */
     onChanged: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
   };

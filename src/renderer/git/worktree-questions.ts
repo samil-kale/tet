@@ -33,7 +33,7 @@ export async function askNewWorktree(projectId: string, run: GitRun, base: strin
     submit: (name) =>
       run.ask(`Adding worktree ${name}...`, async () => {
         const added = await window.tet.projects.addWorktree(projectId, name);
-        return added.project ? { ok: true } : { ok: false, error: added.error };
+        return added.ok ? { ok: true } : { ok: false, error: added.error };
       }),
   });
 }
@@ -71,7 +71,7 @@ export async function askDeleteWorktree(worktree: ProjectRef, branch: string, up
    *  them what names the upstream to try again. git's words are notified. */
   const deleted = async (force: boolean): Promise<GitActionResult> => {
     const result = await window.tet.projects.deleteWorktree(worktree, { force, onRemote: answer.checked });
-    return result.needsConfirmation === "uncommitted" ? result : { ok: result.ok, error: result.error };
+    return result.ok || result.needsConfirmation !== undefined ? result : { ok: false, error: result.error };
   };
   runWithFollowUp(
     (action) => run.run(`Deleting ${branch}...`, action),

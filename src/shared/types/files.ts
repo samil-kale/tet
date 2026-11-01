@@ -1,4 +1,4 @@
-import type { GitActionResult } from "./git";
+import type { ActionDone, ActionRefused } from "./action";
 
 /** The file at HEAD — the diff editor's original side. */
 export interface HeadBlob {
@@ -46,12 +46,13 @@ export interface FileContent {
 export const MISSING_MTIME_MS = 0;
 
 /** Written, or why not — a stale `mtimeMs` never overwrites silently. */
-export interface FileWriteResult extends GitActionResult {
-  mtimeMs?: number;
-  /** Refused as changed on disk since `expectedMtimeMs`: its mtime now, to overwrite against once
-   *  the user agreed — `MISSING_MTIME_MS` for one deleted there. */
-  diskMtimeMs?: number;
-}
+export type FileWriteResult =
+  | (ActionDone & { mtimeMs: number })
+  | (ActionRefused & {
+      /** Refused as changed on disk since `expectedMtimeMs`: its mtime now, to overwrite against
+       *  once the user agreed — `MISSING_MTIME_MS` for one deleted there. */
+      diskMtimeMs?: number;
+    });
 
 /**
  * The Explorer tree's files — a filesystem scan, not `git ls-files`, which cannot represent an empty

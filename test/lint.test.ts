@@ -74,6 +74,8 @@ const IMPORTS: Probe[] = [
   ["src/main/git/git.ts", 'import "../util/process";', "no-restricted-imports"],
   ["src/main/git/explorer-host.ts", 'import "../util/utility-host";', null],
   ["src/main/git/explorer-read.ts", 'import "electron";', "no-restricted-imports"],
+  // In git.ts's bundle, so in its process.
+  ["src/main/git/odf-text.ts", 'import "electron";', "no-restricted-imports"],
   ["src/shared/x.ts", 'import "electron";', "no-restricted-imports"],
   ["src/shared/types/x.ts", 'import "../errors";', null],
   ["src/shared/types/x.ts", 'import "../../main/main";', "no-restricted-imports"],

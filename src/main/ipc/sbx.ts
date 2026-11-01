@@ -1,5 +1,6 @@
 import { handle, on } from "./channels";
-import { errorMessage } from "../../shared/errors";
+import { failure } from "../../shared/errors";
+import type { ActionResult } from "../../shared/types/action";
 import { EMPTY_SBX_SETTINGS } from "../../shared/types/sbx";
 import type {
   SbxAccount,
@@ -49,12 +50,12 @@ export function registerSbxIpc({
   );
   handle("sbx:sign-out", () => runSbxSignOut());
   handle("sbx:accounts", (): SbxAccount[] => sbxAccounts.list());
-  handle("sbx:save-accounts", async (_event, edits: SbxAccountEdit[]): Promise<string | undefined> => {
+  handle("sbx:save-accounts", async (_event, edits: SbxAccountEdit[]): Promise<ActionResult> => {
     try {
       await sbxAccounts.update(edits);
-      return undefined;
+      return { ok: true };
     } catch (error) {
-      return errorMessage(error);
+      return failure(error);
     }
   });
   handle("sbx:init-policy", () => initSbxPolicy());
@@ -87,7 +88,7 @@ export function registerSbxIpc({
   handle("sbx:skills-sources", (): Promise<SbxSkillsSource[]> => readSkillsSources());
   // The MCP tab's picker; asked fresh, as servers are registered outside TET.
   handle("sbx:mcp-registered", (): Promise<SbxRegisteredMcp[] | undefined> => readRegisteredMcp());
-  handle("sbx:mcp-sign-in", (_event, name: string): Promise<string | undefined> => signInMcp(name));
+  handle("sbx:mcp-sign-in", (_event, name: string): Promise<ActionResult> => signInMcp(name));
   // The dialog's Save, shared with tet-ctl's sbx-set-* verbs (sbx-settings.ts).
   handle(
     "sbx:save-settings",

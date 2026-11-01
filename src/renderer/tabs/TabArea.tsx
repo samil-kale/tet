@@ -259,7 +259,7 @@ export const TabArea = memo(function TabArea({
         if (result.ok) {
           showIn(paneId, tabId, transition);
         } else {
-          notify("error", result.error ?? "Could not reopen the session");
+          notify("error", result.error);
         }
       });
     },
