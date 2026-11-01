@@ -225,8 +225,9 @@ export const TabArea = memo(function TabArea({
   );
 
   /**
-   * The one way a tab is moved — dropped, or its menu's "Move to". `dragover` never sees the tab
-   * id, so a drop joins it with the zone. On a strip the tab goes where it fell (`dropOnStrip`);
+   * The one way a tab is moved — dropped, its menu's "Move to", or new from the plus, which names
+   * no place on the strip. `dragover` never sees the tab id, so a drop joins it with the zone. On a
+   * strip the tab goes where it fell (`dropOnStrip`);
    * anywhere else a move to another pane places it as a new tab there (`moveTab`). A tab that
    * changes its place or pane is kept (`keepMoved`); outside a drag it always changes its pane.
    */

@@ -193,6 +193,16 @@ describe("the strip's order", () => {
     assert.deepEqual([shown.tabPane.t1, shown.activeTab.b], ["b", "t1"]);
   });
 
+  it("puts a tab new to the strip behind the pane's last, whether its push came first or not", () => {
+    const tabs = [tab("t1"), tab("t2"), tab("t3")];
+    const withNew = [...tabs, tab("n1")];
+    const ahead = dropOnStrip(settled(), "n1", "a", undefined, tabs);
+    assert.deepEqual(ahead.order, ["t1", "t2", "t3", "n1"]);
+    assert.equal(normalizeLayout(ahead, withNew, tabs, false).order, ahead.order);
+    const pushed = normalizeLayout(settled(), withNew, tabs, false);
+    assert.deepEqual(dropOnStrip(pushed, "n1", "a", undefined, withNew).order, ["t1", "t2", "t3", "n1"]);
+  });
+
   it("finds a dropped tab's place before the pane it leaves collapses", () => {
     const tabs = [tab("t1"), tab("t2"), tab("t3")];
     const layout = layoutOf("cols2", "a", { t1: "a", t2: "b", t3: "b" }, tabs);

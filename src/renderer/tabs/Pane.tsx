@@ -178,9 +178,10 @@ export const Pane = memo(function Pane({
   const createTab = useCallback(
     async (agentId: AgentId) => {
       const descriptor = await window.tet.tabs.create(at, agentId);
-      onActivate(descriptor.tabId, paneId);
+      // Behind the pane's last tab, beside the plus that opened it.
+      onMoveTab(paneId, descriptor.tabId, { before: undefined });
     },
-    [at, paneId, onActivate],
+    [at, paneId, onMoveTab],
   );
 
   /**
