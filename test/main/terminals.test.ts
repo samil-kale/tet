@@ -14,53 +14,13 @@ import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { CONTROL_ENV, type HookEvent } from "../../src/shared/ctl";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { eventually, tempDir, withEnv, withEnvAsync } from "../helpers";
+import { eventually, tempDir, withEnv } from "../helpers";
+import { NO_CALLBACKS, withEmptyPath } from "../helpers/session-manager";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 import { notificationFor } from "../../src/main/terminals/turn-reports";
 import { answersQuestion, type TabState } from "../../src/main/terminals/tab-state";
 
 /** terminals/: a tab's turns and marks, its token and environment, when sessions are listed. */
-
-const NO_CALLBACKS: SessionManagerCallbacks = {
-  onTabs: () => undefined,
-  onArchived: () => undefined,
-  onOutput: () => undefined,
-  onStatus: () => undefined,
-  onStartupProgress: () => undefined,
-  onNotice: () => undefined,
-};
-
-/**
- * Runs `use` on project "p" in a folder of its own with PATH empty: no agent's version check
- * passes and sbx is missing, so nothing is set up, listed or spawned. Everything goes after.
- */
-async function withEmptyPath(
-  callbacks: Partial<SessionManagerCallbacks>,
-  use: (manager: TabSessionManager, project: string) => Promise<void> | void,
-): Promise<void> {
-  const root = tempDir("tet-empty-path-");
-  const project = path.join(root, "repo");
-  fs.mkdirSync(project);
-  const settings = new SettingsStore(root);
-  await withEnvAsync({ PATH: path.join(root, "empty") }, async () => {
-    const manager = new TabSessionManager(
-      { ref: { projectId: "p" }, path: project, name: () => "repo" },
-      root,
-      settings,
-      new SbxLocalStore(root),
-      new HostSetups(root, settings, () => undefined),
-      {
-        ...NO_CALLBACKS,
-        ...callbacks,
-      },
-    );
-    try {
-      await use(manager, project);
-    } finally {
-      await manager.dispose();
-    }
-  });
-}
 
 /** Pieces of the main process needing no app and no server: the session manager's turns and
  *  reports, the control records and launchers, the agent PATH, and what the shell may open. */

@@ -92,14 +92,29 @@ export function setTurn(tab: TabState, inTurn: boolean, at: number, keepQuestion
 
 /**
  * Ends a turn that leaves no mark: `setTurn` would set `finishedAt`, the bubble for a turn that
- * finished out of sight, and the user was in that tab. Both callers are a turn the user cut
- * short — reconcile, reading the end off the session record, and a `stop` reporting one
- * (AgentTurns.stopCutShort).
+ * finished out of sight. Either the user was in that tab and cut it short — reconcile, reading the
+ * end off the session record, and a `stop` reporting one (AgentTurns.stopCutShort) — or its process
+ * is gone, and nothing finished.
  */
 export function endTurnQuietly(tab: TabState): void {
   tab.inTurn = false;
   // A question can only stand within a turn, as in setTurn.
   tab.waitingAt = undefined;
+}
+
+/** A turn stands on this tab, or a question within one: what `endTurnQuietly` clears. */
+export function turnMarked(tab: TabState): boolean {
+  return tab.inTurn === true || tab.waitingAt !== undefined;
+}
+
+/**
+ * A tab going back on the strip or into the archive with no process: in no turn, and waiting for its
+ * first fit. Unless it is open in a terminal, as no fit starts it then (`handleResize`): the Restart
+ * that `stopped` offers takes the session back.
+ */
+export function settleWithoutProcess(tab: TabState): void {
+  endTurnQuietly(tab);
+  tab.status = tab.openedInTerminal ? "stopped" : "ready";
 }
 
 /** Whether a question left standing already said this turn's end — see setTurn. */

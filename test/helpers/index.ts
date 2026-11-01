@@ -230,6 +230,19 @@ export function tetCtl(args: string[], env: Record<string, string | undefined>, 
   });
 }
 
+/** A promise and what settles it. */
+export function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve = (): void => undefined;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Polls until `check` holds, or fails with `what` after `ms`. A thunk `what` is evaluated at
  * failure time, so it can include state gathered while polling (e.g. stderr).

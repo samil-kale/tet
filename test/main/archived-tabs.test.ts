@@ -11,7 +11,7 @@ import { HostPlace } from "../../src/main/terminals/tab-place";
 import { toDescriptor, type TabState } from "../../src/main/terminals/tab-state";
 import type { ActionResult } from "../../src/shared/types/action";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { tempDir } from "../helpers";
+import { deferred, tempDir } from "../helpers";
 
 /** terminals/archived-tabs.ts: the tabs kept archived, archive.json naming them, their sessions the
  *  agent's own. */
@@ -21,15 +21,6 @@ const REF = { projectId: "p" };
 /** What a result refused, in its words; undefined where it was done. */
 function refused(result: ActionResult): string | undefined {
   return result.ok ? undefined : result.error;
-}
-
-/** A promise and what settles it. */
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve = (): void => undefined;
-  const promise = new Promise<void>((settle) => {
-    resolve = settle;
-  });
-  return { promise, resolve };
 }
 
 /** Whether `promise` has settled by the time pending callbacks ran. */

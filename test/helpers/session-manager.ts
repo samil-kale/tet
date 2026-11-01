@@ -1,0 +1,51 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
+import { SettingsStore } from "../../src/main/store/settings";
+import { HostSetups } from "../../src/main/terminals/host-setup";
+import type { spawnAgentProcess } from "../../src/main/terminals/pty";
+import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
+import { tempDir, withEnvAsync } from ".";
+
+export const NO_CALLBACKS: SessionManagerCallbacks = {
+  onTabs: () => undefined,
+  onArchived: () => undefined,
+  onOutput: () => undefined,
+  onStatus: () => undefined,
+  onStartupProgress: () => undefined,
+  onNotice: () => undefined,
+};
+
+/**
+ * Runs `use` on project "p" in a folder of its own with PATH empty: no agent's version check
+ * passes and sbx is missing, so nothing is set up, listed or spawned. Everything goes after.
+ */
+export async function withEmptyPath(
+  callbacks: Partial<SessionManagerCallbacks>,
+  use: (manager: TabSessionManager, project: string) => Promise<void> | void,
+  spawnProcess?: typeof spawnAgentProcess,
+): Promise<void> {
+  const root = tempDir("tet-empty-path-");
+  const project = path.join(root, "repo");
+  fs.mkdirSync(project);
+  const settings = new SettingsStore(root);
+  await withEnvAsync({ PATH: path.join(root, "empty") }, async () => {
+    const manager = new TabSessionManager(
+      { ref: { projectId: "p" }, path: project, name: () => "repo" },
+      root,
+      settings,
+      new SbxLocalStore(root),
+      new HostSetups(root, settings, () => undefined),
+      {
+        ...NO_CALLBACKS,
+        ...callbacks,
+      },
+      spawnProcess,
+    );
+    try {
+      await use(manager, project);
+    } finally {
+      await manager.dispose();
+    }
+  });
+}

@@ -21,7 +21,7 @@ import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../store/settings";
 import { ArchivedTabs } from "./archived-tabs";
 import { PlaceResolver, type AgentPlaces } from "./place-resolver";
-import { storedEnvOf } from "./pty";
+import { spawnAgentProcess, storedEnvOf } from "./pty";
 import { SESSION_REMOVE_DELAY_MS, TerminalSession } from "./terminal-session";
 import { HostPlace, SandboxPlace } from "./tab-place";
 import type { HandoverFiles, Launch, LaunchInput, PlaceContext, TabPlace } from "./tab-place";
@@ -33,8 +33,10 @@ import {
   isSavedCommandTab,
   resumeArgsOf,
   sessionFieldsOf,
+  settleWithoutProcess,
   titleUnsettled,
   toDescriptor,
+  turnMarked,
   type TabState,
 } from "./tab-state";
 import { INTERRUPT_RECONCILE_MS, ReconcileScheduler } from "./reconcile-scheduler";
@@ -175,6 +177,8 @@ export class TabSessionManager {
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
     private readonly callbacks: SessionManagerCallbacks,
+    /** What starts a tab's process (TerminalSession); a test's stands in for the pty. */
+    private readonly spawnProcess: typeof spawnAgentProcess = spawnAgentProcess,
   ) {
     this.places = new PlaceResolver(at, settings, sbxLocal, {
       placeContext: (agent, executable) => this.placeContext(agent, executable),
@@ -790,6 +794,12 @@ export class TabSessionManager {
     tab.handover = undefined;
     const moved = this.placeOf(tab).sandbox !== place.sandbox;
     tab.place = place;
+    // A new process is in no turn; a late report of the last one may have marked a tab waiting for
+    // this start (applyTurnReport's `exited` is about a process gone, not a start to come).
+    if (turnMarked(tab)) {
+      endTurnQuietly(tab);
+      this.postTabs();
+    }
     // The status alone posts no tabs, and the window's badge follows where the tab runs
     // (TabDescriptor.sandboxed).
     if (moved) {
@@ -826,18 +836,18 @@ export class TabSessionManager {
           }
         },
         onStatusChange: (status) => {
-          // A process whose exit came after `stop()` gave up waiting may have been replaced by a
-          // restart: its status is no longer the tab's. The indicator and reconcile are still its.
-          const current = this.sessionOf(tabId) === session;
+          // A process whose exit came after `stop()` gave up waiting may have been replaced, its tab
+          // archived and reopened: its status is no longer the tab's. Nor is a tab's off the strip,
+          // settled by what took it (settleWithoutProcess). The indicator and reconcile are still its.
+          const current = this.tabs.includes(tab) && this.sessionOf(tabId) === session;
           if (current) {
             this.setTabStatus(tab, status);
           }
           if (status === "stopped" || status === "error" || status === "missing") {
             runtime.reconciler?.schedule();
             // A CLI killed mid-turn never reports its end.
-            if (current && (tab.inTurn || tab.waitingAt !== undefined)) {
-              tab.inTurn = false;
-              tab.waitingAt = undefined;
+            if (current && turnMarked(tab)) {
+              endTurnQuietly(tab);
               this.postTabs();
             }
             // The CLI may exit before looking ready, and `markInstalled`'s "missing" spawns nothing.
@@ -847,6 +857,7 @@ export class TabSessionManager {
       },
       agent.terminal?.quitPresses ?? 0,
       launch.args,
+      this.spawnProcess,
     );
 
     this.runOf(tabId).session = session;
@@ -935,7 +946,7 @@ export class TabSessionManager {
    * Deletes a removed tab's persisted session; `index` puts the tab back if that fails. `stopped`
    * is the stop closeTabs started.
    */
-  private async destroyTab(tab: TabState, index: number, stopped: Promise<void> | undefined): Promise<void> {
+  private async destroyTab(tab: TabState, index: number, stopped: Promise<unknown> | undefined): Promise<void> {
     const session = this.sessionOf(tab.tabId);
     this.endRun(tab.tabId, "size");
     const runtime = this.runtimeFor(tab.agentId);
@@ -976,7 +987,7 @@ export class TabSessionManager {
       await this.placeOf(tab).sessionActions()?.remove(sessionId);
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
-      tab.status = "ready";
+      settleWithoutProcess(tab);
       this.tabs.splice(Math.min(index, this.tabs.length), 0, tab);
       this.postTabs();
     } finally {
@@ -1073,7 +1084,7 @@ export class TabSessionManager {
    * session resumed. With `running`, a running one quits first, then takes the same path. Only the
    * window asks that (the tab menu, the environment dialog), never `tabs-restart`, which would let an
    * agent end another's session or its own. A tab not fitted yet waits for its first fit. False where
-   * there was nothing to restart.
+   * there was nothing to restart. One whose process outlives the quit stays as it is, said in a notice.
    */
   restartTab(tabId: string, running = false): boolean {
     const tab = this.tabOf(tabId);
@@ -1106,14 +1117,19 @@ export class TabSessionManager {
       const session = this.sessionOf(tabId);
       void this.reportBeforeQuit(tab)
         .then(() => session?.stop())
-        .finally(() => {
+        .then((gone) => {
           this.endRun(tabId, "restarting");
           // Closed meanwhile, or started anew by something else: nothing left to start.
-          if (this.tabs.includes(tab) && this.sessionOf(tabId) === session) {
-            this.endRun(tabId, "session");
-            tab.restarted = true;
-            this.startTab(tab);
+          if (!this.tabs.includes(tab) || this.sessionOf(tabId) !== session) {
+            return;
           }
+          if (gone === false) {
+            this.noticeStillRunning(tab);
+            return;
+          }
+          this.endRun(tabId, "session");
+          tab.restarted = true;
+          this.startTab(tab);
         });
       return true;
     }
@@ -1128,6 +1144,12 @@ export class TabSessionManager {
     // The status stays until the new process reports, so a start giving up again offers Restart.
     this.startTab(tab);
     return true;
+  }
+
+  /** Its process outlived a stop (TerminalSession.stop): nothing starts beside it, as two processes
+   *  must not write one session. */
+  private noticeStillRunning(tab: TabState): void {
+    this.callbacks.onNotice("error", `The ${getAgent(tab.agentId).displayName} session is still running: try again in a moment.`);
   }
 
   /**
@@ -1147,7 +1169,17 @@ export class TabSessionManager {
     const session = this.sessionOf(tabId);
     // Before the terminal opens, so no fit starts the tab meanwhile.
     tab.openedInTerminal = true;
-    await session?.stop();
+    const gone = await session?.stop();
+    // Closed or archived meanwhile: the session is being deleted or kept, nothing resumes it here.
+    if (!this.tabs.includes(tab)) {
+      tab.openedInTerminal = undefined;
+      return;
+    }
+    if (gone === false) {
+      tab.openedInTerminal = undefined;
+      this.noticeStillRunning(tab);
+      return;
+    }
     if (!(await openExternalTerminal(tab.cwd ?? this.at.path, executable, resumeArgsOf(tab, agent), variables))) {
       tab.openedInTerminal = undefined;
       this.callbacks.onNotice("error", `Could not open a terminal for the ${agent.displayName} session.`);

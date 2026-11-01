@@ -6,7 +6,7 @@ import type { TabDescriptor } from "../../shared/types/terminals";
 import { archivedIds, pruneArchived, setArchived, setArchivedOrder } from "../store/archive";
 import { logError } from "../util/error-log";
 import type { TabPlace } from "./tab-place";
-import { awaitsClaim, type TabState } from "./tab-state";
+import { awaitsClaim, settleWithoutProcess, type TabState } from "./tab-state";
 import { SESSION_REMOVE_DELAY_MS } from "./terminal-session";
 
 /** What the archived tabs run on, handed in by the session manager. */
@@ -96,7 +96,8 @@ export class ArchivedTabs {
       return { ok: false, error: `Could not keep the ${displayName} session: ${errorMessage(error)}` };
     }
     const stopped = this.target.takeOffStrip(tab);
-    Object.assign(tab, { status: "ready", inTurn: false, waitingAt: undefined, finishedAt: undefined, openedInTerminal: undefined });
+    Object.assign(tab, { finishedAt: undefined, openedInTerminal: undefined });
+    settleWithoutProcess(tab);
     this.tabs.push(tab);
     this.post();
     if (stopped) {

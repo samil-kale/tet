@@ -24,7 +24,7 @@ import type { AgentId } from "../../src/shared/types/agents";
 import type { Project } from "../../src/shared/types/project";
 import { EMPTY_SBX_SETTINGS, EMPTY_SBX_SKILLS, type SbxPort, type SbxProjectSettings } from "../../src/shared/types/sbx";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { eventually, startApp, stopApp, tempDir, tetCtl, type TestApp } from "../helpers";
+import { eventually, sleep, startApp, stopApp, tempDir, tetCtl, type TestApp } from "../helpers";
 
 /**
  * The agents' CLIs and sbx as installed on this machine, driven the way TET drives them — what the
@@ -63,10 +63,6 @@ function run(command: string, args: string[], input?: string): { status: number 
 
 function versionIn(text: string): string | undefined {
   return /\d+\.\d+\.\d+/.exec(text)?.[0];
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 describe("the agents as installed", { skip: !HOST && "TET_AGENT_TEST=1 only" }, () => {

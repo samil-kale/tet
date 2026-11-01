@@ -1,7 +1,7 @@
 import type { IPty } from "node-pty";
 import { errorMessage } from "../../shared/errors";
 import type { TerminalStatus } from "../../shared/types/terminals";
-import { spawnAgentProcess, type SpawnOptions } from "./pty";
+import type { spawnAgentProcess, SpawnOptions } from "./pty";
 import { logError } from "../util/error-log";
 
 interface SessionCallbacks {
@@ -47,7 +47,7 @@ export class TerminalSession {
   /** Set while killing for a restart, so a second click can't queue another. */
   private restartQueued = false;
   /** The teardown underway, which a second `stop()` joins. */
-  private stopping: Promise<void> | undefined;
+  private stopping: Promise<boolean> | undefined;
 
   constructor(
     private readonly executable: string,
@@ -56,7 +56,9 @@ export class TerminalSession {
     private readonly callbacks: SessionCallbacks,
     /** How many Ctrl+C bytes this agent wants before it is killed; 0 asks for none. */
     private readonly quitPresses: number,
-    private readonly args: string[] = [],
+    private readonly args: string[],
+    /** What starts its process (TabSessionManager's). */
+    private readonly spawnProcess: typeof spawnAgentProcess,
   ) {}
 
   private setStatus(status: TerminalStatus): void {
@@ -91,7 +93,7 @@ export class TerminalSession {
     }
 
     try {
-      this.process = spawnAgentProcess(this.executable, this.args, { ...this.spawn, cols, rows });
+      this.process = this.spawnProcess(this.executable, this.args, { ...this.spawn, cols, rows });
     } catch (error) {
       logError(`failed to spawn ${this.executable}`, error);
       this.callbacks.onOutput(`\r\n[TET] failed to spawn ${this.executable}:\r\n${errorMessage(error)}\r\n`);
@@ -119,18 +121,19 @@ export class TerminalSession {
   }
 
   /** Resolves once the process is gone, not once a kill was asked for: `destroyTab` deletes what the
-   *  session persisted and must not race it. Asks to quit first (see the Ctrl+C comment above). */
-  stop(): Promise<void> {
+   *  session persisted and must not race it. False where it outlived the kill, as stopping cannot
+   *  hang on it. Asks to quit first (see the Ctrl+C comment above). */
+  stop(): Promise<boolean> {
     this.stopping ??= this.runStop().finally(() => {
       this.stopping = undefined;
     });
     return this.stopping;
   }
 
-  private async runStop(): Promise<void> {
+  private async runStop(): Promise<boolean> {
     const proc = this.process;
     if (!proc) {
-      return;
+      return true;
     }
     // Before the first write: `start`'s exit handler reads it to tell "stopped" from a failure.
     this.intentionalStop = true;
@@ -145,7 +148,7 @@ export class TerminalSession {
       // goes, and a second byte lands as CTRL_C_EVENT and kills the shutdown.
       const last = press === this.quitPresses - 1;
       if (await exitedWithin(exited, last ? GRACEFUL_EXIT_MS : CTRL_C_GAP_MS)) {
-        return;
+        return true;
       }
     }
 
@@ -154,7 +157,7 @@ export class TerminalSession {
     } catch (error) {
       logError(`failed to kill ${this.executable}`, error);
     }
-    await exitedWithin(exited, FORCE_KILL_MS);
+    return exitedWithin(exited, FORCE_KILL_MS);
   }
 
   private writeQuit(proc: IPty): void {
