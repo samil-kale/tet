@@ -333,8 +333,9 @@ per-line decision is for an agent.
   user's call: propose the places above and ask before building it.
 - To get this, **a question runs its own answer** (`useSubmit`; a prompt's `PromptOptions.submit`):
   the dialog stays up while the action runs, so what runs it hands the failure back instead of
-  notifying it (`git/run-action.ts`). A new verb a dialog calls answers its failure rather than
-  sending `app:notice`.
+  notifying it (`git/run-action.ts`). A new verb a dialog calls answers its failure
+  (`ActionResult`, `src/shared/types/action.ts`; a git command's may be a question too,
+  `GitActionResult`) rather than sending `app:notice`.
 - **What a dialog runs finishes before it goes — unless stopping it leaves nothing behind.** Each
   run is one of two kinds, decided by what a stop would leave:
   - *Held* (the default; `DialogFrame`'s `locked`): anything that changes state in steps or is

@@ -646,17 +646,21 @@ export class TabSessionManager {
   }
 
   handleResize(tabId: string, cols: number, rows: number): void {
+    const tab = this.tabOf(tabId);
+    // A fit sent as its tab closed: a closed tab gets no run, nothing would end it.
+    if (!tab) {
+      return;
+    }
     this.runOf(tabId).size = { cols, rows };
     const existing = this.sessionOf(tabId);
     if (existing) {
       existing.ensureStarted(cols, rows);
       return;
     }
-    const tab = this.tabOf(tabId);
     // A failed start (`error`) waits for Restart, which reads the size kept above; retried here,
     // every resize would rerun the whole setup, sbx's checks and notice included. Likewise a tab
     // opened in a terminal before its first start.
-    if (!tab || tab.status === "error" || tab.openedInTerminal) {
+    if (tab.status === "error" || tab.openedInTerminal) {
       return;
     }
     this.startTab(tab);

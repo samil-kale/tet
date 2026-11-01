@@ -162,6 +162,16 @@ describe("a restart asked for", () => {
   });
 });
 
+describe("a fit reported", () => {
+  it("for a tab that is not there holds no run for it", async () => {
+    await withEmptyPath({}, (manager) => {
+      manager.handleResize("new-gone", 80, 24);
+      const { runs } = manager as unknown as { runs: Map<string, unknown> };
+      assert.equal(runs.has("new-gone"), false);
+    });
+  });
+});
+
 describe("the window's restore", () => {
   it("brings the shells back under their ids, once, a taken id under a new one", async () => {
     await withEmptyPath({}, async (manager) => {
