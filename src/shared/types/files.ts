@@ -55,10 +55,10 @@ export type FileWriteResult =
     });
 
 /**
- * The Explorer tree's files — a filesystem scan, not `git ls-files`, which cannot represent an empty
+ * The Explorer tree's files: a filesystem scan, not `git ls-files`, which cannot represent an empty
  * directory. `emptyDirs` holds only directories no file implies. `.git` is always left out. Carries
- * the view settings too, for one read; `roots` is absent without a `folders` list. Paths
- * are repository-relative, each file listed once whatever roots contain it.
+ * the view settings too, for one read; `roots` is absent without a `folders` list. Paths are
+ * repository-relative, each file listed once whatever roots contain it.
  */
 export interface ExplorerListing {
   files: string[];

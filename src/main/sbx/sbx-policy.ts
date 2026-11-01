@@ -88,10 +88,8 @@ export function parseSbxJson(stdout: string): unknown {
 /**
  * The active rules of `sbx policy ls --type filesystem --json` (`rules[]`: `resource_type`
  * "filesystem:read" | "filesystem:write" | "filesystem", `decision`, `resources`, `status`
- * "inactive" for a local rule an organization overrides). Unreadable is no rules — all denied.
- * Deliberately not "sbx cannot say" (a failed run is that, readPolicy): sbx's format is
- * trusted, and held by the recorded answer in test/main/sbx.test.ts and the live one in
- * test/e2e/agents.test.ts.
+ * "inactive" for a local rule an organization overrides). Unreadable is no rules, all denied: not
+ * "sbx cannot say" (a failed run is that, readPolicy), as sbx's format is trusted.
  */
 export function parseFilesystemRules(json: string): FilesystemRule[] {
   const parsed = parseSbxJson(json);

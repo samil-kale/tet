@@ -9,11 +9,11 @@ import { useBusy } from "./use-busy";
 import { useCoversWindow } from "./window-covered";
 
 /**
- * A dialog's answer as it runs (`PromptOptions.submit`): `run` answers what refused it, or throws
- * it, or nothing once it went through, and `onDone` follows (closing the dialog). `busy` is the
- * frame's bar meanwhile; `refused` is the frame's `error` (or a field's), held so what was typed can be
- * corrected, and cleared by the next change — which is about to make it wrong: every edit goes
- * through a setter wrapped in `changing`. The one rule for every dialog, question and card alike.
+ * A dialog's answer as it runs (`PromptOptions.submit`): `run` answers what refused it, or throws it,
+ * or nothing once it went through, and `onDone` follows (closing the dialog). `busy` is the frame's
+ * bar meanwhile; `refused` is the frame's `error` (or a field's), held so what was typed can be
+ * corrected, and cleared by the next change, which is about to make it wrong: every edit goes through
+ * a setter wrapped in `changing`. The one rule for every dialog, question and card alike.
  */
 export function useSubmit(
   run: () => Promise<string | undefined>,
@@ -116,7 +116,7 @@ interface DialogFrameProps<T extends string> {
   /** What ×, Cancel and Escape mean. Left out for a wall that stays up until it is answered
    *  (RequirementsDialog): no ×, no Cancel, and Escape does nothing. */
   onCancel?: () => void;
-  /** What a cancel cuts short first: a stopped run (AGENTS.md), whose answer is then dropped. */
+  /** What a cancel cuts short first: a stopped run, whose answer is then dropped. */
   abort?: () => void;
   /** Before the primary button, after Cancel. */
   actions?: readonly DialogAction[];
@@ -139,7 +139,19 @@ interface DialogFrameProps<T extends string> {
 /**
  * The shell of every dialog — the questions in `Dialog.tsx` and everything under `dialogs/`:
  * overlay, card, header, body, and the button row it draws itself — Cancel, the `actions`, the
- * primary button — so each behaves the same everywhere. A form: Enter runs the primary button.
+ * primary button — so each behaves the same everywhere. A form: Enter runs the primary button. A
+ * hint (`dialog-detail`) stands under the fields it explains.
+ *
+ * What a dialog runs finishes before it goes, unless stopping it leaves nothing behind:
+ * - *Held* (the default, `locked`): anything that changes state in steps or is not killed: a Save, a
+ *   git command, a store, a sign-out. Cancel and × are disabled, Escape does nothing and the body's
+ *   fields are disabled with them.
+ * - *Stopped* (`abort`, a prompt's `PromptOptions.abort`): a run a stop leaves as if it never started
+ *   (it changes nothing, or what it changes happens whole or not at all) and that waits on something
+ *   outside TET: a browser, an agent, a provider's API. It runs the bar but holds no Cancel: Cancel
+ *   kills it where it can, and its answer is dropped.
+ *
+ * A new run is held unless it meets both conditions; a dialog's Save is always held.
  *
  * The focus goes to the open tab's first field, on opening and on each tab switch — once one is
  * there, as a body that loads shows its fields later — and failing one to the primary button, so

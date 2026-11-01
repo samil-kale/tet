@@ -397,9 +397,9 @@ export function SyncIcon(props: IconProps) {
 }
 
 /**
- * Lucide's `message-circle-question-mark` — a session stopped on an unanswered question, on its tab and
- * project row. Shares the mark slot with the bubble and the spinner, so it must differ from them at
- * a glance.
+ * Lucide's `message-circle-question-mark` — a session stopped on an unanswered question, on its tab
+ * and project row. Shares the mark slot with the bubble and the spinner, so it must differ from them
+ * at a glance.
  */
 export function QuestionIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageCircleQuestionMark} />;

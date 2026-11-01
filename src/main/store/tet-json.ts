@@ -28,10 +28,15 @@ import { isRecord, recordOf } from "../util/json-file";
 import { PLATFORM } from "../util/host-platform";
 
 /** A project's saved commands, Explorer folders and excludes and SBX settings, in its own root so
- *  it travels with the repository; a linked worktree has none of its own (configRoot). The
- *  Explorer's `folders` and `exclude` list lie at the top (`readExplorerView`). A file missing or
- *  oddly shaped is no commands and the default view; a broken one its last readable version
- *  (`read`). The watcher reports every write of it as `commands:changed`. */
+ *  it travels with the repository. The Explorer's `folders` and `exclude` list lie at the top
+ *  (`readExplorerView`). A file missing or oddly shaped is no commands and the default view; a
+ *  broken one is neither added nor opened at start (kept, with all TET has of it, until added again),
+ *  counts as its last readable version while open (`read`), said in a notice, and is never written
+ *  over. The watcher reports every write of it as `commands:changed`.
+ *
+ *  A linked worktree has none of its own: it takes its project's (configRoot) and its SBX settings,
+ *  forwards none of the ports, and changes nothing of it. Its row, Explorer and COMMANDS offer no
+ *  settings, and `tet-ctl` refuses them. */
 export const PROJECT_FILE = "tet.json";
 
 /** A plain string while the command line says everything, an object once it needs name, cwd, env or
@@ -395,8 +400,8 @@ export function addExclude(root: string, relPath: string): Promise<void> {
 
 /**
  * The object entries of a stored array, each handed to `row`; a non-array, and an entry that is
- * not an object, is nothing. `row` answers undefined for a row it will not take — every list in
- * tet.json is read this defensively (see the file header).
+ * not an object, is nothing. `row` answers undefined for a row it will not take: every list in
+ * tet.json is read this defensively (`PROJECT_FILE`).
  */
 function objectRows<T>(value: unknown, row: (entry: Record<string, unknown>) => T | undefined): T[] {
   if (!Array.isArray(value)) {
@@ -421,7 +426,7 @@ function toSbxPorts(value: unknown): SbxPort[] {
   );
 }
 
-/** Trimmed as sbx trims them itself, so a row equals the rule sbx lists for it (sbx-save.ts's
+/** Trimmed as sbx trims them itself, so a row equals the rule sbx lists for it (sbx.ts's
  *  readSandboxHosts). */
 function toSbxHosts(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -438,15 +443,14 @@ function toSbxSetup(value: unknown): string[] {
   return Array.isArray(value) ? setupLines(value.filter((line): line is string => typeof line === "string").join("\n")) : [];
 }
 
-/** An entry needs an env name, trimmed (an earlier file's `{ "env": NAME }` row is read as NAME); a
- *  repeated one (on win32 in any case, as the environment `sbx run -e NAME` reads it from) or one
- *  of TET's own dropped — the sandbox sees one value per name (sbx.ts's sandboxEnv). */
+/** An entry is an env name, trimmed; a repeated one (on win32 in any case, as the environment
+ *  `sbx run -e NAME` reads it from) or one of TET's own dropped — the sandbox sees one value per
+ *  name (sbx.ts's sandboxEnv). */
 function toSbxEnvironment(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
   const variables = value
-    .map((entry: unknown) => (isRecord(entry) ? entry.env : entry))
     .filter((entry): entry is string => typeof entry === "string")
     .map((entry) => entry.trim())
     .filter((name) => isEnvName(name) && !isReservedName(name));
@@ -507,8 +511,7 @@ function toSbxSettings(content: ProjectFile | null, worktree: boolean): SbxProje
     ports: worktree ? [] : toSbxPorts(sbx.ports),
     paths,
     hosts: toSbxHosts(sbx.hosts),
-    // Legacy: the key was `variables`. Remove this fallback after 2026-11-17.
-    environment: toSbxEnvironment(sbx.environment ?? sbx.variables),
+    environment: toSbxEnvironment(sbx.environment),
     mcp: toSbxMcp(sbx.mcp),
     setup: toSbxSetup(sbx.setup),
   };

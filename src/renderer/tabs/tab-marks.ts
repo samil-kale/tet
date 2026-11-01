@@ -14,7 +14,7 @@ export interface RefMarks {
   working: boolean;
 }
 
-/** Shared instance, so a pane's props stay identical for a project with none. */
+/** Shared instance, so a pane's props stay identical for a repository or worktree with none. */
 export const NO_IDS: string[] = [];
 
 /** The two marks main holds per tab, as the time it was set. */

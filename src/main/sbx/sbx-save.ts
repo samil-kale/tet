@@ -59,24 +59,24 @@ export interface SbxRemoved {
 }
 
 /**
- * The dialog's Save of the rows readSbxProblems passed (saveProjectSbx): every sandbox goes if
- * SBX is disabled, one with another workspace too (see ensureSandboxExists; rebuilt at its next
- * tab), and one another id of the project left (orphanAgent). The others are brought in line as a
- * tab's start does it (alignSandbox, applyProjectPorts), each against the sandboxes' own
- * (readSandboxReads), so a hand-set rule deleted as a row
- * goes too and a port never published is tried again — but none is started for it: hosts reach a
- * stopped sandbox too, ports and MCP servers only one that runs, and a stopped one takes them at
- * its next tab's start (prepareSbxRun). A row sbx refuses in any sandbox is
- * `refused`, left out of tet.json and taken back where it went through — a port it would not
- * unpublish stays, as the sandbox still has it: tet.json holds what was applied. Grants are
- * narrowed last (revokeMounts), a mount cannot be given back at Save; one sbx would not take back
- * is `refused` too, its row and skills kind kept as they were. A sandbox that cannot be removed rejects,
- * tet.json left as it was; so does a Save sbx cannot read the sandboxes for (assertReadable),
- * before anything changed. The project's `worktrees` take its tet.json (tet-json.ts's
- * configRoot), so their sandboxes are brought in line too, all but the ports, which only the
- * repository's forward. Returns the sandboxes removed, for the caller to say so: a running session
- * of theirs just lost its sandbox; those of other ids; what sbx refused; what could not be taken
- * back; and what tet.json and the skills now hold.
+ * The dialog's Save of the rows readSbxProblems passed (saveProjectSbx).
+ * - Removed: every sandbox if SBX is disabled, one with another workspace (rebuilt at its next tab,
+ *   ensureSandboxExists) and one another id of the project left (orphanAgent). One that cannot be
+ *   removed rejects, tet.json left as it was; so does a Save sbx cannot read the sandboxes for
+ *   (assertReadable), before anything changed.
+ * - Kept: brought in line as a tab's start does it (alignSandbox, applyProjectPorts), each against
+ *   the sandboxes' own (readSandboxReads), so a hand-set rule deleted as a row goes too and a port
+ *   never published is tried again. None is started for it: hosts reach a stopped sandbox, ports and
+ *   MCP servers only one that runs, and a stopped one takes them at its next tab's start
+ *   (prepareSbxRun). The project's `worktrees` take its tet.json (configRoot), so their sandboxes
+ *   follow, all but the ports, which only the repository's forward.
+ * - Refused: a row sbx refuses in any sandbox is left out of tet.json and taken back where it went
+ *   through; a port it would not unpublish stays, as the sandbox still has it. Grants are narrowed
+ *   last (revokeMounts), as a mount cannot be given back at Save; one sbx would not take back keeps
+ *   its row and skills kind as they were.
+ *
+ * Returns the sandboxes removed (a running session of theirs just lost its sandbox), those of other
+ * ids, what sbx refused, what could not be taken back, and what tet.json and the skills now hold.
  */
 export async function saveSbxSettings(
   project: SbxSaveTarget,

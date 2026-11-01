@@ -49,7 +49,7 @@ function cloneFolder(url: string): string {
 /**
  * What the account form hands the dialog's frame while it is up: the frame's primary button is
  * this form's ("Add account"), so Enter in its fields runs it, and `busy` holds the frame as a
- * Save does. Lifted as the bar's `busy` is (AGENTS.md); the host's refusal stays with the form,
+ * Save does. Lifted as the bar's `busy` is (`ProgressBar`); the host's refusal stays with the form,
  * under the token field.
  */
 type AccountSubmission = DialogPrimary & { busy: boolean };

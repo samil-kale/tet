@@ -59,8 +59,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const [projects, setProjects] = useState<Project[]>([]);
   /** The list after an await: the control channel can add a project meanwhile. */
   const projectsRef = useLatest(projects);
-  /** Each project's repository and the worktrees TET made, by the `refKey` every
-   *  record below is kept under. Identity-stable where unchanged. */
+  /** Each project's repository and the worktrees TET made, by the `refKey` every record below is
+   *  kept under. Identity-stable where unchanged. */
   const refsHeld = useRef<Record<string, ResolvedRef>>({});
   const resolvedRefs = useMemo(() => resolvedByRefKey(refsHeld, projects), [projects]);
   /** The active repository or worktree, by `refKey`. */
@@ -163,9 +163,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
 
   /**
-   * Shows a tab opened from outside the tab area, making its repository or worktree
-   * active — a one-off write into the layout (`placeTab`: a saved command's goes where its line last
-   * lay).
+   * Shows a tab opened from outside the tab area, making its repository or worktree active: a one-off
+   * write into the layout (`placeTab`: a saved command's goes where its line last lay).
    */
   const showTab = useCallback(
     (refKey: string, tabId: string, command?: string) => {
@@ -185,9 +184,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const activeResolved = (activeRefKey ? resolvedRefs[activeRefKey] : undefined) ?? null;
 
   /**
-   * The active repository's or worktree's tabs on screen (`tabsOnScreen`) — the one
-   * definition marks, `seen` and notifications (`terminals.reportOnScreen`) go by. Identity-stable: it is
-   * reported on change.
+   * The active repository's or worktree's tabs on screen (`tabsOnScreen`): the one definition marks,
+   * `seen` and notifications (`tabs.reportOnScreen`) go by. Identity-stable: it is reported on
+   * change.
    */
   const onScreenTabIdsRef = useRef<string[]>(NO_IDS);
   const onScreenTabIds = useMemo(() => {
@@ -261,8 +260,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
   const heads = useRefHeads(states);
 
-  /** The status bar's project, branch and change count: the active
-   *  repository's or worktree's. */
+  /** The status bar's project, branch and change count: the active repository's or worktree's. */
   const activeProject = activeResolved ? projects.find((project) => project.id === activeResolved.ref.projectId) : undefined;
   const activeBranchName = activeResolved
     ? activeResolved.worktree
@@ -297,8 +295,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeResolved, showTab],
   );
 
-  /** The status bar's tabs: the active repository's or worktree's tabs in the strip's order, and the focused pane's
-   *  active one. */
+  /** The status bar's tabs: the active repository's or worktree's tabs in the strip's order, and the
+   *  focused pane's active one. */
   const agents = useAgents();
   const activeLayout = activeRefKey ? (layouts[activeRefKey] ?? DEFAULT_LAYOUT) : DEFAULT_LAYOUT;
   const activeStripTabs = activeRefKey ? stripTabs[activeRefKey] : undefined;

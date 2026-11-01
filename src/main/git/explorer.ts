@@ -55,9 +55,8 @@ export async function searchFiles(root: string, query: FileSearchQuery, signal: 
 export const OUTSIDE_REPOSITORY = { ok: false, error: "Path is outside the repository" } as const;
 
 /**
- * A filesystem action as an `ActionResult`: whatever it threw becomes the failure's message, in
- * the words the OS used. For the Explorer's own edits, which run off `runAction` — they take no
- * index lock (Repository.listExplorer).
+ * A filesystem action as an `ActionResult`, whatever it threw as the failure's message: the
+ * Explorer's own edits, which take no index lock and so run off `runAction`.
  */
 function attempt(action: () => Promise<unknown>): Promise<ActionResult> {
   return action().then(() => ({ ok: true }), failure);

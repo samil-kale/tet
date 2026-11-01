@@ -37,8 +37,8 @@ import { eventually, startApp, stopApp, tempDir, tetCtl, type TestApp } from "..
  *   bringing a throwaway project's sandboxes in line with its tet.json; no agent run in any — the
  *   agents are the other switch's.
  *
- * A version other than `install.verifiedVersion` (SBX_VERIFIED_VERSION) is reported, not failed; once a run
- * passes on it, it goes there.
+ * A version other than `install.verifiedVersion` (SBX_VERIFIED_VERSION) is reported, not failed; once
+ * a run passes on it, it goes there.
  *
  * Leaves behind what the CLIs record themselves: AGENT_REPO as a folder the user trusts (Claude
  * Code, Codex). Sessions go with their tabs, the sandboxes and their rules with `sbx rm`, the MCP

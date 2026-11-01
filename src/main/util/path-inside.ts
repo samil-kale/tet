@@ -117,8 +117,8 @@ export function expandHome(hostPath: string): string {
 }
 
 /**
- * `normalizeHostPath`'s inverse, for tet.json: under home as `~/…` with forward slashes, so a row serves another user
- * on the same OS; else as typed. Case-insensitive on win32 through `path.relative`.
+ * `normalizeHostPath`'s inverse, for tet.json: under home as `~/…` with forward slashes, so a row
+ * serves another user on the same OS; else as typed. Case-insensitive on win32 through `path.relative`.
  */
 export function contractHome(hostPath: string): string {
   const typed = hostPath.trim();

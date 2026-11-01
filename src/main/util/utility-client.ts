@@ -23,9 +23,10 @@ interface Pending {
 /**
  * The module `<name>-host.js` serves (a bundle beside this one, esbuild.js's `hostConfig`, run
  * through utility-host.ts's `serveModule`) in a `utilityProcess` of its own, `tet-<name>`: off the
- * main process, which relays pty output, so work there would lag typing. Started on the first call. A process that dies rejects every call in flight and is
- * restarted on the next one, not supervised: the calls are independent, so no state is lost. An
- * AbortSignal among a call's arguments reaches the function as one of the host's own.
+ * main process, which relays pty output, so work there would lag typing. Started on the first call.
+ * A process that dies rejects every call in flight and is restarted on the next one, not supervised:
+ * the calls are independent, so no state is lost. An AbortSignal among a call's arguments reaches
+ * the function as one of the host's own.
  */
 export function utilityClient<Module>(name: string): UtilityClient<Module> {
   let child: UtilityProcess | undefined;

@@ -60,7 +60,7 @@ interface GitBufferOptions extends GitOptions {
 }
 
 /**
- * Git runs at once, beyond which one more waits for a free slot (`unqueued` excepted): dozens
+ * How many git processes run at once; one more waits for a free slot (`unqueued` excepted): dozens
  * started together slow each other down.
  */
 const MAX_QUEUED = 6;
@@ -623,7 +623,7 @@ function readChanges(entries: string[]): FileChange[] {
 
 interface GitDirs {
   gitDir: string;
-  /** Where the worktrees are kept: a linked worktree's main `.git`, else `gitDir`. */
+  /** Where the worktrees are kept: for a linked worktree the repository's `.git`, else `gitDir`. */
   commonDir: string;
 }
 
@@ -634,9 +634,8 @@ function resolveGitDirs(cwd: string): GitDirs {
   return { gitDir, commonDir: linked?.commonDir ?? gitDir };
 }
 
-/**
- * A merge or rebase stopped midway, for the "Abort" entry — three stats instead of a git process,
- * as GitHub Desktop reads it. */
+/** A merge or rebase stopped midway, for the "Abort" entry: three stats instead of a git process,
+ *  as GitHub Desktop reads it. */
 async function readOperation(gitDir: string): Promise<GitOperation | undefined> {
   const exists = (name: string): Promise<boolean> =>
     fs.stat(path.join(gitDir, name)).then(
@@ -811,12 +810,11 @@ export function forget(cwd: string): void {
 
 /**
  * `NETWORK_ENV` plus an ssh that never asks (`-oBatchMode=yes`, e.g. about an unknown host key) and
- * never hangs: unanswered keepalives end it, as http's low-speed limit does. Only where the user
- * chose no ssh of their own: `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so
- * setting it blindly breaks a plink or `ssh -i work_key` setup; a non-OpenSSH program lacks the flag.
- * `core.sshCommand` is read per network command, not cached: the global config changes unwatched,
- * and a stale "none" would override the user's ssh. Off the refresh path, beside a remote round trip.
- * `sshCommand` is its value where the caller read it already (`pull`), "" for none.
+ * never hangs: unanswered keepalives end it. Only where the user chose no ssh of their own:
+ * `GIT_SSH_COMMAND` outranks `GIT_SSH` and `core.sshCommand`, so setting it blindly breaks a plink or
+ * `ssh -i work_key` setup. `core.sshCommand` is read per network command, not cached: the global
+ * config changes unwatched, and a stale "none" would override the user's ssh. `sshCommand` is its
+ * value where the caller read it already (`pull`), "" for none.
  */
 async function networkEnv(cwd: string, sshCommand?: string): Promise<NodeJS.ProcessEnv> {
   if (process.env.GIT_SSH || process.env.GIT_SSH_COMMAND) {
@@ -886,7 +884,7 @@ export function fetch(cwd: string, remote?: string, login?: NetworkLogin, timeou
  *  HEAD of `remote` is asked for again (updateRemoteHead) with the same login: on a host that wants
  *  one, without it it always fails. */
 export async function pull(cwd: string, login?: NetworkLogin, remote?: string): Promise<GitCommandResult> {
-  // Exit 1 where neither is set; a broken config counts as neither, as a failed `--get` did.
+  // Exit 1 where neither is set; a broken config counts as neither.
   const result = await git(cwd, ["config", "--get-regexp", "^(pull\\.ff|core\\.sshcommand)$"]);
   let pullFF = false;
   let sshCommand = "";
@@ -1500,8 +1498,7 @@ interface BlobOptions {
  *
  * `cat-file --filters`, not `show`: it applies the smudge filters and eol conversion of
  * `.gitattributes` and `core.autocrlf`, so the text reads like the working tree. `show` returns the
- * stored blob, which under an LFS or `ident` filter is not the file (pinned in `git.test.ts`).
- * Buffer encoding, as in `readFile`: utf8 replaces invalid bytes and would break an image.
+ * stored blob, which under an LFS or `ident` filter is not the file.
  */
 export async function readBlobAt(cwd: string, revision: string, filePath: string, options: BlobOptions): Promise<HeadBlob> {
   // A rename is one entry over two paths, and only the old one is in the earlier revision.

@@ -5,8 +5,8 @@ import { keepEditor } from "../editor/editor-views";
 import { baseName } from "../paths";
 import { agentInfo, agentName } from "../ui/use-agents";
 
-/** What a tab strip holds: a repository's or worktree's terminals, then its
- *  editor tabs. Told apart by their ids (paneTabKind). */
+/** What a tab strip holds: a repository's or worktree's terminals, then its editor tabs. Told apart
+ *  by their ids (paneTabKind). */
 export type PaneTab = TabDescriptor | EditorTab;
 
 /** A terminal is an agent's, a shell's or a saved command's — the tabs main runs a process for. */

@@ -418,10 +418,10 @@ export const Explorer = memo(function Explorer({
 });
 
 /**
- * The Explorer's listing, carrying the view settings. Re-read, as VS Code's, on what the
- * filesystem reports and never on git status: on `onFilesChanged` (a path came or went, an
- * ignore file changed, or a setting of the listing was saved), on tet.json writes, on window focus for what the watcher missed (a network
- * share watches nothing), and via `refreshExplorer` after the tree's own edits.
+ * The Explorer's listing, carrying the view settings. Re-read, as VS Code's, on what the filesystem
+ * reports and never on git status: on `onFilesChanged` (a path came or went, an ignore file changed,
+ * or a setting of the listing was saved), on tet.json writes, on window focus for what the watcher
+ * missed (a network share watches nothing), and via `refreshExplorer` after the tree's own edits.
  *
  * Held with its repository or worktree: one files lane serves all, and a switch must not show the
  * previous tree.

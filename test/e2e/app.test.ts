@@ -393,7 +393,7 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
 
   it("closes a project with a running tab, and forgets it", async () => {
     const [project] = await projects();
-    // No wait needed: the control socket exists only once the workspace is open (startControl).
+    // No wait needed: the control port answers only once the workspace is open (startControl).
     const created = await ctl("tabs-create", "--agent", "shell", "--project", project.id);
     assert.equal(created.status, 0, created.stderr);
     const tab = created.result as TabDescriptor;

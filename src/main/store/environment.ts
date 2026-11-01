@@ -31,8 +31,10 @@ interface Contents {
 
 /**
  * The environment variables TET sets in the tabs it starts (pty.ts's `setStoredEnv`), global to
- * every project. A value leaves this class only into a tab's environment; the renderer and
- * `tet-ctl` never see one.
+ * every project: kept in the clear, and set over what the machine sets itself, said in a notice. A
+ * value leaves this class only into a tab's environment; the renderer and `tet-ctl` never see one. A
+ * running tab takes them up only when restarted: the dialog's Save restarts the asking one. None in
+ * a sandbox, whose side neither admits the verbs nor mentions them (`ControlSide.admits`).
  *
  * Read from the file on every call, never held: the file is small, and what changed it from outside
  * is neither hidden nor overwritten. A file that cannot be read is written over by nothing — every

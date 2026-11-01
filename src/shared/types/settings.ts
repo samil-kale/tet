@@ -76,7 +76,10 @@ export interface PromptSettings {
 }
 
 /** What TET keeps about itself, not about a repository; written whole, one object per tab of the
- *  settings dialog that has values here (Environment keeps its own store, Info none). */
+ *  settings dialog that has values here (Environment keeps its own store, Info none). A new setting
+ *  joins its tab's object, never the top level. The dialog holds no setting of a project: those are
+ *  tet.json's, edited where they show. `normalize` (store/settings.ts) reads every key back
+ *  defensively, with its default. */
 export interface AppSettings {
   appearance: AppearanceSettings;
   notifications: NotificationSettings;

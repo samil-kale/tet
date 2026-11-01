@@ -26,8 +26,8 @@ import { editorFontFamily } from "../themes/theme-colors";
  * shown, and the one off screen keeps its box (`applyMode`).
  */
 
-/** Typing re-renders the Markdown preview once it pauses: each render parses, sanitizes and colors the
- *  whole file. */
+/** Typing re-renders the Markdown preview once it pauses: each render parses, sanitizes and colors
+ *  the whole file. */
 const MARKDOWN_PREVIEW_RENDER_DELAY_MS = 150;
 /** How long a scroll one side drove is expected to echo back from the other, which must not then
  *  drive it again (VS Code keeps the two in step the same way, by counting the echoes). */
@@ -42,8 +42,8 @@ const MARKDOWN_PREVIEW_IMAGE_DELAY_MS = 1000;
  * preview shows describes the window, not a repository.
  */
 const markdownPreviewByDefault = layoutChoice("markdown-preview.mode", MARKDOWN_PREVIEW_MODES, "off");
-/** Whether a diff opens side by side, and with its unchanged regions collapsed: as the Markdown preview's,
- *  the last answer, for every tab and the next start. */
+/** Whether a diff opens side by side, and with its unchanged regions collapsed: as the Markdown
+ *  preview's, the last answer, for every tab and the next start. */
 const diffDefaults = {
   sideBySide: layoutFlag("diff.side-by-side"),
   unchangedCollapsed: layoutFlag("diff.unchanged-collapsed"),
@@ -68,7 +68,8 @@ export interface EditorSnapshot {
    *  is on screen is `diffShown`. */
   diff: boolean;
   /** The rendered file beside the editor (VS Code's "Open Preview to the Side") or alone, for a
-   *  Markdown file. As the user last left it, the next Markdown file included (`markdownPreviewByDefault`). */
+   *  Markdown file. As the user last left it, the next Markdown file included
+   *  (`markdownPreviewByDefault`). */
   markdownPreview: MarkdownPreviewMode;
   /** The diff in two columns instead of one (`setDiffOption`), as the user last left it. */
   sideBySide: boolean;
@@ -92,7 +93,8 @@ export function diffShown(snapshot: DiffState): boolean {
 }
 
 /** Whether a Markdown preview beside the editor is withheld: a diff shows the changes, not the
- *  result. The preview's own setting stays, so it shows again once the diff is off. */
+ *  result. Hidden, its toggle, shortcut and menu entry disabled, as any preview added later is. The
+ *  preview's own setting stays, so it shows again once the diff is off. */
 export function previewWithheld(snapshot: DiffState): boolean {
   return diffShown(snapshot);
 }
@@ -160,7 +162,7 @@ interface EditorView {
 const views = new Map<string, EditorView>();
 /** By tab: a host subscribes before its file was read. */
 const tabListeners = new Map<string, Set<() => void>>();
-/** By project: a pane's progress bar is about every editor tab it holds. */
+/** By repository or worktree: a pane's progress bar is about every editor tab it holds. */
 const refListeners = new Map<string, Set<() => void>>();
 
 /** A tab with no editor yet — one instance, so it compares equal. */
@@ -700,7 +702,7 @@ export async function saveEditorFile(tabId: string): Promise<void> {
   // Changed on disk meanwhile (an agent wrote it): overwritten only once asked — the other version
   // is gone then — and one deleted there made anew only once asked. With another question up, told
   // instead. Not saving while asked: the bar shows TET working, never TET waiting on the user
-  // (AGENTS.md).
+  // (run-action.ts's runWithFollowUp).
   if (!result.ok && result.diskMtimeMs !== undefined) {
     publish(view, { saving: false });
     const deleted = result.diskMtimeMs === MISSING_MTIME_MS;
@@ -927,9 +929,9 @@ function makeMarkdownPreview(view: EditorView): MarkdownPreviewView {
 }
 
 /**
- * Renders the edited text into the Markdown preview after `delay`, if it is shown. A render while typing
- * (`delay` above 0) loads no new image; if it skipped one, a render that does follows once typing
- * has stopped a while.
+ * Renders the edited text into the Markdown preview after `delay`, if it is shown. A render while
+ * typing (`delay` above 0) loads no new image; if it skipped one, a render that does follows once
+ * typing has stopped a while.
  */
 function renderMarkdownPreview(view: EditorView, delay: number): void {
   const preview = view.markdownView;

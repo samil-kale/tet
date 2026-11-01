@@ -87,8 +87,8 @@ export interface RepositoryState {
   /** Each local branch's upstream on a remote — what a push goes to and "Also delete on the
    *  remote" deletes. Absent without one. */
   branchUpstreams: Record<string, BranchUpstream>;
-  /** The repository's worktrees, main first (git.ts's readWorktrees). A branch checked out in
-   *  another one is shown there on a checkout, as in GitHub Desktop: git refuses it here. */
+  /** The repository and its worktrees, the repository first (git.ts's readWorktrees). A branch
+   *  checked out in another one is shown there on a checkout, as in GitHub Desktop: git refuses it here. */
   worktrees: WorktreeInfo[];
   remotes: RemoteInfo[];
   /** What "Update from" merges and a deleted current branch gives way to, found as GitHub Desktop

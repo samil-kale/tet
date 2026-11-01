@@ -100,12 +100,10 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
 
 /**
  * Records the session a report names, for a tab with none or one that moved on (`/clear`, `/new`,
- * `/resume`). Whatever the turn marks' age (`turnReportAt`), but
- * ordered against the reports naming sessions (turn-order.ts): a late hook of the session left
- * behind would take it back. Reconcile claims it once listed; the session left behind becomes its
- * own tab next start.
- *
- * Whether the tab named a session it had not before.
+ * `/resume`). Whatever the turn marks' age (`turnReportAt`), but ordered against the reports naming
+ * sessions (turn-order.ts): a late hook of the session left behind would take it back. Reconcile
+ * claims it once listed; the session left behind becomes its own tab next start. Returns whether
+ * the tab named a session it had not before.
  */
 export function bindReportedSession(tab: TabState, reported: string, at: number): boolean {
   if (!reportApplies(tab.sessionReportAt, at)) {

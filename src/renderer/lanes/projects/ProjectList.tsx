@@ -78,8 +78,9 @@ interface ProjectListProps {
   onShowChanges: (refKey: string) => void;
   /** Opens the sbx-settings dialog, which runs every check itself. */
   onSbxSettings: (projectId: string) => void;
-  /** `useBranchActions`'s `runIn`: how a command runs in one of these repositories and worktrees — `run` on this
-   *  list's bar and failing as a notice, `ask` on the bar of the question that asked for it. */
+  /** `useBranchActions`'s `runIn`: how a command runs in one of these repositories and worktrees,
+   *  `run` on this list's bar and failing as a notice, `ask` on the bar of the question that asked
+   *  for it. */
   runIn: (refKey: string) => GitRun;
   /** A command started here runs, in any repository or worktree. */
   busy: boolean;

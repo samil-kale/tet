@@ -19,8 +19,8 @@ export interface SbxPath {
 }
 
 /** Which non-identity host skills to mount into the sandbox, with which access; `false` is off.
- *  Agent-agnostic — the paths per agent are `AgentSandbox.skills`. Kept on this
- *  machine per project, never in tet.json (sbx-local.ts). */
+ *  Agent-agnostic: the paths per agent are `AgentSandbox.skills`. Kept on this machine per project,
+ *  never in tet.json (sbx-local.ts). */
 export interface SbxSkillsSettings {
   skills: SbxAccess | false;
   /** The personal instructions file — `CLAUDE.md` for Claude, `AGENTS.md` for Codex and pi. */
@@ -101,9 +101,9 @@ export interface SbxStoredLocal {
 }
 
 /**
- * Save's part of the Environment for this machine, both by the row's env name: the values typed since
- * opening, and the name each row was opened under — its stored value follows a renamed row, and a
- * row added under a stored name does not inherit that value.
+ * Save's part of the Environment for this machine, both by the row's env name: the values typed
+ * since opening, and the name each row was opened under. Its stored value follows a renamed row, and
+ * a row added under a stored name does not inherit that value.
  */
 export interface SbxLocalEdits {
   values: Record<string, string>;

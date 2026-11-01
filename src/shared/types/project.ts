@@ -36,8 +36,8 @@ export function projectRef(projectId: string, worktree?: string): ProjectRef {
 
 /**
  * The pair as one string, for what can hold only one (a map, localStorage, a sandbox's name, a
- * notification): the project id alone for the repository. Never passed on as an address. No space (a
- * project's terminals are disposed by the prefix `${refKey} `) and no ":" (Monaco's URI authority).
+ * notification): the project id alone for the repository. Never passed on as an address. No space
+ * (its terminals are disposed by the prefix `${refKey} `) and no ":" (Monaco's URI authority).
  */
 export function refKeyOf(ref: ProjectRef): string {
   return ref.worktree === undefined ? ref.projectId : `${ref.projectId}-${ref.worktree}`;
@@ -75,15 +75,15 @@ export function worktreeName(worktree: ProjectWorktree): string {
   return worktree.branch ?? worktree.key ?? worktree.path.split(/[\\/]/).pop() ?? worktree.path;
 }
 
-/** What a notice or notification calls a repository or worktree: the project's name, a worktree's with
- *  it. */
+/** What a notice or notification calls a repository or worktree: the project's name, a worktree's
+ *  with it. */
 export function projectRefName(project: Project, ref: ProjectRef): string {
   const worktree = worktreeOf(project, ref);
   return worktree ? `${worktreeName(worktree)} (${project.name})` : project.name;
 }
 
-/** Open/clone/initialize/new worktree: the project, or git's message. `worktree` names the worktree it
- *  was about, to make active. */
+/** Open/clone/initialize/new worktree: the project, or git's message. `worktree` names the worktree
+ *  it was about, to make active. */
 export type AddRepositoryResult =
   | (ActionDone & { project: Project; worktree?: string })
   | (ActionRefused & {

@@ -56,9 +56,9 @@ import { PLATFORM } from "./util/host-platform";
 
 /**
  * A separate profile for tests driving the real app via tet-ctl (test/e2e/app.test.ts): own
- * projects, settings and socket, and — the lock being per profile — a second TET beside the working
- * one. Both Chromium's profile and TET's data folder (data-root.ts), set before either is asked
- * for. Only then is the control token taken from the environment.
+ * projects, settings and control port, and — the lock being per profile — a second TET beside the
+ * working one. Both Chromium's profile and TET's data folder (data-root.ts), set before either is
+ * asked for. Only then is the control token taken from the environment.
  */
 const USER_DATA_ARG = "--user-data-dir=";
 const userDataArg = process.argv.find((arg) => arg.startsWith(USER_DATA_ARG))?.slice(USER_DATA_ARG.length);
@@ -76,17 +76,17 @@ try {
 }
 
 /**
- * Who Windows says a notification is from: name and icon come from the Start menu entry carrying this id,
- * never from the notification (so no notification icon). Electron writes that entry on the first notification
+ * Who Windows says a notification is from: name and icon come from the Start menu entry carrying
+ * this id, never from the notification. Electron writes that entry on the first notification
  * (windows_toast_activator.cc), named after the executable's ProductName, with the id and the
  * activator CLSID. Installed, the executable is `TET.exe` (electron-builder.yml), so the entry is
  * install.ps1's `TET.lnk` rewritten in place; a development run's electron.exe reads "Electron".
  *
- * Windows remembers what it decided about an id, so `npm start` gets its own id — else one dev
- * notification leaves the installed TET reading "Electron". The CLSID is fixed, not Electron's per-run
- * random one, so a notification clicked after TET quit starts the COM server the entry names. Both are set
- * before the workspace: a hook can report a turn once the first terminal is up. The id is
- * electron-builder.yml's `appId`, which Windows' existing decisions about it are keyed on.
+ * Windows remembers what it decided about an id, so `npm start` gets its own id, else one dev
+ * notification leaves the installed TET reading "Electron". The CLSID is fixed, not Electron's
+ * per-run random one, so a notification clicked after TET quit starts the COM server the entry names.
+ * Both are set before the workspace: a hook can report a turn once the first terminal is up. The id
+ * is electron-builder.yml's `appId`, which Windows' existing decisions about it are keyed on.
  */
 const APP_USER_MODEL_ID = "com.samilkale.tet";
 const TOAST_ACTIVATOR_CLSID = "{8DA9BB54-C0A5-4BEC-AF76-BE3568344852}";
@@ -290,8 +290,8 @@ startNotifications({
 });
 
 /**
- * Started with the workspace, so an answering socket means every project is open — no half-open
- * state for a verb to find; tet-ctl waits a moment for the socket.
+ * Started with the workspace, so an answering port means every project is open: no half-open state
+ * for a verb to find. tet-ctl waits a moment for the port.
  */
 async function startControl(): Promise<void> {
   if (!controlChannel) {

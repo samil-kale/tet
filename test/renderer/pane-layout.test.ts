@@ -311,17 +311,17 @@ describe("collapseEmptied", () => {
   });
 
   it("takes the empty panes at the end of the reading order along, never one before an occupied", () => {
-    // LO, RO, LU occupied, RU empty; LU's tab moved up into RO, so LU is what was emptied.
+    // All but bottom right occupied; bottom left's tab moved up into top right, so bottom left is what was emptied.
     const moved = layoutOf("grid2x2", "b", { t1: "a", t2: "b", t3: "b" }, tabs);
     const next = collapseEmptied(moved, "c", tabs);
-    assert.equal(next.preset, "cols2", "the empty RU under the occupied RO went too");
+    assert.equal(next.preset, "cols2", "the empty bottom right under the occupied top right went too");
     assert.deepEqual(next.tabPane, { t1: "a", t2: "b", t3: "b" });
-    // LO and LU occupied, RO and RU empty; LU's tab moved up into LO: the right column goes.
+    // Left column occupied, right column empty; bottom left's tab moved up into top left: the right column goes.
     const up = layoutOf("grid2x2", "a", { t1: "a", t2: "a", t3: "a" }, tabs);
     const single = collapseEmptied(up, "c", tabs);
     assert.equal(single.preset, "single");
     assert.deepEqual(single.tabPane, { t1: "a", t2: "a", t3: "a" });
-    // The same grid with the tab moved down into RU instead: the empty RO before it stays.
+    // The same grid with the tab moved down into bottom right instead: the empty top right before it stays.
     const down = layoutOf("grid2x2", "d", { t1: "a", t2: "d", t3: "d" }, tabs);
     const kept = collapseEmptied(down, "c", tabs);
     assert.equal(kept.preset, "split-right");
@@ -371,13 +371,13 @@ describe("collapseEmpty", () => {
   const grid = (tabPane: ProjectLayout["tabPane"]): ProjectLayout => layoutOf("grid2x2", "a", tabPane, tabs);
 
   it("takes every empty pane the transitions can take, in reading order", () => {
-    // LO and RO occupied: LU goes, then the RU that trails.
+    // Top left and top right occupied: bottom left goes, then the bottom right that trails.
     const cols2 = collapseEmpty(grid({ t1: "a", t2: "b" }), tabs);
     assert.equal(cols2.preset, "cols2");
     assert.deepEqual(cols2.tabPane, { t1: "a", t2: "b" });
-    // LO and LU occupied: RO and RU have no transition without a split-left, both stay.
+    // Left column occupied: the right column's panes have no transition without a split-left, both stay.
     assert.equal(collapseEmpty(grid({ t1: "a", t2: "c" }), tabs).preset, "grid2x2");
-    // Stricter than a run: an empty RO above an occupied RU goes too.
+    // Stricter than a run: an empty top right above an occupied bottom right goes too.
     const split = layoutOf("split-right", "c", { t1: "a", t2: "c" }, tabs);
     const tidy = collapseEmpty(split, tabs);
     assert.equal(tidy.preset, "cols2");

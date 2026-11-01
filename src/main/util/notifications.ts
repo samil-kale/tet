@@ -8,7 +8,8 @@ import type { ProjectRef } from "../../shared/types/project";
 import { logError } from "./error-log";
 import { PLATFORM } from "./host-platform";
 
-/** What the desktop notifications need of the app around them (the window, AppWindow, and the tabs; handed in by main.ts). */
+/** What the desktop notifications need of the app around them (the window, AppWindow, and the tabs;
+ *  handed in by main.ts). */
 interface NotificationDeps {
   /** Only an installed TET asks for the notification presenter: in a checkout it would write a
    *  Start menu entry reading "Electron". */
@@ -145,14 +146,13 @@ function windowsToastXml(id: string, title: string, message: string, target?: Ta
 }
 
 /**
- * The desktop notification behind the `hook` and `notify` verbs — this process holds the desktop session
- * (a sandboxed hook has none). No `icon`: Windows takes TET's (APP_USER_MODEL_ID).
+ * The desktop notification behind the `hook` and `notify` verbs: this process holds the desktop
+ * session (a sandboxed hook has none). No `icon`: Windows takes TET's (APP_USER_MODEL_ID).
  *
  * A click brings the window and the notification's tab to the front, through the notification's own
- * `click` — measured to reach Windows' foreground grant while TET runs, unlike the COM activator
- * (`Notification.handleActivation`), which on win32 carries the same click once TET has quit and
- * started again, but does not get that grant on its own: a window it reveals while TET already runs
- * only flashes the taskbar.
+ * `click`, which reaches Windows' foreground grant while TET runs. The COM activator
+ * (`Notification.handleActivation`) carries the same click on win32 once TET has quit and started
+ * again, but without that grant: a window it reveals while TET already runs only flashes the taskbar.
  */
 export function showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark, agentId?: AgentId): void {
   if (repeatedNotification(title, message, target)) {

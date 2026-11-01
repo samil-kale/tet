@@ -4,7 +4,7 @@ import * as path from "node:path";
 /**
  * Where a linked worktree's or a submodule's git data lives, read off its `.git` file — no git
  * process: `gitDir` the file names, and for a worktree the `commonDir` its `commondir` points at
- * (the main repository's `.git`). Undefined for a `.git` directory (the usual repository) or none.
+ * (the repository's `.git`). Undefined for a `.git` directory (the usual repository) or none.
  * Synchronous, for `ProjectStore.load` and the watcher setup.
  */
 export function readLinkedGitDir(root: string): { gitDir: string; commonDir?: string } | undefined {

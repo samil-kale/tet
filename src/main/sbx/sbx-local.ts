@@ -44,8 +44,7 @@ function isEmptySkills(skills: SbxSkillsSettings): boolean {
 /** A project's entry as read. */
 function toLocal(project: Record<string, unknown>): StoredSbxLocal {
   const local: StoredSbxLocal = {
-    // Legacy: the key was `variables`. Remove this fallback after 2026-11-17.
-    environment: stringsOf(project.environment ?? project.variables),
+    environment: stringsOf(project.environment),
   };
   const skills = toSkills(project.skills);
   if (skills) {

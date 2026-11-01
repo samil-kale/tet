@@ -16,8 +16,7 @@ export interface SpawnOptions {
    *  -e` passes on. */
   envOverride?: Record<string, string>;
   /** This process's project, worktree and tab for the control channel (`TET_PROJECT_ID`,
-   *  `TET_WORKTREE`, `TET_TAB_ID`).
-   *  Above the machine's, like `controlEnv`. */
+   *  `TET_WORKTREE`, `TET_TAB_ID`). Above the machine's, like `controlEnv`. */
   own?: Record<string, string>;
   /** Where the tab runs (TabPlace): whether TET's stored variables reach it, and part of its control
    *  token, which is what the control server reads it back off (ctl-token.ts). This machine
@@ -25,8 +24,9 @@ export interface SpawnOptions {
   side?: TabSide;
 }
 
-/** The control channel's port and token, set by prepareControl (ctl-channel.ts). Above `process.env`, since a TET started
- *  from its own shell tab inherits the outer one's; kept out of it so git does not carry them. */
+/** The control channel's port and token, set by prepareControl (ctl-channel.ts). Above
+ *  `process.env`, since a TET started from its own shell tab inherits the outer one's; kept out of
+ *  it so git does not carry them. */
 let controlEnv: Record<string, string> = {};
 /** Prepended to every terminal's PATH — where the `tet-ctl` launchers are. */
 let launcherDir: string | undefined;
@@ -101,13 +101,11 @@ export function buildEnv(options: Pick<SpawnOptions, "env" | "envOverride" | "ow
 }
 
 /**
- * node-pty leaves the pipe it writes into unguarded: `windowsTerminal.js` puts an `error` listener
- * on the pipe it reads from, `windowsPtyAgent.js` puts none on `inSocket`. A write landing after the
- * process behind it has gone — a tab closed, a quit, a resize on the way out — then fails with
- * nothing listening, which is an uncaught `write EAGAIN` and, through uncaught.ts, a notice telling
- * the user TET hit an unexpected error. There is nothing to do about the write itself; those bytes
- * had nowhere to go. POSIX has no `_agent` and node-pty guards its socket there, so this is a
- * no-op.
+ * node-pty leaves the pipe it writes into unguarded (`windowsPtyAgent.js`'s `inSocket`). A write
+ * landing after the process behind it has gone — a tab closed, a quit, a resize on the way out —
+ * fails with nothing listening: an uncaught `write EAGAIN`, and through uncaught.ts a notice of an
+ * unexpected error, though those bytes had nowhere to go. POSIX has no `_agent` and node-pty guards
+ * its socket there, so this is a no-op.
  */
 function guardPtyInput(spawned: IPty): void {
   const agent = (spawned as unknown as { _agent?: { inSocket?: { on?: (event: string, listener: () => void) => void } } })._agent;

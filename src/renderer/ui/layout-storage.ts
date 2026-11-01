@@ -160,14 +160,14 @@ function storedShare(storageKey: string, initial: number): ReturnType<typeof cre
 }
 
 /**
- * An area's *share* of its container, restored on the next start — `initial` until dragged. A share,
+ * An area's *share* of its container, restored on the next start, `initial` until dragged. A share,
  * not pixels, so it holds at any container size; the owner multiplies it by a live measurement and
- * turns `Sash`'s pixels back into one. Anything outside (0, 1) is ignored both ways: read, since
- * the user can edit it, and written, since a container too small for two areas has no share.
+ * turns `Sash`'s pixels back into one. Anything outside (0, 1) is ignored both ways: read, since the
+ * user can edit it, and written, since a container too small for two areas has no share.
  *
  * One value for every view using the key at once (each editor tab's preview): a drag in one resizes
- * them all. The write waits for the drag to settle, as `useStoredSize`'s does; one pending when a view
- * unmounts is kept, and the others show it.
+ * them all. The write waits for the drag to settle, as `useStoredSize`'s does; one pending when a
+ * view unmounts is kept, and the others show it.
  */
 export function usePersistedShare(storageKey: string, initial: number): [number, (share: number) => void] {
   const store = storedShare(storageKey, initial);

@@ -188,7 +188,7 @@ const LANE_FOLDER = {
   message: "Another lane's own folder; what two lanes share lies below them (git/, ui/)."
 };
 
-/** Up and into another process's folder; a file of that name nearby (opencode's `./cli`) is not one. */
+/** Up and into another process's folder; a file of that name nearby (`./cli`) is not one. */
 const processBorder = (folder) => ({
   regex: `^(\\.\\./)+(${PROCESSES.filter((other) => other !== folder).join("|")})(/|$)`,
   message: "Another process's code; go through src/shared."

@@ -77,9 +77,8 @@ function isCmdShim(file: string): boolean {
 
 /** One argument for a program behind cmd.exe: quoted by the C runtime's rules, then `^`-escaped, so
  *  `&`, `>` or `%VAR%` reach it literally. A shim parses its `%*` a second time, so there it is
- *  escaped twice:
- *  once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. Only there — a batch file
- *  reading `%~1` itself keeps the second carets (Maven's `if "%~1" == "-f"`: a syntax error). */
+ *  escaped twice: once, `a"&b` ends the quote cmd.exe sees and `&b` runs as a command. Only there: a
+ *  batch file reading `%~1` itself keeps the second carets (Maven's `if "%~1" == "-f"`: a syntax error). */
 function escapeCmdArgument(arg: string, shim: boolean): string {
   // Every backslash before a quote, or before the closing one, doubled: the C runtime halves a run.
   const quoted = `"${arg.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\*)$/, "$1$1")}"`;
@@ -87,8 +86,8 @@ function escapeCmdArgument(arg: string, shim: boolean): string {
   return shim ? escaped.replace(CMD_META_CHARS, "^$1") : escaped;
 }
 
-/** Where a command line goes, for every agent, shell and `sbx` spawn: on win32 a native executable directly, a shim or an
- *  unresolved name through cmd.exe; elsewhere unchanged. */
+/** Where a command line goes, for every agent, shell and `sbx` spawn: on win32 a native executable
+ *  directly, a shim or an unresolved name through cmd.exe; elsewhere unchanged. */
 export function resolveCommand(executable: string, args: string[]): ResolvedCommand {
   if (PLATFORM.spawnsThroughCmd) {
     const resolved = resolveWin32Executable(executable);

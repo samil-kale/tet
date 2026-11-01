@@ -33,9 +33,10 @@ interface StatusBarProps {
   onSelectBranch: (name: string) => void;
 }
 
-/** The window's bottom edge (VS Code's status bar): the active repository or worktree with its
- *  active tab, whose clicks list the projects and the tabs to pick from, and its branch with its change count, whose click lists the
- *  local branches; at the right edge the button of the notification center. Its icons read smaller than the rest of the app's. */
+/** The window's bottom edge (VS Code's status bar): the active repository or worktree with its active
+ *  tab, whose clicks list the projects and the tabs to pick from, and its branch with its change
+ *  count, whose click lists the local branches; at the right edge the button of the notification
+ *  center. Its icons read smaller than the rest of the app's. */
 export const StatusBar = memo(function StatusBar({
   project,
   projects,

@@ -28,8 +28,8 @@ import {
 /**
  * Repository against the real git, for what it composes beyond git.ts: the trash, the branch it
  * switches to, the question it hands back. electron's three pieces are faked: `utilityProcess` serves
- * git.ts and the search in this process as their hosts would, `shell.trashItem` moves a file into a folder or fails,
- * and `safeStorage` (helpers/index.ts's fakeSafeStorage).
+ * git.ts and the search in this process as their hosts would, `shell.trashItem` moves a file into a
+ * folder or fails, and `safeStorage` (helpers/index.ts's fakeSafeStorage).
  */
 
 isolateGitConfig("tet-repository-noglobal");

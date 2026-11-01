@@ -48,7 +48,7 @@ export interface EditorReport {
   preview: boolean;
 }
 
-/** `editor-list`'s entry: the report plus whether it is the project's active editor tab. */
+/** `editor-list`'s entry: the report plus whether it is the repository's or worktree's active editor tab. */
 export interface EditorListing extends EditorReport {
   active: boolean;
 }

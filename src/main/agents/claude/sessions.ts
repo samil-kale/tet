@@ -183,10 +183,10 @@ interface ResolvedTitle {
   provisional: boolean;
 }
 
-/** Resolves the display name as Claude Code's `/resume` list does: `custom-title` (anywhere in
- *  the file, so from the backwards scan); else "agent-name",
- *  else "ai-title" — the last occurrence wins, the head window's copy is the fallback; else
- *  "summary" (only after `/compact`); else the first typed prompt; else "". */
+/** Resolves the display name as Claude Code's `/resume` list does: `custom-title` (anywhere in the
+ *  file, so from the backwards scan); else "agent-name", else "ai-title" (the last occurrence wins,
+ *  the head window's copy is the fallback); else "summary" (only after `/compact`); else the first
+ *  typed prompt; else "". */
 function resolveTitle(head: TranscriptHead, tail: TranscriptTail): ResolvedTitle {
   if (tail.customTitle) {
     return { title: truncateTitle(tail.customTitle), provisional: false };
@@ -273,10 +273,10 @@ interface TranscriptTail {
    *  report. A turn whose Stop hooks ran is left out: the hook is authoritative there. */
   turnEndedAt?: number;
   /** The last turn's end has been checked (readTailEntries); an undefined `turnEndedAt` alone
-   * does not say so. */
+   *  does not say so. */
   turnEndResolved?: boolean;
   /** A `turn_duration` not yet checked for a parent `stop_hook_summary`; resolved by the next
-   * turn entry the backward scan visits. */
+   *  turn entry the backward scan visits. */
   pendingTurnEnd?: { ms: number; parentUuid: string };
 }
 

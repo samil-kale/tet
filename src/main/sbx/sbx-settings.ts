@@ -81,12 +81,11 @@ const saves = new Map<string, Promise<unknown>>();
  * The SBX Settings' Save, for both transports: the dialog (ipc/sbx.ts) and `tet-ctl`'s `sbx-set-*`
  * verbs. Stores the typed values first, so a machine without a keyring changes nothing. A row that
  * cannot be applied here (readSbxProblems) is neither saved nor applied, the rest is; what sbx then
- * refuses is left out too (saveSbxSettings), so tet.json holds what was applied, and only its rows
- * keep a value here. `problems` says what was left out; sbx's refusals are the error as well, as
- * nothing marked them before. Notices for the sandboxes it removed. The project's worktrees take
- * its tet.json (tet-json.ts's configRoot), so their sandboxes are saved along. One Save at a time
- * per project, each after the last however that one ended: two at once would apply their rows to
- * the same sandboxes interleaved, and leave them matching neither's tet.json.
+ * refuses is left out too (saveSbxSettings), and only rows in tet.json keep a value here. `problems`
+ * says what was left out; sbx's refusals are the error as well, as nothing marked them before.
+ * Notices for the sandboxes it removed. One Save at a time per project, each after the last however
+ * that one ended: two at once would apply their rows to the same sandboxes interleaved, and leave
+ * them matching neither's tet.json.
  */
 export function saveProjectSbx(
   deps: SaveDeps,

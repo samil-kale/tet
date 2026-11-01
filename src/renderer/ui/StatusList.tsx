@@ -4,7 +4,7 @@ import { CloseIcon } from "./icons";
 /** The gap to the window's edge, as the lists' `left` in styles.css. */
 const EDGE = 6;
 
-/** One entry of a status bar list: a project, a tab, a branch. */
+/** One entry of a status bar list: a project, a tab, a branch, an archived session. */
 export interface StatusListItem {
   id: string;
   label: string;
@@ -25,9 +25,9 @@ interface StatusListProps {
 }
 
 /**
- * The status bar's lists (projects, tabs, branches), laid out as the notification center is
- * (`NoticesCenter`): above the bar, over the button that opens it. Closed by the status bar's button, its own
- * X or a press outside it.
+ * The status bar's lists (projects, tabs, branches, archive), laid out as the notification center is
+ * (`NoticesCenter`): above the bar, over the button that opens it. Closed by the status bar's button,
+ * its own X or a press outside it.
  */
 export const StatusList = memo(function StatusList({ title, items, activeId, trigger, onSelect, onClose }: StatusListProps) {
   const list = useRef<HTMLDivElement>(null);

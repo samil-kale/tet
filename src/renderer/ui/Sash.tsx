@@ -1,9 +1,9 @@
 import { useRef, useState, type PointerEvent } from "react";
 
 /**
- * The floor every lane and section shares, one per direction: a section header (35px) plus three 28px rows
- * high, and as wide as the widest such header needs with its actions — the Explorer's four. Kept in
- * step with `styles.css`'s `--area-min-width`/`--area-min-height`: a sash bounds only a drag, a
+ * The floor every lane and section shares, one per direction: a section header (35px) plus three 28px
+ * rows high, and as wide as the widest such header needs with its actions, the Explorer's four. Kept
+ * in step with `styles.css`'s `--area-min-width`/`--area-min-height`: a sash bounds only a drag, a
  * shrinking window bypasses it.
  */
 export const MIN_AREA_WIDTH = 230;

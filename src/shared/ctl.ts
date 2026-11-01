@@ -76,13 +76,14 @@ export interface ControlVerb {
    *  is plumbing an agent's own hook command calls. */
   unlisted?: true;
   /**
-   * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed
-   * to it until decided. `ownRef` answers only for the caller's own repository or worktree, the one
-   * its sandbox mounts; `ownProject` for its project's repository and every worktree — the worktree
-   * verbs, and the tab verbs, which reach there only tabs running in a sandbox
-   * (CallerSide.reachesTab); `any` as far as from a host tab
-   * (HOST_SIDE.reach). The sandbox is the organization's policy: a verb that starts a process on
-   * this machine, or reads outside the project it mounts, would walk around it.
+   * What a caller running in an sbx sandbox may do; absent means refused, so a new verb is closed to
+   * it until decided. `ownRef` answers only for the caller's own repository or worktree, the one its
+   * sandbox mounts; `ownProject` for its project's repository and every worktree: the worktree verbs,
+   * and the tab verbs, which reach there only tabs running in a sandbox (CallerSide.reachesTab); `any`
+   * as far as from a host tab (HOST_SIDE.reach). The sandbox is the organization's policy: a verb that
+   * starts a process on this machine, or reads outside the project it mounts, would walk around it, so
+   * what acts on this machine (its settings, projects, environment, the SBX settings but `sbx-get` and
+   * `sbx-set-environment`, a saved command, restarting TET) stays refused.
    */
   sandbox?: "any" | "ownRef" | "ownProject";
   /**
@@ -105,9 +106,8 @@ export interface ControlVerb {
 
 /**
  * Hook events in TET's own vocabulary; each agent's hooks (pi: its extension) map its events onto
- * these.
- * `permission` and `question` are one mark with two notification wordings, `answered` clears it;
- * `session-start` marks nothing.
+ * these. `permission` and `question` are one mark with two notification wordings, `answered` clears
+ * it; `session-start` marks nothing.
  */
 export const HOOK_EVENTS = ["session-start", "prompt-submit", "stop", "permission", "question", "answered", "idle"] as const;
 

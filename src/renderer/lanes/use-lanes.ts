@@ -14,7 +14,7 @@ interface Lanes {
   width: number;
   setWidth: (size: number) => void;
   /** The lane whose width transitions now (`.lane.sliding`): opening from closed or closing to
-   *  closed: never on a swap between two different lanes, which takes neither transition. */
+   *  closed, never on a swap between two different lanes, which takes neither transition. */
   slidingLanes: ReadonlySet<Lane>;
   stopSliding: (lane: Lane) => void;
   /** Opens that lane from closed, closes it back if it is already shown, or swaps it in for the
@@ -53,7 +53,7 @@ export function useLanes(activeRefKeyRef: RefObject<string | null>, setActiveRef
       const { shownLane: shown } = live.current;
       setChoice(shown === lane ? "none" : lane);
       // Opening from closed, or closing the one shown: slide. Swapping to a different lane: no
-      // transition, as the strip's toggles have always swapped.
+      // transition.
       if (shown === null || shown === lane) {
         setSlidingLanes((current) => new Set([...current, lane]));
       }
@@ -61,8 +61,8 @@ export function useLanes(activeRefKeyRef: RefObject<string | null>, setActiveRef
     [live, setChoice],
   );
 
-  /** A row's git mark: switches to the repository or worktree and shows git; on the active one,
-   *  the strip's toggle. */
+  /** A row's git mark: switches to the repository or worktree and shows git; on the active one, the
+   *  Navigation Bar's toggle. */
   const showChanges = useCallback(
     (refKey: string) => {
       setActiveRefKey(refKey);

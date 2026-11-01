@@ -1,4 +1,6 @@
-/** What an action answers: done, or refused (ActionRefused). */
+/** What an action answers: done, or refused (ActionRefused). A new verb a dialog calls answers its
+ *  failure this way (a git command's may be a question too, `GitActionResult`) rather than sending
+ *  `app:notice`: the dialog stays up while it runs, and shows it (`useSubmit`). */
 export type ActionResult = ActionDone | ActionRefused;
 
 export interface ActionDone {

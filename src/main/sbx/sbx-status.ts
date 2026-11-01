@@ -203,10 +203,11 @@ export async function readHostAllowed(host: string): Promise<boolean> {
 }
 
 /**
- * Behind both. Three processes, always, `ls` first (it starts the daemon) and the others together:
- * `version` says installed and whether old enough (sbxVersionSupported, else a failure), `policy
- * ls`'s exit code says initialized, its output governed. The answers are read in order, so the
- * first "no" is the one reported — `sbx policy ls` fails when signed out too.
+ * What readSbxReading and checkSbxReady read. Three processes, always, `ls` first (it starts the
+ * daemon) and the others together: `version` says installed and whether old enough
+ * (sbxVersionSupported, else a failure), `policy ls`'s exit code says initialized, its output
+ * governed. The answers are read in order, so the first "no" is the one reported: `sbx policy ls`
+ * fails when signed out too.
  *
  * `sbx ls` is the sign-in probe: side-effect-free, exits 1 with "Not authenticated to Docker" when
  * signed out, and `prepareSbxRun` needs its listing. Not `sbx policy ls`, which also exits 1 signed
@@ -228,15 +229,10 @@ async function probeSbx(refreshPath: boolean): Promise<SbxProbe> {
 }
 
 /**
- * Once the `sbx ls` of the probe underway (one begun if none is) has answered, whatever it said:
- * the daemon is started by then, so an sbx process begun beside the readiness check waits on this
- * instead of starting the daemon against it (a spawn's `ensureRunning`).
- *
- * The gate of every sbx process that overlaps the readiness check: sbx starts its daemon on
- * whichever process comes first, and two processes doing so at once fail on its state lock
- * ("another daemon is already running"), leaving the start in error. Speeding a start up by
- * overlapping sbx calls — a warm-up, a parallel probe — waits on this first; only the check's own
- * `ls` may run ahead of it.
+ * Once the `sbx ls` of the probe underway (one begun if none is) has answered, whatever it said: the
+ * daemon is started by then. Every sbx process overlapping the readiness check waits on this (a
+ * spawn's `ensureRunning`): sbx starts its daemon on whichever process comes first, and two doing so
+ * at once fail on its state lock ("another daemon is already running"), leaving the start in error.
  */
 export async function sbxListed(): Promise<void> {
   await sharedProbe().listed;
@@ -270,8 +266,7 @@ function listForProbe(): Promise<RunResult> {
 
 async function readProbe(listed: Promise<RunResult>): Promise<SbxProbe> {
   const status: SbxStatus = { installed: false, signedIn: false, policyInitialized: false, blockers: [] };
-  // `ls` alone first: it starts the daemon, and two sbx processes starting it at once fail on its
-  // state lock ("another daemon is already running").
+  // `ls` alone first: it starts the daemon (sbxListed).
   const list = await listed;
   const [version, listedPolicy] = await Promise.all([
     readSbxVersion(),

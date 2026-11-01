@@ -6,11 +6,19 @@ import { useBusy } from "./use-busy";
 import { useTextContextMenu } from "./use-text-context-menu";
 
 /**
- * What refused an answer, where the answer was given: under the field to blame (`Field`), in a
- * card's button row level with the buttons (`DialogFrame`), or in place of the list that could not
- * be loaded. Words
- * alone, since the colour and the place already say what it is; nothing at all while there is
- * nothing to say.
+ * What refused an answer, where the answer was given, rather than a notice:
+ * - under the field to blame (`Field`'s `error`);
+ * - in a row of a list, as the error mark's tooltip beside it (`RowMark`, the one mark; on a dialog
+ *   tab, `DialogTab.mark`, repeating its first row's, from the one function that builds the row's);
+ * - else on the left of a card's button row, level with the buttons (`DialogFrame`'s `error`), where
+ *   the fields are several or across tabs;
+ * - in place of the list that could not be loaded, but for Add Repository's remote listing, whose
+ *   failure goes in the button row.
+ *
+ * Words alone, since the colour and the place already say what it is; nothing at all while there is
+ * nothing to say. What was typed is held so it can be corrected, and the words are git's own for a
+ * name it will not take, never TET's guess at them. What the unsaved edits as a whole lead to goes in
+ * the button row too (`DialogFrame`'s `message`, e.g. `RestartNote`).
  */
 export function DialogError({ message }: { message: string | undefined }) {
   return message === undefined ? null : <p className="dialog-error">{message}</p>;

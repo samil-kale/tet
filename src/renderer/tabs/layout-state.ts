@@ -104,9 +104,9 @@ export interface LayoutPersistence {
    *  the same, so a push for another one skips it. */
   serialized: Record<string, { layout: ProjectLayout; tabs: LayoutTab[] }>;
   /**
-   * Projects whose bootstrap has once finished. Before that, `serializeLayout` would drop every
-   * pane whose sessions were not listed yet. From then on written regardless: a CLI booting is not
-   * a listing in flight.
+   * The repositories and worktrees whose bootstrap has once finished. Before that, `serializeLayout`
+   * would drop every pane whose sessions were not listed yet. From then on written regardless: a CLI
+   * booting is not a listing in flight.
    */
   settled: Set<string>;
 }

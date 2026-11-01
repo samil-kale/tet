@@ -55,8 +55,8 @@ export function createMarkdownPreview(): { scroller: HTMLDivElement; body: HTMLD
  * The preview of the Markdown file at `path`, in an inert document that has loaded nothing: code
  * blocks colored by shiki, images replaced by `loadImage`'s data URL — asked for a repository path
  * or an https URL, which main fetches, so the page's CSP keeps it off the network. An inline
- * `data:image` stays; any other source is dropped: `file:` never reaches the disk. `previous` is the preview's last render's
- * `colored`; the one returned is what its next render is handed.
+ * `data:image` stays; any other source is dropped: `file:` never reaches the disk. `previous` is the
+ * preview's last render's `colored`; the one returned is what its next render is handed.
  */
 export async function renderMarkdown(
   text: string,

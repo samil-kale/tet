@@ -256,7 +256,8 @@ function valueNames(rows: { env: string; value: string; from?: string }[], store
  * What of the rows cannot be applied here (sbx-settings.ts's readProjectSbxProblems), asked as soon
  * as the dialog has its rows (`ready`), whatever tab shows — so a row that cannot be applied is
  * marked from the start, its tab too — then again once typing pauses on a change, since each
- * check is an sbx call. An answer overtaken by an edit is dropped. Save leaves such a row out.
+ * check is an sbx call. An answer overtaken by an edit is dropped. Save leaves such a row out; its
+ * mark says what is wrong, never that it will not be saved.
  * `organization` is the governance the dialog's status read, so no check reads it again.
  */
 export function useSbxProblems(

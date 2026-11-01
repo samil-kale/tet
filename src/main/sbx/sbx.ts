@@ -317,9 +317,9 @@ async function allowHosts(name: string, hosts: string[], onData?: OnData): Promi
 }
 
 /**
- * What the sandbox has published, what applyProjectPorts brings in line (as readSandboxHosts is
- * for hosts): a port sbx refused the last time is missing here and is tried again. A *stopped*
- * sandbox answers none though its ports survive the stop, so only a running one's count. `--json` is an array of `{host_ip, host_port, sandbox_port, protocol}`. Undefined when sbx
+ * What the sandbox has published, what applyProjectPorts brings in line (as readSandboxHosts is for
+ * hosts): a port sbx refused the last time is missing here and is tried again. A *stopped* sandbox
+ * answers none though its ports survive the stop, so only a running one's count. Undefined when sbx
  * cannot say.
  */
 export async function readSandboxPorts(name: string): Promise<SbxPort[] | undefined> {
@@ -471,11 +471,11 @@ interface SandboxAlignment {
 }
 
 /**
- * Brings one sandbox's hosts and MCP servers in line with tet.json's rows, both ways and
- * against the sandbox's own (`live`), so a rule set by hand and deleted as a row goes too: the one
- * way they reach a sandbox, at its tab's start (prepareSbxRun) and at a Save (saveSbxSettings).
- * Hosts live in sbx's store, so a stopped sandbox takes them; MCP servers and the
- * ports (applyProjectPorts) need it running. Returns what sbx refused, or could not list.
+ * Brings one sandbox's hosts and MCP servers in line with tet.json's rows, both ways and against the
+ * sandbox's own (`live`), so a rule set by hand and deleted as a row goes too: the one way they reach
+ * a sandbox, at its tab's start (prepareSbxRun) and at a Save (saveSbxSettings). Hosts live in sbx's
+ * store, so a stopped sandbox takes them; MCP servers and the ports (applyProjectPorts) need it
+ * running. Returns what sbx refused, or could not list.
  */
 export async function alignSandbox(name: string, to: SandboxAlignment, onData?: OnData): Promise<SbxProblems> {
   const { settings, live, mcp } = to;
@@ -569,18 +569,19 @@ export function sandboxEnv({
 
 /**
  * Readies a tab's sandbox and returns the `sbx run` arguments: TET's mounts, skills and Allowed
- * paths, ports and variables (sandboxEnv: `env` for the caller to spawn `sbx run` with),
- * and with a control channel its env and the `tet-ctl` launcher. Creates the sandbox itself
- * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent, and
- * `sbx create` is told its workspace alone: every start, the creating one too, brings the sandbox
- * in line with tet.json the same way, each time: the mounts (mountAll), hosts, ports and
- * MCP servers (alignAtStart), against what sbx lists (readSandboxReads).
- * Applies tet.json as it stands and never writes it: what cannot be applied here
- * (readSbxProblems), or what sbx refuses, is skipped and returned as `problems` for the caller to
- * tell (sbxProblemNotices). `savedOver` says a Save
- * replaced tet.json's rows while this start ran, which then applied none of its own. Rejects when
- * creating fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's own cannot be
- * mounted.
+ * paths, ports and variables (sandboxEnv: `env` for the caller to spawn `sbx run` with), and with a
+ * control channel its env and the `tet-ctl` launcher. Creates the sandbox itself
+ * (ensureSandboxExists), since the launcher must be written before `sbx run` starts the agent.
+ *
+ * `sbx create` is told its workspace alone: every start, the creating one too, brings the sandbox in
+ * line with tet.json the same way: the mounts (mountAll), hosts, ports and MCP servers (alignAtStart),
+ * against what sbx lists (readSandboxReads). tet.json applies as it stands and is never written: what
+ * cannot be applied here (readSbxProblems), or what sbx refuses, is skipped and returned as `problems`
+ * for the caller to tell (sbxProblemNotices). `savedOver` says a Save replaced tet.json's rows while
+ * this start ran, which then applied none of its own.
+ *
+ * Rejects when creating fails, sbx cannot say what applies (readSbxProblems) or a folder of TET's
+ * own cannot be mounted.
  */
 export async function prepareSbxRun(
   request: SbxRunRequest,

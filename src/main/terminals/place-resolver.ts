@@ -91,11 +91,10 @@ export class PlaceResolver {
       // A notice only for a tab that cannot run on this machine.
       return this.sbxStranded(tab, places, "SBX is disabled for the project") ? "stranded" : onHost;
     }
-    // Started before it is known whether it may be used, since it is the slowest step and the
-    // readiness check answers nothing it depends on (why that is safe: ensureRunning) — but only
-    // once the check's `sbx ls` has answered (sbxListed): started beside it, the two would each start
-    // sbx's daemon and one would fail on its lock, so this wait stays however early it is moved. Not
-    // for a tab about to run on this machine, which would start a sandbox nobody asked for.
+    // Started before it is known whether it may be used, as the slowest step (why that is safe:
+    // ensureRunning), but only once the check's `sbx ls` has answered (sbxListed), or the two would
+    // each start sbx's daemon and one fail on its lock. Not for a tab about to run on this machine,
+    // which would start a sandbox nobody asked for.
     const warm = tab.sessionId && !tab.sandbox ? undefined : this.reads.sbxListed().then(() => this.reads.ensureRunning(sandbox.name));
     const ready = await this.reads.checkSbxReady(this.at.path, this.at.ref);
     if ("notReady" in ready) {

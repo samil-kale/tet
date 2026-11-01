@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState, type DragEvent, type HTMLAttributes } from "react";
 import { useLatest } from "./use-latest";
 
-/** Drag-reordering, shared by the projects lane's lists, the lanes, the strip's toggles and the
- *  panes' tab strips.
- *  Each supplies its own drag type (nothing else may take the drop: no other list, no terminal),
- *  its payload (an id, or the position where an entry can appear twice), and the move itself. */
+/** Drag-reordering, shared by the projects lane's lists, the ARCHIVE, a dialog's `RowSection` and the
+ *  panes' tab strips. Each supplies its own drag type (nothing else may take the drop: no other list,
+ *  no terminal), its payload (an id, or the position where an entry can appear twice), and the move
+ *  itself. */
 interface DragReorderOptions {
   /** This list's own MIME type, e.g. "application/x-tet-project". */
   dragType: string;
@@ -24,14 +24,14 @@ interface DragReorderOptions {
   halves?: boolean;
 }
 
-/** Any element: a row, a lane, a button. */
+/** Any element: a row, a tab. */
 type RowElement = HTMLElement;
 
 interface DragReorder {
   /** Spread onto each row, with its index: `handleProps` and `targetProps` on one element. */
   rowProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
-  /** What starts the row's drag, where that is a part of it (a lane's headers): the same object
-   *  per index across renders, so a context handing it on changes only with the rows. */
+  /** What starts the row's drag alone, where it takes no drop (the ARCHIVE's rows while filtering):
+   *  the same object per index across renders. */
   handleProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
   /** What takes the drop: the row's whole box. */
   targetProps: (index: number) => HTMLAttributes<RowElement>;

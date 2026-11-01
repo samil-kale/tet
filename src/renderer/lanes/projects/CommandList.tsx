@@ -156,8 +156,8 @@ interface CommandListProps {
   resolved: ResolvedRef | null;
   /** Set by the sash above the list. */
   height: number;
-  /** Brings a started command's tab to front in the pane the command last ran in — hence the
-      command line. By `refKey`. */
+  /** Brings a started command's tab to front in the pane the command last ran in, hence the command
+   *  line. By `refKey`. */
   onOpenTab: (refKey: string, tabId: string, command?: string) => void;
 }
 

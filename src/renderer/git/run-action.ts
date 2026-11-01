@@ -15,7 +15,7 @@ import { askLogin } from "./GitLogin";
  * is the one indicator while it is up. So `ask` leaves the view's bar alone and only `run`/`act`,
  * which have no dialog to show them, raise it.
  *
- * A file action needs no label — the section's own bar covers the whole section — while a git command
+ * A file action needs no label, as the section's own bar covers the whole section; a git command
  * says what it is doing.
  */
 export type FileAsk = (action: () => Promise<GitActionResult>) => Promise<string | undefined>;
@@ -34,8 +34,8 @@ export interface GitRun {
   ask: (label: string, action: GitAction) => Promise<string | undefined>;
 }
 
-/** One git command at a time per repository or worktree, labelled while it runs (`GitRun`). The tree asks its
- *  questions itself, knowing which remote holds a branch and where HEAD is. */
+/** One git command at a time per repository or worktree, labelled while it runs (`GitRun`). The tree
+ *  asks its questions itself, knowing which remote holds a branch and where HEAD is. */
 export interface BranchActions extends GitRun {
   /** A command runs in this repository or worktree; no second one is offered. */
   locked: boolean;
@@ -111,10 +111,10 @@ export function notifying<A extends unknown[]>(ask: (...args: A) => Promise<stri
 }
 
 /**
- * Runs a file action. The running mark is per repository or worktree, since one lane serves all; called once
- * per section, each with its own bar, and raised by `act` alone. Counted, not flagged: an action
- * the main process refuses while another runs (a context menu entry during a commit) ends first,
- * and must not clear the mark of the one still running.
+ * Runs a file action. The running mark is per repository or worktree, since one lane serves all;
+ * called once per section, each with its own bar, and raised by `act` alone. Counted, not flagged: an
+ * action the main process refuses while another runs (a context menu entry during a commit) ends
+ * first, and must not clear the mark of the one still running.
  */
 export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask: FileAsk } {
   const [actingIn, setActingIn] = useState<ReadonlyMap<string, number>>(() => new Map());
@@ -149,10 +149,10 @@ export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask
 }
 
 /**
- * The same for a branch command, which App runs (`runBranchAction`: one per repository or worktree, whatever
- * started it) while the bar belongs to the view that offered it — the git lane and the project
- * list each have one. Counted for the same reason as above, and wrapped around `run` alone: what a
- * question asked for runs on the question's bar.
+ * The same for a branch command, which App runs (`runBranchAction`: one per repository or worktree,
+ * whatever started it) while the bar belongs to the view that offered it: the git lane and the
+ * project list each have one. Counted for the same reason as above, and wrapped around `run` alone:
+ * what a question asked for runs on the question's bar.
  */
 function useBusyStart<A extends unknown[], R>(run: (...args: A) => Promise<R>): { busy: boolean; start: (...args: A) => Promise<R> } {
   const { busy, run: hold } = useBusy();
@@ -161,12 +161,13 @@ function useBusyStart<A extends unknown[], R>(run: (...args: A) => Promise<R>): 
 }
 
 /**
- * App's gate for the branch commands: one per repository or worktree at a time, whoever started it — a second
- * click mid-switch would stack two `git switch`. Mirrors `Repository.runAction`; `BranchActions.run`
- * is the one way in for them, a view asking its own question first (`ask`). Hands out the git lane's actions for
- * the repository or worktree on screen (`activeBranch`, its bar showing what it started, `ask` excepted: the
- * question that asked for it shows that one) and the project list's way of running a command in
- * any repository or worktree it lists (`runIn`, on the list's bar, `projectListBusy`).
+ * App's gate for the branch commands: one per repository or worktree at a time, whoever started it —
+ * a second click mid-switch would stack two `git switch`. Mirrors `Repository.runAction`;
+ * `BranchActions.run` is the one way in for them, a view asking its own question first (`ask`). Hands
+ * out the git lane's actions for the repository or worktree on screen (`activeBranch`, its bar
+ * showing what it started, `ask` excepted: the question that asked for it shows that one) and the
+ * project list's way of running a command in any repository or worktree it lists (`runIn`, on the
+ * list's bar, `projectListBusy`).
  */
 export function useBranchActions(activeRefKey: string | null): {
   activeBranch: BranchActions;

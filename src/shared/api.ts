@@ -267,7 +267,7 @@ export interface TETApi {
     onFileChanged: (listener: (payload: { ref: ProjectRef; path: string }) => void) => Unsubscribe;
     /** For `tet-ctl editor-get` and `editor-list`; null once the tab is closed. */
     reportEditor: (ref: ProjectRef, tabId: string, report: EditorReport | null) => void;
-    /** The project's active editor tab, which `editor-get` answers for. */
+    /** The repository's or worktree's active editor tab, which `editor-get` answers for. */
     reportActiveEditor: (ref: ProjectRef, tabId: string) => void;
     /** `tet-ctl editor-get` asks for the active editor tab's text; the listener answers. */
     onEditorContentRequest: (listener: (ref: ProjectRef) => string | undefined) => Unsubscribe;
@@ -313,12 +313,12 @@ export interface TETApi {
     input: (ref: ProjectRef, tabId: string, data: string) => void;
     /** The first resize starts the process (lazy spawn). */
     resize: (ref: ProjectRef, tabId: string, cols: number, rows: number) => void;
-    /** The project's full tab list on every change. */
+    /** The repository's or worktree's full tab list on every change. */
     onTabs: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
     /** One message per flush for all terminals. */
     onOutput: (listener: (batch: TerminalOutput[]) => void) => Unsubscribe;
     onStatus: (listener: (payload: TabRef & { status: TerminalStatus }) => void) => Unsubscribe;
-    /** Anything in the project still starting (a CLI booting, sessions listing). */
+    /** Anything in the repository or worktree still starting (a CLI booting, sessions listing). */
     onStartupProgress: (listener: (payload: { ref: ProjectRef; show: boolean }) => void) => Unsubscribe;
     /** A tab the control channel opened, to bring to front. */
     onShow: (listener: (payload: TabRef) => void) => Unsubscribe;

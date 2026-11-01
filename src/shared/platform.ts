@@ -41,7 +41,7 @@ export interface Platform {
   shellQuotePath(path: string): string;
   /** The OS's own terminal window running `executable` in `cwd`, then staying open on its shell, as
    *  candidates tried in order until one starts (util/process.ts's openExternalTerminal). `variables`
-   *  are exported in the line itself: a terminal that is already running hands its windows its own
+   *  are exported in the line itself: a terminal already running hands its windows its own
    *  environment, not the one it was started with. */
   externalTerminals(
     cwd: string,
@@ -71,8 +71,8 @@ export interface Platform {
   readonly centersTitle: boolean;
   /** The app quits with its last window; macOS keeps it running. */
   readonly quitsWithLastWindow: boolean;
-  /** Notifications go through Windows' activator (an AppUserModelID, notification XML), clicked even after TET
-   *  quit; elsewhere Electron's own notification, held while it shows. */
+  /** Notifications go through Windows' activator (an AppUserModelID, notification XML), clicked even
+   *  after TET quit; elsewhere Electron's own notification, held while it shows. */
   readonly windowsNotifications: boolean;
   /** The file whose presence keeps Docker Sandboxes' first-run wizard out of a tab (sbx-cli.ts);
    *  undefined where sbx shows none. */

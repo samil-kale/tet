@@ -144,16 +144,13 @@ export async function walkExplorer(
 }
 
 /**
- * The SEARCH section's matches, VS Code's "search in files": every line of every listed
- * file the query matches. The Explorer's own file set, always without what git ignores — VS
- * Code's `search.useIgnoreFiles`, which the tree's `excludeGitIgnore` does not decide, and a
- * search must not read `node_modules`. The files are read a few at a time (more only costs file
- * handles) until the match cap.
+ * The SEARCH section's matches, VS Code's "search in files": every line the query matches in the
+ * Explorer's own file set, always without what git ignores (VS Code's `search.useIgnoreFiles`, which
+ * the tree's `excludeGitIgnore` does not decide: a search must not read `node_modules`).
  *
- * The cap bounds what is listed, not the reading: a query matching nothing still costs the whole
- * repository. So a search gives up as soon as `signal` says the next one was asked for
- * (`Repository.searchFiles`) — typing in a large repository would otherwise have several full
- * scans running at once, all but the last one already discarded by the renderer.
+ * The match cap bounds what is listed, not the reading: a query matching nothing still costs the
+ * whole repository. So a search gives up as soon as `signal` says the next one was asked for
+ * (`Repository.searchFiles`), or typing would run several full scans at once.
  */
 export async function searchFiles(
   root: string,

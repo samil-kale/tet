@@ -3,7 +3,7 @@ const { EventEmitter } = require("node:events");
 /**
  * A notification a test's call into `showDesktopNotification` made: an event emitter, as the real
  * thing is, so a test can simulate a click on it. Kept on `instances`, oldest first, for a test to
- * find the one it just caused (notifications.test.ts via util.test.ts).
+ * find the one it just caused (util.test.ts).
  */
 class Notification extends EventEmitter {
   constructor(options) {

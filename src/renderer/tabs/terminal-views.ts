@@ -47,7 +47,7 @@ const FOCUS_OUT = "\x1b[O";
 
 /**
  * xterm instances live outside React, written to directly. Tab ids are unique only within their
- * project, so keyed by both.
+ * repository or worktree, so keyed by both.
  */
 const views = new Map<string, TerminalView>();
 
@@ -645,8 +645,8 @@ function dropView(key: string, view: TerminalView): void {
 }
 
 /**
- * Every terminal of a closed repository or worktree; `disposeTerminal` only covers tabs gone from a list the host
- * still reports.
+ * Every terminal of a closed repository or worktree; `disposeTerminal` only covers tabs gone from a
+ * list the host still reports.
  *
  * From the close path, never a pane's unmount: a meaningless remount (changed key, error boundary,
  * StrictMode) would throw away running terminals' scrollback.
@@ -654,8 +654,8 @@ function dropView(key: string, view: TerminalView): void {
  * The ptys are already dead (the host disposed the session manager); only buffers and DOM go.
  */
 export function disposeRefTerminals(ref: ProjectRef): void {
-  // A repository's or worktree's refKey holds no space: no other refKey starts with it plus the separator
-  // (shared/types/project.ts's refKeyOf).
+  // A repository's or worktree's refKey holds no space: no other refKey starts with it plus the
+  // separator (shared/types/project.ts's refKeyOf).
   const prefix = viewKey(ref, "");
   for (const held of [earlyOutput, restoredOutput]) {
     for (const key of [...held.keys()]) {

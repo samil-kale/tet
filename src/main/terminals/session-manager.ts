@@ -392,8 +392,8 @@ export class TabSessionManager {
   }
 
   /**
-   * One agent's sessions of this repository, from each of its places (TabPlace.listSessions): the
-   * sandbox's tagged with it, so resolvePlace sends them back.
+   * One agent's sessions of this repository or worktree, from each of its places
+   * (TabPlace.listSessions): the sandbox's tagged with it, so resolvePlace sends them back.
    */
   private async listSessions({ host, sandbox }: AgentRuntime): Promise<AgentSessionInfo[]> {
     // In parallel: the bootstrap listing, and every reconcile.
@@ -1070,11 +1070,10 @@ export class TabSessionManager {
    * A saved command respawns in place (`TerminalSession.restart`). An agent tab with no process
    * (`stopped`, or `error` incl. a start that gave up) takes the whole start path: the sandbox and
    * its mounts may have changed outside TET, so checks, sandbox and mounts are redone and the
-   * session resumed. With
-   * `running`, a running one quits first, then takes the same path — only the window asks that
-   * (the tab menu, the environment dialog), never `tabs-restart`, which would let an agent end
-   * another's session or its own. A tab not fitted yet waits for its first fit. False where there
-   * was nothing to restart.
+   * session resumed. With `running`, a running one quits first, then takes the same path. Only the
+   * window asks that (the tab menu, the environment dialog), never `tabs-restart`, which would let an
+   * agent end another's session or its own. A tab not fitted yet waits for its first fit. False where
+   * there was nothing to restart.
    */
   restartTab(tabId: string, running = false): boolean {
     const tab = this.tabOf(tabId);
@@ -1166,13 +1165,13 @@ export class TabSessionManager {
   }
 
   /**
-   * A tab's hook report — how turns reach TET ("Turns and tab marks" in AGENTS.md); only a turn
-   * the user cut short is ended otherwise (reconcile, AgentSessionInfo.turnEndedAt).
-   * Addressed by tab (`TET_TAB_ID` in the hook's environment, passed into a sandbox by
-   * prepareSbxRun), so no turn is reported for a session no tab has claimed.
+   * A tab's hook report: how turns reach TET ("Turns and tab marks" in AGENTS.md); only a turn the
+   * user cut short is ended otherwise (reconcile, AgentSessionInfo.turnEndedAt). Addressed by tab
+   * (`TET_TAB_ID` in the hook's environment, passed into a sandbox by prepareSbxRun), so no turn is
+   * reported for a session no tab has claimed.
    *
-   * Answers the agent's stdout and the notification, composed here so settings are read at the event, not
-   * baked in at setup. Showing a mark is the renderer's call; no notification for a tab on screen
+   * Answers the agent's stdout and the notification, composed here so settings are read at the event,
+   * not baked in at setup. Showing a mark is the renderer's call; no notification for a tab on screen
    * (`setOnScreen`).
    */
   hookEvent(tabId: string, event: HookEvent, payload: string, reportedAt: number | undefined, side: ControlSide): HookOutcome {
@@ -1187,8 +1186,8 @@ export class TabSessionManager {
     return { ...this.applyHook(tabId, tab, bound, event, payload, reportedAt), stdout };
   }
 
-  /** hookEvent's state change and notification: `tab` is marked, `bound` (it, or a detached one) named its
-   *  session. */
+  /** hookEvent's state change and notification: `tab` is marked, `bound` (it, or a detached one)
+   *  named its session. */
   private applyHook(
     tabId: string,
     tab: TabState | undefined,

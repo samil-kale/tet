@@ -44,7 +44,7 @@ interface PaneProps {
   /** The repository's or worktree's folder, where the mount pickers open. */
   folder: string;
   paneId: PaneId;
-  /** The project's preset, for this pane's "move to" siblings. */
+  /** The preset, for this pane's "move to" siblings. */
   preset: SplitPreset;
   /** This pane's tabs in the strip's order (`inOrder`). */
   tabs: PaneTab[];
@@ -57,11 +57,11 @@ interface PaneProps {
   /** Shows a tab; in another pane, moves it there. */
   onActivate: (tabId: string, paneId: PaneId) => void;
   onFocus: (paneId: PaneId) => void;
-  /** Editor tabs are renderer-only, unknown to `terminals.close`. */
+  /** Editor tabs are renderer-only, unknown to `tabs.close`. */
   onCloseEditors: (tabIds: string[]) => void;
   finishedTabIds: string[];
   waitingTabIds: string[];
-  /** One of this pane's tabs starting, or — only on pane "a" — a project-wide reason. */
+  /** One of this pane's tabs starting, or — only on pane "a" — a strip-wide reason. */
   busy: boolean;
   /**
    * Pixels: one of the two for a sash-sized pane, neither for the filling one. Numbers, not a

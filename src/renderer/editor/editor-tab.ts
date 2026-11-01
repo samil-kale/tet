@@ -1,10 +1,10 @@
 import type { ProjectRef } from "../../shared/types/project";
 
 /**
- * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview
- * tab per repository or worktree, replaced by the next file opened; it is kept (no longer replaced) by an edit,
- * "Keep Open" or an Explorer double-click, and the next file gets a new preview tab. Which tab is
- * the preview is the editor's own state (`editor-views.ts`), decided where an edit lands. A path
+ * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview tab
+ * per repository or worktree, replaced by the next file opened; it is kept (no longer replaced) by an
+ * edit, "Keep Open" or an Explorer double-click, and the next file gets a new preview tab. Which tab
+ * is the preview is the editor's own state (`editor-views.ts`), decided where an edit lands. A path
  * is open in at most one tab per repository or worktree, and a commit's file in one per commit.
  * Renderer-only: no pty, no session; a restart brings it back under its id (`use-tab-restore.ts`,
  * `serializeLayout`).

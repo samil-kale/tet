@@ -11,8 +11,8 @@ import { watchTranscriptDir } from "../../src/main/agents/transcript";
 import { eventually, keepEnv, tempDir } from "../helpers";
 
 /**
- * The session providers against transcripts written the way the CLIs write them. A regression in the title rules or turn forensics shows a
- * wrong title or a spinner that never stops, caught only here.
+ * The session providers against transcripts written the way the CLIs write them. A regression in the
+ * title rules or turn forensics shows a wrong title or a spinner that never stops, caught only here.
  */
 
 const AT = "2026-03-04T10:00:00.000Z";

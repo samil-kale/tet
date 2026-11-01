@@ -59,7 +59,7 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
     const previousTabs = previousTabsRef.current;
     previousTabsRef.current = tabs;
     const reconciled = reconciledRef.current;
-    // As settled at this push: the updater may run once a project has settled since.
+    // As settled at this push: the updater may run once one has settled since.
     const settled = new Set(persistence.current.settled);
     setLayouts((current) => reconcileLayouts(current, tabs, previousTabs, reconciled, settled));
   }, [tabs]);

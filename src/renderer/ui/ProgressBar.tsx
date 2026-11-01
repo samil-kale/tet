@@ -7,11 +7,12 @@ const SPEED = 500;
 
 /**
  * The one indeterminate progress bar, drawn under the header it is a child of, which declares
- * `position: relative`. See "One progress indicator per section" in AGENTS.md. Never a second one
- * under a header: a new slow reason feeds the bar it has. No spinner stands in for it, and a
- * button disabled for being underway only dims; the one spinner is a session's working mark
- * (`TabMark`), a status rather than progress. The one determinate bar is a download's notice
- * (Notices.tsx's `showProgress`), which runs this one while its share is unknown.
+ * `position: relative`. Never a second one under a header: a new slow reason feeds the bar it has.
+ * In a dialog that bar is `DialogFrame`'s `busy`, so a busy state held by a nested view is lifted to
+ * the view owning the frame (`hold`). No spinner stands in for it, and a button disabled for being
+ * underway only dims; the one spinner is a session's working mark (`TabMark`), a status rather than
+ * progress. The one determinate bar is a download's notice (Notices.tsx's `showProgress`), which
+ * runs this one while its share is unknown.
  *
  * Length and speed are absolute, not a share of the width, so bars of different widths side by
  * side look alike; the duration follows from the measured width. `useLayoutEffect`, so the first

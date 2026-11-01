@@ -884,16 +884,6 @@ describe("what sbx keeps on this machine", () => {
     assert.deepEqual([...(await store.environmentValues("p"))], [["NPM_TOKEN", "npm"]]);
   });
 
-  it("reads a file written under the legacy `variables` key", async () => {
-    fakeSafeStorage();
-    const dir = tempDir("tet-sbx-local-");
-    fs.writeFileSync(
-      path.join(dir, "sbx-local.json"),
-      JSON.stringify({ p: { variables: { NPM_TOKEN: Buffer.from("sealed:npm").toString("base64") } } }),
-    );
-    assert.deepEqual([...(await new SbxLocalStore(dir).environmentValues("p"))], [["NPM_TOKEN", "npm"]]);
-  });
-
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", async () => {
     fakeSafeStorage();
     const store = new SbxLocalStore(tempDir("tet-sbx-local-"));

@@ -187,8 +187,8 @@ textarea:focus,
   text-decoration: underline;
 }
 
-/* RadioGroup: VS Code's radio widget, at the fields' height and a button's padding. A border between two options is drawn once: an inactive one leaves off its
-   right, the one after the active its left. */
+/* RadioGroup: VS Code's radio widget, at the fields' height and a button's padding. A border between
+   two options is drawn once: an inactive one leaves off its right, the one after the active its left. */
 .radio-group {
   display: flex;
   align-self: flex-start;
@@ -464,9 +464,9 @@ textarea:focus,
   background: var(--tet-editor-background);
 }
 
-/* The window's bottom edge (VS Code's status bar), after `.body`: the active repository or
-   worktree, and its branch. Its icons read smaller than the rest of the
-   app's. The Navigation Bar's own background: both sit on the window's edge. */
+/* The window's bottom edge (VS Code's status bar), after `.body`: the active repository or worktree,
+   and its branch. Its icons read smaller than the rest of the app's. The Navigation Bar's own
+   background: both sit on the window's edge. */
 .status-bar {
   display: flex;
   align-items: center;
@@ -1073,9 +1073,9 @@ textarea:focus,
   min-width: 0;
 }
 
-/* One project's split: 1–4 `.pane`s ("Split view" in AGENTS.md). A row, since every
-   preset's first sash is vertical; stacked panes nest in a column. Relative for
-   `.snap-preview`; no stacking context. */
+/* One repository's or worktree's split: 1–4 `.pane`s ("Split view" in AGENTS.md). A row, since every
+   preset's first sash is vertical; stacked panes nest in a column. Relative for `.snap-preview`; no
+   stacking context. */
 .panes-grid {
   position: relative;
   display: flex;
@@ -1663,7 +1663,7 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-/* A toggle whose lane is out (the strip's lane toggles). focusBorder, as everything that
+/* A toggle whose lane is out (the Navigation Bar's lane toggles). focusBorder, as everything that
    points: `--tet-button-background` is near white in Dark Slate. A disabled one marks nothing. */
 .icon-button.active:not(:disabled) {
   opacity: 1;

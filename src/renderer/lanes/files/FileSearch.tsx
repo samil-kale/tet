@@ -54,8 +54,8 @@ interface FileSearchProps {
 
 /**
  * The SEARCH section: VS Code's search box, its own query, over what that query finds in the files'
- * lines. Listed as VS Code's search view does — a row per file, collapsed until it is expanded,
- * and under it a row per match with the match marked; the summary is the section's header. Rows of the
+ * lines. Listed as VS Code's search view does: a row per file, collapsed until it is expanded, and
+ * under it a row per match with the match marked; the summary is the section's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.
  */
 export const FileSearch = memo(function FileSearch({ resolved, result, runSearch, onOpenMatch, onExpanded, ref }: FileSearchProps) {

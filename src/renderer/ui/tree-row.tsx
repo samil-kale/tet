@@ -4,9 +4,10 @@ import { PATH_DRAG_TYPE, setDragName, type DragName } from "./row-drag";
 
 /* VS Code's indent: TreeRenderer's DefaultIndent and `workbench.tree.indent` (both 8). The chevron
  * sits as in the branch tree's headers (`.tree-header` in styles.css: 9px in, 4px before the label),
- * not as VS Code's `.monaco-tl-twistie`. A file has no chevron — views.css zeroes it under
- * `align-icons-and-twisties`, which Seti (file icons, no folder icons) turns on — so its file icon sits
- * where a sibling folder's chevron does, its label level with the folder's (.file-icon in styles.css). */
+ * not as VS Code's `.monaco-tl-twistie`. A file has no chevron — VS Code's views.css zeroes it under
+ * `align-icons-and-twisties`, which Seti (file icons, no folder icons) turns on — so its file icon
+ * sits where a sibling folder's chevron does, its label level with the folder's (.file-icon in
+ * styles.css). */
 export const INDENT_STEP = 8;
 export const INDENT_BASE = 9;
 /** Holds a folder's chevron: the chevron's own box, `--icon-size` in styles.css. */

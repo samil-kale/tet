@@ -9,8 +9,8 @@ const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };
 /**
  * The models `agentId` can be asked with, as a `Dropdown`'s options, and why they could not be
  * listed. The listing runs on the view's bar (`hold`, as `fetchHeld`); until it lands a remembered
- * `model` stands in for it.`offered` is false once it has landed without `model`, for the caller
- * to replace a model the agent no longer offers.
+ * `model` stands in for it. `offered` is false once it has landed without `model`, for the caller to
+ * replace a model the agent no longer offers.
  */
 export function useAskModels(
   agentId: AgentId,

@@ -84,13 +84,12 @@ type Pending = Question & { cancel: () => void };
  * Asking the user, as `notify` tells them: a function anything can call, and one mounted component
  * drawing what is pending, in the window rather than Electron's `dialog.showMessageBox`. The main
  * process asks nothing: a question lives in the view offering the action, except an agent's
- * `env-request` (`EnvDialog`). Questions only — a form with two buttons;
- * `SettingsDialog` and the rest of `dialogs/` are not part of this.
+ * `env-request` (`EnvDialog`). Questions only, a form with two buttons; `SettingsDialog` and the rest
+ * of `dialogs/` are not part of this.
  *
  * `confirm` is for the irreversible only. `prompt` is for what is typed — a name, a message, a set
- * of fields drawn by the caller from `Field.tsx`'s components — and is where every rename
- * happens: a tab is too narrow to name inline, and a commit-on-blur field loses typing to a stray
- * click.
+ * of fields drawn by the caller from `Field.tsx`'s components — and is where every rename happens: a
+ * tab is too narrow to name inline, and a commit-on-blur field loses typing to a stray click.
  */
 const pending = createStore<Pending | null>(null);
 
@@ -250,7 +249,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       locked={busy || (held && !dialog.abort)}
       onCancel={dialog.cancel}
       abort={dialog.abort}
-      // Plain to see why it waits: a field left empty (AGENTS.md's exception to a blocked reason).
+      // Plain to see why it waits: a field left empty (`DialogPrimary.disabled`).
       primary={{ label: dialog.confirmLabel, disabled: held || !dialog.ready(value), run: () => void submit() }}
       selectField
     >

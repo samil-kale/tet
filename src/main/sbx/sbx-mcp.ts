@@ -86,8 +86,8 @@ export async function loadMcp(sandbox: string, names: readonly string[], onData?
 /**
  * Unloads each server from a running sandbox (as loadMcp), ending its tools *now*, as a revoked
  * mount does. Unloading one that is not loaded answers 404 with exit 1 and no code of its own, so
- * that answer is told by its words — the one place that does: it is what the row was removed for.
- * The registration stays. All at once, as loadMcp.
+ * that answer is told by its words: it is what the row was removed for. The registration stays. All
+ * at once, as loadMcp.
  */
 export async function unloadMcp(sandbox: string, names: readonly string[], onData?: OnData): Promise<Record<string, string>> {
   const results = await Promise.all(names.map((name) => runSbx(["mcp", "unload", name, "--sandbox", sandbox], { onData })));

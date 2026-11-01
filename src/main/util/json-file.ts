@@ -35,8 +35,8 @@ export function readRows<T>(file: string, strings: string[], accepts: (entry: Re
 }
 
 /** Writes one of TET's own files as indented JSON, renamed into place; throws when it cannot. For a
- *  store written from a Save someone waits on: its failure is theirs to see, and the store changes
- *  its contents only once the file has them. */
+ *  store written from a Save someone waits on: its failure reaches them, in the dialog or `tet-ctl`'s
+ *  answer, and the store changes its contents only once the file has them. */
 export function writeJson(file: string, value: unknown): void {
   writeFileAtomic.sync(file, JSON.stringify(value, null, 2), "utf8");
 }

@@ -35,8 +35,8 @@ export interface TabDescriptor {
   updatedAt?: number;
   /** ms since epoch; absent without a session. */
   createdAt?: number;
-  /** Last turn finished unseen, ms since epoch; cleared once on screen (`terminals.seen`). A time,
-   *  not a flag: the project row's mark opens the oldest first. */
+  /** Last turn finished unseen, ms since epoch; cleared once on screen (`tabs.seen`). A time, not a
+   *  flag: the project row's mark opens the oldest first. */
   finishedAt?: number;
   /** Working a turn — reported by the agent at both ends, never read off the TUI. False once the
    *  process has ended. */

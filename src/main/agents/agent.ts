@@ -43,9 +43,9 @@ export interface SandboxSessionMount {
 }
 
 /**
- * How sessions are read out of an sbx sandbox: a host directory bind-mounted where the CLI writes,
- * read by the host transcript code. No `watch`: the sandboxed tab's own output schedules the
- * reconcile.
+ * How sessions are read out of an sbx sandbox, without starting it: a host directory bind-mounted
+ * where the CLI writes (`sessions/` of its agent folder), read by the host transcript code. No
+ * `watch`: the sandboxed tab's own output schedules the reconcile.
  */
 export interface SandboxSessions {
   mounts: SandboxSessionMount[];
@@ -102,9 +102,9 @@ export interface AgentPaths {
    */
   agentDir: string;
   /**
-   * The one notification setting handed to an agent: every other one is read when a report
-   * arrives (session-manager's `notification`), but the idle reminder has no mark, so its hook is only
-   * registered when wanted, so a change applies only to tabs started after it.
+   * The one notification setting handed to an agent: every other one is read when a report arrives
+   * (session-manager's `notification`), but the idle reminder has no mark, so its hook is registered
+   * only when wanted, and a change applies only to tabs started after it.
    */
   idleReminder: boolean;
   /** The window's theme, for agents that are told it rather than reading the terminal's colors. */
@@ -212,10 +212,11 @@ export interface AgentTurns {
 export interface AgentHost {
   /**
    * Setup before any session spawns: hooks, settings, plugins, and how TET's system prompt
-   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. The
-   * same for every project, so it knows none (data-root.ts's agentConfigDir). A rejection marks the
-   * agent unstartable, so reject only for what makes it unusable; a failed optional write is
-   * swallowed.
+   * (system-prompt.ts) reaches the model — the only place an agent may write configuration. Handed
+   * no project path, it writes only into `config/<agent>` (data-root.ts's agentConfigDir): one set of
+   * files serves every repository and worktree, rewritten once when a setting in it changes
+   * (HostSetups). A rejection marks the agent unstartable, so reject only for what makes it unusable;
+   * a failed optional write is swallowed.
    */
   prepare(executable: string, paths: AgentPaths): Promise<SpawnPreparation>;
 }

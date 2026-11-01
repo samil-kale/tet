@@ -20,7 +20,8 @@ const STAGGER_MS = 150;
 /** The notification center keeps this many, the oldest dropped first. */
 const CENTER_MAX = 100;
 
-/** How long a notice takes to enter or leave, and the notification center to close; the stylesheet's `.notice-item` transition. */
+/** How long a notice takes to enter or leave, and the notification center to close; the
+ *  stylesheet's `.notice-item` transition. */
 const LEAVE_MS = 350;
 
 export interface ShownNotice extends Omit<Notice, "toast"> {
@@ -29,7 +30,8 @@ export interface ShownNotice extends Omit<Notice, "toast"> {
   toast: boolean;
   /** Seen in the notification center. */
   read: boolean;
-  /** Fading out of the notification center, removed once it has. `center`: the last one, which takes the whole center along. */
+  /** Fading out of the notification center, removed once it has. `center`: the last one, which takes
+   *  the whole center along. */
   leaving?: "item" | "center";
   /** Its toast fading out; the entry stays in the notification center. */
   dismissing?: true;
@@ -39,11 +41,10 @@ export interface ShownNotice extends Omit<Notice, "toast"> {
 
 /**
  * How the user is told something, unless a dialog on screen says it (`DialogFrame`, `Field`); no
- * other view keeps a message of its own. A plain function,
- * not a hook or prop, so anything anywhere can report without a threaded callback — modelled on
- * VS Code's `window.showErrorMessage`. The main process says things through `app:notice`. Every
- * notice stays listed in the notification center (`NoticesCenter`) until removed there; the toast
- * is only its first showing.
+ * other view keeps a message of its own. A plain function, not a hook or prop, so anything anywhere
+ * can report without a threaded callback, modelled on VS Code's `window.showErrorMessage`. The main
+ * process says things through `app:notice`. Every notice stays listed in the notification center
+ * (`NoticesCenter`) until removed there; the toast is only its first showing.
  */
 const shown = createStore<ShownNotice[]>([]);
 const centerOpen = createStore(false);
@@ -340,7 +341,8 @@ export function syncWorkingNotices(working: { target: TabRef; agentId: AgentId; 
   }
 }
 
-/** Whether the user can remove a notice from the notification center: not one that follows its tab's state (`mark`: a finished turn, a question, a working session). */
+/** Whether the user can remove a notice from the notification center: not one that follows its tab's
+ *  state (`mark`: a finished turn, a question, a working session). */
 export function removable(notice: ShownNotice): boolean {
   return !notice.mark;
 }
@@ -369,7 +371,8 @@ export function clearNotices(): void {
   closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
-/** A notice's box, in a toast and in the notification center alike: its severity and, for a turn's notice (`agentId`), `session`. */
+/** A notice's box, in a toast and in the notification center alike: its severity and, for a turn's
+ *  notice (`agentId`), `session`. */
 export function noticeClass(notice: ShownNotice): string {
   return `notice ${notice.severity}${notice.agentId ? " session" : ""}`;
 }

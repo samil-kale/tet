@@ -30,16 +30,14 @@ export function useEditorOpening(
   /**
    * Shows a file in an editor tab (the preview rule: `editor-tab.ts`), the way `how` asks for
    * (`OpenEditor`). A path already open is brought to front, kept if asked; else the preview tab
-   * takes it, unless `keep`; else a new tab.
-   * The editor is told before the tab draws, since the tab attaches what it made; the tab is
-   * activated before it appears in the strip, as a new terminal tab is — both in one handler, so
-   * the layout and the list agree on the first render.
+   * takes it, unless `keep`; else a new tab. The editor is told before the tab draws, since the tab
+   * attaches what it made; the tab is activated before it appears in the strip, as a new terminal tab
+   * is — both in one handler, so the layout and the list agree on the first render.
    *
    * A tab already open only ever has its diff switched on, never off, so opening a file again
    * leaves what the user chose there (`showDiff`).
    *
-   * Handed as is to every way in but the changes list (`openActiveDiff`) — the Explorer, its
-   * search, a path ctrl-clicked in a terminal, a Markdown preview's link: the file itself, in the
+   * Handed as is to every way in but the changes list (`openActiveDiff`): the file itself, in the
    * repository or worktree the view names.
    */
   const openEditor = useCallback(

@@ -13,8 +13,8 @@ interface EnvDialogProps {
 /**
  * What an agent asked for with `tet-ctl env-request`: environment variables typed here and never
  * into the chat. The one question the main process asks (AGENTS.md): it runs its own answer, so what
- * refuses Save stays in the dialog. A tab takes up saved values only when it starts, so saving restarts
- * the asking one; a request without a tab only saves.
+ * refuses Save stays in the dialog. A tab takes up saved values only when it starts, so saving
+ * restarts the asking one; a request without a tab only saves.
  */
 export function EnvDialog({ request, onClose }: EnvDialogProps) {
   // Keyed by name: the agent's names are unique (the verb dedupes them).

@@ -335,11 +335,6 @@ describe("readSbxSettings", () => {
     );
   });
 
-  it("reads the legacy `variables` key where `environment` is absent", async () => {
-    put(JSON.stringify({ sbx: { variables: ["NPM_TOKEN"] } }));
-    assert.deepEqual((await readSbxSettings(root)).environment, ["NPM_TOKEN"]);
-  });
-
   it("drops a malformed row rather than throwing, and never carries a token", async () => {
     put(
       JSON.stringify({
@@ -353,17 +348,7 @@ describe("readSbxSettings", () => {
             { path: "/elsewhere", access: "ro", os: "aix" },
           ],
           hosts: ["ok.example.com", 42, "", "  spaced.example.com  "],
-          // Legacy: SBX secrets were removed and the key is ignored. Remove this input after 2026-11-17.
-          secrets: [{ env: "API_KEY", hosts: ["api.example.com"] }],
-          environment: [
-            { env: " NPM_TOKEN ", value: "should-not-be-read" },
-            { env: "NPM_TOKEN" },
-            { env: "PATH" },
-            { env: "TET_TAB_ID" },
-            { env: "not a name" },
-            "BARE_STRING",
-            {},
-          ],
+          environment: [" NPM_TOKEN ", "NPM_TOKEN", "PATH", "TET_TAB_ID", "not a name", "SECOND", { env: "AN_OBJECT" }, {}],
           mcp: [
             { name: " notion ", url: " https://mcp.notion.com/mcp " },
             { name: "notion", url: "https://twice.example.com/mcp" },
@@ -381,7 +366,7 @@ describe("readSbxSettings", () => {
       ports: [{ host: "3000", container: "3000" }],
       paths: [{ path: "~/data", access: "rw" }],
       hosts: ["ok.example.com", "spaced.example.com"],
-      environment: ["NPM_TOKEN", "BARE_STRING"],
+      environment: ["NPM_TOKEN", "SECOND"],
       mcp: [
         { name: "notion", url: "https://mcp.notion.com/mcp" },
         { name: "local", url: "" },

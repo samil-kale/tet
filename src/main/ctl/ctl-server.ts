@@ -64,8 +64,8 @@ export async function startControlServer(deps: ControlDeps, token: string, port:
     if (!side.admits(entry)) {
       return { response: reject("unauthorized", `${request.verb} ${side.refusal}`) };
     }
-    // A host tab reaches every project, repository and worktree; a
-    // sandboxed one only its own, the one its sandbox mounts — but for an `ownProject` verb.
+    // A host tab reaches every project, repository and worktree; a sandboxed one only its own, the
+    // one its sandbox mounts, but for an `ownProject` verb.
     const own = callerRef(caller);
     const reach = side.reach(entry);
     try {

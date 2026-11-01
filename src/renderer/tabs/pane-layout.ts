@@ -67,7 +67,7 @@ export function isPlainShell(tab: LayoutTab): boolean {
   return tab.agentId === "shell" && tab.command === undefined;
 }
 
-/** A project's split state — held in `App`, not in `TabArea` (see AGENTS.md). */
+/** A repository's or worktree's split state, held in `App` (`use-project-layouts.ts`). */
 export interface ProjectLayout {
   preset: SplitPreset;
   /** Where a new tab lands and what the tab shortcuts act on; keyboard focus follows it. */
@@ -162,8 +162,8 @@ export function tabsOnScreen(layout: ProjectLayout, focused: boolean, covered: b
 }
 
 /**
- * The project's active editor tab, given its editor tab ids: the one active in the focused pane,
- * else the first on screen, else `previous` while still open, else the last opened.
+ * The active editor tab of the repository or worktree, given its editor tab ids: the one active in
+ * the focused pane, else the first on screen, else `previous` while still open, else the last opened.
  */
 export function activeEditorTab(layout: ProjectLayout, editorTabIds: string[], previous: string | undefined): string | undefined {
   const open = (tabId: string | null | undefined): tabId is string => tabId != null && editorTabIds.includes(tabId);
@@ -180,7 +180,7 @@ function pickActive(list: LayoutTab[], previousList: LayoutTab[], wanted: string
   }
   // Never in the list: a tab just activated whose push has not arrived, or a restored one whose
   // session is not listed yet. Kept, or the neighbour rule steals its selection; a restored one
-  // that never comes is dropped once the project settles (`collapseEmpty`).
+  // that never comes is dropped once the sessions are listed (`collapseEmpty`).
   if (wanted && !previousList.some((tab) => tab.tabId === wanted)) {
     return wanted;
   }
@@ -484,9 +484,9 @@ export function collapseClosed(layout: ProjectLayout, tabs: LayoutTab[], previou
 }
 
 /**
- * The collapse once a project's bootstrap has listed every session: every empty pane counts as
- * emptied, a snap's included. What the transitions cannot take (the grid's b or d) stays. First a
- * restored active tab that never came gives way to the pane's most recently used one.
+ * The collapse once a repository's or worktree's bootstrap has listed every session: every empty
+ * pane counts as emptied, a snap's included. What the transitions cannot take (the grid's b or d)
+ * stays. First a restored active tab that never came gives way to the pane's most recently used one.
  */
 export function collapseEmpty(layout: ProjectLayout, tabs: LayoutTab[]): ProjectLayout {
   const open = new Set(tabs.map((tab) => tab.tabId));
@@ -699,8 +699,8 @@ export function snapZoneAt(
 
 /**
  * `localStorage` under `layout-storage.ts`'s namespace: layout describes the window, not the
- * repository. Per repository or worktree (its `refKey`), unlike `useStoredSize`/`useStoredToggle`'s fixed
- * keys. `suffix` tells the layout from `TabArea`'s sash positions.
+ * repository. Per repository or worktree (its `refKey`), unlike `useStoredSize`/`useStoredToggle`'s
+ * fixed keys. `suffix` tells the layout from `TabArea`'s sash positions.
  */
 export function layoutStorageKey(refKey: string, suffix: string): string {
   return layoutKey(`terminals.${refKey}.${suffix}`);

@@ -121,7 +121,7 @@ function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
     return true;
   }
   return (
-    // A linked worktree's own index is under `worktrees/<id>`; the common one is the main's.
+    // A linked worktree's own index is under `worktrees/<id>`; the common one is the repository's.
     (ownWorktree !== undefined && normalized === ".git/index") ||
     // git's own locks; a lockfile in the tree (yarn.lock, Cargo.lock) is a change like any other.
     (normalized.startsWith(".git/") && normalized.endsWith(".lock")) ||
@@ -166,8 +166,8 @@ export interface RepositoryManagerCallbacks {
   onMissing: (projectId: string) => void;
 }
 
-/** One repository's state, the single source of truth for the git lane and the terminals.
- *  Refreshed after filesystem changes, so a branch switched in a terminal shows up. */
+/** The state of one repository or worktree, the single source of truth for the git lane and the
+ *  terminals. Refreshed after filesystem changes, so a branch switched in a terminal shows up. */
 export class Repository {
   private state: RepositoryState = EMPTY_REPOSITORY_STATE;
   /** `state` serialized, so a refresh serializes only its own side to compare. */
@@ -806,22 +806,18 @@ export class Repository {
     return searchFiles(this.at.path, query, this.search.signal);
   }
 
-  /** The Explorer's "New File..." (explorer.ts). */
   createFile(filePath: string): Promise<ActionResult> {
     return createFile(this.at.path, filePath);
   }
 
-  /** The Explorer's "New Folder..." (explorer.ts). */
   createDirectory(dirPath: string): Promise<ActionResult> {
     return createDirectory(this.at.path, dirPath);
   }
 
-  /** The Explorer's "Delete..." (explorer.ts). */
   deletePath(filePath: string): Promise<ActionResult> {
     return deletePath(this.at.path, filePath);
   }
 
-  /** The Explorer's "Rename..." (explorer.ts). */
   renamePath(fromPath: string, toPath: string): Promise<ActionResult> {
     return renamePath(this.at.path, fromPath, toPath);
   }

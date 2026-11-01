@@ -61,8 +61,8 @@ export function useEditorSync(
       }),
     [],
   );
-  // Reported to main as App's `onScreenTabIds` is: only the renderer knows. A repository or worktree whose
-  // last editor tab closed reports nothing; main finds no report under the old id.
+  // Reported to main as App's `onScreenTabIds` is: only the renderer knows. A repository or worktree
+  // whose last editor tab closed reports nothing; main finds no report under the old id.
   const reportedActive = useRef<Record<string, string>>({});
   useEffect(() => {
     for (const [refKey, tabId] of Object.entries(activeEditors)) {

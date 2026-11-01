@@ -163,8 +163,8 @@ export class AppWindow {
   }
 
   /**
-   * A notification disappears; this lasts until the window is focused (the `focus` handler): taskbar flash
-   * on Windows, dock bounce on macOS, urgency hint on Linux. No badge count: only macOS has one
+   * A notification disappears; this lasts until the window is focused (the `focus` handler): taskbar
+   * flash on Windows, dock bounce on macOS, urgency hint on Linux. No badge count: only macOS has one
    * everywhere.
    */
   attractAttention = (): void => {

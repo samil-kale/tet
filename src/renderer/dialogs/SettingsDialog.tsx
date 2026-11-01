@@ -141,10 +141,10 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 ];
 
 /**
- * Everything TET keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits
- * its own copy and writes on Save; Cancel and Escape drop the edits. A setting reaches an agent
- * through `AgentPaths` at `AgentHost.prepare`, once per agent (HostSetups), as does the color theme. Deliberately
- * not in here: the tab marks.
+ * Everything TET keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits its
+ * own copy and writes on Save; Cancel and Escape drop the edits. A setting reaches an agent through
+ * `AgentPaths` at `AgentHost.prepare`, once per agent (HostSetups), as does the color theme.
+ * Deliberately not in here: the tab marks.
  */
 export function SettingsDialog({ onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
