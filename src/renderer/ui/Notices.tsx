@@ -95,8 +95,8 @@ export function useCenterOpen(): boolean {
   return useStore(centerOpen);
 }
 
-/** A notice arriving now is seen in the open notification center, so it has no toast to come with its
- *  closing; one arriving while the center fades out would be missed without. */
+/** A notice arriving now is seen in the open notification center: read, with no toast to come with
+ *  its closing. One arriving while the center fades out would be missed: unread, with its toast. */
 function seenInCenter(): boolean {
   return centerOpen.get() && !centerClosing.get();
 }
@@ -179,7 +179,7 @@ function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "t
     title,
     message,
     toast: toast !== false && !seenInCenter(),
-    read: centerOpen.get(),
+    read: seenInCenter(),
     target,
     mark,
     agentId,
@@ -203,8 +203,8 @@ function report(severity: NoticeSeverity, message: string, title?: string): void
 /**
  * A download's progress, one notice per `key` updated in place: it stands, with a bar along its
  * bottom edge as VS Code's, until the progress ends, the X dismisses its toast or the notification
- * center opens. Ended on `done`,
- * it stays in its place as a plain info with its toast anew; ended otherwise, it goes.
+ * center opens. Ended on `done`, it stays in its place as a plain info with its toast anew; ended
+ * otherwise, it goes.
  */
 export function showProgress({ key, message, fraction, done }: NoticeProgress): void {
   const standing = shown.get().find((notice) => notice.progress?.key === key);
@@ -214,7 +214,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
         notify("info", message);
       }
     } else if (done) {
-      const ended: ShownNotice = { id: standing.id, severity: "info", message, toast: !seenInCenter(), read: centerOpen.get() };
+      const ended: ShownNotice = { id: standing.id, severity: "info", message, toast: !seenInCenter(), read: seenInCenter() };
       shown.set(shown.get().map((notice) => (notice === standing ? ended : notice)));
       scheduleDismiss(standing.id, "info");
       report("info", message);
@@ -232,7 +232,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
     severity: "info",
     message,
     toast: !seenInCenter(),
-    read: centerOpen.get(),
+    read: seenInCenter(),
     progress: { key, fraction },
   };
   shown.set([...shown.get(), entry].slice(-CENTER_MAX));
@@ -352,7 +352,7 @@ export function syncWorkingNotices(working: { target: TabRef; agentId: AgentId; 
       message,
       agentId,
       toast: false,
-      read: centerOpen.get(),
+      read: seenInCenter(),
       target,
       mark: "working",
     }));

@@ -9,7 +9,7 @@ import { StatusList, type StatusListItem } from "./StatusList";
 import { TabMark } from "./TabMark";
 
 /** What the tabs' button and list say while there is no tab to name. */
-const NO_TABS = "No Tabs open";
+const NO_TABS = "No tabs open";
 
 interface StatusBarProps {
   /** The active repository's or worktree's project; absent while none is open. */

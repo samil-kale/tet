@@ -130,6 +130,7 @@ describe("a toast and the notification center", () => {
     await later();
     assert.deepEqual(messages(), ["while open"]);
     assert.deepEqual(toasts(), []);
+    assert.equal(listNotices()[0].read, true);
 
     toggleCenter();
     await later();
@@ -142,6 +143,7 @@ describe("a toast and the notification center", () => {
     notify("info", "while closing");
     await later();
     assert.deepEqual(toasts(), ["while closing"]);
+    assert.equal(listNotices()[0].read, false, "the center closing did not show it");
   });
 });
 

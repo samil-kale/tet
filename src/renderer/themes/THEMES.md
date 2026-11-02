@@ -30,7 +30,7 @@ name:
 | `app.background`, `app.border`                                  | `panel.background`, `panel.border`                                 |
 | `popup.background`, `popup.border`                              | `editorWidget.background`, `editorWidget.border`                   |
 | `popup.shadow`                                                  | `widget.shadow`                                                    |
-| `notice.{background,border}`                                    | `notifications.{background,border}`                                |
+| `notice.border`                                                 | `notifications.border`                                             |
 | `notice{Error,Warning,Info}Icon.foreground`                     | `notifications{Error,Warning,Info}Icon.foreground`                 |
 | `graph.foreground1` … `graph.foreground5`                       | `scmGraph.foreground1` … `scmGraph.foreground5`                    |
 | `graph.refColor`, `graph.remoteRefColor`, `graph.baseRefColor`  | `scmGraph.historyItemRefColor`, `…RemoteRefColor`, `…BaseRefColor` |

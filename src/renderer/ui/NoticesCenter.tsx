@@ -65,7 +65,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
         </span>
       </div>
       <div className="notices-center-list">
-        {notices.length === 0 && <div className="notices-center-empty">No new notifications</div>}
+        {notices.length === 0 && <div className="popup-empty">No new notifications</div>}
         {centerOrder(notices).map((notice) => {
           const { target } = notice;
           return (

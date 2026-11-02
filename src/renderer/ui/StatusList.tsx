@@ -105,7 +105,7 @@ export const StatusList = memo(function StatusList({
         </span>
       </div>
       <div className="status-list-items">
-        {items.length === 0 && emptyText && <div className="status-list-empty">{emptyText}</div>}
+        {items.length === 0 && emptyText && <div className="popup-empty">{emptyText}</div>}
         {rows.map((item) => (
           <div
             key={item.id}

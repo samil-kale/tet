@@ -81,7 +81,6 @@
 
   --tet-progressBar-background: #005fb8;
 
-  --tet-notice-background: #ffffff;
   --tet-notice-border: #e5e5e5;
   /* The error icon is errorForeground rather than the registry's editorError.foreground, as in
      Dark Modern; the other two are editorWarning.foreground and editorInfo.foreground, which the

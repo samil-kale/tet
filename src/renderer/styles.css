@@ -309,6 +309,7 @@ textarea:focus,
   --content-min-width: 320px;
   --list-row-height: 28px;
   --popup-row-height: 30px;
+  --popup-radius: 3px;
   /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
      are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
   --tree-row-height: 24px;
@@ -1315,7 +1316,7 @@ textarea:focus,
   color: var(--tet-menu-foreground);
   background: var(--tet-menu-background);
   border: 1px solid var(--tet-menu-border);
-  border-radius: 3px;
+  border-radius: var(--popup-radius);
 }
 
 /* The toasts stack as one box, so `.notices` casts their shadow: each one's would fall on the next. */
@@ -1335,13 +1336,17 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
+/* A menu's entry, a status bar list's row, the line of an empty list and a session's row in the
+   notification center read alike because this box is declared once, shared by the selectors. */
 .context-menu-item,
 .status-list-item,
-.notices-center-empty,
-.status-list-empty {
+.popup-empty,
+.notices-center .notice.session {
   display: flex;
   align-items: center;
   gap: 6px;
+  height: var(--popup-row-height);
+  padding: 0 10px;
 }
 
 .context-menu-item,
@@ -1374,7 +1379,7 @@ textarea:focus,
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
-  margin: 0 0 0 auto;
+  margin-left: auto;
   padding-left: 12px;
   box-sizing: content-box;
 }
@@ -1387,7 +1392,6 @@ textarea:focus,
 /* Its height is capped by `Dropdown` to the room below the trigger; its width is the trigger's,
    so a longer option is cut short rather than scrolled to. */
 .dropdown-menu {
-  overflow-x: hidden;
   overflow-y: auto;
 }
 
@@ -2697,7 +2701,7 @@ textarea:focus,
   flex-direction: column;
   align-items: flex-end;
   max-width: 100%;
-  border-radius: 3px;
+  border-radius: var(--popup-radius);
   pointer-events: none;
 }
 
@@ -2769,8 +2773,7 @@ textarea:focus,
   align-items: flex-start;
   /* With the 14px icon, the text starts where VS Code's does beside its 16px one. */
   gap: 6px;
-  /* VS Code's fixed width: a notice sized to its text is easily missed. The box is the
-     notification center's (`.notices-center`). */
+  /* VS Code's fixed width: a notice sized to its text is easily missed. */
   width: min(450px, 100vw);
   padding: 4px 6px 4px 10px;
   text-align: left;
@@ -2835,21 +2838,9 @@ textarea:focus,
   text-overflow: ellipsis;
 }
 
-/* A session's row in the notification center, a context menu's entry and the line of an empty list
-   are sized as a `.status-list-item`: they read alike because this box is declared once, shared by
-   the selectors. */
-.status-list-item,
-.context-menu-item,
-.notices-center-empty,
-.status-list-empty,
-.notices-center .notice.session {
-  height: var(--popup-row-height);
-  padding: 0 10px;
-}
-
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
 .notice-progress {
-  border-radius: 0 0 3px 3px;
+  border-radius: 0 0 var(--popup-radius) var(--popup-radius);
 }
 
 .notice-progress-fill {
@@ -2903,7 +2894,7 @@ textarea:focus,
 .notices-center-list,
 .status-list-items {
   overflow-y: auto;
-  border-radius: 0 0 2px 2px;
+  border-radius: 0 0 calc(var(--popup-radius) - 1px) calc(var(--popup-radius) - 1px);
 }
 
 /* A session: its icon, then its name. */

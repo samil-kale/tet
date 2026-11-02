@@ -313,15 +313,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeRefKeyRef, activateTab],
   );
   /** The status bar's plus: behind the focused pane's last tab, where a pane's own plus places one. */
-  const focusedPane = activeLayout.focusedPane;
   const newTab = useCallback(
     (agentId: AgentId) => {
       if (activeResolved) {
         const { ref, refKey } = activeResolved;
-        void window.tet.tabs.create(ref, agentId).then((tab) => dropOnStrip(refKey, tab.tabId, focusedPane, undefined));
+        void window.tet.tabs.create(ref, agentId).then((tab) => dropOnStrip(refKey, tab.tabId, activeLayout.focusedPane, undefined));
       }
     },
-    [activeResolved, focusedPane, dropOnStrip],
+    [activeResolved, activeLayout.focusedPane, dropOnStrip],
   );
 
   /** The status bar's project list. */
