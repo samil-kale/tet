@@ -2864,10 +2864,10 @@ textarea:focus,
   flex-direction: column;
   width: min(450px, 100vw);
   max-height: 60%;
-  border-radius: 2px;
-  color: var(--tet-notice-foreground);
-  background: var(--tet-lane-background);
-  border: 1px solid var(--tet-notice-border);
+  border-radius: 5px;
+  color: var(--tet-menu-foreground);
+  background: var(--tet-menu-background);
+  border: 1px solid var(--tet-menu-border);
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
   /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
   animation: notice-enter 0.35s ease-out;
@@ -2897,9 +2897,11 @@ textarea:focus,
   border-bottom-color: var(--tet-notice-border);
 }
 
+/* Inside the box's rounded corners, or a hovered or active last row would cover them. */
 .notices-center-list,
 .status-list-items {
   overflow-y: auto;
+  border-radius: 0 0 4px 4px;
 }
 
 /* A session: its icon, then its name. */
@@ -2941,6 +2943,8 @@ textarea:focus,
 
 .notices-center .notice {
   width: auto;
+  color: inherit;
+  background: none;
   border: none;
   border-radius: 0;
 }

@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "./ui/use-latest";
+import type { AgentId } from "../shared/types/agents";
 import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
 import { projectRef, refKeyOf, projectRefsOf, worktreeName } from "../shared/types/project";
 import type { EnvRequest } from "../shared/types/environment";
@@ -309,6 +310,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     },
     [activeRefKeyRef, activateTab],
   );
+  /** The status bar's plus: behind the focused pane's last tab, where a pane's own plus places one. */
+  const focusedPane = activeLayout.focusedPane;
+  const newTab = useCallback(
+    (agentId: AgentId) => {
+      if (activeResolved) {
+        const { ref, refKey } = activeResolved;
+        void window.tet.tabs.create(ref, agentId).then((tab) => dropOnStrip(refKey, tab.tabId, focusedPane, undefined));
+      }
+    },
+    [activeResolved, focusedPane, dropOnStrip],
+  );
 
   /** The status bar's project list. */
   const projectItems = useMemo(
@@ -561,6 +573,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         tabs={statusTabs}
         activeTabId={activeTabId}
         onSelectTab={selectTab}
+        agents={agents}
+        onNewTab={newTab}
         branch={activeBranchName}
         changesCount={activeChangesCount}
         archived={archiveItems}

@@ -1,5 +1,6 @@
 import { createElement } from "react";
-import type { AgentIcon as AgentIconData, AgentId } from "../../shared/types/agents";
+import type { AgentIcon as AgentIconData, AgentId, AgentInfo } from "../../shared/types/agents";
+import type { ContextMenuEntry } from "./ContextMenu";
 import { FillSvg, Svg } from "./icons";
 import { agentInfo, useAgents } from "./use-agents";
 
@@ -15,6 +16,11 @@ interface AgentIconProps {
 export function AgentIcon({ agentId, className }: AgentIconProps) {
   const icon = agentInfo(useAgents(), agentId)?.icon;
   return icon ? <DrawnIcon icon={icon} className={className} /> : null;
+}
+
+/** An agent as a menu entry: its icon, then its name. */
+export function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
+  return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="tab-icon" />, run };
 }
 
 function DrawnIcon({ icon, className }: { icon: AgentIconData; className?: string }) {

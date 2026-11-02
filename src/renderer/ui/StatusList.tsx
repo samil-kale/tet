@@ -1,5 +1,6 @@
 import { memo, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
-import { CloseIcon } from "./icons";
+import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
+import { CloseIcon, PlusIcon } from "./icons";
 
 /** The gap to the window's edge, as the lists' `left` in styles.css. */
 const EDGE = 6;
@@ -22,6 +23,8 @@ interface StatusListProps {
   /** A click on an entry; the list closes. */
   onSelect: (id: string) => void;
   onClose: () => void;
+  /** The tabs' list alone: the menu of its header's plus. */
+  newTabEntries?: () => ContextMenuEntry[];
 }
 
 /**
@@ -29,8 +32,14 @@ interface StatusListProps {
  * (`NoticesCenter`): above the bar, over the button that opens it. Closed by the status bar's button,
  * its own X or a press outside it.
  */
-export const StatusList = memo(function StatusList({ title, items, activeId, trigger, onSelect, onClose }: StatusListProps) {
+export const StatusList = memo(function StatusList({ title, items, activeId, trigger, onSelect, onClose, newTabEntries }: StatusListProps) {
   const list = useRef<HTMLDivElement>(null);
+  // Above the list, which stands right over the status bar and leaves no room below its header.
+  const plusMenu = useAnchoredMenu((rect) => ({
+    x: rect.left,
+    y: (list.current?.getBoundingClientRect().top ?? rect.top) - 6,
+    above: true,
+  }));
 
   // It opens above the button that opens it, kept inside the window.
   useLayoutEffect(() => {
@@ -61,6 +70,11 @@ export const StatusList = memo(function StatusList({ title, items, activeId, tri
       <div className="section-header status-list-header">
         <span className="section-title">{title.toUpperCase()}</span>
         <span className="section-header-actions">
+          {newTabEntries && (
+            <button type="button" className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
+              <PlusIcon />
+            </button>
+          )}
           <button type="button" className="icon-button" title={`Hide ${title}`} onClick={onClose}>
             <CloseIcon />
           </button>
@@ -81,6 +95,8 @@ export const StatusList = memo(function StatusList({ title, items, activeId, tri
           </div>
         ))}
       </div>
+      {/* Inside the list's node, so a press in the menu is no press outside it. */}
+      {newTabEntries && plusMenu.render(newTabEntries, "new-tab-menu")}
     </div>
   );
 });

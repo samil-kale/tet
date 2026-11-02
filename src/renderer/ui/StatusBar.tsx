@@ -1,6 +1,8 @@
 import { memo, useCallback, useState } from "react";
+import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { Project } from "../../shared/types/project";
 import { shortcutLabel } from "../shortcuts";
+import { agentEntry } from "./agent-icons";
 import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon } from "./icons";
 import { MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
 import { StatusList, type StatusListItem } from "./StatusList";
@@ -19,6 +21,10 @@ interface StatusBarProps {
   activeTabId: string | undefined;
   /** A tab's click shows it. */
   onSelectTab: (tabId: string) => void;
+  /** What the tabs' list's plus offers. */
+  agents: AgentInfo[];
+  /** An agent's click in that plus's menu opens a tab of it. */
+  onNewTab: (agentId: AgentId) => void;
   /** Its branch, or the short commit id while detached; absent while none is open. */
   branch: string | undefined;
   /** Its uncommitted changes, by the branch. */
@@ -44,6 +50,8 @@ export const StatusBar = memo(function StatusBar({
   tabs,
   activeTabId,
   onSelectTab,
+  agents,
+  onNewTab,
   branch,
   changesCount,
   archived,
@@ -56,6 +64,17 @@ export const StatusBar = memo(function StatusBar({
   const [openList, setOpenList] = useState<"projects" | "tabs" | "branches" | "archive" | null>(null);
   const closeList = useCallback(() => setOpenList(null), []);
   const toggleList = (list: "projects" | "tabs" | "branches" | "archive"): void => setOpenList((open) => (open === list ? null : list));
+  // The list closes, as on a click on one of its entries.
+  const newTabEntries = useCallback(
+    () =>
+      agents.map((agent) =>
+        agentEntry(agent, () => {
+          closeList();
+          onNewTab(agent.id);
+        }),
+      ),
+    [agents, closeList, onNewTab],
+  );
   const active = tabs.find((tab) => tab.id === activeTabId);
   // An agent's notice stands in the center until its tab's state ends, read or not.
   const highlighted = notices.some((notice) => !notice.read || !removable(notice));
@@ -110,7 +129,15 @@ export const StatusBar = memo(function StatusBar({
         />
       )}
       {openList === "tabs" && (
-        <StatusList title="Tabs" items={tabs} activeId={activeTabId} trigger="status-bar-tabs" onSelect={onSelectTab} onClose={closeList} />
+        <StatusList
+          title="Tabs"
+          items={tabs}
+          activeId={activeTabId}
+          trigger="status-bar-tabs"
+          onSelect={onSelectTab}
+          onClose={closeList}
+          newTabEntries={newTabEntries}
+        />
       )}
       {openList === "archive" && (
         <StatusList

@@ -4,7 +4,7 @@ import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { ARCHIVABLE_TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
-import { AgentIcon } from "../ui/agent-icons";
+import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
 import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed, refusal } from "../ui/Dialog";
@@ -32,11 +32,6 @@ function formatIso(ms: number): string {
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
     ` ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
   );
-}
-
-/** An agent as a menu entry: its icon, then its name. */
-function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
-  return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="tab-icon" />, run };
 }
 
 interface PaneProps {

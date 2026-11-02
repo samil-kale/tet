@@ -42,6 +42,8 @@ interface ContextMenuProps {
   /** A submenu's: its parent entry's left edge, which it ends at when the window has no room right
    *  of `x`. */
   flipX?: number;
+  /** Opens upward: `y` is where its bottom edge ends. */
+  above?: boolean;
   /** The button a menu was opened from: a press on it is no press outside, its own handler closes
    *  the menu. */
   anchor?: HTMLElement;
@@ -67,7 +69,7 @@ export function useContextMenu<T>() {
 }
 
 /** Where a menu opened from a button goes, worked out from the button's box. */
-type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight">;
+type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight" | "above">;
 
 /**
  * A menu opened from a button: `open` as the button's `onMouseDown`, `place` saying where from its
@@ -87,7 +89,7 @@ export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
   return { open, close, render, isOpen: menu !== null };
 }
 
-export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, anchor, header }: ContextMenuProps) {
+export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, above, anchor, header }: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -105,8 +107,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     const { width: menuWidth, height } = element.getBoundingClientRect();
     const left = flipX !== undefined && x + menuWidth > window.innerWidth ? flipX - menuWidth : x;
     element.style.left = `${Math.max(0, Math.min(left, window.innerWidth - menuWidth))}px`;
-    element.style.top = `${Math.max(0, Math.min(y, window.innerHeight - height))}px`;
-  }, [x, y, flipX]);
+    element.style.top = `${Math.max(0, Math.min(above ? y - height : y, window.innerHeight - height))}px`;
+  }, [x, y, flipX, above]);
 
   // Opened last, so over a dialog a `Dropdown` sits in: Escape closes the menu alone.
   useEscape(onClose);
