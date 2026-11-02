@@ -140,6 +140,7 @@ export const StatusBar = memo(function StatusBar({
           // Without a project there is nowhere to open a tab.
           newTabEntries={project ? newTabEntries : undefined}
           emptyText={NO_TABS}
+          sorted
         />
       )}
       {openList === "archive" && (

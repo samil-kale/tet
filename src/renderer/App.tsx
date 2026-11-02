@@ -297,6 +297,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
           id: terminal.tabId,
           label: terminalLabel(terminal, agents),
           icon: <AgentIcon agentId={terminal.agentId} className="tab-icon" />,
+          // An agent's tab still without a session was just opened, the newest; a shell never has one.
+          lastActive: terminal.updatedAt ?? terminal.createdAt ?? (terminal.agentId === "shell" ? undefined : Number.MAX_SAFE_INTEGER),
         };
       }),
     [activeLayout.order, activeStripTabs, agents],

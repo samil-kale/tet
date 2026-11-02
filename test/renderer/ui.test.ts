@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { fakeLocalStorage, keepGlobals } from "../helpers";
 import { reorder } from "../../src/renderer/ui/drag-reorder";
 import { layoutFlag, layoutKey } from "../../src/renderer/ui/layout-storage";
+import { newestFirst } from "../../src/renderer/ui/StatusList";
 import { holdEscape } from "../../src/renderer/ui/use-escape";
 import {
   buildTree,
@@ -87,6 +88,24 @@ describe("a tree of repository paths", () => {
     assert.deepEqual(files.get("src")!.sort(), ["src/main/git/git.ts", "src/main/git/repository.ts", "src/renderer/App.tsx"]);
     assert.deepEqual(files.get("src/main/git/git.ts"), ["src/main/git/git.ts"]);
     assert.deepEqual(foldersIn(buildTree(paths)).sort(), ["src", "src/main", "src/main/git", "src/renderer"]);
+  });
+});
+
+describe("a status bar list sorted by time", () => {
+  it("lists the newest first and those without a time last, in the order they came", () => {
+    const item = (id: string, lastActive?: number) => ({ id, label: id, icon: null, lastActive });
+    const sorted = newestFirst([
+      item("shell"),
+      item("old", 1),
+      item("editor"),
+      item("new", 3),
+      item("mid", 2),
+      item("fresh", Number.MAX_SAFE_INTEGER),
+    ]);
+    assert.deepEqual(
+      sorted.map((entry) => entry.id),
+      ["fresh", "new", "mid", "old", "shell", "editor"],
+    );
   });
 });
 

@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
 import { CloseIcon, PlusIcon } from "./icons";
 
@@ -10,6 +10,13 @@ export interface StatusListItem {
   id: string;
   label: string;
   icon: ReactNode;
+  /** When it was last active, ms since epoch, where a list sorts by it (`newestFirst`). */
+  lastActive?: number;
+}
+
+/** Newest first; those without a time last, in the order they came. */
+export function newestFirst(items: StatusListItem[]): StatusListItem[] {
+  return [...items].sort((a, b) => (b.lastActive ?? 0) - (a.lastActive ?? 0));
 }
 
 interface StatusListProps {
@@ -27,6 +34,8 @@ interface StatusListProps {
   newTabEntries?: () => ContextMenuEntry[];
   /** What it says while it has no entries. */
   emptyText?: string;
+  /** Lists its entries `newestFirst` as it opens, not in the order they come. */
+  sorted?: boolean;
 }
 
 /**
@@ -43,8 +52,12 @@ export const StatusList = memo(function StatusList({
   onClose,
   newTabEntries,
   emptyText,
+  sorted,
 }: StatusListProps) {
   const list = useRef<HTMLDivElement>(null);
+  // Once, as it opens, so a row never moves under the pointer; one added since comes first.
+  const [openedOrder] = useState(() => newestFirst(items).map((item) => item.id));
+  const rows = sorted ? [...items].sort((a, b) => openedOrder.indexOf(a.id) - openedOrder.indexOf(b.id)) : items;
   // Above the list, which stands right over the status bar and leaves no room below its header.
   const plusMenu = useAnchoredMenu((rect) => ({
     x: rect.left,
@@ -93,7 +106,7 @@ export const StatusList = memo(function StatusList({
       </div>
       <div className="status-list-items">
         {items.length === 0 && emptyText && <div className="status-list-empty">{emptyText}</div>}
-        {items.map((item) => (
+        {rows.map((item) => (
           <div
             key={item.id}
             className={`status-list-item${item.id === activeId ? " active" : ""}`}
