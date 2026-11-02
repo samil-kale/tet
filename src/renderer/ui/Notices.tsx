@@ -95,7 +95,13 @@ export function useCenterOpen(): boolean {
   return useStore(centerOpen);
 }
 
-/** Opening the center reads everything in it. */
+/** A notice arriving now is seen in the open notification center, so it has no toast to come with its
+ *  closing; one arriving while the center fades out would be missed without. */
+function seenInCenter(): boolean {
+  return centerOpen.get() && !centerClosing.get();
+}
+
+/** Opening the center reads everything in it and ends the toasts, which it lists from now on. */
 export function toggleCenter(): void {
   if (centerOpen.get()) {
     closeCenter();
@@ -103,7 +109,10 @@ export function toggleCenter(): void {
   }
   newestAtOpen = nextId;
   centerOpen.set(true);
-  shown.set(shown.get().map((notice) => (notice.read ? notice : { ...notice, read: true })));
+  hovered = undefined;
+  shown.set(
+    shown.get().map((notice) => (notice.read && !notice.toast ? notice : { ...notice, read: true, toast: false, dismissing: undefined })),
+  );
 }
 
 /**
@@ -164,7 +173,17 @@ function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "t
     return;
   }
   const id = ++nextId;
-  const entry: ShownNotice = { id, severity, title, message, toast: toast !== false, read: centerOpen.get(), target, mark, agentId };
+  const entry: ShownNotice = {
+    id,
+    severity,
+    title,
+    message,
+    toast: toast !== false && !seenInCenter(),
+    read: centerOpen.get(),
+    target,
+    mark,
+    agentId,
+  };
   shown.set([...shown.get().filter((notice) => notice !== same), entry].slice(-CENTER_MAX));
   if (entry.toast) {
     scheduleDismiss(id, severity);
@@ -183,7 +202,8 @@ function report(severity: NoticeSeverity, message: string, title?: string): void
 
 /**
  * A download's progress, one notice per `key` updated in place: it stands, with a bar along its
- * bottom edge as VS Code's, until the progress ends or the X dismisses its toast. Ended on `done`,
+ * bottom edge as VS Code's, until the progress ends, the X dismisses its toast or the notification
+ * center opens. Ended on `done`,
  * it stays in its place as a plain info with its toast anew; ended otherwise, it goes.
  */
 export function showProgress({ key, message, fraction, done }: NoticeProgress): void {
@@ -194,7 +214,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
         notify("info", message);
       }
     } else if (done) {
-      const ended: ShownNotice = { id: standing.id, severity: "info", message, toast: true, read: centerOpen.get() };
+      const ended: ShownNotice = { id: standing.id, severity: "info", message, toast: !seenInCenter(), read: centerOpen.get() };
       shown.set(shown.get().map((notice) => (notice === standing ? ended : notice)));
       scheduleDismiss(standing.id, "info");
       report("info", message);
@@ -211,7 +231,7 @@ export function showProgress({ key, message, fraction, done }: NoticeProgress): 
     id: ++nextId,
     severity: "info",
     message,
-    toast: true,
+    toast: !seenInCenter(),
     read: centerOpen.get(),
     progress: { key, fraction },
   };

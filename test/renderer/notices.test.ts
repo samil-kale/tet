@@ -9,6 +9,7 @@ import {
   removable,
   removeStaleNotices,
   syncWorkingNotices,
+  toggleCenter,
 } from "../../src/renderer/ui/Notices";
 import { projectRef, refKeyOf } from "../../src/shared/types/project";
 import type { NoticeMark } from "../../src/shared/types/app";
@@ -104,6 +105,43 @@ describe("a notice with a mark", () => {
       centerOrder(listNotices()).map((notice) => notice.message),
       ["working", "question", "done", "plain"],
     );
+  });
+});
+
+describe("a toast and the notification center", () => {
+  const toasts = (): string[] => listNotices().flatMap((notice) => (notice.toast ? [notice.message] : []));
+
+  it("ends when the center opens, and does not come back with its closing", async () => {
+    notify("info", "standing");
+    assert.deepEqual(toasts(), ["standing"]);
+
+    toggleCenter();
+    assert.deepEqual(toasts(), []);
+    assert.deepEqual(messages(), ["standing"], "the center lists it");
+
+    toggleCenter();
+    await later();
+    assert.deepEqual(toasts(), []);
+  });
+
+  it("is not raised by a notice arriving while the center is open", async () => {
+    toggleCenter();
+    notify("info", "while open");
+    await later();
+    assert.deepEqual(messages(), ["while open"]);
+    assert.deepEqual(toasts(), []);
+
+    toggleCenter();
+    await later();
+    assert.deepEqual(toasts(), []);
+  });
+
+  it("is raised by a notice arriving while the center fades out", async () => {
+    toggleCenter();
+    toggleCenter();
+    notify("info", "while closing");
+    await later();
+    assert.deepEqual(toasts(), ["while closing"]);
   });
 });
 
