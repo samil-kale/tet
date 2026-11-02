@@ -471,6 +471,10 @@ textarea:focus,
    and its branch. Its icons read smaller than the rest of the app's. The Navigation Bar's own
    background: both sit on the window's edge. */
 .status-bar {
+  /* Above its lists and the notification center, which rise from behind it; below the menus, which
+     may reach over it. */
+  position: relative;
+  z-index: 26;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1331,7 +1335,7 @@ textarea:focus,
 /* Anchored at the pointer, so fixed rather than positioned within any pane. */
 .context-menu {
   position: fixed;
-  z-index: 20;
+  z-index: 27;
   /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
   overflow: hidden;
   font-size: var(--tet-font-size);
@@ -2697,7 +2701,7 @@ textarea:focus,
   right: 6px;
   bottom: 32px;
   /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
-  z-index: 25;
+  z-index: 28;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
