@@ -1309,21 +1309,20 @@ textarea:focus,
 .context-menu {
   position: fixed;
   z-index: 20;
-  padding: 4px 0;
+  /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
+  overflow: hidden;
   font-size: var(--tet-font-size);
   background: var(--tet-menu-background);
   color: var(--tet-menu-foreground);
   border: 1px solid var(--tet-menu-border);
-  border-radius: 5px;
+  border-radius: 3px;
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
 .context-menu-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 2em;
-  padding: 0 24px 0 20px;
+  gap: 6px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -1349,19 +1348,14 @@ textarea:focus,
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
-  margin: 0 -16px 0 auto;
+  margin: 0 0 0 auto;
   padding-left: 12px;
   box-sizing: content-box;
 }
 
-/* Compact lists of choices: the context menu without its padding. */
-.new-tab-menu,
-.dropdown-menu {
-  border-radius: 3px;
-}
-
 .new-tab-menu {
   min-width: 120px;
+  padding: 2px 0;
 }
 
 /* Its height is capped by `Dropdown` to the room below the trigger; its width is the trigger's,
@@ -1371,27 +1365,14 @@ textarea:focus,
   overflow-y: auto;
 }
 
-/* Plain text, no icon or arrow: a block, which can end in an ellipsis. */
+/* Plain text, no icon or arrow: a block, which can end in an ellipsis; centered by its line, as
+   high as the row (`.context-menu-item`). */
 .dropdown-menu .context-menu-item {
   display: block;
+  line-height: 30px;
 }
 
-.new-tab-menu .context-menu-item,
-.dropdown-menu .context-menu-item {
-  height: auto;
-  padding: 5px 12px;
-}
-
-.new-tab-menu .context-menu-item {
-  padding-right: 16px;
-}
-
-/* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it. The menu has no
-   top padding then, or the entries would show in it above the header. */
-.context-menu:has(> .context-menu-header) {
-  padding-top: 0;
-}
-
+/* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it. */
 .context-menu-header {
   position: sticky;
   top: 0;
@@ -2831,9 +2812,10 @@ textarea:focus,
   text-overflow: ellipsis;
 }
 
-/* A session's row in the notification center is sized as a `.status-list-item`: the two lists
-   read alike because this box is declared once, shared by both selectors. */
+/* A session's row in the notification center and a context menu's entry are sized as a
+   `.status-list-item`: they read alike because this box is declared once, shared by the selectors. */
 .status-list-item,
+.context-menu-item,
 .notices-center .notice.session {
   height: 30px;
   padding: 0 10px;
@@ -2864,7 +2846,7 @@ textarea:focus,
   flex-direction: column;
   width: min(450px, 100vw);
   max-height: 60%;
-  border-radius: 5px;
+  border-radius: 3px;
   color: var(--tet-menu-foreground);
   background: var(--tet-menu-background);
   border: 1px solid var(--tet-menu-border);
@@ -2901,7 +2883,7 @@ textarea:focus,
 .notices-center-list,
 .status-list-items {
   overflow-y: auto;
-  border-radius: 0 0 4px 4px;
+  border-radius: 0 0 2px 2px;
 }
 
 /* A session: its icon, then its name. */

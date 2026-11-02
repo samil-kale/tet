@@ -24,8 +24,8 @@ export type ContextMenuEntry = ContextMenuAction | typeof SEPARATOR;
 /** How long the pointer rests on an entry before its submenu opens or another one closes, so a
  *  pointer crossing entries on its way into an open submenu leaves it open (VS Code's delay). */
 const SUBMENU_DELAY_MS = 250;
-/** The menu's top padding and border: a submenu's first entry lines up with its parent entry. */
-const SUBMENU_OFFSET = 5;
+/** The menu's top border: a submenu's first entry lines up with its parent entry. */
+const SUBMENU_OFFSET = 1;
 
 interface ContextMenuProps {
   /** Where the pointer was; the menu is clamped to the window from there. */
