@@ -3,10 +3,13 @@ import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { Project } from "../../shared/types/project";
 import { shortcutLabel } from "../shortcuts";
 import { agentEntry } from "./agent-icons";
-import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon } from "./icons";
+import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon, SquareTerminalIcon } from "./icons";
 import { MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
 import { StatusList, type StatusListItem } from "./StatusList";
 import { TabMark } from "./TabMark";
+
+/** What the tabs' button and list say while there is no tab to name. */
+const NO_TABS = "No Tabs open";
 
 interface StatusBarProps {
   /** The active repository's or worktree's project; absent while none is open. */
@@ -88,12 +91,10 @@ export const StatusBar = memo(function StatusBar({
             {project.name}
           </button>
         )}
-        {active && (
-          <button type="button" className="status-bar-item status-bar-tabs" title="Tabs" onClick={() => toggleList("tabs")}>
-            {active.icon}
-            <span className="status-bar-tab">{active.label}</span>
-          </button>
-        )}
+        <button type="button" className="status-bar-item status-bar-tabs" title="Tabs" onClick={() => toggleList("tabs")}>
+          {active?.icon ?? <SquareTerminalIcon className="tree-icon" />}
+          <span className="status-bar-tab">{active?.label ?? NO_TABS}</span>
+        </button>
         {branch && (
           <button type="button" className="status-bar-item status-bar-branches" title="Branches" onClick={() => toggleList("branches")}>
             <BranchIcon className="tree-icon" />
@@ -136,7 +137,9 @@ export const StatusBar = memo(function StatusBar({
           trigger="status-bar-tabs"
           onSelect={onSelectTab}
           onClose={closeList}
-          newTabEntries={newTabEntries}
+          // Without a project there is nowhere to open a tab.
+          newTabEntries={project ? newTabEntries : undefined}
+          emptyText={NO_TABS}
         />
       )}
       {openList === "archive" && (

@@ -48,6 +48,7 @@ import {
   SquareArrowOutUpRight,
   SquareCode,
   SquareSplitHorizontal,
+  SquareTerminal,
   Tag,
   Undo2,
   User,
@@ -489,6 +490,11 @@ export function SaveIcon(props: IconProps) {
 /** Lucide's `square-split-horizontal` — the Markdown preview beside the editor. */
 export function SquareSplitHorizontalIcon(props: IconProps) {
   return <Lucide {...props} icon={SquareSplitHorizontal} />;
+}
+
+/** Lucide's `square-terminal` — the status bar's tabs while none is open. */
+export function SquareTerminalIcon(props: IconProps) {
+  return <Lucide {...props} icon={SquareTerminal} />;
 }
 
 /** Lucide's `book-open` — the Markdown preview alone. */

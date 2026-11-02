@@ -1336,10 +1336,16 @@ textarea:focus,
 }
 
 .context-menu-item,
-.status-list-item {
+.status-list-item,
+.notices-center-empty,
+.status-list-empty {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.context-menu-item,
+.status-list-item {
   cursor: pointer;
 }
 
@@ -2766,7 +2772,7 @@ textarea:focus,
   /* VS Code's fixed width: a notice sized to its text is easily missed. The box is the
      notification center's (`.notices-center`). */
   width: min(450px, 100vw);
-  padding: 10px 6px 10px 10px;
+  padding: 4px 6px 4px 10px;
   text-align: left;
   font-size: var(--tet-font-size);
 }
@@ -2829,10 +2835,13 @@ textarea:focus,
   text-overflow: ellipsis;
 }
 
-/* A session's row in the notification center and a context menu's entry are sized as a
-   `.status-list-item`: they read alike because this box is declared once, shared by the selectors. */
+/* A session's row in the notification center, a context menu's entry and the line of an empty list
+   are sized as a `.status-list-item`: they read alike because this box is declared once, shared by
+   the selectors. */
 .status-list-item,
 .context-menu-item,
+.notices-center-empty,
+.status-list-empty,
 .notices-center .notice.session {
   height: var(--popup-row-height);
   padding: 0 10px;
@@ -2884,8 +2893,7 @@ textarea:focus,
   max-width: min(450px, 100vw);
 }
 
-/* A `.section-header` in every respect but its line, which is the center's own. The empty line
-   below it shares its height and padding. */
+/* A `.section-header` in every respect but its line, which is the center's own. */
 .notices-center-header,
 .status-list-header {
   border-bottom-color: var(--tet-notice-border);
@@ -2922,14 +2930,6 @@ textarea:focus,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.notices-center-empty,
-.status-list-empty {
-  display: flex;
-  align-items: center;
-  height: var(--bar-height);
-  padding: 0 10px;
 }
 
 .notices-center .notice {
