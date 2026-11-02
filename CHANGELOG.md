@@ -3,6 +3,16 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.23.1 (2026-11-03)
+
+- **Status bar tabs.** The tabs list opens a new tab from its plus and lists the newest first. Its
+  button stays while no tab is open.
+- **One look for popups.** Menus, the status bar's lists, the notification center and toasts share
+  their colors, borders and row sizes. Lists and the new-tab menu slide out from behind the bar they
+  belong to, and close the same way.
+- **Fixes.** Opening the notification center ends the toasts it lists, and a notice arriving while
+  it is open raises none.
+
 ## 0.23.0 (2026-11-02)
 
 - **New tabs.** A tab opened from the plus lands behind the pane's last tab, right beside the plus.
