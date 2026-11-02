@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.23.0 (2026-11-02)
+
+- **New tabs.** A tab opened from the plus lands behind the pane's last tab, right beside the plus.
+- **Fixes.** A tab no longer starts a new process beside one that outlived its stop; a notice asks
+  to try again in a moment. Quitting waits only for a running git action like a commit or a push,
+  not for a read or a periodic fetch.
+
 ## 0.22.9 (2026-10-30)
 
 - **Fixes.** A session's row in the notification center is the same height as in the status list.
