@@ -64,7 +64,8 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
 1. **Take the theme file as VS Code reads it.** Follow its `include` chain (Light Modern:
    `light_modern.json` over `light_plus.json` over `light_vs.json`). A theme shiki ships is taken
    as shiki ships it (`@shikijs/themes/<name>`); any other is the extension's theme file as it
-   ships, put beside the stylesheet as `<id>.json` (comments stripped, if it has any).
+   ships, put beside the stylesheet as `<id>.json` (comments stripped, if it has any, and
+   `semanticHighlighting` and `semanticTokenColors`, which neither shiki nor monaco reads).
 2. **Copy each required variable's value** from the theme's `colors`, by its id.
 3. **Fill what the theme leaves unset with what VS Code would draw**, read from VS Code's color
    registry under the theme's kind (its `dark:` or `light:` branch), never eyeballed: a default

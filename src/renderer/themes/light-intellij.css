@@ -1,9 +1,9 @@
 /*
  * "Light IntelliJ": the Light variant of compassak.intellij-idea-new-ui (MIT, Ananda Bibek Ray),
  * with its dark title bar. Values, token colors included, come from light-intellij.json beside this
- * file: the extension's theme file as it ships, renamed and stripped of its comments. See
- * THEMES.md for the layer. The theme sets few colors. Exception: the secondary button's hover,
- * marked where it stands.
+ * file: the extension's theme file as it ships, renamed and stripped of its comments and its
+ * semantic* keys. See THEMES.md for the layer. The theme sets few colors. Exception: the secondary
+ * button's hover, marked where it stands.
  */
 :root[data-theme="light-intellij"] {
   color-scheme: light;

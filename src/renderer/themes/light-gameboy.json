@@ -214,21 +214,6 @@
   },
   "displayName": "Light GameBoy",
   "name": "light-gameboy",
-  "semanticHighlighting": true,
-  "semanticTokenColors": {
-    "class": "#1a4a3a",
-    "enum": "#306850",
-    "enumMember": "#526525",
-    "function.declaration": "#306850",
-    "function.defaultLibrary": "#1a4a3a",
-    "interface": "#306850",
-    "parameter": {
-      "fontStyle": "italic"
-    },
-    "property.readonly": "#3d4d1c",
-    "type": "#1a4a3a",
-    "variable.readonly": "#3d4d1c"
-  },
   "tokenColors": [
     {
       "name": "Comments",

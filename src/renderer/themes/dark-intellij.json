@@ -248,51 +248,6 @@
   },
   "displayName": "Dark IntelliJ",
   "name": "dark-intellij",
-  "semanticHighlighting": true,
-  "semanticTokenColors": {
-    "namespace": {
-      "foreground": "#c77dbb",
-      "fontStyle": "italic"
-    },
-    "variable": {
-      "foreground": "#a9b7c5"
-    },
-    "variable.defaultLibrary": {
-      "foreground": "#c77dbb",
-      "fontStyle": "italic"
-    },
-    "parameter": {
-      "foreground": "#bcbec3"
-    },
-    "typeParameter": {
-      "foreground": "#507874"
-    },
-    "type": {
-      "foreground": "#bcbec3"
-    },
-    "type.defaultLibrary": {
-      "fontStyle": "italic"
-    },
-    "interface": {
-      "foreground": "#bcbec3"
-    },
-    "interface.defaultLibrary": {
-      "fontStyle": "italic"
-    },
-    "class": {
-      "foreground": "#bcbec3"
-    },
-    "class.defaultLibrary": {
-      "foreground": "#c77dbb",
-      "fontStyle": "italic"
-    },
-    "property": {
-      "foreground": "#c77dbb"
-    },
-    "property.defaultLibrary": {
-      "foreground": "#14c4b6"
-    }
-  },
   "tokenColors": [
     {
       "name": "Comment",

@@ -274,7 +274,6 @@
   },
   "displayName": "Dark Slate",
   "name": "dark-slate",
-  "semanticHighlighting": true,
   "tokenColors": [
     {
       "scope": [

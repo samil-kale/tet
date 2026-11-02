@@ -1,9 +1,9 @@
 /*
  * "Light GameBoy": the Light variant of sanchodelniglo.gameboy-classic-theme (MIT, Romain
  * Grossard). Values, token colors included, come from light-gameboy.json beside this file: the
- * extension's theme file as it ships, renamed. See THEMES.md for the layer. Exceptions: the hovered
- * row, the tabs' borders, the tab marks on the active one and the progress bar, each marked where
- * it stands.
+ * extension's theme file as it ships, renamed and without its semantic* keys. See THEMES.md
+ * for the layer. Exceptions: the hovered row, the tabs' borders, the tab marks on the active one
+ * and the progress bar, each marked where it stands.
  */
 :root[data-theme="light-gameboy"] {
   color-scheme: light;

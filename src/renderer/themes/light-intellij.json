@@ -105,15 +105,6 @@
   },
   "displayName": "Light IntelliJ",
   "name": "light-intellij",
-  "semanticHighlighting": true,
-  "semanticTokenColors": {
-    "class": {
-      "bold": false
-    },
-    "interface": {
-      "bold": false
-    }
-  },
   "tokenColors": [
     {
       "settings": {

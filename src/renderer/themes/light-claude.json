@@ -1,7 +1,6 @@
 {
   "name": "light-claude",
   "type": "light",
-  "semanticHighlighting": true,
   "colors": {
     "focusBorder": "#C2613A",
     "foreground": "#2A2A28",
@@ -353,128 +352,6 @@
     "symbolIcon.textForeground": "#2A2A28",
     "symbolIcon.typeParameterForeground": "#0B7285",
     "symbolIcon.variableForeground": "#2A2A28"
-  },
-  "semanticTokenColors": {
-    "class": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "class.defaultLibrary": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "enum": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "enumMember": {
-      "foreground": "#0B7285"
-    },
-    "function": {
-      "foreground": "#C2613A",
-      "fontStyle": "italic"
-    },
-    "function.defaultLibrary": {
-      "foreground": "#C2613A",
-      "fontStyle": "italic"
-    },
-    "method": {
-      "foreground": "#C2613A",
-      "fontStyle": "italic"
-    },
-    "interface": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "keyword": {
-      "foreground": "#7C3AED",
-      "fontStyle": "bold"
-    },
-    "macro": {
-      "foreground": "#BF3989"
-    },
-    "namespace": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "parameter": {
-      "foreground": "#B35A2A"
-    },
-    "property": {
-      "foreground": "#57534E"
-    },
-    "property.readonly": {
-      "foreground": "#57534E"
-    },
-    "string": {
-      "foreground": "#1A7F37"
-    },
-    "type": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "type.defaultLibrary": {
-      "foreground": "#1B6ACB",
-      "fontStyle": "italic"
-    },
-    "typeParameter": {
-      "foreground": "#9A6700",
-      "fontStyle": "italic"
-    },
-    "variable": {
-      "foreground": "#2A2A28"
-    },
-    "variable.readonly": {
-      "foreground": "#9A6700"
-    },
-    "variable.defaultLibrary": {
-      "foreground": "#7C3AED",
-      "fontStyle": "italic"
-    },
-    "comment": {
-      "foreground": "#8B8B85",
-      "fontStyle": "italic"
-    },
-    "decorator": {
-      "foreground": "#BF3989",
-      "fontStyle": "italic"
-    },
-    "operator": {
-      "foreground": "#0B7285"
-    },
-    "regexp": {
-      "foreground": "#BF3989"
-    },
-    "number": {
-      "foreground": "#9A6700"
-    },
-    "boolean": {
-      "foreground": "#9A6700"
-    },
-    "event": {
-      "foreground": "#C2613A"
-    },
-    "*.async": {
-      "fontStyle": "italic"
-    },
-    "*.modification": {
-      "fontStyle": "italic"
-    },
-    "*.declaration": {
-      "fontStyle": ""
-    },
-    "*.readonly": {
-      "fontStyle": ""
-    },
-    "*.static": {
-      "fontStyle": "italic"
-    },
-    "*.deprecated": {
-      "fontStyle": "strikethrough"
-    },
-    "*.abstract": {
-      "fontStyle": "italic"
-    }
   },
   "tokenColors": [
     {
