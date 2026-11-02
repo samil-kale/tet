@@ -308,6 +308,7 @@ textarea:focus,
   --area-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 28px;
+  --popup-row-height: 30px;
   /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
      are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
   --tree-row-height: 24px;
@@ -1305,6 +1306,26 @@ textarea:focus,
   margin-left: -1px;
 }
 
+/* What floats over the window reads alike: the menus, the status bar's lists, the notification
+   center and the toasts. */
+.context-menu,
+.notices-center,
+.status-list,
+.notice {
+  color: var(--tet-menu-foreground);
+  background: var(--tet-menu-background);
+  border: 1px solid var(--tet-menu-border);
+  border-radius: 3px;
+}
+
+/* The toasts stack as one box, so `.notices` casts their shadow: each one's would fall on the next. */
+.context-menu,
+.notices-center,
+.status-list,
+.notices {
+  box-shadow: 0 4px 12px var(--tet-popup-shadow);
+}
+
 /* Anchored at the pointer, so fixed rather than positioned within any pane. */
 .context-menu {
   position: fixed;
@@ -1312,19 +1333,18 @@ textarea:focus,
   /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
   overflow: hidden;
   font-size: var(--tet-font-size);
-  background: var(--tet-menu-background);
-  color: var(--tet-menu-foreground);
-  border: 1px solid var(--tet-menu-border);
-  border-radius: 3px;
-  box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
-.context-menu-item {
+.context-menu-item,
+.status-list-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  white-space: nowrap;
   cursor: pointer;
+}
+
+.context-menu-item {
+  white-space: nowrap;
 }
 
 .context-menu-item:not(.disabled):hover,
@@ -1369,7 +1389,7 @@ textarea:focus,
    high as the row (`.context-menu-item`). */
 .dropdown-menu .context-menu-item {
   display: block;
-  line-height: 30px;
+  line-height: var(--popup-row-height);
 }
 
 /* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it. */
@@ -2671,6 +2691,7 @@ textarea:focus,
   flex-direction: column;
   align-items: flex-end;
   max-width: 100%;
+  border-radius: 3px;
   pointer-events: none;
 }
 
@@ -2748,10 +2769,6 @@ textarea:focus,
   padding: 10px 6px 10px 10px;
   text-align: left;
   font-size: var(--tet-font-size);
-  color: var(--tet-notice-foreground);
-  background: var(--tet-lane-background);
-  border: 1px solid var(--tet-notice-border);
-  border-radius: 2px;
 }
 
 /* Only the icon carries the severity's colour: a whole notice in red is harder to read. */
@@ -2817,7 +2834,7 @@ textarea:focus,
 .status-list-item,
 .context-menu-item,
 .notices-center .notice.session {
-  height: 30px;
+  height: var(--popup-row-height);
   padding: 0 10px;
 }
 
@@ -2846,13 +2863,8 @@ textarea:focus,
   flex-direction: column;
   width: min(450px, 100vw);
   max-height: 60%;
-  border-radius: 3px;
-  color: var(--tet-menu-foreground);
-  background: var(--tet-menu-background);
-  border: 1px solid var(--tet-menu-border);
-  box-shadow: 0 4px 12px var(--tet-popup-shadow);
-  /* Opens and closes as a notice enters and leaves (`.notice-item`), in `LEAVE_MS`. */
-  animation: notice-enter 0.35s ease-out;
+  /* Opens as a notice enters (`.notice-item`), but quicker; closes as one leaves, in `LEAVE_MS`. */
+  animation: notice-enter 0.15s ease-out;
   transition:
     opacity 0.35s ease-out,
     transform 0.35s ease-out;
@@ -2888,12 +2900,8 @@ textarea:focus,
 
 /* A session: its icon, then its name. */
 .status-list-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   font-size: var(--tet-font-size);
   line-height: 22px;
-  cursor: pointer;
 }
 
 .status-list-item + .status-list-item {
@@ -2916,7 +2924,8 @@ textarea:focus,
   white-space: nowrap;
 }
 
-.notices-center-empty {
+.notices-center-empty,
+.status-list-empty {
   display: flex;
   align-items: center;
   height: var(--bar-height);
@@ -2925,8 +2934,6 @@ textarea:focus,
 
 .notices-center .notice {
   width: auto;
-  color: inherit;
-  background: none;
   border: none;
   border-radius: 0;
 }

@@ -25,6 +25,8 @@ interface StatusListProps {
   onClose: () => void;
   /** The tabs' list alone: the menu of its header's plus. */
   newTabEntries?: () => ContextMenuEntry[];
+  /** What it says while it has no entries. */
+  emptyText?: string;
 }
 
 /**
@@ -32,7 +34,16 @@ interface StatusListProps {
  * (`NoticesCenter`): above the bar, over the button that opens it. Closed by the status bar's button,
  * its own X or a press outside it.
  */
-export const StatusList = memo(function StatusList({ title, items, activeId, trigger, onSelect, onClose, newTabEntries }: StatusListProps) {
+export const StatusList = memo(function StatusList({
+  title,
+  items,
+  activeId,
+  trigger,
+  onSelect,
+  onClose,
+  newTabEntries,
+  emptyText,
+}: StatusListProps) {
   const list = useRef<HTMLDivElement>(null);
   // Above the list, which stands right over the status bar and leaves no room below its header.
   const plusMenu = useAnchoredMenu((rect) => ({
@@ -81,6 +92,7 @@ export const StatusList = memo(function StatusList({ title, items, activeId, tri
         </span>
       </div>
       <div className="status-list-items">
+        {items.length === 0 && emptyText && <div className="status-list-empty">{emptyText}</div>}
         {items.map((item) => (
           <div
             key={item.id}

@@ -124,7 +124,9 @@ export const Pane = memo(function Pane({
   onMoveTab,
   onDropArchived,
 }: PaneProps) {
-  const plusMenu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom + 6 }));
+  const newTab = useRef<HTMLDivElement>(null);
+  // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
+  const plusMenu = useAnchoredMenu((rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + 12 }));
   const tabMenu = useContextMenu<string>();
   const closeTabMenu = tabMenu.close;
   const strip = useRef<HTMLDivElement>(null);
@@ -570,7 +572,7 @@ export const Pane = memo(function Pane({
         {/* This pane's one progress bar: a tab starting, an editor tab busy, or in
             pane "a" the bootstrap session listing. */}
         {(busy || editorBusy) && <ProgressBar />}
-        <div className="new-tab">
+        <div ref={newTab} className="new-tab">
           <button className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
             <PlusIcon />
           </button>

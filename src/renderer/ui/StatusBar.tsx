@@ -147,6 +147,7 @@ export const StatusBar = memo(function StatusBar({
           trigger="status-bar-archive"
           onSelect={onSelectArchived}
           onClose={closeList}
+          emptyText="No archived sessions"
         />
       )}
       {openList === "branches" && (
