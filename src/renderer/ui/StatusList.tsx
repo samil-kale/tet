@@ -1,6 +1,7 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
 import { CloseIcon, PlusIcon } from "./icons";
+import { usePressOutside } from "./use-press-outside";
 
 /** The gap to the window's edge, as the lists' `left` in styles.css. */
 const EDGE = 6;
@@ -29,6 +30,8 @@ interface StatusListProps {
   trigger: string;
   /** A click on an entry; the list closes. */
   onSelect: (id: string) => void;
+  /** Fading out, gone once it has. */
+  closing: boolean;
   onClose: () => void;
   /** The tabs' list alone: the menu of its header's plus. */
   newTabEntries?: () => ContextMenuEntry[];
@@ -49,6 +52,7 @@ export const StatusList = memo(function StatusList({
   activeId,
   trigger,
   onSelect,
+  closing,
   onClose,
   newTabEntries,
   emptyText,
@@ -77,21 +81,11 @@ export const StatusList = memo(function StatusList({
     element.style.left = `${Math.max(EDGE, Math.min(button.getBoundingClientRect().left, room)) - origin}px`;
   }, [trigger]);
 
-  // A press outside closes it; the status bar's button toggles it itself.
-  useEffect(() => {
-    const onMouseDown = (event: MouseEvent): void => {
-      const target = event.target as Element;
-      if (!list.current?.contains(target) && !target.closest(`.${trigger}`)) {
-        onClose();
-      }
-    };
-    document.addEventListener("mousedown", onMouseDown, true);
-    return () => document.removeEventListener("mousedown", onMouseDown, true);
-  }, [trigger, onClose]);
+  usePressOutside(list, trigger, onClose);
 
   return (
-    <div ref={list} className="status-list">
-      <div className="section-header status-list-header">
+    <div ref={list} className={`status-list${closing ? " closing" : ""}`}>
+      <div className="section-header popup-header">
         <span className="section-title">{title.toUpperCase()}</span>
         <span className="section-header-actions">
           {newTabEntries && (
@@ -104,7 +98,7 @@ export const StatusList = memo(function StatusList({
           </button>
         </span>
       </div>
-      <div className="status-list-items">
+      <div className="popup-items">
         {items.length === 0 && emptyText && <div className="popup-empty">{emptyText}</div>}
         {rows.map((item) => (
           <div

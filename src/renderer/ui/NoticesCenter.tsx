@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useRef } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { ClearIcon, CloseIcon } from "./icons";
 import {
@@ -14,6 +14,7 @@ import {
   useCenterOpen,
   useNoticeList,
 } from "./Notices";
+import { usePressOutside } from "./use-press-outside";
 
 interface NoticesCenterProps {
   /** Shows the tab a notice is about. */
@@ -33,27 +34,14 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
   const notices = useNoticeList();
   const center = useRef<HTMLDivElement>(null);
 
-  // A press outside closes it; the status bar's button toggles it itself.
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const onMouseDown = (event: MouseEvent): void => {
-      const target = event.target as Element;
-      if (!center.current?.contains(target) && !target.closest(".status-bar-notices")) {
-        closeCenter();
-      }
-    };
-    document.addEventListener("mousedown", onMouseDown, true);
-    return () => document.removeEventListener("mousedown", onMouseDown, true);
-  }, [open]);
+  usePressOutside(center, "status-bar-notices", closeCenter, open);
 
   if (!open) {
     return null;
   }
   return (
     <div ref={center} className={`notices-center${closing ? " closing" : ""}`}>
-      <div className="section-header notices-center-header">
+      <div className="section-header popup-header">
         <span className="section-title">NOTIFICATIONS</span>
         <span className="section-header-actions">
           <button type="button" className="icon-button" title="Clear All" disabled={!notices.some(removable)} onClick={clearNotices}>
@@ -64,7 +52,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
           </button>
         </span>
       </div>
-      <div className="notices-center-list">
+      <div className="popup-items">
         {notices.length === 0 && <div className="popup-empty">No new notifications</div>}
         {centerOrder(notices).map((notice) => {
           const { target } = notice;

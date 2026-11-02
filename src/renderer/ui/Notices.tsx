@@ -20,9 +20,12 @@ const STAGGER_MS = 150;
 /** The notification center keeps this many, the oldest dropped first. */
 const CENTER_MAX = 100;
 
-/** How long a notice takes to enter or leave, and the notification center to close; the
- *  stylesheet's `.notice-item` transition. */
+/** How long a notice takes to enter or leave; the stylesheet's `.notice-item` transition. */
 const LEAVE_MS = 350;
+
+/** How long the notification center or a status bar list takes to close; the stylesheet's
+ *  `.notices-center` transition. */
+export const CLOSE_MS = 150;
 
 export interface ShownNotice extends Omit<Notice, "toast"> {
   id: number;
@@ -116,7 +119,7 @@ export function toggleCenter(): void {
 }
 
 /**
- * Every way of closing the notification center fades it out whole, in `LEAVE_MS`; `then` runs once
+ * Every way of closing the notification center fades it out whole, in `CLOSE_MS`; `then` runs once
  * it is closed (at once, if it is not open).
  */
 export function closeCenter(then?: () => void): void {
@@ -135,7 +138,7 @@ export function closeCenter(then?: () => void): void {
     centerClosing.set(false);
     centerOpen.set(false);
     runAfterClose();
-  }, LEAVE_MS);
+  }, CLOSE_MS);
 }
 
 function runAfterClose(): void {

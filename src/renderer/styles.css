@@ -310,6 +310,7 @@ textarea:focus,
   --list-row-height: 28px;
   --popup-row-height: 30px;
   --popup-radius: 3px;
+  --popup-width: min(450px, 100vw);
   /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
      are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
   --tree-row-height: 24px;
@@ -2771,10 +2772,9 @@ textarea:focus,
   position: relative;
   display: flex;
   align-items: flex-start;
-  /* With the 14px icon, the text starts where VS Code's does beside its 16px one. */
-  gap: 6px;
+  gap: 8px;
   /* VS Code's fixed width: a notice sized to its text is easily missed. */
-  width: min(450px, 100vw);
+  width: var(--popup-width);
   padding: 4px 6px 4px 10px;
   text-align: left;
   font-size: var(--tet-font-size);
@@ -2861,16 +2861,17 @@ textarea:focus,
   z-index: 25;
   display: flex;
   flex-direction: column;
-  width: min(450px, 100vw);
+  width: var(--popup-width);
   max-height: 60%;
-  /* Opens as a notice enters (`.notice-item`), but quicker; closes as one leaves, in `LEAVE_MS`. */
+  /* Opens and closes as a notice enters and leaves (`.notice-item`), but quicker: `CLOSE_MS`. */
   animation: notice-enter 0.15s ease-out;
   transition:
-    opacity 0.35s ease-out,
-    transform 0.35s ease-out;
+    opacity 0.15s ease-out,
+    transform 0.15s ease-out;
 }
 
-.notices-center.closing {
+.notices-center.closing,
+.status-list.closing {
   opacity: 0;
   transform: translateY(16px);
   pointer-events: none;
@@ -2881,18 +2882,16 @@ textarea:focus,
   left: 6px;
   width: fit-content;
   min-width: min(360px, 100vw);
-  max-width: min(450px, 100vw);
+  max-width: var(--popup-width);
 }
 
-/* A `.section-header` in every respect but its line, which is the center's own. */
-.notices-center-header,
-.status-list-header {
-  border-bottom-color: var(--tet-notice-border);
+/* A `.section-header` in every respect but its line, which is the box's own. */
+.popup-header {
+  border-bottom-color: var(--tet-menu-border);
 }
 
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
-.notices-center-list,
-.status-list-items {
+.popup-items {
   overflow-y: auto;
   border-radius: 0 0 calc(var(--popup-radius) - 1px) calc(var(--popup-radius) - 1px);
 }
@@ -2904,7 +2903,7 @@ textarea:focus,
 }
 
 .status-list-item + .status-list-item {
-  border-top: 1px solid var(--tet-notice-border);
+  border-top: 1px solid var(--tet-menu-border);
 }
 
 .status-list-item:hover,
@@ -2935,7 +2934,7 @@ textarea:focus,
 }
 
 .notices-center .notice-item + .notice-item > .notice {
-  border-top: 1px solid var(--tet-notice-border);
+  border-top: 1px solid var(--tet-menu-border);
 }
 
 .notices-center .notice.clickable {
