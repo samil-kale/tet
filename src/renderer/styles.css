@@ -311,6 +311,8 @@ textarea:focus,
   --popup-row-height: 30px;
   --popup-radius: 3px;
   --popup-width: min(450px, 100vw);
+  /* As `CLOSE_MS` (use-closing.ts). */
+  --popup-fade: 0.1s;
   /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
      are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
   --tree-row-height: 24px;
@@ -1392,6 +1394,31 @@ textarea:focus,
 .new-tab-menu {
   min-width: 120px;
   padding: 2px 0;
+}
+
+/* A pane's slides down from behind its tab strip and back up, in `CLOSE_MS`. */
+.pane > .new-tab-menu {
+  animation: new-tab-menu-enter var(--popup-fade) ease-out;
+  transition:
+    opacity var(--popup-fade) ease-out,
+    transform var(--popup-fade) ease-out;
+}
+
+.pane > .new-tab-menu.closing {
+  opacity: 0;
+  transform: translateY(-16px);
+  pointer-events: none;
+}
+
+.pane:has(> .new-tab-menu) > .tab-strip {
+  z-index: 28;
+}
+
+@keyframes new-tab-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
 }
 
 /* Its height is capped by `Dropdown` to the room below the trigger; its width is the trigger's,
@@ -2868,10 +2895,10 @@ textarea:focus,
   width: var(--popup-width);
   max-height: 60%;
   /* Opens and closes as a notice enters and leaves (`.notice-item`), but quicker: `CLOSE_MS`. */
-  animation: notice-enter 0.15s ease-out;
+  animation: notice-enter var(--popup-fade) ease-out;
   transition:
-    opacity 0.15s ease-out,
-    transform 0.15s ease-out;
+    opacity var(--popup-fade) ease-out,
+    transform var(--popup-fade) ease-out;
 }
 
 .notices-center.closing,

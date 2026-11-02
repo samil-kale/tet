@@ -1,12 +1,13 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { Project } from "../../shared/types/project";
 import { shortcutLabel } from "../shortcuts";
 import { agentEntry } from "./agent-icons";
 import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon, SquareTerminalIcon } from "./icons";
-import { CLOSE_MS, MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
+import { MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
 import { StatusList, type StatusListItem } from "./StatusList";
 import { TabMark } from "./TabMark";
+import { useClosing } from "./use-closing";
 
 /** What the tabs' button and list say while there is no tab to name. */
 const NO_TABS = "No tabs open";
@@ -67,27 +68,15 @@ export const StatusBar = memo(function StatusBar({
   const notices = useNoticeList();
   /** The list shown, if any: one at a time, as they share their place. */
   const [openList, setOpenList] = useState<ListName | null>(null);
-  /** It is fading out, closed once it has, as the notification center does. */
-  const [closing, setClosing] = useState(false);
-  const closeList = useCallback(() => setClosing(true), []);
+  const { closing, close: closeList, cancel: keepList } = useClosing(() => setOpenList(null));
   const toggleList = (list: ListName): void => {
     if (openList === list) {
       closeList();
     } else {
       setOpenList(list);
-      setClosing(false);
+      keepList();
     }
   };
-  useEffect(() => {
-    if (!closing) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      setOpenList(null);
-      setClosing(false);
-    }, CLOSE_MS);
-    return () => clearTimeout(timer);
-  }, [closing]);
   // The list closes, as on a click on one of its entries.
   const newTabEntries = useCallback(
     () =>

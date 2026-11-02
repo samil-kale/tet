@@ -9,6 +9,7 @@ import { CloseIcon, SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
 import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
+import { CLOSE_MS } from "./use-closing";
 import { useTopDialog } from "./window-covered";
 
 /** VS Code's durations. */
@@ -22,10 +23,6 @@ const CENTER_MAX = 100;
 
 /** How long a notice takes to enter or leave; the stylesheet's `.notice-item` transition. */
 const LEAVE_MS = 350;
-
-/** How long the notification center or a status bar list takes to close; the stylesheet's
- *  `.notices-center` transition. */
-export const CLOSE_MS = 150;
 
 export interface ShownNotice extends Omit<Notice, "toast"> {
   id: number;

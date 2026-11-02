@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronIcon } from "./icons";
+import { useClosing } from "./use-closing";
 import { useEscape } from "./use-escape";
 import { useLatest } from "./use-latest";
 import { useTopDialog } from "./window-covered";
@@ -74,18 +75,26 @@ type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight" | 
 /**
  * A menu opened from a button: `open` as the button's `onMouseDown`, `place` saying where from its
  * box; `render` where the menu goes, with its entries. A press on the button while the menu is up
- * closes it.
+ * closes it. With `fades` it stays `.closing` for `useClosing`'s time before it goes.
  */
-export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace) {
+export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace, fades = false) {
   const [menu, setMenu] = useState<(AnchoredPlace & { anchor: HTMLElement }) | null>(null);
+  const remove = useCallback(() => setMenu(null), []);
+  const { closing, close: fadeOut } = useClosing(remove);
+  const close = fades ? fadeOut : remove;
   const open = (event: React.MouseEvent<HTMLElement>): void => {
     event.stopPropagation();
-    const anchor = event.currentTarget;
-    setMenu((current) => (current ? null : { ...place(anchor.getBoundingClientRect()), anchor }));
+    if (menu) {
+      close();
+    } else {
+      const anchor = event.currentTarget;
+      setMenu({ ...place(anchor.getBoundingClientRect()), anchor });
+    }
   };
-  const close = useCallback(() => setMenu(null), []);
   const render = (entries: () => ContextMenuEntry[], className: string, header?: ReactNode): ReactNode =>
-    menu && <ContextMenu {...menu} entries={entries()} onClose={close} className={className} header={header} />;
+    menu && (
+      <ContextMenu {...menu} entries={entries()} onClose={close} className={`${className}${closing ? " closing" : ""}`} header={header} />
+    );
   return { open, close, render, isOpen: menu !== null };
 }
 

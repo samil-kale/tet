@@ -126,7 +126,10 @@ export const Pane = memo(function Pane({
 }: PaneProps) {
   const newTab = useRef<HTMLDivElement>(null);
   // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
-  const plusMenu = useAnchoredMenu((rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + 12 }));
+  const plusMenu = useAnchoredMenu(
+    (rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + 12 }),
+    true,
+  );
   const tabMenu = useContextMenu<string>();
   const closeTabMenu = tabMenu.close;
   const strip = useRef<HTMLDivElement>(null);
