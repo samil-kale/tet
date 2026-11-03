@@ -1968,7 +1968,7 @@ textarea:focus,
      reads too dark for a dialog (Dark IntelliJ's). */
   background: var(--tet-dialog-background, var(--tet-terminal-background));
   border: 1px solid var(--tet-popup-border);
-  border-radius: 5px;
+  border-radius: 3px;
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
@@ -1980,7 +1980,7 @@ textarea:focus,
   display: flex;
   height: var(--bar-height);
   margin: -16px -16px 0;
-  border-radius: 5px 5px 0 0;
+  border-radius: 3px 3px 0 0;
   /* A theme overrides it only where its own inactive tab color reads wrong on a dialog (Dark
      IntelliJ's, equal to its own dialog background). */
   background: var(--tet-dialogHeader-background, var(--tet-tab-inactiveBackground));
