@@ -1209,7 +1209,7 @@ textarea:focus,
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
   padding: 0 6px 0 12px;
-  max-width: 270px;
+  max-width: 300px;
   background: var(--tet-tab-inactiveBackground);
   cursor: pointer;
 }
