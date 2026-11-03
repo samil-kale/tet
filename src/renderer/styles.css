@@ -1525,7 +1525,7 @@ textarea:focus,
 
 /* Only while sliding: left on, it would animate sash drags too. */
 .lane.sliding {
-  transition: width 0.15s ease;
+  transition: width 0.1s ease;
 }
 
 .lane-content {

@@ -35,6 +35,8 @@ interface StatusListProps {
   onClose: () => void;
   /** The tabs' list alone: the menu of its header's plus. */
   newTabEntries?: () => ContextMenuEntry[];
+  /** The projects' list alone: a click on its header's plus. */
+  onAddRepository?: () => void;
   /** What it says while it has no entries. */
   emptyText?: string;
   /** Lists its entries `newestFirst` as it opens, not in the order they come. */
@@ -55,6 +57,7 @@ export const StatusList = memo(function StatusList({
   closing,
   onClose,
   newTabEntries,
+  onAddRepository,
   emptyText,
   sorted,
 }: StatusListProps) {
@@ -65,7 +68,7 @@ export const StatusList = memo(function StatusList({
   // Above the list, which stands right over the status bar and leaves no room below its header.
   const plusMenu = useAnchoredMenu((rect) => ({
     x: rect.left,
-    y: (list.current?.getBoundingClientRect().top ?? rect.top) - 6,
+    y: (list.current?.getBoundingClientRect().top ?? rect.top) - 2,
     above: true,
   }));
 
@@ -90,6 +93,11 @@ export const StatusList = memo(function StatusList({
         <span className="section-header-actions">
           {newTabEntries && (
             <button type="button" className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
+              <PlusIcon />
+            </button>
+          )}
+          {onAddRepository && (
+            <button type="button" className="icon-button" title="Add repository" onClick={onAddRepository}>
               <PlusIcon />
             </button>
           )}

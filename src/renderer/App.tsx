@@ -571,6 +571,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         project={activeProject}
         projects={projectItems}
         onSelectProject={selectProject}
+        onAddRepository={openAdd}
         tabs={statusTabs}
         activeTabId={activeTabId}
         onSelectTab={selectTab}

@@ -21,6 +21,8 @@ interface StatusBarProps {
   projects: StatusListItem[];
   /** A project's click in that list opens its repository. */
   onSelectProject: (projectId: string) => void;
+  /** The plus of that list. */
+  onAddRepository: () => void;
   /** Its tabs in the strip's order. */
   tabs: StatusListItem[];
   /** The tab the focused pane shows; absent while it has none. */
@@ -53,6 +55,7 @@ export const StatusBar = memo(function StatusBar({
   project,
   projects,
   onSelectProject,
+  onAddRepository,
   tabs,
   activeTabId,
   onSelectTab,
@@ -88,6 +91,10 @@ export const StatusBar = memo(function StatusBar({
       ),
     [agents, closeList, onNewTab],
   );
+  const addRepository = useCallback(() => {
+    closeList();
+    onAddRepository();
+  }, [closeList, onAddRepository]);
   const active = tabs.find((tab) => tab.id === activeTabId);
   // An agent's notice stands in the center until its tab's state ends, read or not.
   const highlighted = notices.some((notice) => !notice.read || !removable(notice));
@@ -138,6 +145,7 @@ export const StatusBar = memo(function StatusBar({
           onSelect={onSelectProject}
           closing={closing}
           onClose={closeList}
+          onAddRepository={addRepository}
         />
       )}
       {openList === "tabs" && (
