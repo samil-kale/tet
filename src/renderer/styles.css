@@ -2806,7 +2806,7 @@ textarea:focus,
   gap: 8px;
   /* VS Code's fixed width: a notice sized to its text is easily missed. */
   width: var(--popup-width);
-  padding: 4px 6px 4px 10px;
+  padding: 10px 6px 10px 10px;
   text-align: left;
   font-size: var(--tet-font-size);
 }
@@ -2955,6 +2955,7 @@ textarea:focus,
 
 .notices-center .notice {
   width: auto;
+  padding: 4px 6px 4px 10px;
   border: none;
   border-radius: 0;
 }
