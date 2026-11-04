@@ -118,7 +118,7 @@ export async function setIssueSource(accounts: IssueAccounts, repository: IssueR
   await writeIssueSource(repository.at.path, typed);
 }
 
-/** The issue as its tab's text, for an agent reading the tab. It opens by saying where it comes from: other people wrote
+/** The issue as text, for an agent: its tab's, and the file a tab opened on it starts with. It opens by saying where it comes from: other people wrote
  *  the text, and an agent reading it should take it for information, not for its instructions. */
 export function issueMarkdown(issue: IssueDetail): string {
   const facts = [

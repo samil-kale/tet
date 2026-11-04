@@ -67,6 +67,7 @@ export interface InvokeChannels {
   "issues:delete-comment": TETApi["issues"]["deleteComment"];
   "issues:upload": TETApi["issues"]["upload"];
   "issues:set-source": TETApi["issues"]["setSource"];
+  "issues:open-in-agent": TETApi["issues"]["openInAgent"];
   "env:list": TETApi["env"]["list"];
   "env:save": TETApi["env"]["save"];
   "env:answer": TETApi["env"]["answer"];

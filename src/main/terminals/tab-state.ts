@@ -4,6 +4,13 @@ import type { HandoverFiles, TabPlace } from "./tab-place";
 
 /** A tab as its session manager holds it, and what reads or sets its marks. */
 
+/** What `TabState.initialFile` holds: a file by its name and content, and the prompt its path ends. */
+export interface InitialFile {
+  name: string;
+  content: string;
+  prompt: string;
+}
+
 export interface TabState extends TabDescriptor {
   /** The session this tab's hooks named (AgentTurns.sessionIdOf), claimed as `sessionId`
    *  once listed. */
@@ -37,6 +44,9 @@ export interface TabState extends TabDescriptor {
   /** The prompt a new tab starts with (AgentTerminal.initialPromptArgs), on its first start only:
    *  a restart would submit it again. */
   initialPrompt?: string;
+  /** A file the tab starts on, its `prompt` naming it as its first prompt: written at the first start,
+   *  once it is known where the tab runs. Made `initialPrompt` then. */
+  initialFile?: InitialFile;
   /** Another agent's session this tab takes over (handOver), handed over as it is — never converted,
    *  so no format change of the agent's breaks it — and made its first prompt on its first start,
    *  once it is known where the tab runs. Dropped then, like `initialPrompt`. */

@@ -24,6 +24,7 @@ import { SESSION_REMOVE_DELAY_MS } from "./terminal-session";
 import { HostPlace, SandboxPlace } from "./tab-place";
 import type { PlaceContext, TabPlace } from "./tab-place";
 import { removeHandoverCopy, TabRuns, type RunCallbacks } from "./tab-runs";
+import type { InitialFile } from "./tab-state";
 import { applyTurnReport, bindReportedSession, notificationFor, type HookNotification, type NotificationKind } from "./turn-reports";
 import {
   awaitsClaim,
@@ -461,6 +462,11 @@ export class TabSessionManager {
   /** `prompt` only for an agent with a `terminal`; the caller checks. */
   createTab(agentId: AgentId, sandboxOnly = false, prompt?: string): TabDescriptor {
     return this.addTab(agentId, { ...(sandboxOnly && { sandboxOnly }), ...(prompt !== undefined && { initialPrompt: prompt }) });
+  }
+
+  /** A new tab of `agentId` starting on `file`, for an agent with a `terminal`; the caller checks. */
+  createTabOnFile(agentId: AgentId, file: InitialFile): TabDescriptor {
+    return this.addTab(agentId, { initialFile: file });
   }
 
   /**

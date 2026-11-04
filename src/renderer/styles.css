@@ -1279,8 +1279,7 @@ textarea:focus,
 
 .issue-state.open {
   border-color: var(--tet-focusBorder);
-  background: var(--tet-focusBorder);
-  color: var(--tet-button-foreground);
+  color: var(--tet-focusBorder);
 }
 
 .issue-columns {
@@ -1776,26 +1775,35 @@ textarea:focus,
   box-sizing: content-box;
 }
 
-.new-tab-menu {
+.new-tab-menu,
+.context-menu .context-menu {
   min-width: 120px;
 }
 
-/* A pane's slides down from behind its tab strip and back up, in `CLOSE_MS`. */
-.pane > .new-tab-menu {
+/* A pane's slides down from behind its tab strip, an issue tab's from behind its bar, and back up,
+   in `CLOSE_MS`. */
+.pane > .new-tab-menu,
+.editor-tab > .new-tab-menu {
   animation: new-tab-menu-enter var(--popup-fade) ease-out;
   transition:
     opacity var(--popup-fade) ease-out,
     transform var(--popup-fade) ease-out;
 }
 
-.pane > .new-tab-menu.closing {
+.pane > .new-tab-menu.closing,
+.editor-tab > .new-tab-menu.closing {
   opacity: 0;
   transform: translateY(-16px);
   pointer-events: none;
 }
 
-.pane:has(> .new-tab-menu) > .tab-strip {
+.pane:has(> .new-tab-menu) > .tab-strip,
+.editor-tab:has(> .new-tab-menu) > .editor-bar {
   z-index: 28;
+}
+
+.editor-tab:has(> .new-tab-menu) > .editor-bar {
+  position: relative;
 }
 
 @keyframes new-tab-menu-enter {

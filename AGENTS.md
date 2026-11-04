@@ -273,7 +273,9 @@ per-line decision is for an agent.
   path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
   new kind of row in one, comes with an *offer* to add its drag — the user decides. An ISSUES or
-  ARCHIVE row opens instead: the pane or snap zone it drops on takes its tab.
+  ARCHIVE row opens instead: the pane or snap zone it drops on takes its tab. An issue reaches an
+  agent through "Open in Agent", in its row's menu and its tab's bar: a new tab of the agent picked,
+  the issue its first prompt.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.

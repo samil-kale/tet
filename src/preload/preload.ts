@@ -91,6 +91,7 @@ const api: TETApi = {
     deleteComment: (projectId, number, id) => invoke("issues:delete-comment", projectId, number, id),
     upload: (projectId, name, dataBase64) => invoke("issues:upload", projectId, name, dataBase64),
     setSource: (projectId, source) => invoke("issues:set-source", projectId, source),
+    openInAgent: (ref, number, agentId) => invoke("issues:open-in-agent", ref, number, agentId),
   },
   env: {
     list: () => invoke("env:list"),

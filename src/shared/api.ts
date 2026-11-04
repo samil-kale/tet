@@ -191,6 +191,9 @@ export interface TETApi {
     /** Checks a path against the tracker and saves it in tet.json; empty removes it. Answers what
      *  refused it, for the question that is still up to show it at its field. */
     setSource: (projectId: string, source: string) => Promise<ActionResult>;
+    /** A new tab of the agent in the repository or worktree, read from the tracker, the issue its
+     *  first prompt; the tab shows it as a file. */
+    openInAgent: (ref: ProjectRef, number: number, agentId: AgentId) => Promise<HandoverResult>;
   };
   env: {
     /** Never the values. */

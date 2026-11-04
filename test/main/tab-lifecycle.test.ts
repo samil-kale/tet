@@ -1,11 +1,12 @@
 import * as assert from "node:assert/strict";
+import * as fs from "node:fs";
 import { describe, it, mock } from "node:test";
 import type { IPty } from "node-pty";
 import type { SessionProvider } from "../../src/main/agents/agent";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { HOST_CALLER } from "../../src/main/ctl/caller-side";
 import type { TabSessionManager } from "../../src/main/terminals/session-manager";
-import { HostPlace } from "../../src/main/terminals/tab-place";
+import { HostPlace, type LaunchInput } from "../../src/main/terminals/tab-place";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { deferred, eventually, sleep } from "../helpers";
@@ -43,6 +44,8 @@ interface Lifecycle {
   tab: (tabId: string) => TabDescriptor | undefined;
   /** How many processes have not exited. */
   live: () => number;
+  /** The agent's arguments of each start, oldest first. */
+  starts: string[][];
 }
 
 /**
@@ -54,6 +57,7 @@ async function withLifecycle(use: (lifecycle: Lifecycle) => Promise<void>): Prom
   const processes: FakeProcess[] = [];
   const log: string[] = [];
   const notices: string[] = [];
+  const starts: string[][] = [];
   let hanging = false;
   let launchGate: Promise<void> | undefined;
   let removesFail = false;
@@ -72,7 +76,8 @@ async function withLifecycle(use: (lifecycle: Lifecycle) => Promise<void>): Prom
 
   const { install, sandbox, sessions: ownSessions } = claudeAgent;
   Object.assign(claudeAgent, { install: undefined, sandbox: undefined, sessions });
-  const launches = mock.method(HostPlace.prototype, "launch", async () => {
+  const launches = mock.method(HostPlace.prototype, "launch", async (input: LaunchInput) => {
+    starts.push(input.agentArgs([]));
     await launchGate;
     return { executable: "agent", args: [] };
   });
@@ -114,6 +119,7 @@ async function withLifecycle(use: (lifecycle: Lifecycle) => Promise<void>): Prom
             spawned: (count, ms) => eventually(`process ${count}`, () => processes.length === count, ms),
             tab,
             live: () => processes.filter((candidate) => !candidate.exited).length,
+            starts,
           });
         } finally {
           for (const process of processes) {
@@ -249,6 +255,26 @@ describe("a running tab archived", () => {
       assert.equal(tab(tabId)?.status, "ready");
       assert.equal(manager.start(tabId), true, "tabs-start takes it");
       await spawned(2);
+    });
+  });
+});
+
+describe("a tab opened on a file", () => {
+  it("writes it where the tab runs at its first start, names it in its first prompt, and gives that once", async () => {
+    await withLifecycle(async ({ manager, spawned, starts, tab }) => {
+      const { tabId } = manager.createTabOnFile("claude", { name: "issue-7.md", content: "The text", prompt: "Read it:" });
+      assert.equal(starts.length, 0, "nothing runs before its first fit");
+      manager.handleResize(tabId, 80, 24);
+      await spawned(1);
+      await eventually("the tab runs", () => tab(tabId)?.status === "running");
+      const prompt = starts[0].at(-1) ?? "";
+      const file = /^Read it: (.+issue-7.md)$/.exec(prompt)?.[1];
+      assert.ok(file !== undefined, prompt);
+      assert.equal(fs.readFileSync(file, "utf8"), "The text");
+
+      assert.equal(manager.restartTab(tabId, true), true);
+      await spawned(2);
+      assert.ok(!starts[1].some((arg) => arg.includes("Read it:")), "a restart resumes, the prompt is not given again");
     });
   });
 });

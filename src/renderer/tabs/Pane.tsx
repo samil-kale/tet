@@ -6,7 +6,7 @@ import { ARCHIVABLE_TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE, PANE
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
-import { SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
+import { BAR_MENU_DROP, SEPARATOR, useAnchoredMenu, useContextMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { TerminalHost } from "./TerminalHost";
@@ -131,7 +131,7 @@ export const Pane = memo(function Pane({
   const newTab = useRef<HTMLDivElement>(null);
   // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
   const plusMenu = useAnchoredMenu(
-    (rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + 12 }),
+    (rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + BAR_MENU_DROP }),
     true,
   );
   const tabMenu = useContextMenu<string>();
@@ -415,10 +415,10 @@ export const Pane = memo(function Pane({
       hasSessions && handOverAgents.length > 0
         ? [
             SEPARATOR,
-            ...handOverAgents.map((agent): ContextMenuEntry => ({
-              label: `Hand over to ${agent.displayName}`,
-              run: withSession ? () => void handOver(withSession.tabId, agent.id) : undefined,
-            })),
+            {
+              label: "Hand over to",
+              entries: withSession && handOverAgents.map((agent) => agentEntry(agent, () => void handOver(withSession.tabId, agent.id))),
+            },
           ]
         : [];
     // Two entries, as the SBX Settings has two buttons: one native picker cannot offer both.

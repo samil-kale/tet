@@ -29,6 +29,8 @@ export type ContextMenuEntry = ContextMenuAction | typeof SEPARATOR;
 const SUBMENU_DELAY_MS = 250;
 /** The menu's top border and `--menu-padding`: a submenu's first entry lines up with its parent entry. */
 const SUBMENU_OFFSET = 4;
+/** Between a submenu and its menu, so each reads as a menu of its own. */
+const SUBMENU_GAP = 4;
 
 interface ContextMenuProps {
   /** Where the pointer was; the menu is clamped to the window from there. */
@@ -70,6 +72,9 @@ export function useContextMenu<T>() {
     menu && <ContextMenu x={menu.x} y={menu.y} entries={entries(menu.target)} onClose={close} />;
   return { open, close, render, target: menu?.target };
 }
+
+/** How far below its button a bar's menu starts: clear of the bar it slides out from behind. */
+export const BAR_MENU_DROP = 12;
 
 /** Where a menu opened from a button goes, worked out from the button's box. */
 type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight" | "flipX" | "above">;
@@ -150,7 +155,9 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
 
   const openSubmenu = (index: number, item: HTMLElement): void => {
     const rect = item.getBoundingClientRect();
-    setSubmenu({ index, x: rect.right, y: rect.top - SUBMENU_OFFSET, flipX: rect.left });
+    // Off the menu's edges, not the entry's: they lie inside its border.
+    const edges = menu.current?.getBoundingClientRect() ?? rect;
+    setSubmenu({ index, x: edges.right + SUBMENU_GAP, y: rect.top - SUBMENU_OFFSET, flipX: edges.left - SUBMENU_GAP });
   };
 
   // Hovering an entry opens its submenu, or closes another's, once the pointer rests there.

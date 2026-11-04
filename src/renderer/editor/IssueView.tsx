@@ -1,11 +1,15 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
+import type { AgentId, AgentInfo } from "../../shared/types/agents";
+import { agentEntry } from "../ui/agent-icons";
+import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
 import { IconButton } from "../ui/IconButton";
-import { GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SyncIcon, TrashIcon } from "../ui/icons";
+import { AiIcon, GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SyncIcon, TrashIcon } from "../ui/icons";
 import { usePickMenu } from "../ui/pick-menu";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
+import { useAgents } from "../ui/use-agents";
 import { issueLink } from "./editor-tab";
 import { issueThread, type ThreadEvent } from "./issue-thread";
 import { createMarkdownPreview, renderHtml, renderMarkdown } from "./markdown";
@@ -102,6 +106,7 @@ export interface IssueActions {
   milestones: () => Promise<IssueMilestone[] | undefined>;
   /** The Markdown that shows the file, once it is up. */
   upload: (file: File) => Promise<string | undefined>;
+  openInAgent: (agentId: AgentId) => void;
 }
 
 interface IssueTextProps {
@@ -459,40 +464,59 @@ export function confirmDeleteIssue(number: number): Promise<boolean> {
   });
 }
 
+/** The agents an issue can be opened in, wherever that is offered: those a prompt can start. */
+export function issueAgentEntries(agents: readonly AgentInfo[], open: (agentId: AgentId) => void): ContextMenuEntry[] {
+  return agents.filter((agent) => agent.takesPrompt).map((agent) => agentEntry(agent, () => open(agent.id)));
+}
+
 /** The tab's bar, as a file's: what can be done to the issue, its state, then what names it. */
 function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
+  const agents = useAgents();
+  // As a pane's new-tab menu: a button's padding off it, and beside the bar, whose stacking it slides
+  // out from behind.
+  const agentMenu = useAnchoredMenu((rect) => ({ x: rect.left - 6, y: rect.bottom + BAR_MENU_DROP }), true);
+  const agentEntries = (): ContextMenuEntry[] => {
+    const offered = issueAgentEntries(agents, actions.openInAgent);
+    return offered.length > 0 ? offered : [{ label: "No agent installed" }];
+  };
   return (
-    <div className="editor-bar">
-      <div className="editor-bar-actions">
-        <IconButton title="Refresh" onClick={actions.refresh}>
-          <SyncIcon />
-        </IconButton>
-        <IconButton title="Copy Link" onClick={() => void navigator.clipboard.writeText(issue.url)}>
-          <LinkIcon />
-        </IconButton>
-        <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
-          <RemoteIcon />
-        </IconButton>
-        <IconButton title="Rename Issue..." onClick={() => void askIssueTitle(issue.title, actions.rename)}>
-          <PencilIcon />
-        </IconButton>
-        <IconButton
-          title="Delete Issue..."
-          onClick={() => void confirmDeleteIssue(issue.number).then((answer) => (answer ? actions.deleteIssue() : undefined))}
-        >
-          <TrashIcon />
-        </IconButton>
+    <>
+      <div className="editor-bar">
+        <div className="editor-bar-actions">
+          <IconButton title="Refresh" onClick={actions.refresh}>
+            <SyncIcon />
+          </IconButton>
+          <IconButton title="Copy Link" onClick={() => void navigator.clipboard.writeText(issue.url)}>
+            <LinkIcon />
+          </IconButton>
+          <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
+            <RemoteIcon />
+          </IconButton>
+          <button type="button" className="icon-button" title="Open in Agent" onMouseDown={agentMenu.open}>
+            <AiIcon />
+          </button>
+          <IconButton title="Rename Issue..." onClick={() => void askIssueTitle(issue.title, actions.rename)}>
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            title="Delete Issue..."
+            onClick={() => void confirmDeleteIssue(issue.number).then((answer) => (answer ? actions.deleteIssue() : undefined))}
+          >
+            <TrashIcon />
+          </IconButton>
+        </div>
+        <div className="editor-bar-actions">
+          <span className={issue.open ? "issue-state open" : "issue-state"}>{issue.open ? "Open" : "Closed"}</span>
+        </div>
+        <div className="issue-bar-name">
+          <span className="editor-path issue-bar-title" title={issue.title}>
+            {issue.title}
+          </span>
+          <span className="count-badge issue-bar-number">#{issue.number}</span>
+        </div>
       </div>
-      <div className="editor-bar-actions">
-        <span className={issue.open ? "issue-state open" : "issue-state"}>{issue.open ? "Open" : "Closed"}</span>
-      </div>
-      <div className="issue-bar-name">
-        <span className="editor-path issue-bar-title" title={issue.title}>
-          {issue.title}
-        </span>
-        <span className="count-badge issue-bar-number">#{issue.number}</span>
-      </div>
-    </div>
+      {agentMenu.render(agentEntries, "new-tab-menu")}
+    </>
   );
 }
 

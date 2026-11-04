@@ -2,7 +2,14 @@ import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAct
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { forget } from "../identity";
-import { nextEditorTabId, setIssueGoneHandler, setRevealHandler, type EditorTab, type OpenEditor } from "../editor/editor-tab";
+import {
+  nextEditorTabId,
+  setIssueGoneHandler,
+  setIssueTabHandler,
+  setRevealHandler,
+  type EditorTab,
+  type OpenEditor,
+} from "../editor/editor-tab";
 import {
   canDiscardEdits,
   disposeEditor,
@@ -129,6 +136,8 @@ export function useEditorOpening(
     },
     [setEditorTabs],
   );
+
+  useEffect(() => setIssueTabHandler((ref, tabId) => activateTab(refKeyOf(ref), tabId)), [activateTab]);
 
   useEffect(
     () =>

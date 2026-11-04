@@ -4,6 +4,7 @@ import type { AgentDefinition } from "../agents/agent";
 import { CONTROL_ENV, CONTROL_START_SIZE } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
 import { effectivePrompt } from "../../shared/prompts";
+import { writeDropFile } from "../store/drops";
 import type { NoticeSeverity } from "../../shared/types/app";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TerminalStatus } from "../../shared/types/terminals";
@@ -202,6 +203,7 @@ export class TabRuns {
           this.failStart(tab);
           return;
         }
+        await this.writeInitialFile(tab, place);
         const launch = await place.launch(this.launchInput(tab));
         const dims = this.runs.get(tabId)?.size;
         if (!dims || !this.target.onStrip(tab) || this.sessionOf(tabId) || tab.openedInTerminal) {
@@ -223,6 +225,19 @@ export class TabRuns {
         this.endRun(tabId, "starting");
         this.target.indicators.release(tabId);
       });
+  }
+
+  /** The tab's `initialFile` written where `place` keeps what has no path of its own, and its prompt
+   *  naming the path as the tab sees it. Refused a sight of it, the tab starts without it. */
+  private async writeInitialFile(tab: TabState, place: TabPlace): Promise<void> {
+    const { initialFile } = tab;
+    if (!initialFile) {
+      return;
+    }
+    const file = await writeDropFile(place.dropsDir(), initialFile.name, Buffer.from(initialFile.content));
+    const [seen] = await place.handPaths([file]);
+    tab.initialFile = undefined;
+    tab.initialPrompt = seen === undefined ? undefined : `${initialFile.prompt} ${seen}`;
   }
 
   /** A start that spawned nothing leaves its tab in `error`, unless it was closed or started anew

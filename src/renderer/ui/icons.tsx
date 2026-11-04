@@ -398,6 +398,19 @@ export function ArrowDownIcon(props: IconProps) {
   return <Lucide {...props} icon={ArrowDown} extent={16.7} />;
 }
 
+/** The letters AI, which Lucide has no icon for, on its grid and stroke — an issue opened in an
+ *  agent. */
+export function AiIcon(props: IconProps) {
+  // Letters ink little of their bounding box, so it is cut to the long axis's cap, not its mean.
+  return (
+    <Svg {...props} extent={16.6} cx={11} cy={12} grid={24} stroke={2}>
+      <path d="M3 20 9 4l6 16" />
+      <path d="M5 15h8" />
+      <path d="M19 4v16" />
+    </Svg>
+  );
+}
+
 /** Lucide's `refresh-cw` — fetch. */
 export function SyncIcon(props: IconProps) {
   return <Lucide {...props} icon={RefreshCw} />;

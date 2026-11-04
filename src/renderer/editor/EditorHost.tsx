@@ -20,6 +20,7 @@ import {
   issueMilestones,
   issueOptions,
   loadIssueImage,
+  openTabIssueInAgent,
   previewWithheld,
   reloadIssue,
   renameIssue,
@@ -157,6 +158,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       options: () => issueOptions(tabId),
       milestones: () => issueMilestones(tabId),
       upload: (file) => uploadIssueFile(tabId, file),
+      openInAgent: (agentId) => openTabIssueInAgent(tabId, agentId),
     }),
     [tabId],
   );

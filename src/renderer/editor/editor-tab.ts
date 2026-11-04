@@ -1,4 +1,6 @@
+import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
+import { notify } from "../ui/Notices";
 
 /**
  * The non-terminal tabs: a project's files in monaco, VS Code's preview semantics. One preview tab
@@ -113,6 +115,29 @@ export function setIssueGoneHandler(handler: (projectId: string, number: number)
 
 export function issueGone(projectId: string, number: number): void {
   issueGoneHandler?.(projectId, number);
+}
+
+/** Shows a tab opened on an issue. Set by App. */
+let issueTabHandler: ((ref: ProjectRef, tabId: string) => void) | undefined;
+
+export function setIssueTabHandler(handler: (ref: ProjectRef, tabId: string) => void): () => void {
+  issueTabHandler = handler;
+  return () => {
+    if (issueTabHandler === handler) {
+      issueTabHandler = undefined;
+    }
+  };
+}
+
+/** A new tab of the agent in the repository or worktree, shown, the issue its first prompt; a notice
+ *  when it cannot be read. */
+export async function openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId): Promise<void> {
+  const result = await window.tet.issues.openInAgent(ref, number, agentId);
+  if (result.ok) {
+    issueTabHandler?.(ref, result.tab.tabId);
+  } else {
+    notify("error", result.error);
+  }
 }
 
 const issueListeners = new Set<(projectId: string) => void>();

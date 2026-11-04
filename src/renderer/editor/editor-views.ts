@@ -2,6 +2,7 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import { onRefClosed } from "../ref-lifetime";
 import { refKeyOf } from "../../shared/types/project";
 import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
+import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/types/providers";
 import { toBase64 } from "../ui/base64";
@@ -14,7 +15,7 @@ import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Mona
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
 import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
-import { issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile } from "./editor-tab";
+import { issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, openIssueInAgent } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
 
 /**
@@ -661,6 +662,15 @@ export async function reloadIssue(tabId: string): Promise<void> {
   });
   if (!issue) {
     notify("error", error ?? `Could not read issue #${number}`);
+  }
+}
+
+/** The tab's issue opened in a new tab of the agent, beside it. */
+export function openTabIssueInAgent(tabId: string, agentId: AgentId): void {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  if (view && number !== undefined) {
+    void openIssueInAgent(view.ref, number, agentId);
   }
 }
 

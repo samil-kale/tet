@@ -1,9 +1,9 @@
 import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
 import type { Issue, IssueFilter } from "../../../shared/types/providers";
-import { issueFileName, issueGone, type OpenEditor } from "../../editor/editor-tab";
+import { issueFileName, issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
 import { reloadIssueTabs } from "../../editor/editor-views";
-import { askIssueTitle, confirmDeleteIssue, dayOf, Person } from "../../editor/IssueView";
+import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
@@ -15,6 +15,7 @@ import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
 import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
 import { Section } from "../../ui/Section";
+import { useAgents } from "../../ui/use-agents";
 import { useTextContextMenu } from "../../ui/use-text-context-menu";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssues } from "./use-issues";
@@ -109,6 +110,7 @@ export const IssueList = memo(function IssueList({
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
   const menu = useContextMenu<Issue>();
+  const agents = useAgents();
 
   const askSource = async (): Promise<void> => {
     await prompt({
@@ -175,6 +177,11 @@ export const IssueList = memo(function IssueList({
   const menuEntries = (issue: Issue): ContextMenuEntry[] => [
     { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
     { label: "Copy Link", run: () => void navigator.clipboard.writeText(issue.url) },
+    SEPARATOR,
+    {
+      label: "Open in Agent",
+      entries: issueAgentEntries(agents, (agentId) => void openIssueInAgent(resolved.ref, issue.number, agentId)),
+    },
     SEPARATOR,
     { label: "Rename...", run: () => void askRename(issue) },
     { label: "Delete...", run: () => void askDelete(issue) },
