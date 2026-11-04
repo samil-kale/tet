@@ -1,17 +1,19 @@
 import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
 import type { Issue, IssueFilter } from "../../../shared/types/providers";
-import { issueFileName, type OpenEditor } from "../../editor/editor-tab";
-import { dayOf, Person } from "../../editor/IssueView";
+import { issueFileName, issueGone, type OpenEditor } from "../../editor/editor-tab";
+import { reloadIssueTabs } from "../../editor/editor-views";
+import { askIssueTitle, confirmDeleteIssue, dayOf, Person } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
-import { useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
+import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
 import { Field, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
-import { LinkIcon, MessageIcon, PlusIcon, SyncIcon } from "../../ui/icons";
+import { Link2Icon, MessageIcon, PlusIcon, SyncIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
-import { setDragName } from "../../ui/row-drag";
+import { notify } from "../../ui/Notices";
+import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
 import { Section } from "../../ui/Section";
 import { useTextContextMenu } from "../../ui/use-text-context-menu";
 import { IssueFilterBar } from "./IssueFilterBar";
@@ -53,12 +55,10 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
 
 function IssueRow({
   issue,
-  projectId,
   onOpen,
   onMenu,
 }: {
   issue: Issue;
-  projectId: string;
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
@@ -67,9 +67,7 @@ function IssueRow({
       className="list-row issue-row"
       title={[`#${issue.number} ${issue.title}`, ...(issue.labels.length > 0 ? [`Labels: ${issue.labels.join(", ")}`] : [])].join("\n")}
       draggable
-      onDragStart={(event) =>
-        setDragName(event.dataTransfer, { kind: "issue", name: issue.url, issue: { projectId, number: issue.number } })
-      }
+      onDragStart={(event) => event.dataTransfer.setData(ISSUE_DRAG_TYPE, String(issue.number))}
       onClick={() => onOpen({})}
       onDoubleClick={() => onOpen({ keep: true })}
       onContextMenu={onMenu}
@@ -90,9 +88,9 @@ function IssueRow({
 }
 
 /**
- * The project's issues, on its tracker: a click opens one in the preview tab, read-only, a double
- * click keeps it, as the Explorer's files, and a drag onto a terminal hands it to the tab. All
- * this writes to the tracker is a new issue, whose tab changes it from there. The source is the
+ * The project's issues, on its tracker: a click opens one in the preview tab, a double click keeps
+ * it, as the Explorer's files, and a drag onto a pane opens it there. All this writes to the
+ * tracker is a new issue and a row's title or deletion; its tab changes the rest. The source is the
  * project's setting, so a worktree, which changes none, offers no button for it.
  */
 export const IssueList = memo(function IssueList({
@@ -149,9 +147,37 @@ export const IssueList = memo(function IssueList({
     }
   };
 
+  const askRename = (issue: Issue): Promise<void> =>
+    askIssueTitle(issue.title, async (typed) => {
+      const result = await window.tet.issues.update(projectId, issue.number, { title: typed });
+      if (result.ok) {
+        reload();
+        reloadIssueTabs(projectId, issue.number);
+      }
+      return refusal(result);
+    });
+
+  const askDelete = async (issue: Issue): Promise<void> => {
+    if (!(await confirmDeleteIssue(issue.number))) {
+      return;
+    }
+    holdBusy();
+    const result = await window.tet.issues.delete(projectId, issue.number);
+    if (!result.ok) {
+      releaseBusy();
+      notify("error", result.error);
+      return;
+    }
+    reloadThenRelease();
+    issueGone(projectId, issue.number);
+  };
+
   const menuEntries = (issue: Issue): ContextMenuEntry[] => [
     { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
     { label: "Copy Link", run: () => void navigator.clipboard.writeText(issue.url) },
+    SEPARATOR,
+    { label: "Rename...", run: () => void askRename(issue) },
+    { label: "Delete...", run: () => void askDelete(issue) },
   ];
 
   return (
@@ -165,7 +191,7 @@ export const IssueList = memo(function IssueList({
           <>
             {worktree === undefined && (
               <IconButton title="Issue source..." onClick={() => void askSource()}>
-                <LinkIcon />
+                <Link2Icon />
               </IconButton>
             )}
             <IconButton title="Refresh" disabled={busy} onClick={reload}>
@@ -185,7 +211,6 @@ export const IssueList = memo(function IssueList({
               <IssueRow
                 key={issue.number}
                 issue={issue}
-                projectId={projectId}
                 onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
                 onMenu={(event) => menu.open(event, issue)}
               />

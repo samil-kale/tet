@@ -94,7 +94,7 @@ export interface EditorTab {
   issue?: number;
 }
 
-/** What an issue's text is called as a file, in its tab and where it is handed to a terminal. */
+/** What an issue's text is called as a file, in its tab. */
 export function issueFileName(number: number): string {
   return `issue-${number}.md`;
 }

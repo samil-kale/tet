@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
 import type { AgentInfo } from "../../shared/types/agents";
+import type { ProjectRef } from "../../shared/types/project";
+import { issueFileName, type OpenEditor } from "../editor/editor-tab";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import { disposeTerminal } from "./terminal-views";
@@ -64,6 +66,8 @@ interface TabAreaProps {
   externalBusy: boolean;
   /** By `refKey`, as the layout callbacks below. */
   onCloseEditors: (refKey: string, tabIds: string[]) => void;
+  /** Opens a file or issue in an editor tab, answering the tab. */
+  onOpenEditor: (ref: ProjectRef, path: string, how?: OpenEditor) => string;
   layout: ProjectLayout;
   onActivateTab: (refKey: string, tabId: string, paneId?: PaneId) => void;
   onSnapTab: (refKey: string, tabId: string, transition: SnapTransition) => void;
@@ -85,6 +89,7 @@ export const TabArea = memo(function TabArea({
   agents,
   externalBusy,
   onCloseEditors,
+  onOpenEditor,
   layout,
   onActivateTab,
   onSnapTab,
@@ -267,6 +272,17 @@ export const TabArea = memo(function TabArea({
     [onDragEnd, resolved.ref, showIn],
   );
 
+  /** An issue's row dropped on a pane: its tab kept, as one placed by hand, and shown as a dragged
+   *  tab is, in the pane or the snap zone. */
+  const onDropIssue = useCallback(
+    (paneId: PaneId, number: number) => {
+      const transition = dragTargetRef.current?.transition ?? null;
+      onDragEnd();
+      showIn(paneId, onOpenEditor(resolved.ref, issueFileName(number), { issue: number, keep: true, background: true }), transition);
+    },
+    [onDragEnd, onOpenEditor, resolved.ref, showIn],
+  );
+
   // Each pane's tabs in the strip's order, identity kept when unchanged. Keyed on the fields
   // `paneOf` and `inOrder` read, not the layout: a selection change must not hand every pane a
   // fresh list.
@@ -334,6 +350,7 @@ export const TabArea = memo(function TabArea({
       onDragOverChange={onDragOverChange}
       onMoveTab={onMoveTab}
       onDropArchived={onDropArchived}
+      onDropIssue={onDropIssue}
     />
   );
 

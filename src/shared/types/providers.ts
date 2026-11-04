@@ -97,7 +97,7 @@ export type IssueEvent = { actor: string; /** ISO 8601. */ createdAt: string } &
   | { kind: "text"; text: string }
 );
 
-/** One issue with what its row leaves out, for its tab and a tab it is handed to. */
+/** One issue with what its row leaves out, for its tab. */
 export interface IssueDetail extends Issue {
   /** All of them; `assignee` is the first. */
   assignees: string[];
@@ -145,7 +145,7 @@ export interface IssueUploadResult {
 
 export interface IssueReadResult {
   issue?: IssueDetail;
-  /** The same as the file a terminal's tab reads. */
+  /** The issue as its tab's text, what an agent reading the tab is answered (`editorContent`). */
   markdown?: string;
   error?: string;
 }

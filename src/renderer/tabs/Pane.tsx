@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { ARCHIVABLE_TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
+import { ARCHIVABLE_TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
@@ -73,6 +73,8 @@ interface PaneProps {
   onMoveTab: (paneId: PaneId, tabId: string, strip?: { before: string | undefined }) => void;
   /** An archived tab's row dropped on a pane: reopened there (`TabArea`). */
   onDropArchived: (paneId: PaneId, tabId: string) => void;
+  /** An issue's row dropped on a pane: its tab opened there (`TabArea`). */
+  onDropIssue: (paneId: PaneId, number: number) => void;
 }
 
 /** A drag's pointer over a pane. `noZone`: it frames the pane alone, whatever snap zone lies under
@@ -124,6 +126,7 @@ export const Pane = memo(function Pane({
   onDragOverChange,
   onMoveTab,
   onDropArchived,
+  onDropIssue,
 }: PaneProps) {
   const newTab = useRef<HTMLDivElement>(null);
   // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
@@ -469,7 +472,7 @@ export const Pane = memo(function Pane({
       // Capture: xterm's mousedown calls stopPropagation() once a TUI turns on mouse tracking.
       onMouseDownCapture={focusHere}
       onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE) && !event.dataTransfer.types.includes(ARCHIVED_TAB_DRAG_TYPE)) {
+        if (![TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE].some((type) => event.dataTransfer.types.includes(type))) {
           // A terminal prevents what it takes (terminal-views.ts), before this runs.
           const taken = event.defaultPrevented && (event.target as Element).closest(".terminal-host") !== null;
           onDragOverChange(paneId, taken ? { x: event.clientX, y: event.clientY, noZone: true } : null);
@@ -493,6 +496,11 @@ export const Pane = memo(function Pane({
         if (event.dataTransfer.types.includes(ARCHIVED_TAB_DRAG_TYPE)) {
           event.preventDefault();
           onDropArchived(paneId, event.dataTransfer.getData(ARCHIVED_TAB_DRAG_TYPE));
+          return;
+        }
+        if (event.dataTransfer.types.includes(ISSUE_DRAG_TYPE)) {
+          event.preventDefault();
+          onDropIssue(paneId, Number(event.dataTransfer.getData(ISSUE_DRAG_TYPE)));
           return;
         }
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {

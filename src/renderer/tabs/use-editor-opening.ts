@@ -38,7 +38,7 @@ export function useEditorOpening(
    * leaves what the user chose there (`showDiff`).
    *
    * Handed as is to every way in but the changes list (`openActiveDiff`): the file itself, in the
-   * repository or worktree the view names.
+   * repository or worktree the view names. Answers the tab, for a way in that places it itself.
    */
   const openEditor = useCallback(
     (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
@@ -82,6 +82,7 @@ export function useEditorOpening(
       if (!how.background) {
         activateTab(refKey, tabId);
       }
+      return tabId;
     },
     [activateTab, editorTabsRef, setEditorTabs],
   );

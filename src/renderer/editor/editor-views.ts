@@ -664,6 +664,15 @@ export async function reloadIssue(tabId: string): Promise<void> {
   }
 }
 
+/** Every tab open on the issue reads it again, after a change made outside them. */
+export function reloadIssueTabs(projectId: string, number: number): void {
+  for (const [tabId, view] of views) {
+    if (view.ref.projectId === projectId && view.snapshot.issue === number) {
+      void reloadIssue(tabId);
+    }
+  }
+}
+
 /** A comment on the tab's issue, which shows once it is up; false, with a notice, when refused. */
 export async function commentOnIssue(tabId: string, body: string): Promise<boolean> {
   const view = views.get(tabId);

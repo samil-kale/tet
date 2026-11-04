@@ -3,7 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { issueFileName, openFile } from "../editor/editor-tab";
+import { openFile } from "../editor/editor-tab";
 import { onRefClosed } from "../ref-lifetime";
 import { Terminal } from "@xterm/xterm";
 import { CONTROL_START_SIZE } from "../../shared/ctl";
@@ -189,18 +189,6 @@ async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<voi
     }
   }
   await handPaths(view, paths);
-}
-
-/** Tells the tab which issue is meant, its text and comments in a file beside it: a file, since the
- *  tracker's text is no line to type. A file without a path, so `pasteDroppedFiles` writes it. */
-async function pasteIssue(view: TerminalView, { projectId, number }: NonNullable<DragName["issue"]>): Promise<void> {
-  const { markdown, error } = await window.tet.issues.read(projectId, number);
-  if (markdown === undefined) {
-    notify("error", error ?? `Could not read issue #${number}`);
-    return;
-  }
-  view.term.paste(`issue #${number} `);
-  await pasteDroppedFiles(view, [new File([markdown], issueFileName(number))]);
 }
 
 /** A copied image has no path either — written into the drops folder too. */
@@ -501,11 +489,7 @@ export function attachTerminal(
     view.term.focus();
     const named = event.dataTransfer?.getData(NAME_DRAG_TYPE);
     if (named) {
-      const { kind, name, issue } = JSON.parse(named) as DragName;
-      if (issue && view.labelsDrops) {
-        pasteIssue(view, issue).catch((error: unknown) => notify("error", `Could not paste the issue: ${errorMessage(error)}`));
-        return;
-      }
+      const { kind, name } = JSON.parse(named) as DragName;
       // In prose one word after its kind, quoted where it holds a space; else as it is, a saved
       // command's line to run. Through term.paste (handPaths).
       const labelled = `${kind} ${/\s/.test(name) ? `"${name}"` : name}`;

@@ -551,6 +551,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
               // Only the bootstrap listing, which has no tab; a starting tab shows via `startingTabIds`.
               externalBusy={(starting[resolved.refKey] ?? false) && (marks[resolved.refKey]?.starting ?? NO_IDS).length === 0}
               onCloseEditors={closeEditors}
+              onOpenEditor={openEditor}
               layout={layouts[resolved.refKey] ?? DEFAULT_LAYOUT}
               onActivateTab={activateTab}
               onSnapTab={snapTab}

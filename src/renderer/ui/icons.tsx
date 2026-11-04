@@ -28,6 +28,7 @@ import {
   Info,
   Landmark,
   Link,
+  Link2,
   List,
   ListTree,
   ListX,
@@ -465,10 +466,15 @@ export function TrashIcon(props: IconProps) {
   return <Lucide {...props} icon={Trash2} />;
 }
 
-/** Lucide's `link` — the ISSUES section's source, drawn a little smaller: its diagonal reads large
- *  beside the header's other buttons. */
+/** Lucide's `link` — an issue's Copy Link, drawn a little smaller: its diagonal reads large beside the
+ *  bar's other buttons. */
 export function LinkIcon(props: IconProps) {
   return <Lucide {...props} icon={Link} extent={22} />;
+}
+
+/** Lucide's `link-2` — the ISSUES section's source. */
+export function Link2Icon(props: IconProps) {
+  return <Lucide {...props} icon={Link2} />;
 }
 
 /** Lucide's `archive` — the archive lane, drawn a little larger: its box reads small beside the

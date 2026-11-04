@@ -38,6 +38,9 @@ export const ARCHIVABLE_TAB_DRAG_TYPE = "application/x-tet-tab-archivable";
  *  takes it to reopen the tab there. */
 export const ARCHIVED_TAB_DRAG_TYPE = "application/x-tet-tab-archived";
 
+/** The drag of an issue's row, carrying its number: a pane takes it to open the issue's tab there. */
+export const ISSUE_DRAG_TYPE = "application/x-tet-issue";
+
 /** Which panes exist for a preset, in reading order — also the "move to" menu's order. */
 export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
   single: ["a"],

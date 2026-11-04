@@ -259,7 +259,7 @@ per-line decision is for an agent.
   settings right after the lane toggles; beside it the lanes: the projects (each with its worktrees,
   and the COMMANDS), git, files, the archived tabs (taken off the strip, their sessions kept) and
   the project's issues (read from its tracker, written to from an issue's tab and the section's
-  new issue) — none of them a tab.
+  new issue, rename and delete) — none of them a tab.
   Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`, `issues`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
   no reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
   the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
@@ -272,7 +272,8 @@ per-line decision is for an agent.
 - **A section's rows drag onto a terminal**, which types what was dropped: a file's or folder's
   path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
-  new kind of row in one, comes with an *offer* to add its drag — the user decides.
+  new kind of row in one, comes with an *offer* to add its drag — the user decides. An ISSUES or
+  ARCHIVE row opens instead: the pane or snap zone it drops on takes its tab.
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.

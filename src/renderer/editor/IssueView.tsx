@@ -3,7 +3,7 @@ import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/type
 import { ActionLink } from "../ui/ActionLink";
 import { askName, confirmed } from "../ui/Dialog";
 import { IconButton } from "../ui/IconButton";
-import { GearIcon, PaperclipIcon, PencilIcon, TrashIcon } from "../ui/icons";
+import { GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SyncIcon, TrashIcon } from "../ui/icons";
 import { usePickMenu } from "../ui/pick-menu";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { issueLink } from "./editor-tab";
@@ -444,20 +444,54 @@ function IssueEventLine({ event, avatar }: { event: ThreadEvent; avatar: string 
   );
 }
 
-function IssueTitle({ issue, rename }: { issue: IssueDetail; rename: IssueActions["rename"] }) {
+/** The question renaming an issue asks, wherever it is offered. */
+export function askIssueTitle(current: string, submit: (title: string) => Promise<string | undefined>): Promise<void> {
+  return askName({ title: "Rename issue", label: "Title", current, confirmLabel: "Rename", submit });
+}
+
+/** The question deleting an issue asks, wherever it is offered. */
+export function confirmDeleteIssue(number: number): Promise<boolean> {
+  return confirmed({
+    title: "Delete issue",
+    message: `Delete issue #${number}?`,
+    detail: "It is deleted on the tracker for good, with its comments.",
+    confirmLabel: "Delete",
+  });
+}
+
+/** The tab's bar, as a file's: what can be done to the issue, its state, then what names it. */
+function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
   return (
-    <div className="issue-title">
-      <span>
-        {issue.title} <span className="count-badge">#{issue.number}</span>
-      </span>
-      <IconButton
-        title="Rename Issue..."
-        onClick={() =>
-          void askName({ title: "Rename issue", label: "Title", current: issue.title, confirmLabel: "Rename", submit: rename })
-        }
-      >
-        <PencilIcon />
-      </IconButton>
+    <div className="editor-bar">
+      <div className="editor-bar-actions">
+        <IconButton title="Refresh" onClick={actions.refresh}>
+          <SyncIcon />
+        </IconButton>
+        <IconButton title="Copy Link" onClick={() => void navigator.clipboard.writeText(issue.url)}>
+          <LinkIcon />
+        </IconButton>
+        <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
+          <RemoteIcon />
+        </IconButton>
+        <IconButton title="Rename Issue..." onClick={() => void askIssueTitle(issue.title, actions.rename)}>
+          <PencilIcon />
+        </IconButton>
+        <IconButton
+          title="Delete Issue..."
+          onClick={() => void confirmDeleteIssue(issue.number).then((answer) => (answer ? actions.deleteIssue() : undefined))}
+        >
+          <TrashIcon />
+        </IconButton>
+      </div>
+      <div className="editor-bar-actions">
+        <span className={issue.open ? "issue-state open" : "issue-state"}>{issue.open ? "Open" : "Closed"}</span>
+      </div>
+      <div className="issue-bar-name">
+        <span className="editor-path issue-bar-title" title={issue.title}>
+          {issue.title}
+        </span>
+        <span className="count-badge issue-bar-number">#{issue.number}</span>
+      </div>
     </div>
   );
 }
@@ -528,9 +562,9 @@ function PickSection({
 }
 
 /**
- * An issue's tab, shaped as VS Code's GitHub Pull Requests and Issues draws one: its title, state and
- * actions, the description and comments with a box for one more, and beside them who and what it is
- * assigned. Only the viewer's own comments offer to change: the tracker's REST says nothing of who
+ * An issue's tab: a bar as a file's, with its actions, title and state, then, as VS Code's GitHub Pull
+ * Requests and Issues draws them, the description and comments with a box for one more, and beside
+ * them who and what it is assigned. Only the viewer's own comments offer to change: the tracker's REST says nothing of who
  * else may, and a description it refuses says so in a notice, a title in the dialog that asked.
  */
 export function IssueView({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
@@ -550,139 +584,113 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
   const milestones = useRef<IssueMilestone[]>([]);
   const { viewer } = issue;
   return (
-    <div className="issue-view">
-      <IssueTitle issue={issue} rename={actions.rename} />
-      <div className="issue-line">
-        <span className={issue.open ? "issue-state open" : "issue-state"}>{issue.open ? "Open" : "Closed"}</span>
-        <Person login={issue.author} avatar={issue.avatars[issue.author]} />
-        <span>{issue.author}</span>
-      </div>
-      <div className="issue-line">
-        <button type="button" className="button secondary" onClick={actions.refresh}>
-          Refresh
-        </button>
-        <button type="button" className="button secondary" onClick={() => void navigator.clipboard.writeText(issue.url)}>
-          Copy Link
-        </button>
-        <button type="button" className="button secondary" onClick={() => void window.tet.shell.openUrl(issue.url)}>
-          Open in Browser
-        </button>
-        <button
-          type="button"
-          className="button secondary"
-          onClick={() =>
-            void confirmed({
-              title: "Delete issue",
-              message: `Delete issue #${issue.number}?`,
-              detail: "It is deleted on the tracker for good, with its comments.",
-              confirmLabel: "Delete",
-            }).then((answer) => (answer ? actions.deleteIssue() : undefined))
-          }
-        >
-          Delete Issue...
-        </button>
-      </div>
-      <div className="issue-columns">
-        <div className="issue-thread">
-          <IssueCard
-            author={issue.author}
-            avatar={issue.avatars[issue.author]}
-            opened
-            at={issue.createdAt}
-            text={issue.body}
-            html={issue.bodyHtml}
-            issueUrl={issue.url}
-            loadImage={loadImage}
-            upload={upload}
-            accept={accept}
-            onEdit={(body) => {
-              actions.update({ body });
-              return Promise.resolve(true);
-            }}
-          />
-          {issueThread(issue.notes, issue.events).map((entry, index) => {
-            if ("event" in entry) {
-              return <IssueEventLine key={`event${index}`} event={entry.event} avatar={issue.avatars[entry.event.actor]} />;
-            }
-            const { note } = entry;
-            return (
-              <IssueCard
-                key={note.id}
-                author={note.author}
-                avatar={issue.avatars[note.author]}
-                at={note.createdAt}
-                text={note.body}
-                html={note.bodyHtml}
-                issueUrl={issue.url}
-                loadImage={loadImage}
-                upload={upload}
-                accept={accept}
-                onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}
-                onDelete={
-                  note.author === viewer
-                    ? () =>
-                        void confirmed({
-                          title: "Delete comment",
-                          message: "Delete this comment?",
-                          detail: "It is deleted on the tracker for good.",
-                          confirmLabel: "Delete",
-                        }).then((answer) => (answer ? actions.deleteComment(note.id) : undefined))
-                    : undefined
-                }
-              />
-            );
-          })}
-          <CommentBox open={issue.open} actions={actions} upload={upload} accept={accept} />
-        </div>
-        <div className="issue-side">
-          <PickSection
-            title="Assignees"
-            picked={issue.assignees}
-            several
-            load={() => loadOptions().then((loaded) => loaded?.people)}
-            onChange={(assignees) => actions.update({ assignees })}
-          >
-            {issue.assignees.length === 0 && <span className="issue-none">None</span>}
-            {issue.assignees.map((login) => (
-              <div key={login} className="issue-side-person">
-                <Person login={login} avatar={issue.avatars[login]} />
-                <span>{login}</span>
-              </div>
-            ))}
-            {viewer !== undefined && !issue.assignees.includes(viewer) && (
-              <ActionLink onClick={() => actions.update({ assignees: [...issue.assignees, viewer] })}>Assign yourself</ActionLink>
-            )}
-          </PickSection>
-          <PickSection
-            title="Labels"
-            picked={issue.labels}
-            several
-            load={() => loadOptions().then((loaded) => loaded?.labels)}
-            onChange={(labels) => actions.update({ labels })}
-          >
-            {issue.labels.length === 0 && <span className="issue-none">None</span>}
-            <div className="issue-labels">
-              {issue.labels.map((label) => (
-                <span key={label} className="issue-label">
-                  {label}
-                </span>
+    <>
+      <IssueBar issue={issue} actions={actions} />
+      <div className="issue-view">
+        <div className="issue-columns">
+          <div className="issue-thread">
+            <IssueCard
+              author={issue.author}
+              avatar={issue.avatars[issue.author]}
+              opened
+              at={issue.createdAt}
+              text={issue.body}
+              html={issue.bodyHtml}
+              issueUrl={issue.url}
+              loadImage={loadImage}
+              upload={upload}
+              accept={accept}
+              onEdit={(body) => {
+                actions.update({ body });
+                return Promise.resolve(true);
+              }}
+            />
+            {issueThread(issue.notes, issue.events).map((entry, index) => {
+              if ("event" in entry) {
+                return <IssueEventLine key={`event${index}`} event={entry.event} avatar={issue.avatars[entry.event.actor]} />;
+              }
+              const { note } = entry;
+              return (
+                <IssueCard
+                  key={note.id}
+                  author={note.author}
+                  avatar={issue.avatars[note.author]}
+                  at={note.createdAt}
+                  text={note.body}
+                  html={note.bodyHtml}
+                  issueUrl={issue.url}
+                  loadImage={loadImage}
+                  upload={upload}
+                  accept={accept}
+                  onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}
+                  onDelete={
+                    note.author === viewer
+                      ? () =>
+                          void confirmed({
+                            title: "Delete comment",
+                            message: "Delete this comment?",
+                            detail: "It is deleted on the tracker for good.",
+                            confirmLabel: "Delete",
+                          }).then((answer) => (answer ? actions.deleteComment(note.id) : undefined))
+                      : undefined
+                  }
+                />
+              );
+            })}
+            <CommentBox open={issue.open} actions={actions} upload={upload} accept={accept} />
+          </div>
+          <div className="issue-side">
+            <PickSection
+              title="Assignees"
+              picked={issue.assignees}
+              several
+              load={() => loadOptions().then((loaded) => loaded?.people)}
+              onChange={(assignees) => actions.update({ assignees })}
+            >
+              {issue.assignees.length === 0 && <span className="issue-none">None</span>}
+              {issue.assignees.map((login) => (
+                <div key={login} className="issue-side-person">
+                  <Person login={login} avatar={issue.avatars[login]} />
+                  <span>{login}</span>
+                </div>
               ))}
-            </div>
-          </PickSection>
-          <PickSection
-            title="Milestone"
-            picked={issue.milestone === undefined ? [] : [issue.milestone]}
-            several={false}
-            load={async () => {
-              milestones.current = (await actions.milestones()) ?? [];
-              return milestones.current.map((milestone) => milestone.title);
-            }}
-            onChange={([title]) => actions.update({ milestone: milestones.current.find((milestone) => milestone.title === title) ?? null })}
-          >
-            <span className={issue.milestone === undefined ? "issue-none" : undefined}>{issue.milestone ?? "None"}</span>
-          </PickSection>
+              {viewer !== undefined && !issue.assignees.includes(viewer) && (
+                <ActionLink onClick={() => actions.update({ assignees: [...issue.assignees, viewer] })}>Assign yourself</ActionLink>
+              )}
+            </PickSection>
+            <PickSection
+              title="Labels"
+              picked={issue.labels}
+              several
+              load={() => loadOptions().then((loaded) => loaded?.labels)}
+              onChange={(labels) => actions.update({ labels })}
+            >
+              {issue.labels.length === 0 && <span className="issue-none">None</span>}
+              <div className="issue-labels">
+                {issue.labels.map((label) => (
+                  <span key={label} className="issue-label">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </PickSection>
+            <PickSection
+              title="Milestone"
+              picked={issue.milestone === undefined ? [] : [issue.milestone]}
+              several={false}
+              load={async () => {
+                milestones.current = (await actions.milestones()) ?? [];
+                return milestones.current.map((milestone) => milestone.title);
+              }}
+              onChange={([title]) =>
+                actions.update({ milestone: milestones.current.find((milestone) => milestone.title === title) ?? null })
+              }
+            >
+              <span className={issue.milestone === undefined ? "issue-none" : undefined}>{issue.milestone ?? "None"}</span>
+            </PickSection>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
