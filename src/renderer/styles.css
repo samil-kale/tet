@@ -1634,6 +1634,20 @@ textarea:focus,
   color: var(--tet-tabMark-foreground, var(--tet-focusBorder));
 }
 
+/* `SpinnerIcon`'s turn about the svg's centre. A CSS animation starts with the frame the icon
+   appears in; a SMIL one waits for the svg's own timeline. */
+.spinner-turn {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: spinner-turn 1.2s linear infinite;
+}
+
+@keyframes spinner-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* On the active tab or row's selection background, else in the mark's own colour. */
 .tab.active .tab-mark:not(.tab-mark-error),
 .project-row.active .tab-mark:not(.tab-mark-error),

@@ -4,7 +4,7 @@ import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
 import { createByteThresholdCheck } from "../cli-ready";
 import { codexIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
-import { hookSessionId } from "../hook-payload";
+import { hookSessionId, hookToolCall } from "../hook-payload";
 import { codexHookReply, setupCodexHooks } from "./hooks";
 import { listModels } from "./app-server-client";
 import { codexHome, codexSandboxSessions, codexSessionProvider } from "./sessions";
@@ -43,7 +43,7 @@ export const codexAgent: SandboxedAgent = {
   },
   sessions: codexSessionProvider,
   // See AgentTurns.questionOutlivesTurn.
-  turns: { sessionIdOf: hookSessionId, questionOutlivesTurn: true, hookReply: codexHookReply },
+  turns: { sessionIdOf: hookSessionId, toolCallOf: hookToolCall, questionOutlivesTurn: true, hookReply: codexHookReply },
   host: {
     // Nothing is written (setupCodexHooks), so nothing can fail.
     prepare: () => Promise.resolve({ args: [...BASE_ARGS, ...setupCodexHooks()] }),

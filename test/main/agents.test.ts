@@ -10,7 +10,7 @@ import * as esbuild from "esbuild";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { setupClaudeHooks } from "../../src/main/agents/claude/hooks";
 import { hookTrustedHash, setupCodexHooks } from "../../src/main/agents/codex/hooks";
-import { hookSessionId } from "../../src/main/agents/hook-payload";
+import { hookSessionId, hookToolCall } from "../../src/main/agents/hook-payload";
 import { piStopCutShort, renderPiExtension, writePiExtension } from "../../src/main/agents/pi/extension";
 import { systemPrompt } from "../../src/main/agents/system-prompt";
 import { createByteThresholdCheck } from "../../src/main/agents/cli-ready";
@@ -81,18 +81,25 @@ describe("Claude Code's hooks", () => {
     return settings.hooks;
   };
 
-  it("report a question when its tool starts and its answer when the tool ends, one process per question", () => {
+  it("report a question when its tool starts, a permission when its dialog opens, and the answer when a tool ends or fails", () => {
     const hooks = hooksOf(false);
     assert.deepEqual(
-      [hooks.PreToolUse, hooks.PostToolUse].map((groups) => groups.map((group) => [group.matcher, group.hooks[0].command])),
-      [[["AskUserQuestion", "tet-ctl hook question"]], [["AskUserQuestion", "tet-ctl hook answered"]]],
+      [hooks.PreToolUse, hooks.PermissionRequest, hooks.PostToolUse, hooks.PostToolUseFailure].map((groups) =>
+        groups.map((group) => [group.matcher, group.hooks[0].command]),
+      ),
+      [
+        [["AskUserQuestion", "tet-ctl hook question"]],
+        [[undefined, "tet-ctl hook permission"]],
+        [[undefined, "tet-ctl hook answered"]],
+        [[undefined, "tet-ctl hook answered"]],
+      ],
     );
   });
 
   it("register the idle reminder only when it is wanted", () => {
     const matchers = (idleReminder: boolean): (string | undefined)[] => hooksOf(idleReminder).Notification.map((group) => group.matcher);
-    assert.deepEqual(matchers(false), ["permission_prompt|elicitation_dialog"]);
-    assert.deepEqual(matchers(true), ["permission_prompt|elicitation_dialog", "idle_prompt"]);
+    assert.deepEqual(matchers(false), ["elicitation_dialog"]);
+    assert.deepEqual(matchers(true), ["elicitation_dialog", "idle_prompt"]);
   });
 });
 
@@ -114,7 +121,7 @@ describe("Codex's hook trust", () => {
     for (const event of ["UserPromptSubmit", "Stop", "PermissionRequest", "PreToolUse", "PostToolUse"]) {
       assert.ok(hooks.includes(`${event}=[`), event);
     }
-    assert.match(hooks, /matcher='request_user_input'/);
+    assert.deepEqual(hooks.match(/matcher='[^']*'/g), ["matcher='request_user_input'"], "the answer's hook runs on every tool");
     const trusted = hooks.match(/trusted_hash='sha256:[0-9a-f]{64}'/g) ?? [];
     assert.equal(trusted.length, 6, "one per event, each its own handler");
     assert.ok(!args.some((arg) => arg.startsWith("hooks.")), "one value, never key paths");
@@ -177,6 +184,38 @@ describe("the session a hook report names", () => {
     assert.equal(hookSessionId(codex), "01a09f45-f0d2-74e1-be90-a8f79f43cb7e");
     for (const nothing of ["", "{}", "null", "not json", `{"session_id":"  "}`, `{"session_id":7}`]) {
       assert.equal(hookSessionId(nothing), undefined, nothing);
+    }
+  });
+});
+
+describe("the tool call a hook report names", () => {
+  it("reads alike in the report that asks and the one that follows the run", () => {
+    // Claude Code: the same `tool_input` at the dialog and after the run.
+    const claudeAsk = `{"hook_event_name":"PermissionRequest","tool_name":"PowerShell","tool_input":{"command":"echo hi","description":"Write hi"}}`;
+    const claudeRan = `{"hook_event_name":"PostToolUse","tool_name":"PowerShell","tool_use_id":"t","tool_input":{"command":"echo hi","description":"Write hi"},"tool_response":{}}`;
+    const claudeFailed = `{"hook_event_name":"PostToolUseFailure","tool_name":"PowerShell","tool_use_id":"t","tool_input":{"command":"echo hi","description":"Write hi"},"error":"Exit code 3","is_interrupt":false}`;
+    // Codex: a description beside the command at the dialog only.
+    const codexAsk = `{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo hi","description":"May I?"}}`;
+    const codexRan = `{"hook_event_name":"PostToolUse","tool_name":"Bash","tool_use_id":"t","tool_input":{"command":"echo hi"}}`;
+    assert.equal(hookToolCall(claudeAsk), hookToolCall(claudeRan));
+    assert.equal(hookToolCall(claudeAsk), hookToolCall(claudeFailed));
+    assert.equal(hookToolCall(codexAsk), hookToolCall(codexRan));
+    assert.ok(hookToolCall(claudeAsk));
+  });
+
+  it("differs for another command, another file, another tool and a subagent's call", () => {
+    const call = (tool: string, input: object, agent?: string) =>
+      hookToolCall(JSON.stringify({ tool_name: tool, tool_input: input, agent_id: agent }));
+    const base = call("Bash", { command: "echo hi" });
+    assert.notEqual(call("Bash", { command: "echo other" }), base);
+    assert.notEqual(call("Read", { command: "echo hi" }), base);
+    assert.notEqual(call("Bash", { command: "echo hi" }, "a1"), base, "a subagent's");
+    assert.notEqual(call("Write", { file_path: "a.txt" }), call("Write", { file_path: "b.txt" }));
+  });
+
+  it("is none for a payload naming no tool", () => {
+    for (const nothing of ["", "{}", "null", "not json", `{"tool_name":" "}`, `{"tool_name":7}`]) {
+      assert.equal(hookToolCall(nothing), undefined, nothing);
     }
   });
 });

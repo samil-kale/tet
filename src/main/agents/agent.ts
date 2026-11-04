@@ -184,6 +184,13 @@ export interface AgentTurns {
    *  listing carries no pid or tab. */
   sessionIdOf(payload: string): string | undefined;
   /**
+   * The tool call a `permission`, `question` or `answered` report is about (hook-payload.ts's
+   * `hookToolCall`), for an agent whose `answered` comes from a hook on every tool call: only the
+   * report of the call the tab waits on answers it, not another tool finishing meanwhile (a
+   * subagent's, a parallel one's). Omitted: any `answered` does (pi's extension reports its dialog's end).
+   */
+  toolCallOf?(payload: string): string | undefined;
+  /**
    * Whether a question still stands after its turn ended: Codex's question lets the turn end while
    * it waits in the composer, so clearing it at turn end would drop the tab's only "wants the user"
    * mark.

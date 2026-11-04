@@ -75,7 +75,7 @@ interface HookEntry {
   /** snake_case, as in a trust key. */
   label: string;
   command: string;
-  /** Only the question tool's `PreToolUse` and `PostToolUse` need one. */
+  /** Only the question tool's `PreToolUse` needs one. */
   matcher?: string;
 }
 
@@ -122,8 +122,10 @@ export function setupCodexHooks(target: HookTarget = HOST_TARGET): string[] {
     // Waiting: an approval about to be asked, or the question tool about to run.
     { event: "PermissionRequest", label: "permission_request", command: hookCommand("permission") },
     { event: "PreToolUse", label: "pre_tool_use", command: hookCommand("question"), matcher: "request_user_input" },
-    // Its answer ends the question; an approval's does not report one.
-    { event: "PostToolUse", label: "post_tool_use", command: hookCommand("answered"), matcher: "request_user_input" },
+    // Every tool run: it is what follows an answered question or approval, which no hook reports.
+    // Only the call the tab waits on counts (AgentTurns.toolCallOf). A declined approval fires nothing;
+    // that turn ends cut short (reconcile).
+    { event: "PostToolUse", label: "post_tool_use", command: hookCommand("answered") },
   ];
 
   return ["-c", buildHooksArg(entries, target)];

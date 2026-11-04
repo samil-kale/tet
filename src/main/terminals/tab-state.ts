@@ -28,6 +28,8 @@ export interface TabState extends TabDescriptor {
   /** Opened by `tet-ctl` from a sandbox: runs in the sandbox or not at all (resolvePlace), or the
    *  sandbox could disable SBX in tet.json and open itself a tab on this machine. */
   sandboxOnly?: true;
+  /** The tool call the standing question is about (AgentTurns.toolCallOf), read only while `waitingAt` is set. */
+  waitingFor?: string;
   /** When the running turn was reported started — what a turn end is dated against. */
   turnStartedAt?: number;
   /**
@@ -81,9 +83,9 @@ export function titleUnsettled(tab: TabState): boolean {
  * `keepQuestion`, for AgentTurns.questionOutlivesTurn: the question stays **and the end
  * leaves no bubble beside it**, the question being the more urgent and actionable of the two.
  *
- * Only pi and the agents' question tools (Claude Code's AskUserQuestion, Codex's request_user_input)
- * report an answered question (`answered`), so a permission granted mid-turn keeps the mark until
- * the tab is typed into.
+ * A question or permission answered mid-turn is reported as `answered`: by pi's dialog ending, and
+ * for Claude Code and Codex by the run of the tool call it waited on (AgentTurns.toolCallOf). One
+ * declined reports nothing, so it keeps the mark until the tab is typed into or the turn ends.
  */
 export function setTurn(tab: TabState, inTurn: boolean, at: number, keepQuestion = false): void {
   tab.inTurn = inTurn;
@@ -136,8 +138,10 @@ export function endLeavesQuestion(tab: TabState, agent: AgentDefinition): boolea
  * Whether terminal input can answer a standing question — see `write`. Besides an agent's `answered`,
  * this and either end of the turn (setTurn) are what clear the mark. Enter and a printable
  * character (Claude Code's permission prompt takes a digit without Enter). Not arrows, Tab,
- * Shift+Tab, a bare Escape or the mouse (a click into the terminal answers nothing): the mark
- * stands on the tab on screen too.
+ * Shift+Tab, a bare Escape or the mouse: a mouse report cannot tell an answer from a click that
+ * only focuses the terminal or lands on a CLI that ignores it (Codex's dialog), and a click that
+ * does answer (Claude Code's) is reported as `answered` by the tool call's run instead, so the mark
+ * never goes while the question stands.
  */
 export function answersQuestion(data: string): boolean {
   if (data.includes("\r") || data.includes("\n")) {

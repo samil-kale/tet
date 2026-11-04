@@ -52,13 +52,13 @@ import {
   Shield,
   SquareArrowOutUpRight,
   SquareCode,
+  SquareSparkles,
   SquareSplitHorizontal,
   SquareTerminal,
   Tag,
   Trash2,
   Undo2,
   User,
-  Wand,
   WholeWord,
   X,
   type LucideIcon,
@@ -350,17 +350,9 @@ export function SpinnerIcon(props: IconProps) {
   // The whole 24 grid at Lucide's stroke of 2, as `Lucide` draws it by default.
   return (
     <Svg {...props} extent={19.2} cx={12} cy={12} grid={24} stroke={2}>
-      <g>
-        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1.2s" repeatCount="indefinite" />
-        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-      </g>
+      <path className="spinner-turn" d="M21 12a9 9 0 1 1-6.219-8.56" />
     </Svg>
   );
-}
-
-/** Lucide's `wand` — a model's suggestion. */
-export function SparkleIcon(props: IconProps) {
-  return <Lucide {...props} icon={Wand} />;
 }
 
 /** Lucide's `play`, two pixels under like `CloseIcon`. */
@@ -398,17 +390,9 @@ export function ArrowDownIcon(props: IconProps) {
   return <Lucide {...props} icon={ArrowDown} extent={16.7} />;
 }
 
-/** The letters AI, which Lucide has no icon for, on its grid and stroke — an issue opened in an
- *  agent. */
-export function AiIcon(props: IconProps) {
-  // Letters ink little of their bounding box, so it is cut to the long axis's cap, not its mean.
-  return (
-    <Svg {...props} extent={16.6} cx={11} cy={12} grid={24} stroke={2}>
-      <path d="M3 20 9 4l6 16" />
-      <path d="M5 15h8" />
-      <path d="M19 4v16" />
-    </Svg>
-  );
+/** Lucide's `square-sparkles` — a model's suggestion, an issue opened in an agent. */
+export function SquareSparklesIcon(props: IconProps) {
+  return <Lucide {...props} icon={SquareSparkles} />;
 }
 
 /** Lucide's `refresh-cw` — fetch. */

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
-import { SparkleIcon } from "./icons";
+import { SquareSparklesIcon } from "./icons";
 import { useBusy } from "./use-busy";
 import { useTextContextMenu } from "./use-text-context-menu";
 
@@ -243,7 +243,7 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => void suggest()}
           >
-            <SparkleIcon />
+            <SquareSparklesIcon />
           </button>
         )}
       </FieldRow>

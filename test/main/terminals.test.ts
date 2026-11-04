@@ -195,6 +195,52 @@ describe("a question reported answered", () => {
   });
 });
 
+describe("a permission reported answered", () => {
+  const ask = (tool: string, command: string, agentId?: string) =>
+    JSON.stringify({ tool_name: tool, tool_input: { command, description: "d" }, agent_id: agentId });
+  const ran = (tool: string, command: string, agentId?: string) =>
+    JSON.stringify({ tool_name: tool, tool_input: { command }, agent_id: agentId });
+
+  it("is cleared by the run of the call it waits on, not by another call finishing", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("codex");
+      const inspected = () => manager.inspect().find((tab) => tab.tabId === tabId);
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
+      manager.hookEvent(tabId, "permission", ask("Bash", "echo hi"), at + 1000, HOST_CALLER);
+      manager.hookEvent(tabId, "answered", ran("Bash", "ls"), at + 2000, HOST_CALLER);
+      assert.notEqual(inspected()?.waitingAt, undefined, "a parallel call");
+      manager.hookEvent(tabId, "answered", ran("Bash", "echo hi", "sub1"), at + 3000, HOST_CALLER);
+      assert.notEqual(inspected()?.waitingAt, undefined, "a subagent's call");
+      manager.hookEvent(tabId, "answered", ran("Bash", "echo hi"), at + 4000, HOST_CALLER);
+      assert.equal(inspected()?.waitingAt, undefined);
+      assert.equal(inspected()?.inTurn, true, "the turn runs on");
+    });
+  });
+
+  it("stands through every call's run when it names no call of its own", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("claude");
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
+      manager.hookEvent(tabId, "permission", "{}", at + 1000, HOST_CALLER);
+      manager.hookEvent(tabId, "answered", ran("Bash", "ls"), at + 2000, HOST_CALLER);
+      assert.notEqual(manager.inspect().find((tab) => tab.tabId === tabId)?.waitingAt, undefined);
+    });
+  });
+
+  it("is cleared by any answer where the agent names no tool", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("pi");
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", "{}", at, HOST_CALLER);
+      manager.hookEvent(tabId, "permission", ask("Bash", "echo hi"), at + 1000, HOST_CALLER);
+      manager.hookEvent(tabId, "answered", ran("Bash", "ls"), at + 2000, HOST_CALLER);
+      assert.equal(manager.inspect().find((tab) => tab.tabId === tabId)?.waitingAt, undefined);
+    });
+  });
+});
+
 describe("a turn's notification", () => {
   const tab = (title: string): TabState => ({ tabId: "t", agentId: "claude", title, status: "running" });
   const all = { finished: true, waiting: true, idleReminder: true };

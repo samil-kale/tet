@@ -6,7 +6,7 @@ import { agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
 import { IconButton } from "../ui/IconButton";
-import { AiIcon, GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SyncIcon, TrashIcon } from "../ui/icons";
+import { GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SquareSparklesIcon, SyncIcon, TrashIcon } from "../ui/icons";
 import { usePickMenu } from "../ui/pick-menu";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
@@ -493,7 +493,7 @@ function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueAction
             <RemoteIcon />
           </IconButton>
           <button type="button" className="icon-button" title="Open in Agent" onMouseDown={agentMenu.open}>
-            <AiIcon />
+            <SquareSparklesIcon />
           </button>
           <IconButton title="Rename Issue..." onClick={() => void askIssueTitle(issue.title, actions.rename)}>
             <PencilIcon />

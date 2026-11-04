@@ -2,7 +2,7 @@ import * as path from "node:path";
 import { createByteThresholdCheck } from "../cli-ready";
 import { claudeIcon } from "./icon";
 import type { SandboxedAgent } from "../agent";
-import { hookSessionId } from "../hook-payload";
+import { hookSessionId, hookToolCall } from "../hook-payload";
 import { SANDBOX_HOME, SANDBOX_TARGET } from "../hook-target";
 import { claudeHookReply, claudeWorkOutlivesStop, setupClaudeHooks } from "./hooks";
 import { claudeConfigDir, claudeSandboxSessions, claudeSessionProvider } from "./sessions";
@@ -49,7 +49,7 @@ export const claudeAgent: SandboxedAgent = {
     modelArgs: (model) => ["--model", model],
   },
   sessions: claudeSessionProvider,
-  turns: { sessionIdOf: hookSessionId, workOutlivesStop: claudeWorkOutlivesStop, hookReply: claudeHookReply },
+  turns: { sessionIdOf: hookSessionId, toolCallOf: hookToolCall, workOutlivesStop: claudeWorkOutlivesStop, hookReply: claudeHookReply },
   host: {
     prepare: (_executable, paths) => {
       let args: string[] = [];

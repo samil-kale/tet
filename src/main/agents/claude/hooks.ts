@@ -21,18 +21,24 @@ export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TA
   const hooks = {
     UserPromptSubmit: [{ hooks: command("prompt-submit") }],
     Stop: [{ hooks: command("stop") }],
-    // Two events mean blocked on the user; `idle_prompt` fires after a turn ended (the bubble's
-    // meaning), so it is only a reminder, registered only when wanted (AgentPaths.idleReminder).
-    // No guard on the first two: they are raised only when Claude Code has actually stopped.
+    // Blocked on the user: `PermissionRequest` fires as the dialog opens, with the tool in its
+    // payload (the `permission_prompt` notification comes later and names none);
+    // `elicitation_dialog` is an MCP server's question. `idle_prompt` fires after a turn ended (the
+    // bubble's meaning), so it is only a reminder, registered only when wanted
+    // (AgentPaths.idleReminder). No guard on these: they are raised only when Claude Code has
+    // actually stopped.
+    PermissionRequest: [{ hooks: command("permission") }],
     Notification: [
-      { matcher: "permission_prompt|elicitation_dialog", hooks: command("permission") },
+      { matcher: "elicitation_dialog", hooks: command("permission") },
       ...(paths.idleReminder ? [{ matcher: "idle_prompt", hooks: command("idle") }] : []),
     ],
-    // `AskUserQuestion` is a tool, not a Notification event. Its answer ends the question, as a
-    // permission's does not: only this tool's PostToolUse is hooked, one process per question rather
-    // than one per tool call. A declined one fires nothing; that turn ends cut short (reconcile).
+    // `AskUserQuestion` is a tool, not a Notification event.
     PreToolUse: [{ matcher: "AskUserQuestion", hooks: command("question") }],
-    PostToolUse: [{ matcher: "AskUserQuestion", hooks: command("answered") }],
+    // Every tool run, succeeded or failed: it is what follows an answered permission or question,
+    // which no hook reports. Only the call the tab waits on counts (AgentTurns.toolCallOf). A
+    // declined one fires nothing; that turn ends cut short (reconcile).
+    PostToolUse: [{ hooks: command("answered") }],
+    PostToolUseFailure: [{ hooks: command("answered") }],
   };
 
   // Claude Code paints dark unless told; `theme` here outranks `~/.claude.json` for this process.

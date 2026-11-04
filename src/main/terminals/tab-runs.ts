@@ -389,8 +389,8 @@ export class TabRuns {
   }
 
   write(tabId: string, data: string): void {
-    // Typing into the asking tab answers it, for agents reporting no `answered`. Cleared before
-    // forwarding.
+    // Typing into the asking tab answers it: a declined one reports no `answered`, an allowed one
+    // only once its tool has run. Cleared before forwarding.
     const tab = this.target.tabOf(tabId);
     if (tab?.waitingAt !== undefined && answersQuestion(data)) {
       tab.waitingAt = undefined;

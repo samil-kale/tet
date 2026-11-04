@@ -36,6 +36,7 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
   // A report sent before the exit can arrive after it (Codex's aborted hook, an extension's post, a
   // sandbox's latency) and would mark a tab whose process is gone until the next stop.
   const exited = tab.status === "stopped" || tab.status === "error";
+  const agent = getAgent(tab.agentId);
   switch (event) {
     case "session-start":
       // Only names the session (bindReportedSession). Codex fires it with the first prompt, whose turn
@@ -52,7 +53,6 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
       if (!fresh) {
         return UNCHANGED;
       }
-      const agent = getAgent(tab.agentId);
       if (agent.turns?.workOutlivesStop?.(payload)) {
         return UNCHANGED;
       }
@@ -82,10 +82,16 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
         return UNCHANGED;
       }
       tab.waitingAt = at;
+      tab.waitingFor = agent.turns?.toolCallOf?.(payload);
       return { changed: true, notify: event };
     case "answered":
       // The dialog closed, whatever closed it; the turn, if any, runs on.
       if (!fresh || exited || tab.waitingAt === undefined) {
+        return UNCHANGED;
+      }
+      // Reported by a hook on every tool call: another call finishing says nothing of the question,
+      // nor does any of a question that names no call (an MCP server's).
+      if (agent.turns?.toolCallOf && agent.turns.toolCallOf(payload) !== tab.waitingFor) {
         return UNCHANGED;
       }
       tab.waitingAt = undefined;
