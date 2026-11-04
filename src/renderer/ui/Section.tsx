@@ -7,6 +7,8 @@ interface SectionProps {
   count?: ReactNode;
   /** The count says something went wrong instead (a SEARCH regex that will not parse). */
   countError?: boolean;
+  /** After the count, dimmed and cut short first: what the section shows, where it says so. */
+  detail?: string;
   /** Draws the section's one progress bar along the header's bottom edge. */
   busy?: boolean;
   /** Given, the sash beside it sizes the section; left out, it takes the rest of the lane. */
@@ -20,7 +22,7 @@ interface SectionProps {
  * A titled section of a lane — the projects lane's, the git lane's, the files lane's: a header
  * with its title, count and actions, then what it holds, a filter field included where it has one.
  */
-export function Section({ title, count, countError, busy, height, actions, children }: SectionProps) {
+export function Section({ title, count, countError, detail, busy, height, actions, children }: SectionProps) {
   return (
     <div className={`section${height === undefined ? " grows" : ""}`} style={height === undefined ? undefined : { height }}>
       <div className="section-header">
@@ -30,6 +32,14 @@ export function Section({ title, count, countError, busy, height, actions, child
             <>
               {" "}
               <span className={`count-badge${countError ? " error" : ""}`}>({count})</span>
+            </>
+          )}
+          {detail !== undefined && (
+            <>
+              {" "}
+              <span className="count-badge" title={detail}>
+                {detail}
+              </span>
             </>
           )}
         </span>

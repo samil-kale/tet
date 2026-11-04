@@ -11,6 +11,7 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   CircleAlert,
+  CircleDot,
   CircleX,
   Columns2,
   File,
@@ -26,6 +27,7 @@ import {
   GripVertical,
   Info,
   Landmark,
+  Link,
   List,
   ListTree,
   ListX,
@@ -35,6 +37,8 @@ import {
   MessageCircleX,
   MessageSquareText,
   Package,
+  Paperclip,
+  Pencil,
   Play,
   Plus,
   Power,
@@ -50,6 +54,7 @@ import {
   SquareSplitHorizontal,
   SquareTerminal,
   Tag,
+  Trash2,
   Undo2,
   User,
   Wand,
@@ -318,7 +323,7 @@ export function RegexIcon(props: IconProps) {
   return <Lucide {...props} icon={Regex} />;
 }
 
-/** Lucide's `message-square-text` — the GRAPH's search in commit messages. */
+/** Lucide's `message-square-text` — the GRAPH's search in commit messages, an issue's comments. */
 export function MessageIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageSquareText} />;
 }
@@ -438,6 +443,32 @@ export function GearIcon(props: IconProps) {
 /** Lucide's `file-code` — the files lane. */
 export function FilesIcon(props: IconProps) {
   return <Lucide {...props} icon={FileCode} />;
+}
+
+/** Lucide's `circle-dot` — the issues lane. */
+export function IssuesIcon(props: IconProps) {
+  return <Lucide {...props} icon={CircleDot} />;
+}
+
+/** Lucide's `paperclip` — a file for an issue's text. */
+export function PaperclipIcon(props: IconProps) {
+  return <Lucide {...props} icon={Paperclip} />;
+}
+
+/** Lucide's `pencil` — an issue's title or text to change. */
+export function PencilIcon(props: IconProps) {
+  return <Lucide {...props} icon={Pencil} />;
+}
+
+/** Lucide's `trash-2` — an issue's comment to delete. */
+export function TrashIcon(props: IconProps) {
+  return <Lucide {...props} icon={Trash2} />;
+}
+
+/** Lucide's `link` — the ISSUES section's source, drawn a little smaller: its diagonal reads large
+ *  beside the header's other buttons. */
+export function LinkIcon(props: IconProps) {
+  return <Lucide {...props} icon={Link} extent={22} />;
 }
 
 /** Lucide's `archive` — the archive lane, drawn a little larger: its box reads small beside the

@@ -10,6 +10,11 @@
   color: var(--tet-editor-foreground);
 }
 
+/* An issue's text, in its card (`IssueText`). */
+.markdown-body.compact {
+  padding: 10px 10px 0;
+}
+
 .markdown-body :is(h1, h2, h3, h4, h5, h6, p, ol, ul, pre) {
   margin-top: 0;
 }

@@ -13,6 +13,8 @@ interface ContextMenuAction {
   /** Leads the label, e.g. an agent's icon in the new-tab menu. */
   icon?: ReactNode;
   run?: () => void;
+  /** `run` leaves the menu up, for a list where several can be picked. */
+  keepsOpen?: boolean;
   /** A submenu, opened on hover or click, in place of a `run`. */
   entries?: ContextMenuEntry[];
 }
@@ -25,8 +27,8 @@ export type ContextMenuEntry = ContextMenuAction | typeof SEPARATOR;
 /** How long the pointer rests on an entry before its submenu opens or another one closes, so a
  *  pointer crossing entries on its way into an open submenu leaves it open (VS Code's delay). */
 const SUBMENU_DELAY_MS = 250;
-/** The menu's top border: a submenu's first entry lines up with its parent entry. */
-const SUBMENU_OFFSET = 1;
+/** The menu's top border and `--menu-padding`: a submenu's first entry lines up with its parent entry. */
+const SUBMENU_OFFSET = 4;
 
 interface ContextMenuProps {
   /** Where the pointer was; the menu is clamped to the window from there. */
@@ -40,8 +42,8 @@ interface ContextMenuProps {
   width?: number;
   /** Caps the height, which then scrolls; kept within the window, it is never clamped upward. */
   maxHeight?: number;
-  /** A submenu's: its parent entry's left edge, which it ends at when the window has no room right
-   *  of `x`. */
+  /** Where it ends when the window has no room right of `x`: a submenu's parent entry's left edge, a
+   *  list's button's right edge. */
   flipX?: number;
   /** Opens upward: `y` is where its bottom edge ends. */
   above?: boolean;
@@ -70,7 +72,7 @@ export function useContextMenu<T>() {
 }
 
 /** Where a menu opened from a button goes, worked out from the button's box. */
-type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight" | "above">;
+type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight" | "flipX" | "above">;
 
 /**
  * A menu opened from a button: `open` as the button's `onMouseDown`, `place` saying where from its
@@ -107,7 +109,8 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   // CSS sibling selector follows it (e.g. a row's `:has(+ .row-mark)`), changing that field's layout.
   const dialog = useTopDialog();
 
-  // Clamped into the window, written to the node rather than state so nothing paints unclamped.
+  // Clamped into the window, written to the node rather than state so nothing paints unclamped. On
+  // every render: entries that arrive while it is up (`usePickMenu`'s options) change its size.
   useLayoutEffect(() => {
     const element = menu.current;
     if (!element) {
@@ -117,7 +120,7 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
     const left = flipX !== undefined && x + menuWidth > window.innerWidth ? flipX - menuWidth : x;
     element.style.left = `${Math.max(0, Math.min(left, window.innerWidth - menuWidth))}px`;
     element.style.top = `${Math.max(0, Math.min(above ? y - height : y, window.innerHeight - height))}px`;
-  }, [x, y, flipX, above]);
+  });
 
   // Opened last, so over a dialog a `Dropdown` sits in: Escape closes the menu alone.
   useEscape(onClose);
@@ -183,7 +186,9 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
                 clearTimeout(hoverTimer.current);
                 openSubmenu(index, event.currentTarget);
               } else if (entry.run) {
-                onClose();
+                if (!entry.keepsOpen) {
+                  onClose();
+                }
                 entry.run();
               }
             }}

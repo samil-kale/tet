@@ -110,6 +110,7 @@ textarea:disabled,
 .button:disabled,
 .button.disabled,
 .action-link:disabled,
+.issue-attach:disabled,
 .radio-option:disabled,
 .dialog-color:disabled,
 /* Its own section's bar says it is busy. */
@@ -308,8 +309,11 @@ textarea:focus,
   --area-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 28px;
+  /* The ISSUES section's, two lines of text: the one list row of another height. */
+  --issue-row-height: 52px;
   --popup-row-height: 30px;
   --popup-radius: 3px;
+  --menu-padding: 3px;
   --popup-width: min(450px, 100vw);
   /* As `CLOSE_MS` (use-closing.ts). */
   --popup-fade: 0.1s;
@@ -1073,6 +1077,385 @@ textarea:focus,
   height: calc(var(--icon-size) - 2px);
 }
 
+/* The ISSUES section (lanes/issues/). Its filter row and two-line rows are IntelliJ's merge request
+   list's. */
+.issue-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: none;
+  gap: 2px 5px;
+  padding: 0 7px 7px 7px;
+  border-bottom: 1px solid var(--tet-app-border);
+  font-size: var(--small-font-size);
+  color: var(--tet-descriptionForeground);
+}
+
+.issue-filter {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.issue-filter.set {
+  color: var(--tet-foreground);
+}
+
+.issue-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: var(--action-size);
+  padding: 0 2px 0 3px;
+  border-radius: 3px;
+  --icon-size: 12px;
+}
+
+.issue-filter-trigger:hover,
+.issue-filter-trigger.open {
+  background: var(--tet-toolbar-hoverBackground);
+}
+
+.issue-filter-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Its clear button is smaller than the row's words are high. */
+.issue-filter .icon-button {
+  --action-size: 16px;
+  --icon-size: 11px;
+}
+
+.pick-menu {
+  min-width: 200px;
+}
+
+/* What marks a picked option stands at the entry's right edge, as `.context-menu-chevron` does; the
+   one left empty keeps the room, so the list's width holds as options are picked. */
+.pick-menu .tree-icon {
+  order: 1;
+  margin-left: auto;
+}
+
+.issue-row {
+  cursor: pointer;
+}
+
+/* After `.list-row`: the height its rule states for every other. */
+.list-row.issue-row {
+  gap: 8px;
+  height: var(--issue-row-height);
+  padding-right: 8px;
+}
+
+.issue-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.issue-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--tiny-font-size);
+  color: var(--tet-descriptionForeground);
+  margin-bottom: 4px;
+}
+
+.issue-person {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--tet-menu-border);
+  border-radius: 50%;
+  font-size: 9px;
+}
+
+.issue-person img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+/* Wide enough for two digits, so rows' icons stand above each other. */
+.issue-comments {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 3px;
+  min-width: 30px;
+  font-size: var(--tiny-font-size);
+  color: var(--tet-descriptionForeground);
+}
+
+/* An issue's tab (editor/IssueView.tsx), shaped as VS Code's GitHub Pull Requests and Issues. */
+.issue-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 26px;
+  background: var(--tet-editor-background);
+  color: var(--tet-editor-foreground);
+  user-select: text;
+}
+
+.issue-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  overflow-wrap: anywhere;
+}
+
+.issue-title .count-badge {
+  font-size: 16px;
+}
+
+.issue-card-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--tet-descriptionForeground);
+}
+
+.issue-card-author {
+  font-weight: 600;
+  color: var(--tet-foreground);
+}
+
+.issue-card-edit {
+  padding: 10px;
+}
+
+.issue-attach {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 0;
+  font-size: var(--small-font-size);
+  color: var(--tet-descriptionForeground);
+}
+
+.issue-attach:hover:not(:disabled) {
+  color: var(--tet-foreground);
+}
+
+.issue-new-body {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.issue-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.issue-state {
+  padding: 3px 10px;
+  border: 1px solid var(--tet-menu-border);
+  border-radius: 3px;
+  font-size: var(--small-font-size);
+}
+
+.issue-state.open {
+  border-color: var(--tet-focusBorder);
+  background: var(--tet-focusBorder);
+  color: var(--tet-button-foreground);
+}
+
+.issue-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tet-app-border);
+}
+
+/* Takes the room; the side column goes under it in a narrow pane. */
+.issue-thread {
+  display: flex;
+  flex-direction: column;
+  flex: 999 1 320px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.issue-card {
+  position: relative;
+  border: 1px solid var(--tet-app-border);
+  border-radius: 3px;
+}
+
+.issue-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bar-height);
+  padding: 0 10px;
+  border-bottom: 1px solid var(--tet-app-border);
+  border-radius: 3px 3px 0 0;
+  background: var(--tet-lane-background);
+  font-size: var(--small-font-size);
+}
+
+/* Grows with its text in the card, which scrolls with the view. */
+.issue-text > .markdown-preview {
+  position: static;
+  overflow: visible;
+}
+
+.issue-event {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* A pixel more than a card's padding, for its border: the avatars stand above each other. */
+  padding: 0 10px 0 11px;
+}
+
+/* The line joining a thread's entries, through the avatars' middle: over the thread's gap above a
+   card, over its own height too on an event, whose avatar covers it. */
+.issue-thread > .issue-card:not(:first-child)::before,
+.issue-thread > .issue-event::before {
+  content: "";
+  position: absolute;
+  width: 1px;
+  background: var(--tet-app-border);
+}
+
+.issue-thread > .issue-card:not(:first-child)::before {
+  top: -13px;
+  left: 20px;
+  height: 13px;
+}
+
+.issue-thread > .issue-event::before {
+  top: -12px;
+  bottom: 0;
+  left: 21px;
+}
+
+.issue-event .issue-person {
+  position: relative;
+  background: var(--tet-editor-background);
+}
+
+.issue-event-message {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-event-name {
+  font-weight: 600;
+}
+
+.issue-event-old,
+.issue-event-time {
+  color: var(--tet-descriptionForeground);
+}
+
+.issue-event-new {
+  text-decoration: none;
+}
+
+.issue-empty,
+.issue-none {
+  color: var(--tet-descriptionForeground);
+}
+
+.issue-empty {
+  padding: 10px;
+}
+
+.issue-side {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 25%;
+  gap: 14px;
+  min-width: 180px;
+  max-width: 360px;
+}
+
+.issue-side-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tet-app-border);
+}
+
+.issue-side-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--action-size);
+  font-weight: 600;
+  font-size: var(--small-font-size);
+}
+
+.issue-comment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The box to write in, apart from the thread above it; the one a card edits in is not. */
+.issue-thread > .issue-comment {
+  margin-top: 50px;
+}
+
+.issue-comment textarea {
+  display: block;
+  width: 100%;
+  height: 120px;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.issue-comment .issue-line {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.issue-side-person {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.issue-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--action-gap);
+}
+
+.issue-label {
+  padding: 1px 7px;
+  border: 1px solid var(--tet-menu-border);
+  border-radius: 3px;
+  background: var(--tet-lane-background);
+  font-size: var(--tiny-font-size);
+}
+
 /* Tab area ------------------------------------------------------------------------------- */
 
 .tab-area {
@@ -1113,15 +1496,15 @@ textarea:focus,
   flex: 1;
 }
 
-/* The frames of a drag: the pane a dragged tab would land in, the pane it would add (at even
-   shares, `PANE_BOXES`), a terminal a file is held over and the ARCHIVE lane a tab is held over.
+/* The frames of a drag: the pane a dragged tab would land in or whose terminal a file or a lane's
+   row is held over, the pane it would add (at even shares, `PANE_BOXES`) and the ARCHIVE lane a tab
+   is held over.
    Overlays all: a border would shrink the box its children measure, an inset box-shadow's top edge
    paints behind the opaque tab strip, and panes keep their sizes until the drop, or every pty under
    them refits mid-drag. Above the layers beneath them, which xterm's decorations reach 7 of. The
    veil is VS Code's drop-target wash. */
 .pane.drag-over::after,
 .snap-preview,
-.terminal-host.drag-over::after,
 .lane-content.drag-over::after {
   position: absolute;
   border: 1px solid var(--tet-focusBorder);
@@ -1132,7 +1515,7 @@ textarea:focus,
 
 .pane.drag-over::after {
   content: "";
-  /* Right is 1px short: the window's own edge, where no line is drawn (as the terminal's below). */
+  /* Right is 1px short: the window's own edge, where no line is drawn. */
   inset: 0 1px 0 0;
 }
 
@@ -1340,6 +1723,7 @@ textarea:focus,
   z-index: 27;
   /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
   overflow: hidden;
+  padding: var(--menu-padding) 0;
   font-size: var(--tet-font-size);
 }
 
@@ -1393,7 +1777,6 @@ textarea:focus,
 
 .new-tab-menu {
   min-width: 120px;
-  padding: 2px 0;
 }
 
 /* A pane's slides down from behind its tab strip and back up, in `CLOSE_MS`. */
@@ -1423,7 +1806,9 @@ textarea:focus,
 
 /* Its height is capped by `Dropdown` to the room below the trigger; its width is the trigger's,
    so a longer option is cut short rather than scrolled to. */
-.dropdown-menu {
+/* After `.context-menu`, whose `overflow: hidden` these lists take back to scroll past their cap. */
+.dropdown-menu,
+.pick-menu {
   overflow-y: auto;
 }
 
@@ -1434,10 +1819,13 @@ textarea:focus,
   line-height: var(--popup-row-height);
 }
 
-/* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it. */
+/* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it, covering the
+   menu's padding above it, which they would show through. */
 .context-menu-header {
   position: sticky;
-  top: 0;
+  top: calc(-1 * var(--menu-padding));
+  margin-top: calc(-1 * var(--menu-padding));
+  padding-top: var(--menu-padding);
   z-index: 1;
   background: var(--tet-menu-background);
 }
@@ -1471,23 +1859,13 @@ textarea:focus,
   /* Right inset is narrower than left: no scrollbar sits there to leave room for. */
   inset: 6px 6px 6px 12px;
   background: var(--tet-terminal-background);
-  /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. No
-     `paint`: it would clip the drag-over frame reaching past the host. */
+  /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. */
   contain: size layout style;
 }
 
 /* visibility, not display: xterm needs a laid-out element to measure itself. */
 .terminal-host.hidden {
   visibility: hidden;
-}
-
-/* A file held over this terminal. An overlay, not a border: a border shrinks the box xterm
-   measures, so every drag would refit it and resize the pty. */
-.terminal-host.drag-over::after {
-  content: "";
-  /* Undoes the host's inset to frame the pane. Right and bottom are 1px short: the window's own
-     edges, where no line is drawn. */
-  inset: -6px -5px -5px -12px;
 }
 
 /*
@@ -1967,7 +2345,7 @@ textarea:focus,
      tab strip; not the editor widget's. A theme overrides it only where its terminal's own ground
      reads too dark for a dialog (Dark IntelliJ's). */
   background: var(--tet-dialog-background, var(--tet-terminal-background));
-  border: 1px solid var(--tet-popup-border);
+  border: 1px solid var(--tet-menu-border);
   border-radius: 3px;
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }

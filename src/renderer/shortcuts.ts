@@ -15,6 +15,7 @@ export type ShortcutId =
   | "toggleProjects"
   | "toggleGit"
   | "toggleFiles"
+  | "toggleIssues"
   | "toggleArchive"
   | "toggleNotices"
   | "jumpToWaiting"
@@ -39,6 +40,7 @@ export const SHORTCUT_DEFS: readonly ShortcutDef[] = [
   { id: "toggleGit", description: "Show or hide git", shift: true, key: "w", label: "W" },
   { id: "toggleFiles", description: "Show or hide files", shift: true, key: "e", label: "E" },
   { id: "toggleArchive", description: "Show or hide archive", shift: true, key: "r", label: "R" },
+  { id: "toggleIssues", description: "Show or hide issues", shift: true, key: "y", label: "Y" },
   { id: "settings", description: "Open settings", shift: true, key: "t", label: "T" },
   { id: "toggleNotices", description: "Show or hide notifications", shift: true, key: "x", label: "X" },
   {

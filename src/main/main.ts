@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
+import { setIssueSource } from "./providers/issues";
 import { RepoCache } from "./providers/repo-cache";
 import { GitLoginStore } from "./git/git-logins";
 import { CONTROL_ENV } from "../shared/ctl";
@@ -296,6 +297,7 @@ async function startControl(): Promise<void> {
         addWorktree: (projectId, branch) => addWorktree(projectDeps, projectId, branch),
         deleteWorktree: (worktree, force) => deleteWorktree(projectDeps, worktree, { force, onRemote: false }),
         readCommands,
+        setIssueSource: (repository, source) => setIssueSource(accounts, repository, source),
         shutdown,
         records,
         projectRefPath: (ref) => {

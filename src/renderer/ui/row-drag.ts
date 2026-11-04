@@ -11,8 +11,11 @@ export interface DragName {
   /** What `name` is, as typed before it where the tab's agent reads prose (AgentInfo.labelsDrops):
    *  "branch", "commit", "tet project". */
   kind: string;
-  /** As git or TET knows it: a branch with its remote, a commit's full hash, a stash's ref. */
+  /** As git or TET knows it: a branch with its remote, a commit's full hash, a stash's ref; an
+   *  issue's url. */
   name: string;
+  /** The issue meant: a tab whose agent reads prose gets its text as a file, in place of `name`. */
+  issue?: { projectId: string; number: number };
 }
 
 /** Carried beside whatever else the row's drag holds, a list's own type to reorder it by. */

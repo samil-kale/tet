@@ -740,7 +740,7 @@ export interface PersistedTab {
 
 /** A stored editor entry, read defensively: none where its file is not named. */
 function readEditorEntry(value: unknown): EditorEntry | undefined {
-  const { path, commit, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<string, unknown>;
+  const { path, commit, issue, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<string, unknown>;
   if (typeof path !== "string") {
     return undefined;
   }
@@ -751,6 +751,7 @@ function readEditorEntry(value: unknown): EditorEntry | undefined {
       typeof sha === "string"
         ? { sha, parent: typeof parent === "string" ? parent : undefined, origPath: typeof origPath === "string" ? origPath : undefined }
         : undefined,
+    issue: typeof issue === "number" ? issue : undefined,
     preview: preview === true,
     diff: diff === true,
     markdownPreview: MARKDOWN_PREVIEW_MODES.find((mode) => mode === markdownPreview) ?? "off",

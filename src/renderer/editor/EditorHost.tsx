@@ -1,24 +1,36 @@
-import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { ImageView } from "./ImageView";
+import { IssueView, type IssueActions } from "./IssueView";
 import { isMarkdown } from "./diff-highlight";
 import {
   attachEditor,
   attachMarkdownPreview,
+  commentOnIssue,
   createMissingFile,
+  deleteIssue,
+  deleteIssueComment,
   diffShown,
+  editIssueComment,
   editorKind,
   focusEditor,
   getEditorSnapshot,
   hasChanges,
   isReadOnly,
+  issueMilestones,
+  issueOptions,
+  loadIssueImage,
   previewWithheld,
+  reloadIssue,
+  renameIssue,
   saveEditorFile,
   setDiffOption,
   showDiff,
   showMarkdownPreview,
   subscribeEditor,
   subscribeRefEditors,
+  updateIssue,
+  uploadIssueFile,
   type EditorSnapshot,
 } from "./editor-views";
 import { isEditorTabId } from "./editor-tab";
@@ -79,7 +91,7 @@ interface EditorHostProps {
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
   const snapshot = useEditorStore(tabId, whole);
-  const { path, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
+  const { path, issue, issueDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const markdownPreviewFrame = useRef<HTMLDivElement>(null);
@@ -131,6 +143,32 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       void saveEditorFile(tabId);
     }
   };
+
+  const issueActions = useMemo<IssueActions>(
+    () => ({
+      loadImage: (source) => loadIssueImage(tabId, source),
+      refresh: () => void reloadIssue(tabId),
+      comment: (body) => commentOnIssue(tabId, body),
+      editComment: (id, body) => editIssueComment(tabId, id, body),
+      deleteComment: (id) => deleteIssueComment(tabId, id),
+      deleteIssue: () => deleteIssue(tabId),
+      update: (change) => updateIssue(tabId, change),
+      rename: (title) => renameIssue(tabId, title),
+      options: () => issueOptions(tabId),
+      milestones: () => issueMilestones(tabId),
+      upload: (file) => uploadIssueFile(tabId, file),
+    }),
+    [tabId],
+  );
+
+  if (issue !== undefined) {
+    return (
+      <div className={`editor-tab${active ? "" : " hidden"}`}>
+        {kind === "error" && <div className="placeholder">Could not read the issue.</div>}
+        {issueDetail && <IssueView issue={issueDetail} actions={issueActions} />}
+      </div>
+    );
+  }
 
   return (
     <div className={`editor-tab${active ? "" : " hidden"}`} onKeyDown={onKeyDown}>

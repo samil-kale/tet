@@ -87,7 +87,7 @@ export function useEditorSync(
         const paths = sameList(
           previous[refKey]?.paths,
           editors
-            .filter((tab) => !tab.commit)
+            .filter((tab) => !tab.commit && tab.issue === undefined)
             .map((tab) => tab.path)
             .sort(),
           NO_PATHS,

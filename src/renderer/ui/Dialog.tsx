@@ -172,6 +172,8 @@ export function singleField(label: ReactNode, maxLength?: number): PromptOptions
 interface NameOptions {
   title: string;
   detail?: ReactNode;
+  /** The field's label, "Name" unless what is named has a word of its own. */
+  label?: string;
   confirmLabel: string;
   /** The name as it stands, for a rename: handed back unchanged it is done, nothing run. Left out
    *  for a new one. */
@@ -182,14 +184,14 @@ interface NameOptions {
 }
 
 /** The question every create and rename asks: one name, required and trimmed. */
-export async function askName({ title, detail, confirmLabel, current, maxLength, submit }: NameOptions): Promise<void> {
+export async function askName({ title, detail, label = "Name", confirmLabel, current, maxLength, submit }: NameOptions): Promise<void> {
   await prompt({
     title,
     detail,
     confirmLabel,
     value: current ?? "",
     ready: filled,
-    render: singleField("Name", maxLength),
+    render: singleField(label, maxLength),
     submit: (typed) => {
       const name = typed.trim();
       return name === current ? Promise.resolve(undefined) : submit(name);

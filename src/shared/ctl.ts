@@ -516,6 +516,14 @@ const VERBS = [
     positionals: [],
   },
   {
+    verb: "issues-set-source",
+    group: "Projects",
+    usage: "issues-set-source [<path>] [--project <id>]",
+    summary:
+      "Read the project's issues from another repository on its host, group/subgroup/name, checked against the tracker and saved in tet.json. No path goes back to the repository's own.",
+    positionals: ["source"],
+  },
+  {
     verb: "tabs-run-command",
     group: "Tabs",
     usage: "tabs-run-command <name> [--background] [TARGET]",

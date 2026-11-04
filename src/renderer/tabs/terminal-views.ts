@@ -3,7 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SerializeAddon } from "@xterm/addon-serialize";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { openFile } from "../editor/editor-tab";
+import { issueFileName, openFile } from "../editor/editor-tab";
 import { onRefClosed } from "../ref-lifetime";
 import { Terminal } from "@xterm/xterm";
 import { CONTROL_START_SIZE } from "../../shared/ctl";
@@ -14,6 +14,7 @@ import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
 import { isModifierHeld, PLATFORM } from "../platform";
+import { toBase64 } from "../ui/base64";
 import { notify } from "../ui/Notices";
 import { NAME_DRAG_TYPE, PATH_DRAG_TYPE, type DragName } from "../ui/row-drag";
 import { buildXtermTheme, editorFontFamily } from "../themes/theme-colors";
@@ -163,16 +164,6 @@ function openUrl(url: string): void {
   void window.tet.shell.openUrl(url);
 }
 
-function toBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  }
-  return btoa(binary);
-}
-
 /** Types paths of this machine as the tab sees them (handPaths), in the order given: the words as
  *  main quoted them for the tab, through term.paste, so no CLI input mode misreads them as
  *  keystrokes (vim mode, say). */
@@ -198,6 +189,18 @@ async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<voi
     }
   }
   await handPaths(view, paths);
+}
+
+/** Tells the tab which issue is meant, its text and comments in a file beside it: a file, since the
+ *  tracker's text is no line to type. A file without a path, so `pasteDroppedFiles` writes it. */
+async function pasteIssue(view: TerminalView, { projectId, number }: NonNullable<DragName["issue"]>): Promise<void> {
+  const { markdown, error } = await window.tet.issues.read(projectId, number);
+  if (markdown === undefined) {
+    notify("error", error ?? `Could not read issue #${number}`);
+    return;
+  }
+  view.term.paste(`issue #${number} `);
+  await pasteDroppedFiles(view, [new File([markdown], issueFileName(number))]);
 }
 
 /** A copied image has no path either — written into the drops folder too. */
@@ -475,27 +478,17 @@ export function attachTerminal(
   // row of a lane carrying its path or what it names, only.
   const holdsRow = (event: DragEvent): boolean =>
     event.dataTransfer?.types.some((type) => type === PATH_DRAG_TYPE || type === NAME_DRAG_TYPE) === true;
-  const frame = (shown: boolean): void => {
-    container.classList.toggle("drag-over", shown);
-  };
 
   container.addEventListener("dragover", (event) => {
     if (!holdsRow(event) && !event.dataTransfer?.types.includes("Files")) {
       return;
     }
-    // Only a prevented dragover makes this a drop target.
+    // Only a prevented dragover makes this a drop target, and frames its pane (`Pane.tsx`).
     event.preventDefault();
     // A row is copied here, unless its list allows only the move it is reordered by. A file's
     // effect stays what its source allows.
     if (event.dataTransfer && holdsRow(event)) {
       event.dataTransfer.dropEffect = event.dataTransfer.effectAllowed === "move" ? "move" : "copy";
-    }
-    frame(true);
-  });
-  container.addEventListener("dragleave", (event) => {
-    // Also fires for xterm's children; only leaving the container (or window: null) counts.
-    if (!container.contains(event.relatedTarget as Node | null)) {
-      frame(false);
     }
   });
   container.addEventListener("drop", (event) => {
@@ -504,12 +497,15 @@ export function attachTerminal(
       return;
     }
     event.preventDefault();
-    frame(false);
     // What was dropped is typed here, so the next key goes here too.
     view.term.focus();
     const named = event.dataTransfer?.getData(NAME_DRAG_TYPE);
     if (named) {
-      const { kind, name } = JSON.parse(named) as DragName;
+      const { kind, name, issue } = JSON.parse(named) as DragName;
+      if (issue && view.labelsDrops) {
+        pasteIssue(view, issue).catch((error: unknown) => notify("error", `Could not paste the issue: ${errorMessage(error)}`));
+        return;
+      }
       // In prose one word after its kind, quoted where it holds a space; else as it is, a saved
       // command's line to run. Through term.paste (handPaths).
       const labelled = `${kind} ${/\s/.test(name) ? `"${name}"` : name}`;

@@ -4,13 +4,13 @@ import { FilterField } from "./FilterField";
 import { ChevronIcon } from "./icons";
 
 /** Taller lists scroll. */
-const MAX_LIST_HEIGHT = 300;
+export const MAX_LIST_HEIGHT = 300;
 
 /** From this many options a list has a filter field above it, which Enter takes the first match of. */
 const FILTER_FROM = 10;
 
 /** Gap between the open list and the window's bottom edge. */
-const WINDOW_MARGIN = 8;
+export const WINDOW_MARGIN = 8;
 
 export interface DropdownOption<T extends string> {
   value: T;

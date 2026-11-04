@@ -86,7 +86,7 @@ const EDITOR_CSS_VARS: Record<string, string> = {
   // to the shiki theme's own foreground, which is the one color in the widget not from TET's
   // stylesheet.
   "editorWidget.foreground": "--tet-foreground",
-  "editorWidget.border": "--tet-popup-border",
+  "editorWidget.border": "--tet-menu-border",
   "widget.shadow": "--tet-popup-shadow",
 };
 

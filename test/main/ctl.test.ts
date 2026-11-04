@@ -87,6 +87,7 @@ interface Calls {
   /** `[tabId, agentId, sandboxOnly]` per handover. */
   handedOff: [string, string, boolean][];
   commands: string[];
+  issueSources: [string, string][];
   added: string[];
   removed: string[];
   /** `[projectId, branch]` per worktree-add, `[refKey, force]` per worktree-delete. */
@@ -316,6 +317,7 @@ function deps(): ControlDeps {
         open(ref)
           ? {
               at: { path: refKeyOf(ref) },
+              started: () => Promise.resolve(),
               getState: () => ({
                 ...EMPTY_REPOSITORY_STATE,
                 head: `main-of-${refKeyOf(ref)}`,
@@ -376,6 +378,12 @@ function deps(): ControlDeps {
       return force ? { ok: true } : (merging.deleteRefused ?? { ok: true });
     },
     readCommands: async () => [{ command: "npm run build", name: "build" }],
+    setIssueSource: async (repository, source) => {
+      if (source === "no/such") {
+        throw new Error("404 Not Found");
+      }
+      calls.issueSources.push([repository.at.path, source]);
+    },
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
     },
@@ -489,6 +497,7 @@ describe("tet-ctl against the control server", () => {
       created: [],
       handedOff: [],
       commands: [],
+      issueSources: [],
       added: [],
       removed: [],
       worktreesAdded: [],
@@ -913,6 +922,16 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["commands-list"])).result, [{ name: "build", command: "npm run build" }]);
   });
 
+  it("sets the issue source, removes it without a path, and answers what the tracker refused", async () => {
+    assert.deepEqual((await tetCtl(["issues-set-source", "group/tracker"])).result, { source: "group/tracker" });
+    assert.deepEqual((await tetCtl(["issues-set-source"])).result, { source: null });
+    assert.deepEqual(calls.issueSources, [
+      [PROJECT.id, "group/tracker"],
+      [PROJECT.id, ""],
+    ]);
+    assertUsage(await tetCtl(["issues-set-source", "no/such"]), /404 Not Found/);
+  });
+
   it("reports a saved command that does not exist", async () => {
     assertUsage(await tetCtl(["tabs-run-command", "deploy"]), /no saved command named deploy/);
   });
@@ -1076,6 +1095,7 @@ describe("tet-ctl against the control server", () => {
     const refused = [
       ["tabs-run-command", "build"],
       ["commands-list"],
+      ["issues-set-source", "group/tracker"],
       ["projects-add", workDir],
       ["projects-remove", "--project", OTHER.id],
       ["settings-set-theme", "dark-modern"],

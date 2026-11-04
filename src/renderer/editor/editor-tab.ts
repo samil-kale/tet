@@ -5,7 +5,8 @@ import type { ProjectRef } from "../../shared/types/project";
  * per repository or worktree, replaced by the next file opened; it is kept (no longer replaced) by an
  * edit, "Keep Open" or an Explorer double-click, and the next file gets a new preview tab. Which tab
  * is the preview is the editor's own state (`editor-views.ts`), decided where an edit lands. A path
- * is open in at most one tab per repository or worktree, and a commit's file in one per commit.
+ * is open in at most one tab per repository or worktree, a commit's file in one per commit, and an
+ * issue in one.
  * Renderer-only: no pty, no session; a restart brings it back under its id (`use-tab-restore.ts`,
  * `serializeLayout`).
  *
@@ -60,6 +61,8 @@ export interface OpenEditor {
   reveal?: EditorReveal;
   /** The file at a commit, read-only, instead of the working tree's. */
   commit?: CommitSide;
+  /** The project's issue of this number, as `issueFileName`: no file of the tree. */
+  issue?: number;
 }
 
 /** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
@@ -72,6 +75,7 @@ export const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "s
 export interface EditorEntry {
   path: string;
   commit?: CommitSide;
+  issue?: number;
   preview: boolean;
   diff: boolean;
   markdownPreview: MarkdownPreviewMode;
@@ -86,13 +90,60 @@ export interface EditorTab {
   path: string;
   /** Set for a GRAPH diff: a path is then open once per commit. */
   commit?: CommitSide;
+  /** Set for an issue, whose `path` is only its `issueFileName`. */
+  issue?: number;
+}
+
+/** What an issue's text is called as a file, in its tab and where it is handed to a terminal. */
+export function issueFileName(number: number): string {
+  return `issue-${number}.md`;
+}
+
+/** Closes every tab of an issue that is gone, in the repository and its worktrees. Set by App. */
+let issueGoneHandler: ((projectId: string, number: number) => void) | undefined;
+
+export function setIssueGoneHandler(handler: (projectId: string, number: number) => void): () => void {
+  issueGoneHandler = handler;
+  return () => {
+    if (issueGoneHandler === handler) {
+      issueGoneHandler = undefined;
+    }
+  };
+}
+
+export function issueGone(projectId: string, number: number): void {
+  issueGoneHandler?.(projectId, number);
+}
+
+const issueListeners = new Set<(projectId: string) => void>();
+
+/** A project's issue changed through its tab, for the ISSUES section to read again. */
+export function issuesChanged(projectId: string): void {
+  for (const listener of issueListeners) {
+    listener(projectId);
+  }
+}
+
+export function subscribeIssues(listener: (projectId: string) => void): () => void {
+  issueListeners.add(listener);
+  return () => issueListeners.delete(listener);
+}
+
+/** Where a link of an issue's text at `issueUrl` leads; undefined for one within the text. An
+ *  upload's is relative to the project, whatever else is to the host. */
+export function issueLink(href: string, issueUrl: string): string | undefined {
+  if (href === "" || href.startsWith("#")) {
+    return undefined;
+  }
+  const project = issueUrl.split("/-/")[0];
+  return URL.parse(href.startsWith("/uploads/") ? project + href : href, issueUrl)?.href;
 }
 
 /** The path of tab `tabId` where it shows the working tree's file, the one the Explorer marks open;
- *  a commit's file is not in the tree. */
+ *  a commit's file and an issue are not in the tree. */
 export function workingTreePathOf(tabs: EditorTab[] | undefined, tabId: string | undefined): string | null {
   const tab = tabs?.find((candidate) => candidate.tabId === tabId);
-  return tab && !tab.commit ? tab.path : null;
+  return tab && !tab.commit && tab.issue === undefined ? tab.path : null;
 }
 
 export function isEditorTabId(tabId: string): boolean {

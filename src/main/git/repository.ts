@@ -246,6 +246,11 @@ export class Repository {
     return this.state;
   }
 
+  /** Once the first read is in, however it ended: before it `getState` is the empty state. */
+  async started(): Promise<void> {
+    await this.starting?.catch(() => undefined);
+  }
+
   start(): Promise<void> {
     this.starting = this.startReading();
     return this.starting;

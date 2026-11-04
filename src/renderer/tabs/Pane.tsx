@@ -15,7 +15,7 @@ import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type Pan
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
 import { IconButton } from "../ui/IconButton";
-import { CloseIcon, FilesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
+import { CloseIcon, FilesIcon, IssuesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
 import { ProgressBar } from "../ui/ProgressBar";
 import { useDragReorder } from "../ui/drag-reorder";
@@ -75,11 +75,12 @@ interface PaneProps {
   onDropArchived: (paneId: PaneId, tabId: string) => void;
 }
 
-/** A dragged tab's pointer over a pane, and whether it is over the tab strip. */
+/** A drag's pointer over a pane. `noZone`: it frames the pane alone, whatever snap zone lies under
+ *  it: a tab over the tab strip, and what a terminal takes. */
 export interface DragPosition {
   x: number;
   y: number;
-  overStrip: boolean;
+  noZone: boolean;
 }
 
 /** What the strip draws of one tab (faceOf). */
@@ -313,11 +314,11 @@ export const Pane = memo(function Pane({
     const kinded = kindOf(tab);
     switch (kinded.kind) {
       case "editor": {
-        const { path, commit } = kinded.tab;
+        const { path, commit, issue } = kinded.tab;
         return {
           label: <EditorTabLabel tabId={tab.tabId} label={editorLabel(kinded.tab)} />,
           tooltip: path + (commit ? ` (${commit.sha.slice(0, 7)})` : ""),
-          icon: <FilesIcon className="tab-icon" />,
+          icon: issue === undefined ? <FilesIcon className="tab-icon" /> : <IssuesIcon className="tab-icon" />,
           sandboxed: false,
           inactive: false,
           closeTitle: "Close file",
@@ -469,6 +470,9 @@ export const Pane = memo(function Pane({
       onMouseDownCapture={focusHere}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE) && !event.dataTransfer.types.includes(ARCHIVED_TAB_DRAG_TYPE)) {
+          // A terminal prevents what it takes (terminal-views.ts), before this runs.
+          const taken = event.defaultPrevented && (event.target as Element).closest(".terminal-host") !== null;
+          onDragOverChange(paneId, taken ? { x: event.clientX, y: event.clientY, noZone: true } : null);
           return;
         }
         event.preventDefault();
@@ -476,7 +480,7 @@ export const Pane = memo(function Pane({
         onDragOverChange(paneId, {
           x: event.clientX,
           y: event.clientY,
-          overStrip: (event.target as Element).closest(".tab-strip") !== null,
+          noZone: (event.target as Element).closest(".tab-strip") !== null,
         });
       }}
       onDragLeave={(event) => {
@@ -492,6 +496,7 @@ export const Pane = memo(function Pane({
           return;
         }
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {
+          onDragOverChange(paneId, null);
           // A terminal took it and has the focus now (terminal-views.ts); its pane follows, as on a click.
           if ((event.target as Element).closest(".terminal-host") !== null) {
             focusHere();

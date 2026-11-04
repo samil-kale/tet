@@ -56,14 +56,19 @@ export function useTabRestore(
       const editors: EditorTab[] = [];
       const shellIds: string[] = [];
       for (const { id, kind, editor } of loadPersisted(refKey).tabs) {
-        if (kind === "editor" && editor && !open.some((tab) => tab.path === editor.path && tab.commit?.sha === editor.commit?.sha)) {
+        if (
+          kind === "editor" &&
+          editor &&
+          !open.some((tab) => tab.path === editor.path && tab.commit?.sha === editor.commit?.sha && tab.issue === editor.issue)
+        ) {
           // One preview tab: a file opened meanwhile may have taken it.
           openEditorFile(ref, id, editor.path, editor.preview && previewEditorTab(ref) === undefined, {
             diff: editor.diff,
             commit: editor.commit,
+            issue: editor.issue,
             restored: editor,
           });
-          editors.push({ tabId: id, ref, path: editor.path, commit: editor.commit });
+          editors.push({ tabId: id, ref, path: editor.path, commit: editor.commit, issue: editor.issue });
         } else if (kind === "shell") {
           const shown = history[id];
           if (typeof shown === "string") {

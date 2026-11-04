@@ -51,6 +51,8 @@ interface ProjectFile {
   exclude?: unknown;
   /** The sbx-settings dialog's state (readSbxSettings/writeSbxSettings). Never a credential. */
   sbx?: unknown;
+  /** Where the ISSUES section reads from, in place of the repository's own (readIssueSource). */
+  issues?: unknown;
 }
 
 /** What of the Explorer's view is the project's; anything of the wrong shape is its default. */
@@ -396,6 +398,23 @@ export function addExclude(root: string, relPath: string): Promise<void> {
     }
     return content.exclude.includes(relPath) ? [] : [[["exclude", content.exclude.length], relPath, true]];
   });
+}
+
+/** A repository's path on its host, as "owner/name" or "group/subgroup/name". tet.json travels with
+ *  the repository, and a dot segment would leave the API's own path with the account's token. */
+export function isIssueSource(text: string): boolean {
+  return /^[\w.-]+(\/[\w.-]+)+$/.test(text) && !text.split("/").some((segment) => segment === "." || segment === "..");
+}
+
+/** The `issues` entry; one that is no such path counts as none. */
+export async function readIssueSource(root: string): Promise<string | undefined> {
+  const source = (await read(file(root)))?.issues;
+  return typeof source === "string" && isIssueSource(source) ? source : undefined;
+}
+
+/** Undefined removes the entry: the repository's own issues again. */
+export function writeIssueSource(root: string, source: string | undefined): Promise<void> {
+  return patch(root, () => [[["issues"], source]]);
 }
 
 /**

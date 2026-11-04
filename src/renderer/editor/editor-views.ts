@@ -3,7 +3,9 @@ import { onRefClosed } from "../ref-lifetime";
 import { refKeyOf } from "../../shared/types/project";
 import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ProjectRef } from "../../shared/types/project";
-import { confirmed, confirmedFollowUp } from "../ui/Dialog";
+import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/types/providers";
+import { toBase64 } from "../ui/base64";
+import { confirmed, confirmedFollowUp, refusal } from "../ui/Dialog";
 import { layoutChoice, layoutFlag } from "../ui/layout-storage";
 import { named } from "../ui/named";
 import { notify } from "../ui/Notices";
@@ -12,7 +14,7 @@ import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Mona
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
 import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
-import { MARKDOWN_PREVIEW_MODES, openFile } from "./editor-tab";
+import { issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
 
 /**
@@ -78,6 +80,10 @@ export interface EditorSnapshot {
   unchangedCollapsed: boolean;
   /** A GRAPH diff: the file at this commit, which nothing outside the tab changes. */
   commit?: CommitSide;
+  /** An issue, which no change of the repository touches. */
+  issue?: number;
+  /** What its tab draws (`IssueView`), once read. */
+  issueDetail?: IssueDetail;
 }
 
 type DiffState = Pick<EditorSnapshot, "diff" | "file" | "dirty">;
@@ -141,6 +147,12 @@ interface EditorView {
   markdownView: MarkdownPreviewView | null;
   /** Bumped by every open (and a re-read that builds the models): a read overtaken is dropped. */
   readSeq: number;
+  /** The issue's last change on its way: each sets a whole list, so they go in the order made. */
+  issueWrites?: Promise<unknown>;
+  /** Bumped by every change shown ahead of the tracker: a read begun before it knows nothing of it. */
+  issueEdits?: number;
+  /** What the tab is writing to the tracker now, its pane's bar running meanwhile. */
+  issueWork?: number;
   /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
    *  and mtime as clean. */
   saves: number;
@@ -280,9 +292,9 @@ export function editorEntry(tabId: string): EditorEntry | undefined {
   if (!view) {
     return undefined;
   }
-  const { path, commit, preview, diff, markdownPreview } = view.snapshot;
+  const { path, commit, issue, preview, diff, markdownPreview } = view.snapshot;
   const viewState = view.pendingViewState ?? (view.models && activeEditor(view)?.saveViewState()) ?? undefined;
-  return { path, commit, preview, diff, markdownPreview, viewState };
+  return { path, commit, issue, preview, diff, markdownPreview, viewState };
 }
 
 /** A match in a tab already open (`App.openEditor`), which needs no new read. */
@@ -343,7 +355,10 @@ export function showMarkdownPreview(tabId: string, mode: MarkdownPreviewMode): v
   if (!view || !isMarkdown(view.snapshot.path) || previewWithheld(view.snapshot)) {
     return;
   }
-  markdownPreviewByDefault.set(mode);
+  // An issue opens as its text, whatever a file's default is, and leaves that default alone.
+  if (view.snapshot.issue === undefined) {
+    markdownPreviewByDefault.set(mode);
+  }
   if (view.snapshot.markdownPreview !== mode) {
     publish(view, { markdownPreview: mode });
   }
@@ -382,7 +397,7 @@ export function getEditorSnapshot(tabId: string): EditorSnapshot {
 /** Whether opening `path` with its Markdown preview would land in a tab withholding it: one opened with
  *  its diff if `diff`, else the tab already showing it with its own. */
 export function previewWithheldAt(ref: ProjectRef, path: string, diff: boolean): boolean {
-  const open = refViews(ref).find((view) => view.snapshot.path === path && !view.snapshot.commit);
+  const open = refViews(ref).find((view) => view.snapshot.path === path && !view.snapshot.commit && view.snapshot.issue === undefined);
   return diff || (open ? previewWithheld(open.snapshot) : false);
 }
 
@@ -521,7 +536,11 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     preview,
     diff: how.diff === true || how.commit !== undefined,
     commit: how.commit,
-    markdownPreview: isMarkdown(path) ? (how.restored?.markdownPreview ?? markdownPreviewByDefault.get()) : "off",
+    issue: how.issue,
+    issueDetail: undefined,
+    markdownPreview: isMarkdown(path)
+      ? (how.restored?.markdownPreview ?? (how.issue === undefined ? markdownPreviewByDefault.get() : "only"))
+      : "off",
     sideBySide: diffDefaults.sideBySide.get(),
     unchangedCollapsed: diffDefaults.unchangedCollapsed.get(),
   });
@@ -529,7 +548,12 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   // The diff editor is the tab's for every file it opens.
   applyDiffOptions(view);
   const current = view;
-  const read = how.commit ? readCommitFile(ref, path, how.commit) : window.tet.repository.readFile(ref, path);
+  const read =
+    how.issue !== undefined
+      ? readIssueFile(view, seq, path, how.issue)
+      : how.commit
+        ? readCommitFile(ref, path, how.commit)
+        : window.tet.repository.readFile(ref, path);
   void read.then((file) => {
     if (stale(current, seq)) {
       return;
@@ -538,7 +562,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     if (file.error && !(how.restored && file.notFound)) {
       notify("error", `${file.path}: ${file.error}`);
     }
-    const text = editorKind(file) === "text";
+    // An issue draws its own view, no editor.
+    const text = editorKind(file) === "text" && how.issue === undefined;
     publish(current, { file, loading: false, building: text });
     if (text) {
       void showText(current, seq, file);
@@ -568,6 +593,241 @@ async function readCommitFile(ref: ProjectRef, path: string, commit: CommitSide)
   };
 }
 
+/** An issue as the editor tab holds a file, never saved, its text what `editorContent` answers,
+ *  with what its view draws. */
+async function readIssueFile(view: EditorView, seq: number, path: string, number: number): Promise<FileContent> {
+  const { issue, markdown, error } = await window.tet.issues.read(view.ref.projectId, number);
+  if (issue && !stale(view, seq)) {
+    publish(view, { issueDetail: issue });
+  }
+  return { path, content: markdown ?? "", mtimeMs: 0, binary: false, tooLarge: false, readOnly: true, error };
+}
+
+/** An image of the text of tab `tabId`'s issue: through the account where it takes the token, else
+ *  a web image as a preview's. */
+export async function loadIssueImage(tabId: string, source: string): Promise<string | undefined> {
+  const view = views.get(tabId);
+  const image = view ? await window.tet.issues.image(view.ref.projectId, source) : null;
+  if (image !== null) {
+    return image;
+  }
+  return /^https:/i.test(source) ? ((await window.tet.shell.fetchImage(source)) ?? undefined) : undefined;
+}
+
+/** Runs a write to the tracker under the tab's progress bar, however many overlap. */
+async function underIssueBar<T>(view: EditorView, work: () => Promise<T>): Promise<T> {
+  view.issueWork = (view.issueWork ?? 0) + 1;
+  publish(view, { saving: true });
+  try {
+    return await work();
+  } finally {
+    view.issueWork -= 1;
+    if (view.issueWork === 0 && !disposed(view)) {
+      publish(view, { saving: false });
+    }
+  }
+}
+
+/** The issue's tab read afresh from the tracker, what it shows standing until the answer lands. It
+ *  reads once the changes on their way are through, and again if one overtakes the answer, or it
+ *  would take back what the tab already shows. Never awaited from within `issueWrites`, which it
+ *  waits for. */
+export async function reloadIssue(tabId: string): Promise<void> {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  if (!view || number === undefined) {
+    return;
+  }
+  const seq = view.readSeq;
+  publish(view, { loading: true });
+  await view.issueWrites;
+  if (stale(view, seq)) {
+    return;
+  }
+  const edits = view.issueEdits;
+  const { issue, markdown, error } = await window.tet.issues.read(view.ref.projectId, number);
+  if (stale(view, seq)) {
+    return;
+  }
+  if (view.issueEdits !== edits) {
+    await view.issueWrites;
+    return reloadIssue(tabId);
+  }
+  const file = view.snapshot.file;
+  publish(view, {
+    loading: false,
+    issueDetail: issue ?? view.snapshot.issueDetail,
+    file: file && markdown !== undefined ? { ...file, content: markdown } : file,
+  });
+  if (!issue) {
+    notify("error", error ?? `Could not read issue #${number}`);
+  }
+}
+
+/** A comment on the tab's issue, which shows once it is up; false, with a notice, when refused. */
+export async function commentOnIssue(tabId: string, body: string): Promise<boolean> {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  if (!view || number === undefined) {
+    return false;
+  }
+  const result = await underIssueBar(view, () => window.tet.issues.comment(view.ref.projectId, number, body));
+  if (!result.ok) {
+    notify("error", result.error);
+    return false;
+  }
+  issuesChanged(view.ref.projectId);
+  await reloadIssue(tabId);
+  return true;
+}
+
+/** A comment of the tab's issue changed; false, with a notice, when refused. */
+export async function editIssueComment(tabId: string, id: number, body: string): Promise<boolean> {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  if (!view || number === undefined) {
+    return false;
+  }
+  const result = await underIssueBar(view, () => window.tet.issues.editComment(view.ref.projectId, number, id, body));
+  if (!result.ok) {
+    notify("error", result.error);
+    return false;
+  }
+  await reloadIssue(tabId);
+  return true;
+}
+
+/** A comment of the tab's issue deleted, or a notice when refused. */
+export async function deleteIssueComment(tabId: string, id: number): Promise<void> {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  if (!view || number === undefined) {
+    return;
+  }
+  const result = await underIssueBar(view, () => window.tet.issues.deleteComment(view.ref.projectId, number, id));
+  if (!result.ok) {
+    notify("error", result.error);
+    return;
+  }
+  issuesChanged(view.ref.projectId);
+  await reloadIssue(tabId);
+}
+
+/** The tab's issue deleted on the tracker, its tabs closed with it, or a notice when refused. */
+export async function deleteIssue(tabId: string): Promise<void> {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  if (!view || number === undefined) {
+    return;
+  }
+  const { projectId } = view.ref;
+  const result = await underIssueBar(view, () => window.tet.issues.delete(projectId, number));
+  if (!result.ok) {
+    notify("error", result.error);
+    return;
+  }
+  issuesChanged(projectId);
+  issueGone(projectId, number);
+}
+
+/** The tab's project's milestones; undefined, with a notice, when the tracker cannot say. */
+export async function issueMilestones(tabId: string): Promise<IssueMilestone[] | undefined> {
+  const view = views.get(tabId);
+  if (!view) {
+    return undefined;
+  }
+  const answer = await window.tet.issues.milestones(view.ref.projectId);
+  if (typeof answer === "string") {
+    notify("error", answer);
+    return undefined;
+  }
+  return answer;
+}
+
+/** A file up on the tab's tracker, answered as the Markdown that shows it; undefined, with a notice,
+ *  when refused. */
+export async function uploadIssueFile(tabId: string, file: File): Promise<string | undefined> {
+  const view = views.get(tabId);
+  if (!view) {
+    return undefined;
+  }
+  // A pasted image comes without a name of its own.
+  const name = file.name || `pasted-${Date.now()}.${file.type.split("/")[1] ?? "bin"}`;
+  const data = toBase64(await file.arrayBuffer());
+  const { markdown, error } = await underIssueBar(view, () => window.tet.issues.upload(view.ref.projectId, name, data));
+  if (markdown === undefined) {
+    notify("error", error ?? `Could not upload ${name}`);
+  }
+  return markdown;
+}
+
+/** Changes the tab's issue: shown at once, and read back from the tracker if it refuses, answering
+ *  what it refused. A changed text is read back regardless, for the host's rendering of it. */
+async function changeIssue(tabId: string, change: IssueChange): Promise<string | undefined> {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  const detail = view?.snapshot.issueDetail;
+  if (!view || number === undefined || !detail) {
+    return undefined;
+  }
+  const assignees = change.assignees ?? detail.assignees;
+  publish(view, {
+    issueDetail: {
+      ...detail,
+      title: change.title ?? detail.title,
+      body: change.body ?? detail.body,
+      bodyHtml: change.body === undefined ? detail.bodyHtml : undefined,
+      open: change.state === undefined ? detail.open : change.state === "open",
+      milestone: change.milestone === undefined ? detail.milestone : change.milestone?.title,
+      labels: change.labels ?? detail.labels,
+      assignees,
+      assignee: assignees[0],
+    },
+  });
+  view.issueEdits = (view.issueEdits ?? 0) + 1;
+  const { projectId } = view.ref;
+  const previous = view.issueWrites ?? Promise.resolve();
+  const write = underIssueBar(view, async () => {
+    await previous;
+    const result = await window.tet.issues.update(projectId, number, change);
+    if (result.ok) {
+      issuesChanged(projectId);
+    }
+    void reloadIssue(tabId);
+    return refusal(result);
+  });
+  view.issueWrites = write;
+  return await write;
+}
+
+/** Changes the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
+export function updateIssue(tabId: string, change: IssueChange): void {
+  void changeIssue(tabId, change).then((refused) => {
+    if (refused !== undefined) {
+      notify("error", refused);
+    }
+  });
+}
+
+/** The tab's issue under a new title, answering what the tracker refused (`changeIssue`). */
+export function renameIssue(tabId: string, title: string): Promise<string | undefined> {
+  return changeIssue(tabId, { title });
+}
+
+/** What the tab's issue can be given, off its tracker; undefined, with a notice, when it cannot say. */
+export async function issueOptions(tabId: string): Promise<{ labels: string[]; people: string[] } | undefined> {
+  const view = views.get(tabId);
+  if (!view) {
+    return undefined;
+  }
+  const { labels, people, error } = await window.tet.issues.filterOptions(view.ref.projectId);
+  if (error !== undefined) {
+    notify("error", error);
+    return undefined;
+  }
+  return { labels: labels ?? [], people: people ?? [] };
+}
+
 /**
  * Folds outside changes into the open file on a HEAD or status change. The edited side only while
  * clean, in place so undo and cursor survive — a dirty tab keeps the read as `onDisk`; HEAD's side
@@ -577,8 +837,8 @@ async function readCommitFile(ref: ProjectRef, path: string, commit: CommitSide)
  */
 export function setEditorVersion(tabId: string, version: string): void {
   const view = views.get(tabId);
-  // A commit's file never changes.
-  if (!view || view.snapshot.commit) {
+  // A commit's file never changes, and an issue is not in the repository.
+  if (!view || view.snapshot.commit || view.snapshot.issue !== undefined) {
     return;
   }
   const { path, file, loading } = view.snapshot;
@@ -862,10 +1122,12 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   // One model per URI or monaco throws; the repository or worktree is the authority, as two can
   // show one path. Within a repository or worktree a path is open in one tab at most
   // (use-editor-opening.ts's openEditor), and the previous models are cleared before the next open.
-  // A commit's file lies under its sha, its own models beside the working tree's.
-  const commit = view.snapshot.commit;
+  // A commit's file lies under its sha, an issue under its own folder, their own models beside the
+  // working tree's.
+  const { commit, issue } = view.snapshot;
+  const folder = commit ? `${commit.sha}/` : issue !== undefined ? "issue/" : "";
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
-    monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${commit ? `${commit.sha}/` : ""}${file.path}` });
+    monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${folder}${file.path}` });
   const models = {
     original: monaco.editor.createModel(
       file.head?.content ?? file.content,

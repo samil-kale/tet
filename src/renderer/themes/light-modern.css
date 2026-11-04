@@ -68,7 +68,6 @@
 
   --tet-popup-background: #f8f8f8;
   /* The registry's transparent(foreground, 0.2), as is the menu separator below. */
-  --tet-popup-border: #3b3b3b33;
   --tet-popup-shadow: #00000029;
 
   /* The registry points menu.background/foreground at dropdown.background/foreground. */

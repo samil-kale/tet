@@ -19,7 +19,10 @@ References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code**
 classic layout, Dark Modern's palette, tab semantics, theme names; **IntelliJ** where VS Code has
 no answer or the git lane's tree is concerned — the commit view's checkboxes, tree headers,
 toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor); **Monaco** for
-the editor tab.
+the editor tab; VS Code's **GitHub Pull Requests and Issues** (`microsoft/vscode-pull-request-github`)
+for the ISSUES lane and its issue tab, which writes an issue's title, text, comments, state, labels,
+assignees and milestone, uploads what the tracker takes from a token (`uploads`), and makes and deletes issues, and nothing
+else until asked.
 
 ## Do not restart the app yourself
 
@@ -70,8 +73,8 @@ project's tabs.
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
      (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
-     Explorer tree, the SEARCH section, Seti's file icons), `archive/` (the ARCHIVE) — and imports
-     no other lane; beside them, their state (`use-lanes.ts`) and the Navigation Bar that toggles
+     Explorer tree, the SEARCH section, Seti's file icons), `issues/` (the ISSUES), `archive/` (the
+     ARCHIVE) — and imports no other lane; beside them, their state (`use-lanes.ts`) and the Navigation Bar that toggles
      them (`NavigationBar.tsx`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the
@@ -97,7 +100,8 @@ project's tabs.
 - A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer's `folders` and excludes and `sbx` (`PROJECT_FILE`, `src/main/store/tet-json.ts`).
+  the Explorer's `folders` and excludes, `sbx` and the ISSUES section's `issues`, a repository on
+  the remote's host to read them from (`PROJECT_FILE`, `src/main/store/tet-json.ts`).
   Missing means nothing configured, broken never does; nothing writes over a broken file. A worktree
   has none of its own: it takes its project's (`configRoot`) and changes nothing of it.
 
@@ -253,17 +257,18 @@ per-line decision is for an agent.
 
 - **Layout**: the Navigation Bar at the window's left edge (`NavigationBar.tsx`), full height,
   settings right after the lane toggles; beside it the lanes: the projects (each with its worktrees,
-  and the COMMANDS), git, files and the archived tabs (taken off the strip, their sessions kept) —
-  none of them a tab. Only one is ever shown, in a fixed order (`projects`, `git`, `files`,
-  `archive`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
+  and the COMMANDS), git, files, the archived tabs (taken off the strip, their sessions kept) and
+  the project's issues (read from its tracker, written to from an issue's tab and the section's
+  new issue) — none of them a tab.
+  Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`, `issues`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
   no reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
   the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
   preview tab each (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
   `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`),
-  LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`, ARCHIVE `ArchiveList`; each
-  title heads a `Section`, drawn by `ProjectList`, `CommandList` and `ArchiveList` themselves and by
-  `GitLane` and `FilesLane` around the others, never a "pane".
+  LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`, ISSUES `IssueList`, ARCHIVE
+  `ArchiveList`; each title heads a `Section`, drawn by `ProjectList`, `CommandList`, `IssueList` and
+  `ArchiveList` themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
 - **A section's rows drag onto a terminal**, which types what was dropped: a file's or folder's
   path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
@@ -297,8 +302,9 @@ per-line decision is for an agent.
 - **The keyboard belongs to the terminal**: TET's key handler runs before xterm and takes nothing
   an agent could have received. Check every new shortcut against `src/renderer/shortcuts.ts`. No
   window shortcut closes a tab.
-- **The renderer**: terminal output never goes through React state — xterms and editors live
-  outside React (`terminal-views.ts`, `editor-views.ts`). The views under `App` are memoized: hand
+- **The renderer**: terminal output never goes through React state — the xterm and editor instances
+  live outside React (`terminal-views.ts`, `editor-views.ts`), the views around them, a pane's frame
+  among them, in it. The views under `App` are memoized: hand
   them stable props (`useCallback`, `useMemo`, `identity.ts`).
 - **Anything that changes the box xterm measures refits the pty**: hide with `visibility`, frame
   with an overlay, resize only once dragging settles.
@@ -313,7 +319,7 @@ per-line decision is for an agent.
   re-run, never edit.
 - Icons and marks are monochrome. The one accent is `--tet-focusBorder`, for anything that marks or
   points. Exceptions: git status letters, the error mark, a notice's severity icon, an editor tab's
-  unsaved dot, the file icons. A theme whose own mark colour differs sets it in place of the accent
+  unsaved dot, the file icons, an issue's avatars. A theme whose own mark colour differs sets it in place of the accent
   (`THEMES.md`).
 - **A git name or a file's path in a sentence is set apart from the words around it** — a
   branch, a remote, a tag, a stash — in every menu entry and every question: its message,

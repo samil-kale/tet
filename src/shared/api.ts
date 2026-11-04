@@ -15,7 +15,21 @@ import type {
   StashCommand,
 } from "./types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
-import type { AddAccountResult, ListRepositoriesResult, ProviderAccount, ProviderId, RemoteRepository } from "./types/providers";
+import type {
+  AddAccountResult,
+  IssueChange,
+  IssueCreateResult,
+  IssueFilter,
+  IssueFilterOptions,
+  IssueListResult,
+  IssueMilestone,
+  IssueReadResult,
+  IssueUploadResult,
+  ListRepositoriesResult,
+  ProviderAccount,
+  ProviderId,
+  RemoteRepository,
+} from "./types/providers";
 import type {
   SbxAccount,
   SbxAccountEdit,
@@ -155,6 +169,28 @@ export interface TETApi {
     repos: (accountId: string) => Promise<ListRepositoriesResult>;
     /** The last listing kept for the account, possibly stale; undefined when none was fetched yet. */
     cachedRepos: (accountId: string) => Promise<RemoteRepository[] | undefined>;
+  };
+  issues: {
+    /** Newest first, from the project's tracker. */
+    list: (projectId: string, filter: IssueFilter) => Promise<IssueListResult>;
+    filterOptions: (projectId: string) => Promise<IssueFilterOptions>;
+    /** The issue with its comments, for its tab and as the file a terminal it is dropped on reads. */
+    read: (projectId: string, number: number) => Promise<IssueReadResult>;
+    /** An image of an issue's text that takes the account's token, as a data URL; null for any other. */
+    image: (projectId: string, source: string) => Promise<string | null>;
+    comment: (projectId: string, number: number, body: string) => Promise<ActionResult>;
+    update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
+    /** The open ones, or why not. */
+    milestones: (projectId: string) => Promise<IssueMilestone[] | string>;
+    create: (projectId: string, title: string, body: string) => Promise<IssueCreateResult>;
+    /** For good, with its comments. */
+    delete: (projectId: string, number: number) => Promise<ActionResult>;
+    editComment: (projectId: string, number: number, id: number, body: string) => Promise<ActionResult>;
+    deleteComment: (projectId: string, number: number, id: number) => Promise<ActionResult>;
+    upload: (projectId: string, name: string, dataBase64: string) => Promise<IssueUploadResult>;
+    /** Checks a path against the tracker and saves it in tet.json; empty removes it. Answers what
+     *  refused it, for the question that is still up to show it at its field. */
+    setSource: (projectId: string, source: string) => Promise<ActionResult>;
   };
   env: {
     /** Never the values. */

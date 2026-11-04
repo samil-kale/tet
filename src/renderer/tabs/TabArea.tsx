@@ -182,7 +182,7 @@ export const TabArea = memo(function TabArea({
       // Over a tab strip, a plain move whatever zone lies under it: in cols2 the zones cover all of
       // b, leaving the strip to drop into b.
       const hit =
-        position.overStrip || !grid || grid.width === 0 || grid.height === 0
+        position.noZone || !grid || grid.width === 0 || grid.height === 0
           ? null
           : snapZoneAt(
               presetRef.current,

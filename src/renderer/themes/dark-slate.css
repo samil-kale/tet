@@ -75,7 +75,6 @@
   /* Raised off the editor the way GitHub Dark Default's widget sits over its editor — at the
      editor's own tone find/replace shows only its border. */
   --tet-popup-background: #232830;
-  --tet-popup-border: #2a2d35;
   /* Dark Modern's. */
   --tet-popup-shadow: #0000005c;
 

@@ -11,6 +11,7 @@ import { isWorking, TERMINAL_STATUSES, type TabRef } from "../../shared/types/te
 import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
+import { errorMessage } from "../../shared/errors";
 import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
 import { sbxVerbs } from "./ctl-sbx-verbs";
@@ -23,6 +24,7 @@ import {
   list,
   onOff,
   oneOf,
+  optionalText,
   projectById,
   refuseUnsaved,
   repositoryOf,
@@ -460,6 +462,17 @@ export function verbs(deps: ControlDeps): Handlers {
       // Without `env` and `color`: what a caller needs to pick a command and know where it runs.
       const commands = await deps.readCommands(found.path);
       return { result: commands.map(({ name, command, cwd, os }) => ({ name, command, cwd, os })) };
+    },
+
+    "issues-set-source": async (args, caller) => {
+      const { ref } = refFrom(args, caller);
+      const source = optionalText(args, "source") ?? "";
+      try {
+        await deps.setIssueSource(repository(ref), source);
+      } catch (error) {
+        throw new ControlError("bad_args", errorMessage(error));
+      }
+      return { result: { source: source.trim() || null } };
     },
 
     "tabs-run-command": async (args, caller) => {

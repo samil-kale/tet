@@ -82,6 +82,28 @@ export function useStoredChoice<T extends string>(key: string, choices: readonly
   return [choice, set];
 }
 
+/** A value only this window's views write, restored on the next start, in layout storage; written
+ *  with every change. Unreadable storage is `initial`. */
+export function useStoredJson<T>(key: string, initial: T): [T, (next: T) => void] {
+  const storageKey = layoutKey(key);
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored === null ? initial : (JSON.parse(stored) as T);
+    } catch {
+      return initial;
+    }
+  });
+  const set = useCallback(
+    (next: T) => {
+      setValue(next);
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    },
+    [storageKey],
+  );
+  return [value, set];
+}
+
 /**
  * Which groups of a tree the user has collapsed, restored on the next start, in layout storage.
  * `initial` names what starts collapsed; a key never toggled stands expanded.

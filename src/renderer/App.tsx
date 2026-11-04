@@ -17,6 +17,7 @@ import { Dialogs } from "./ui/Dialog";
 import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesLane } from "./lanes/files/FilesLane";
 import { GitLane } from "./lanes/git/GitLane";
+import { IssueList } from "./lanes/issues/IssueList";
 import { Notices, notify, showProgress, toggleCenter } from "./ui/Notices";
 import { NoticesCenter } from "./ui/NoticesCenter";
 import { ProjectList } from "./lanes/projects/ProjectList";
@@ -389,6 +390,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     toggleProjects: () => toggleLane("projects"),
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
+    toggleIssues: () => toggleLane("issues"),
     toggleArchive: () => toggleLane("archive"),
     toggleNotices: toggleCenter,
     jumpToWaiting,
@@ -507,6 +509,10 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     searchHeight={fileSearchHeight}
                     onSearchHeight={setFileSearchHeight}
                   />
+                )}
+                {lane === "issues" && activeResolved && (
+                  // Keyed by project: the repository and its worktrees read one tracker.
+                  <IssueList key={activeResolved.ref.projectId} resolved={activeResolved} shown={shown} onOpenFile={openEditor} />
                 )}
                 {lane === "archive" && activeResolved && (
                   // Keyed by repository or worktree: each has its own archived tabs.

@@ -3,6 +3,7 @@ import { registerCommandsIpc } from "./commands";
 import { registerEnvironmentIpc } from "./environment";
 import type { IpcDeps } from "./deps";
 import { registerDropsIpc } from "./drops";
+import { registerIssuesIpc } from "./issues";
 import { registerProjectsIpc } from "./projects";
 import { registerRepositoryIpc } from "./repository";
 import { registerSbxIpc } from "./sbx";
@@ -18,6 +19,7 @@ export function registerIpc(deps: IpcDeps): void {
   registerSbxIpc(deps);
   registerEnvironmentIpc(deps);
   registerProjectsIpc(deps);
+  registerIssuesIpc(deps);
   registerRepositoryIpc(deps);
   registerCommandsIpc(deps);
   registerTerminalsIpc(deps);

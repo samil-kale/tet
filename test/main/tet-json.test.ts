@@ -8,16 +8,72 @@ import { PLATFORM } from "../../src/main/util/host-platform";
 import {
   addExclude,
   addFolder,
+  isIssueSource,
   readChanged,
   readCommands,
   readExplorerView,
+  readIssueSource,
   readSbxSettings,
   removeFolder,
   tetJsonProblem,
   writeCommands,
+  writeIssueSource,
   writeSbxSettings,
 } from "../../src/main/store/tet-json";
 import { tempDir } from "../helpers";
+
+describe("the issue source", () => {
+  let dir: string;
+  const tetJson = (): string => path.join(dir, "tet.json");
+  beforeEach(() => {
+    dir = tempDir("tet-json-issues-");
+  });
+
+  it("reads none from a missing file, a missing entry and an entry that is no path", async () => {
+    assert.equal(await readIssueSource(dir), undefined);
+    for (const entry of ["{}", '{"issues": 3}', '{"issues": "name"}', '{"issues": "a/../b"}', '{"issues": "a b/c"}']) {
+      fs.writeFileSync(tetJson(), entry);
+      assert.equal(await readIssueSource(dir), undefined, entry);
+    }
+  });
+
+  it("takes an owner's and a nested group's path", () => {
+    assert.ok(isIssueSource("owner/name"));
+    assert.ok(isIssueSource("group/sub-group/my.tracker_1"));
+    assert.ok(!isIssueSource("/owner/name"));
+    assert.ok(!isIssueSource("owner/name/"));
+    assert.ok(!isIssueSource("owner/.."));
+  });
+
+  it("writes it beside what the user wrote, and removes it again", async () => {
+    fs.writeFileSync(tetJson(), '{\n  // Kept.\n  "commands": ["build"]\n}\n');
+    await writeIssueSource(dir, "group/tracker");
+    assert.equal(await readIssueSource(dir), "group/tracker");
+    assert.ok(fs.readFileSync(tetJson(), "utf8").includes("// Kept."));
+    await writeIssueSource(dir, undefined);
+    assert.equal(await readIssueSource(dir), undefined);
+    assert.ok(fs.readFileSync(tetJson(), "utf8").includes("// Kept."));
+    assert.deepEqual(
+      (await readCommands(dir)).map((command) => command.command),
+      ["build"],
+    );
+  });
+
+  it("never writes over a broken file", async () => {
+    fs.writeFileSync(tetJson(), "{ broken");
+    await assert.rejects(() => writeIssueSource(dir, "group/tracker"));
+    assert.equal(fs.readFileSync(tetJson(), "utf8"), "{ broken");
+  });
+
+  it("refuses a worktree, which takes its repository's", async () => {
+    const worktree = tempDir("tet-json-worktree-");
+    const gitDir = path.join(dir, ".git", "worktrees", "w");
+    fs.mkdirSync(gitDir, { recursive: true });
+    fs.writeFileSync(path.join(gitDir, "commondir"), "../..\n");
+    fs.writeFileSync(path.join(worktree, ".git"), `gitdir: ${gitDir}\n`);
+    await assert.rejects(() => writeIssueSource(worktree, "group/tracker"), /worktree/);
+  });
+});
 
 /** tet.json: the user's file, read defensively and written back with nothing of theirs lost. */
 

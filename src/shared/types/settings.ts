@@ -6,7 +6,7 @@ export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
 /** The lanes left of the tab area, in their fixed order. */
-export const LANES = ["projects", "git", "files", "archive"] as const;
+export const LANES = ["projects", "git", "files", "archive", "issues"] as const;
 
 export type Lane = (typeof LANES)[number];
 

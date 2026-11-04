@@ -64,7 +64,17 @@ export async function renderMarkdown(
   loadImage: (source: string) => Promise<string | undefined>,
   previous: ColoredBlocks,
 ): Promise<{ doc: Document; colored: ColoredBlocks }> {
-  const html = DOMPurify.sanitize(markdown.render(text), SANITIZE);
+  return renderHtml(markdown.render(text), path, loadImage, previous);
+}
+
+/** As `renderMarkdown`, of HTML a host rendered: nothing of it is trusted more. */
+export async function renderHtml(
+  source: string,
+  path: string,
+  loadImage: (source: string) => Promise<string | undefined>,
+  previous: ColoredBlocks,
+): Promise<{ doc: Document; colored: ColoredBlocks }> {
+  const html = DOMPurify.sanitize(source, SANITIZE);
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const element of doc.body.querySelectorAll("*")) {
     for (const name of LOADING_ATTRIBUTES) {

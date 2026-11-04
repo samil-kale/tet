@@ -8,6 +8,7 @@ import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from ".
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
+import type { IssueRepository } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
 import type { CallerSide } from "./caller-side";
@@ -124,6 +125,7 @@ export interface ControlDeps {
     get(ref: ProjectRef):
       | {
           at: { path: string };
+          started(): Promise<void>;
           getState(): RepositoryState;
           listExplorer(settings: ExplorerSettings): Promise<ExplorerListing>;
           merge(target: CheckoutTarget, fastForwardOnto?: string): Promise<GitCommandResult>;
@@ -161,6 +163,8 @@ export interface ControlDeps {
   addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
   deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
+  /** providers/issues.ts's, with the accounts of main.ts. */
+  setIssueSource(repository: IssueRepository, source: string): Promise<void>;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */

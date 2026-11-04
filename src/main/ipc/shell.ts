@@ -5,6 +5,7 @@ import { handle } from "./channels";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types/project";
+import { imageDataUrl } from "../util/image-response";
 import { expandHome, repositoryRelative } from "../util/path-inside";
 import { isExecutableFile, isOpenableUrl } from "../util/shell-open";
 import type { IpcDeps } from "./deps";
@@ -93,27 +94,8 @@ export function registerShellIpc({ repositories, notice }: Pick<IpcDeps, "reposi
   handle("shell:fetch-image", async (_event, url: string): Promise<string | null> => {
     try {
       const response = await fetchHttpsImage(url);
-      if (!response) {
-        return null;
-      }
-      const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
-      if (!response.ok || !type.startsWith("image/") || !response.body) {
-        void response.body?.cancel();
-        return null;
-      }
-      // Read in chunks against the cap: a response without a content-length would otherwise be
-      // held whole before it could be measured. Leaving the loop cancels the rest.
-      const chunks: Uint8Array[] = [];
-      let size = 0;
-      for await (const chunk of response.body) {
-        size += chunk.length;
-        // The editor's cap for a repository file.
-        if (size > MAX_EDIT_BYTES) {
-          return null;
-        }
-        chunks.push(chunk);
-      }
-      return `data:${type};base64,${Buffer.concat(chunks).toString("base64")}`;
+      // The editor's cap for a repository file.
+      return response ? await imageDataUrl(response, MAX_EDIT_BYTES) : null;
     } catch {
       return null;
     }

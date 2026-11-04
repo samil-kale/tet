@@ -2,7 +2,7 @@ import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAct
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
 import { forget } from "../identity";
-import { nextEditorTabId, setRevealHandler, type EditorTab, type OpenEditor } from "../editor/editor-tab";
+import { nextEditorTabId, setIssueGoneHandler, setRevealHandler, type EditorTab, type OpenEditor } from "../editor/editor-tab";
 import {
   canDiscardEdits,
   disposeEditor,
@@ -43,7 +43,9 @@ export function useEditorOpening(
   const openEditor = useCallback(
     (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
       const refKey = refKeyOf(ref);
-      const open = editorTabsRef.current[refKey]?.find((tab) => tab.path === path && tab.commit?.sha === how.commit?.sha);
+      const open = editorTabsRef.current[refKey]?.find(
+        (tab) => tab.path === path && tab.commit?.sha === how.commit?.sha && tab.issue === how.issue,
+      );
       const preview = how.keep ? undefined : previewEditorTab(ref);
       let tabId: string;
       if (open) {
@@ -65,12 +67,17 @@ export function useEditorOpening(
         openEditorFile(ref, tabId, path, true, how);
         setEditorTabs((current) => ({
           ...current,
-          [refKey]: (current[refKey] ?? []).map((tab) => (tab.tabId === tabId ? { ...tab, path, commit: how.commit } : tab)),
+          [refKey]: (current[refKey] ?? []).map((tab) =>
+            tab.tabId === tabId ? { ...tab, path, commit: how.commit, issue: how.issue } : tab,
+          ),
         }));
       } else {
         tabId = nextEditorTabId();
         openEditorFile(ref, tabId, path, how.keep !== true, how);
-        setEditorTabs((current) => ({ ...current, [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit }] }));
+        setEditorTabs((current) => ({
+          ...current,
+          [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit, issue: how.issue }],
+        }));
       }
       if (!how.background) {
         activateTab(refKey, tabId);
@@ -120,6 +127,22 @@ export function useEditorOpening(
       });
     },
     [setEditorTabs],
+  );
+
+  useEffect(
+    () =>
+      setIssueGoneHandler((projectId, number) => {
+        for (const [refKey, tabs] of Object.entries(editorTabsRef.current)) {
+          const gone = tabs.filter((tab) => tab.ref.projectId === projectId && tab.issue === number);
+          if (gone.length > 0) {
+            closeEditors(
+              refKey,
+              gone.map((tab) => tab.tabId),
+            );
+          }
+        }
+      }),
+    [closeEditors, editorTabsRef],
   );
 
   return { openEditor, openActiveDiff, closeEditors };

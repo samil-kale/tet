@@ -28,7 +28,7 @@ name:
 | `lane.background`                                               | `sideBar.background`                                               |
 | `sectionHeader.foreground`                                      | `sideBarSectionHeader.foreground`                                  |
 | `app.background`, `app.border`                                  | `panel.background`, `panel.border`                                 |
-| `popup.background`, `popup.border`                              | `editorWidget.background`, `editorWidget.border`                   |
+| `popup.background`                                              | `editorWidget.background`                                          |
 | `popup.shadow`                                                  | `widget.shadow`                                                    |
 | `notice{Error,Warning,Info}Icon.foreground`                     | `notifications{Error,Warning,Info}Icon.foreground`                 |
 | `graph.foreground1` … `graph.foreground5`                       | `scmGraph.foreground1` … `scmGraph.foreground5`                    |
