@@ -324,6 +324,32 @@ export function toNotes(entries: GitLabNote[]): IssueNote[] {
     .map((entry) => ({ id: entry.id, author: entry.author.username, createdAt: entry.created_at, body: entry.body }));
 }
 
+const ESCAPED: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
+
+/** A title change has no record of its own and no field saying so, so its system note's words are
+ *  matched: rendered, its titles escaped and their changes in spans, or Markdown with inline diff marks. */
+const TITLE_NOTES: { note: RegExp; title: (marked: string) => string }[] = [
+  {
+    note: /^<p>changed title from <code class="idiff">(.*)<\/code> to <code class="idiff">(.*)<\/code><\/p>$/s,
+    title: (html) => html.replace(/<\/?span[^>]*>/g, "").replace(/&(?:amp|lt|gt|quot|#39);/g, (entity) => ESCAPED[entity]),
+  },
+  {
+    note: /^changed title from \*\*(.*)\*\* to \*\*(.*)\*\*$/s,
+    title: (markdown) => markdown.replace(/\{[-+]|[-+]\}/g, ""),
+  },
+];
+
+/** What a system note says happened, in its own words where it says no more than that. */
+function fromSystemNote(body: string): { kind: "renamed"; from: string; to: string } | { kind: "text"; text: string } {
+  for (const { note, title } of TITLE_NOTES) {
+    const match = note.exec(body);
+    if (match) {
+      return { kind: "renamed", from: title(match[1]), to: title(match[2]) };
+    }
+  }
+  return { kind: "text", text: body };
+}
+
 /** An issue's events, from where GitLab keeps each kind: a change of labels, state or milestone has
  *  its own record, and what else it did only its system notes tell, in its own words. */
 export function toEvents(
@@ -336,7 +362,7 @@ export function toEvents(
   const events: IssueEvent[] = [];
   for (const note of notes) {
     if (note.system) {
-      events.push({ actor: note.author.username, createdAt: note.created_at, kind: "text", text: note.body });
+      events.push({ actor: note.author.username, createdAt: note.created_at, ...fromSystemNote(note.body) });
     }
   }
   for (const entry of labels) {
@@ -399,9 +425,10 @@ export const gitlab: GitProvider = {
   },
 
   async listPeople(host, token, path) {
+    // relations: the default leaves out who reaches the project through a group shared with it.
     const query = `query($path: ID!, $cursor: String) {
       project(fullPath: $path) {
-        projectMembers(first: 100, after: $cursor) {
+        projectMembers(relations: [DIRECT, INHERITED, INVITED_GROUPS, SHARED_INTO_ANCESTORS], first: 100, after: $cursor) {
           pageInfo { hasNextPage endCursor }
           nodes { user { username } }
         }

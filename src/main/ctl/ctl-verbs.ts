@@ -468,11 +468,10 @@ export function verbs(deps: ControlDeps): Handlers {
       const { ref } = refFrom(args, caller);
       const source = optionalText(args, "source") ?? "";
       try {
-        await deps.setIssueSource(repository(ref), source);
+        return { result: { source: (await deps.setIssueSource(repository(ref), source)) ?? null } };
       } catch (error) {
         throw new ControlError("bad_args", errorMessage(error));
       }
-      return { result: { source: source.trim() || null } };
     },
 
     "tabs-run-command": async (args, caller) => {

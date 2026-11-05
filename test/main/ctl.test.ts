@@ -383,6 +383,7 @@ function deps(): ControlDeps {
         throw new Error("404 Not Found");
       }
       calls.issueSources.push([repository.at.path, source]);
+      return source.replace("https://host/", "") || undefined;
     },
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
@@ -924,9 +925,11 @@ describe("tet-ctl against the control server", () => {
 
   it("sets the issue source, removes it without a path, and answers what the tracker refused", async () => {
     assert.deepEqual((await tetCtl(["issues-set-source", "group/tracker"])).result, { source: "group/tracker" });
+    assert.deepEqual((await tetCtl(["issues-set-source", "https://host/group/tracker"])).result, { source: "group/tracker" });
     assert.deepEqual((await tetCtl(["issues-set-source"])).result, { source: null });
     assert.deepEqual(calls.issueSources, [
       [PROJECT.id, "group/tracker"],
+      [PROJECT.id, "https://host/group/tracker"],
       [PROJECT.id, ""],
     ]);
     assertUsage(await tetCtl(["issues-set-source", "no/such"]), /404 Not Found/);

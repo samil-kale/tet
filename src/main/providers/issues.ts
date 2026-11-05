@@ -48,6 +48,17 @@ function withPath(host: string, rawPath: string): { host: string; path: string }
   return path === "" ? undefined : { host: host.toLowerCase(), path };
 }
 
+/** The repository's first remote that has a url, which its tracker is reached through. */
+async function trackerRemote(repository: IssueRepository): Promise<{ host: string; path: string }> {
+  await repository.started();
+  const url = repository.getState().remotes.find((remote) => remote.url !== undefined)?.url;
+  const remote = url === undefined ? undefined : parseRemoteUrl(url);
+  if (!remote) {
+    throw new Error("This repository has no remote on a host to read issues from");
+  }
+  return remote;
+}
+
 /**
  * Runs `call` against the repository's tracker: on the host of its first remote (`origin`, where it
  * has one), for `source`, its tet.json's `issues` or else the remote's own path. An account that
@@ -60,12 +71,7 @@ export async function onTracker<T>(
   call: TrackerCall<T>,
   { source, handsOver }: { source?: string; handsOver?: (error: unknown) => boolean } = {},
 ): Promise<T> {
-  await repository.started();
-  const url = repository.getState().remotes.find((remote) => remote.url !== undefined)?.url;
-  const remote = url === undefined ? undefined : parseRemoteUrl(url);
-  if (!remote) {
-    throw new Error("This repository has no remote on a host to read issues from");
-  }
+  const remote = await trackerRemote(repository);
   const path = source ?? (await readIssueSource(repository.at.path)) ?? remote.path;
   if (!isIssueSource(path)) {
     throw new Error(`Not a repository path on ${remote.host}: ${path}`);
@@ -104,18 +110,28 @@ export function writeOnTracker<T>(accounts: IssueAccounts, repository: IssueRepo
   });
 }
 
-/** Saves the repository's issue source once the tracker reads it; empty goes back to its own. */
-export async function setIssueSource(accounts: IssueAccounts, repository: IssueRepository, source: string): Promise<void> {
+/** Saves the repository's issue source once the tracker reads it and answers what was saved; empty
+ *  goes back to its own. A url counts as its path, on the remote's host alone, where it is read from. */
+export async function setIssueSource(accounts: IssueAccounts, repository: IssueRepository, source: string): Promise<string | undefined> {
   const typed = source.trim();
   if (typed === "") {
     await writeIssueSource(repository.at.path, undefined);
-    return;
+    return undefined;
   }
-  if (!isIssueSource(typed)) {
+  const url = parseRemoteUrl(typed);
+  const sourcePath = url?.path ?? typed;
+  if (!isIssueSource(sourcePath)) {
     throw new Error(`Not a repository path, as owner/name or group/subgroup/name: ${typed}`);
   }
-  await onTracker(accounts, repository, (provider, host, token, path) => provider.listLabels(host, token, path), { source: typed });
-  await writeIssueSource(repository.at.path, typed);
+  if (url) {
+    const { host } = await trackerRemote(repository);
+    if (url.host !== host) {
+      throw new Error(`Not on this repository's host, ${host}: ${typed}`);
+    }
+  }
+  await onTracker(accounts, repository, (provider, host, token, path) => provider.listLabels(host, token, path), { source: sourcePath });
+  await writeIssueSource(repository.at.path, sourcePath);
+  return sourcePath;
 }
 
 /** The issue as text, for an agent: its tab's, and the file a tab opened on it starts with. It opens by saying where it comes from: other people wrote

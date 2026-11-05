@@ -1124,8 +1124,8 @@ textarea:focus,
   white-space: nowrap;
 }
 
-/* Its clear button is smaller than the row's words are high. */
-.issue-filter .icon-button {
+/* Its clear button is smaller than the row's words are high; not the one in its list's filter field. */
+.issue-filter > .icon-button {
   --action-size: 16px;
   --icon-size: 11px;
 }
@@ -1739,6 +1739,8 @@ textarea:focus,
   overflow: hidden;
   padding: var(--menu-padding) 0;
   font-size: var(--tet-font-size);
+  /* Drawn inside its button's parent, a bold title for one. */
+  font-weight: normal;
 }
 
 /* A menu's entry, a status bar list's row, the line of an empty list and a session's row in the

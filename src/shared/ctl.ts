@@ -520,7 +520,7 @@ const VERBS = [
     group: "Projects",
     usage: "issues-set-source [<path>] [--project <id>]",
     summary:
-      "Read the project's issues from another repository on its host, group/subgroup/name, checked against the tracker and saved in tet.json. No path goes back to the repository's own.",
+      "Read the project's issues from another repository on its host, group/subgroup/name or its url, checked against the tracker and saved in tet.json as the path. No path goes back to the repository's own.",
     positionals: ["source"],
   },
   {

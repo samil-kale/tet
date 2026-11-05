@@ -115,13 +115,17 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   const dialog = useTopDialog();
 
   // Clamped into the window, written to the node rather than state so nothing paints unclamped. On
-  // every render: entries that arrive while it is up (`usePickMenu`'s options) change its size.
+  // every render: entries that arrive while it is up (`PickMenu`'s options) change its size.
   useLayoutEffect(() => {
     const element = menu.current;
     if (!element) {
       return;
     }
     const { width: menuWidth, height } = element.getBoundingClientRect();
+    // A filter field's list holds its widest, or each key typed would resize it.
+    if (header) {
+      element.style.minWidth = `${menuWidth}px`;
+    }
     const left = flipX !== undefined && x + menuWidth > window.innerWidth ? flipX - menuWidth : x;
     element.style.left = `${Math.max(0, Math.min(left, window.innerWidth - menuWidth))}px`;
     element.style.top = `${Math.max(0, Math.min(above ? y - height : y, window.innerHeight - height))}px`;

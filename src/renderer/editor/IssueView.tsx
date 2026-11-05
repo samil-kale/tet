@@ -7,7 +7,7 @@ import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/Con
 import { askName, confirmed } from "../ui/Dialog";
 import { IconButton } from "../ui/IconButton";
 import { GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SquareSparklesIcon, SyncIcon, TrashIcon } from "../ui/icons";
-import { usePickMenu } from "../ui/pick-menu";
+import { PickMenu } from "../ui/PickMenu";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
 import { issueLink } from "./editor-tab";
@@ -560,36 +560,31 @@ function PickSection({
   children: React.ReactNode;
 }) {
   const [options, setOptions] = useState<string[]>();
-  const menu = usePickMenu({
-    options: options && [...new Set([...options, ...picked])],
-    isPicked: (option) => picked.includes(option),
-    onPick: (option) => {
-      const rest = picked.filter((entry) => entry !== option);
-      onChange(picked.includes(option) ? rest : several ? [...picked, option] : [option]);
-    },
-    several,
-  });
   return (
     <SideSection
       title={title}
       action={
-        <button
-          type="button"
+        <PickMenu
           className="icon-button"
           title={`Change ${title}`}
-          onMouseDown={(event) => {
-            menu.open(event);
+          options={options && [...new Set([...options, ...picked])]}
+          isPicked={(option) => picked.includes(option)}
+          onPick={(option) => {
+            const rest = picked.filter((entry) => entry !== option);
+            onChange(picked.includes(option) ? rest : several ? [...picked, option] : [option]);
+          }}
+          several={several}
+          onOpen={() => {
             if (options === undefined) {
               void load().then(setOptions);
             }
           }}
         >
           <GearIcon />
-        </button>
+        </PickMenu>
       }
     >
       {children}
-      {menu.render()}
     </SideSection>
   );
 }

@@ -1,7 +1,7 @@
 import type { IssueFilter } from "../../../shared/types/providers";
 import { IconButton } from "../../ui/IconButton";
 import { ChevronIcon, CloseIcon } from "../../ui/icons";
-import { usePickMenu } from "../../ui/pick-menu";
+import { PickMenu } from "../../ui/PickMenu";
 import type { IssueOptions } from "./use-issues";
 
 interface FilterControlProps {
@@ -20,20 +20,17 @@ interface FilterControlProps {
 /** One filter: its title and value, a list to pick from, and a button clearing it once set
  *  (IntelliJ's). */
 function FilterControl({ title, value, options, isPicked, onPick, onClear, several }: FilterControlProps) {
-  const menu = usePickMenu({ options, isPicked, onPick, several });
-
   return (
     <span className={value === undefined ? "issue-filter" : "issue-filter set"}>
-      <button type="button" className={menu.isOpen ? "issue-filter-trigger open" : "issue-filter-trigger"} onMouseDown={menu.open}>
+      <PickMenu className="issue-filter-trigger" options={options} isPicked={isPicked} onPick={onPick} several={several}>
         <span className="issue-filter-text">{value === undefined ? title : `${title}: ${value}`}</span>
         {value === undefined && <ChevronIcon expanded />}
-      </button>
+      </PickMenu>
       {value !== undefined && (
         <IconButton title={`Clear ${title}`} onClick={onClear}>
           <CloseIcon />
         </IconButton>
       )}
-      {menu.render()}
     </span>
   );
 }

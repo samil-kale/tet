@@ -164,7 +164,7 @@ export interface ControlDeps {
   deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
   /** providers/issues.ts's, with the accounts of main.ts. */
-  setIssueSource(repository: IssueRepository, source: string): Promise<void>;
+  setIssueSource(repository: IssueRepository, source: string): Promise<string | undefined>;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */

@@ -253,6 +253,25 @@ describe("the issues of a tracker", () => {
     assert.throws(() => idsByName(["new"], labels, "label"), /new is no label/);
   });
 
+  it("reads a title change off GitLab's system note, rendered or in Markdown", () => {
+    const author = { username: "anna", avatar_url: null };
+    const created_at = "2026-10-01T10:00:00Z";
+    const titleOf = (body: string) => toGitLabEvents([{ id: "n", system: true, author, created_at, body }], [], [], [])[0];
+    const base = { actor: "anna", createdAt: created_at };
+    assert.deepEqual(
+      titleOf(
+        '<p>changed title from <code class="idiff">Edit a member&#39;s &quot;role&quot; &amp;amp;</code> to <code class="idiff"><span class="idiff left right addition">IXUS: </span>Edit a member&#39;s &quot;role&quot; &amp;amp;</code></p>',
+      ),
+      { ...base, kind: "renamed", from: 'Edit a member\'s "role" &amp;', to: 'IXUS: Edit a member\'s "role" &amp;' },
+    );
+    assert.deepEqual(titleOf("changed title from **Provide{-r more-} info** to **Provide{+ more user+} info**"), {
+      ...base,
+      kind: "renamed",
+      from: "Provider more info",
+      to: "Provide more user info",
+    });
+  });
+
   it("reads a note GitLab's GraphQL answers, a deleted account's as ghost", () => {
     const note = { id: "gid://gitlab/Note/42", system: false, body: "B", createdAt: "a" };
     assert.deepEqual(noteFromGitLabGraphql("gitlab.example.com", { ...note, author: { username: "anna", avatarUrl: "/a.png" } }), {
@@ -537,6 +556,28 @@ describe("the issues of a tracker", () => {
     it("refuses a source that is no path, without asking the tracker", async () => {
       const root = tempDir("tet-issues-");
       await assert.rejects(() => setIssueSource(accountsOf(), repositoryAt(root, ORIGIN), "a/../b"), /Not a repository path/);
+      assert.equal(fs.existsSync(path.join(root, "tet.json")), false);
+    });
+
+    it("takes a url for the source as its path", async (t) => {
+      const root = tempDir("tet-issues-");
+      const asked: string[] = [];
+      t.mock.method(PROVIDERS.github, "listLabels", async (_host: string, _token: string, source: string) => {
+        asked.push(source);
+        return [];
+      });
+      const saved = await setIssueSource(accountsOf(account("a")), repositoryAt(root, ORIGIN), " https://GitHub.com/g/s/tracker.git/ ");
+      assert.equal(saved, "g/s/tracker");
+      assert.deepEqual(asked, ["g/s/tracker"]);
+      assert.equal(await readIssueSource(root), "g/s/tracker");
+    });
+
+    it("refuses a url on another host than the remote's, without asking the tracker", async () => {
+      const root = tempDir("tet-issues-");
+      await assert.rejects(
+        () => setIssueSource(accountsOf(account("a")), repositoryAt(root, ORIGIN), "https://gitlab.example.com/g/tracker"),
+        /Not on this repository's host, github\.com/,
+      );
       assert.equal(fs.existsSync(path.join(root, "tet.json")), false);
     });
 
