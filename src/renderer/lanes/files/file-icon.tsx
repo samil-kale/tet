@@ -22,7 +22,7 @@ function fileIcon(name: string): FileIcon | null {
 export function FileIconView({ name }: { name: string }) {
   const [glyph, color] = fileIcon(name) ?? ["", ""];
   return (
-    <span className={`tree-icon file-icon${color ? ` ${color}` : ""}`} aria-hidden="true">
+    <span className={`line-icon file-icon${color ? ` ${color}` : ""}`} aria-hidden="true">
       {glyph}
     </span>
   );

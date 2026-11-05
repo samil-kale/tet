@@ -129,7 +129,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
                 onContextMenu={(event) => menu.open(event, tab)}
                 {...(reorderable ? rowProps(index) : handleProps(index))}
               >
-                <AgentIcon agentId={tab.agentId} className="tree-icon" />
+                <AgentIcon agentId={tab.agentId} className="line-icon" />
                 <span className="list-main">
                   <span className="list-label">{labelOf(tab)}</span>
                   {lastActive(tab)}

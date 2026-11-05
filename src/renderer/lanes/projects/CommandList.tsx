@@ -104,7 +104,7 @@ async function askCommand(
     ready: commandReady,
     render: renderCommandFields,
     submit,
-    className: "command-dialog",
+    className: "wide",
   });
 }
 

@@ -119,7 +119,7 @@ textarea:disabled,
 .switch-tab.disabled,
 /* The rows' mark goes with its tab's while a run holds the body. */
 .dialog-body:disabled .row-mark,
-.pick-row.disabled,
+.list-row.disabled,
 /* A worktree made elsewhere: listed, never opened. */
 .worktree-row.made-elsewhere,
 /* An agent a skills row brings nothing to. */
@@ -147,19 +147,24 @@ textarea:focus,
 /* Text cut short with an ellipsis rather than wrapped or pushing its row wider: the label, name or
    path that shares a row with something that keeps its room. */
 .titlebar-name,
+.status-bar-tab,
 .list-label,
 .list-extra,
+.list-detail,
 .tree-extra,
 .section-title,
 .tree-label,
 .tab-label,
+.issue-filter-text,
 .dialog-title,
-.editor-path,
+.editor-bar-title,
 .sbx-path-value,
 .suggester-name,
 .repository-name,
 .dropdown-trigger,
-.dropdown-menu .context-menu-item {
+.dropdown-menu .context-menu-item,
+.status-list-label,
+.notice.session .notice-message {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -308,8 +313,8 @@ textarea:focus,
   --area-min-height: 120px;
   --content-min-width: 320px;
   --list-row-height: 28px;
-  /* The ISSUES section's, two lines of text: the one list row of another height. */
-  --issue-row-height: 52px;
+  /* `.list-row.two-line`'s, two lines of text: the one list row of another height. */
+  --two-line-row-height: 52px;
   --popup-row-height: 30px;
   --popup-radius: 3px;
   --menu-padding: 3px;
@@ -331,10 +336,11 @@ textarea:focus,
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
   --small-font-size: 12px;
   --tiny-font-size: 11px;
-  /* The command dialog's: its fields need more than `.dialog`'s width. */
+  /* `.dialog.wide`'s, the command dialog: its fields need more than `.dialog`'s width. */
   --dialog-wide-width: 620px;
-  /* The fixed-height dialogs (settings, sbx, Add Repository): switching tabs or loading a list must
-     not resize them, and their tabs and lists need this much width. Capped to the window. */
+  /* `.dialog.tall`'s, the fixed-height dialogs (settings, sbx, Add Repository): switching tabs or
+     loading a list must not resize them, and their tabs and lists need this much width. Capped to
+     the window. */
   --dialog-tall-width: 700px;
   --dialog-tall-height: 450px;
   --dialog-max-height: calc(100vh - 32px);
@@ -429,10 +435,25 @@ textarea:focus,
   padding: calc((100% - var(--icon-size)) / 2);
 }
 
-/* Never the list hover colour: invisible on a hovered row, a patch on a selected one. */
-.icon-button:hover:not(:disabled) {
+/* Never the list hover colour: invisible on a hovered row, a patch on a selected one. The same for
+   what a toolbar holds besides its icon buttons: the status bar's entries, the ISSUES filters. */
+.icon-button:hover:not(:disabled),
+.status-bar-item:hover,
+.issue-filter-trigger:hover,
+.issue-filter-trigger.open {
   background: var(--tet-toolbar-hoverBackground);
+}
+
+.icon-button:hover:not(:disabled) {
   opacity: 1;
+}
+
+/* A row of actions, --action-gap apart: a section header's, the editor bar's, a text box's format
+   buttons, a filter field's toggles. */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--action-gap);
 }
 
 /* Body ----------------------------------------------------------------------------------- */
@@ -498,15 +519,8 @@ textarea:focus,
   padding: 0 6px;
 }
 
-.status-bar-item:hover {
-  background: var(--tet-toolbar-hoverBackground);
-}
-
 .status-bar-tab {
   max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* The notification center's button, at the right edge; its marks and icon set wider apart than a
@@ -608,12 +622,6 @@ textarea:focus,
   border-top: 1px solid var(--tet-app-border);
 }
 
-.section-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--action-gap);
-}
-
 .command-list {
   flex: 1;
   min-height: 0;
@@ -676,12 +684,19 @@ textarea:focus,
 
 .project-row,
 .worktree-row,
-.archive-row {
+.archive-row,
+.issue-row,
+.master-row {
   cursor: pointer;
 }
 
+/* Rows that are not picked (`AccountList` without `onSelect`): no pointer, and the hover rule skips them. */
+.master-row.static {
+  cursor: default;
+}
+
 /* An archived tab's agent icon stands further from its label than the 4px gap of the other rows. */
-.archive-row > .tree-icon {
+.archive-row > .line-icon {
   margin-right: 4px;
 }
 
@@ -693,21 +708,18 @@ textarea:focus,
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
 .project-group.dragging,
 .tab.dragging,
-.command-row.dragging,
-.archive-row.dragging,
+.list-row.dragging,
 .edit-row.dragging {
   opacity: 0.5;
 }
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
-.command-row.drop-before,
-.archive-row.drop-before,
+.list-row.drop-before,
 .edit-row.drop-before {
   box-shadow: inset 0 1px 0 var(--tet-focusBorder);
 }
 
-.command-row.drop-after,
-.archive-row.drop-after,
+.list-row.drop-after,
 .edit-row.drop-after {
   box-shadow: inset 0 -1px 0 var(--tet-focusBorder);
 }
@@ -785,6 +797,31 @@ textarea:focus,
   color: var(--tet-descriptionForeground);
 }
 
+/* A row of two lines, its label over its detail: an issue's, and a master-detail list's
+   (`.master-list`). Stretched, so each line is cut at the row's width. */
+.list-row.two-line {
+  gap: 8px;
+  height: var(--two-line-row-height);
+  padding-right: 8px;
+}
+
+.list-row.two-line > .list-main {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.list-detail {
+  margin-bottom: 4px;
+  font-size: var(--tiny-font-size);
+  color: var(--tet-descriptionForeground);
+}
+
+/* Keeps the detail readable on the selection blue, where its usual grey is not. */
+.list-row.active .list-detail {
+  color: inherit;
+  opacity: 0.8;
+}
+
 /* Branch tree ----------------------------------------------------------------------------- */
 
 /* A branch command is running; a second one would race it for the index lock. */
@@ -797,7 +834,7 @@ textarea:focus,
 }
 
 /* Merged into the default branch: dimmed below the other icons, not recolored. */
-.branch-tree .tree-icon.merged {
+.branch-tree .line-icon.merged {
   opacity: 0.5;
 }
 
@@ -807,10 +844,17 @@ textarea:focus,
   padding: 7px;
 }
 
-/* Room for the search icon. */
+/* Room for the search icon on the left. On the right, room for what stands inside the field
+   (`.filter-toggles`: 20px each, --action-gap apart, 4px off the edge), and 4px before the text:
+   the clear button, and before it the SEARCH and GRAPH sections' three toggles, VS Code's. */
 .filter-field input {
   width: 100%;
   padding-left: 28px;
+  padding-right: calc(20px + 8px);
+}
+
+.filter-field.with-toggles input {
+  padding-right: calc(4 * 20px + 3 * var(--action-gap) + 8px);
 }
 
 .filter-icon {
@@ -825,17 +869,6 @@ textarea:focus,
 /* The remote tab's column gap spaces the field; the `Dropdown` menu's own field inside it keeps the padding. */
 .remote-main > .filter-field {
   padding: 0;
-}
-
-/* Room for what stands inside the field (`.filter-toggles`: 20px each, --action-gap apart, 4px off
-   the edge), and 4px before the text: the clear button, and before it the SEARCH and GRAPH
-   sections' three toggles, VS Code's. */
-.filter-field input {
-  padding-right: calc(20px + 8px);
-}
-
-.filter-field.with-toggles input {
-  padding-right: calc(4 * 20px + 3 * var(--action-gap) + 8px);
 }
 
 /* Here the field lacks the 6px the branch tree's icon is placed against. */
@@ -855,11 +888,9 @@ textarea:focus,
   height: 20px;
 }
 
+/* The field's `.toolbar`, over its right end. */
 .filter-toggles {
   position: absolute;
-  display: flex;
-  align-items: center;
-  gap: var(--action-gap);
   /* 4px off the input's edge, inside the field's right padding. */
   right: 10px;
   top: 50%;
@@ -896,41 +927,39 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-.tree-row > .tree-icon {
+.tree-row > .line-icon {
   margin-right: 4px;
 }
 
-/* What trails a tree row's label: a file's folder, a worktree's base, a commit's author. */
-.tree-row > .tree-extra,
-.tree-row > .count-badge {
-  margin-left: 6px;
-}
-
-/* Centered in the row, the smaller text sits above the label's baseline; this puts it on it. */
+/* What trails a tree row's label: a file's folder, a worktree's base, a commit's author. Centered
+   in the row, the smaller text sits above the label's baseline; the offset puts it on it. */
 .tree-row > .tree-extra,
 .tree-row > .count-badge {
   position: relative;
   top: 0.5px;
+  margin-left: 6px;
 }
 
-/* Every list's rows, one hover and one selection. */
+/* Every list's rows, one hover and one selection: the lanes', a status bar list's and the
+   notification center's. */
 /* `:where` keeps the specificity of the selection rule below, which must win while hovered. */
 .list-row:where(:not(.made-elsewhere, .static, .disabled)):hover,
 .tree-header:hover,
 .tree-row:hover,
 /* The Explorer's rows inside the folder a dragged row would be moved into. */
 .tree-row.drop-target,
-.repository-row:hover {
+.repository-row:hover,
+.status-list-item:hover,
+.notices-center .notice.clickable:hover {
   background: var(--tet-list-hoverBackground);
 }
 
 /* After the hover rule: a selected row keeps its selection colour while hovered. HEAD gets a
    background, not a recolored label, which keeps a track badge legible. */
-.project-row.active,
-.worktree-row.active,
+.list-row.active,
 .tree-row.current,
 .tree-row.selected,
-.pick-row.active {
+.status-list-item.active {
   background: var(--tet-list-activeSelectionBackground);
   color: var(--tet-list-activeSelectionForeground);
 }
@@ -944,7 +973,7 @@ textarea:focus,
 }
 
 /* A file icon is a glyph of Seti's font (lanes/files/file-icons.ts), centred in the chevron's
-   `.tree-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
+   `.line-icon` box, the same share of it VS Code's takes of its own. The chevron's gap after it
    (CHEVRON_WIDTH + CHEVRON_GAP in ui/tree-row.tsx), so file and folder labels stay level. */
 @font-face {
   font-family: "seti";
@@ -969,31 +998,31 @@ textarea:focus,
 
 /* Seti's palette (FileIconColor in lanes/files/file-icons.ts) in the terminal's ANSI colors, which every
    theme names. Orange has no slot and takes bright red; pink takes bright magenta. */
-.dense-tree .tree-icon.blue {
+.dense-tree .line-icon.blue {
   color: var(--tet-terminal-ansiBlue);
 }
 
-.dense-tree .tree-icon.yellow {
+.dense-tree .line-icon.yellow {
   color: var(--tet-terminal-ansiYellow);
 }
 
-.dense-tree .tree-icon.green {
+.dense-tree .line-icon.green {
   color: var(--tet-terminal-ansiGreen);
 }
 
-.dense-tree .tree-icon.red {
+.dense-tree .line-icon.red {
   color: var(--tet-terminal-ansiRed);
 }
 
-.dense-tree .tree-icon.orange {
+.dense-tree .line-icon.orange {
   color: var(--tet-terminal-ansiBrightRed);
 }
 
-.dense-tree .tree-icon.purple {
+.dense-tree .line-icon.purple {
   color: var(--tet-terminal-ansiMagenta);
 }
 
-.dense-tree .tree-icon.pink {
+.dense-tree .line-icon.pink {
   color: var(--tet-terminal-ansiBrightMagenta);
 }
 
@@ -1028,9 +1057,9 @@ textarea:focus,
   background: var(--tet-editor-findMatchHighlightBackground);
 }
 
-/* A tree's and a tab's icons are the size of every other, as IntelliJ's. */
-.tree-icon,
-.tab-icon {
+/* An icon beside text — a tree's, a list's, a tab's, a menu entry's, the status bar's — the size of
+   every other, as IntelliJ's. */
+.line-icon {
   flex: none;
   width: var(--icon-size);
   height: var(--icon-size);
@@ -1109,17 +1138,6 @@ textarea:focus,
   --icon-size: 12px;
 }
 
-.issue-filter-trigger:hover,
-.issue-filter-trigger.open {
-  background: var(--tet-toolbar-hoverBackground);
-}
-
-.issue-filter-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Its clear button is smaller than the row's words are high; not the one in its list's filter field. */
 .issue-filter > .icon-button {
   --action-size: 16px;
@@ -1132,43 +1150,9 @@ textarea:focus,
 
 /* What marks a picked option stands at the entry's right edge, as `.context-menu-chevron` does; the
    one left empty keeps the room, so the list's width holds as options are picked. */
-.pick-menu .tree-icon {
+.pick-menu .line-icon {
   order: 1;
   margin-left: auto;
-}
-
-/* The issues' two-line row, which the picked lists of the Settings' Accounts and Prompts tabs and the
-   remote tab (`.pick-row`) take as theirs. */
-.issue-row,
-.pick-row {
-  cursor: pointer;
-}
-
-/* After `.list-row`: the height its rule states for every other. */
-.list-row.issue-row,
-.list-row.pick-row {
-  gap: 8px;
-  height: var(--issue-row-height);
-  padding-right: 8px;
-}
-
-.issue-main,
-.pick-main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  gap: 6px;
-  min-width: 0;
-}
-
-.issue-meta,
-.pick-meta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--tiny-font-size);
-  color: var(--tet-descriptionForeground);
-  margin-bottom: 4px;
 }
 
 .issue-person {
@@ -1248,11 +1232,8 @@ textarea:focus,
   border-radius: 3px 3px 0 0;
 }
 
-/* The format buttons, at the bar's end. */
+/* The format buttons, a `.toolbar` at the bar's end. */
 .issue-box-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--action-gap);
   margin-left: auto;
   padding: 0 6px;
 }
@@ -1294,11 +1275,16 @@ textarea:focus,
   margin-bottom: 14px;
 }
 
-.issue-state {
-  padding: 3px 10px;
+/* An issue's state and its labels, set off as chips. */
+.issue-state,
+.issue-label {
   border: 1px solid var(--tet-menu-border);
   border-radius: 3px;
   background: var(--tet-lane-background);
+}
+
+.issue-state {
+  padding: 3px 10px;
   font-size: var(--small-font-size);
 }
 
@@ -1475,9 +1461,6 @@ textarea:focus,
 
 .issue-label {
   padding: 2px 7px;
-  border: 1px solid var(--tet-menu-border);
-  border-radius: 3px;
-  background: var(--tet-lane-background);
   font-size: var(--tiny-font-size);
 }
 
@@ -1573,10 +1556,10 @@ textarea:focus,
   top: 0;
   height: 100%;
   background: var(--tet-progressBar-background);
-  animation: tab-progress-loop linear infinite;
+  animation: progress-bar-loop linear infinite;
 }
 
-@keyframes tab-progress-loop {
+@keyframes progress-bar-loop {
   from {
     transform: translateX(0);
   }
@@ -1630,13 +1613,11 @@ textarea:focus,
   box-shadow: inset 0 -1px 0 var(--tet-tab-activeBorder);
 }
 
-/* The editor tab's bar boxes its actions at the strip's start, none tab-shaped; boxed like
-   `.new-tab` at the other end. The panel's border, not the tabs': a theme may hide the line
-   between tabs (Dark IntelliJ), but this one marks the chrome off. */
+/* The editor tab's bar boxes its actions (a `.toolbar`) at the strip's start, at the bar's full
+   height, none tab-shaped; boxed like `.new-tab` at the other end. The panel's border, not the
+   tabs': a theme may hide the line between tabs (Dark IntelliJ), but this one marks the chrome off. */
 .editor-bar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--action-gap);
+  align-self: stretch;
   flex: none;
   border-right: 1px solid var(--tet-app-border);
   padding: 0 6px;
@@ -1675,8 +1656,7 @@ textarea:focus,
 
 /* On the active tab or row's selection background, else in the mark's own colour. */
 .tab.active .tab-mark:not(.tab-mark-error),
-.project-row.active .tab-mark:not(.tab-mark-error),
-.worktree-row.active .tab-mark:not(.tab-mark-error) {
+.list-row.active .tab-mark:not(.tab-mark-error) {
   color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-foreground, var(--tet-focusBorder)));
 }
 
@@ -1825,7 +1805,7 @@ textarea:focus,
    in `CLOSE_MS`. */
 .pane > .new-tab-menu,
 .editor-tab > .new-tab-menu {
-  animation: new-tab-menu-enter var(--popup-fade) ease-out;
+  animation: drop-in var(--popup-fade) ease-out;
   transition:
     opacity var(--popup-fade) ease-out,
     transform var(--popup-fade) ease-out;
@@ -1847,7 +1827,7 @@ textarea:focus,
   position: relative;
 }
 
-@keyframes new-tab-menu-enter {
+@keyframes drop-in {
   from {
     opacity: 0;
     transform: translateY(-16px);
@@ -2122,12 +2102,7 @@ textarea:focus,
   border-bottom: 1px solid var(--tet-app-border);
 }
 
-/* The editor bar's full height. */
-.editor-bar-actions {
-  align-self: stretch;
-}
-
-.editor-path {
+.editor-bar-title {
   flex: 1;
   min-width: 0;
   margin-left: 6px;
@@ -2662,30 +2637,26 @@ textarea:focus,
 }
 
 /* Fixed height: switching tabs must not resize the dialog, and rows that outgrow it scroll in their
-   own box rather than growing it. Capped to the window, the SBX Settings' only with the fields or the
-   account up (SbxSettingsDialog's `showsAccount`); the checks before them are short. */
-.settings-dialog,
-.sbx-settings-dialog,
-.add-repository-dialog {
+   own box rather than growing it. Capped to the window. */
+.dialog.tall {
   width: var(--dialog-tall-width);
   height: var(--dialog-tall-height);
-}
-
-.settings-dialog,
-.add-repository-dialog,
-.sbx-settings-dialog.ready {
   max-height: var(--dialog-max-height);
 }
 
-.command-dialog {
+/* The SBX Settings' are capped only with the fields or the account up (SbxSettingsDialog's
+   `showsAccount`); the checks before them are short. */
+.sbx-settings-dialog:not(.ready) {
+  max-height: none;
+}
+
+.dialog.wide {
   width: var(--dialog-wide-width);
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
    shrink into it. */
-.sbx-settings-dialog .dialog-body,
-.settings-dialog .dialog-body,
-.add-repository-dialog .dialog-body {
+.dialog.tall .dialog-body {
   flex: 1;
   min-height: 0;
 }
@@ -2954,14 +2925,12 @@ textarea:focus,
 }
 
 /* A column wide enough for "Ctrl+Shift+" plus a letter, shared by the Info tab's two lists. */
-.settings-info-row,
-.settings-shortcut-row {
+.settings-info-row {
   display: flex;
   gap: 12px;
 }
 
-.settings-info-row span:first-child,
-.settings-shortcut-row span:first-child {
+.settings-info-row span:first-child {
   width: 85px;
   flex: none;
   color: var(--tet-descriptionForeground);
@@ -3075,9 +3044,9 @@ textarea:focus,
 
 /* Add repository ------------------------------------------------------------------------- */
 
-.remote-tab,
-.accounts-tab,
-.prompts-tab {
+/* A list beside what its picked row shows, IntelliJ's master-detail: the Add Repository dialog's
+   Remote tab, the Settings' Accounts and Prompts tabs. */
+.master-detail {
   display: flex;
   gap: 12px;
   flex: 1;
@@ -3085,9 +3054,8 @@ textarea:focus,
   margin-top: 4px;
 }
 
-/* A list of what is picked, beside what the pick shows: the remote tab's accounts, the Settings'
-   Accounts and Prompts tabs. */
-.pick-list {
+/* The list, its rows `.master-row`s. */
+.master-list {
   display: flex;
   flex-direction: column;
   width: 200px;
@@ -3099,17 +3067,6 @@ textarea:focus,
 
 .account-add {
   padding: 7px;
-}
-
-/* Rows that are not picked (`AccountList` without `onSelect`): no pointer, and the hover rule skips them. */
-.pick-row.static {
-  cursor: default;
-}
-
-/* Keeps the description readable on the selection blue, where its usual grey is not. */
-.pick-row.active .pick-meta {
-  color: inherit;
-  opacity: 0.8;
 }
 
 .repository-list {
@@ -3186,7 +3143,7 @@ textarea:focus,
 .notice-item {
   display: grid;
   grid-template-rows: 1fr;
-  animation: notice-enter 0.35s ease-out;
+  animation: rise-in 0.35s ease-out;
   transition:
     grid-template-rows 0.35s ease-out,
     opacity 0.35s ease-out,
@@ -3216,7 +3173,7 @@ textarea:focus,
   border-bottom-width: 0;
 }
 
-@keyframes notice-enter {
+@keyframes rise-in {
   from {
     opacity: 0;
     transform: translateY(16px);
@@ -3239,7 +3196,7 @@ textarea:focus,
 /* Only the icon carries the severity's colour: a whole notice in red is harder to read. */
 .notice-icon {
   flex: none;
-  /* An integer box of its own, as `.tab-icon`. */
+  /* An integer box of its own, as `.line-icon`. */
   width: var(--icon-size);
   height: var(--icon-size);
   /* Optical: half the gap between the first line's height and the icon's own. */
@@ -3289,9 +3246,6 @@ textarea:focus,
 
 .notice.session .notice-message {
   display: block;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
 }
 
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
@@ -3320,7 +3274,7 @@ textarea:focus,
   width: var(--popup-width);
   max-height: 60%;
   /* Opens and closes as a notice enters and leaves (`.notice-item`), but quicker: `CLOSE_MS`. */
-  animation: notice-enter var(--popup-fade) ease-out;
+  animation: rise-in var(--popup-fade) ease-out;
   transition:
     opacity var(--popup-fade) ease-out,
     transform var(--popup-fade) ease-out;
@@ -3360,22 +3314,6 @@ textarea:focus,
 
 .status-list-item + .status-list-item {
   border-top: 1px solid var(--tet-menu-border);
-}
-
-.status-list-item:hover,
-.notices-center .notice.clickable:hover {
-  background: var(--tet-list-hoverBackground);
-}
-
-.status-list-item.active {
-  background: var(--tet-list-activeSelectionBackground);
-  color: var(--tet-list-activeSelectionForeground);
-}
-
-.status-list-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .notices-center .notice {

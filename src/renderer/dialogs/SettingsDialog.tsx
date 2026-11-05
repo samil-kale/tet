@@ -312,7 +312,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
           </>
         )
       }
-      className="settings-dialog"
+      className="settings-dialog tall"
       onCancel={onClose}
       primary={{ label: "Save", blocked, disabled: loading || loadFailed !== undefined, run: () => void save() }}
     >
@@ -399,13 +399,13 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
       )}
       {shown === "accounts" && <ProviderAccounts onBusy={setAddingAccount} />}
       {shown === "prompts" && settings && (
-        <div className="prompts-tab">
-          <div className="pick-list">
+        <div className="master-detail">
+          <div className="master-list">
             {PROMPT_IDS.map((id) => (
-              <div key={id} className={`list-row pick-row${id === promptId ? " active" : ""}`} onClick={() => setPromptId(id)}>
-                <span className="pick-main">
+              <div key={id} className={`list-row master-row two-line${id === promptId ? " active" : ""}`} onClick={() => setPromptId(id)}>
+                <span className="list-main">
                   <span className="list-label">{PROMPT_LABELS[id]}</span>
-                  <span className="pick-meta">{PROMPT_DETAILS[id]}</span>
+                  <span className="list-detail">{PROMPT_DETAILS[id]}</span>
                 </span>
               </div>
             ))}
@@ -480,7 +480,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
           <FieldColumn fill>
             <p className="dialog-detail">Shortcuts</p>
             {SHORTCUTS.map(({ id, description }) => (
-              <div key={id} className="settings-shortcut-row">
+              <div key={id} className="settings-info-row">
                 <span>{shortcutLabel(id)}</span>
                 <span>{description}</span>
               </div>

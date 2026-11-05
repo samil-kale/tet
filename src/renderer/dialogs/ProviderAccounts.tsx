@@ -48,7 +48,7 @@ export function ProviderAccounts({ onBusy }: ProviderAccountsProps) {
   }, [busy, onBusy]);
 
   return (
-    <div className="accounts-tab">
+    <div className="master-detail">
       <AccountList
         accounts={accounts}
         runHeld={runRemoval}

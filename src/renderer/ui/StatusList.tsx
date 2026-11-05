@@ -90,7 +90,7 @@ export const StatusList = memo(function StatusList({
     <div ref={list} className={`status-list${closing ? " closing" : ""}`}>
       <div className="section-header popup-header">
         <span className="section-title">{title.toUpperCase()}</span>
-        <span className="section-header-actions">
+        <span className="toolbar">
           {newTabEntries && (
             <button type="button" className="icon-button" title="New tab" onMouseDown={plusMenu.open}>
               <PlusIcon />

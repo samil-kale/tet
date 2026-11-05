@@ -37,7 +37,7 @@ export function FilterField({ placeholder, value, onChange, autoFocus, onEnter, 
         onContextMenu={textMenu.onContextMenu}
       />
       {textMenu.menu}
-      <span className="filter-toggles">
+      <span className="toolbar filter-toggles">
         {children}
         <IconButton
           title="Clear"

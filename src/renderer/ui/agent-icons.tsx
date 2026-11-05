@@ -20,7 +20,7 @@ export function AgentIcon({ agentId, className }: AgentIconProps) {
 
 /** An agent as a menu entry: its icon, then its name. */
 export function agentEntry(agent: AgentInfo, run: () => void): ContextMenuEntry {
-  return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="tab-icon" />, run };
+  return { label: agent.displayName, icon: <AgentIcon agentId={agent.id} className="line-icon" />, run };
 }
 
 function DrawnIcon({ icon, className }: { icon: AgentIconData; className?: string }) {

@@ -104,23 +104,23 @@ export const StatusBar = memo(function StatusBar({
       <div className="status-bar">
         {project && (
           <button type="button" className="status-bar-item status-bar-projects" title="Projects" onClick={() => toggleList("projects")}>
-            <ProjectsIcon className="tree-icon" />
+            <ProjectsIcon className="line-icon" />
             {project.name}
           </button>
         )}
         <button type="button" className="status-bar-item status-bar-tabs" title="Tabs" onClick={() => toggleList("tabs")}>
-          {active?.icon ?? <SquareTerminalIcon className="tree-icon" />}
+          {active?.icon ?? <SquareTerminalIcon className="line-icon" />}
           <span className="status-bar-tab">{active?.label ?? NO_TABS}</span>
         </button>
         {branch && (
           <button type="button" className="status-bar-item status-bar-branches" title="Branches" onClick={() => toggleList("branches")}>
-            <BranchIcon className="tree-icon" />
+            <BranchIcon className="line-icon" />
             {branch}: {changesCount}
           </button>
         )}
         {project && (
           <button type="button" className="status-bar-item status-bar-archive" title="Archive" onClick={() => toggleList("archive")}>
-            <ArchiveIcon className="tree-icon" />
+            <ArchiveIcon className="line-icon" />
             archive: {archived.length}
           </button>
         )}
@@ -133,7 +133,7 @@ export const StatusBar = memo(function StatusBar({
           {marks.map((mark) => (
             <TabMark key={mark} kind={mark} />
           ))}
-          <BellIcon className="tree-icon" />
+          <BellIcon className="line-icon" />
         </button>
       </div>
       {openList === "projects" && (

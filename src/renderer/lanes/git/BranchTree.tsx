@@ -42,7 +42,7 @@ const NESTED_INDENT = ROW_INDENT + COLUMN_STEP;
 
 /** A branch merged into the default branch has its icon dimmed. */
 function branchIconClass(merged: boolean): string {
-  return merged ? "tree-icon merged" : "tree-icon";
+  return merged ? "line-icon merged" : "line-icon";
 }
 
 /**
@@ -65,7 +65,7 @@ function TreeGroup({
   return (
     <div className="tree-group">
       <button className="tree-header" onClick={onToggle}>
-        <ChevronIcon expanded={!collapsed} className="tree-icon" />
+        <ChevronIcon expanded={!collapsed} className="line-icon" />
         <span>{label}</span>
         <span className="count-badge">({count})</span>
       </button>
@@ -466,7 +466,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
                 onDoubleClick={() => !worktree.current && worktree.key !== undefined && openWorktree(worktree)}
                 onContextMenu={(event) => menu.open(event, { kind: "worktree", worktree })}
                 dragName={{ kind: "worktree", name: worktreeName(worktree) }}
-                icon={<WorktreeIcon className="tree-icon" />}
+                icon={<WorktreeIcon className="line-icon" />}
                 label={worktreeName(worktree)}
               >
                 {(worktree.branch === undefined || worktree.base) && (
@@ -492,8 +492,8 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
                   dragName={{ kind: "remote", name: entry.name }}
                   icon={
                     <>
-                      <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="tree-icon" />
-                      <RemoteIcon className="tree-icon" />
+                      <ChevronIcon expanded={!isCollapsed(`remote:${entry.name}`)} className="line-icon" />
+                      <RemoteIcon className="line-icon" />
                     </>
                   }
                   label={entry.name}
@@ -532,7 +532,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
                 onDoubleClick={() => checkoutTag(tag)}
                 onContextMenu={(event) => menu.open(event, { kind: "tag", name: tag })}
                 dragName={{ kind: "tag", name: tag }}
-                icon={<TagIcon className="tree-icon" />}
+                icon={<TagIcon className="line-icon" />}
                 label={tag}
               />
             ))
@@ -553,7 +553,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
                 title={`${stash.ref}: ${stash.message}\nRight-click to apply, pop or drop it`}
                 onContextMenu={(event) => menu.open(event, { kind: "stash", stash })}
                 dragName={{ kind: "stash", name: stash.ref }}
-                icon={<StashIcon className="tree-icon" />}
+                icon={<StashIcon className="line-icon" />}
                 label={stash.message}
               />
             ))

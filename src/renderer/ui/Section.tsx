@@ -43,7 +43,7 @@ export function Section({ title, count, countError, detail, busy, height, action
             </>
           )}
         </span>
-        {actions && <span className="section-header-actions">{actions}</span>}
+        {actions && <span className="toolbar">{actions}</span>}
         {busy && <ProgressBar />}
       </div>
       {children}

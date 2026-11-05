@@ -178,7 +178,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     <div className={`editor-tab${active ? "" : " hidden"}`} onKeyDown={onKeyDown}>
       <div className="editor-bar">
         {/* Always there, so the path doesn't shift for a read-only file. */}
-        <div className="editor-bar-actions">
+        <div className="toolbar editor-bar-actions">
           <IconButton
             title={`Save (${PLATFORM.modifierLabel}+S)`}
             disabled={isReadOnly(file) || !dirty || saving}
@@ -237,7 +237,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
           )}
         </div>
         {dirty && <span className="editor-dirty">●</span>}
-        <span className="editor-path">{path}</span>
+        <span className="editor-bar-title">{path}</span>
       </div>
       <div className="editor-body">
         {/* Why is the notice's (editor-views.ts); the tab says only what it is, like the rest. */}

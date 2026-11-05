@@ -233,7 +233,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked, onError }: RemoteTa
   );
 
   return (
-    <div className="remote-tab">
+    <div className="master-detail">
       <AccountList
         accounts={accounts ?? []}
         selectedId={adding ? null : selectedId}
@@ -410,7 +410,7 @@ export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
     <DialogFrame
       header={{ tabs: MODES, active: mode, onSelect: switchMode }}
       error={mode === "remote" ? listError : refused}
-      className="add-repository-dialog"
+      className="tall"
       busy={busy}
       locked={locked}
       onCancel={onClose}

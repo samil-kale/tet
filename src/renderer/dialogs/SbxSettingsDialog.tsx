@@ -352,7 +352,7 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
   return (
     <DialogFrame
       header={tabbed ? { tabs, active: tab, onSelect: setTab } : { title: `SBX Settings - ${project.name}` }}
-      className={showsAccount ? "sbx-settings-dialog ready" : "sbx-settings-dialog"}
+      className={showsAccount ? "sbx-settings-dialog tall ready" : "sbx-settings-dialog tall"}
       busy={busy}
       locked={holding}
       error={refused ?? accountError}

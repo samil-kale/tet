@@ -43,7 +43,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
     <div ref={center} className={`notices-center${closing ? " closing" : ""}`}>
       <div className="section-header popup-header">
         <span className="section-title">NOTIFICATIONS</span>
-        <span className="section-header-actions">
+        <span className="toolbar">
           <button type="button" className="icon-button" title="Clear All" disabled={!notices.some(removable)} onClick={clearNotices}>
             <ClearIcon />
           </button>

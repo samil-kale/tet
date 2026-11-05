@@ -321,7 +321,7 @@ export const Pane = memo(function Pane({
         return {
           label: <EditorTabLabel tabId={tab.tabId} label={editorLabel(kinded.tab)} />,
           tooltip: path + (commit ? ` (${commit.sha.slice(0, 7)})` : ""),
-          icon: issue === undefined ? <FilesIcon className="tab-icon" /> : <IssuesIcon className="tab-icon" />,
+          icon: issue === undefined ? <FilesIcon className="line-icon" /> : <IssuesIcon className="line-icon" />,
           sandboxed: false,
           inactive: false,
           closeTitle: "Close file",
@@ -345,7 +345,7 @@ export const Pane = memo(function Pane({
           // The session title; a session-less agent's name.
           label: <span className="tab-label">{terminalLabel(terminal, agents)}</span>,
           tooltip: tooltip.join("\n"),
-          icon: mark ? <TabMark kind={mark} className="tab-icon" /> : <AgentIcon agentId={terminal.agentId} className="tab-icon" />,
+          icon: mark ? <TabMark kind={mark} className="line-icon" /> : <AgentIcon agentId={terminal.agentId} className="line-icon" />,
           sandboxed: terminal.sandboxed === true,
           inactive: terminal.status === "stopped",
           closeTitle: "Close tab",

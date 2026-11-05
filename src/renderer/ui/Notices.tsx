@@ -414,7 +414,7 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
         {notice.title && !notice.agentId && <span className="notice-title">{notice.title}</span>}
         <span className="notice-message">{notice.message}</span>
       </span>
-      {notice.agentId && <AgentIcon agentId={notice.agentId} className="tab-icon" />}
+      {notice.agentId && <AgentIcon agentId={notice.agentId} className="line-icon" />}
       {notice.progress && (
         <span className="notice-progress">
           {notice.progress.fraction === null ? (

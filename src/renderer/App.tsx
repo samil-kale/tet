@@ -261,7 +261,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       archivedTabs.map((tab): StatusListItem => ({
         id: tab.tabId,
         label: tab.title || "New session",
-        icon: <AgentIcon agentId={tab.agentId} className="tab-icon" />,
+        icon: <AgentIcon agentId={tab.agentId} className="line-icon" />,
       })),
     [archivedTabs],
   );
@@ -291,13 +291,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       inOrder(activeLayout.order, activeStripTabs ?? NO_TABS).map((tab): StatusListItem => {
         const kinded = kindOf(tab);
         if (kinded.kind === "editor") {
-          return { id: tab.tabId, label: editorLabel(kinded.tab), icon: <FilesIcon className="tab-icon" /> };
+          return { id: tab.tabId, label: editorLabel(kinded.tab), icon: <FilesIcon className="line-icon" /> };
         }
         const terminal = kinded.tab;
         return {
           id: terminal.tabId,
           label: terminalLabel(terminal, agents),
-          icon: <AgentIcon agentId={terminal.agentId} className="tab-icon" />,
+          icon: <AgentIcon agentId={terminal.agentId} className="line-icon" />,
           // An agent's tab still without a session was just opened, the newest; a shell never has one.
           lastActive: terminal.updatedAt ?? terminal.createdAt ?? (terminal.agentId === "shell" ? undefined : Number.MAX_SAFE_INTEGER),
         };
@@ -326,7 +326,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   /** The status bar's project list. */
   const projectItems = useMemo(
-    () => projects.map((entry): StatusListItem => ({ id: entry.id, label: entry.name, icon: <ProjectsIcon className="tab-icon" /> })),
+    () => projects.map((entry): StatusListItem => ({ id: entry.id, label: entry.name, icon: <ProjectsIcon className="line-icon" /> })),
     [projects],
   );
   /** The status bar's project list: a project opens as its repository. */
@@ -407,7 +407,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The status bar's branch list: the local branches, a click switching to one as the branch tree's
    *  double-click does. */
   const branchItems = useMemo(
-    () => activeState.localBranches.map((name): StatusListItem => ({ id: name, label: name, icon: <BranchIcon className="tab-icon" /> })),
+    () => activeState.localBranches.map((name): StatusListItem => ({ id: name, label: name, icon: <BranchIcon className="line-icon" /> })),
     [activeState.localBranches],
   );
   const checkoutBranch = useCallback(

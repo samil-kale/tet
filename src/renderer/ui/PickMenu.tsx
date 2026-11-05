@@ -46,7 +46,7 @@ export function PickMenu({ options, isPicked, onPick, several, className, title,
       ? [{ label: empty }]
       : filter.matching.map((option) => ({
           label: option,
-          icon: isPicked(option) ? <CheckIcon className="tree-icon" /> : <span className="tree-icon" />,
+          icon: isPicked(option) ? <CheckIcon className="line-icon" /> : <span className="line-icon" />,
           keepsOpen: several,
           run: () => onPick(option),
         }));

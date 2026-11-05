@@ -196,7 +196,7 @@ const CommitEntry = memo(function CommitEntry({ commit, row, isOpen, files, togg
         title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
         dragName={{ kind: "commit", name: commit.sha }}
         onClick={() => toggle(commit)}
-        icon={row ? <Lanes row={row} expanded={isOpen} /> : <CommitIcon className="tree-icon" />}
+        icon={row ? <Lanes row={row} expanded={isOpen} /> : <CommitIcon className="line-icon" />}
         label={commit.subject}
       >
         <span className="tree-extra">{commit.author}</span>
@@ -214,7 +214,7 @@ const CommitEntry = memo(function CommitEntry({ commit, row, isOpen, files, togg
             icon={
               <>
                 {row && <LanesBeside row={row} />}
-                <span className={`tree-icon change-status ${file.status}`}>{STATUS_LETTER[file.status]}</span>
+                <span className={`line-icon change-status ${file.status}`}>{STATUS_LETTER[file.status]}</span>
               </>
             }
             label={baseName(file.path)}

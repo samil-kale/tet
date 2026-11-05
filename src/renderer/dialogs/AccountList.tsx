@@ -47,16 +47,16 @@ export function AccountList({ accounts, selectedId, onSelect, runHeld, locked, o
   };
 
   return (
-    <div className="pick-list">
+    <div className="master-list">
       {accounts.map((account) => (
         <div
           key={account.id}
-          className={`list-row pick-row${account.id === selectedId ? " active" : ""}${locked ? " disabled" : ""}${onSelect ? "" : " static"}`}
+          className={`list-row master-row two-line${account.id === selectedId ? " active" : ""}${locked ? " disabled" : ""}${onSelect ? "" : " static"}`}
           onClick={onSelect && !locked ? () => onSelect(account.id) : undefined}
         >
-          <span className="pick-main">
+          <span className="list-main">
             <span className="list-label">{account.user}</span>
-            <span className="pick-meta">
+            <span className="list-detail">
               {PROVIDER_LABEL[account.provider]} · {account.host}
             </span>
           </span>

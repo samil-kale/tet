@@ -65,7 +65,7 @@ function IssueRow({
 }) {
   return (
     <div
-      className="list-row issue-row"
+      className="list-row issue-row two-line"
       title={[`#${issue.number} ${issue.title}`, ...(issue.labels.length > 0 ? [`Labels: ${issue.labels.join(", ")}`] : [])].join("\n")}
       draggable
       onDragStart={(event) => event.dataTransfer.setData(ISSUE_DRAG_TYPE, String(issue.number))}
@@ -73,9 +73,9 @@ function IssueRow({
       onDoubleClick={() => onOpen({ keep: true })}
       onContextMenu={onMenu}
     >
-      <span className="issue-main">
+      <span className="list-main">
         <span className="list-label">{issue.title}</span>
-        <span className="issue-meta">
+        <span className="list-detail">
           #{issue.number} · created {dayOf(issue.createdAt)}, by {issue.author}
         </span>
       </span>

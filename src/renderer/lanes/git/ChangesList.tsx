@@ -343,7 +343,7 @@ export const ChangesList = memo(function ChangesList({
                     <>
                       <ChevronBox />
                       {box}
-                      <span className={`tree-icon change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
+                      <span className={`line-icon change-status ${change.status}`}>{STATUS_LETTER[change.status]}</span>
                     </>
                   ) : (
                     <>

@@ -138,7 +138,7 @@ export function ChevronBox({ expanded }: { expanded?: boolean }) {
         marginRight: CHEVRON_GAP,
       }}
     >
-      {expanded !== undefined && <ChevronIcon expanded={expanded} className="tree-icon" />}
+      {expanded !== undefined && <ChevronIcon expanded={expanded} className="line-icon" />}
     </span>
   );
 }

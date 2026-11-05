@@ -268,7 +268,7 @@ function TextBox({
           locked={busy}
         />
         {!previewing && (
-          <div className="issue-box-tools">
+          <div className="toolbar issue-box-tools">
             {BOX_FORMATS.map(({ format: kind, title, Icon }) => (
               <IconButton
                 key={kind}
@@ -321,7 +321,7 @@ function TextBox({
             }}
           />
           <button type="button" className="issue-attach" disabled={busy} onClick={() => picker.current?.click()}>
-            <PaperclipIcon className="tree-icon" />
+            <PaperclipIcon className="line-icon" />
             Paste, drop, or click to add files
           </button>
         </>
@@ -592,7 +592,7 @@ function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueAction
   return (
     <>
       <div className="editor-bar">
-        <div className="editor-bar-actions">
+        <div className="toolbar editor-bar-actions">
           <IconButton title="Refresh" onClick={actions.refresh}>
             <SyncIcon />
           </IconButton>
@@ -612,11 +612,11 @@ function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueAction
             <TrashIcon />
           </IconButton>
         </div>
-        <div className="editor-bar-actions">
+        <div className="toolbar editor-bar-actions">
           <span className={issue.open ? "issue-state open" : "issue-state"}>{issue.open ? "Open" : "Closed"}</span>
         </div>
         <div className="issue-bar-name">
-          <span className="editor-path issue-bar-title" title={issue.title}>
+          <span className="editor-bar-title issue-bar-title" title={issue.title}>
             {issue.title}
           </span>
           <span className="count-badge issue-bar-number">#{issue.number}</span>
