@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import type { IssueChange, IssueDetail, IssueMilestone, ProviderId } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
@@ -6,14 +6,34 @@ import { agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
 import { IconButton } from "../ui/IconButton";
-import { GearIcon, RemoteIcon, LinkIcon, PaperclipIcon, PencilIcon, SquareSparklesIcon, SyncIcon, TrashIcon } from "../ui/icons";
+import {
+  BoldIcon,
+  CodeIcon,
+  GearIcon,
+  HeadingIcon,
+  ItalicIcon,
+  LinkIcon,
+  ListChecksIcon,
+  ListIcon,
+  ListOrderedIcon,
+  PaperclipIcon,
+  PencilIcon,
+  QuoteIcon,
+  RemoteIcon,
+  SquareSparklesIcon,
+  SyncIcon,
+  TrashIcon,
+  type IconProps,
+} from "../ui/icons";
 import { PickMenu } from "../ui/PickMenu";
+import { SwitchTabs } from "../ui/SwitchTabs";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
 import { issueLink } from "./editor-tab";
 import { issueThread, type ThreadEvent } from "./issue-thread";
 import { issueFileLink, issueTextHtml } from "./issue-text";
 import { createMarkdownPreview, renderHtmlInto, resolveLink } from "./markdown";
+import { markdownEdit, type MarkdownFormat } from "./markdown-format";
 
 const DAY_MS = 86_400_000;
 
@@ -153,6 +173,24 @@ function IssueText({ text, provider, issueUrl, loadImage, openFile }: IssueTextP
   return <div ref={host} className="issue-text" />;
 }
 
+const BOX_TABS = [
+  { id: "write", label: "Write" },
+  { id: "preview", label: "Preview" },
+] as const;
+
+/** The buttons above a text box, each a format of its selection. */
+const BOX_FORMATS: { format: MarkdownFormat; title: string; Icon: ComponentType<IconProps> }[] = [
+  { format: "heading", title: "Heading", Icon: HeadingIcon },
+  { format: "bold", title: "Bold", Icon: BoldIcon },
+  { format: "italic", title: "Italic", Icon: ItalicIcon },
+  { format: "quote", title: "Quote", Icon: QuoteIcon },
+  { format: "code", title: "Code", Icon: CodeIcon },
+  { format: "link", title: "Link", Icon: LinkIcon },
+  { format: "bullets", title: "Bulleted List", Icon: ListIcon },
+  { format: "numbers", title: "Numbered List", Icon: ListOrderedIcon },
+  { format: "tasks", title: "Task List", Icon: ListChecksIcon },
+];
+
 /** The box text for the tracker is typed into, with a preview of it as the tracker will show it: with
  *  `upload`, a file picked, pasted or dropped is uploaded at once, its Markdown following what stands
  *  there. */
@@ -179,6 +217,21 @@ function TextBox({
   const picker = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const format = (kind: MarkdownFormat): void => {
+    const area = field.current;
+    if (!area) {
+      return;
+    }
+    const edit = markdownEdit(kind, area.value, area.selectionStart, area.selectionEnd);
+    area.focus();
+    area.setSelectionRange(edit.from, edit.to);
+    // Typed in, as the textarea's own undo takes it back; the change reaches `onChange` as typing's
+    // does. Nothing else edits a textarea into its undo history.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    document.execCommand("insertText", false, edit.insert);
+    area.setSelectionRange(...edit.select);
+  };
   const attach = async (files: File[]): Promise<void> => {
     setUploading(true);
     let next = value;
@@ -207,23 +260,29 @@ function TextBox({
         }
       }}
     >
-      <div className="issue-box-tabs" role="tablist">
-        {[
-          { name: "Write", active: !previewing },
-          { name: "Preview", active: previewing },
-        ].map(({ name, active }) => (
-          <button
-            key={name}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            className={`issue-box-tab${active ? " active" : ""}`}
-            disabled={busy}
-            onClick={() => setPreviewing(name === "Preview")}
-          >
-            {name}
-          </button>
-        ))}
+      <div className="issue-box-tabs">
+        <SwitchTabs
+          tabs={BOX_TABS}
+          active={previewing ? "preview" : "write"}
+          onSelect={(id) => setPreviewing(id === "preview")}
+          locked={busy}
+        />
+        {!previewing && (
+          <div className="issue-box-tools">
+            {BOX_FORMATS.map(({ format: kind, title, Icon }) => (
+              <IconButton
+                key={kind}
+                title={title}
+                disabled={busy}
+                // The focus stays in the textarea, whose selection is what the format reads.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => format(kind)}
+              >
+                <Icon />
+              </IconButton>
+            ))}
+          </div>
+        )}
       </div>
       {previewing ? (
         <div className="issue-box-preview">
@@ -231,6 +290,7 @@ function TextBox({
         </div>
       ) : (
         <textarea
+          ref={field}
           aria-label={label}
           placeholder="Use Markdown to format your text"
           value={value}

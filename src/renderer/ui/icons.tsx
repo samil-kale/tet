@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bell,
+  Bold,
   BookOpen,
   CaseSensitive,
   Check,
@@ -12,6 +13,7 @@ import {
   CircleAlert,
   CircleDot,
   CircleX,
+  Code,
   Columns2,
   File,
   FileCode,
@@ -24,11 +26,15 @@ import {
   GitCompare,
   Globe,
   GripVertical,
+  Heading,
   Info,
+  Italic,
   Landmark,
   Link,
   Link2,
   List,
+  ListChecks,
+  ListOrdered,
   ListTree,
   ListX,
   LogIn,
@@ -44,6 +50,7 @@ import {
   Plus,
   Power,
   PowerOff,
+  Quote,
   RefreshCw,
   Regex,
   Save,
@@ -463,7 +470,7 @@ export function TrashIcon(props: IconProps) {
   return <Lucide {...props} icon={Trash2} />;
 }
 
-/** Lucide's `link` — an issue's Copy Link, drawn a little smaller: its diagonal reads large beside the
+/** Lucide's `link` — an issue's Copy Link and a text box's link, drawn a little smaller: its diagonal reads large beside the
  *  bar's other buttons. */
 export function LinkIcon(props: IconProps) {
   return <Lucide {...props} icon={Link} extent={22} />;
@@ -505,7 +512,7 @@ export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} />;
 }
 
-/** LOCAL CHANGES' "View as List": Lucide's `list`. */
+/** LOCAL CHANGES' "View as List", and a text box's bullet list: Lucide's `list`. */
 export function ListIcon(props: IconProps) {
   return <Lucide {...props} icon={List} />;
 }
@@ -543,4 +550,39 @@ export function CompareIcon(props: IconProps) {
 /** Lucide's `columns-2` — the editor tab's side-by-side toggle. */
 export function SideBySideIcon(props: IconProps) {
   return <Lucide {...props} icon={Columns2} />;
+}
+
+/** Lucide's `heading` — a text box's heading. */
+export function HeadingIcon(props: IconProps) {
+  return <Lucide {...props} icon={Heading} />;
+}
+
+/** Lucide's `bold` — a text box's bold. */
+export function BoldIcon(props: IconProps) {
+  return <Lucide {...props} icon={Bold} />;
+}
+
+/** Lucide's `italic` — a text box's italic. */
+export function ItalicIcon(props: IconProps) {
+  return <Lucide {...props} icon={Italic} />;
+}
+
+/** Lucide's `quote` — a text box's quote. */
+export function QuoteIcon(props: IconProps) {
+  return <Lucide {...props} icon={Quote} />;
+}
+
+/** Lucide's `code` — a text box's code. */
+export function CodeIcon(props: IconProps) {
+  return <Lucide {...props} icon={Code} />;
+}
+
+/** Lucide's `list-ordered` — a text box's numbered list. */
+export function ListOrderedIcon(props: IconProps) {
+  return <Lucide {...props} icon={ListOrdered} />;
+}
+
+/** Lucide's `list-checks` — a text box's task list. */
+export function ListChecksIcon(props: IconProps) {
+  return <Lucide {...props} icon={ListChecks} />;
 }

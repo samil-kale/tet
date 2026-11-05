@@ -111,13 +111,12 @@ textarea:disabled,
 .button.disabled,
 .action-link:disabled,
 .issue-attach:disabled,
-.issue-box-tab:disabled,
 .radio-option:disabled,
 .dialog-color:disabled,
 /* Its own section's bar says it is busy. */
 .icon-button:disabled,
 .context-menu-item.disabled,
-.dialog-tab.disabled,
+.switch-tab.disabled,
 /* The rows' mark goes with its tab's while a run holds the body. */
 .dialog-body:disabled .row-mark,
 .account-row.disabled,
@@ -1242,22 +1241,25 @@ textarea:focus,
   padding: 10px;
 }
 
-/* Write and Preview above a text box, as the tab strip's tabs are drawn. */
+/* Write and Preview above a text box: a card header's height, as a dialog's tab header. */
 .issue-box-tabs {
   display: flex;
+  align-items: stretch;
+  height: var(--bar-height);
   margin-bottom: 6px;
-  border-bottom: 1px solid var(--tet-app-border);
+  overflow: hidden;
+  border: 1px solid var(--tet-app-border);
+  border-radius: 3px;
+  background: var(--tet-tab-inactiveBackground);
 }
 
-.issue-box-tab {
-  padding: 4px 12px;
-  font-size: var(--small-font-size);
-  color: var(--tet-tab-inactiveForeground);
-}
-
-.issue-box-tab.active {
-  color: var(--tet-tab-activeForeground);
-  box-shadow: inset 0 -1px 0 var(--tet-tab-activeBorder);
+/* The format buttons, at the bar's end. */
+.issue-box-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--action-gap);
+  margin-left: auto;
+  padding: 0 6px;
 }
 
 /* The size and look of the textarea it stands in for. */
@@ -1604,9 +1606,9 @@ textarea:focus,
   display: none;
 }
 
-/* A tab of the strip, and of a dialog's header (`.dialog-tab`). */
+/* A tab of the strip, and a switching one (`.switch-tab`, `ui/SwitchTabs.tsx`). */
 .tab,
-.dialog-tab {
+.switch-tab {
   display: flex;
   align-items: center;
   font-size: var(--tet-font-size);
@@ -1625,9 +1627,9 @@ textarea:focus,
   cursor: pointer;
 }
 
-/* The active tab, in the strip and a dialog's header (`.dialog-tab`) alike. */
+/* The active tab, in the strip and a switching one (`.switch-tab`) alike. */
 .tab.active,
-.dialog-tab.active {
+.switch-tab.active {
   color: var(--tet-tab-activeForeground);
   background: var(--tet-tab-activeBackground);
   box-shadow: inset 0 -1px 0 var(--tet-tab-activeBorder);
@@ -2423,14 +2425,14 @@ textarea:focus,
   overflow: hidden;
 }
 
-.dialog-tab {
+.switch-tab {
   padding: 0 12px;
 }
 
-/* `.dialog-tab.active` is `.tab.active`'s. */
+/* `.switch-tab.active` is `.tab.active`'s. */
 
 /* The rows' mark (.row-mark) repeated on their tab, so it shows from any tab. */
-.dialog-tab-mark {
+.switch-tab-mark {
   display: flex;
   margin-left: 6px;
   color: var(--tet-errorForeground);

@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { errorMessage } from "../../shared/errors";
 import { DialogError } from "./Field";
 import { IconButton } from "./IconButton";
-import { CircleAlertIcon, CloseIcon } from "./icons";
+import { CloseIcon } from "./icons";
 import { ProgressBar } from "./ProgressBar";
+import { SwitchTabs, type SwitchTab } from "./SwitchTabs";
 import { useEscape } from "./use-escape";
 import { useBusy } from "./use-busy";
 import { useCoversWindow } from "./window-covered";
@@ -84,15 +85,6 @@ interface DialogAction {
 /** The open tab's first field: what is typed into, a checkbox, a picker's input. */
 const FIELD = "input:not([type=hidden]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled)";
 
-interface DialogTab<T extends string> {
-  id: T;
-  label: string;
-  /** Given, the tab cannot be chosen and says why on hover. */
-  disabled?: string;
-  /** Given, something on the tab needs a look: an error mark beside the label, saying what. */
-  mark?: string;
-}
-
 /**
  * What heads the dialog, one of two shapes: a title bar, or a tab strip in place of the title for a
  * dialog with several tabs. Either carries × when `onCancel` is given.
@@ -100,7 +92,7 @@ interface DialogTab<T extends string> {
 type DialogHeader<T extends string> =
   | { title: string }
   | {
-      tabs: readonly DialogTab<T>[];
+      tabs: readonly SwitchTab<T>[];
       active: T;
       onSelect: (id: T) => void;
     };
@@ -257,29 +249,8 @@ export function DialogFrame<T extends string>({
       >
         <div className={"tabs" in header ? "dialog-header dialog-tabs" : "dialog-header dialog-bar"}>
           {"tabs" in header ? (
-            header.tabs.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                // The context menu's disabled entry, not the attribute: chromium swallows a
-                // disabled control's tooltip, and the reason is the point. A held run holds the tab
-                // too: switching would unmount the form it answers into.
-                className={`dialog-tab${header.active === entry.id ? " active" : ""}${entry.disabled || locked ? " disabled" : ""}`}
-                title={entry.disabled ?? entry.mark}
-                onClick={() => {
-                  if (!entry.disabled && !locked) {
-                    header.onSelect(entry.id);
-                  }
-                }}
-              >
-                {entry.label}
-                {entry.mark && (
-                  <span className="dialog-tab-mark">
-                    <CircleAlertIcon />
-                  </span>
-                )}
-              </button>
-            ))
+            // A held run holds the tabs too: switching would unmount the form it answers into.
+            <SwitchTabs tabs={header.tabs} active={header.active} onSelect={header.onSelect} locked={locked} />
           ) : (
             <span className="dialog-title">{header.title}</span>
           )}
