@@ -7,6 +7,7 @@ import type {
   IssueNote,
   RemoteRepository,
 } from "../../shared/types/providers";
+import { fetchHttpsImage } from "../util/image-response";
 import { allNodes, ApiError, fetchOk, idsByName, sendGraphql, type GitProvider, type GraphqlPage, type GraphqlSend } from "./provider";
 
 // All of it GraphQL, but for what it does not carry: a file going up, through the upload's own
@@ -529,7 +530,16 @@ export const github: GitProvider = {
   },
 
   async readImage(host, token, _path, source) {
-    return readsWithToken(host, source) ? fetchOk(source, { Authorization: `Bearer ${token}`, "User-Agent": "tet" }) : undefined;
+    if (!readsWithToken(host, source)) {
+      return undefined;
+    }
+    const response = await fetchHttpsImage(source, undefined, { Authorization: `Bearer ${token}`, "User-Agent": "tet" });
+    if (response && !response.ok) {
+      void response.body?.cancel();
+      // Thrown, so that the next account gets to try.
+      throw new ApiError(response.status, `${response.status} ${response.statusText}`.trim());
+    }
+    return response;
   },
 
   async addComment(host, token, path, number, body) {

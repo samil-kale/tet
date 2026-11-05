@@ -1,54 +1,14 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { net, shell } from "electron";
+import { shell } from "electron";
 import { handle } from "./channels";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { errorMessage } from "../../shared/errors";
 import type { ProjectRef } from "../../shared/types/project";
-import { imageDataUrl } from "../util/image-response";
+import { fetchHttpsImage, imageDataUrl } from "../util/image-response";
 import { expandHome, repositoryRelative } from "../util/path-inside";
 import { isExecutableFile, isOpenableUrl } from "../util/shell-open";
 import type { IpcDeps } from "./deps";
-
-/** A Markdown preview's web image: a badge service that hangs is given up on. */
-const FETCH_IMAGE_TIMEOUT_MS = 15_000;
-/** As many hops as a badge service needs; past that it is a loop, not a move. */
-const MAX_IMAGE_REDIRECTS = 5;
-
-/** What `fetchHttpsImage` sends a request with; `net.fetch` in the app, a stand-in in the tests. */
-type FetchLike = (url: string, init: { signal: AbortSignal; redirect: "manual" }) => Promise<Response>;
-
-/**
- * Fetches `url` with every hop checked to be https, the whole chain under one timeout. Undefined
- * as soon as a hop is not https, names no location, or the chain runs long — a README's image must
- * not become a request to another scheme or to a host behind the machine.
- */
-export async function fetchHttpsImage(
-  url: string,
-  fetchFn: FetchLike = (target, init) => net.fetch(target, init),
-): Promise<Response | undefined> {
-  const signal = AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS);
-  // A relative location resolves against the hop that sent it; undefined where it is no URL at all.
-  const resolve = (value: string, base?: string): string | undefined => {
-    const resolved = URL.parse(value, base);
-    // A `javascript:` or `data:` location resolves to itself and is refused here, like `http:`.
-    return resolved?.protocol === "https:" ? resolved.href : undefined;
-  };
-
-  let target = resolve(url);
-  for (let hop = 0; target !== undefined && hop <= MAX_IMAGE_REDIRECTS; hop++) {
-    const response = await fetchFn(target, { signal, redirect: "manual" });
-    // 3xx without a location is not a redirect; anything else is the answer.
-    const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
-    if (location === null) {
-      return response;
-    }
-    // Unread, a hop's body holds its request open until it is collected.
-    void response.body?.cancel();
-    target = resolve(location, target);
-  }
-  return undefined;
-}
 
 /** What TET hands to the OS: links, files and folders. */
 export function registerShellIpc({ repositories, notice }: Pick<IpcDeps, "repositories" | "notice">): void {

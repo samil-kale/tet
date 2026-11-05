@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { fetchHttpsImage } from "../../src/main/ipc/shell";
+import { fetchHttpsImage } from "../../src/main/util/image-response";
 import { ROOT } from "../helpers";
 
 /** ipc/: what the handlers do beyond passing on, and that every channel has one. */
@@ -73,6 +73,24 @@ describe("a Markdown preview's image fetch", () => {
     const { asked, fetchFn } = server({ "https://a.example/x/badge.svg": "../y/real.png" });
     assert.equal((await fetchHttpsImage("https://a.example/x/badge.svg", fetchFn))?.status, 200);
     assert.deepEqual(asked, ["https://a.example/x/badge.svg", "https://a.example/y/real.png"]);
+  });
+
+  it("sends the headers with the first hop alone", async () => {
+    const seen: (Record<string, string> | undefined)[] = [];
+    const response = await fetchHttpsImage(
+      "https://github.com/user-attachments/assets/1",
+      (_url, init) => {
+        seen.push(init.headers);
+        return Promise.resolve(
+          seen.length === 1
+            ? new Response(null, { status: 302, headers: { location: "https://storage.example/1?signed" } })
+            : new Response("image"),
+        );
+      },
+      { Authorization: "Bearer token" },
+    );
+    assert.equal(response?.status, 200);
+    assert.deepEqual(seen, [{ Authorization: "Bearer token" }, undefined]);
   });
 
   it("stops where a redirect leaves https, without sending that request", async () => {
