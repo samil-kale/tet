@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { fetchHttpsImage } from "../../src/main/util/image-response";
+import { fetchHttpsImage, imageDataUrl } from "../../src/main/util/image-response";
 import { ROOT } from "../helpers";
 
 /** ipc/: what the handlers do beyond passing on, and that every channel has one. */
@@ -128,5 +128,41 @@ describe("a Markdown preview's image fetch", () => {
     });
     assert.equal(await fetchHttpsImage("https://a.example/1", fetchFn), undefined);
     assert.ok(asked.length <= 7, `stopped after ${asked.length} hops`);
+  });
+});
+
+describe("imageDataUrl", () => {
+  const PNG = Buffer.from("89504e470d0a1a0a0000", "hex");
+  const answer = (body: BodyInit, type?: string, status = 200): Response => {
+    const response = new Response(body, { status });
+    response.headers.delete("content-type");
+    if (type !== undefined) {
+      response.headers.set("content-type", type);
+    }
+    return response;
+  };
+  const CAP = 1024;
+
+  it("keeps the type a response states", async () => {
+    assert.equal(
+      await imageDataUrl(answer(PNG, "image/svg+xml; charset=utf-8"), CAP),
+      `data:image/svg+xml;base64,${PNG.toString("base64")}`,
+    );
+  });
+
+  it("tells an unlabeled image by its bytes", async () => {
+    const png = `data:image/png;base64,${PNG.toString("base64")}`;
+    assert.equal(await imageDataUrl(answer(PNG, "application/octet-stream"), CAP), png);
+    assert.equal(await imageDataUrl(answer(PNG, "binary/octet-stream"), CAP), png);
+    assert.equal(await imageDataUrl(answer(PNG), CAP), png);
+    const webp = Buffer.concat([Buffer.from("RIFF"), Buffer.alloc(4), Buffer.from("WEBPVP8 ")]);
+    assert.ok((await imageDataUrl(answer(webp, "application/octet-stream"), CAP))?.startsWith("data:image/webp;base64,"));
+  });
+
+  it("refuses what is no image, however it starts or is labeled", async () => {
+    assert.equal(await imageDataUrl(answer("<svg></svg>", "application/octet-stream"), CAP), null);
+    assert.equal(await imageDataUrl(answer(PNG, "text/html"), CAP), null);
+    assert.equal(await imageDataUrl(answer(PNG, "application/octet-stream", 404), CAP), null);
+    assert.equal(await imageDataUrl(answer(Buffer.alloc(CAP + 1), "application/octet-stream"), CAP), null);
   });
 });

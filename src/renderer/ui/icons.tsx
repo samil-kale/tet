@@ -1,5 +1,4 @@
 import {
-  Archive,
   ArrowDown,
   ArrowUp,
   Bell,
@@ -38,6 +37,7 @@ import {
   MessageCircleX,
   MessageSquareText,
   Package,
+  Package2,
   Paperclip,
   Pencil,
   Play,
@@ -474,10 +474,9 @@ export function Link2Icon(props: IconProps) {
   return <Lucide {...props} icon={Link2} />;
 }
 
-/** Lucide's `archive` — the archive lane, drawn a little larger: its box reads small beside the
- *  other lanes. */
+/** Lucide's `package-2` — the archive lane. */
 export function ArchiveIcon(props: IconProps) {
-  return <Lucide {...props} icon={Archive} extent={18.5} />;
+  return <Lucide {...props} icon={Package2} />;
 }
 
 /** The EXPLORER header's "New File...": Lucide's `file-plus`. */

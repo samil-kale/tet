@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { IssueChange, IssueDetail, IssueMilestone, ProviderId } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
@@ -13,7 +13,7 @@ import { useAgents } from "../ui/use-agents";
 import { issueLink } from "./editor-tab";
 import { issueThread, type ThreadEvent } from "./issue-thread";
 import { issueFileLink, issueTextHtml } from "./issue-text";
-import { createMarkdownPreview, renderHtml, resolveLink } from "./markdown";
+import { createMarkdownPreview, renderHtmlInto, resolveLink } from "./markdown";
 
 const DAY_MS = 86_400_000;
 
@@ -123,11 +123,11 @@ interface IssueTextProps {
 }
 
 /** Text written on the tracker, rendered in a shadow root of its own as the Markdown preview's is
- *  (`issueTextHtml`). A link to a file of the repository opens it; the rest go to main, which opens
- *  only web and mail ones. */
+ *  (`issueTextHtml`), before the card's first paint. A link to a file of the repository opens it; the
+ *  rest go to main, which opens only web and mail ones. */
 function IssueText({ text, provider, issueUrl, loadImage, openFile }: IssueTextProps) {
   const host = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const { scroller, body } = createMarkdownPreview();
     body.classList.add("compact");
     scroller.addEventListener("click", (event) => {
@@ -146,18 +146,9 @@ function IssueText({ text, provider, issueUrl, loadImage, openFile }: IssueTextP
       }
     });
     host.current?.replaceChildren(scroller);
-    let current = true;
-    renderHtml(issueTextHtml(text, provider, issueUrl), "", loadImage, new Map()).then(
-      ({ doc }) => {
-        if (current) {
-          body.replaceChildren(...doc.body.childNodes);
-        }
-      },
-      (error: unknown) => console.warn("[TET] An issue's text failed to render:", error),
+    renderHtmlInto(body, issueTextHtml(text, provider, issueUrl), loadImage).catch((error: unknown) =>
+      console.warn("[TET] An issue's text failed to render:", error),
     );
-    return () => {
-      current = false;
-    };
   }, [text, provider, issueUrl, loadImage, openFile]);
   return <div ref={host} className="issue-text" />;
 }

@@ -64,10 +64,13 @@ describe("an issue's text on GitLab", () => {
     );
   });
 
-  it("drops an image's settings and keeps what follows them", () => {
-    assert.equal(gitlab("![i](/uploads/a/c.jpg){width=10% height=10}"), `<p>${image}</p>`);
-    assert.equal(gitlab('![i](/uploads/a/c.jpg){width="10"} some text'), `<p>${image} some text</p>`);
-    assert.equal(gitlab("![i](/uploads/a/c.jpg){width=10}now"), `<p>${image}now</p>`);
+  it("sizes an image by its settings and keeps what follows them", () => {
+    const sized = (size: string): string => `<a href="/uploads/a/c.jpg"><img src="/uploads/a/c.jpg" alt="i" ${size}></a>`;
+    assert.equal(gitlab("![i](/uploads/a/c.jpg){width=900 height=520}"), `<p>${sized('width="900" height="520"')}</p>`);
+    assert.equal(gitlab("![i](/uploads/a/c.jpg){width=10% height=10px}"), `<p>${sized('width="10%" height="10"')}</p>`);
+    assert.equal(gitlab('![i](/uploads/a/c.jpg){width="10"} some text'), `<p>${sized('width="10"')} some text</p>`);
+    assert.equal(gitlab("![i](/uploads/a/c.jpg){width=10}now"), `<p>${sized('width="10"')}now</p>`);
+    assert.equal(gitlab("![i](/uploads/a/c.jpg){width=wide data-height=10}"), `<p>${image}</p>`);
     assert.equal(gitlab("![i](/uploads/a/c.jpg){a=1} {other}"), `<p>${image} {other}</p>`);
     assert.equal(gitlab("![i](/uploads/a/c.jpg){a=1}{other}"), `<p>${image}{other}</p>`);
     assert.equal(gitlab("![i][l]{a=1} text\n\n[l]: /uploads/a/c.jpg"), `<p>${image} text</p>`);

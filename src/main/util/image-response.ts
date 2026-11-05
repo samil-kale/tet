@@ -77,10 +77,30 @@ export async function fetchHttpsImage(
   return undefined;
 }
 
-/** A response's image as a data URL; null for an error, anything but an image, or one over the cap. */
+/** What a response without a type of its own says, as storage that was never told one answers. */
+const UNLABELED_TYPES = new Set(["", "application/octet-stream", "binary/octet-stream"]);
+
+/** The types a browser's `<img>` tells by a file's first bytes, in hex. */
+const IMAGE_SIGNATURES: [string, RegExp][] = [
+  ["image/png", /^89504e470d0a1a0a/],
+  ["image/jpeg", /^ffd8ff/],
+  ["image/gif", /^474946383[79]61/],
+  ["image/webp", /^52494646.{8}57454250/],
+  ["image/bmp", /^424d/],
+  ["image/x-icon", /^0000(01|02)00/],
+];
+
+/** The image type `bytes` start with, undefined where they are none. */
+function imageTypeOf(bytes: Buffer): string | undefined {
+  const head = bytes.subarray(0, 12).toString("hex");
+  return IMAGE_SIGNATURES.find(([, signature]) => signature.test(head))?.[0];
+}
+
+/** A response's image as a data URL, an unlabeled one going by its bytes as in a browser; null for an
+ *  error, anything but an image, or one over the cap. */
 export async function imageDataUrl(response: Response, maxBytes: number): Promise<string | null> {
-  const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
-  if (!response.ok || !type.startsWith("image/") || !response.body) {
+  const stated = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+  if (!response.ok || !(stated.startsWith("image/") || UNLABELED_TYPES.has(stated)) || !response.body) {
     void response.body?.cancel();
     return null;
   }
@@ -95,5 +115,7 @@ export async function imageDataUrl(response: Response, maxBytes: number): Promis
     }
     chunks.push(chunk);
   }
-  return `data:${type};base64,${Buffer.concat(chunks).toString("base64")}`;
+  const bytes = Buffer.concat(chunks);
+  const type = stated.startsWith("image/") ? stated : imageTypeOf(bytes);
+  return type === undefined ? null : `data:${type};base64,${bytes.toString("base64")}`;
 }

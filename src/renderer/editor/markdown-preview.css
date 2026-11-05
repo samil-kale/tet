@@ -15,6 +15,23 @@
   padding: 10px 10px 0;
 }
 
+.markdown-body.compact img {
+  border-radius: 3px;
+}
+
+/* Its image keeps the shape it declares where the card is narrower than it. */
+.markdown-body.compact img[width][height] {
+  height: auto;
+}
+
+/* An image on its way (`renderHtmlInto`), which without a source would be its alt text or nothing:
+   a surface of the size it declares, else the browser's default. `inline-block`, as an inline one
+   without a source drops what it declares. */
+.markdown-body img[data-tet-pending] {
+  display: inline-block;
+  content: linear-gradient(var(--tet-textCodeBlock-background), var(--tet-textCodeBlock-background));
+}
+
 .markdown-body :is(h1, h2, h3, h4, h5, h6, p, ol, ul, pre) {
   margin-top: 0;
 }

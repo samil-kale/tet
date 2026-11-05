@@ -10,6 +10,7 @@ import type {
 import {
   allNodes,
   ApiError,
+  fetchImageOk,
   fetchOk,
   getPaged,
   idsByName,
@@ -486,7 +487,7 @@ export const gitlab: GitProvider = {
 
   async readImage(host, token, path, source) {
     const upload = uploadOf(host, source);
-    return upload && fetchOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
+    return upload && fetchImageOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
   },
 
   async addComment(host, token, path, number, body) {

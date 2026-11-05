@@ -9,8 +9,8 @@ const LANE_TOGGLES: Record<Lane, { title: string; shortcut?: ShortcutId; Icon: (
   projects: { title: "Projects", shortcut: "toggleProjects", Icon: ProjectsIcon },
   git: { title: "Git", shortcut: "toggleGit", Icon: GitIcon },
   files: { title: "Files", shortcut: "toggleFiles", Icon: FilesIcon },
-  archive: { title: "Archive", shortcut: "toggleArchive", Icon: ArchiveIcon },
   issues: { title: "Issues", shortcut: "toggleIssues", Icon: IssuesIcon },
+  archive: { title: "Archive", shortcut: "toggleArchive", Icon: ArchiveIcon },
 };
 
 /** The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar);

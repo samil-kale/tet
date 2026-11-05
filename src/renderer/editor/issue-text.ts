@@ -74,18 +74,25 @@ function withReferences(state: StateCore, token: Token, env: IssueTextEnv): Toke
   return tokens;
 }
 
-/** A GitLab image's `{width=50%}` right behind it goes, what follows its `}` stays. */
-function dropImageSettings(next: Token | undefined): void {
+/** A size among a GitLab image's settings: `width=50%`, `height="10px"`. */
+const IMAGE_SIZE = /(?<![\w-])(width|height)="?(\d+)(px|%)?"?/g;
+
+/** A GitLab image's `{width=900 height=520}` right behind it sizes it, as on GitLab, so that its place
+ *  is known before it arrives; what follows its `}` stays. */
+function applyImageSettings(image: Token, next: Token | undefined): void {
   if (next?.type === "text" && next.content.startsWith("{")) {
     const close = next.content.indexOf("}");
     if (close >= 0) {
+      for (const [, name, size, unit] of next.content.slice(0, close).matchAll(IMAGE_SIZE)) {
+        image.attrSet(name, unit === "%" ? `${size}%` : size);
+      }
       next.content = next.content.slice(close + 1);
     }
   }
 }
 
 /** A line's inline tokens with what IntelliJ's converters add: references made links outside a link,
- *  and on GitLab each image a link to itself, without its settings. */
+ *  and on GitLab each image a link to itself, of the size its settings give. */
 function converted(state: StateCore, children: Token[], env: IssueTextEnv): Token[] {
   const tokens: Token[] = [];
   let linkDepth = 0;
@@ -98,7 +105,7 @@ function converted(state: StateCore, children: Token[], env: IssueTextEnv): Toke
     if (token.type === "text" && linkDepth === 0) {
       tokens.push(...withReferences(state, token, env));
     } else if (token.type === "image" && env.provider === "gitlab") {
-      dropImageSettings(children[index + 1]);
+      applyImageSettings(token, children[index + 1]);
       if (linkDepth > 0) {
         tokens.push(token);
       } else {
@@ -140,7 +147,8 @@ markdown.core.ruler.push("tet_issue_text", (state) => {
 
 /**
  * The HTML of an issue's text: rendered here from its Markdown as IntelliJ's
- * `GHMarkdownToHtmlConverter` and `GitLabMarkdownToHtmlConverter` do, never by its host.
+ * `GHMarkdownToHtmlConverter` and `GitLabMarkdownToHtmlConverter` do, never by its host, but for
+ * the size of a GitLab image (`applyImageSettings`).
  */
 export function issueTextHtml(text: string, provider: ProviderId, issueUrl: string): string {
   return markdown.render(text, { provider, issueUrl } satisfies IssueTextEnv);

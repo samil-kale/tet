@@ -21,6 +21,9 @@ const LOADING_ATTRIBUTES = ["src", "srcset", "poster", "background", "href", "xl
 /** Marks the source line a block starts at — VS Code's `data-line` — for the scroll sync. */
 const LINE_ATTRIBUTE = "data-tet-line";
 
+/** Marks an image on its way, which the stylesheet gives its place meanwhile (`renderHtmlInto`). */
+const PENDING_ATTRIBUTE = "data-tet-pending";
+
 const markdown = new MarkdownIt({ html: true, linkify: true });
 // Every block token markdown-it maps to the source, nested ones included; raw HTML has no element
 // to carry it.
@@ -64,16 +67,35 @@ export async function renderMarkdown(
   loadImage: (source: string) => Promise<string | undefined>,
   previous: ColoredBlocks,
 ): Promise<{ doc: Document; colored: ColoredBlocks }> {
-  return renderHtml(markdown.render(text), path, loadImage, previous);
+  const doc = inertDocument(markdown.render(text));
+  const colored: ColoredBlocks = new Map();
+  await Promise.all([
+    ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code, previous, colored)),
+    ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage)),
+  ]);
+  return { doc, colored };
 }
 
-/** As `renderMarkdown`, of Markdown already made HTML (`issueTextHtml`). */
-export async function renderHtml(
+/**
+ * Markdown already made HTML (`issueTextHtml`) into `body` at once, for a text shown once rather
+ * than rendered anew on every keystroke: its code blocks color and its images arrive there, each
+ * holding its place until then. A failure leaves the text standing.
+ */
+export async function renderHtmlInto(
+  body: HTMLElement,
   source: string,
-  path: string,
   loadImage: (source: string) => Promise<string | undefined>,
-  previous: ColoredBlocks,
-): Promise<{ doc: Document; colored: ColoredBlocks }> {
+): Promise<void> {
+  const doc = inertDocument(source);
+  const codeBlocks = [...doc.querySelectorAll("pre > code")];
+  // Started first: an image's source must be gone before the page's document takes the element.
+  const images = [...doc.querySelectorAll("img")].map((img) => holdPlace(img, loadImage));
+  body.replaceChildren(...doc.body.childNodes);
+  await Promise.all([...codeBlocks.map((code) => highlightBlock(code, new Map(), new Map())), ...images]);
+}
+
+/** `source` sanitized, in a document that loads nothing and with nothing left to load but what `resolveImage` vets. */
+function inertDocument(source: string): Document {
   const html = DOMPurify.sanitize(source, SANITIZE);
   const doc = new DOMParser().parseFromString(html, "text/html");
   for (const element of doc.body.querySelectorAll("*")) {
@@ -84,12 +106,19 @@ export async function renderHtml(
       }
     }
   }
-  const colored: ColoredBlocks = new Map();
-  await Promise.all([
-    ...[...doc.querySelectorAll("pre > code")].map((code) => highlightBlock(code, previous, colored)),
-    ...[...doc.querySelectorAll("img")].map((img) => resolveImage(img, path, loadImage)),
-  ]);
-  return { doc, colored };
+  return doc;
+}
+
+/** `resolveImage` with the element marked until the image can be drawn: a source only just set
+ *  has no size yet, and one that failed leaves its alt text. */
+async function holdPlace(img: HTMLImageElement, loadImage: (source: string) => Promise<string | undefined>): Promise<void> {
+  img.setAttribute(PENDING_ATTRIBUTE, "");
+  try {
+    await resolveImage(img, "", loadImage);
+    await img.decode().catch(() => undefined);
+  } finally {
+    img.removeAttribute(PENDING_ATTRIBUTE);
+  }
 }
 
 interface Mark {

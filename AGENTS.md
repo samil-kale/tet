@@ -195,7 +195,7 @@ others.
 - Paths through `path.join`; every agent, shell tab and `sbx` spawn through `resolveCommand`
   (`src/main/util/process.ts`), never `shell: true`.
 - Every HTTP request goes through Electron's `net.fetch`, never the global `fetch`. Code the tests
-  run under node takes it as a parameter defaulting to `net.fetch` (`fetchHttpsImage`). A request
+  run under node takes it as a parameter defaulting to `net.fetch` (`resumableDownload`). A request
   that reads a redirect instead of following it uses `net.request`, the same stack (the update
   check's `latestVersion`).
 - A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
@@ -258,10 +258,10 @@ per-line decision is for an agent.
 
 - **Layout**: the Navigation Bar at the window's left edge (`NavigationBar.tsx`), full height,
   settings right after the lane toggles; beside it the lanes: the projects (each with its worktrees,
-  and the COMMANDS), git, files, the archived tabs (taken off the strip, their sessions kept) and
-  the project's issues (read from its tracker, written to from an issue's tab and the section's
-  new issue, rename and delete) — none of them a tab.
-  Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `archive`, `issues`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
+  and the COMMANDS), git, files, the project's issues (read from its tracker, written to from an
+  issue's tab and the section's new issue, rename and delete) and the archived tabs (taken off the
+  strip, their sessions kept) — none of them a tab.
+  Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `issues`, `archive`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
   no reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
   the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
   preview tab each (`editor-tab.ts`).

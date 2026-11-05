@@ -8,6 +8,7 @@ import type {
   IssueUploads,
   RemoteRepository,
 } from "../../shared/types/providers";
+import { fetchHttpsImage } from "../util/image-response";
 
 /** A repository host: authenticate, list repositories with their clone url and read their issues.
  *  One interface for GitHub and GitLab, over plain REST and GraphQL rather than Octokit or GitBeaker,
@@ -64,6 +65,17 @@ export async function fetchOk(url: string, headers: Record<string, string>, init
   const response = await net.fetch(url, { headers, cache: "no-store", ...init });
   if (!response.ok) {
     throw new ApiError(response.status, await apiError(response));
+  }
+  return response;
+}
+
+/** An image read with a token, which stays with its first hop: a redirect leads to storage. What the
+ *  host refused throws — see fetchOk — so that the next account gets to try. */
+export async function fetchImageOk(url: string, headers: Record<string, string>): Promise<Response | undefined> {
+  const response = await fetchHttpsImage(url, undefined, headers);
+  if (response && !response.ok) {
+    void response.body?.cancel();
+    throw new ApiError(response.status, `${response.status} ${response.statusText}`.trim());
   }
   return response;
 }
