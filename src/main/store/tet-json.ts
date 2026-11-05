@@ -51,7 +51,8 @@ interface ProjectFile {
   exclude?: unknown;
   /** The sbx-settings dialog's state (readSbxSettings/writeSbxSettings). Never a credential. */
   sbx?: unknown;
-  /** Where the ISSUES section reads from, in place of the repository's own (readIssueSource). */
+  /** The ISSUES section's settings: `source`, where it reads from in place of the repository's own
+   *  (readIssueSource/writeIssueSource). */
   issues?: unknown;
 }
 
@@ -406,15 +407,22 @@ export function isIssueSource(text: string): boolean {
   return /^[\w.-]+(\/[\w.-]+)+$/.test(text) && !text.split("/").some((segment) => segment === "." || segment === "..");
 }
 
-/** The `issues` entry; one that is no such path counts as none. */
+/** The `issues.source` entry; one that is no such path counts as none. */
 export async function readIssueSource(root: string): Promise<string | undefined> {
-  const source = (await read(file(root)))?.issues;
+  const { source } = recordOf((await read(file(root)))?.issues);
   return typeof source === "string" && isIssueSource(source) ? source : undefined;
 }
 
-/** Undefined removes the entry: the repository's own issues again. */
+/** Undefined removes the entry: the repository's own issues again. The rest of `issues` stays as
+ *  written, an `issues` left empty goes, and one that isn't an object is replaced, as an edit can't
+ *  reach into it. */
 export function writeIssueSource(root: string, source: string | undefined): Promise<void> {
-  return patch(root, () => [[["issues"], source]]);
+  return patch(root, ({ issues }) => {
+    if (isRecord(issues) && (source !== undefined || Object.keys(issues).some((key) => key !== "source"))) {
+      return [[["issues", "source"], source]];
+    }
+    return [[["issues"], source === undefined ? undefined : { source }]];
+  });
 }
 
 /**

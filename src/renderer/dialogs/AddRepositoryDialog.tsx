@@ -2,22 +2,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
 import type { GitLogin } from "../../shared/types/git";
 import type { AddRepositoryResult } from "../../shared/types/project";
-import type { ProviderAccount, ProviderId, RemoteRepository } from "../../shared/types/providers";
+import type { ProviderAccount, RemoteRepository } from "../../shared/types/providers";
 import { emptyLogin, GitLoginFields, loginReady } from "../git/GitLogin";
+import { AccountFields, accountReady, addAccount, emptyAccount } from "../git/ProviderAccount";
 import { forget } from "../identity";
 import { parentOf } from "../paths";
 import { ActionLink } from "../ui/ActionLink";
-import { confirmed, refusal } from "../ui/Dialog";
 import { DialogFrame, useSubmit, type DialogPrimary } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { FieldColumn, FieldGroup, lastDirectory, PathField, TextField } from "../ui/Field";
+import { FieldColumn, lastDirectory, PathField, TextField } from "../ui/Field";
 import { FilterField } from "../ui/FilterField";
-import { IconButton } from "../ui/IconButton";
-import { CloseIcon } from "../ui/icons";
-import { RadioGroup } from "../ui/RadioGroup";
-import { RowMark } from "../ui/RowSection";
 import { useBusy } from "../ui/use-busy";
 import { fetchHeld } from "../ui/fetch-held";
+import { AccountList } from "./AccountList";
 
 /** Picked off an account's list, cloned from a url, or added from disk — initialized there where it
  *  holds no repository yet. Not in Dialog.tsx, which asks one question. */
@@ -28,13 +25,6 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "clone", label: "Clone" },
   { id: "add", label: "Add" },
 ];
-
-const PROVIDER_LABEL: Record<ProviderId, string> = { github: "GitHub", gitlab: "GitLab" };
-const DEFAULT_HOST: Record<ProviderId, string> = { github: "github.com", gitlab: "gitlab.com" };
-const PROVIDER_OPTIONS = (Object.keys(PROVIDER_LABEL) as ProviderId[]).map((value) => ({
-  value,
-  label: PROVIDER_LABEL[value],
-}));
 
 /** The folder a url clones into, by git's rule: the last path segment without ".git". */
 function cloneFolder(url: string): string {
@@ -59,14 +49,11 @@ interface AccountFormProps {
   onForm: (form: AccountSubmission | null) => void;
 }
 
-/** Provider, host and token; the token is validated on entry and never shown again. */
+/** Provider, host and token (`AccountFields`), the frame's primary button adding them. */
 function AccountForm({ onAdded, onForm }: AccountFormProps) {
-  const [provider, setProvider] = useState<ProviderId>("github");
-  const [host, setHost] = useState(DEFAULT_HOST.github);
-  const [token, setToken] = useState("");
-  /** What the host refused, under the token field: that is what it checks ("Bad credentials"). */
+  const [draft, setDraft] = useState(() => emptyAccount());
   const { busy, refused, submit, changing } = useSubmit(async () => {
-    const result = await window.tet.providers.addAccount(provider, host.trim(), token.trim());
+    const result = await addAccount(draft);
     if (!result.ok) {
       return result.error;
     }
@@ -74,13 +61,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
     return undefined;
   });
 
-  /** Replaces the host only while it is empty or a provider default. */
-  const pick = (next: ProviderId): void => {
-    setProvider(next);
-    setHost((current) => (current === "" || Object.values(DEFAULT_HOST).includes(current) ? DEFAULT_HOST[next] : current));
-  };
-
-  const ready = host.trim() !== "" && token.trim() !== "";
+  const ready = accountReady(draft);
   // The latest, for a submit the frame holds from an earlier render.
   const submitRef = useLatest(submit);
   useEffect(() => {
@@ -91,12 +72,7 @@ function AccountForm({ onAdded, onForm }: AccountFormProps) {
 
   return (
     <FieldColumn>
-      {/* Which provider a token is for; each validates against its own API. */}
-      <FieldGroup label="Provider">
-        <RadioGroup value={provider} options={PROVIDER_OPTIONS} onChange={pick} />
-      </FieldGroup>
-      <TextField label="Host" value={host} onChange={changing(setHost)} />
-      <TextField label="Personal access token" type="password" value={token} onChange={changing(setToken)} error={refused} />
+      <AccountFields value={draft} onChange={changing(setDraft)} error={refused} />
     </FieldColumn>
   );
 }
@@ -166,8 +142,6 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked, onError }: RemoteTa
     onError(listError);
     return () => onError(undefined);
   }, [listError, onError]);
-  /** Why an account could not be removed, beside its row until the next try. */
-  const [removeError, setRemoveError] = useState<{ accountId: string; message: string } | undefined>(undefined);
   const [filter, setFilter] = useState("");
   /** The group picked in this dialog, "" for all; undefined while none was picked here. Tagged with its
    *  account: groups are per account, so a pick would filter another's list to nothing. */
@@ -231,21 +205,7 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked, onError }: RemoteTa
     setAdding(false);
   };
 
-  const removeAccount = async (account: ProviderAccount): Promise<void> => {
-    const answer = await confirmed({
-      title: "Remove account",
-      message: `Remove ${account.user} on ${account.host}?`,
-      detail: "The stored token is deleted with it.",
-      confirmLabel: "Remove",
-    });
-    if (!answer) {
-      return;
-    }
-    const failed = refusal(await runHeld(() => window.tet.providers.removeAccount(account.id)));
-    setRemoveError(failed === undefined ? undefined : { accountId: account.id, message: failed });
-    if (failed !== undefined) {
-      return;
-    }
+  const accountRemoved = (account: ProviderAccount): void => {
     const remaining = (accounts ?? []).filter((entry) => entry.id !== account.id);
     setAccounts(remaining);
     setSelectedId((current) => (current === account.id ? (remaining[0]?.id ?? null) : current));
@@ -274,34 +234,21 @@ function RemoteTab({ onClone, hold, onForm, runHeld, locked, onError }: RemoteTa
 
   return (
     <div className="remote-tab">
-      <div className="account-list">
-        {(accounts ?? []).map((account) => (
-          <div
-            key={account.id}
-            className={`account-row${account.id === selectedId && !adding ? " active" : ""}${locked ? " disabled" : ""}`}
-            onClick={() => {
-              if (!locked) {
-                setSelectedId(account.id);
-                setAdding(false);
-              }
-            }}
-          >
-            <div className="account-label">
-              <span className="account-user">{account.user}</span>
-              <span className="account-host">
-                {PROVIDER_LABEL[account.provider]} · {account.host}
-              </span>
-            </div>
-            <RowMark title={removeError?.accountId === account.id ? removeError.message : undefined} />
-            <IconButton title="Remove account" isolated onClick={() => void removeAccount(account)}>
-              <CloseIcon />
-            </IconButton>
-          </div>
-        ))}
+      <AccountList
+        accounts={accounts ?? []}
+        selectedId={adding ? null : selectedId}
+        onSelect={(accountId) => {
+          setSelectedId(accountId);
+          setAdding(false);
+        }}
+        runHeld={runHeld}
+        locked={locked}
+        onRemoved={accountRemoved}
+      >
         <div className="account-add">
           <ActionLink onClick={() => setAdding(true)}>+ Add account...</ActionLink>
         </div>
-      </div>
+      </AccountList>
       <FieldColumn fill className="remote-main">
         {adding ? (
           <AccountForm onAdded={accountAdded} onForm={onForm} />
@@ -348,7 +295,8 @@ interface AddRepositoryDialogProps {
   onClose: () => void;
 }
 
-/** The one place TET talks to a host rather than a repository, so provider accounts live here. */
+/** The one place TET talks to a host rather than a repository, so provider accounts are listed and
+ *  removed here; one is added here or in the Settings' Accounts tab. */
 export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Issue, IssueFilter } from "../../../shared/types/providers";
 import { subscribeIssues } from "../../editor/editor-tab";
+import { subscribeAccounts } from "../../git/ProviderAccount";
 import { notify } from "../../ui/Notices";
 
 export interface IssueOptions {
@@ -15,6 +16,8 @@ interface Issues {
   issues: Issue[] | undefined;
   /** tet.json's `issues`, where it has one. */
   source: string | undefined;
+  /** No account is added for the tracker. */
+  noAccount: boolean;
   options: IssueOptions;
   busy: boolean;
   reload: () => void;
@@ -35,6 +38,7 @@ interface Issues {
 export function useIssues(projectId: string, filter: IssueFilter, shown: boolean): Issues {
   const [issues, setIssues] = useState<Issue[]>();
   const [source, setSource] = useState<string>();
+  const [noAccount, setNoAccount] = useState(false);
   const [options, setOptions] = useState(NO_OPTIONS);
   const [busy, setBusy] = useState(false);
   const [generation, setGeneration] = useState(0);
@@ -60,6 +64,8 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       }),
     [projectId, reload],
   );
+
+  useEffect(() => subscribeAccounts(reload), [reload]);
 
   useEffect(
     () =>
@@ -106,6 +112,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
         setHeld(false);
       }
       setSource(result.source);
+      setNoAccount(result.noAccount === true);
       setIssues(result.issues ?? []);
       if (result.error !== undefined) {
         notify("error", result.error);
@@ -127,5 +134,5 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     });
   }, [projectId, filterKey, shown, generation]);
 
-  return { issues, source, options, busy: busy || held, reload, holdBusy, releaseBusy, reloadThenRelease };
+  return { issues, source, noAccount, options, busy: busy || held, reload, holdBusy, releaseBusy, reloadThenRelease };
 }

@@ -23,7 +23,7 @@ import { NoticesCenter } from "./ui/NoticesCenter";
 import { ProjectList } from "./lanes/projects/ProjectList";
 import { useSandboxedProjects } from "./lanes/projects/use-sandboxed-projects";
 import { activeAfterChange, activeAtStart, rememberActive } from "./lanes/projects/active-ref";
-import { SettingsDialog } from "./dialogs/SettingsDialog";
+import { SettingsDialog, type SettingsTab } from "./dialogs/SettingsDialog";
 import { useStoredSize } from "./ui/layout-storage";
 import { useLanes } from "./lanes/use-lanes";
 import { LANES } from "../shared/types/settings";
@@ -122,8 +122,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     showChanges,
   } = useLanes(activeRefKeyRef, setActiveRefKey);
   const [addOpen, setAddOpen] = useState(false);
-  /** Window-wide, not per project. */
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Window-wide, not per project. `tab`: where a view sent the user to. */
+  const [settingsOpen, setSettingsOpen] = useState<{ tab?: SettingsTab } | null>(null);
   const [sbxSettingsProject, setSbxSettingsProject] = useState<Project | null>(null);
   /** What an agent asked for with `tet-ctl env-request`; main sends one at a time. */
   const [envRequest, setEnvRequest] = useState<EnvRequest | null>(null);
@@ -386,7 +386,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   useWindowShortcuts({
     // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has to be
     // the one on top — an agent's environment dialog, drawn last, can already be up.
-    settings: () => !isWindowCovered() && setSettingsOpen(true),
+    settings: () => !isWindowCovered() && setSettingsOpen({}),
     toggleProjects: () => toggleLane("projects"),
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
@@ -422,8 +422,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   // Stable handles, so memoized views re-render only for what they show.
   const openAdd = useCallback(() => setAddOpen(true), []);
   const closeAdd = useCallback(() => setAddOpen(false), []);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
-  const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const openSettings = useCallback(() => setSettingsOpen({}), []);
+  const openAccounts = useCallback(() => setSettingsOpen({ tab: "accounts" }), []);
+  const closeSettings = useCallback(() => setSettingsOpen(null), []);
   const openSbxSettings = useCallback(
     (projectId: string) => setSbxSettingsProject(projects.find((candidate) => candidate.id === projectId) ?? null),
     [projects],
@@ -512,7 +513,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                 )}
                 {lane === "issues" && activeResolved && (
                   // Keyed by project: the repository and its worktrees read one tracker.
-                  <IssueList key={activeResolved.ref.projectId} resolved={activeResolved} shown={shown} onOpenFile={openEditor} />
+                  <IssueList
+                    key={activeResolved.ref.projectId}
+                    resolved={activeResolved}
+                    shown={shown}
+                    onOpenFile={openEditor}
+                    onOpenAccounts={openAccounts}
+                  />
                 )}
                 {lane === "archive" && activeResolved && (
                   // Keyed by repository or worktree: each has its own archived tabs.
@@ -594,7 +601,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
-      {settingsOpen && <SettingsDialog onClose={closeSettings} />}
+      {settingsOpen && <SettingsDialog tab={settingsOpen.tab} onClose={closeSettings} />}
       {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
       {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 

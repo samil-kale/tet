@@ -31,7 +31,16 @@ describe("the issue source", () => {
 
   it("reads none from a missing file, a missing entry and an entry that is no path", async () => {
     assert.equal(await readIssueSource(dir), undefined);
-    for (const entry of ["{}", '{"issues": 3}', '{"issues": "name"}', '{"issues": "a/../b"}', '{"issues": "a b/c"}']) {
+    for (const entry of [
+      "{}",
+      '{"issues": 3}',
+      '{"issues": "g/tracker"}',
+      '{"issues": {}}',
+      '{"issues": {"source": 3}}',
+      '{"issues": {"source": "name"}}',
+      '{"issues": {"source": "a/../b"}}',
+      '{"issues": {"source": "a b/c"}}',
+    ]) {
       fs.writeFileSync(tetJson(), entry);
       assert.equal(await readIssueSource(dir), undefined, entry);
     }
@@ -57,6 +66,20 @@ describe("the issue source", () => {
       (await readCommands(dir)).map((command) => command.command),
       ["build"],
     );
+  });
+
+  it("leaves the other `issues` settings alone, and replaces an `issues` that is no object", async () => {
+    fs.writeFileSync(tetJson(), '{"issues": {"other": 1}}');
+    await writeIssueSource(dir, "group/tracker");
+    assert.deepEqual(JSON.parse(fs.readFileSync(tetJson(), "utf8")), { issues: { other: 1, source: "group/tracker" } });
+    await writeIssueSource(dir, undefined);
+    assert.deepEqual(JSON.parse(fs.readFileSync(tetJson(), "utf8")), { issues: { other: 1 } });
+
+    fs.writeFileSync(tetJson(), '{"issues": "old/tracker"}');
+    await writeIssueSource(dir, "group/tracker");
+    assert.deepEqual(JSON.parse(fs.readFileSync(tetJson(), "utf8")), { issues: { source: "group/tracker" } });
+    await writeIssueSource(dir, undefined);
+    assert.deepEqual(JSON.parse(fs.readFileSync(tetJson(), "utf8")), {});
   });
 
   it("never writes over a broken file", async () => {

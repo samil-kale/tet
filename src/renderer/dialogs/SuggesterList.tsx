@@ -5,7 +5,7 @@ import { reorder } from "../ui/drag-reorder";
 import { Dropdown } from "../ui/Dropdown";
 import { IconButton } from "../ui/IconButton";
 import { PowerIcon, PowerOffIcon } from "../ui/icons";
-import { EditRow, RowInput, RowMark, RowSection, type RowReorder } from "../ui/RowSection";
+import { EditRow, RowMark, RowSection, type RowReorder } from "../ui/RowSection";
 import { agentName, useAgents } from "../ui/use-agents";
 import { useAskModels } from "../ui/use-ask-models";
 
@@ -32,7 +32,9 @@ function SuggesterRow({ entry, name, drag, onChange, onReplaceModel, hold }: Sug
 
   return (
     <EditRow className="suggester-row" reorder={drag} off={!entry.enabled}>
-      <RowInput readOnly width="fixed" value={name} />
+      <span className="suggester-name" title={name}>
+        {name}
+      </span>
       <Dropdown value={entry.model} options={options} onChange={(model) => onChange({ ...entry, model })} />
       <RowMark title={error} />
       <IconButton title={entry.enabled ? "Switch off" : "Switch on"} onClick={() => onChange({ ...entry, enabled: !entry.enabled })}>

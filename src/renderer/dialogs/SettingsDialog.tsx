@@ -10,10 +10,11 @@ import type { AppInfo } from "../../shared/types/app";
 import type { EnvEdit } from "../../shared/types/environment";
 import type { ExplorerSortOrder } from "../../shared/types/files";
 import type { AppSettings, ColorScheme, GitSettings, NotificationSettings, PromptId, SettingsEdits } from "../../shared/types/settings";
+import { ActionLink } from "../ui/ActionLink";
 import { confirm } from "../ui/Dialog";
 import { DialogFrame, useSubmit } from "../ui/DialogFrame";
 import { Dropdown } from "../ui/Dropdown";
-import { Checkbox, DialogError, Field, FieldColumn, FieldGroup, FieldRow } from "../ui/Field";
+import { Checkbox, DialogError, Field, FieldColumn, FieldGroup } from "../ui/Field";
 import { RadioGroup } from "../ui/RadioGroup";
 import { RestartNote } from "../ui/RestartNote";
 import { useBusy } from "../ui/use-busy";
@@ -33,13 +34,16 @@ import {
   type Row,
 } from "../ui/RowSection";
 import { SHORTCUTS, shortcutLabel } from "../shortcuts";
+import { ProviderAccounts } from "./ProviderAccounts";
 import { SuggesterList } from "./SuggesterList";
 
 interface SettingsDialogProps {
+  /** The tab it opens on, where a view sends the user to one; the first otherwise. */
+  tab?: SettingsTab;
   onClose: () => void;
 }
 
-type SettingsTab = "appearance" | "notifications" | "files" | "git" | "prompts" | "environment" | "info";
+export type SettingsTab = "appearance" | "notifications" | "files" | "git" | "accounts" | "prompts" | "environment" | "info";
 
 /** The dialog opens on the first. */
 const TABS: { id: SettingsTab; label: string }[] = [
@@ -47,6 +51,7 @@ const TABS: { id: SettingsTab; label: string }[] = [
   { id: "notifications", label: "Notifications" },
   { id: "files", label: "Files" },
   { id: "git", label: "Git" },
+  { id: "accounts", label: "Accounts" },
   { id: "prompts", label: "Prompts" },
   { id: "environment", label: "Environment" },
   { id: "info", label: "Info" },
@@ -104,6 +109,11 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   handover: "Session handover",
 };
 
+const PROMPT_DETAILS: Record<PromptId, string> = {
+  commitMessage: "Asked in the background",
+  handover: "Sent to the tab taking over",
+};
+
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished - the turn ended" },
   { key: "waiting", label: "Permission or question - the agent waits for an answer" },
@@ -142,12 +152,14 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 
 /**
  * Everything TET keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits its
- * own copy and writes on Save; Cancel and Escape drop the edits. A setting reaches an agent through
- * `AgentPaths` at `AgentHost.prepare`, once per agent (HostSetups), as does the color theme.
- * Deliberately not in here: the tab marks.
+ * own copy and writes on Save; Cancel and Escape drop the edits, but for the Accounts tab, which
+ * adds an account at once. A setting reaches an agent through `AgentPaths` at `AgentHost.prepare`,
+ * once per agent (HostSetups), as does the color theme. Deliberately not in here: the tab marks.
  */
-export function SettingsDialog({ onClose }: SettingsDialogProps) {
-  const [tab, setTab] = useState<SettingsTab>(TABS[0].id);
+export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) {
+  const [tab, setTab] = useState<SettingsTab>(openedOn ?? TABS[0].id);
+  /** An account is being added (`ProviderAccounts`). */
+  const [addingAccount, setAddingAccount] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
@@ -287,9 +299,9 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
   return (
     <DialogFrame
       header={{ tabs, active: tab, onSelect: setTab }}
-      busy={saving || loading || listingModels > 0}
+      busy={saving || loading || listingModels > 0 || addingAccount}
       // Loading and listing the models only read: Cancel stays open meanwhile.
-      locked={saving}
+      locked={saving || addingAccount}
       error={refused}
       message={
         (kindSwitched || envRestart) && (
@@ -385,45 +397,49 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
             ))}
         </FieldGroup>
       )}
+      {shown === "accounts" && <ProviderAccounts onBusy={setAddingAccount} />}
       {shown === "prompts" && settings && (
-        <>
-          <FieldGroup label="Prompt">
-            <FieldRow>
-              <Dropdown
-                value={promptId}
-                onChange={setPromptId}
-                options={PROMPT_IDS.map((id) => ({ value: id, label: PROMPT_LABELS[id] }))}
+        <div className="prompts-tab">
+          <div className="pick-list">
+            {PROMPT_IDS.map((id) => (
+              <div key={id} className={`list-row pick-row${id === promptId ? " active" : ""}`} onClick={() => setPromptId(id)}>
+                <span className="pick-main">
+                  <span className="list-label">{PROMPT_LABELS[id]}</span>
+                  <span className="pick-meta">{PROMPT_DETAILS[id]}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <FieldColumn fill>
+            {/* Only for a prompt TET asks in the background; a handover's goes to the tab taking over. */}
+            {promptId === "commitMessage" && (
+              <SuggesterList
+                value={settings.prompts.commitSuggesters}
+                onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
+                onReplaceModel={replaceModel}
+                hold={holdListing}
               />
-              <button
-                type="button"
-                className="button secondary"
-                disabled={settings.prompts.texts[promptId] === ""}
-                onClick={() => applyPrompt(promptId, "")}
-              >
-                Reset to default
-              </button>
-            </FieldRow>
-          </FieldGroup>
-          {/* Only for a prompt TET asks in the background; a handover's goes to the tab taking over. */}
-          {promptId === "commitMessage" && (
-            <SuggesterList
-              value={settings.prompts.commitSuggesters}
-              onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
-              onReplaceModel={replaceModel}
-              hold={holdListing}
-            />
-          )}
-          {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
-              asked for, so it applies on Save. */}
-          <textarea
-            className="settings-prompt"
-            spellCheck={false}
-            value={effectivePrompt(settings.prompts.texts, promptId)}
-            onChange={(event) => applyPrompt(promptId, event.target.value)}
-            onContextMenu={promptTextMenu.onContextMenu}
-          />
-          {promptTextMenu.menu}
-        </>
+            )}
+            <div className="dialog-field prompt-text">
+              <div className="prompt-text-head">
+                <span>Prompt text</span>
+                <ActionLink disabled={settings.prompts.texts[promptId] === ""} onClick={() => applyPrompt(promptId, "")}>
+                  Reset to default
+                </ActionLink>
+              </div>
+              {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
+                  asked for, so it applies on Save. */}
+              <textarea
+                className="settings-prompt"
+                spellCheck={false}
+                value={effectivePrompt(settings.prompts.texts, promptId)}
+                onChange={(event) => applyPrompt(promptId, event.target.value)}
+                onContextMenu={promptTextMenu.onContextMenu}
+              />
+              {promptTextMenu.menu}
+            </div>
+          </FieldColumn>
+        </div>
       )}
       {shown === "environment" && (
         <FieldColumn fill className="settings-environment">

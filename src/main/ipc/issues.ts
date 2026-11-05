@@ -15,7 +15,7 @@ import type {
   IssueUploadResult,
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
-import { issueMarkdown, onTracker, setIssueSource, writeOnTracker } from "../providers/issues";
+import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker } from "../providers/issues";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
@@ -55,7 +55,7 @@ export function registerIssuesIpc({
       const issues = await onTracker(accounts, repository, (provider, host, token, path) => provider.listIssues(host, token, path, filter));
       return { issues, source };
     } catch (error) {
-      return { source, error: errorMessage(error) };
+      return { source, error: errorMessage(error), noAccount: error instanceof NoAccountError };
     }
   });
 

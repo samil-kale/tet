@@ -10,7 +10,7 @@ import { filled, prompt, refusal, singleField, type PromptFields } from "../../u
 import { Field, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
-import { LinkIcon, PlusIcon, SyncIcon } from "../../ui/icons";
+import { LinkIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
 import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
@@ -88,20 +88,27 @@ function IssueRow({
  * The project's issues, on its tracker: a click opens one in the preview tab, a double click keeps
  * it, as the Explorer's files, and a drag onto a pane opens it there. All this writes to the
  * tracker is a new issue and a row's title or deletion; its tab changes the rest. The source is the
- * project's setting, so a worktree, which changes none, offers no button for it.
+ * project's setting, so a worktree, which changes none, offers no button for it. An account is the
+ * machine's, so every project sends the user to the Settings' Accounts while its tracker has none.
  */
 export const IssueList = memo(function IssueList({
   resolved,
   shown,
   onOpenFile,
+  onOpenAccounts,
 }: {
   resolved: ResolvedRef;
   shown: boolean;
   onOpenFile: (ref: ProjectRef, path: string, how?: OpenEditor) => void;
+  onOpenAccounts: () => void;
 }) {
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, INITIAL_FILTER);
-  const { issues, source, options, busy, reload, holdBusy, releaseBusy, reloadThenRelease } = useIssues(projectId, filter, shown);
+  const { issues, source, noAccount, options, busy, reload, holdBusy, releaseBusy, reloadThenRelease } = useIssues(
+    projectId,
+    filter,
+    shown,
+  );
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
@@ -194,6 +201,11 @@ export const IssueList = memo(function IssueList({
             {worktree === undefined && (
               <IconButton title="Issue source..." onClick={() => void askSource()}>
                 <LinkIcon />
+              </IconButton>
+            )}
+            {noAccount && (
+              <IconButton title="Add account..." onClick={onOpenAccounts}>
+                <UserPlusIcon />
               </IconButton>
             )}
             <IconButton title="Refresh" disabled={busy} onClick={reload}>

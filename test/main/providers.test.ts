@@ -31,6 +31,7 @@ import {
 } from "../../src/main/providers/gitlab";
 import {
   issueMarkdown,
+  NoAccountError,
   onTracker,
   parseRemoteUrl,
   setIssueSource,
@@ -528,13 +529,16 @@ describe("the issues of a tracker", () => {
       const root = tempDir("tet-issues-");
       const call = async (): Promise<string> => "called";
       await assert.rejects(() => onTracker(accountsOf(account("a")), repositoryAt(root), call), /no remote/);
-      await assert.rejects(() => onTracker(accountsOf(), repositoryAt(root, ORIGIN), call), /No account for github\.com/);
+      await assert.rejects(
+        () => onTracker(accountsOf(), repositoryAt(root, ORIGIN), call),
+        (error: unknown) => error instanceof NoAccountError && error.host === "github.com",
+      );
       await assert.rejects(() => onTracker(accountsOf(account("unreadable")), repositoryAt(root, ORIGIN), call), /could not be read/);
     });
 
     it("reads from tet.json's source, on the remote's host", async () => {
       const root = tempDir("tet-issues-");
-      fs.writeFileSync(path.join(root, "tet.json"), '{"issues": "g/tracker"}');
+      fs.writeFileSync(path.join(root, "tet.json"), '{"issues": {"source": "g/tracker"}}');
       const read = await onTracker(accountsOf(account("a")), repositoryAt(root, ORIGIN), async (_provider, host, _token, source) => {
         return `${host} ${source}`;
       });
@@ -571,7 +575,7 @@ describe("the issues of a tracker", () => {
 
     it("removes the source without asking the tracker", async () => {
       const root = tempDir("tet-issues-");
-      fs.writeFileSync(path.join(root, "tet.json"), '{"issues": "g/tracker"}');
+      fs.writeFileSync(path.join(root, "tet.json"), '{"issues": {"source": "g/tracker"}}');
       await setIssueSource(accountsOf(), repositoryAt(root), "  ");
       assert.equal(await readIssueSource(root), undefined);
     });

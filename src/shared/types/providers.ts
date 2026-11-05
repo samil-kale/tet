@@ -64,6 +64,8 @@ export interface IssueListResult {
   /** The `issues` of the project's tet.json, where it has one. */
   source?: string;
   error?: string;
+  /** `error` is that no account is added for the repository's tracker. */
+  noAccount?: boolean;
 }
 
 /** What the ISSUES section's filters offer. */

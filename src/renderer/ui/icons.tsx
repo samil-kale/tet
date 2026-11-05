@@ -65,6 +65,7 @@ import {
   Trash2,
   Undo2,
   User,
+  UserPlus,
   WholeWord,
   X,
   type LucideIcon,
@@ -338,6 +339,11 @@ export function MessageIcon(props: IconProps) {
 /** Lucide's `user` — the GRAPH's search in authors. */
 export function UserIcon(props: IconProps) {
   return <Lucide {...props} icon={User} />;
+}
+
+/** Lucide's `user-plus` — the ISSUES section's account to add. */
+export function UserPlusIcon(props: IconProps) {
+  return <Lucide {...props} icon={UserPlus} />;
 }
 
 /** Lucide's `file` — the GRAPH's search in paths. */

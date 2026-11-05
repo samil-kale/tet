@@ -18,6 +18,13 @@ export interface IssueRepository {
 /** The accounts a tracker is reached through. */
 export type IssueAccounts = Pick<AccountStore, "list" | "token">;
 
+/** The tracker's host has no account added: `host` is the one to add it for. */
+export class NoAccountError extends Error {
+  constructor(readonly host: string) {
+    super(`No account for ${host}: add one under Accounts in Settings`);
+  }
+}
+
 /** One call to the tracker, through one account. */
 export type TrackerCall<T> = (provider: GitProvider, host: string, token: string, path: string, user: string) => Promise<T>;
 
@@ -78,7 +85,7 @@ export async function onTracker<T>(
   }
   const candidates = accounts.list().filter((account) => account.host.toLowerCase() === remote.host);
   if (candidates.length === 0) {
-    throw new Error(`No account for ${remote.host}: add one under Add Repository`);
+    throw new NoAccountError(remote.host);
   }
   let failure: string | undefined;
   for (const account of candidates) {
