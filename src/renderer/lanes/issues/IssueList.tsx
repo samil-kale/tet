@@ -45,7 +45,7 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
           className="issue-new-body"
           value={value.body}
           disabled={busy}
-          onChange={(event) => onChange({ ...value, body: event.target.value })}
+          onChange={(event) => onChange((current) => ({ ...current, body: event.target.value }))}
           onContextMenu={textMenu.onContextMenu}
         />
         {textMenu.menu}
@@ -104,11 +104,7 @@ export const IssueList = memo(function IssueList({
 }) {
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, INITIAL_FILTER);
-  const { issues, source, noAccount, options, busy, reload, holdBusy, releaseBusy, reloadThenRelease } = useIssues(
-    projectId,
-    filter,
-    shown,
-  );
+  const { issues, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
@@ -136,18 +132,14 @@ export const IssueList = memo(function IssueList({
       ready: (value) => filled(value.title),
       render: (fields) => <NewIssueFields {...fields} />,
       submit: async ({ title: typed, body }) => {
-        holdBusy();
-        const result = await window.tet.issues.create(projectId, typed.trim(), body);
+        const result = await write(() => window.tet.issues.create(projectId, typed.trim(), body));
         if (result.ok) {
           created = result.number;
-        } else {
-          releaseBusy();
         }
         return refusal(result);
       },
     });
     if (created !== undefined) {
-      reloadThenRelease();
       onOpenFile(resolved.ref, issueFileName(created), { issue: created, keep: true });
     }
   };
@@ -166,14 +158,11 @@ export const IssueList = memo(function IssueList({
     if (!(await confirmDeleteIssue(issue.number))) {
       return;
     }
-    holdBusy();
-    const result = await window.tet.issues.delete(projectId, issue.number);
+    const result = await write(() => window.tet.issues.delete(projectId, issue.number));
     if (!result.ok) {
-      releaseBusy();
       notify("error", result.error);
       return;
     }
-    reloadThenRelease();
     issueGone(projectId, issue.number);
   };
 

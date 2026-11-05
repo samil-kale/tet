@@ -9,7 +9,7 @@ import { useTextContextMenu } from "./use-text-context-menu";
  * What refused an answer, where the answer was given, rather than a notice:
  * - under the field to blame (`Field`'s `error`);
  * - in a row of a list, as the error mark's tooltip beside it (`RowMark`, the one mark; on a dialog
- *   tab, `DialogTab.mark`, repeating its first row's, from the one function that builds the row's);
+ *   tab, `SwitchTab.mark`, repeating its first row's, from the one function that builds the row's);
  * - else on the left of a card's button row, level with the buttons (`DialogFrame`'s `error`), where
  *   the fields are several or across tabs;
  * - in place of the list that could not be loaded, but for Add Repository's remote listing, whose

@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { issueFileLink, issueTextHtml } from "../../src/renderer/editor/issue-text";
+import { issueFileLink, issueLink, issueTextHtml } from "../../src/renderer/editor/issue-text";
 
 const GITHUB_ISSUE = "https://github.com/o/r/issues/5";
 const GITLAB_ISSUE = "https://gitlab.example.com/g/p/-/issues/5";
@@ -86,5 +86,12 @@ describe("an issue's text on GitLab", () => {
     assert.equal(issueFileLink("mailto:a@example.com", "gitlab", GITLAB_ISSUE), undefined);
     assert.equal(issueFileLink("#note", "gitlab", GITLAB_ISSUE), undefined);
     assert.equal(issueFileLink("bla.md", "github", GITHUB_ISSUE), undefined);
+  });
+
+  it("leads a link to the tracker, an upload's from its project", () => {
+    assert.equal(issueLink("/uploads/abc/a.pdf", GITLAB_ISSUE), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
+    assert.equal(issueLink("/g/p/-/issues/3", GITLAB_ISSUE), "https://gitlab.example.com/g/p/-/issues/3");
+    assert.equal(issueLink("https://example.com/x", GITLAB_ISSUE), "https://example.com/x");
+    assert.equal(issueLink("#note", GITLAB_ISSUE), undefined);
   });
 });

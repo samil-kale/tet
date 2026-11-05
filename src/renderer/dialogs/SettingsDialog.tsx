@@ -153,7 +153,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
 /**
  * Everything TET keeps about itself, not a repository. Not in Dialog.tsx: it asks nothing, edits its
  * own copy and writes on Save; Cancel and Escape drop the edits, but for the Accounts tab, which
- * adds an account at once. A setting reaches an agent through `AgentPaths` at `AgentHost.prepare`,
+ * adds and removes an account at once. A setting reaches an agent through `AgentPaths` at `AgentHost.prepare`,
  * once per agent (HostSetups), as does the color theme. Deliberately not in here: the tab marks.
  */
 export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) {

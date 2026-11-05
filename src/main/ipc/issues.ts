@@ -1,5 +1,5 @@
 import { handle } from "./channels";
-import { errorMessage } from "../../shared/errors";
+import { errorMessage, failure } from "../../shared/errors";
 import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
@@ -10,12 +10,12 @@ import type {
   IssueFilter,
   IssueFilterOptions,
   IssueListResult,
-  IssueMilestone,
+  IssueMilestonesResult,
   IssueReadResult,
   IssueUploadResult,
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
-import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker } from "../providers/issues";
+import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker, type TrackerCall } from "../providers/issues";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
@@ -47,12 +47,22 @@ export function registerIssuesIpc({
     return repository;
   };
 
+  /** A write to the project's tracker (`writeOnTracker`), as an `ActionResult`. */
+  const written = async (projectId: string, call: TrackerCall<unknown>): Promise<ActionResult> => {
+    try {
+      await writeOnTracker(accounts, repositoryOf(projectId), call);
+      return { ok: true };
+    } catch (error) {
+      return failure(error);
+    }
+  };
+
   handle("issues:list", async (_event, projectId: string, filter: IssueFilter): Promise<IssueListResult> => {
     let source: string | undefined;
     try {
       const repository = repositoryOf(projectId);
       source = await readIssueSource(repository.at.path);
-      const issues = await onTracker(accounts, repository, (provider, host, token, path) => provider.listIssues(host, token, path, filter));
+      const issues = await onTracker(accounts, repository, (provider, tracker) => provider.listIssues(tracker, filter));
       return { issues, source };
     } catch (error) {
       return { source, error: errorMessage(error), noAccount: error instanceof NoAccountError };
@@ -61,8 +71,8 @@ export function registerIssuesIpc({
 
   handle("issues:filter-options", async (_event, projectId: string): Promise<IssueFilterOptions> => {
     try {
-      return await onTracker(accounts, repositoryOf(projectId), async (provider, host, token, path) => {
-        const [labels, people] = await Promise.all([provider.listLabels(host, token, path), provider.listPeople(host, token, path)]);
+      return await onTracker(accounts, repositoryOf(projectId), async (provider, tracker) => {
+        const [labels, people] = await Promise.all([provider.listLabels(tracker), provider.listPeople(tracker)]);
         return { labels, people };
       });
     } catch (error) {
@@ -72,10 +82,10 @@ export function registerIssuesIpc({
 
   handle("issues:read", async (_event, projectId: string, number: number): Promise<IssueReadResult> => {
     try {
-      const issue = await onTracker(accounts, repositoryOf(projectId), async (provider, host, token, path, viewer) => ({
-        ...(await provider.readIssue(host, token, path, number)),
+      const issue = await onTracker(accounts, repositoryOf(projectId), async (provider, tracker, viewer) => ({
+        ...(await provider.readIssue(tracker, number)),
         viewer,
-        uploads: provider.uploads(host),
+        uploads: provider.uploads(tracker.host),
       }));
       return { issue, markdown: issueMarkdown(issue) };
     } catch (error) {
@@ -89,81 +99,63 @@ export function registerIssuesIpc({
       if (!manager) {
         throw new Error(notOpenMessage(store, ref));
       }
-      const issue = await onTracker(accounts, repositoryOf(ref.projectId), (provider, host, token, path) =>
-        provider.readIssue(host, token, path, number),
-      );
+      const issue = await onTracker(accounts, repositoryOf(ref.projectId), (provider, tracker) => provider.readIssue(tracker, number));
       const file = { name: `issue-${number}.md`, content: issueMarkdown(issue), prompt: issuePrompt(number) };
       return { ok: true, tab: manager.createTabOnFile(agentId, file) };
     } catch (error) {
-      return { ok: false, error: errorMessage(error) };
+      return failure(error);
     }
   });
 
   // Null when it takes no token or cannot be read: the text stands without it, as a preview's does.
   handle("issues:image", async (_event, projectId: string, source: string): Promise<string | null> => {
     try {
-      const response = await onTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.readImage(host, token, path, source),
-      );
+      const response = await onTracker(accounts, repositoryOf(projectId), (provider, tracker) => provider.readImage(tracker, source));
       return response ? await imageDataUrl(response, MAX_EDIT_BYTES) : null;
     } catch {
       return null;
     }
   });
 
-  handle("issues:milestones", async (_event, projectId: string): Promise<IssueMilestone[] | string> => {
+  handle("issues:milestones", async (_event, projectId: string): Promise<IssueMilestonesResult> => {
     try {
-      return await onTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.listMilestones(host, token, path),
-      );
+      const milestones = await onTracker(accounts, repositoryOf(projectId), (provider, tracker) => provider.listMilestones(tracker));
+      return { milestones };
     } catch (error) {
-      return errorMessage(error);
+      return { error: errorMessage(error) };
     }
   });
 
   handle("issues:create", async (_event, projectId: string, title: string, body: string): Promise<IssueCreateResult> => {
     try {
-      const number = await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.createIssue(host, token, path, title, body),
+      const number = await writeOnTracker(accounts, repositoryOf(projectId), (provider, tracker) =>
+        provider.createIssue(tracker, title, body),
       );
       return { ok: true, number };
     } catch (error) {
-      return { ok: false, error: errorMessage(error) };
+      return failure(error);
     }
   });
 
-  handle("issues:edit-comment", async (_event, projectId: string, number: number, id: string, body: string): Promise<ActionResult> => {
-    try {
-      await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.editComment(host, token, path, number, id, body),
-      );
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: errorMessage(error) };
-    }
-  });
+  handle("issues:comment", (_event, projectId: string, number: number, body: string) =>
+    written(projectId, (provider, tracker) => provider.addComment(tracker, number, body)),
+  );
 
-  handle("issues:delete-comment", async (_event, projectId: string, number: number, id: string): Promise<ActionResult> => {
-    try {
-      await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.deleteComment(host, token, path, number, id),
-      );
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: errorMessage(error) };
-    }
-  });
+  handle("issues:edit-comment", (_event, projectId: string, id: string, body: string) =>
+    written(projectId, (provider, tracker) => provider.editComment(tracker, id, body)),
+  );
 
-  handle("issues:delete", async (_event, projectId: string, number: number): Promise<ActionResult> => {
-    try {
-      await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.deleteIssue(host, token, path, number),
-      );
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: errorMessage(error) };
-    }
-  });
+  handle("issues:delete-comment", (_event, projectId: string, id: string) =>
+    written(projectId, (provider, tracker) => provider.deleteComment(tracker, id)),
+  );
+
+  handle("issues:update", (_event, projectId: string, number: number, change: IssueChange) =>
+    written(projectId, (provider, tracker) => provider.updateIssue(tracker, number, change)),
+  );
+
+  handle("issues:delete", (_event, projectId: string, number: number) =>
+    written(projectId, (provider, tracker) => provider.deleteIssue(tracker, number)),
+  );
 
   handle("issues:upload", async (_event, projectId: string, name: string, dataBase64: string): Promise<IssueUploadResult> => {
     try {
@@ -171,34 +163,14 @@ export function registerIssuesIpc({
       if (bytes.byteLength > MAX_UPLOAD_BYTES) {
         return { error: `${name} is too large to upload` };
       }
-      const markdown = await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.uploadFile ? provider.uploadFile(host, token, path, name, bytes) : Promise.reject(new Error(`${host} takes no upload`)),
+      const markdown = await writeOnTracker(accounts, repositoryOf(projectId), (provider, tracker) =>
+        provider.uploads(tracker.host)
+          ? provider.uploadFile(tracker, name, bytes)
+          : Promise.reject(new Error(`${tracker.host} takes no upload`)),
       );
       return { markdown };
     } catch (error) {
       return { error: errorMessage(error) };
-    }
-  });
-
-  handle("issues:comment", async (_event, projectId: string, number: number, body: string): Promise<ActionResult> => {
-    try {
-      await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.addComment(host, token, path, number, body),
-      );
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: errorMessage(error) };
-    }
-  });
-
-  handle("issues:update", async (_event, projectId: string, number: number, change: IssueChange): Promise<ActionResult> => {
-    try {
-      await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
-        provider.updateIssue(host, token, path, number, change),
-      );
-      return { ok: true };
-    } catch (error) {
-      return { ok: false, error: errorMessage(error) };
     }
   });
 
@@ -207,7 +179,7 @@ export function registerIssuesIpc({
       await setIssueSource(accounts, repositoryOf(projectId), source);
       return { ok: true };
     } catch (error) {
-      return { ok: false, error: errorMessage(error) };
+      return failure(error);
     }
   });
 }

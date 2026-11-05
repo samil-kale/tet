@@ -22,7 +22,7 @@ import type {
   IssueFilter,
   IssueFilterOptions,
   IssueListResult,
-  IssueMilestone,
+  IssueMilestonesResult,
   IssueReadResult,
   IssueUploadResult,
   ListRepositoriesResult,
@@ -180,13 +180,12 @@ export interface TETApi {
     image: (projectId: string, source: string) => Promise<string | null>;
     comment: (projectId: string, number: number, body: string) => Promise<ActionResult>;
     update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
-    /** The open ones, or why not. */
-    milestones: (projectId: string) => Promise<IssueMilestone[] | string>;
+    milestones: (projectId: string) => Promise<IssueMilestonesResult>;
     create: (projectId: string, title: string, body: string) => Promise<IssueCreateResult>;
     /** For good, with its comments. */
     delete: (projectId: string, number: number) => Promise<ActionResult>;
-    editComment: (projectId: string, number: number, id: string, body: string) => Promise<ActionResult>;
-    deleteComment: (projectId: string, number: number, id: string) => Promise<ActionResult>;
+    editComment: (projectId: string, id: string, body: string) => Promise<ActionResult>;
+    deleteComment: (projectId: string, id: string) => Promise<ActionResult>;
     upload: (projectId: string, name: string, dataBase64: string) => Promise<IssueUploadResult>;
     /** Checks a path against the tracker and saves it in tet.json; empty removes it. Answers what
      *  refused it, for the question that is still up to show it at its field. */

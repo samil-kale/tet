@@ -4,7 +4,7 @@ import type { RepositoryState } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
 import { forget, sameList, sameRecord } from "../identity";
 import { onRefClosed } from "../ref-lifetime";
-import type { EditorTab } from "../editor/editor-tab";
+import { inWorkingTree, type EditorTab } from "../editor/editor-tab";
 import { activeEditorTab, DEFAULT_LAYOUT, type ProjectLayout } from "./pane-layout";
 import { editorContent, setEditorVersion } from "../editor/editor-views";
 
@@ -87,7 +87,7 @@ export function useEditorSync(
         const paths = sameList(
           previous[refKey]?.paths,
           editors
-            .filter((tab) => !tab.commit && tab.issue === undefined)
+            .filter(inWorkingTree)
             .map((tab) => tab.path)
             .sort(),
           NO_PATHS,

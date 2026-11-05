@@ -298,7 +298,7 @@ per-line decision is for an agent.
   is held unless it meets the conditions in `DialogFrame`'s comment; a Save is always held.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out, the Add Repository dialog's account adding and
-  removal and namespace pick and the Settings dialog's account adding, which act at once. A setting reaches an agent at its setup
+  removal and namespace pick and the Settings dialog's account adding and removal, which act at once. A setting reaches an agent at its setup
   (`AgentPaths`), so it applies to tabs started afterwards; the theme and the idle reminder
   redo the host setup, once per agent (`HostSetups`).
 - **One progress indicator per section** (`ProgressBar.tsx`): a new slow reason feeds the existing

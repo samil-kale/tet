@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
-import { MAX_LIST_HEIGHT, WINDOW_MARGIN } from "./Dropdown";
+import { listMaxHeight } from "./Dropdown";
 import { CheckIcon } from "./icons";
 import { useOptionFilter } from "./use-option-filter";
 
@@ -27,7 +27,7 @@ export function PickMenu({ options, isPicked, onPick, several, className, title,
     x: rect.left,
     y: rect.bottom,
     flipX: rect.right,
-    maxHeight: Math.min(MAX_LIST_HEIGHT, window.innerHeight - rect.bottom - WINDOW_MARGIN),
+    maxHeight: listMaxHeight(rect),
   }));
   const filter = useOptionFilter(
     options ?? [],

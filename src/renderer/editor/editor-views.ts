@@ -2,6 +2,7 @@ import type { editor as MonacoEditor } from "monaco-editor";
 import { onRefClosed } from "../ref-lifetime";
 import { refKeyOf } from "../../shared/types/project";
 import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
+import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/types/providers";
@@ -15,7 +16,7 @@ import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Mona
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
 import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
-import { issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, openIssueInAgent } from "./editor-tab";
+import { inWorkingTree, issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, openIssueInAgent } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
 
 /**
@@ -356,10 +357,7 @@ export function showMarkdownPreview(tabId: string, mode: MarkdownPreviewMode): v
   if (!view || !isMarkdown(view.snapshot.path) || previewWithheld(view.snapshot)) {
     return;
   }
-  // An issue opens as its text, whatever a file's default is, and leaves that default alone.
-  if (view.snapshot.issue === undefined) {
-    markdownPreviewByDefault.set(mode);
-  }
+  markdownPreviewByDefault.set(mode);
   if (view.snapshot.markdownPreview !== mode) {
     publish(view, { markdownPreview: mode });
   }
@@ -398,7 +396,7 @@ export function getEditorSnapshot(tabId: string): EditorSnapshot {
 /** Whether opening `path` with its Markdown preview would land in a tab withholding it: one opened with
  *  its diff if `diff`, else the tab already showing it with its own. */
 export function previewWithheldAt(ref: ProjectRef, path: string, diff: boolean): boolean {
-  const open = refViews(ref).find((view) => view.snapshot.path === path && !view.snapshot.commit && view.snapshot.issue === undefined);
+  const open = refViews(ref).find((view) => view.snapshot.path === path && inWorkingTree(view.snapshot));
   return diff || (open ? previewWithheld(open.snapshot) : false);
 }
 
@@ -539,9 +537,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     commit: how.commit,
     issue: how.issue,
     issueDetail: undefined,
-    markdownPreview: isMarkdown(path)
-      ? (how.restored?.markdownPreview ?? (how.issue === undefined ? markdownPreviewByDefault.get() : "only"))
-      : "off",
+    markdownPreview: isMarkdown(path) ? (how.restored?.markdownPreview ?? markdownPreviewByDefault.get()) : "off",
     sideBySide: diffDefaults.sideBySide.get(),
     unchangedCollapsed: diffDefaults.unchangedCollapsed.get(),
   });
@@ -637,16 +633,23 @@ async function underIssueBar<T>(view: EditorView, work: () => Promise<T>): Promi
   }
 }
 
+/** Tab `tabId`'s view and the issue it shows, where it shows one. */
+function issueTab(tabId: string): { view: EditorView; number: number } | undefined {
+  const view = views.get(tabId);
+  const number = view?.snapshot.issue;
+  return view && number !== undefined ? { view, number } : undefined;
+}
+
 /** The issue's tab read afresh from the tracker, what it shows standing until the answer lands. It
  *  reads once the changes on their way are through, and again if one overtakes the answer, or it
  *  would take back what the tab already shows. Never awaited from within `issueWrites`, which it
  *  waits for. */
 export async function reloadIssue(tabId: string): Promise<void> {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  if (!view || number === undefined) {
+  const tab = issueTab(tabId);
+  if (!tab) {
     return;
   }
+  const { view, number } = tab;
   const seq = view.readSeq;
   publish(view, { loading: true });
   await view.issueWrites;
@@ -675,10 +678,9 @@ export async function reloadIssue(tabId: string): Promise<void> {
 
 /** The tab's issue opened in a new tab of the agent, beside it. */
 export function openTabIssueInAgent(tabId: string, agentId: AgentId): void {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  if (view && number !== undefined) {
-    void openIssueInAgent(view.ref, number, agentId);
+  const tab = issueTab(tabId);
+  if (tab) {
+    void openIssueInAgent(tab.view.ref, tab.number, agentId);
   }
 }
 
@@ -691,31 +693,14 @@ export function reloadIssueTabs(projectId: string, number: number): void {
   }
 }
 
-/** A comment on the tab's issue, which shows once it is up; false, with a notice, when refused. */
-export async function commentOnIssue(tabId: string, body: string): Promise<boolean> {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  if (!view || number === undefined) {
+/** A write to the tab's issue under its bar, the tab reading the issue again once it went through;
+ *  false, with a notice, when refused. Nothing the ISSUES section's rows show changes by it. */
+async function writeIssue(tabId: string, write: (projectId: string, number: number) => Promise<ActionResult>): Promise<boolean> {
+  const tab = issueTab(tabId);
+  if (!tab) {
     return false;
   }
-  const result = await underIssueBar(view, () => window.tet.issues.comment(view.ref.projectId, number, body));
-  if (!result.ok) {
-    notify("error", result.error);
-    return false;
-  }
-  issuesChanged(view.ref.projectId);
-  await reloadIssue(tabId);
-  return true;
-}
-
-/** A comment of the tab's issue changed; false, with a notice, when refused. */
-export async function editIssueComment(tabId: string, id: string, body: string): Promise<boolean> {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  if (!view || number === undefined) {
-    return false;
-  }
-  const result = await underIssueBar(view, () => window.tet.issues.editComment(view.ref.projectId, number, id, body));
+  const result = await underIssueBar(tab.view, () => write(tab.view.ref.projectId, tab.number));
   if (!result.ok) {
     notify("error", result.error);
     return false;
@@ -724,37 +709,35 @@ export async function editIssueComment(tabId: string, id: string, body: string):
   return true;
 }
 
-/** A comment of the tab's issue deleted, or a notice when refused. */
+/** A comment on the tab's issue, which shows once it is up (`writeIssue`). */
+export function commentOnIssue(tabId: string, body: string): Promise<boolean> {
+  return writeIssue(tabId, (projectId, number) => window.tet.issues.comment(projectId, number, body));
+}
+
+/** A comment of the tab's issue changed (`writeIssue`). */
+export function editIssueComment(tabId: string, id: string, body: string): Promise<boolean> {
+  return writeIssue(tabId, (projectId) => window.tet.issues.editComment(projectId, id, body));
+}
+
+/** A comment of the tab's issue deleted (`writeIssue`). */
 export async function deleteIssueComment(tabId: string, id: string): Promise<void> {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  if (!view || number === undefined) {
-    return;
-  }
-  const result = await underIssueBar(view, () => window.tet.issues.deleteComment(view.ref.projectId, number, id));
-  if (!result.ok) {
-    notify("error", result.error);
-    return;
-  }
-  issuesChanged(view.ref.projectId);
-  await reloadIssue(tabId);
+  await writeIssue(tabId, (projectId) => window.tet.issues.deleteComment(projectId, id));
 }
 
 /** The tab's issue deleted on the tracker, its tabs closed with it, or a notice when refused. */
 export async function deleteIssue(tabId: string): Promise<void> {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  if (!view || number === undefined) {
+  const tab = issueTab(tabId);
+  if (!tab) {
     return;
   }
-  const { projectId } = view.ref;
-  const result = await underIssueBar(view, () => window.tet.issues.delete(projectId, number));
+  const { projectId } = tab.view.ref;
+  const result = await underIssueBar(tab.view, () => window.tet.issues.delete(projectId, tab.number));
   if (!result.ok) {
     notify("error", result.error);
     return;
   }
   issuesChanged(projectId);
-  issueGone(projectId, number);
+  issueGone(projectId, tab.number);
 }
 
 /** The tab's project's milestones; undefined, with a notice, when the tracker cannot say. */
@@ -763,12 +746,11 @@ export async function issueMilestones(tabId: string): Promise<IssueMilestone[] |
   if (!view) {
     return undefined;
   }
-  const answer = await window.tet.issues.milestones(view.ref.projectId);
-  if (typeof answer === "string") {
-    notify("error", answer);
-    return undefined;
+  const { milestones, error } = await window.tet.issues.milestones(view.ref.projectId);
+  if (milestones === undefined) {
+    notify("error", error ?? "Could not read the milestones");
   }
-  return answer;
+  return milestones;
 }
 
 /** A file up on the tab's tracker, answered as the Markdown that shows it; undefined, with a notice,
@@ -790,12 +772,12 @@ export async function uploadIssueFile(tabId: string, file: File): Promise<string
 
 /** Changes the tab's issue: shown at once and read back from the tracker, answering what it refused. */
 async function changeIssue(tabId: string, change: IssueChange): Promise<string | undefined> {
-  const view = views.get(tabId);
-  const number = view?.snapshot.issue;
-  const detail = view?.snapshot.issueDetail;
-  if (!view || number === undefined || !detail) {
+  const tab = issueTab(tabId);
+  const detail = tab?.view.snapshot.issueDetail;
+  if (!tab || !detail) {
     return undefined;
   }
+  const { view, number } = tab;
   const assignees = change.assignees ?? detail.assignees;
   publish(view, {
     issueDetail: {
@@ -839,8 +821,15 @@ export function renameIssue(tabId: string, title: string): Promise<string | unde
   return changeIssue(tabId, { title });
 }
 
+/** What an issue can be given and the ISSUES section filtered by, off its tracker. */
+export interface IssueOptions {
+  labels: string[];
+  /** Offered for both author and assignee. */
+  people: string[];
+}
+
 /** What the tab's issue can be given, off its tracker; undefined, with a notice, when it cannot say. */
-export async function issueOptions(tabId: string): Promise<{ labels: string[]; people: string[] } | undefined> {
+export async function issueOptions(tabId: string): Promise<IssueOptions | undefined> {
   const view = views.get(tabId);
   if (!view) {
     return undefined;
@@ -863,7 +852,7 @@ export async function issueOptions(tabId: string): Promise<{ labels: string[]; p
 export function setEditorVersion(tabId: string, version: string): void {
   const view = views.get(tabId);
   // A commit's file never changes, and an issue is not in the repository.
-  if (!view || view.snapshot.commit || view.snapshot.issue !== undefined) {
+  if (!view || !inWorkingTree(view.snapshot)) {
     return;
   }
   const { path, file, loading } = view.snapshot;
@@ -1147,12 +1136,10 @@ async function showText(view: EditorView, seq: number, file: FileContent): Promi
   // One model per URI or monaco throws; the repository or worktree is the authority, as two can
   // show one path. Within a repository or worktree a path is open in one tab at most
   // (use-editor-opening.ts's openEditor), and the previous models are cleared before the next open.
-  // A commit's file lies under its sha, an issue under its own folder, their own models beside the
-  // working tree's.
-  const { commit, issue } = view.snapshot;
-  const folder = commit ? `${commit.sha}/` : issue !== undefined ? "issue/" : "";
+  // A commit's file lies under its sha, its own models beside the working tree's.
+  const commit = view.snapshot.commit;
   const uri = (scheme: string): ReturnType<typeof monaco.Uri.from> =>
-    monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${folder}${file.path}` });
+    monaco.Uri.from({ scheme, authority: refKeyOf(view.ref), path: `/${commit ? `${commit.sha}/` : ""}${file.path}` });
   const models = {
     original: monaco.editor.createModel(
       file.head?.content ?? file.content,

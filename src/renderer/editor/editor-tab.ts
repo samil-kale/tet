@@ -154,21 +154,24 @@ export function subscribeIssues(listener: (projectId: string) => void): () => vo
   return () => issueListeners.delete(listener);
 }
 
-/** Where a link of an issue's text at `issueUrl` leads; undefined for one within the text. An
- *  upload's is relative to the project, whatever else is to the host. */
-export function issueLink(href: string, issueUrl: string): string | undefined {
-  if (href === "" || href.startsWith("#")) {
-    return undefined;
-  }
-  const project = issueUrl.split("/-/")[0];
-  return URL.parse(href.startsWith("/uploads/") ? project + href : href, issueUrl)?.href;
+/** What an editor tab shows, beside its path. */
+type EditorSource = Pick<EditorTab, "commit" | "issue">;
+
+/** Whether an editor tab shows the working tree's file: a commit's file and an issue are not in it. */
+export function inWorkingTree({ commit, issue }: EditorSource): boolean {
+  return !commit && issue === undefined;
 }
 
-/** The path of tab `tabId` where it shows the working tree's file, the one the Explorer marks open;
- *  a commit's file and an issue are not in the tree. */
+/** Whether `tab` shows what `wanted` names: a path is open once per repository or worktree, a
+ *  commit's file once per commit, an issue once. */
+export function showsSame(tab: EditorTab, wanted: EditorSource & { path: string }): boolean {
+  return tab.path === wanted.path && tab.commit?.sha === wanted.commit?.sha && tab.issue === wanted.issue;
+}
+
+/** The path of tab `tabId` where it shows the working tree's file, the one the Explorer marks open. */
 export function workingTreePathOf(tabs: EditorTab[] | undefined, tabId: string | undefined): string | null {
   const tab = tabs?.find((candidate) => candidate.tabId === tabId);
-  return tab && !tab.commit && tab.issue === undefined ? tab.path : null;
+  return tab && inWorkingTree(tab) ? tab.path : null;
 }
 
 export function isEditorTabId(tabId: string): boolean {

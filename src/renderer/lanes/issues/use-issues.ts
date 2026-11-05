@@ -1,13 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Issue, IssueFilter } from "../../../shared/types/providers";
 import { subscribeIssues } from "../../editor/editor-tab";
+import type { IssueOptions } from "../../editor/editor-views";
 import { subscribeAccounts } from "../../git/ProviderAccount";
 import { notify } from "../../ui/Notices";
-
-export interface IssueOptions {
-  labels: string[];
-  people: string[];
-}
 
 const NO_OPTIONS: IssueOptions = { labels: [], people: [] };
 
@@ -21,11 +17,9 @@ interface Issues {
   options: IssueOptions;
   busy: boolean;
   reload: () => void;
-  /** Runs the bar for work of the section's own, until `releaseBusy` or the next list. */
-  holdBusy: () => void;
-  releaseBusy: () => void;
-  /** The list read again, the bar held until it has come. */
-  reloadThenRelease: () => void;
+  /** Runs a write of the section's own under its bar, answering its result: gone through, the list is
+   *  read again, the bar held until it has come. */
+  write: <T extends { ok: boolean }>(action: () => Promise<T>) => Promise<T>;
 }
 
 /**
@@ -44,14 +38,22 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
   const [generation, setGeneration] = useState(0);
   const reload = useCallback(() => setGeneration((current) => current + 1), []);
   const [held, setHeld] = useState(false);
-  const holdBusy = useCallback(() => setHeld(true), []);
-  const releaseBusy = useCallback(() => setHeld(false), []);
   /** A list is on its way that ends the hold. */
   const releaseOnList = useRef(false);
-  const reloadThenRelease = useCallback(() => {
-    releaseOnList.current = true;
-    reload();
-  }, [reload]);
+  const write = useCallback(
+    async <T extends { ok: boolean }>(action: () => Promise<T>): Promise<T> => {
+      setHeld(true);
+      const result = await action();
+      if (result.ok) {
+        releaseOnList.current = true;
+        reload();
+      } else {
+        setHeld(false);
+      }
+      return result;
+    },
+    [reload],
+  );
   /** The next read follows what an issue's tab did, whose own bar says it is busy. */
   const quiet = useRef(false);
 
@@ -134,5 +136,5 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     });
   }, [projectId, filterKey, shown, generation]);
 
-  return { issues, source, noAccount, options, busy: busy || held, reload, holdBusy, releaseBusy, reloadThenRelease };
+  return { issues, source, noAccount, options, busy: busy || held, reload, write };
 }

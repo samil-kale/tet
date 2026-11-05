@@ -8,21 +8,17 @@ import {
   contentTypeOf,
   github,
   carriesAll,
-  fromGraphql as fromGitHubGraphql,
   issuesVariables as gitHubIssuesVariables,
   readsWithToken,
   toEvents as toGitHubEvents,
   toIssue as toGitHubIssue,
-  timelineEntry,
   toIssueInput as toGitHubInput,
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
-  fromGraphql as fromGitLabGraphql,
   gitlab,
   issuesVariables,
   mutationError,
-  noteFromGraphql as noteFromGitLabGraphql,
   toEvents as toGitLabEvents,
   toIssue as toGitLabIssue,
   toIssueInput,
@@ -39,7 +35,7 @@ import {
   type IssueAccounts,
   type IssueRepository,
 } from "../../src/main/providers/issues";
-import { ApiError, graphqlError, idsByName } from "../../src/main/providers/provider";
+import { ApiError, graphqlError, idsByName, type Tracker } from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
 import { readIssueSource } from "../../src/main/store/tet-json";
 import type { ProviderAccount } from "../../src/shared/types/providers";
@@ -51,32 +47,33 @@ describe("the issues of a tracker", () => {
   const githubIssue = {
     number: 412,
     title: "Focus is lost",
-    html_url: "https://github.com/o/r/issues/412",
-    state: "open",
-    user: { login: "mira", avatar_url: "https://avatars.example.com/u/1?v=4" },
-    assignees: [
-      { login: "jonas", avatar_url: "https://avatars.example.com/u/2?v=4" },
-      { login: "lena", avatar_url: "https://avatars.example.com/u/3" },
-    ],
-    comments: 3,
-    created_at: "2026-10-01T10:00:00Z",
-    labels: [{ name: "bug" }, "terminals"],
+    url: "https://github.com/o/r/issues/412",
+    state: "OPEN",
+    createdAt: "2026-10-01T10:00:00Z",
+    author: { login: "mira", avatarUrl: "https://avatars.example.com/u/1?v=4" },
+    assignees: {
+      nodes: [
+        { login: "jonas", avatarUrl: "https://avatars.example.com/u/2?v=4" },
+        null,
+        { login: "lena", avatarUrl: "https://avatars.example.com/u/3" },
+      ],
+    },
+    labels: { nodes: [{ name: "bug" }, { name: "terminals" }] },
     body: "Text",
   };
   const gitlabIssue = {
-    iid: 12,
+    iid: "12",
     title: "VAT",
-    web_url: "https://gitlab.example.com/g/t/-/issues/12",
+    webUrl: "https://gitlab.example.com/g/t/-/issues/12",
     state: "closed",
+    createdAt: "2026-10-02T10:00:00Z",
     author: { username: "anna" },
-    assignees: [],
-    user_notes_count: 1,
-    created_at: "2026-10-02T10:00:00Z",
-    labels: ["type::bug"],
+    assignees: { nodes: [] },
+    labels: { nodes: [{ title: "type::bug" }] },
     description: null,
   };
 
-  it("reads GitHub's and GitLab's records as one row", () => {
+  it("reads GitHub's and GitLab's issues as one row, a deleted account as ghost", () => {
     assert.deepEqual(toGitHubIssue(githubIssue), {
       number: 412,
       title: "Focus is lost",
@@ -84,7 +81,6 @@ describe("the issues of a tracker", () => {
       open: true,
       author: "mira",
       assignee: "jonas",
-      comments: 3,
       createdAt: "2026-10-01T10:00:00Z",
       labels: ["bug", "terminals"],
       avatars: {
@@ -100,45 +96,44 @@ describe("the issues of a tracker", () => {
       open: false,
       author: "anna",
       assignee: undefined,
-      comments: 1,
       createdAt: "2026-10-02T10:00:00Z",
       labels: ["type::bug"],
       avatars: {},
     });
-    assert.equal(toGitHubIssue({ ...githubIssue, user: null }).author, "ghost");
-    assert.equal(toGitHubIssue({ ...githubIssue, user: null }).avatars.ghost, undefined);
+    assert.equal(toGitHubIssue({ ...githubIssue, author: null }).author, "ghost");
+    assert.equal(toGitHubIssue({ ...githubIssue, author: null }).avatars.ghost, undefined);
   });
 
   it("reads what happened to an issue off GitHub's timeline, leaving out what the tab does not draw", () => {
-    const actor = { login: "mira", avatar_url: "https://a/1" };
-    const created_at = "2026-10-01T10:00:00Z";
-    const base = { actor: "mira", createdAt: created_at };
+    const happened = { createdAt: "a", actor: { login: "mira", avatarUrl: "https://a/1" } };
+    const base = { actor: "mira", createdAt: "a" };
     assert.deepEqual(
       toGitHubEvents([
-        { event: "commented", actor, created_at },
-        { event: "closed", actor, created_at },
-        { event: "reopened", actor: null, created_at },
-        { event: "assigned", actor, created_at, assignee: actor },
-        { event: "unassigned", actor, created_at, assignee: actor },
-        { event: "labeled", actor, created_at, label: { name: "bug" } },
-        { event: "unlabeled", actor, created_at, label: { name: "bug" } },
-        { event: "milestoned", actor, created_at, milestone: { title: "May" } },
-        { event: "demilestoned", actor, created_at, milestone: { title: "May" } },
-        { event: "renamed", actor, created_at, rename: { from: "A", to: "B" } },
-        { event: "cross-referenced", actor, created_at, source: { issue: { number: 7, title: "T", html_url: "https://h/7" } } },
-        { event: "subscribed", actor, created_at },
+        { __typename: "SubscribedEvent", ...happened },
+        { __typename: "ClosedEvent", ...happened },
+        { __typename: "ReopenedEvent", createdAt: "a", actor: null },
+        { __typename: "AssignedEvent", ...happened, assignee: { login: "jonas" } },
+        { __typename: "UnassignedEvent", ...happened, assignee: {} },
+        { __typename: "UnassignedEvent", ...happened, assignee: { login: "jonas" } },
+        { __typename: "LabeledEvent", ...happened, label: { name: "bug" } },
+        { __typename: "UnlabeledEvent", ...happened, label: { name: "bug" } },
+        { __typename: "MilestonedEvent", ...happened, milestoneTitle: "May" },
+        { __typename: "DemilestonedEvent", ...happened, milestoneTitle: "May" },
+        { __typename: "RenamedTitleEvent", ...happened, previousTitle: "A", currentTitle: "B" },
+        { __typename: "CrossReferencedEvent", ...happened, source: { number: 7, title: "T", url: "https://x/7" } },
+        { __typename: "CrossReferencedEvent", ...happened, source: {} },
       ]),
       [
         { ...base, kind: "closed" },
-        { actor: "ghost", createdAt: created_at, kind: "reopened" },
-        { ...base, kind: "assigned", login: "mira" },
-        { ...base, kind: "unassigned", login: "mira" },
+        { actor: "ghost", createdAt: "a", kind: "reopened" },
+        { ...base, kind: "assigned", login: "jonas" },
+        { ...base, kind: "unassigned", login: "jonas" },
         { ...base, kind: "labeled", label: "bug" },
         { ...base, kind: "unlabeled", label: "bug" },
         { ...base, kind: "milestoned", milestone: "May" },
         { ...base, kind: "demilestoned", milestone: "May" },
         { ...base, kind: "renamed", from: "A", to: "B" },
-        { ...base, kind: "linked", number: 7, title: "T", url: "https://h/7" },
+        { ...base, kind: "linked", number: 7, title: "T", url: "https://x/7" },
       ],
     );
   });
@@ -150,8 +145,8 @@ describe("the issues of a tracker", () => {
     assert.deepEqual(
       toGitLabEvents(
         [
-          { id: "n1", system: true, author: user, created_at, body: "assigned to @anna" },
-          { id: "n2", system: false, author: user, created_at, body: "Comment" },
+          { id: "n1", system: true, author: user, createdAt: created_at, body: "assigned to @anna" },
+          { id: "n2", system: false, author: user, createdAt: created_at, body: "Comment" },
         ],
         [
           { user, created_at, action: "add", label: { name: "bug" } },
@@ -253,7 +248,7 @@ describe("the issues of a tracker", () => {
   it("reads a title change off GitLab's system note, rendered or in Markdown", () => {
     const author = { username: "anna" };
     const created_at = "2026-10-01T10:00:00Z";
-    const titleOf = (body: string) => toGitLabEvents([{ id: "n", system: true, author, created_at, body }], [], [], [])[0];
+    const titleOf = (body: string) => toGitLabEvents([{ id: "n", system: true, author, createdAt: created_at, body }], [], [], [])[0];
     const base = { actor: "anna", createdAt: created_at };
     assert.deepEqual(
       titleOf(
@@ -266,47 +261,6 @@ describe("the issues of a tracker", () => {
       kind: "renamed",
       from: "Provider more info",
       to: "Provide more user info",
-    });
-  });
-
-  it("reads a note GitLab's GraphQL answers, a deleted account's as ghost", () => {
-    const note = { id: "gid://gitlab/Note/42", system: false, body: "B", createdAt: "a" };
-    assert.deepEqual(noteFromGitLabGraphql({ ...note, author: { username: "anna" } }), {
-      id: "gid://gitlab/Note/42",
-      system: false,
-      author: { username: "anna" },
-      created_at: "a",
-      body: "B",
-    });
-    assert.equal(noteFromGitLabGraphql({ ...note, author: null }).author.username, "ghost");
-  });
-
-  it("reads an issue GitLab's GraphQL answers as REST's", () => {
-    const entry = fromGitLabGraphql({
-      iid: "12",
-      title: "T",
-      webUrl: "https://gitlab.example.com/g/t/-/work_items/12",
-      state: "opened",
-      createdAt: "2026-10-01T00:00:00Z",
-      description: null,
-      userNotesCount: 2,
-      author: { username: "anna" },
-      assignees: { nodes: [{ username: "tom" }] },
-      labels: { nodes: [{ title: "bug" }] },
-      milestone: { title: "May" },
-    });
-    assert.deepEqual(entry, {
-      iid: 12,
-      title: "T",
-      web_url: "https://gitlab.example.com/g/t/-/work_items/12",
-      state: "opened",
-      author: { username: "anna" },
-      assignees: [{ username: "tom" }],
-      user_notes_count: 2,
-      created_at: "2026-10-01T00:00:00Z",
-      labels: ["bug"],
-      description: null,
-      milestone: { title: "May" },
     });
   });
 
@@ -330,68 +284,10 @@ describe("the issues of a tracker", () => {
     assert.deepEqual(sent({ assignees: [] }, undefined, []), { id: "I1", assigneeIds: [] });
   });
 
-  const hubIssue = {
-    number: 412,
-    title: "T",
-    url: "https://github.com/o/r/issues/412",
-    state: "OPEN",
-    createdAt: "a",
-    author: { login: "mira", avatarUrl: "https://a/1" },
-    assignees: { nodes: [{ login: "jonas", avatarUrl: "https://a/2" }] },
-    comments: { totalCount: 3 },
-    labels: { nodes: [{ name: "bug" }, { name: "ui" }] },
-  };
-
-  it("reads an issue GitHub's GraphQL answers, a deleted account's as no user", () => {
-    assert.deepEqual(fromGitHubGraphql(hubIssue), {
-      number: 412,
-      title: "T",
-      html_url: "https://github.com/o/r/issues/412",
-      state: "open",
-      user: { login: "mira", avatar_url: "https://a/1" },
-      assignees: [{ login: "jonas", avatar_url: "https://a/2" }],
-      comments: 3,
-      created_at: "a",
-      labels: [{ name: "bug" }, { name: "ui" }],
-      body: null,
-      milestone: undefined,
-    });
-    assert.equal(fromGitHubGraphql({ ...hubIssue, author: null }).user, null);
-  });
-
   it("keeps an issue only with all of a filter's labels, as GitHub's own filter takes any", () => {
-    assert.equal(carriesAll(hubIssue, []), true);
-    assert.equal(carriesAll(hubIssue, ["ui", "bug"]), true);
-    assert.equal(carriesAll(hubIssue, ["bug", "docs"]), false);
-  });
-
-  it("reads GitHub's timeline items as what the tab draws", () => {
-    const happened = { createdAt: "a", actor: { login: "mira", avatarUrl: "https://a/1" } };
-    const base = { actor: "mira", createdAt: "a" };
-    assert.deepEqual(
-      toGitHubEvents(
-        [
-          { __typename: "ClosedEvent", ...happened },
-          { __typename: "ReopenedEvent", createdAt: "a", actor: null },
-          { __typename: "AssignedEvent", ...happened, assignee: { login: "jonas" } },
-          { __typename: "UnassignedEvent", ...happened, assignee: {} },
-          { __typename: "LabeledEvent", ...happened, label: { name: "bug" } },
-          { __typename: "DemilestonedEvent", ...happened, milestoneTitle: "May" },
-          { __typename: "RenamedTitleEvent", ...happened, previousTitle: "A", currentTitle: "B" },
-          { __typename: "CrossReferencedEvent", ...happened, source: { number: 7, title: "T", url: "https://x/7" } },
-          { __typename: "CrossReferencedEvent", ...happened, source: {} },
-        ].map(timelineEntry),
-      ),
-      [
-        { ...base, kind: "closed" },
-        { actor: "ghost", createdAt: "a", kind: "reopened" },
-        { ...base, kind: "assigned", login: "jonas" },
-        { ...base, kind: "labeled", label: "bug" },
-        { ...base, kind: "demilestoned", milestone: "May" },
-        { ...base, kind: "renamed", from: "A", to: "B" },
-        { ...base, kind: "linked", number: 7, title: "T", url: "https://x/7" },
-      ],
-    );
+    assert.equal(carriesAll(githubIssue, []), true);
+    assert.equal(carriesAll(githubIssue, ["terminals", "bug"]), true);
+    assert.equal(carriesAll(githubIssue, ["bug", "docs"]), false);
   });
 
   it("offers an upload where the host takes one from a token, and what it takes", () => {
@@ -402,7 +298,8 @@ describe("the issues of a tracker", () => {
   });
 
   it("refuses what GitHub takes no upload of, without asking it", async () => {
-    await assert.rejects(() => github.uploadFile("github.com", "t", "o/r", "a.pdf", Buffer.from("x")), /only images and videos/);
+    const tracker = { host: "github.com", token: "t", path: "o/r" };
+    await assert.rejects(() => github.uploadFile(tracker, "a.pdf", Buffer.from("x")), /only images and videos/);
   });
 
   it("reads what a GraphQL answer refused, under its status of 200", () => {
@@ -419,14 +316,18 @@ describe("the issues of a tracker", () => {
     assert.equal(uploadMarkdown("a.mp4", "https://x/a", "video/mp4"), "https://x/a");
   });
 
-  it("leaves out what GitLab noted itself", () => {
+  it("leaves out what GitLab noted itself, and reads a deleted account's comment as ghost's", () => {
     const author = { username: "anna" };
     assert.deepEqual(
       toGitLabNotes([
-        { id: "n1", system: true, author, created_at: "a", body: "added label" },
-        { id: "n2", system: false, author, created_at: "b", body: "Comment" },
+        { id: "n1", system: true, author, createdAt: "a", body: "added label" },
+        { id: "n2", system: false, author, createdAt: "b", body: "Comment" },
+        { id: "n3", system: false, author: null, createdAt: "c", body: "Gone" },
       ]),
-      [{ id: "n2", author: "anna", createdAt: "b", body: "Comment" }],
+      [
+        { id: "n2", author: "anna", createdAt: "b", body: "Comment" },
+        { id: "n3", author: "ghost", createdAt: "c", body: "Gone" },
+      ],
     );
   });
 
@@ -466,7 +367,7 @@ describe("the issues of a tracker", () => {
         },
         getState: () => (read ? repositoryAt(root, ORIGIN).getState() : { remotes: [] }),
       };
-      const answer = await onTracker(accountsOf(account("a")), opening, async (_provider, host) => host);
+      const answer = await onTracker(accountsOf(account("a")), opening, async (_provider, { host }) => host);
       assert.equal(answer, "github.com");
     });
 
@@ -474,7 +375,7 @@ describe("the issues of a tracker", () => {
       const root = tempDir("tet-issues-");
       const seen: string[] = [];
       const accounts = accountsOf(account("a"), account("other", "gitlab.com"), account("b"));
-      const answer = await onTracker(accounts, repositoryAt(root, ORIGIN), async (_provider, host, token, path) => {
+      const answer = await onTracker(accounts, repositoryAt(root, ORIGIN), async (_provider, { host, token, path }) => {
         seen.push(token);
         if (token === "token-a") {
           throw new Error("first");
@@ -485,7 +386,7 @@ describe("the issues of a tracker", () => {
       assert.deepEqual(seen, ["token-a", "token-b"]);
       await assert.rejects(
         () =>
-          onTracker(accountsOf(account("a"), account("b")), repositoryAt(root, ORIGIN), async (_provider, _host, token) => {
+          onTracker(accountsOf(account("a"), account("b")), repositoryAt(root, ORIGIN), async (_provider, { token }) => {
             throw new Error(token);
           }),
         /token-a/,
@@ -508,13 +409,15 @@ describe("the issues of a tracker", () => {
     it("writes through the next account only where the first does not reach the tracker", async () => {
       const root = tempDir("tet-issues-");
       const accounts = accountsOf(account("a"), account("b"));
-      const failingFirst = (status: number, seen: string[]) => async (_provider: unknown, _host: string, token: string) => {
-        seen.push(token);
-        if (token === "token-a") {
-          throw new ApiError(status, `${status} from the host`);
-        }
-        return "written";
-      };
+      const failingFirst =
+        (status: number, seen: string[]) =>
+        async (_provider: unknown, { token }: Tracker) => {
+          seen.push(token);
+          if (token === "token-a") {
+            throw new ApiError(status, `${status} from the host`);
+          }
+          return "written";
+        };
       for (const status of [401, 404]) {
         const seen: string[] = [];
         assert.equal(await writeOnTracker(accounts, repositoryAt(root, ORIGIN), failingFirst(status, seen)), "written");
@@ -539,8 +442,8 @@ describe("the issues of a tracker", () => {
     it("reads from tet.json's source, on the remote's host", async () => {
       const root = tempDir("tet-issues-");
       fs.writeFileSync(path.join(root, "tet.json"), '{"issues": {"source": "g/tracker"}}');
-      const read = await onTracker(accountsOf(account("a")), repositoryAt(root, ORIGIN), async (_provider, host, _token, source) => {
-        return `${host} ${source}`;
+      const read = await onTracker(accountsOf(account("a")), repositoryAt(root, ORIGIN), async (_provider, { host, path }) => {
+        return `${host} ${path}`;
       });
       assert.equal(read, "github.com g/tracker");
     });
@@ -554,8 +457,8 @@ describe("the issues of a tracker", () => {
     it("takes a url for the source as its path", async (t) => {
       const root = tempDir("tet-issues-");
       const asked: string[] = [];
-      t.mock.method(PROVIDERS.github, "listLabels", async (_host: string, _token: string, source: string) => {
-        asked.push(source);
+      t.mock.method(PROVIDERS.github, "listLabels", async ({ path }: Tracker) => {
+        asked.push(path);
         return [];
       });
       const saved = await setIssueSource(accountsOf(account("a")), repositoryAt(root, ORIGIN), " https://GitHub.com/g/s/tracker.git/ ");
@@ -605,7 +508,7 @@ describe("the issues of a tracker", () => {
       assert.ok(markdown.includes(part), part);
     }
     const bare = issueMarkdown({
-      ...toGitHubIssue({ ...githubIssue, assignees: [], labels: [] }),
+      ...toGitHubIssue({ ...githubIssue, assignees: { nodes: [] }, labels: { nodes: [] } }),
       provider: "github",
       assignees: [],
       body: "",

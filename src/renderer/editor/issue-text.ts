@@ -154,6 +154,16 @@ export function issueTextHtml(text: string, provider: ProviderId, issueUrl: stri
   return markdown.render(text, { provider, issueUrl } satisfies IssueTextEnv);
 }
 
+/** Where a link of an issue's text at `issueUrl` leads; undefined for one within the text. An
+ *  upload's is relative to the project, whatever else is to the host. */
+export function issueLink(href: string, issueUrl: string): string | undefined {
+  if (href === "" || href.startsWith("#")) {
+    return undefined;
+  }
+  const project = issueUrl.split("/-/")[0];
+  return URL.parse(href.startsWith("/uploads/") ? project + href : href, issueUrl)?.href;
+}
+
 /** The file of the repository a link of a GitLab issue's text means, as written: any other than a web
  *  address, an upload or one into its own project. Undefined for those, and on GitHub. */
 export function issueFileLink(href: string, provider: ProviderId, issueUrl: string): string | undefined {

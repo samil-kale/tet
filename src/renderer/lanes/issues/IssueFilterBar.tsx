@@ -2,7 +2,7 @@ import type { IssueFilter } from "../../../shared/types/providers";
 import { IconButton } from "../../ui/IconButton";
 import { ChevronIcon, CloseIcon } from "../../ui/icons";
 import { PickMenu } from "../../ui/PickMenu";
-import type { IssueOptions } from "./use-issues";
+import type { IssueOptions } from "../../editor/editor-views";
 
 interface FilterControlProps {
   title: string;

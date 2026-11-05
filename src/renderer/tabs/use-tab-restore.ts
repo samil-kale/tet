@@ -5,7 +5,7 @@ import type { RepositoryState } from "../../shared/types/git";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { onRefClosed } from "../ref-lifetime";
 import type { ResolvedRef } from "../resolved-ref";
-import type { EditorTab } from "../editor/editor-tab";
+import { showsSame, type EditorTab } from "../editor/editor-tab";
 import { openEditorFile, previewEditorTab } from "../editor/editor-views";
 import { isPlainShell, layoutStorageKey, loadPersisted } from "./pane-layout";
 import { restoreHistory, shellHistory } from "./terminal-views";
@@ -56,11 +56,7 @@ export function useTabRestore(
       const editors: EditorTab[] = [];
       const shellIds: string[] = [];
       for (const { id, kind, editor } of loadPersisted(refKey).tabs) {
-        if (
-          kind === "editor" &&
-          editor &&
-          !open.some((tab) => tab.path === editor.path && tab.commit?.sha === editor.commit?.sha && tab.issue === editor.issue)
-        ) {
+        if (kind === "editor" && editor && !open.some((tab) => showsSame(tab, editor))) {
           // One preview tab: a file opened meanwhile may have taken it.
           openEditorFile(ref, id, editor.path, editor.preview && previewEditorTab(ref) === undefined, {
             diff: editor.diff,

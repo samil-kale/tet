@@ -3,10 +3,16 @@ import { ChevronIcon } from "./icons";
 import { useOptionFilter } from "./use-option-filter";
 
 /** Taller lists scroll. */
-export const MAX_LIST_HEIGHT = 300;
+const MAX_LIST_HEIGHT = 300;
 
 /** Gap between the open list and the window's bottom edge. */
-export const WINDOW_MARGIN = 8;
+const WINDOW_MARGIN = 8;
+
+/** The cap of a list opened below the button `rect` is of: the room below it, or `ContextMenu` would
+ *  clamp it upward over the button. */
+export function listMaxHeight(rect: DOMRect): number {
+  return Math.min(MAX_LIST_HEIGHT, window.innerHeight - rect.bottom - WINDOW_MARGIN);
+}
 
 export interface DropdownOption<T extends string> {
   value: T;
@@ -33,8 +39,7 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
     x: rect.left,
     y: rect.bottom,
     width: rect.width,
-    // Capped to the room below, or `ContextMenu` would clamp it upward over the trigger.
-    maxHeight: Math.min(MAX_LIST_HEIGHT, window.innerHeight - rect.bottom - WINDOW_MARGIN),
+    maxHeight: listMaxHeight(rect),
   }));
   const selected = options.find((option) => option.value === value);
 

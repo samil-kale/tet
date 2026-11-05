@@ -29,9 +29,9 @@ import { PickMenu } from "../ui/PickMenu";
 import { SwitchTabs } from "../ui/SwitchTabs";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
-import { issueLink } from "./editor-tab";
+import type { IssueOptions } from "./editor-views";
 import { issueThread, type ThreadEvent } from "./issue-thread";
-import { issueFileLink, issueTextHtml } from "./issue-text";
+import { issueFileLink, issueLink, issueTextHtml } from "./issue-text";
 import { createMarkdownPreview, renderHtmlInto, resolveLink } from "./markdown";
 import { markdownEdit, type MarkdownFormat } from "./markdown-format";
 
@@ -125,16 +125,15 @@ export interface IssueActions {
   update: (change: IssueChange) => void;
   /** The title changed; what the tracker refused, for the dialog that asked (`askName`). */
   rename: (title: string) => Promise<string | undefined>;
-  options: () => Promise<{ labels: string[]; people: string[] } | undefined>;
+  options: () => Promise<IssueOptions | undefined>;
   milestones: () => Promise<IssueMilestone[] | undefined>;
   /** The Markdown that shows the file, once it is up. */
   upload: (file: File) => Promise<string | undefined>;
   openInAgent: (agentId: AgentId) => void;
 }
 
-interface IssueTextProps {
-  /** The Markdown as written. */
-  text: string;
+/** What an issue's text is rendered with. */
+interface TextRendering {
   provider: ProviderId;
   /** What a relative link leads from. */
   issueUrl: string;
@@ -142,10 +141,20 @@ interface IssueTextProps {
   openFile: IssueActions["openFile"];
 }
 
+/** What a box writing an issue's text takes beside its value, the same for every box of the issue. */
+interface TextWriting {
+  /** What the preview renders the text with. */
+  rendering: TextRendering;
+  /** Where the tracker takes a file for the text. */
+  upload: IssueActions["upload"] | undefined;
+  /** What the picker offers, an `accept`; absent offers any file. */
+  accept: string | undefined;
+}
+
 /** Text written on the tracker, rendered in a shadow root of its own as the Markdown preview's is
  *  (`issueTextHtml`), before the card's first paint. A link to a file of the repository opens it; the
- *  rest go to main, which opens only web and mail ones. */
-function IssueText({ text, provider, issueUrl, loadImage, openFile }: IssueTextProps) {
+ *  rest go to main, which opens only web and mail ones. `text` is the Markdown as written. */
+function IssueText({ text, provider, issueUrl, loadImage, openFile }: TextRendering & { text: string }) {
   const host = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const { scroller, body } = createMarkdownPreview();
@@ -199,19 +208,13 @@ function TextBox({
   value,
   onChange,
   disabled,
-  upload,
-  accept,
-  rendering,
+  writing: { rendering, upload, accept },
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
-  upload: IssueActions["upload"] | undefined;
-  /** What the picker offers, an `accept`; absent offers any file. */
-  accept: string | undefined;
-  /** What the preview renders the text with. */
-  rendering: Omit<IssueTextProps, "text">;
+  writing: TextWriting;
 }) {
   const textMenu = useTextContextMenu(onChange);
   const picker = useRef<HTMLInputElement>(null);
@@ -330,19 +333,7 @@ function TextBox({
   );
 }
 
-function CommentBox({
-  open,
-  actions,
-  upload,
-  accept,
-  rendering,
-}: {
-  open: boolean;
-  actions: IssueActions;
-  upload: IssueActions["upload"] | undefined;
-  accept: string | undefined;
-  rendering: Omit<IssueTextProps, "text">;
-}) {
+function CommentBox({ open, actions, writing }: { open: boolean; actions: IssueActions; writing: TextWriting }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const typed = text.trim() !== "";
@@ -366,15 +357,7 @@ function CommentBox({
     <div className="issue-comment">
       <div className="issue-card">
         <div className="issue-card-edit">
-          <TextBox
-            label="Add a comment"
-            value={text}
-            onChange={setText}
-            disabled={busy}
-            upload={upload}
-            accept={accept}
-            rendering={rendering}
-          />
+          <TextBox label="Add a comment" value={text} onChange={setText} disabled={busy} writing={writing} />
         </div>
       </div>
       <div className="issue-line">
@@ -390,20 +373,21 @@ function CommentBox({
   );
 }
 
-interface IssueCardProps extends IssueTextProps {
+interface IssueCardProps {
   author: string;
   avatar: string | undefined;
   /** The issue's own text, whose title says it was opened; a comment's names the author and time alone. */
   opened?: boolean;
   at: string;
-  upload: IssueActions["upload"] | undefined;
-  accept: string | undefined;
+  /** The Markdown as written. */
+  text: string;
+  writing: TextWriting;
   /** Offered where it can be changed; false keeps the box open. */
   onEdit?: (text: string) => Promise<boolean>;
   onDelete?: () => void;
 }
 
-function IssueCard({ author, avatar, opened, at, upload, accept, onEdit, onDelete, ...shown }: IssueCardProps) {
+function IssueCard({ author, avatar, opened, at, text, writing, onEdit, onDelete }: IssueCardProps) {
   const [draft, setDraft] = useState<string>();
   const [busy, setBusy] = useState(false);
   const save = async (): Promise<void> => {
@@ -422,7 +406,7 @@ function IssueCard({ author, avatar, opened, at, upload, accept, onEdit, onDelet
           {agoOf(at)}
         </span>
         {onEdit && (
-          <IconButton title="Edit" onClick={() => setDraft(shown.text)}>
+          <IconButton title="Edit" onClick={() => setDraft(text)}>
             <PencilIcon />
           </IconButton>
         )}
@@ -434,20 +418,7 @@ function IssueCard({ author, avatar, opened, at, upload, accept, onEdit, onDelet
       </div>
       {draft !== undefined ? (
         <div className="issue-comment issue-card-edit">
-          <TextBox
-            label="Text"
-            value={draft}
-            onChange={setDraft}
-            disabled={busy}
-            upload={upload}
-            accept={accept}
-            rendering={{
-              provider: shown.provider,
-              issueUrl: shown.issueUrl,
-              loadImage: shown.loadImage,
-              openFile: shown.openFile,
-            }}
-          />
+          <TextBox label="Text" value={draft} onChange={setDraft} disabled={busy} writing={writing} />
           <div className="issue-line">
             <button type="button" className="button secondary" disabled={busy} onClick={() => setDraft(undefined)}>
               Cancel
@@ -457,10 +428,10 @@ function IssueCard({ author, avatar, opened, at, upload, accept, onEdit, onDelet
             </button>
           </div>
         </div>
-      ) : shown.text === "" ? (
+      ) : text === "" ? (
         <div className="issue-empty">No description provided.</div>
       ) : (
-        <IssueText {...shown} />
+        <IssueText {...writing.rendering} text={text} />
       )}
     </div>
   );
@@ -690,13 +661,16 @@ function PickSection({
 /**
  * An issue's tab: a bar as a file's, with its actions, title and state, then, as VS Code's GitHub Pull
  * Requests and Issues draws them, the description and comments with a box for one more, and beside
- * them who and what it is assigned. Only the viewer's own comments offer to change: the tracker's REST says nothing of who
- * else may, and a description it refuses says so in a notice, a title in the dialog that asked.
+ * them who and what it is assigned. Only the viewer's own comments offer to change: what is read of
+ * the tracker says nothing of who else may, and a description it refuses says so in a notice, a
+ * title in the dialog that asked.
  */
 export function IssueView({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
-  const { loadImage, openFile } = actions;
-  const upload = issue.uploads ? actions.upload : undefined;
-  const accept = issue.uploads?.extensions?.map((extension) => `.${extension}`).join(",");
+  const writing: TextWriting = {
+    rendering: { provider: issue.provider, issueUrl: issue.url, loadImage: actions.loadImage, openFile: actions.openFile },
+    upload: issue.uploads ? actions.upload : undefined,
+    accept: issue.uploads?.extensions?.map((extension) => `.${extension}`).join(","),
+  };
   // One request for both lists, however many are opened; a failed one is asked again.
   const options = useRef<ReturnType<IssueActions["options"]>>(undefined);
   const loadOptions = async (): ReturnType<IssueActions["options"]> => {
@@ -721,12 +695,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
               opened
               at={issue.createdAt}
               text={issue.body}
-              provider={issue.provider}
-              issueUrl={issue.url}
-              loadImage={loadImage}
-              openFile={openFile}
-              upload={upload}
-              accept={accept}
+              writing={writing}
               onEdit={(body) => {
                 actions.update({ body });
                 return Promise.resolve(true);
@@ -744,12 +713,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                   avatar={issue.avatars[note.author]}
                   at={note.createdAt}
                   text={note.body}
-                  provider={issue.provider}
-                  issueUrl={issue.url}
-                  loadImage={loadImage}
-                  openFile={openFile}
-                  upload={upload}
-                  accept={accept}
+                  writing={writing}
                   onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}
                   onDelete={
                     note.author === viewer
@@ -765,13 +729,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                 />
               );
             })}
-            <CommentBox
-              open={issue.open}
-              actions={actions}
-              upload={upload}
-              accept={accept}
-              rendering={{ provider: issue.provider, issueUrl: issue.url, loadImage, openFile }}
-            />
+            <CommentBox open={issue.open} actions={actions} writing={writing} />
           </div>
           <div className="issue-side">
             <PickSection

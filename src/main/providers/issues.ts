@@ -4,7 +4,7 @@ import type { IssueDetail } from "../../shared/types/providers";
 import { isIssueSource, readIssueSource, writeIssueSource } from "../store/tet-json";
 import type { AccountStore } from "./accounts";
 import { PROVIDERS } from "./index";
-import { ApiError, type GitProvider } from "./provider";
+import { ApiError, type GitProvider, type Tracker } from "./provider";
 
 /** What of a repository its issues are found by: its folder, whose tet.json may name the source,
  *  and its remotes, whose first gives the host, known once it has `started`: the lane may ask while
@@ -25,8 +25,8 @@ export class NoAccountError extends Error {
   }
 }
 
-/** One call to the tracker, through one account. */
-export type TrackerCall<T> = (provider: GitProvider, host: string, token: string, path: string, user: string) => Promise<T>;
+/** One call to the tracker, through one account, whose login is `user`. */
+export type TrackerCall<T> = (provider: GitProvider, tracker: Tracker, user: string) => Promise<T>;
 
 /** The host and repository path of a remote's url, https, `ssh://` or scp-like; undefined for
  *  anything else, a folder for one. An https url's port is part of its host, as an account's is, an
@@ -92,13 +92,13 @@ export async function onTracker<T>(
     const token = await accounts.token(account.id);
     if (token !== undefined) {
       try {
-        return await call(PROVIDERS[account.provider], account.host, token, path, account.user);
+        return await call(PROVIDERS[account.provider], { host: account.host, token, path }, account.user);
       } catch (error) {
         // Both hosts answer 401 for a token that is expired or revoked, whatever was asked for; what
         // an account may not do or reach is another status.
         const refused = error instanceof ApiError && error.status === 401;
         failure ??= refused
-          ? `${account.host} refused the token of ${account.user}, which may have expired: add the account again under Add Repository`
+          ? `${account.host} refused the token of ${account.user}, which may have expired: add the account again under Accounts in Settings`
           : errorMessage(error);
         if (handsOver && !handsOver(error)) {
           break;
@@ -106,7 +106,7 @@ export async function onTracker<T>(
       }
     }
   }
-  throw new Error(failure ?? "The account's token could not be read — add the account again");
+  throw new Error(failure ?? "The account's token could not be read: add the account again under Accounts in Settings");
 }
 
 /** `onTracker` for what writes: the next account takes over only from one that does not reach the
@@ -136,7 +136,7 @@ export async function setIssueSource(accounts: IssueAccounts, repository: IssueR
       throw new Error(`Not on this repository's host, ${host}: ${typed}`);
     }
   }
-  await onTracker(accounts, repository, (provider, host, token, path) => provider.listLabels(host, token, path), { source: sourcePath });
+  await onTracker(accounts, repository, (provider, tracker) => provider.listLabels(tracker), { source: sourcePath });
   await writeIssueSource(repository.at.path, sourcePath);
   return sourcePath;
 }

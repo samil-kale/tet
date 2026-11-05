@@ -23,7 +23,7 @@ import {
 } from "../../src/renderer/tabs/pane-layout";
 import type { ProjectLayout } from "../../src/renderer/tabs/pane-layout";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
-import { issueLink, nextEditorTabId, workingTreePathOf, type EditorEntry, type EditorTab } from "../../src/renderer/editor/editor-tab";
+import { nextEditorTabId, workingTreePathOf, type EditorEntry, type EditorTab } from "../../src/renderer/editor/editor-tab";
 import { fakeLocalStorage, keepGlobals } from "../helpers";
 
 /** The split view's rules — pure functions, needing no window. */
@@ -657,14 +657,6 @@ describe("what is persisted", () => {
       { id: editorTab.tabId, pane: "b", kind: "editor", editor: { ...entry, commit: undefined, issue: undefined } },
       { id: "sh", pane: "b", kind: "shell" },
     ]);
-  });
-
-  it("leads an issue's links to the tracker, an upload's from its project", () => {
-    const issue = "https://gitlab.example.com/g/p/-/issues/12";
-    assert.equal(issueLink("/uploads/abc/a.pdf", issue), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
-    assert.equal(issueLink("/g/p/-/issues/3", issue), "https://gitlab.example.com/g/p/-/issues/3");
-    assert.equal(issueLink("https://example.com/x", issue), "https://example.com/x");
-    assert.equal(issueLink("#note", issue), undefined);
   });
 
   it("brings back an issue's tab by its number, as no file of the tree", () => {

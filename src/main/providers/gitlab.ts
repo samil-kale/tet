@@ -33,12 +33,8 @@ function headers(token: string): Record<string, string> {
   return { "PRIVATE-TOKEN": token };
 }
 
-function graphql(host: string, token: string, query: string, variables: object = {}): Promise<unknown> {
-  return sendGraphql(`https://${host}/api/graphql`, { Authorization: `Bearer ${token}` }, query, variables);
-}
-
 function sender(host: string, token: string): GraphqlSend {
-  return (query, variables) => graphql(host, token, query, variables);
+  return (query, variables) => sendGraphql(`https://${host}/api/graphql`, { Authorization: `Bearer ${token}` }, query, variables);
 }
 
 /** A project GraphQL answers null for says neither that it is missing nor that the token cannot read
@@ -50,6 +46,11 @@ function reached<T>(found: T | null | undefined, what: string): T {
   return found;
 }
 
+/** The issue a project's answer holds, both reached (`reached`). */
+function reachedIssue<T>(project: { issue: T | null } | null, path: string, number: number): T {
+  return reached(reached(project, path).issue, `Issue #${number}`);
+}
+
 /** What a mutation answered, which says what it refused in a field of its own. */
 export function mutationError(result: { errors?: string[] } | null | undefined): string | undefined {
   if (!result) {
@@ -59,9 +60,9 @@ export function mutationError(result: { errors?: string[] } | null | undefined):
 }
 
 /** One mutation, answering what it was asked to select beside its `errors`. */
-async function mutate<T>(host: string, token: string, name: string, inputType: string, input: object, selection = ""): Promise<T> {
+async function mutate<T>(send: GraphqlSend, name: string, inputType: string, input: object, selection = ""): Promise<T> {
   const query = `mutation($input: ${inputType}!) { ${name}(input: $input) { ${selection} errors } }`;
-  const data = (await graphql(host, token, query, { input })) as Record<string, (T & { errors?: string[] }) | null> | null;
+  const data = (await send(query, { input })) as Record<string, (T & { errors?: string[] }) | null> | null;
   const result = data?.[name];
   const refused = mutationError(result);
   if (refused !== undefined || !result) {
@@ -74,37 +75,13 @@ interface GitLabUser {
   username: string;
 }
 
-export interface GitLabIssue {
-  iid: number;
-  title: string;
-  web_url: string;
-  state: string;
-  author: GitLabUser;
-  assignees: GitLabUser[];
-  user_notes_count: number;
-  created_at: string;
-  labels: string[];
-  description: string | null;
-  milestone?: { title: string } | null;
-}
-
-export interface GitLabNote {
-  id: string;
-  /** What GitLab wrote itself (a label added, an assignee changed), not a comment. */
-  system: boolean;
-  author: GitLabUser;
-  created_at: string;
-  body: string;
-}
-
 /** An issue as GraphQL says it; only one read alone has the last two. */
-export interface GitLabGraphqlIssue {
+export interface GitLabIssue {
   iid: string;
   title: string;
   webUrl: string;
   state: string;
   createdAt: string;
-  userNotesCount: number;
   author: GitLabUser;
   assignees: { nodes: GitLabUser[] };
   labels: { nodes: { title: string }[] };
@@ -113,15 +90,16 @@ export interface GitLabGraphqlIssue {
 }
 
 /** A note as GraphQL says it; `author` is null for a deleted account. */
-export interface GitLabGraphqlNote {
+export interface GitLabNote {
   id: string;
+  /** What GitLab wrote itself (a label added, an assignee changed), not a comment. */
   system: boolean;
   body: string;
   createdAt: string;
   author: GitLabUser | null;
 }
 
-const ISSUE_ROW = `iid title webUrl state createdAt userNotesCount
+const ISSUE_ROW = `iid title webUrl state createdAt
   author { username }
   assignees(first: 100) { nodes { username } }
   labels(first: 100) { nodes { title } }`;
@@ -162,34 +140,6 @@ const LABELS_QUERY = `query($path: ID!, $cursor: String) {
   }
 }`;
 
-/** An issue read over GraphQL as `toIssue` takes it. */
-export function fromGraphql(entry: GitLabGraphqlIssue): GitLabIssue {
-  return {
-    iid: Number(entry.iid),
-    title: entry.title,
-    web_url: entry.webUrl,
-    state: entry.state,
-    author: entry.author,
-    assignees: entry.assignees.nodes,
-    user_notes_count: entry.userNotesCount,
-    created_at: entry.createdAt,
-    labels: entry.labels.nodes.map((label) => label.title),
-    description: entry.description ?? null,
-    milestone: entry.milestone,
-  };
-}
-
-/** A note read over GraphQL as `toNotes` and `toEvents` take it. */
-export function noteFromGraphql(entry: GitLabGraphqlNote): GitLabNote {
-  return {
-    id: entry.id,
-    system: entry.system,
-    author: entry.author ?? { username: "ghost" },
-    created_at: entry.createdAt,
-    body: entry.body,
-  };
-}
-
 /** An entry of an issue's `resource_*_events`; `user` is null for a deleted account. */
 interface GitLabResourceEvent {
   user: GitLabUser | null;
@@ -227,8 +177,8 @@ export function toIssueInput(path: string, number: number, change: IssueChange, 
 }
 
 /** A project's labels by name, with their ids. */
-async function allLabels(host: string, token: string, path: string): Promise<{ id: string; name: string }[]> {
-  const entries = await allNodes<{ id: string; title: string }>(sender(host, token), LABELS_QUERY, { path }, (data) => {
+async function allLabels(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
+  const entries = await allNodes<{ id: string; title: string }>(send, LABELS_QUERY, { path }, (data) => {
     const { project } = data as { project: { labels: GraphqlPage<{ id: string; title: string }> } | null };
     return reached(project, path).labels;
   });
@@ -277,24 +227,28 @@ export function issuesVariables(path: string, filter: IssueFilter): Record<strin
  *  browser session, never to a token, so a user is shown by the first letters of the login. */
 export function toIssue(entry: GitLabIssue): Issue {
   return {
-    number: entry.iid,
+    number: Number(entry.iid),
     title: entry.title,
-    url: entry.web_url,
+    url: entry.webUrl,
     open: entry.state === "opened",
     author: entry.author.username,
-    assignee: entry.assignees[0]?.username,
-    comments: entry.user_notes_count,
-    createdAt: entry.created_at,
-    labels: entry.labels,
+    assignee: entry.assignees.nodes[0]?.username,
+    createdAt: entry.createdAt,
+    labels: entry.labels.nodes.map((label) => label.title),
     avatars: {},
   };
+}
+
+/** Who wrote a note; a deleted account is ghost. */
+function authorOf(note: GitLabNote): string {
+  return note.author?.username ?? "ghost";
 }
 
 /** The comments among an issue's notes. */
 export function toNotes(entries: GitLabNote[]): IssueNote[] {
   return entries
     .filter((entry) => !entry.system)
-    .map((entry) => ({ id: entry.id, author: entry.author.username, createdAt: entry.created_at, body: entry.body }));
+    .map((entry) => ({ id: entry.id, author: authorOf(entry), createdAt: entry.createdAt, body: entry.body }));
 }
 
 const ESCAPED: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
@@ -335,7 +289,7 @@ export function toEvents(
   const events: IssueEvent[] = [];
   for (const note of notes) {
     if (note.system) {
-      events.push({ actor: note.author.username, createdAt: note.created_at, ...fromSystemNote(note.body) });
+      events.push({ actor: authorOf(note), createdAt: note.createdAt, ...fromSystemNote(note.body) });
     }
   }
   for (const entry of labels) {
@@ -356,7 +310,7 @@ export function toEvents(
 
 export const gitlab: GitProvider = {
   async validate(host, token) {
-    const data = (await graphql(host, token, "{ currentUser { username } }")) as { currentUser: { username?: unknown } | null };
+    const data = (await sender(host, token)("{ currentUser { username } }", {})) as { currentUser: { username?: unknown } | null };
     const username = data.currentUser?.username;
     if (typeof username !== "string" || username === "") {
       throw new Error("The API answered without a username");
@@ -385,19 +339,19 @@ export const gitlab: GitProvider = {
     }));
   },
 
-  async listIssues(host, token, path, filter) {
-    const entries = await allNodes<GitLabGraphqlIssue>(sender(host, token), ISSUES_QUERY, issuesVariables(path, filter), (data) => {
-      const { project } = data as { project: { issues: GraphqlPage<GitLabGraphqlIssue> } | null };
+  async listIssues({ host, token, path }, filter) {
+    const entries = await allNodes<GitLabIssue>(sender(host, token), ISSUES_QUERY, issuesVariables(path, filter), (data) => {
+      const { project } = data as { project: { issues: GraphqlPage<GitLabIssue> } | null };
       return reached(project, path).issues;
     });
-    return entries.map((entry) => toIssue(fromGraphql(entry)));
+    return entries.map(toIssue);
   },
 
-  async listLabels(host, token, path) {
-    return (await allLabels(host, token, path)).map((entry) => entry.name);
+  async listLabels({ host, token, path }) {
+    return (await allLabels(sender(host, token), path)).map((entry) => entry.name);
   },
 
-  async listPeople(host, token, path) {
+  async listPeople({ host, token, path }) {
     // relations: the default leaves out who reaches the project through a group shared with it.
     const query = `query($path: ID!, $cursor: String) {
       project(fullPath: $path) {
@@ -415,56 +369,50 @@ export const gitlab: GitProvider = {
     return entries.flatMap((entry) => entry.user?.username ?? []);
   },
 
-  async readIssue(host, token, path, number) {
+  async readIssue({ host, token, path }, number) {
+    const send = sender(host, token);
     const url = `${projectUrl(host, path)}/issues/${number}`;
     const iid = String(number);
     const [issue, labels, states, milestones] = await Promise.all([
-      graphql(host, token, ISSUE_QUERY, { path, iid }),
+      send(ISSUE_QUERY, { path, iid }),
       getPaged(`${url}/resource_label_events?per_page=100`, headers(token)),
       getPaged(`${url}/resource_state_events?per_page=100`, headers(token)),
       getPaged(`${url}/resource_milestone_events?per_page=100`, headers(token)),
     ]);
-    const { project } = issue as { project: { issue: (GitLabGraphqlIssue & { notes: GraphqlPage<GitLabGraphqlNote> }) | null } | null };
-    const found = reached(reached(project, path).issue, `Issue #${number}`);
+    const { project } = issue as { project: { issue: (GitLabIssue & { notes: GraphqlPage<GitLabNote> }) | null } | null };
+    const found = reachedIssue(project, path, number);
     const later = found.notes.pageInfo.hasNextPage
-      ? await allNodes<GitLabGraphqlNote>(
-          sender(host, token),
-          NOTES_QUERY,
-          { path, iid, cursor: found.notes.pageInfo.endCursor },
-          (data) => {
-            const answer = data as { project: { issue: { notes: GraphqlPage<GitLabGraphqlNote> } | null } | null };
-            return reached(reached(answer.project, path).issue, `Issue #${number}`).notes;
-          },
-        )
+      ? await allNodes<GitLabNote>(send, NOTES_QUERY, { path, iid, cursor: found.notes.pageInfo.endCursor }, (data) => {
+          const answer = data as { project: { issue: { notes: GraphqlPage<GitLabNote> } | null } | null };
+          return reachedIssue(answer.project, path, number).notes;
+        })
       : [];
-    const entry = fromGraphql(found);
-    const entries = [...found.notes.nodes, ...later].map(noteFromGraphql);
+    const notes = [...found.notes.nodes, ...later];
     return {
-      ...toIssue(entry),
+      ...toIssue(found),
       provider: "gitlab",
-      events: toEvents(entries, labels as GitLabLabelEvent[], states as GitLabStateEvent[], milestones as GitLabMilestoneEvent[]),
-      assignees: entry.assignees.map((assignee) => assignee.username),
-      milestone: entry.milestone?.title,
-      body: entry.description ?? "",
-      notes: toNotes(entries),
+      events: toEvents(notes, labels as GitLabLabelEvent[], states as GitLabStateEvent[], milestones as GitLabMilestoneEvent[]),
+      assignees: found.assignees.nodes.map((assignee) => assignee.username),
+      milestone: found.milestone?.title,
+      body: found.description ?? "",
+      notes: toNotes(notes),
     };
   },
 
-  async readImage(host, token, path, source) {
+  async readImage({ host, token, path }, source) {
     const upload = uploadOf(host, source);
     return upload && fetchImageOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
   },
 
-  async addComment(host, token, path, number, body) {
+  async addComment({ host, token, path }, number, body) {
+    const send = sender(host, token);
     const query = "query($path: ID!, $iid: String!) { project(fullPath: $path) { issue(iid: $iid) { id } } }";
-    const { project } = (await graphql(host, token, query, { path, iid: String(number) })) as {
-      project: { issue: { id: string } | null } | null;
-    };
-    const { id } = reached(reached(project, path).issue, `Issue #${number}`);
-    await mutate(host, token, "createNote", "CreateNoteInput", { noteableId: id, body });
+    const { project } = (await send(query, { path, iid: String(number) })) as { project: { issue: { id: string } | null } | null };
+    const { id } = reachedIssue(project, path, number);
+    await mutate(send, "createNote", "CreateNoteInput", { noteableId: id, body });
   },
 
-  async listMilestones(host, token, path) {
+  async listMilestones({ host, token, path }) {
     // includeAncestors: those of its groups can be set as well.
     const query = `query($path: ID!, $cursor: String) {
       project(fullPath: $path) {
@@ -480,10 +428,9 @@ export const gitlab: GitProvider = {
     });
   },
 
-  async createIssue(host, token, path, title, body) {
+  async createIssue({ host, token, path }, title, body) {
     const { issue } = await mutate<{ issue: { iid: string } | null }>(
-      host,
-      token,
+      sender(host, token),
       "createIssue",
       "CreateIssueInput",
       { projectPath: path, title, description: body },
@@ -492,39 +439,40 @@ export const gitlab: GitProvider = {
     return Number(reached(issue, `The new issue of ${path}`).iid);
   },
 
-  async editComment(host, token, _path, _number, id, body) {
-    await mutate(host, token, "updateNote", "UpdateNoteInput", { id, body });
+  async editComment({ host, token }, id, body) {
+    await mutate(sender(host, token), "updateNote", "UpdateNoteInput", { id, body });
   },
 
-  async deleteComment(host, token, _path, _number, id) {
-    await mutate(host, token, "destroyNote", "DestroyNoteInput", { id });
+  async deleteComment({ host, token }, id) {
+    await mutate(sender(host, token), "destroyNote", "DestroyNoteInput", { id });
   },
 
-  deleteIssue(host, token, path, number) {
+  deleteIssue({ host, token, path }, number) {
     return sendDelete(`${projectUrl(host, path)}/issues/${number}`, headers(token));
   },
 
   uploads: () => ({}),
 
-  async uploadFile(host, token, path, name, bytes) {
+  async uploadFile({ host, token, path }, name, bytes) {
     const form = new FormData();
     form.append("file", new Blob([Buffer.from(bytes)]), name);
     const response = await fetchOk(`${projectUrl(host, path)}/uploads`, headers(token), { method: "POST", body: form });
     return ((await response.json()) as { markdown: string }).markdown;
   },
 
-  async updateIssue(host, token, path, number, change) {
+  async updateIssue({ host, token, path }, number, change) {
+    const send = sender(host, token);
     const { assignees, ...rest } = change;
     if (assignees !== undefined) {
-      await mutate(host, token, "issueSetAssignees", "IssueSetAssigneesInput", {
+      await mutate(send, "issueSetAssignees", "IssueSetAssigneesInput", {
         projectPath: path,
         iid: String(number),
         assigneeUsernames: assignees,
       });
     }
     if (Object.values(rest).some((value) => value !== undefined)) {
-      const labelIds = rest.labels && idsByName(rest.labels, await allLabels(host, token, path), "label");
-      await mutate(host, token, "updateIssue", "UpdateIssueInput", toIssueInput(path, number, rest, labelIds));
+      const labelIds = rest.labels && idsByName(rest.labels, await allLabels(send, path), "label");
+      await mutate(send, "updateIssue", "UpdateIssueInput", toIssueInput(path, number, rest, labelIds));
     }
   },
 };

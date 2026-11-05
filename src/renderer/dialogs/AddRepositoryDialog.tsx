@@ -295,8 +295,8 @@ interface AddRepositoryDialogProps {
   onClose: () => void;
 }
 
-/** The one place TET talks to a host rather than a repository, so provider accounts are listed and
- *  removed here; one is added here or in the Settings' Accounts tab. */
+/** The one place TET talks to a host rather than a repository, so provider accounts are added and
+ *  removed here, as in the Settings' Accounts tab. */
 export function AddRepositoryDialog({ onClose }: AddRepositoryDialogProps) {
   const [mode, setMode] = useState<Mode>("remote");
   const [url, setUrl] = useState("");

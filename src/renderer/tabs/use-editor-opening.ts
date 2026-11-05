@@ -7,6 +7,7 @@ import {
   setIssueGoneHandler,
   setIssueTabHandler,
   setRevealHandler,
+  showsSame,
   type EditorTab,
   type OpenEditor,
 } from "../editor/editor-tab";
@@ -50,9 +51,7 @@ export function useEditorOpening(
   const openEditor = useCallback(
     (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
       const refKey = refKeyOf(ref);
-      const open = editorTabsRef.current[refKey]?.find(
-        (tab) => tab.path === path && tab.commit?.sha === how.commit?.sha && tab.issue === how.issue,
-      );
+      const open = editorTabsRef.current[refKey]?.find((tab) => showsSame(tab, { path, commit: how.commit, issue: how.issue }));
       const preview = how.keep ? undefined : previewEditorTab(ref);
       let tabId: string;
       if (open) {

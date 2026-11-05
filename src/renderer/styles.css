@@ -1740,6 +1740,10 @@ textarea:focus,
 .context-menu {
   position: fixed;
   z-index: 27;
+  /* Sized by its entries, never by the room right of where it opens: measured there before
+     `ContextMenu` moves it, a filter field's input would let it shrink, and it would grow back past
+     the window's edge once moved. */
+  width: max-content;
   /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
   overflow: hidden;
   padding: var(--menu-padding) 0;
@@ -1874,8 +1878,9 @@ textarea:focus,
 }
 
 /* A tab's own content (the editor, its Markdown preview) keeps the wider 10px scrollbar; the
-   rest of the app uses the narrower one above. */
-.pane-body ::-webkit-scrollbar {
+   rest of the app uses the narrower one above. A menu opened in a tab is drawn inside it, but is
+   the app's, so it keeps the narrower one. */
+.pane-body :not(.context-menu)::-webkit-scrollbar {
   width: 11px;
   height: 11px;
 }

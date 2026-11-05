@@ -10,35 +10,43 @@ import type {
 } from "../../shared/types/providers";
 import { fetchHttpsImage } from "../util/image-response";
 
+/** A repository's issue tracker as one call reaches it: the host, the token of the account it goes
+ *  through, and the repository's path there, "owner/name" or "group/subgroup/name". */
+export interface Tracker {
+  host: string;
+  token: string;
+  path: string;
+}
+
 /** A repository host: authenticate, list repositories with their clone url and read their issues.
  *  One interface for GitHub and GitLab, over plain REST and GraphQL rather than Octokit or GitBeaker,
- *  and kept out of the local git layer: everything past the clone goes through the local git CLI.
- *  `path` is a repository's on the host, "owner/name" or "group/subgroup/name". */
+ *  and kept out of the local git layer: everything past the clone goes through the local git CLI. */
 export interface GitProvider {
   /** Checks the token against the host and returns its login. */
   validate(host: string, token: string): Promise<string>;
   /** Every repository the token's user can reach, most recently active first. */
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
   /** The issues the filter leaves, newest first. */
-  listIssues(host: string, token: string, path: string, filter: IssueFilter): Promise<Issue[]>;
+  listIssues(tracker: Tracker, filter: IssueFilter): Promise<Issue[]>;
   /** Refuses a path the token cannot read, which is how a new issue source is checked. */
-  listLabels(host: string, token: string, path: string): Promise<string[]>;
+  listLabels(tracker: Tracker): Promise<string[]>;
   /** Who can be assigned, so external authors are not among them. */
-  listPeople(host: string, token: string, path: string): Promise<string[]>;
-  readIssue(host: string, token: string, path: string, number: number): Promise<IssueDetail>;
+  listPeople(tracker: Tracker): Promise<string[]>;
+  readIssue(tracker: Tracker, number: number): Promise<IssueDetail>;
   /** An image of an issue's text that takes the token to read; undefined for any other source. */
-  readImage(host: string, token: string, path: string, source: string): Promise<Response | undefined>;
-  listMilestones(host: string, token: string, path: string): Promise<IssueMilestone[]>;
-  createIssue(host: string, token: string, path: string, title: string, body: string): Promise<number>;
-  addComment(host: string, token: string, path: string, number: number, body: string): Promise<void>;
-  editComment(host: string, token: string, path: string, number: number, id: string, body: string): Promise<void>;
-  deleteComment(host: string, token: string, path: string, number: number, id: string): Promise<void>;
-  deleteIssue(host: string, token: string, path: string, number: number): Promise<void>;
+  readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
+  listMilestones(tracker: Tracker): Promise<IssueMilestone[]>;
+  createIssue(tracker: Tracker, title: string, body: string): Promise<number>;
+  addComment(tracker: Tracker, number: number, body: string): Promise<void>;
+  /** A comment by its id, which the tracker knows without its issue. */
+  editComment(tracker: Tracker, id: string, body: string): Promise<void>;
+  deleteComment(tracker: Tracker, id: string): Promise<void>;
+  deleteIssue(tracker: Tracker, number: number): Promise<void>;
   /** What `uploadFile` takes on this host; undefined where it takes nothing. */
   uploads(host: string): IssueUploads | undefined;
   /** Uploads a file for an issue's text and answers the Markdown that shows it. */
-  uploadFile(host: string, token: string, path: string, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
-  updateIssue(host: string, token: string, path: string, number: number, change: IssueChange): Promise<void>;
+  uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
+  updateIssue(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
 }
 
 /** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching

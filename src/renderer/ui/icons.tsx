@@ -331,7 +331,7 @@ export function RegexIcon(props: IconProps) {
   return <Lucide {...props} icon={Regex} />;
 }
 
-/** Lucide's `message-square-text` — the GRAPH's search in commit messages, an issue's comments. */
+/** Lucide's `message-square-text` — the GRAPH's search in commit messages. */
 export function MessageIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageSquareText} />;
 }
@@ -423,7 +423,7 @@ export function QuestionIcon(props: IconProps) {
 
 /**
  * Lucide's `circle-alert` — what cannot work as it stands in a dialog: its row or tab (`RowMark`,
- * `DialogTab.mark`). Its own color, not `--tet-focusBorder`: see `.tab-mark-error`.
+ * `SwitchTab.mark`). Its own color, not `--tet-focusBorder`: see `.tab-mark-error`.
  */
 export function CircleAlertIcon(props: IconProps) {
   return <Lucide {...props} icon={CircleAlert} />;

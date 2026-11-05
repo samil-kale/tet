@@ -42,7 +42,6 @@ export interface Issue {
   author: string;
   /** The first of them; a row has room for one. */
   assignee?: string;
-  comments: number;
   /** ISO 8601. */
   createdAt: string;
   labels: string[];
@@ -124,6 +123,12 @@ export interface IssueMilestone {
   /** What the tracker addresses it by, its GraphQL id. */
   id: string;
   title: string;
+}
+
+export interface IssueMilestonesResult {
+  /** The open ones. */
+  milestones?: IssueMilestone[];
+  error?: string;
 }
 
 /** What the issue's tab sets, a list as a whole; a field left out stays as it is. */

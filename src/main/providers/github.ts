@@ -38,79 +38,39 @@ export function readsWithToken(host: string, source: string): boolean {
   return url?.protocol === "https:" && url.host.toLowerCase() === host.toLowerCase();
 }
 
-/** `user` is null for a deleted account. */
-interface GitHubUser {
-  login: string;
-  avatar_url: string;
-}
-
-export interface GitHubIssue {
-  number: number;
-  title: string;
-  html_url: string;
-  state: string;
-  user: GitHubUser | null;
-  assignees: GitHubUser[];
-  comments: number;
-  created_at: string;
-  labels: (string | { name: string })[];
-  body: string | null;
-  milestone?: { title: string } | null;
-}
-
-interface GitHubComment {
-  id: string;
-  user: GitHubUser | null;
-  created_at: string;
-  body: string | null;
-}
-
-/** An entry of an issue's timeline; which of the rest it has goes by its `event`. */
-export interface GitHubTimelineEntry {
-  event: string;
-  actor?: GitHubUser | null;
-  created_at: string;
-  assignee?: GitHubUser | null;
-  label?: { name: string };
-  milestone?: { title: string };
-  rename?: { from: string; to: string };
-  source?: { issue?: { number: number; title: string; html_url: string } };
-}
-
 /** A user as GraphQL says it; null for a deleted account. */
-interface GitHubGraphqlUser {
+interface GitHubUser {
   login: string;
   avatarUrl: string;
 }
 
 /** An issue as GraphQL says it; only one read alone has the last two. */
-export interface GitHubGraphqlIssue {
+export interface GitHubIssue {
   number: number;
   title: string;
   url: string;
   state: string;
   createdAt: string;
-  author: GitHubGraphqlUser | null;
-  assignees: { nodes: GitHubGraphqlUser[] };
-  comments: { totalCount: number };
+  author: GitHubUser | null;
+  assignees: { nodes: (GitHubUser | null)[] };
   labels: { nodes: { name: string }[] };
   body?: string | null;
   milestone?: { title: string } | null;
 }
 
 /** A comment as GraphQL says it. */
-export interface GitHubGraphqlComment {
+export interface GitHubComment {
   id: string;
   body: string;
   createdAt: string;
-  author: GitHubGraphqlUser | null;
+  author: GitHubUser | null;
 }
 
 /** A timeline item as GraphQL says it; which of the rest it has goes by its `__typename`. */
-export interface GitHubGraphqlEvent {
+export interface GitHubEvent {
   __typename: string;
   createdAt: string;
-  actor: GitHubGraphqlUser | null;
+  actor: GitHubUser | null;
   assignee?: { login?: string } | null;
   label?: { name: string };
   milestoneTitle?: string;
@@ -122,7 +82,6 @@ export interface GitHubGraphqlEvent {
 const ISSUE_ROW = `number title url state createdAt
   author { login avatarUrl }
   assignees(first: 100) { nodes { login avatarUrl } }
-  comments { totalCount }
   labels(first: 100) { nodes { name } }`;
 
 const COMMENT_PAGE = `pageInfo { hasNextPage endCursor }
@@ -130,8 +89,8 @@ const COMMENT_PAGE = `pageInfo { hasNextPage endCursor }
 
 const ACTOR = "createdAt actor { login avatarUrl }";
 
-/** The kinds of timeline item the tab draws, with what `timelineEntry` calls them. */
-const EVENT_NAMES: Record<string, string> = {
+/** The kinds of timeline item the tab draws, as `toEvent` reads them. */
+const EVENT_KINDS: Record<string, Exclude<IssueEvent["kind"], "text"> | undefined> = {
   ClosedEvent: "closed",
   ReopenedEvent: "reopened",
   AssignedEvent: "assigned",
@@ -141,7 +100,7 @@ const EVENT_NAMES: Record<string, string> = {
   MilestonedEvent: "milestoned",
   DemilestonedEvent: "demilestoned",
   RenamedTitleEvent: "renamed",
-  CrossReferencedEvent: "cross-referenced",
+  CrossReferencedEvent: "linked",
 };
 
 const TIMELINE_ARGUMENTS = `itemTypes: [CLOSED_EVENT, REOPENED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, LABELED_EVENT, UNLABELED_EVENT,
@@ -196,71 +155,36 @@ const TIMELINE_QUERY = `query($owner: String!, $name: String!, $number: Int!, $c
   }
 }`;
 
-/** What a timeline entry shows, for those the tab draws; a comment is read on its own. */
-function toEvent(entry: GitHubTimelineEntry): IssueEvent | undefined {
-  const base = { actor: entry.actor?.login ?? "ghost", createdAt: entry.created_at };
-  switch (entry.event) {
+/** What a timeline item shows, for those the tab draws; a comment is read on its own. */
+function toEvent(item: GitHubEvent): IssueEvent | undefined {
+  const base = { actor: item.actor?.login ?? "ghost", createdAt: item.createdAt };
+  const kind = EVENT_KINDS[item.__typename];
+  switch (kind) {
     case "closed":
     case "reopened":
-      return { ...base, kind: entry.event };
+      return { ...base, kind };
     case "assigned":
     case "unassigned":
-      return entry.assignee ? { ...base, kind: entry.event, login: entry.assignee.login } : undefined;
+      return item.assignee?.login === undefined ? undefined : { ...base, kind, login: item.assignee.login };
     case "labeled":
     case "unlabeled":
-      return entry.label && { ...base, kind: entry.event, label: entry.label.name };
+      return item.label && { ...base, kind, label: item.label.name };
     case "milestoned":
     case "demilestoned":
-      return entry.milestone && { ...base, kind: entry.event, milestone: entry.milestone.title };
+      return item.milestoneTitle === undefined ? undefined : { ...base, kind, milestone: item.milestoneTitle };
     case "renamed":
-      return entry.rename && { ...base, kind: "renamed", from: entry.rename.from, to: entry.rename.to };
-    case "cross-referenced": {
-      const issue = entry.source?.issue;
-      return issue && { ...base, kind: "linked", number: issue.number, title: issue.title, url: issue.html_url };
+      return item.previousTitle === undefined ? undefined : { ...base, kind, from: item.previousTitle, to: item.currentTitle ?? "" };
+    case "linked": {
+      const { number, title, url } = item.source ?? {};
+      return number === undefined ? undefined : { ...base, kind, number, title: title ?? "", url: url ?? "" };
     }
-    default:
+    case undefined:
       return undefined;
   }
 }
 
-export function toEvents(entries: GitHubTimelineEntry[]): IssueEvent[] {
-  return entries.map(toEvent).filter((event) => event !== undefined);
-}
-
-function userOf(person: GitHubGraphqlUser | null): GitHubUser | null {
-  return person && { login: person.login, avatar_url: person.avatarUrl };
-}
-
-/** An issue read over GraphQL as `toIssue` takes it. */
-export function fromGraphql(entry: GitHubGraphqlIssue): GitHubIssue {
-  return {
-    number: entry.number,
-    title: entry.title,
-    html_url: entry.url,
-    state: entry.state.toLowerCase(),
-    user: userOf(entry.author),
-    assignees: entry.assignees.nodes.flatMap((person) => userOf(person) ?? []),
-    comments: entry.comments.totalCount,
-    created_at: entry.createdAt,
-    labels: entry.labels.nodes,
-    body: entry.body ?? null,
-    milestone: entry.milestone,
-  };
-}
-
-/** A timeline item read over GraphQL as `toEvents` takes it. */
-export function timelineEntry(item: GitHubGraphqlEvent): GitHubTimelineEntry {
-  const { number, title, url } = item.source ?? {};
-  return {
-    event: EVENT_NAMES[item.__typename] ?? item.__typename,
-    actor: userOf(item.actor),
-    created_at: item.createdAt,
-    assignee: item.assignee?.login === undefined ? undefined : { login: item.assignee.login, avatar_url: "" },
-    label: item.label,
-    milestone: item.milestoneTitle === undefined ? undefined : { title: item.milestoneTitle },
-    rename: item.previousTitle === undefined ? undefined : { from: item.previousTitle, to: item.currentTitle ?? "" },
-    source: number === undefined ? undefined : { issue: { number, title: title ?? "", html_url: url ?? "" } },
-  };
+export function toEvents(items: GitHubEvent[]): IssueEvent[] {
+  return items.map(toEvent).filter((event) => event !== undefined);
 }
 
 /** What of a change `updateIssue` sets, in GitHub's words: a milestone, labels and assignees by their
@@ -391,7 +315,7 @@ export function issuesVariables(path: string, filter: IssueFilter): Record<strin
 }
 
 /** Whether an issue carries every one of a filter's labels. */
-export function carriesAll(entry: GitHubGraphqlIssue, labels: string[]): boolean {
+export function carriesAll(entry: GitHubIssue, labels: string[]): boolean {
   return labels.every((label) => entry.labels.nodes.some((node) => node.name === label));
 }
 
@@ -399,7 +323,7 @@ export function carriesAll(entry: GitHubGraphqlIssue, labels: string[]): boolean
 function avatarsOf(users: (GitHubUser | null)[]): Record<string, string> {
   const avatars: Record<string, string> = {};
   for (const user of users) {
-    const url = user && URL.parse(user.avatar_url);
+    const url = user && URL.parse(user.avatarUrl);
     if (user && url) {
       url.searchParams.set("s", "40");
       avatars[user.login] = url.href;
@@ -408,27 +332,32 @@ function avatarsOf(users: (GitHubUser | null)[]): Record<string, string> {
   return avatars;
 }
 
+/** Who an issue is assigned to; a deleted account is none. */
+function assigneesOf(entry: GitHubIssue): GitHubUser[] {
+  return entry.assignees.nodes.flatMap((person) => person ?? []);
+}
+
 export function toIssue(entry: GitHubIssue): Issue {
+  const assignees = assigneesOf(entry);
   return {
     number: entry.number,
     title: entry.title,
-    url: entry.html_url,
-    open: entry.state === "open",
-    author: entry.user?.login ?? "ghost",
-    assignee: entry.assignees[0]?.login,
-    comments: entry.comments,
-    createdAt: entry.created_at,
-    labels: entry.labels.map((label) => (typeof label === "string" ? label : label.name)),
-    avatars: avatarsOf([entry.user, ...entry.assignees]),
+    url: entry.url,
+    open: entry.state === "OPEN",
+    author: entry.author?.login ?? "ghost",
+    assignee: assignees[0]?.login,
+    createdAt: entry.createdAt,
+    labels: entry.labels.nodes.map((label) => label.name),
+    avatars: avatarsOf([entry.author, ...assignees]),
   };
 }
 
 function toNote(entry: GitHubComment): IssueNote {
   return {
     id: entry.id,
-    author: entry.user?.login ?? "ghost",
-    createdAt: entry.created_at,
-    body: entry.body ?? "",
+    author: entry.author?.login ?? "ghost",
+    createdAt: entry.createdAt,
+    body: entry.body,
   };
 }
 
@@ -472,84 +401,78 @@ export const github: GitProvider = {
     }));
   },
 
-  async listIssues(host, token, path, filter) {
-    const entries = await allNodes<GitHubGraphqlIssue>(
+  async listIssues({ host, token, path }, filter) {
+    const entries = await allNodes<GitHubIssue>(
       sender(host, token),
       ISSUES_QUERY,
       issuesVariables(path, filter),
-      (data) => (data as { repository: { issues: GraphqlPage<GitHubGraphqlIssue> } }).repository.issues,
+      (data) => (data as { repository: { issues: GraphqlPage<GitHubIssue> } }).repository.issues,
     );
-    return entries.filter((entry) => carriesAll(entry, filter.labels)).map((entry) => toIssue(fromGraphql(entry)));
+    return entries.filter((entry) => carriesAll(entry, filter.labels)).map(toIssue);
   },
 
-  async listLabels(host, token, path) {
+  async listLabels({ host, token, path }) {
     return (await allLabels(sender(host, token), path)).map((entry) => entry.name);
   },
 
-  async listPeople(host, token, path) {
+  async listPeople({ host, token, path }) {
     return (await allAssignable(sender(host, token), path)).map((entry) => entry.name);
   },
 
-  async readIssue(host, token, path, number) {
+  async readIssue({ host, token, path }, number) {
     const send = sender(host, token);
     const variables = { ...repositoryOf(path), number };
     const data = (await send(ISSUE_QUERY, variables)) as {
       repository: {
-        issue: GitHubGraphqlIssue & { commentPage: GraphqlPage<GitHubGraphqlComment>; timelineItems: GraphqlPage<GitHubGraphqlEvent> };
+        issue: GitHubIssue & { commentPage: GraphqlPage<GitHubComment>; timelineItems: GraphqlPage<GitHubEvent> };
       };
     };
     const found = data.repository.issue;
     const [laterComments, laterEvents] = await Promise.all([
       found.commentPage.pageInfo.hasNextPage
-        ? allNodes<GitHubGraphqlComment>(
+        ? allNodes<GitHubComment>(
             send,
             COMMENTS_QUERY,
             { ...variables, cursor: found.commentPage.pageInfo.endCursor },
-            (answer) => (answer as { repository: { issue: { comments: GraphqlPage<GitHubGraphqlComment> } } }).repository.issue.comments,
+            (answer) => (answer as { repository: { issue: { comments: GraphqlPage<GitHubComment> } } }).repository.issue.comments,
           )
         : [],
       found.timelineItems.pageInfo.hasNextPage
-        ? allNodes<GitHubGraphqlEvent>(
+        ? allNodes<GitHubEvent>(
             send,
             TIMELINE_QUERY,
             { ...variables, cursor: found.timelineItems.pageInfo.endCursor },
-            (answer) =>
-              (answer as { repository: { issue: { timelineItems: GraphqlPage<GitHubGraphqlEvent> } } }).repository.issue.timelineItems,
+            (answer) => (answer as { repository: { issue: { timelineItems: GraphqlPage<GitHubEvent> } } }).repository.issue.timelineItems,
           )
         : [],
     ]);
-    const entry = fromGraphql(found);
-    const notes = [...found.commentPage.nodes, ...laterComments].map((comment): GitHubComment => ({
-      id: comment.id,
-      user: userOf(comment.author),
-      created_at: comment.createdAt,
-      body: comment.body,
-    }));
-    const entries = [...found.timelineItems.nodes, ...laterEvents].map(timelineEntry);
+    const assignees = assigneesOf(found);
+    const comments = [...found.commentPage.nodes, ...laterComments];
+    const items = [...found.timelineItems.nodes, ...laterEvents];
     return {
-      ...toIssue(entry),
+      ...toIssue(found),
       provider: "github",
-      avatars: avatarsOf([entry.user, ...entry.assignees, ...notes.map((note) => note.user), ...entries.map((item) => item.actor ?? null)]),
-      events: toEvents(entries),
-      assignees: entry.assignees.map((assignee) => assignee.login),
-      milestone: entry.milestone?.title,
-      body: entry.body ?? "",
-      notes: notes.map(toNote),
+      avatars: avatarsOf([found.author, ...assignees, ...comments.map((comment) => comment.author), ...items.map((item) => item.actor)]),
+      events: toEvents(items),
+      assignees: assignees.map((assignee) => assignee.login),
+      milestone: found.milestone?.title,
+      body: found.body ?? "",
+      notes: comments.map(toNote),
     };
   },
 
-  async readImage(host, token, _path, source) {
+  async readImage({ host, token }, source) {
     return readsWithToken(host, source) ? fetchImageOk(source, { Authorization: `Bearer ${token}`, "User-Agent": "tet" }) : undefined;
   },
 
-  async addComment(host, token, path, number, body) {
+  async addComment({ host, token, path }, number, body) {
     const send = sender(host, token);
     await send("mutation($input: AddCommentInput!) { addComment(input: $input) { clientMutationId } }", {
       input: { subjectId: await issueNodeId(send, path, number), body },
     });
   },
 
-  async updateIssue(host, token, path, number, change) {
+  async updateIssue({ host, token, path }, number, change) {
     const send = sender(host, token);
     const [issueId, labelIds, assigneeIds] = await Promise.all([
       issueNodeId(send, path, number),
@@ -561,7 +484,7 @@ export const github: GitProvider = {
     });
   },
 
-  async listMilestones(host, token, path) {
+  async listMilestones({ host, token, path }) {
     const query = `query($owner: String!, $name: String!, $cursor: String) {
       repository(owner: $owner, name: $name) {
         milestones(first: 100, after: $cursor, states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }) {
@@ -578,7 +501,7 @@ export const github: GitProvider = {
     );
   },
 
-  async createIssue(host, token, path, title, body) {
+  async createIssue({ host, token, path }, title, body) {
     const send = sender(host, token);
     const { id } = await repositoryIds(send, path);
     const data = (await send("mutation($input: CreateIssueInput!) { createIssue(input: $input) { issue { number } } }", {
@@ -587,19 +510,19 @@ export const github: GitProvider = {
     return data.createIssue.issue.number;
   },
 
-  async editComment(host, token, _path, _number, id, body) {
+  async editComment({ host, token }, id, body) {
     await sender(host, token)("mutation($input: UpdateIssueCommentInput!) { updateIssueComment(input: $input) { clientMutationId } }", {
       input: { id, body },
     });
   },
 
-  async deleteComment(host, token, _path, _number, id) {
+  async deleteComment({ host, token }, id) {
     await sender(host, token)("mutation($input: DeleteIssueCommentInput!) { deleteIssueComment(input: $input) { clientMutationId } }", {
       input: { id },
     });
   },
 
-  async deleteIssue(host, token, path, number) {
+  async deleteIssue({ host, token, path }, number) {
     const send = sender(host, token);
     await send("mutation($input: DeleteIssueInput!) { deleteIssue(input: $input) { clientMutationId } }", {
       input: { issueId: await issueNodeId(send, path, number) },
@@ -609,7 +532,7 @@ export const github: GitProvider = {
   uploads: (host) => (hasUpload(host) ? { extensions: Object.keys(UPLOAD_TYPES) } : undefined),
 
   // Undocumented, and the one GitHub's own CLI uploads with; the bytes go as they are.
-  async uploadFile(host, token, path, name, bytes) {
+  async uploadFile({ host, token, path }, name, bytes) {
     const contentType = contentTypeOf(name);
     if (contentType === undefined) {
       throw new Error(`GitHub takes only images and videos from a token: attach ${name} on ${host}`);
