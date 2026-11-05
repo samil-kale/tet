@@ -20,6 +20,7 @@ import {
   issueMilestones,
   issueOptions,
   loadIssueImage,
+  openIssueFile,
   openTabIssueInAgent,
   previewWithheld,
   reloadIssue,
@@ -148,6 +149,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   const issueActions = useMemo<IssueActions>(
     () => ({
       loadImage: (source) => loadIssueImage(tabId, source),
+      openFile: (path) => openIssueFile(tabId, path),
       refresh: () => void reloadIssue(tabId),
       comment: (body) => commentOnIssue(tabId, body),
       editComment: (id, body) => editIssueComment(tabId, id, body),

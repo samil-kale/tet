@@ -7,19 +7,26 @@ import { PROVIDERS } from "../../src/main/providers";
 import {
   contentTypeOf,
   github,
-  graphqlError,
-  issuesUrl as gitHubIssuesUrl,
+  carriesAll,
+  fromGraphql as fromGitHubGraphql,
+  issuesVariables as gitHubIssuesVariables,
+  readsWithToken,
   toEvents as toGitHubEvents,
   toIssue as toGitHubIssue,
-  toIssueUpdate as toGitHubUpdate,
+  timelineEntry,
+  toIssueInput as toGitHubInput,
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
+  avatarUrlOf,
+  fromGraphql as fromGitLabGraphql,
   gitlab,
-  issuesUrl as gitLabIssuesUrl,
+  issuesVariables,
+  mutationError,
+  noteFromGraphql as noteFromGitLabGraphql,
   toEvents as toGitLabEvents,
   toIssue as toGitLabIssue,
-  toIssueUpdate,
+  toIssueInput,
   toNotes as toGitLabNotes,
   uploadOf,
 } from "../../src/main/providers/gitlab";
@@ -32,7 +39,7 @@ import {
   type IssueAccounts,
   type IssueRepository,
 } from "../../src/main/providers/issues";
-import { ApiError } from "../../src/main/providers/provider";
+import { ApiError, graphqlError, idsByName } from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
 import { readIssueSource } from "../../src/main/store/tet-json";
 import type { ProviderAccount } from "../../src/shared/types/providers";
@@ -146,8 +153,8 @@ describe("the issues of a tracker", () => {
     assert.deepEqual(
       toGitLabEvents(
         [
-          { id: 1, system: true, author: user, created_at, body: "assigned to @anna" },
-          { id: 2, system: false, author: user, created_at, body: "Comment" },
+          { id: "n1", system: true, author: user, created_at, body: "assigned to @anna" },
+          { id: "n2", system: false, author: user, created_at, body: "Comment" },
         ],
         [
           { user, created_at, action: "add", label: { name: "bug" } },
@@ -178,22 +185,26 @@ describe("the issues of a tracker", () => {
 
   it("asks each host for the filter in its own words", () => {
     const filter = { state: "closed" as const, author: "mira", assignee: "jonas", labels: ["bug", "ui"] };
-    const hub = new URL(gitHubIssuesUrl("github.com", "o/r", filter));
-    assert.equal(hub.origin + hub.pathname, "https://api.github.com/repos/o/r/issues");
-    assert.equal(hub.searchParams.get("state"), "closed");
-    assert.equal(hub.searchParams.get("creator"), "mira");
-    assert.equal(hub.searchParams.get("assignee"), "jonas");
-    assert.equal(hub.searchParams.get("labels"), "bug,ui");
-    assert.equal(new URL(gitHubIssuesUrl("github.com", "o/r", { labels: [] })).searchParams.get("state"), "all");
+    // As it is sent: what is left out stays out of the request.
+    const hub = (...args: Parameters<typeof gitHubIssuesVariables>): unknown => JSON.parse(JSON.stringify(gitHubIssuesVariables(...args)));
+    assert.deepEqual(hub("o/r", filter), {
+      owner: "o",
+      name: "r",
+      filter: { states: ["CLOSED"], createdBy: "mira", assignee: "jonas", labels: ["bug", "ui"] },
+    });
+    assert.deepEqual(hub("o/r", { state: "open", labels: [] }), { owner: "o", name: "r", filter: { states: ["OPEN"] } });
+    assert.deepEqual(hub("o/r", { labels: [] }), { owner: "o", name: "r", filter: {} });
 
-    const lab = new URL(gitLabIssuesUrl("gitlab.example.com", "g/s/t", filter));
-    assert.ok(lab.href.startsWith("https://gitlab.example.com/api/v4/projects/g%2Fs%2Ft/issues?"));
-    assert.equal(lab.searchParams.get("state"), "closed");
-    assert.equal(lab.searchParams.get("author_username"), "mira");
-    assert.equal(lab.searchParams.get("assignee_username"), "jonas");
-    assert.equal(lab.searchParams.get("labels"), "bug,ui");
-    assert.equal(new URL(gitLabIssuesUrl("gitlab.example.com", "g/t", { state: "open", labels: [] })).searchParams.get("state"), "opened");
-    assert.equal(new URL(gitLabIssuesUrl("gitlab.example.com", "g/t", { labels: [] })).searchParams.has("state"), false);
+    const sent = (...args: Parameters<typeof issuesVariables>): unknown => JSON.parse(JSON.stringify(issuesVariables(...args)));
+    assert.deepEqual(sent("g/s/t", filter), {
+      path: "g/s/t",
+      state: "closed",
+      authorUsername: "mira",
+      assigneeUsernames: ["jonas"],
+      labelName: ["bug", "ui"],
+    });
+    assert.deepEqual(sent("g/t", { state: "open", labels: [] }), { path: "g/t", state: "opened" });
+    assert.deepEqual(sent("g/t", { labels: [] }), { path: "g/t" });
   });
 
   it("finds an upload to read with the token, on the account's host alone", () => {
@@ -210,27 +221,169 @@ describe("the issues of a tracker", () => {
     assert.equal(uploadOf(host, "docs/a.png"), undefined);
   });
 
-  it("puts a change in GitLab's words, refusing a login no member has", () => {
-    const members = [{ id: 7, username: "anna", avatar_url: null }];
-    // As it is sent: what is left out stays out of the request.
-    const sent = (...args: Parameters<typeof toIssueUpdate>): unknown => JSON.parse(JSON.stringify(toIssueUpdate(...args)));
-    assert.deepEqual(sent({ labels: ["a", "b"] }, []), { labels: "a,b" });
-    assert.deepEqual(sent({ assignees: ["anna"] }, members), { assignee_ids: [7] });
-    assert.deepEqual(sent({ assignees: [], labels: [] }, []), { labels: "", assignee_ids: [] });
-    assert.deepEqual(sent({ title: "T", body: "B" }, []), { title: "T", description: "B" });
-    assert.deepEqual(sent({ state: "closed" }, []), { state_event: "close" });
-    assert.deepEqual(sent({ state: "open" }, []), { state_event: "reopen" });
-    assert.deepEqual(sent({ milestone: { id: 3, title: "M" } }, []), { milestone_id: 3 });
-    assert.deepEqual(sent({ milestone: null }, []), { milestone_id: 0 });
-    assert.throws(() => toIssueUpdate({ assignees: ["tom"] }, members), /tom is no member/);
+  it("asks for an image with GitHub's token on the account's host alone", () => {
+    assert.equal(readsWithToken("github.com", "https://github.com/user-attachments/assets/1"), true);
+    assert.equal(readsWithToken("github.com", "https://GitHub.com/a.png"), true);
+    assert.equal(readsWithToken("github.com", "https://example.com/a.png"), false);
+    assert.equal(readsWithToken("github.com", "https://github.com.example.com/a.png"), false);
+    assert.equal(readsWithToken("github.com", "http://github.com/a.png"), false);
+    assert.equal(readsWithToken("github.com", "docs/a.png"), false);
+  });
+
+  it("puts a change in GitLab's words", () => {
+    const issue = { projectPath: "g/t", iid: "12" };
+    // As it is sent: what is left out stays out of the request, a null stays in.
+    const sent = (change: Parameters<typeof toIssueInput>[2], labelIds?: string[]): unknown =>
+      JSON.parse(JSON.stringify(toIssueInput("g/t", 12, change, labelIds)));
+    assert.deepEqual(sent({ title: "T", body: "B" }), { ...issue, title: "T", description: "B" });
+    assert.deepEqual(sent({ state: "closed" }), { ...issue, stateEvent: "CLOSE" });
+    assert.deepEqual(sent({ state: "open" }), { ...issue, stateEvent: "REOPEN" });
+    assert.deepEqual(sent({ milestone: { id: "m3", title: "M" } }), { ...issue, milestoneId: "m3" });
+    assert.deepEqual(sent({ milestone: null }), { ...issue, milestoneId: null });
+    assert.deepEqual(sent({ labels: [] }, []), { ...issue, labelIds: [] });
+  });
+
+  it("finds ids by their names, refusing a name it does not know", () => {
+    const labels = [
+      { id: "gid://gitlab/ProjectLabel/1", name: "bug" },
+      { id: "gid://gitlab/GroupLabel/2", name: "ui" },
+    ];
+    assert.deepEqual(idsByName(["ui", "bug"], labels, "label"), ["gid://gitlab/GroupLabel/2", "gid://gitlab/ProjectLabel/1"]);
+    assert.deepEqual(idsByName([], labels, "label"), []);
+    assert.throws(() => idsByName(["new"], labels, "label"), /new is no label/);
+  });
+
+  it("reads a note GitLab's GraphQL answers, a deleted account's as ghost", () => {
+    const note = { id: "gid://gitlab/Note/42", system: false, body: "B", createdAt: "a" };
+    assert.deepEqual(noteFromGitLabGraphql("gitlab.example.com", { ...note, author: { username: "anna", avatarUrl: "/a.png" } }), {
+      id: "gid://gitlab/Note/42",
+      system: false,
+      author: { username: "anna", avatar_url: "https://gitlab.example.com/a.png" },
+      created_at: "a",
+      body: "B",
+    });
+    assert.equal(noteFromGitLabGraphql("gitlab.example.com", { ...note, author: null }).author.username, "ghost");
+  });
+
+  it("reads an issue GitLab's GraphQL answers as REST's", () => {
+    const person = { username: "anna", avatarUrl: "/uploads/-/a.png" };
+    const entry = fromGitLabGraphql("gitlab.example.com", {
+      iid: "12",
+      title: "T",
+      webUrl: "https://gitlab.example.com/g/t/-/work_items/12",
+      state: "opened",
+      createdAt: "2026-10-01T00:00:00Z",
+      description: null,
+      userNotesCount: 2,
+      author: person,
+      assignees: { nodes: [{ username: "tom", avatarUrl: null }] },
+      labels: { nodes: [{ title: "bug" }] },
+      milestone: { title: "May" },
+    });
+    assert.deepEqual(entry, {
+      iid: 12,
+      title: "T",
+      web_url: "https://gitlab.example.com/g/t/-/work_items/12",
+      state: "opened",
+      author: { username: "anna", avatar_url: "https://gitlab.example.com/uploads/-/a.png" },
+      assignees: [{ username: "tom", avatar_url: null }],
+      user_notes_count: 2,
+      created_at: "2026-10-01T00:00:00Z",
+      labels: ["bug"],
+      description: null,
+      milestone: { title: "May" },
+    });
+  });
+
+  it("makes a GitLab picture's URL whole", () => {
+    assert.equal(avatarUrlOf("gitlab.example.com", null), null);
+    assert.equal(avatarUrlOf("gitlab.example.com", "https://g/a.png"), "https://g/a.png");
+    assert.equal(avatarUrlOf("gitlab.example.com", "/uploads/a.png"), "https://gitlab.example.com/uploads/a.png");
+    assert.equal(avatarUrlOf("gitlab.example.com", "/avatar/ab"), "https://secure.gravatar.com/avatar/ab?s=80&d=identicon");
+  });
+
+  it("reads what a GitLab mutation refused in its own field", () => {
+    assert.equal(mutationError({ errors: [] }), undefined);
+    assert.equal(mutationError({}), undefined);
+    assert.equal(mutationError({ errors: ["No", "Other"] }), "No; Other");
+    assert.equal(mutationError(null), "GitLab answered the change with nothing");
   });
 
   it("puts a change in GitHub's words", () => {
-    const sent = (change: Parameters<typeof toGitHubUpdate>[0]): unknown => JSON.parse(JSON.stringify(toGitHubUpdate(change)));
-    assert.deepEqual(sent({ title: "T", state: "closed", labels: ["a"] }), { title: "T", state: "closed", labels: ["a"] });
-    assert.deepEqual(sent({ milestone: { id: 3, title: "M" } }), { milestone: 3 });
-    assert.deepEqual(sent({ milestone: null }), { milestone: null });
-    assert.deepEqual(sent({ assignees: [] }), { assignees: [] });
+    // As it is sent: what is left out stays out of the request, a null stays in.
+    const sent = (change: Parameters<typeof toGitHubInput>[1], labelIds?: string[], assigneeIds?: string[]): unknown =>
+      JSON.parse(JSON.stringify(toGitHubInput("I1", change, labelIds, assigneeIds)));
+    assert.deepEqual(sent({ title: "T", body: "B" }), { id: "I1", title: "T", body: "B" });
+    assert.deepEqual(sent({ state: "closed" }), { id: "I1", state: "CLOSED" });
+    assert.deepEqual(sent({ state: "open" }), { id: "I1", state: "OPEN" });
+    assert.deepEqual(sent({ milestone: { id: "m3", title: "M" } }), { id: "I1", milestoneId: "m3" });
+    assert.deepEqual(sent({ milestone: null }), { id: "I1", milestoneId: null });
+    assert.deepEqual(sent({ labels: ["a"] }, ["L1"]), { id: "I1", labelIds: ["L1"] });
+    assert.deepEqual(sent({ assignees: [] }, undefined, []), { id: "I1", assigneeIds: [] });
+  });
+
+  const hubIssue = {
+    number: 412,
+    title: "T",
+    url: "https://github.com/o/r/issues/412",
+    state: "OPEN",
+    createdAt: "a",
+    author: { login: "mira", avatarUrl: "https://a/1" },
+    assignees: { nodes: [{ login: "jonas", avatarUrl: "https://a/2" }] },
+    comments: { totalCount: 3 },
+    labels: { nodes: [{ name: "bug" }, { name: "ui" }] },
+  };
+
+  it("reads an issue GitHub's GraphQL answers, a deleted account's as no user", () => {
+    assert.deepEqual(fromGitHubGraphql(hubIssue), {
+      number: 412,
+      title: "T",
+      html_url: "https://github.com/o/r/issues/412",
+      state: "open",
+      user: { login: "mira", avatar_url: "https://a/1" },
+      assignees: [{ login: "jonas", avatar_url: "https://a/2" }],
+      comments: 3,
+      created_at: "a",
+      labels: [{ name: "bug" }, { name: "ui" }],
+      body: null,
+      milestone: undefined,
+    });
+    assert.equal(fromGitHubGraphql({ ...hubIssue, author: null }).user, null);
+  });
+
+  it("keeps an issue only with all of a filter's labels, as GitHub's own filter takes any", () => {
+    assert.equal(carriesAll(hubIssue, []), true);
+    assert.equal(carriesAll(hubIssue, ["ui", "bug"]), true);
+    assert.equal(carriesAll(hubIssue, ["bug", "docs"]), false);
+  });
+
+  it("reads GitHub's timeline items as what the tab draws", () => {
+    const happened = { createdAt: "a", actor: { login: "mira", avatarUrl: "https://a/1" } };
+    const base = { actor: "mira", createdAt: "a" };
+    assert.deepEqual(
+      toGitHubEvents(
+        [
+          { __typename: "ClosedEvent", ...happened },
+          { __typename: "ReopenedEvent", createdAt: "a", actor: null },
+          { __typename: "AssignedEvent", ...happened, assignee: { login: "jonas" } },
+          { __typename: "UnassignedEvent", ...happened, assignee: {} },
+          { __typename: "LabeledEvent", ...happened, label: { name: "bug" } },
+          { __typename: "DemilestonedEvent", ...happened, milestoneTitle: "May" },
+          { __typename: "RenamedTitleEvent", ...happened, previousTitle: "A", currentTitle: "B" },
+          { __typename: "CrossReferencedEvent", ...happened, source: { number: 7, title: "T", url: "https://x/7" } },
+          { __typename: "CrossReferencedEvent", ...happened, source: {} },
+        ].map(timelineEntry),
+      ),
+      [
+        { ...base, kind: "closed" },
+        { actor: "ghost", createdAt: "a", kind: "reopened" },
+        { ...base, kind: "assigned", login: "jonas" },
+        { ...base, kind: "labeled", label: "bug" },
+        { ...base, kind: "demilestoned", milestone: "May" },
+        { ...base, kind: "renamed", from: "A", to: "B" },
+        { ...base, kind: "linked", number: 7, title: "T", url: "https://x/7" },
+      ],
+    );
   });
 
   it("offers an upload where the host takes one from a token, and what it takes", () => {
@@ -248,7 +401,7 @@ describe("the issues of a tracker", () => {
     assert.equal(graphqlError({}), undefined);
     assert.equal(graphqlError({ errors: [] }), undefined);
     assert.equal(graphqlError({ errors: [{ message: "No permission" }, { message: "Other" }] }), "No permission; Other");
-    assert.equal(graphqlError({ errors: [{}] }), "GitHub refused the request");
+    assert.equal(graphqlError({ errors: [{}] }), "The host refused the request");
   });
 
   it("shows a GitHub upload by its kind", () => {
@@ -262,10 +415,10 @@ describe("the issues of a tracker", () => {
     const author = { username: "anna", avatar_url: null };
     assert.deepEqual(
       toGitLabNotes([
-        { id: 1, system: true, author, created_at: "a", body: "added label" },
-        { id: 2, system: false, author, created_at: "b", body: "Comment" },
+        { id: "n1", system: true, author, created_at: "a", body: "added label" },
+        { id: "n2", system: false, author, created_at: "b", body: "Comment" },
       ]),
-      [{ id: 2, author: "anna", createdAt: "b", body: "Comment" }],
+      [{ id: "n2", author: "anna", createdAt: "b", body: "Comment" }],
     );
   });
 
@@ -398,10 +551,11 @@ describe("the issues of a tracker", () => {
   it("writes an issue as a file that says where its text comes from", () => {
     const markdown = issueMarkdown({
       ...toGitHubIssue(githubIssue),
+      provider: "github",
       assignees: ["jonas", "lena"],
       milestone: "May",
       body: "Text",
-      notes: [{ id: 1, author: "lena", createdAt: "2026-10-03", body: "Comment" }],
+      notes: [{ id: "n1", author: "lena", createdAt: "2026-10-03", body: "Comment" }],
       events: [{ actor: "lena", createdAt: "2026-10-03", kind: "closed" }],
     });
     assert.ok(markdown.startsWith("# #412 Focus is lost\n\nCopied from https://github.com/o/r/issues/412."));
@@ -419,6 +573,7 @@ describe("the issues of a tracker", () => {
     }
     const bare = issueMarkdown({
       ...toGitHubIssue({ ...githubIssue, assignees: [], labels: [] }),
+      provider: "github",
       assignees: [],
       body: "",
       notes: [],

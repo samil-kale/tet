@@ -615,6 +615,14 @@ export async function loadIssueImage(tabId: string, source: string): Promise<str
   return /^https:/i.test(source) ? ((await window.tet.shell.fetchImage(source)) ?? undefined) : undefined;
 }
 
+/** A file of the repository or worktree of tab `tabId`, led to by a link of its issue's text. */
+export function openIssueFile(tabId: string, path: string): void {
+  const view = views.get(tabId);
+  if (view) {
+    openFile(view.ref, path, isMarkdown(path));
+  }
+}
+
 /** Runs a write to the tracker under the tab's progress bar, however many overlap. */
 async function underIssueBar<T>(view: EditorView, work: () => Promise<T>): Promise<T> {
   view.issueWork = (view.issueWork ?? 0) + 1;
@@ -701,7 +709,7 @@ export async function commentOnIssue(tabId: string, body: string): Promise<boole
 }
 
 /** A comment of the tab's issue changed; false, with a notice, when refused. */
-export async function editIssueComment(tabId: string, id: number, body: string): Promise<boolean> {
+export async function editIssueComment(tabId: string, id: string, body: string): Promise<boolean> {
   const view = views.get(tabId);
   const number = view?.snapshot.issue;
   if (!view || number === undefined) {
@@ -717,7 +725,7 @@ export async function editIssueComment(tabId: string, id: number, body: string):
 }
 
 /** A comment of the tab's issue deleted, or a notice when refused. */
-export async function deleteIssueComment(tabId: string, id: number): Promise<void> {
+export async function deleteIssueComment(tabId: string, id: string): Promise<void> {
   const view = views.get(tabId);
   const number = view?.snapshot.issue;
   if (!view || number === undefined) {
@@ -780,8 +788,7 @@ export async function uploadIssueFile(tabId: string, file: File): Promise<string
   return markdown;
 }
 
-/** Changes the tab's issue: shown at once, and read back from the tracker if it refuses, answering
- *  what it refused. A changed text is read back regardless, for the host's rendering of it. */
+/** Changes the tab's issue: shown at once and read back from the tracker, answering what it refused. */
 async function changeIssue(tabId: string, change: IssueChange): Promise<string | undefined> {
   const view = views.get(tabId);
   const number = view?.snapshot.issue;
@@ -795,7 +802,6 @@ async function changeIssue(tabId: string, change: IssueChange): Promise<string |
       ...detail,
       title: change.title ?? detail.title,
       body: change.body ?? detail.body,
-      bodyHtml: change.body === undefined ? detail.bodyHtml : undefined,
       open: change.state === undefined ? detail.open : change.state === "open",
       milestone: change.milestone === undefined ? detail.milestone : change.milestone?.title,
       labels: change.labels ?? detail.labels,

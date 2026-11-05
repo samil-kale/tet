@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/types/providers";
+import type { IssueChange, IssueDetail, IssueMilestone, ProviderId } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import { agentEntry } from "../ui/agent-icons";
@@ -12,7 +12,8 @@ import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
 import { issueLink } from "./editor-tab";
 import { issueThread, type ThreadEvent } from "./issue-thread";
-import { createMarkdownPreview, renderHtml, renderMarkdown } from "./markdown";
+import { issueFileLink, issueTextHtml } from "./issue-text";
+import { createMarkdownPreview, renderHtml, resolveLink } from "./markdown";
 
 const DAY_MS = 86_400_000;
 
@@ -94,10 +95,12 @@ type LoadImage = (source: string) => Promise<string | undefined>;
  *  says so in a notice, and false where what was typed then stays. */
 export interface IssueActions {
   loadImage: LoadImage;
+  /** A file of the repository a link of its text leads to. */
+  openFile: (path: string) => void;
   refresh: () => void;
   comment: (body: string) => Promise<boolean>;
-  editComment: (id: number, body: string) => Promise<boolean>;
-  deleteComment: (id: number) => Promise<void>;
+  editComment: (id: string, body: string) => Promise<boolean>;
+  deleteComment: (id: string) => Promise<void>;
   deleteIssue: () => Promise<void>;
   update: (change: IssueChange) => void;
   /** The title changed; what the tracker refused, for the dialog that asked (`askName`). */
@@ -110,17 +113,19 @@ export interface IssueActions {
 }
 
 interface IssueTextProps {
-  /** The Markdown as written, or the host's rendering of it where there is one (`bodyHtml`). */
+  /** The Markdown as written. */
   text: string;
-  html: string | undefined;
+  provider: ProviderId;
   /** What a relative link leads from. */
   issueUrl: string;
   loadImage: LoadImage;
+  openFile: IssueActions["openFile"];
 }
 
-/** Text written on the tracker, rendered as the Markdown preview renders a file, in a shadow root of
- *  its own. Its links go to main, which opens only web and mail ones. */
-function IssueText({ text, html, issueUrl, loadImage }: IssueTextProps) {
+/** Text written on the tracker, rendered in a shadow root of its own as the Markdown preview's is
+ *  (`issueTextHtml`). A link to a file of the repository opens it; the rest go to main, which opens
+ *  only web and mail ones. */
+function IssueText({ text, provider, issueUrl, loadImage, openFile }: IssueTextProps) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const { scroller, body } = createMarkdownPreview();
@@ -129,16 +134,20 @@ function IssueText({ text, html, issueUrl, loadImage }: IssueTextProps) {
       const link = event.composedPath().find((node) => node instanceof HTMLAnchorElement);
       if (link) {
         event.preventDefault();
-        const target = issueLink(link.getAttribute("href") ?? "", issueUrl);
-        if (target !== undefined) {
+        const href = link.getAttribute("href") ?? "";
+        const file = issueFileLink(href, provider, issueUrl);
+        const path = file === undefined ? undefined : resolveLink("", file);
+        const target = issueLink(href, issueUrl);
+        if (path !== undefined) {
+          openFile(path);
+        } else if (target !== undefined) {
           void window.tet.shell.openUrl(target);
         }
       }
     });
     host.current?.replaceChildren(scroller);
     let current = true;
-    const rendered = html === undefined ? renderMarkdown(text, "", loadImage, new Map()) : renderHtml(html, "", loadImage, new Map());
-    rendered.then(
+    renderHtml(issueTextHtml(text, provider, issueUrl), "", loadImage, new Map()).then(
       ({ doc }) => {
         if (current) {
           body.replaceChildren(...doc.body.childNodes);
@@ -149,7 +158,7 @@ function IssueText({ text, html, issueUrl, loadImage }: IssueTextProps) {
     return () => {
       current = false;
     };
-  }, [text, html, issueUrl, loadImage]);
+  }, [text, provider, issueUrl, loadImage, openFile]);
   return <div ref={host} className="issue-text" />;
 }
 
@@ -592,7 +601,7 @@ function PickSection({
  * else may, and a description it refuses says so in a notice, a title in the dialog that asked.
  */
 export function IssueView({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
-  const { loadImage } = actions;
+  const { loadImage, openFile } = actions;
   const upload = issue.uploads ? actions.upload : undefined;
   const accept = issue.uploads?.extensions?.map((extension) => `.${extension}`).join(",");
   // One request for both lists, however many are opened; a failed one is asked again.
@@ -619,9 +628,10 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
               opened
               at={issue.createdAt}
               text={issue.body}
-              html={issue.bodyHtml}
+              provider={issue.provider}
               issueUrl={issue.url}
               loadImage={loadImage}
+              openFile={openFile}
               upload={upload}
               accept={accept}
               onEdit={(body) => {
@@ -641,9 +651,10 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                   avatar={issue.avatars[note.author]}
                   at={note.createdAt}
                   text={note.body}
-                  html={note.bodyHtml}
+                  provider={issue.provider}
                   issueUrl={issue.url}
                   loadImage={loadImage}
+                  openFile={openFile}
                   upload={upload}
                   accept={accept}
                   onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}

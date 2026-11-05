@@ -132,7 +132,7 @@ export function registerIssuesIpc({
     }
   });
 
-  handle("issues:edit-comment", async (_event, projectId: string, number: number, id: number, body: string): Promise<ActionResult> => {
+  handle("issues:edit-comment", async (_event, projectId: string, number: number, id: string, body: string): Promise<ActionResult> => {
     try {
       await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
         provider.editComment(host, token, path, number, id, body),
@@ -143,7 +143,7 @@ export function registerIssuesIpc({
     }
   });
 
-  handle("issues:delete-comment", async (_event, projectId: string, number: number, id: number): Promise<ActionResult> => {
+  handle("issues:delete-comment", async (_event, projectId: string, number: number, id: string): Promise<ActionResult> => {
     try {
       await writeOnTracker(accounts, repositoryOf(projectId), (provider, host, token, path) =>
         provider.deleteComment(host, token, path, number, id),

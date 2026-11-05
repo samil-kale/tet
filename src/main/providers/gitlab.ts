@@ -7,7 +7,22 @@ import type {
   IssueNote,
   RemoteRepository,
 } from "../../shared/types/providers";
-import { fetchOk, getJson, getPaged, sendDelete, sendJson, type GitProvider } from "./provider";
+import {
+  allNodes,
+  ApiError,
+  fetchOk,
+  getPaged,
+  idsByName,
+  sendDelete,
+  sendGraphql,
+  type GitProvider,
+  type GraphqlPage,
+  type GraphqlSend,
+} from "./provider";
+
+// GraphQL for all that it answers in structure and out of experiment. REST for the rest: an issue's
+// label, state and milestone events, which GraphQL words only as text; deleting an issue and uploading
+// a file, whose mutations are experiments; and reading an upload's bytes, which GraphQL cannot carry.
 
 function apiBase(host: string): string {
   return `https://${host}/api/v4`;
@@ -17,10 +32,41 @@ function headers(token: string): Record<string, string> {
   return { "PRIVATE-TOKEN": token };
 }
 
-interface GitLabProject {
-  path_with_namespace: string;
-  path: string;
-  http_url_to_repo: string;
+function graphql(host: string, token: string, query: string, variables: object = {}): Promise<unknown> {
+  return sendGraphql(`https://${host}/api/graphql`, { Authorization: `Bearer ${token}` }, query, variables);
+}
+
+function sender(host: string, token: string): GraphqlSend {
+  return (query, variables) => graphql(host, token, query, variables);
+}
+
+/** A project GraphQL answers null for says neither that it is missing nor that the token cannot read
+ *  it: REST's 404 for both, which hands over to the next account. */
+function reached<T>(found: T | null | undefined, what: string): T {
+  if (found === null || found === undefined) {
+    throw new ApiError(404, `${what} was not found, or this account cannot read it`);
+  }
+  return found;
+}
+
+/** What a mutation answered, which says what it refused in a field of its own. */
+export function mutationError(result: { errors?: string[] } | null | undefined): string | undefined {
+  if (!result) {
+    return "GitLab answered the change with nothing";
+  }
+  return result.errors && result.errors.length > 0 ? result.errors.join("; ") : undefined;
+}
+
+/** One mutation, answering what it was asked to select beside its `errors`. */
+async function mutate<T>(host: string, token: string, name: string, inputType: string, input: object, selection = ""): Promise<T> {
+  const query = `mutation($input: ${inputType}!) { ${name}(input: $input) { ${selection} errors } }`;
+  const data = (await graphql(host, token, query, { input })) as Record<string, (T & { errors?: string[] }) | null> | null;
+  const result = data?.[name];
+  const refused = mutationError(result);
+  if (refused !== undefined || !result) {
+    throw new Error(refused);
+  }
+  return result;
 }
 
 interface GitLabUser {
@@ -43,7 +89,7 @@ export interface GitLabIssue {
 }
 
 export interface GitLabNote {
-  id: number;
+  id: string;
   /** What GitLab wrote itself (a label added, an assignee changed), not a comment. */
   system: boolean;
   author: GitLabUser;
@@ -51,8 +97,115 @@ export interface GitLabNote {
   body: string;
 }
 
-export interface GitLabMember extends GitLabUser {
-  id: number;
+/** A user as GraphQL says it; an uploaded picture's URL is relative to the host. */
+interface GitLabGraphqlUser {
+  username: string;
+  avatarUrl: string | null;
+}
+
+/** An issue as GraphQL says it; only one read alone has the last two. */
+export interface GitLabGraphqlIssue {
+  iid: string;
+  title: string;
+  webUrl: string;
+  state: string;
+  createdAt: string;
+  userNotesCount: number;
+  author: GitLabGraphqlUser;
+  assignees: { nodes: GitLabGraphqlUser[] };
+  labels: { nodes: { title: string }[] };
+  description?: string | null;
+  milestone?: { title: string } | null;
+}
+
+/** A note as GraphQL says it; `author` is null for a deleted account. */
+export interface GitLabGraphqlNote {
+  id: string;
+  system: boolean;
+  body: string;
+  createdAt: string;
+  author: GitLabGraphqlUser | null;
+}
+
+const ISSUE_ROW = `iid title webUrl state createdAt userNotesCount
+  author { username avatarUrl }
+  assignees(first: 100) { nodes { username avatarUrl } }
+  labels(first: 100) { nodes { title } }`;
+
+const NOTE_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes { id system body createdAt author { username avatarUrl } }`;
+
+const ISSUES_QUERY = `query($path: ID!, $cursor: String, $state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String]) {
+  project(fullPath: $path) {
+    issues(first: 100, after: $cursor, sort: created_desc, state: $state, authorUsername: $authorUsername, assigneeUsernames: $assigneeUsernames, labelName: $labelName) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ${ISSUE_ROW} }
+    }
+  }
+}`;
+
+const ISSUE_QUERY = `query($path: ID!, $iid: String!) {
+  project(fullPath: $path) {
+    issue(iid: $iid) {
+      ${ISSUE_ROW}
+      description
+      milestone { title }
+      notes(first: 100) { ${NOTE_PAGE} }
+    }
+  }
+}`;
+
+const NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
+  project(fullPath: $path) { issue(iid: $iid) { notes(first: 100, after: $cursor) { ${NOTE_PAGE} } } }
+}`;
+
+const LABELS_QUERY = `query($path: ID!, $cursor: String) {
+  project(fullPath: $path) {
+    labels(first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id title }
+    }
+  }
+}`;
+
+/** A user's picture as a whole URL, a Gravatar one where only its path is given. */
+export function avatarUrlOf(host: string, avatarUrl: string | null): string | null {
+  if (!avatarUrl || avatarUrl.startsWith("http")) {
+    return avatarUrl;
+  }
+  return avatarUrl.startsWith("/avatar") ? `https://secure.gravatar.com${avatarUrl}?s=80&d=identicon` : `https://${host}${avatarUrl}`;
+}
+
+function userOf(host: string, person: GitLabGraphqlUser): GitLabUser {
+  return { username: person.username, avatar_url: avatarUrlOf(host, person.avatarUrl) };
+}
+
+/** An issue read over GraphQL as `toIssue` takes it. */
+export function fromGraphql(host: string, entry: GitLabGraphqlIssue): GitLabIssue {
+  return {
+    iid: Number(entry.iid),
+    title: entry.title,
+    web_url: entry.webUrl,
+    state: entry.state,
+    author: userOf(host, entry.author),
+    assignees: entry.assignees.nodes.map((person) => userOf(host, person)),
+    user_notes_count: entry.userNotesCount,
+    created_at: entry.createdAt,
+    labels: entry.labels.nodes.map((label) => label.title),
+    description: entry.description ?? null,
+    milestone: entry.milestone,
+  };
+}
+
+/** A note read over GraphQL as `toNotes` and `toEvents` take it. */
+export function noteFromGraphql(host: string, entry: GitLabGraphqlNote): GitLabNote {
+  return {
+    id: entry.id,
+    system: entry.system,
+    author: entry.author ? userOf(host, entry.author) : { username: "ghost", avatar_url: null },
+    created_at: entry.createdAt,
+    body: entry.body,
+  };
 }
 
 /** An entry of an issue's `resource_*_events`; `user` is null for a deleted account. */
@@ -76,24 +229,28 @@ export interface GitLabStateEvent extends GitLabResourceEvent {
   state: string;
 }
 
-/** A change in GitLab's words: labels as one list, assignees by id. Refuses a login no member has,
- *  so an assignee is not dropped unseen. */
-export function toIssueUpdate(change: IssueChange, members: GitLabMember[]): object {
+/** What of a change `updateIssue` sets, in GitLab's words: labels by their ids, a milestone by its id,
+ *  null taking it off. */
+export function toIssueInput(path: string, number: number, change: IssueChange, labelIds: string[] | undefined): object {
+  const { title, body, milestone, state } = change;
   return {
-    title: change.title,
-    description: change.body,
-    state_event: change.state && (change.state === "open" ? "reopen" : "close"),
-    // 0 takes it off.
-    milestone_id: change.milestone === undefined ? undefined : (change.milestone?.id ?? 0),
-    labels: change.labels?.join(","),
-    assignee_ids: change.assignees?.map((login) => {
-      const member = members.find((candidate) => candidate.username === login);
-      if (!member) {
-        throw new Error(`${login} is no member of this project`);
-      }
-      return member.id;
-    }),
+    projectPath: path,
+    iid: String(number),
+    title,
+    description: body,
+    milestoneId: milestone === undefined ? undefined : (milestone?.id ?? null),
+    labelIds,
+    stateEvent: state && (state === "open" ? "REOPEN" : "CLOSE"),
   };
+}
+
+/** A project's labels by name, with their ids. */
+async function allLabels(host: string, token: string, path: string): Promise<{ id: string; name: string }[]> {
+  const entries = await allNodes<{ id: string; title: string }>(sender(host, token), LABELS_QUERY, { path }, (data) => {
+    const { project } = data as { project: { labels: GraphqlPage<{ id: string; title: string }> } | null };
+    return reached(project, path).labels;
+  });
+  return entries.map((entry) => ({ id: entry.id, name: entry.title }));
 }
 
 /** A project's API path takes its whole path as one segment. */
@@ -123,21 +280,15 @@ export function uploadOf(host: string, source: string): { secret: string; file: 
   }
 }
 
-export function issuesUrl(host: string, path: string, filter: IssueFilter): string {
-  const query = new URLSearchParams({ per_page: "100", order_by: "created_at", sort: "desc" });
-  if (filter.state) {
-    query.set("state", filter.state === "open" ? "opened" : "closed");
-  }
-  if (filter.author) {
-    query.set("author_username", filter.author);
-  }
-  if (filter.assignee) {
-    query.set("assignee_username", filter.assignee);
-  }
-  if (filter.labels.length > 0) {
-    query.set("labels", filter.labels.join(","));
-  }
-  return `${projectUrl(host, path)}/issues?${query.toString()}`;
+/** What a filter asks for, in the words of `ISSUES_QUERY`. */
+export function issuesVariables(path: string, filter: IssueFilter): Record<string, unknown> {
+  return {
+    path,
+    state: filter.state && (filter.state === "open" ? "opened" : "closed"),
+    authorUsername: filter.author,
+    assigneeUsernames: filter.assignee ? [filter.assignee] : undefined,
+    labelName: filter.labels.length > 0 ? filter.labels : undefined,
+  };
 }
 
 /** Each user's picture by login, of those who have one. */
@@ -206,55 +357,92 @@ export function toEvents(
 
 export const gitlab: GitProvider = {
   async validate(host, token) {
-    const user = (await getJson(`${apiBase(host)}/user`, headers(token))) as { username?: unknown };
-    if (typeof user.username !== "string" || user.username === "") {
+    const data = (await graphql(host, token, "{ currentUser { username } }")) as { currentUser: { username?: unknown } | null };
+    const username = data.currentUser?.username;
+    if (typeof username !== "string" || username === "") {
       throw new Error("The API answered without a username");
     }
-    return user.username;
+    return username;
   },
 
   async listRepositories(host, token) {
-    // membership=true: without it a self-hosted instance answers with everything it can see.
-    // simple=true: the full record's extra fields (permissions, statistics, owner, _links) are not read.
-    const url = `${apiBase(host)}/projects?membership=true&per_page=100&order_by=last_activity_at&simple=true`;
-    const entries = (await getPaged(url, headers(token))) as GitLabProject[];
+    // membership: without it a self-hosted instance answers with everything it can see.
+    const query = `query($cursor: String) {
+      projects(membership: true, first: 100, after: $cursor, sort: "latest_activity_desc") {
+        pageInfo { hasNextPage endCursor }
+        nodes { fullPath path httpUrlToRepo }
+      }
+    }`;
+    const entries = await allNodes<{ fullPath: string; path: string; httpUrlToRepo: string }>(
+      sender(host, token),
+      query,
+      {},
+      (data) => (data as { projects: GraphqlPage<{ fullPath: string; path: string; httpUrlToRepo: string }> }).projects,
+    );
     return entries.map((entry): RemoteRepository => ({
-      fullName: entry.path_with_namespace,
+      fullName: entry.fullPath,
       name: entry.path,
-      cloneUrl: entry.http_url_to_repo,
+      cloneUrl: entry.httpUrlToRepo,
     }));
   },
 
   async listIssues(host, token, path, filter) {
-    const entries = (await getPaged(issuesUrl(host, path, filter), headers(token))) as GitLabIssue[];
-    return entries.map(toIssue);
+    const entries = await allNodes<GitLabGraphqlIssue>(sender(host, token), ISSUES_QUERY, issuesVariables(path, filter), (data) => {
+      const { project } = data as { project: { issues: GraphqlPage<GitLabGraphqlIssue> } | null };
+      return reached(project, path).issues;
+    });
+    return entries.map((entry) => toIssue(fromGraphql(host, entry)));
   },
 
   async listLabels(host, token, path) {
-    const entries = (await getPaged(`${projectUrl(host, path)}/labels?per_page=100`, headers(token))) as { name: string }[];
-    return entries.map((entry) => entry.name);
+    return (await allLabels(host, token, path)).map((entry) => entry.name);
   },
 
   async listPeople(host, token, path) {
-    // members/all: with those of its parent groups, who can be assigned as well.
-    const entries = (await getPaged(`${projectUrl(host, path)}/members/all?per_page=100`, headers(token))) as GitLabUser[];
-    return entries.map((entry) => entry.username);
+    const query = `query($path: ID!, $cursor: String) {
+      project(fullPath: $path) {
+        projectMembers(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes { user { username } }
+        }
+      }
+    }`;
+    type Member = { user: { username: string } | null };
+    const entries = await allNodes<Member>(sender(host, token), query, { path }, (data) => {
+      const { project } = data as { project: { projectMembers: GraphqlPage<Member> } | null };
+      return reached(project, path).projectMembers;
+    });
+    return entries.flatMap((entry) => entry.user?.username ?? []);
   },
 
   async readIssue(host, token, path, number) {
     const url = `${projectUrl(host, path)}/issues/${number}`;
-    const [issue, notes, labels, states, milestones] = await Promise.all([
-      getJson(url, headers(token)),
-      getPaged(`${url}/notes?per_page=100&order_by=created_at&sort=asc`, headers(token)),
+    const iid = String(number);
+    const [issue, labels, states, milestones] = await Promise.all([
+      graphql(host, token, ISSUE_QUERY, { path, iid }),
       getPaged(`${url}/resource_label_events?per_page=100`, headers(token)),
       getPaged(`${url}/resource_state_events?per_page=100`, headers(token)),
       getPaged(`${url}/resource_milestone_events?per_page=100`, headers(token)),
     ]);
-    const entry = issue as GitLabIssue;
-    const entries = notes as GitLabNote[];
+    const { project } = issue as { project: { issue: (GitLabGraphqlIssue & { notes: GraphqlPage<GitLabGraphqlNote> }) | null } | null };
+    const found = reached(reached(project, path).issue, `Issue #${number}`);
+    const later = found.notes.pageInfo.hasNextPage
+      ? await allNodes<GitLabGraphqlNote>(
+          sender(host, token),
+          NOTES_QUERY,
+          { path, iid, cursor: found.notes.pageInfo.endCursor },
+          (data) => {
+            const answer = data as { project: { issue: { notes: GraphqlPage<GitLabGraphqlNote> } | null } | null };
+            return reached(reached(answer.project, path).issue, `Issue #${number}`).notes;
+          },
+        )
+      : [];
+    const entry = fromGraphql(host, found);
+    const entries = [...found.notes.nodes, ...later].map((note) => noteFromGraphql(host, note));
     const resources = [...labels, ...states, ...milestones] as GitLabResourceEvent[];
     return {
       ...toIssue(entry),
+      provider: "gitlab",
       avatars: avatarsOf([
         entry.author,
         ...entry.assignees,
@@ -274,32 +462,49 @@ export const gitlab: GitProvider = {
     return upload && fetchOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
   },
 
-  addComment(host, token, path, number, body) {
-    return sendJson("POST", `${projectUrl(host, path)}/issues/${number}/notes`, headers(token), { body });
+  async addComment(host, token, path, number, body) {
+    const query = "query($path: ID!, $iid: String!) { project(fullPath: $path) { issue(iid: $iid) { id } } }";
+    const { project } = (await graphql(host, token, query, { path, iid: String(number) })) as {
+      project: { issue: { id: string } | null } | null;
+    };
+    const { id } = reached(reached(project, path).issue, `Issue #${number}`);
+    await mutate(host, token, "createNote", "CreateNoteInput", { noteableId: id, body });
   },
 
   async listMilestones(host, token, path) {
-    // include_ancestors: those of its groups can be set as well.
-    const url = `${projectUrl(host, path)}/milestones?state=active&include_ancestors=true&per_page=100`;
-    const entries = (await getPaged(url, headers(token))) as IssueMilestone[];
-    return entries.map((entry): IssueMilestone => ({ id: entry.id, title: entry.title }));
+    // includeAncestors: those of its groups can be set as well.
+    const query = `query($path: ID!, $cursor: String) {
+      project(fullPath: $path) {
+        milestones(first: 100, after: $cursor, state: active, includeAncestors: true) {
+          pageInfo { hasNextPage endCursor }
+          nodes { id title }
+        }
+      }
+    }`;
+    return allNodes<IssueMilestone>(sender(host, token), query, { path }, (data) => {
+      const { project } = data as { project: { milestones: GraphqlPage<IssueMilestone> } | null };
+      return reached(project, path).milestones;
+    });
   },
 
   async createIssue(host, token, path, title, body) {
-    const response = await fetchOk(
-      `${projectUrl(host, path)}/issues`,
-      { ...headers(token), "Content-Type": "application/json" },
-      { method: "POST", body: JSON.stringify({ title, description: body }) },
+    const { issue } = await mutate<{ issue: { iid: string } | null }>(
+      host,
+      token,
+      "createIssue",
+      "CreateIssueInput",
+      { projectPath: path, title, description: body },
+      "issue { iid }",
     );
-    return ((await response.json()) as { iid: number }).iid;
+    return Number(reached(issue, `The new issue of ${path}`).iid);
   },
 
-  editComment(host, token, path, number, id, body) {
-    return sendJson("PUT", `${projectUrl(host, path)}/issues/${number}/notes/${id}`, headers(token), { body });
+  async editComment(host, token, _path, _number, id, body) {
+    await mutate(host, token, "updateNote", "UpdateNoteInput", { id, body });
   },
 
-  deleteComment(host, token, path, number, id) {
-    return sendDelete(`${projectUrl(host, path)}/issues/${number}/notes/${id}`, headers(token));
+  async deleteComment(host, token, _path, _number, id) {
+    await mutate(host, token, "destroyNote", "DestroyNoteInput", { id });
   },
 
   deleteIssue(host, token, path, number) {
@@ -316,10 +521,17 @@ export const gitlab: GitProvider = {
   },
 
   async updateIssue(host, token, path, number, change) {
-    const members =
-      change.assignees === undefined
-        ? []
-        : ((await getPaged(`${projectUrl(host, path)}/members/all?per_page=100`, headers(token))) as GitLabMember[]);
-    await sendJson("PUT", `${projectUrl(host, path)}/issues/${number}`, headers(token), toIssueUpdate(change, members));
+    const { assignees, ...rest } = change;
+    if (assignees !== undefined) {
+      await mutate(host, token, "issueSetAssignees", "IssueSetAssigneesInput", {
+        projectPath: path,
+        iid: String(number),
+        assigneeUsernames: assignees,
+      });
+    }
+    if (Object.values(rest).some((value) => value !== undefined)) {
+      const labelIds = rest.labels && idsByName(rest.labels, await allLabels(host, token, path), "label");
+      await mutate(host, token, "updateIssue", "UpdateIssueInput", toIssueInput(path, number, rest, labelIds));
+    }
   },
 };

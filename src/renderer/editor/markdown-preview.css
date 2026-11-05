@@ -72,6 +72,16 @@
   margin-bottom: 0;
 }
 
+/* An issue's task (`issue-text.ts`): its box stands where the list's marker would. */
+.markdown-body .task-list-item {
+  list-style: none;
+}
+
+.markdown-body .task-list-item-checkbox {
+  margin: 0 0.4em 0 -1.4em;
+  vertical-align: middle;
+}
+
 .markdown-body :is(sub, sup) {
   line-height: 0;
 }

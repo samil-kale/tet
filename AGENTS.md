@@ -18,9 +18,10 @@ was measured, history, dates, version numbers or links. An agent's tested versio
 References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code** for the UI —
 classic layout, Dark Modern's palette, tab semantics, theme names; **IntelliJ** where VS Code has
 no answer or the git lane's tree is concerned — the commit view's checkboxes, tree headers,
-toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor); **Monaco** for
+toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor), how an issue's text
+is rendered, from its Markdown (`issue-text.ts`); **Monaco** for
 the editor tab; VS Code's **GitHub Pull Requests and Issues** (`microsoft/vscode-pull-request-github`)
-for the ISSUES lane and its issue tab, which writes an issue's title, text, comments, state, labels,
+for the rest of the ISSUES lane and its issue tab, which writes an issue's title, text, comments, state, labels,
 assignees and milestone, uploads what the tracker takes from a token (`uploads`), and makes and deletes issues, and nothing
 else until asked.
 

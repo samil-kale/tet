@@ -10,9 +10,9 @@ import type {
 } from "../../shared/types/providers";
 
 /** A repository host: authenticate, list repositories with their clone url and read their issues.
- *  One interface for GitHub and GitLab, over plain REST rather than Octokit or GitBeaker, and kept
- *  out of the local git layer: everything past the clone goes through the local git CLI. `path` is
- *  a repository's on the host, "owner/name" or "group/subgroup/name". */
+ *  One interface for GitHub and GitLab, over plain REST and GraphQL rather than Octokit or GitBeaker,
+ *  and kept out of the local git layer: everything past the clone goes through the local git CLI.
+ *  `path` is a repository's on the host, "owner/name" or "group/subgroup/name". */
 export interface GitProvider {
   /** Checks the token against the host and returns its login. */
   validate(host: string, token: string): Promise<string>;
@@ -30,8 +30,8 @@ export interface GitProvider {
   listMilestones(host: string, token: string, path: string): Promise<IssueMilestone[]>;
   createIssue(host: string, token: string, path: string, title: string, body: string): Promise<number>;
   addComment(host: string, token: string, path: string, number: number, body: string): Promise<void>;
-  editComment(host: string, token: string, path: string, number: number, id: number, body: string): Promise<void>;
-  deleteComment(host: string, token: string, path: string, number: number, id: number): Promise<void>;
+  editComment(host: string, token: string, path: string, number: number, id: string, body: string): Promise<void>;
+  deleteComment(host: string, token: string, path: string, number: number, id: string): Promise<void>;
   deleteIssue(host: string, token: string, path: string, number: number): Promise<void>;
   /** What `uploadFile` takes on this host; undefined where it takes nothing. */
   uploads(host: string): IssueUploads | undefined;
@@ -68,16 +68,73 @@ export async function fetchOk(url: string, headers: Record<string, string>, init
   return response;
 }
 
-/** One write with a JSON body, whose answer is not read — see fetchOk. */
-export async function sendJson(method: string, url: string, headers: Record<string, string>, body: unknown): Promise<void> {
-  const response = await fetchOk(url, { ...headers, "Content-Type": "application/json" }, { method, body: JSON.stringify(body) });
-  void response.body?.cancel();
-}
-
 /** One DELETE, whose answer is not read — see fetchOk. */
 export async function sendDelete(url: string, headers: Record<string, string>): Promise<void> {
   const response = await fetchOk(url, headers, { method: "DELETE" });
   void response.body?.cancel();
+}
+
+/** What a GraphQL answer refused, which it says under a status of 200. */
+export function graphqlError(body: { errors?: { message?: string }[] }): string | undefined {
+  const messages = body.errors?.map((error) => error.message ?? "").filter((message) => message !== "");
+  return body.errors === undefined || body.errors.length === 0 ? undefined : messages?.join("; ") || "The host refused the request";
+}
+
+/** One GraphQL request, answering its `data`; what it refused throws — see fetchOk. */
+export async function sendGraphql(url: string, headers: Record<string, string>, query: string, variables: object): Promise<unknown> {
+  const response = await fetchOk(
+    url,
+    { ...headers, "Content-Type": "application/json" },
+    { method: "POST", body: JSON.stringify({ query, variables }) },
+  );
+  const body = (await response.json()) as { data?: unknown; errors?: { message?: string }[] };
+  const refused = graphqlError(body);
+  if (refused !== undefined) {
+    throw new Error(refused);
+  }
+  return body.data;
+}
+
+/** Sends one GraphQL request to a host, answering its `data` (`sendGraphql`). */
+export type GraphqlSend = (query: string, variables: object) => Promise<unknown>;
+
+/** A page of a GraphQL listing, with where the next starts. */
+export interface GraphqlPage<T> {
+  pageInfo: { hasNextPage: boolean; endCursor: string | null };
+  nodes: T[];
+}
+
+/** Every page of a GraphQL listing up to the cap, from `variables`' `cursor` where it has one; `pageOf`
+ *  finds it in an answer. */
+export async function allNodes<T>(
+  send: GraphqlSend,
+  query: string,
+  variables: Record<string, unknown>,
+  pageOf: (data: unknown) => GraphqlPage<T>,
+): Promise<T[]> {
+  const nodes: T[] = [];
+  let cursor = (variables.cursor ?? null) as string | null;
+  for (let page = 0; page < PAGE_CAP; page++) {
+    const answer = pageOf(await send(query, { ...variables, cursor }));
+    nodes.push(...answer.nodes);
+    if (!answer.pageInfo.hasNextPage) {
+      break;
+    }
+    cursor = answer.pageInfo.endCursor;
+  }
+  return nodes;
+}
+
+/** The ids of what a host names, by those names; GraphQL sets labels and people by id alone. Refuses a
+ *  name it does not know, so nothing is dropped unseen. */
+export function idsByName(names: string[], known: { id: string; name: string }[], what: string): string[] {
+  return names.map((name) => {
+    const entry = known.find((candidate) => candidate.name === name);
+    if (!entry) {
+      throw new Error(`${name} is no ${what} of this project`);
+    }
+    return entry.id;
+  });
 }
 
 /** One GET as JSON — see fetchOk. */

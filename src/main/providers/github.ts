@@ -7,12 +7,10 @@ import type {
   IssueNote,
   RemoteRepository,
 } from "../../shared/types/providers";
-import { ApiError, fetchOk, getJson, getPaged, sendDelete, sendJson, type GitProvider } from "./provider";
+import { allNodes, ApiError, fetchOk, idsByName, sendGraphql, type GitProvider, type GraphqlPage, type GraphqlSend } from "./provider";
 
-/** github.com's API lives on its own subdomain; GitHub Enterprise serves it under /api/v3. */
-function apiBase(host: string): string {
-  return host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`;
-}
+// All of it GraphQL, but for what it does not carry: a file going up, through the upload's own
+// endpoint, and an image coming down.
 
 /** GitHub rejects requests without a User-Agent. */
 function headers(token: string): Record<string, string> {
@@ -23,16 +21,11 @@ function headers(token: string): Record<string, string> {
   };
 }
 
-/** With each text's `body_html` too, whose images of a private repository carry their own signed
- *  URLs: the ones in `body` answer no request, with a token or without. */
-function fullHeaders(token: string): Record<string, string> {
-  return { ...headers(token), Accept: "application/vnd.github.full+json" };
-}
-
-interface GitHubRepository {
-  full_name: string;
-  name: string;
-  clone_url: string;
+/** Whether an image of an issue's text may be asked for with the token: on the account's host alone,
+ *  as anyone can write any address into a text. */
+export function readsWithToken(host: string, source: string): boolean {
+  const url = URL.parse(source);
+  return url?.protocol === "https:" && url.host.toLowerCase() === host.toLowerCase();
 }
 
 /** `user` is null for a deleted account. */
@@ -52,18 +45,14 @@ export interface GitHubIssue {
   created_at: string;
   labels: (string | { name: string })[];
   body: string | null;
-  body_html?: string;
   milestone?: { title: string } | null;
-  /** Present on a pull request, which the issues listing holds too. */
-  pull_request?: unknown;
 }
 
 interface GitHubComment {
-  id: number;
+  id: string;
   user: GitHubUser | null;
   created_at: string;
   body: string | null;
-  body_html?: string;
 }
 
 /** An entry of an issue's timeline; which of the rest it has goes by its `event`. */
@@ -77,6 +66,125 @@ export interface GitHubTimelineEntry {
   rename?: { from: string; to: string };
   source?: { issue?: { number: number; title: string; html_url: string } };
 }
+
+/** A user as GraphQL says it; null for a deleted account. */
+interface GitHubGraphqlUser {
+  login: string;
+  avatarUrl: string;
+}
+
+/** An issue as GraphQL says it; only one read alone has the last two. */
+export interface GitHubGraphqlIssue {
+  number: number;
+  title: string;
+  url: string;
+  state: string;
+  createdAt: string;
+  author: GitHubGraphqlUser | null;
+  assignees: { nodes: GitHubGraphqlUser[] };
+  comments: { totalCount: number };
+  labels: { nodes: { name: string }[] };
+  body?: string | null;
+  milestone?: { title: string } | null;
+}
+
+/** A comment as GraphQL says it. */
+export interface GitHubGraphqlComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  author: GitHubGraphqlUser | null;
+}
+
+/** A timeline item as GraphQL says it; which of the rest it has goes by its `__typename`. */
+export interface GitHubGraphqlEvent {
+  __typename: string;
+  createdAt: string;
+  actor: GitHubGraphqlUser | null;
+  assignee?: { login?: string } | null;
+  label?: { name: string };
+  milestoneTitle?: string;
+  previousTitle?: string;
+  currentTitle?: string;
+  source?: { number?: number; title?: string; url?: string };
+}
+
+const ISSUE_ROW = `number title url state createdAt
+  author { login avatarUrl }
+  assignees(first: 100) { nodes { login avatarUrl } }
+  comments { totalCount }
+  labels(first: 100) { nodes { name } }`;
+
+const COMMENT_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes { id body createdAt author { login avatarUrl } }`;
+
+const ACTOR = "createdAt actor { login avatarUrl }";
+
+/** The kinds of timeline item the tab draws, with what `timelineEntry` calls them. */
+const EVENT_NAMES: Record<string, string> = {
+  ClosedEvent: "closed",
+  ReopenedEvent: "reopened",
+  AssignedEvent: "assigned",
+  UnassignedEvent: "unassigned",
+  LabeledEvent: "labeled",
+  UnlabeledEvent: "unlabeled",
+  MilestonedEvent: "milestoned",
+  DemilestonedEvent: "demilestoned",
+  RenamedTitleEvent: "renamed",
+  CrossReferencedEvent: "cross-referenced",
+};
+
+const TIMELINE_ARGUMENTS = `itemTypes: [CLOSED_EVENT, REOPENED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, LABELED_EVENT, UNLABELED_EVENT,
+  MILESTONED_EVENT, DEMILESTONED_EVENT, RENAMED_TITLE_EVENT, CROSS_REFERENCED_EVENT]`;
+
+const TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on ClosedEvent { ${ACTOR} }
+    ... on ReopenedEvent { ${ACTOR} }
+    ... on AssignedEvent { ${ACTOR} assignee { ... on Actor { login } } }
+    ... on UnassignedEvent { ${ACTOR} assignee { ... on Actor { login } } }
+    ... on LabeledEvent { ${ACTOR} label { name } }
+    ... on UnlabeledEvent { ${ACTOR} label { name } }
+    ... on MilestonedEvent { ${ACTOR} milestoneTitle }
+    ... on DemilestonedEvent { ${ACTOR} milestoneTitle }
+    ... on RenamedTitleEvent { ${ACTOR} previousTitle currentTitle }
+    ... on CrossReferencedEvent {
+      ${ACTOR}
+      source { ... on Issue { number title url } ... on PullRequest { number title url } }
+    }
+  }`;
+
+const ISSUES_QUERY = `query($owner: String!, $name: String!, $cursor: String, $filter: IssueFilters) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 100, after: $cursor, orderBy: { field: CREATED_AT, direction: DESC }, filterBy: $filter) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ${ISSUE_ROW} }
+    }
+  }
+}`;
+
+const ISSUE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      ${ISSUE_ROW}
+      body
+      milestone { title }
+      commentPage: comments(first: 100) { ${COMMENT_PAGE} }
+      timelineItems(first: 100, ${TIMELINE_ARGUMENTS}) { ${TIMELINE_PAGE} }
+    }
+  }
+}`;
+
+const COMMENTS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) { issue(number: $number) { comments(first: 100, after: $cursor) { ${COMMENT_PAGE} } } }
+}`;
+
+const TIMELINE_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) { timelineItems(first: 100, after: $cursor, ${TIMELINE_ARGUMENTS}) { ${TIMELINE_PAGE} } }
+  }
+}`;
 
 /** What a timeline entry shows, for those the tab draws; a comment is read on its own. */
 function toEvent(entry: GitHubTimelineEntry): IssueEvent | undefined {
@@ -109,9 +217,59 @@ export function toEvents(entries: GitHubTimelineEntry[]): IssueEvent[] {
   return entries.map(toEvent).filter((event) => event !== undefined);
 }
 
-/** A change in GitHub's words: a milestone by its number, null taking it off. */
-export function toIssueUpdate({ milestone, ...rest }: IssueChange): object {
-  return milestone === undefined ? rest : { ...rest, milestone: milestone?.id ?? null };
+function userOf(person: GitHubGraphqlUser | null): GitHubUser | null {
+  return person && { login: person.login, avatar_url: person.avatarUrl };
+}
+
+/** An issue read over GraphQL as `toIssue` takes it. */
+export function fromGraphql(entry: GitHubGraphqlIssue): GitHubIssue {
+  return {
+    number: entry.number,
+    title: entry.title,
+    html_url: entry.url,
+    state: entry.state.toLowerCase(),
+    user: userOf(entry.author),
+    assignees: entry.assignees.nodes.flatMap((person) => userOf(person) ?? []),
+    comments: entry.comments.totalCount,
+    created_at: entry.createdAt,
+    labels: entry.labels.nodes,
+    body: entry.body ?? null,
+    milestone: entry.milestone,
+  };
+}
+
+/** A timeline item read over GraphQL as `toEvents` takes it. */
+export function timelineEntry(item: GitHubGraphqlEvent): GitHubTimelineEntry {
+  const { number, title, url } = item.source ?? {};
+  return {
+    event: EVENT_NAMES[item.__typename] ?? item.__typename,
+    actor: userOf(item.actor),
+    created_at: item.createdAt,
+    assignee: item.assignee?.login === undefined ? undefined : { login: item.assignee.login, avatar_url: "" },
+    label: item.label,
+    milestone: item.milestoneTitle === undefined ? undefined : { title: item.milestoneTitle },
+    rename: item.previousTitle === undefined ? undefined : { from: item.previousTitle, to: item.currentTitle ?? "" },
+    source: number === undefined ? undefined : { issue: { number, title: title ?? "", html_url: url ?? "" } },
+  };
+}
+
+/** What of a change `updateIssue` sets, in GitHub's words: a milestone, labels and assignees by their
+ *  ids, null taking the milestone off. */
+export function toIssueInput(
+  issueId: string,
+  { title, body, state, milestone }: IssueChange,
+  labelIds: string[] | undefined,
+  assigneeIds: string[] | undefined,
+): object {
+  return {
+    id: issueId,
+    title,
+    body,
+    state: state && (state === "open" ? "OPEN" : "CLOSED"),
+    milestoneId: milestone === undefined ? undefined : (milestone?.id ?? null),
+    labelIds,
+    assigneeIds,
+  };
 }
 
 /** github.com's GraphQL lives on its own subdomain; GitHub Enterprise serves it under /api. */
@@ -119,10 +277,65 @@ function graphqlUrl(host: string): string {
   return host === "github.com" ? "https://api.github.com/graphql" : `https://${host}/api/graphql`;
 }
 
-/** What a GraphQL answer refused, which it says under a status of 200. */
-export function graphqlError(body: { errors?: { message?: string }[] }): string | undefined {
-  const messages = body.errors?.map((error) => error.message ?? "").filter((message) => message !== "");
-  return body.errors === undefined || body.errors.length === 0 ? undefined : messages?.join("; ") || "GitHub refused the request";
+function sender(host: string, token: string): GraphqlSend {
+  return (query, variables) => sendGraphql(graphqlUrl(host), headers(token), query, variables);
+}
+
+/** A repository's path as GraphQL asks for it. */
+function repositoryOf(path: string): { owner: string; name: string } {
+  const [owner, name] = path.split("/");
+  return { owner, name };
+}
+
+/** The node id GraphQL addresses a repository's issue by. */
+async function issueNodeId(send: GraphqlSend, path: string, number: number): Promise<string> {
+  const query =
+    "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { id } } }";
+  const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { issue: { id: string } } };
+  return data.repository.issue.id;
+}
+
+/** The node id GraphQL addresses a repository by, and the number its upload goes by. */
+async function repositoryIds(send: GraphqlSend, path: string): Promise<{ id: string; databaseId: number }> {
+  const query = "query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { id databaseId } }";
+  return ((await send(query, repositoryOf(path))) as { repository: { id: string; databaseId: number } }).repository;
+}
+
+/** A repository's labels by name, with their ids. */
+async function allLabels(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
+  const query = `query($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      labels(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id name }
+      }
+    }
+  }`;
+  return allNodes<{ id: string; name: string }>(
+    send,
+    query,
+    repositoryOf(path),
+    (data) => (data as { repository: { labels: GraphqlPage<{ id: string; name: string }> } }).repository.labels,
+  );
+}
+
+/** Who can be assigned, by login, with their ids. */
+async function allAssignable(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
+  const query = `query($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      assignableUsers(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id login }
+      }
+    }
+  }`;
+  const entries = await allNodes<{ id: string; login: string }>(
+    send,
+    query,
+    repositoryOf(path),
+    (data) => (data as { repository: { assignableUsers: GraphqlPage<{ id: string; login: string }> } }).repository.assignableUsers,
+  );
+  return entries.map((entry) => ({ id: entry.id, name: entry.login }));
 }
 
 /** The only files its upload takes from a token, by extension: it refuses any other type. */
@@ -153,19 +366,23 @@ function hasUpload(host: string): boolean {
   return host === "github.com" || host.endsWith(".ghe.com");
 }
 
-export function issuesUrl(host: string, path: string, filter: IssueFilter): string {
-  // Without `state` the host lists only open issues.
-  const query = new URLSearchParams({ per_page: "100", sort: "created", direction: "desc", state: filter.state ?? "all" });
-  if (filter.author) {
-    query.set("creator", filter.author);
-  }
-  if (filter.assignee) {
-    query.set("assignee", filter.assignee);
-  }
-  if (filter.labels.length > 0) {
-    query.set("labels", filter.labels.join(","));
-  }
-  return `${apiBase(host)}/repos/${path}/issues?${query.toString()}`;
+/** What a filter asks for, in the words of `ISSUES_QUERY`. Its `labels` leave an issue with any of
+ *  them, so `carriesAll` narrows what it answers. */
+export function issuesVariables(path: string, filter: IssueFilter): Record<string, unknown> {
+  return {
+    ...repositoryOf(path),
+    filter: {
+      states: filter.state && [filter.state === "open" ? "OPEN" : "CLOSED"],
+      createdBy: filter.author,
+      assignee: filter.assignee,
+      labels: filter.labels.length > 0 ? filter.labels : undefined,
+    },
+  };
+}
+
+/** Whether an issue carries every one of a filter's labels. */
+export function carriesAll(entry: GitHubGraphqlIssue, labels: string[]): boolean {
+  return labels.every((label) => entry.labels.nodes.some((node) => node.name === label));
 }
 
 /** Each user's picture by login, at about twice the size it is drawn: unasked, GitHub sends the whole. */
@@ -202,121 +419,181 @@ function toNote(entry: GitHubComment): IssueNote {
     author: entry.user?.login ?? "ghost",
     createdAt: entry.created_at,
     body: entry.body ?? "",
-    bodyHtml: entry.body_html,
   };
 }
 
 export const github: GitProvider = {
   async validate(host, token) {
-    const user = (await getJson(`${apiBase(host)}/user`, headers(token))) as { login?: unknown };
-    if (typeof user.login !== "string" || user.login === "") {
+    const data = (await sender(host, token)("{ viewer { login } }", {})) as { viewer: { login?: unknown } | null };
+    const login = data.viewer?.login;
+    if (typeof login !== "string" || login === "") {
       throw new Error("The API answered without a login");
     }
-    return user.login;
+    return login;
   },
 
   async listRepositories(host, token) {
-    // The default affiliation covers owned, collaborated and organization repositories.
-    const url = `${apiBase(host)}/user/repos?per_page=100&sort=pushed`;
-    const entries = (await getPaged(url, headers(token))) as GitHubRepository[];
+    // Both affiliations, or it leaves out the organizations' repositories.
+    const query = `query($cursor: String) {
+      viewer {
+        repositories(
+          first: 100
+          after: $cursor
+          orderBy: { field: PUSHED_AT, direction: DESC }
+          affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER]
+          ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER]
+        ) {
+          pageInfo { hasNextPage endCursor }
+          nodes { nameWithOwner name url }
+        }
+      }
+    }`;
+    type Repository = { nameWithOwner: string; name: string; url: string };
+    const entries = await allNodes<Repository>(
+      sender(host, token),
+      query,
+      {},
+      (data) => (data as { viewer: { repositories: GraphqlPage<Repository> } }).viewer.repositories,
+    );
     return entries.map((entry): RemoteRepository => ({
-      fullName: entry.full_name,
+      fullName: entry.nameWithOwner,
       name: entry.name,
-      cloneUrl: entry.clone_url,
+      cloneUrl: `${entry.url}.git`,
     }));
   },
 
   async listIssues(host, token, path, filter) {
-    const entries = (await getPaged(issuesUrl(host, path, filter), headers(token))) as GitHubIssue[];
-    return entries.filter((entry) => entry.pull_request === undefined).map(toIssue);
+    const entries = await allNodes<GitHubGraphqlIssue>(
+      sender(host, token),
+      ISSUES_QUERY,
+      issuesVariables(path, filter),
+      (data) => (data as { repository: { issues: GraphqlPage<GitHubGraphqlIssue> } }).repository.issues,
+    );
+    return entries.filter((entry) => carriesAll(entry, filter.labels)).map((entry) => toIssue(fromGraphql(entry)));
   },
 
   async listLabels(host, token, path) {
-    const entries = (await getPaged(`${apiBase(host)}/repos/${path}/labels?per_page=100`, headers(token))) as { name: string }[];
-    return entries.map((entry) => entry.name);
+    return (await allLabels(sender(host, token), path)).map((entry) => entry.name);
   },
 
   async listPeople(host, token, path) {
-    const entries = (await getPaged(`${apiBase(host)}/repos/${path}/assignees?per_page=100`, headers(token))) as GitHubUser[];
-    return entries.map((entry) => entry.login);
+    return (await allAssignable(sender(host, token), path)).map((entry) => entry.name);
   },
 
   async readIssue(host, token, path, number) {
-    const url = `${apiBase(host)}/repos/${path}/issues/${number}`;
-    const [issue, comments, timeline] = await Promise.all([
-      getJson(url, fullHeaders(token)),
-      getPaged(`${url}/comments?per_page=100`, fullHeaders(token)),
-      getPaged(`${url}/timeline?per_page=100`, headers(token)),
+    const send = sender(host, token);
+    const variables = { ...repositoryOf(path), number };
+    const data = (await send(ISSUE_QUERY, variables)) as {
+      repository: {
+        issue: GitHubGraphqlIssue & { commentPage: GraphqlPage<GitHubGraphqlComment>; timelineItems: GraphqlPage<GitHubGraphqlEvent> };
+      };
+    };
+    const found = data.repository.issue;
+    const [laterComments, laterEvents] = await Promise.all([
+      found.commentPage.pageInfo.hasNextPage
+        ? allNodes<GitHubGraphqlComment>(
+            send,
+            COMMENTS_QUERY,
+            { ...variables, cursor: found.commentPage.pageInfo.endCursor },
+            (answer) => (answer as { repository: { issue: { comments: GraphqlPage<GitHubGraphqlComment> } } }).repository.issue.comments,
+          )
+        : [],
+      found.timelineItems.pageInfo.hasNextPage
+        ? allNodes<GitHubGraphqlEvent>(
+            send,
+            TIMELINE_QUERY,
+            { ...variables, cursor: found.timelineItems.pageInfo.endCursor },
+            (answer) =>
+              (answer as { repository: { issue: { timelineItems: GraphqlPage<GitHubGraphqlEvent> } } }).repository.issue.timelineItems,
+          )
+        : [],
     ]);
-    const entry = issue as GitHubIssue;
-    const notes = comments as GitHubComment[];
-    const entries = timeline as GitHubTimelineEntry[];
+    const entry = fromGraphql(found);
+    const notes = [...found.commentPage.nodes, ...laterComments].map((comment): GitHubComment => ({
+      id: comment.id,
+      user: userOf(comment.author),
+      created_at: comment.createdAt,
+      body: comment.body,
+    }));
+    const entries = [...found.timelineItems.nodes, ...laterEvents].map(timelineEntry);
     return {
       ...toIssue(entry),
+      provider: "github",
       avatars: avatarsOf([entry.user, ...entry.assignees, ...notes.map((note) => note.user), ...entries.map((item) => item.actor ?? null)]),
       events: toEvents(entries),
       assignees: entry.assignees.map((assignee) => assignee.login),
       milestone: entry.milestone?.title,
       body: entry.body ?? "",
-      bodyHtml: entry.body_html,
       notes: notes.map(toNote),
     };
   },
 
-  // `body_html`'s signed URLs take no token.
-  readImage: () => Promise.resolve(undefined),
-
-  addComment(host, token, path, number, body) {
-    return sendJson("POST", `${apiBase(host)}/repos/${path}/issues/${number}/comments`, headers(token), { body });
+  async readImage(host, token, _path, source) {
+    return readsWithToken(host, source) ? fetchOk(source, { Authorization: `Bearer ${token}`, "User-Agent": "tet" }) : undefined;
   },
 
-  updateIssue(host, token, path, number, change) {
-    return sendJson("PATCH", `${apiBase(host)}/repos/${path}/issues/${number}`, headers(token), toIssueUpdate(change));
+  async addComment(host, token, path, number, body) {
+    const send = sender(host, token);
+    await send("mutation($input: AddCommentInput!) { addComment(input: $input) { clientMutationId } }", {
+      input: { subjectId: await issueNodeId(send, path, number), body },
+    });
+  },
+
+  async updateIssue(host, token, path, number, change) {
+    const send = sender(host, token);
+    const [issueId, labelIds, assigneeIds] = await Promise.all([
+      issueNodeId(send, path, number),
+      change.labels && allLabels(send, path).then((labels) => idsByName(change.labels ?? [], labels, "label")),
+      change.assignees && allAssignable(send, path).then((people) => idsByName(change.assignees ?? [], people, "person to assign")),
+    ]);
+    await send("mutation($input: UpdateIssueInput!) { updateIssue(input: $input) { clientMutationId } }", {
+      input: toIssueInput(issueId, change, labelIds, assigneeIds),
+    });
   },
 
   async listMilestones(host, token, path) {
-    const entries = (await getPaged(`${apiBase(host)}/repos/${path}/milestones?state=open&per_page=100`, headers(token))) as {
-      number: number;
-      title: string;
-    }[];
-    return entries.map((entry): IssueMilestone => ({ id: entry.number, title: entry.title }));
+    const query = `query($owner: String!, $name: String!, $cursor: String) {
+      repository(owner: $owner, name: $name) {
+        milestones(first: 100, after: $cursor, states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }) {
+          pageInfo { hasNextPage endCursor }
+          nodes { id title }
+        }
+      }
+    }`;
+    return allNodes<IssueMilestone>(
+      sender(host, token),
+      query,
+      repositoryOf(path),
+      (data) => (data as { repository: { milestones: GraphqlPage<IssueMilestone> } }).repository.milestones,
+    );
   },
 
   async createIssue(host, token, path, title, body) {
-    const response = await fetchOk(
-      `${apiBase(host)}/repos/${path}/issues`,
-      { ...headers(token), "Content-Type": "application/json" },
-      { method: "POST", body: JSON.stringify({ title, body }) },
-    );
-    return ((await response.json()) as { number: number }).number;
+    const send = sender(host, token);
+    const { id } = await repositoryIds(send, path);
+    const data = (await send("mutation($input: CreateIssueInput!) { createIssue(input: $input) { issue { number } } }", {
+      input: { repositoryId: id, title, body },
+    })) as { createIssue: { issue: { number: number } } };
+    return data.createIssue.issue.number;
   },
 
-  editComment(host, token, path, _number, id, body) {
-    return sendJson("PATCH", `${apiBase(host)}/repos/${path}/issues/comments/${id}`, headers(token), { body });
+  async editComment(host, token, _path, _number, id, body) {
+    await sender(host, token)("mutation($input: UpdateIssueCommentInput!) { updateIssueComment(input: $input) { clientMutationId } }", {
+      input: { id, body },
+    });
   },
 
-  deleteComment(host, token, path, _number, id) {
-    return sendDelete(`${apiBase(host)}/repos/${path}/issues/comments/${id}`, headers(token));
+  async deleteComment(host, token, _path, _number, id) {
+    await sender(host, token)("mutation($input: DeleteIssueCommentInput!) { deleteIssueComment(input: $input) { clientMutationId } }", {
+      input: { id },
+    });
   },
 
-  // Its REST has no way to delete an issue; GraphQL does, by the issue's node id.
   async deleteIssue(host, token, path, number) {
-    const issue = (await getJson(`${apiBase(host)}/repos/${path}/issues/${number}`, headers(token))) as { node_id: string };
-    const response = await fetchOk(
-      graphqlUrl(host),
-      { ...headers(token), "Content-Type": "application/json" },
-      {
-        method: "POST",
-        body: JSON.stringify({
-          query: "mutation($id: ID!) { deleteIssue(input: { issueId: $id }) { clientMutationId } }",
-          variables: { id: issue.node_id },
-        }),
-      },
-    );
-    const refused = graphqlError((await response.json()) as { errors?: { message?: string }[] });
-    if (refused !== undefined) {
-      throw new Error(refused);
-    }
+    const send = sender(host, token);
+    await send("mutation($input: DeleteIssueInput!) { deleteIssue(input: $input) { clientMutationId } }", {
+      input: { issueId: await issueNodeId(send, path, number) },
+    });
   },
 
   uploads: (host) => (hasUpload(host) ? { extensions: Object.keys(UPLOAD_TYPES) } : undefined),
@@ -327,8 +604,8 @@ export const github: GitProvider = {
     if (contentType === undefined) {
       throw new Error(`GitHub takes only images and videos from a token: attach ${name} on ${host}`);
     }
-    const repository = (await getJson(`${apiBase(host)}/repos/${path}`, headers(token))) as { id: number };
-    const query = new URLSearchParams({ name, content_type: contentType, repository_id: String(repository.id) });
+    const { databaseId } = await repositoryIds(sender(host, token), path);
+    const query = new URLSearchParams({ name, content_type: contentType, repository_id: String(databaseId) });
     const response = await fetchOk(
       `https://uploads.${host}/user-attachments/assets?${query.toString()}`,
       { ...headers(token), "Content-Type": "application/octet-stream" },

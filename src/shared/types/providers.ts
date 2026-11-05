@@ -76,13 +76,12 @@ export interface IssueFilterOptions {
 
 /** A comment of an issue, oldest first in `IssueDetail.notes`. */
 export interface IssueNote {
-  id: number;
+  /** What the tracker addresses it by, its GraphQL id. */
+  id: string;
   author: string;
   /** ISO 8601. */
   createdAt: string;
   body: string;
-  /** `body` as the host rendered it, where its images are reached only through this. */
-  bodyHtml?: string;
 }
 
 /** What happened to an issue, shown between its comments. */
@@ -99,12 +98,12 @@ export type IssueEvent = { actor: string; /** ISO 8601. */ createdAt: string } &
 
 /** One issue with what its row leaves out, for its tab. */
 export interface IssueDetail extends Issue {
+  /** Whose Markdown its texts are written in (`issueTextHtml`). */
+  provider: ProviderId;
   /** All of them; `assignee` is the first. */
   assignees: string[];
   milestone?: string;
   body: string;
-  /** As `IssueNote.bodyHtml`. */
-  bodyHtml?: string;
   notes: IssueNote[];
   events: IssueEvent[];
   /** The login of the account it was read through. */
@@ -120,7 +119,8 @@ export interface IssueUploads {
 }
 
 export interface IssueMilestone {
-  id: number;
+  /** What the tracker addresses it by, its GraphQL id. */
+  id: string;
   title: string;
 }
 

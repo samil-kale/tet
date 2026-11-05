@@ -185,8 +185,8 @@ export interface TETApi {
     create: (projectId: string, title: string, body: string) => Promise<IssueCreateResult>;
     /** For good, with its comments. */
     delete: (projectId: string, number: number) => Promise<ActionResult>;
-    editComment: (projectId: string, number: number, id: number, body: string) => Promise<ActionResult>;
-    deleteComment: (projectId: string, number: number, id: number) => Promise<ActionResult>;
+    editComment: (projectId: string, number: number, id: string, body: string) => Promise<ActionResult>;
+    deleteComment: (projectId: string, number: number, id: string) => Promise<ActionResult>;
     upload: (projectId: string, name: string, dataBase64: string) => Promise<IssueUploadResult>;
     /** Checks a path against the tracker and saves it in tet.json; empty removes it. Answers what
      *  refused it, for the question that is still up to show it at its field. */

@@ -67,7 +67,7 @@ export async function renderMarkdown(
   return renderHtml(markdown.render(text), path, loadImage, previous);
 }
 
-/** As `renderMarkdown`, of HTML a host rendered: nothing of it is trusted more. */
+/** As `renderMarkdown`, of Markdown already made HTML (`issueTextHtml`). */
 export async function renderHtml(
   source: string,
   path: string,
