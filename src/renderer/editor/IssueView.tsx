@@ -153,8 +153,9 @@ function IssueText({ text, provider, issueUrl, loadImage, openFile }: IssueTextP
   return <div ref={host} className="issue-text" />;
 }
 
-/** The box text for the tracker is typed into: with `upload`, a file picked, pasted or dropped is
- *  uploaded at once, its Markdown following what stands there. */
+/** The box text for the tracker is typed into, with a preview of it as the tracker will show it: with
+ *  `upload`, a file picked, pasted or dropped is uploaded at once, its Markdown following what stands
+ *  there. */
 function TextBox({
   label,
   value,
@@ -162,6 +163,7 @@ function TextBox({
   disabled,
   upload,
   accept,
+  rendering,
 }: {
   label: string;
   value: string;
@@ -170,10 +172,13 @@ function TextBox({
   upload: IssueActions["upload"] | undefined;
   /** What the picker offers, an `accept`; absent offers any file. */
   accept: string | undefined;
+  /** What the preview renders the text with. */
+  rendering: Omit<IssueTextProps, "text">;
 }) {
   const textMenu = useTextContextMenu(onChange);
   const picker = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const attach = async (files: File[]): Promise<void> => {
     setUploading(true);
     let next = value;
@@ -202,20 +207,45 @@ function TextBox({
         }
       }}
     >
-      <textarea
-        aria-label={label}
-        value={value}
-        disabled={busy}
-        onChange={(event) => onChange(event.target.value)}
-        onContextMenu={textMenu.onContextMenu}
-        onPaste={(event) => {
-          const files = [...event.clipboardData.files];
-          if (upload && files.length > 0) {
-            event.preventDefault();
-            void attach(files);
-          }
-        }}
-      />
+      <div className="issue-box-tabs" role="tablist">
+        {[
+          { name: "Write", active: !previewing },
+          { name: "Preview", active: previewing },
+        ].map(({ name, active }) => (
+          <button
+            key={name}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            className={`issue-box-tab${active ? " active" : ""}`}
+            disabled={busy}
+            onClick={() => setPreviewing(name === "Preview")}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      {previewing ? (
+        <div className="issue-box-preview">
+          {value.trim() === "" ? <div className="issue-empty">Nothing to preview</div> : <IssueText {...rendering} text={value} />}
+        </div>
+      ) : (
+        <textarea
+          aria-label={label}
+          placeholder="Use Markdown to format your text"
+          value={value}
+          disabled={busy}
+          onChange={(event) => onChange(event.target.value)}
+          onContextMenu={textMenu.onContextMenu}
+          onPaste={(event) => {
+            const files = [...event.clipboardData.files];
+            if (upload && files.length > 0) {
+              event.preventDefault();
+              void attach(files);
+            }
+          }}
+        />
+      )}
       {textMenu.menu}
       {upload && (
         <>
@@ -245,11 +275,13 @@ function CommentBox({
   actions,
   upload,
   accept,
+  rendering,
 }: {
   open: boolean;
   actions: IssueActions;
   upload: IssueActions["upload"] | undefined;
   accept: string | undefined;
+  rendering: Omit<IssueTextProps, "text">;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -277,7 +309,15 @@ function CommentBox({
           <span className="issue-card-author">Add a comment</span>
         </div>
         <div className="issue-card-edit">
-          <TextBox label="Add a comment" value={text} onChange={setText} disabled={busy} upload={upload} accept={accept} />
+          <TextBox
+            label="Add a comment"
+            value={text}
+            onChange={setText}
+            disabled={busy}
+            upload={upload}
+            accept={accept}
+            rendering={rendering}
+          />
         </div>
       </div>
       <div className="issue-line">
@@ -337,7 +377,20 @@ function IssueCard({ author, avatar, opened, at, upload, accept, onEdit, onDelet
       </div>
       {draft !== undefined ? (
         <div className="issue-comment issue-card-edit">
-          <TextBox label="Text" value={draft} onChange={setDraft} disabled={busy} upload={upload} accept={accept} />
+          <TextBox
+            label="Text"
+            value={draft}
+            onChange={setDraft}
+            disabled={busy}
+            upload={upload}
+            accept={accept}
+            rendering={{
+              provider: shown.provider,
+              issueUrl: shown.issueUrl,
+              loadImage: shown.loadImage,
+              openFile: shown.openFile,
+            }}
+          />
           <div className="issue-line">
             <button type="button" className="button secondary" disabled={busy} onClick={() => setDraft(undefined)}>
               Cancel
@@ -658,7 +711,13 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                 />
               );
             })}
-            <CommentBox open={issue.open} actions={actions} upload={upload} accept={accept} />
+            <CommentBox
+              open={issue.open}
+              actions={actions}
+              upload={upload}
+              accept={accept}
+              rendering={{ provider: issue.provider, issueUrl: issue.url, loadImage, openFile }}
+            />
           </div>
           <div className="issue-side">
             <PickSection
