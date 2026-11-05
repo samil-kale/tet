@@ -18,7 +18,6 @@ import {
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
-  avatarUrlOf,
   fromGraphql as fromGitLabGraphql,
   gitlab,
   issuesVariables,
@@ -68,7 +67,7 @@ describe("the issues of a tracker", () => {
     title: "VAT",
     web_url: "https://gitlab.example.com/g/t/-/issues/12",
     state: "closed",
-    author: { username: "anna", avatar_url: null },
+    author: { username: "anna" },
     assignees: [],
     user_notes_count: 1,
     created_at: "2026-10-02T10:00:00Z",
@@ -107,9 +106,6 @@ describe("the issues of a tracker", () => {
     });
     assert.equal(toGitHubIssue({ ...githubIssue, user: null }).author, "ghost");
     assert.equal(toGitHubIssue({ ...githubIssue, user: null }).avatars.ghost, undefined);
-    assert.deepEqual(toGitLabIssue({ ...gitlabIssue, author: { username: "anna", avatar_url: "https://g/a.png" } }).avatars, {
-      anna: "https://g/a.png",
-    });
   });
 
   it("reads what happened to an issue off GitHub's timeline, leaving out what the tab does not draw", () => {
@@ -147,7 +143,7 @@ describe("the issues of a tracker", () => {
   });
 
   it("reads what happened to an issue off GitLab's records and system notes", () => {
-    const user = { username: "anna", avatar_url: null };
+    const user = { username: "anna" };
     const created_at = "2026-10-01T10:00:00Z";
     const base = { actor: "anna", createdAt: created_at };
     assert.deepEqual(
@@ -254,7 +250,7 @@ describe("the issues of a tracker", () => {
   });
 
   it("reads a title change off GitLab's system note, rendered or in Markdown", () => {
-    const author = { username: "anna", avatar_url: null };
+    const author = { username: "anna" };
     const created_at = "2026-10-01T10:00:00Z";
     const titleOf = (body: string) => toGitLabEvents([{ id: "n", system: true, author, created_at, body }], [], [], [])[0];
     const base = { actor: "anna", createdAt: created_at };
@@ -274,19 +270,18 @@ describe("the issues of a tracker", () => {
 
   it("reads a note GitLab's GraphQL answers, a deleted account's as ghost", () => {
     const note = { id: "gid://gitlab/Note/42", system: false, body: "B", createdAt: "a" };
-    assert.deepEqual(noteFromGitLabGraphql("gitlab.example.com", { ...note, author: { username: "anna", avatarUrl: "/a.png" } }), {
+    assert.deepEqual(noteFromGitLabGraphql({ ...note, author: { username: "anna" } }), {
       id: "gid://gitlab/Note/42",
       system: false,
-      author: { username: "anna", avatar_url: "https://gitlab.example.com/a.png" },
+      author: { username: "anna" },
       created_at: "a",
       body: "B",
     });
-    assert.equal(noteFromGitLabGraphql("gitlab.example.com", { ...note, author: null }).author.username, "ghost");
+    assert.equal(noteFromGitLabGraphql({ ...note, author: null }).author.username, "ghost");
   });
 
   it("reads an issue GitLab's GraphQL answers as REST's", () => {
-    const person = { username: "anna", avatarUrl: "/uploads/-/a.png" };
-    const entry = fromGitLabGraphql("gitlab.example.com", {
+    const entry = fromGitLabGraphql({
       iid: "12",
       title: "T",
       webUrl: "https://gitlab.example.com/g/t/-/work_items/12",
@@ -294,8 +289,8 @@ describe("the issues of a tracker", () => {
       createdAt: "2026-10-01T00:00:00Z",
       description: null,
       userNotesCount: 2,
-      author: person,
-      assignees: { nodes: [{ username: "tom", avatarUrl: null }] },
+      author: { username: "anna" },
+      assignees: { nodes: [{ username: "tom" }] },
       labels: { nodes: [{ title: "bug" }] },
       milestone: { title: "May" },
     });
@@ -304,21 +299,14 @@ describe("the issues of a tracker", () => {
       title: "T",
       web_url: "https://gitlab.example.com/g/t/-/work_items/12",
       state: "opened",
-      author: { username: "anna", avatar_url: "https://gitlab.example.com/uploads/-/a.png" },
-      assignees: [{ username: "tom", avatar_url: null }],
+      author: { username: "anna" },
+      assignees: [{ username: "tom" }],
       user_notes_count: 2,
       created_at: "2026-10-01T00:00:00Z",
       labels: ["bug"],
       description: null,
       milestone: { title: "May" },
     });
-  });
-
-  it("makes a GitLab picture's URL whole", () => {
-    assert.equal(avatarUrlOf("gitlab.example.com", null), null);
-    assert.equal(avatarUrlOf("gitlab.example.com", "https://g/a.png"), "https://g/a.png");
-    assert.equal(avatarUrlOf("gitlab.example.com", "/uploads/a.png"), "https://gitlab.example.com/uploads/a.png");
-    assert.equal(avatarUrlOf("gitlab.example.com", "/avatar/ab"), "https://secure.gravatar.com/avatar/ab?s=80&d=identicon");
   });
 
   it("reads what a GitLab mutation refused in its own field", () => {
@@ -431,7 +419,7 @@ describe("the issues of a tracker", () => {
   });
 
   it("leaves out what GitLab noted itself", () => {
-    const author = { username: "anna", avatar_url: null };
+    const author = { username: "anna" };
     assert.deepEqual(
       toGitLabNotes([
         { id: "n1", system: true, author, created_at: "a", body: "added label" },

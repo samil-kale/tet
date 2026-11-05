@@ -10,7 +10,7 @@ import { filled, prompt, refusal, singleField, type PromptFields } from "../../u
 import { Field, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
-import { Link2Icon, MessageIcon, PlusIcon, SyncIcon } from "../../ui/icons";
+import { LinkIcon, PlusIcon, SyncIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
 import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
@@ -80,10 +80,6 @@ function IssueRow({
         </span>
       </span>
       {issue.assignee !== undefined && <Person login={issue.assignee} avatar={issue.avatars[issue.assignee]} />}
-      <span className="issue-comments">
-        <MessageIcon className="tree-icon" />
-        {issue.comments}
-      </span>
     </div>
   );
 }
@@ -176,7 +172,6 @@ export const IssueList = memo(function IssueList({
 
   const menuEntries = (issue: Issue): ContextMenuEntry[] => [
     { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
-    { label: "Copy Link", run: () => void navigator.clipboard.writeText(issue.url) },
     SEPARATOR,
     {
       label: "Open in Agent",
@@ -198,7 +193,7 @@ export const IssueList = memo(function IssueList({
           <>
             {worktree === undefined && (
               <IconButton title="Issue source..." onClick={() => void askSource()}>
-                <Link2Icon />
+                <LinkIcon />
               </IconButton>
             )}
             <IconButton title="Refresh" disabled={busy} onClick={reload}>

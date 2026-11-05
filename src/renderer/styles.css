@@ -1187,17 +1187,6 @@ textarea:focus,
   border-radius: 50%;
 }
 
-/* Wide enough for two digits, so rows' icons stand above each other. */
-.issue-comments {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  gap: 3px;
-  min-width: 30px;
-  font-size: var(--tiny-font-size);
-  color: var(--tet-descriptionForeground);
-}
-
 /* An issue's tab (editor/IssueView.tsx), shaped as VS Code's GitHub Pull Requests and Issues. */
 .issue-view {
   flex: 1;
@@ -1241,16 +1230,20 @@ textarea:focus,
   padding: 10px;
 }
 
-/* Write and Preview above a text box: a card header's height, as a dialog's tab header. */
+/* Write and Preview above a text box: a card header's height, pulled to the card's edges as a
+   dialog's tab header is, by cancelling `.issue-card-edit`'s padding. */
 .issue-box-tabs {
   display: flex;
   align-items: stretch;
   height: var(--bar-height);
-  margin-bottom: 6px;
-  overflow: hidden;
-  border: 1px solid var(--tet-app-border);
-  border-radius: 3px;
+  margin: -10px -10px 10px;
+  border-bottom: 1px solid var(--tet-app-border);
   background: var(--tet-tab-inactiveBackground);
+}
+
+/* At the card's top, as the comment box's, it takes the card's corners. */
+.issue-card-edit:first-child .issue-box-tabs {
+  border-radius: 3px 3px 0 0;
 }
 
 /* The format buttons, at the bar's end. */
@@ -1450,7 +1443,7 @@ textarea:focus,
 
 /* The box to write in, apart from the thread above it; the one a card edits in is not. */
 .issue-thread > .issue-comment {
-  margin-top: 50px;
+  margin-top: 30px;
 }
 
 .issue-comment textarea {
@@ -1479,7 +1472,7 @@ textarea:focus,
 }
 
 .issue-label {
-  padding: 1px 7px;
+  padding: 2px 7px;
   border: 1px solid var(--tet-menu-border);
   border-radius: 3px;
   background: var(--tet-lane-background);

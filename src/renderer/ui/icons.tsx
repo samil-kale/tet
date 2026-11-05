@@ -31,7 +31,6 @@ import {
   Italic,
   Landmark,
   Link,
-  Link2,
   List,
   ListChecks,
   ListOrdered,
@@ -470,15 +469,9 @@ export function TrashIcon(props: IconProps) {
   return <Lucide {...props} icon={Trash2} />;
 }
 
-/** Lucide's `link` — an issue's Copy Link and a text box's link, drawn a little smaller: its diagonal reads large beside the
- *  bar's other buttons. */
+/** Lucide's `link` — the ISSUES section's source and a text box's link, drawn a little smaller: its diagonal reads large beside the bar's other buttons. */
 export function LinkIcon(props: IconProps) {
   return <Lucide {...props} icon={Link} extent={22} />;
-}
-
-/** Lucide's `link-2` — the ISSUES section's source. */
-export function Link2Icon(props: IconProps) {
-  return <Lucide {...props} icon={Link2} />;
 }
 
 /** Lucide's `package-2` — the archive lane. */

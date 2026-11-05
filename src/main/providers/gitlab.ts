@@ -72,7 +72,6 @@ async function mutate<T>(host: string, token: string, name: string, inputType: s
 
 interface GitLabUser {
   username: string;
-  avatar_url: string | null;
 }
 
 export interface GitLabIssue {
@@ -98,12 +97,6 @@ export interface GitLabNote {
   body: string;
 }
 
-/** A user as GraphQL says it; an uploaded picture's URL is relative to the host. */
-interface GitLabGraphqlUser {
-  username: string;
-  avatarUrl: string | null;
-}
-
 /** An issue as GraphQL says it; only one read alone has the last two. */
 export interface GitLabGraphqlIssue {
   iid: string;
@@ -112,8 +105,8 @@ export interface GitLabGraphqlIssue {
   state: string;
   createdAt: string;
   userNotesCount: number;
-  author: GitLabGraphqlUser;
-  assignees: { nodes: GitLabGraphqlUser[] };
+  author: GitLabUser;
+  assignees: { nodes: GitLabUser[] };
   labels: { nodes: { title: string }[] };
   description?: string | null;
   milestone?: { title: string } | null;
@@ -125,16 +118,16 @@ export interface GitLabGraphqlNote {
   system: boolean;
   body: string;
   createdAt: string;
-  author: GitLabGraphqlUser | null;
+  author: GitLabUser | null;
 }
 
 const ISSUE_ROW = `iid title webUrl state createdAt userNotesCount
-  author { username avatarUrl }
-  assignees(first: 100) { nodes { username avatarUrl } }
+  author { username }
+  assignees(first: 100) { nodes { username } }
   labels(first: 100) { nodes { title } }`;
 
 const NOTE_PAGE = `pageInfo { hasNextPage endCursor }
-  nodes { id system body createdAt author { username avatarUrl } }`;
+  nodes { id system body createdAt author { username } }`;
 
 const ISSUES_QUERY = `query($path: ID!, $cursor: String, $state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String]) {
   project(fullPath: $path) {
@@ -169,27 +162,15 @@ const LABELS_QUERY = `query($path: ID!, $cursor: String) {
   }
 }`;
 
-/** A user's picture as a whole URL, a Gravatar one where only its path is given. */
-export function avatarUrlOf(host: string, avatarUrl: string | null): string | null {
-  if (!avatarUrl || avatarUrl.startsWith("http")) {
-    return avatarUrl;
-  }
-  return avatarUrl.startsWith("/avatar") ? `https://secure.gravatar.com${avatarUrl}?s=80&d=identicon` : `https://${host}${avatarUrl}`;
-}
-
-function userOf(host: string, person: GitLabGraphqlUser): GitLabUser {
-  return { username: person.username, avatar_url: avatarUrlOf(host, person.avatarUrl) };
-}
-
 /** An issue read over GraphQL as `toIssue` takes it. */
-export function fromGraphql(host: string, entry: GitLabGraphqlIssue): GitLabIssue {
+export function fromGraphql(entry: GitLabGraphqlIssue): GitLabIssue {
   return {
     iid: Number(entry.iid),
     title: entry.title,
     web_url: entry.webUrl,
     state: entry.state,
-    author: userOf(host, entry.author),
-    assignees: entry.assignees.nodes.map((person) => userOf(host, person)),
+    author: entry.author,
+    assignees: entry.assignees.nodes,
     user_notes_count: entry.userNotesCount,
     created_at: entry.createdAt,
     labels: entry.labels.nodes.map((label) => label.title),
@@ -199,11 +180,11 @@ export function fromGraphql(host: string, entry: GitLabGraphqlIssue): GitLabIssu
 }
 
 /** A note read over GraphQL as `toNotes` and `toEvents` take it. */
-export function noteFromGraphql(host: string, entry: GitLabGraphqlNote): GitLabNote {
+export function noteFromGraphql(entry: GitLabGraphqlNote): GitLabNote {
   return {
     id: entry.id,
     system: entry.system,
-    author: entry.author ? userOf(host, entry.author) : { username: "ghost", avatar_url: null },
+    author: entry.author ?? { username: "ghost" },
     created_at: entry.createdAt,
     body: entry.body,
   };
@@ -292,17 +273,8 @@ export function issuesVariables(path: string, filter: IssueFilter): Record<strin
   };
 }
 
-/** Each user's picture by login, of those who have one. */
-function avatarsOf(users: GitLabUser[]): Record<string, string> {
-  const avatars: Record<string, string> = {};
-  for (const user of users) {
-    if (user.avatar_url) {
-      avatars[user.username] = user.avatar_url;
-    }
-  }
-  return avatars;
-}
-
+/** `avatars` stays empty: a private instance serves a user's uploaded picture only to a signed-in
+ *  browser session, never to a token, so a user is shown by the first letters of the login. */
 export function toIssue(entry: GitLabIssue): Issue {
   return {
     number: entry.iid,
@@ -314,7 +286,7 @@ export function toIssue(entry: GitLabIssue): Issue {
     comments: entry.user_notes_count,
     createdAt: entry.created_at,
     labels: entry.labels,
-    avatars: avatarsOf([entry.author, ...entry.assignees]),
+    avatars: {},
   };
 }
 
@@ -418,7 +390,7 @@ export const gitlab: GitProvider = {
       const { project } = data as { project: { issues: GraphqlPage<GitLabGraphqlIssue> } | null };
       return reached(project, path).issues;
     });
-    return entries.map((entry) => toIssue(fromGraphql(host, entry)));
+    return entries.map((entry) => toIssue(fromGraphql(entry)));
   },
 
   async listLabels(host, token, path) {
@@ -465,18 +437,11 @@ export const gitlab: GitProvider = {
           },
         )
       : [];
-    const entry = fromGraphql(host, found);
-    const entries = [...found.notes.nodes, ...later].map((note) => noteFromGraphql(host, note));
-    const resources = [...labels, ...states, ...milestones] as GitLabResourceEvent[];
+    const entry = fromGraphql(found);
+    const entries = [...found.notes.nodes, ...later].map(noteFromGraphql);
     return {
       ...toIssue(entry),
       provider: "gitlab",
-      avatars: avatarsOf([
-        entry.author,
-        ...entry.assignees,
-        ...entries.map((note) => note.author),
-        ...resources.flatMap((event) => event.user ?? []),
-      ]),
       events: toEvents(entries, labels as GitLabLabelEvent[], states as GitLabStateEvent[], milestones as GitLabMilestoneEvent[]),
       assignees: entry.assignees.map((assignee) => assignee.username),
       milestone: entry.milestone?.title,

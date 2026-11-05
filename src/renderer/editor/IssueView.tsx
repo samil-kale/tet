@@ -365,9 +365,6 @@ function CommentBox({
   return (
     <div className="issue-comment">
       <div className="issue-card">
-        <div className="issue-card-header">
-          <span className="issue-card-author">Add a comment</span>
-        </div>
         <div className="issue-card-edit">
           <TextBox
             label="Add a comment"
@@ -598,9 +595,6 @@ function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueAction
         <div className="editor-bar-actions">
           <IconButton title="Refresh" onClick={actions.refresh}>
             <SyncIcon />
-          </IconButton>
-          <IconButton title="Copy Link" onClick={() => void navigator.clipboard.writeText(issue.url)}>
-            <LinkIcon />
           </IconButton>
           <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
             <RemoteIcon />
