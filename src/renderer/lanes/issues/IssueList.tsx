@@ -76,7 +76,7 @@ function IssueRow({
       <span className="list-main">
         <span className="list-label">{issue.title}</span>
         <span className="list-detail">
-          #{issue.number} · created {dayOf(issue.createdAt)}, by {issue.author}
+          #{issue.number} · opened {dayOf(issue.createdAt)}, by {issue.author}
         </span>
       </span>
       {issue.assignee === undefined ? (

@@ -1191,21 +1191,19 @@ textarea:focus,
   user-select: text;
 }
 
-/* The title and its number on one baseline, the pair centered in the bar. */
-.issue-bar-name {
-  display: flex;
-  align-items: baseline;
-  min-width: 0;
+.editor-bar.issue-bar {
+  gap: 0;
+  padding: 0;
 }
 
-/* Beside what follows it, not across the bar as a file's path. */
-.issue-bar-name > .issue-bar-title {
-  flex: 0 1 auto;
+.issue-bar > .issue-state,
+.issue-bar > .issue-bar-number {
+  padding: 0 10px;
+  font-size: var(--tet-font-size);
 }
 
 .issue-bar-number {
-  flex: none;
-  margin: 0 6px;
+  color: var(--tet-descriptionForeground);
 }
 
 .issue-card-title {
@@ -1280,24 +1278,6 @@ textarea:focus,
   align-items: center;
   gap: 8px;
   margin-bottom: 14px;
-}
-
-/* An issue's state and its labels, set off as chips. */
-.issue-state,
-.issue-label {
-  border: 1px solid var(--tet-menu-border);
-  border-radius: 3px;
-  background: var(--tet-lane-background);
-}
-
-.issue-state {
-  padding: 3px 10px;
-  font-size: var(--small-font-size);
-}
-
-.issue-state.open {
-  border-color: var(--tet-focusBorder);
-  color: var(--tet-focusBorder);
 }
 
 .issue-columns {
@@ -1474,6 +1454,9 @@ textarea:focus,
 
 .issue-label {
   padding: 2px 7px;
+  border: 1px solid var(--tet-menu-border);
+  border-radius: 3px;
+  background: var(--tet-lane-background);
   font-size: var(--tiny-font-size);
 }
 
@@ -2123,7 +2106,7 @@ textarea:focus,
 .editor-bar-title {
   flex: 1;
   min-width: 0;
-  margin-left: 6px;
+  padding: 0 10px;
   font-size: var(--tet-font-size);
 }
 
