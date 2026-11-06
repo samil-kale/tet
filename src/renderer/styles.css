@@ -1174,6 +1174,12 @@ textarea:focus,
   border-radius: 50%;
 }
 
+/* An issue row without an assignee holds the avatar's place, so its texts are cut where the other
+   rows' are. */
+.issue-person.vacant {
+  visibility: hidden;
+}
+
 /* An issue's tab (editor/IssueView.tsx), shaped as VS Code's GitHub Pull Requests and Issues. */
 .issue-view {
   flex: 1;

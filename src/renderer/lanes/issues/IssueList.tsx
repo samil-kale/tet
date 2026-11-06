@@ -79,7 +79,11 @@ function IssueRow({
           #{issue.number} · created {dayOf(issue.createdAt)}, by {issue.author}
         </span>
       </span>
-      {issue.assignee !== undefined && <Person login={issue.assignee} avatar={issue.avatars[issue.assignee]} />}
+      {issue.assignee === undefined ? (
+        <span className="issue-person vacant" />
+      ) : (
+        <Person login={issue.assignee} avatar={issue.avatars[issue.assignee]} />
+      )}
     </div>
   );
 }
