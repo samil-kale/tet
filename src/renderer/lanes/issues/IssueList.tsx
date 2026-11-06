@@ -114,7 +114,7 @@ export const IssueList = memo(function IssueList({
   const askSource = async (): Promise<void> => {
     await prompt({
       title: "Issue source",
-      detail: "Empty shows this repository's own issues. Saved in tet.json, so everyone working on this project sees the same source.",
+      detail: "Leave empty to show the issues of this repository itself.",
       confirmLabel: "Save",
       value: source ?? "",
       ready: () => true,
