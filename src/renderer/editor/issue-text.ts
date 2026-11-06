@@ -92,7 +92,7 @@ function applyImageSettings(image: Token, next: Token | undefined): void {
 }
 
 /** A line's inline tokens with what IntelliJ's converters add: references made links outside a link,
- *  and on GitLab each image a link to itself, of the size its settings give. */
+ *  and on GitLab each image of the size its settings give. */
 function converted(state: StateCore, children: Token[], env: IssueTextEnv): Token[] {
   const tokens: Token[] = [];
   let linkDepth = 0;
@@ -106,11 +106,7 @@ function converted(state: StateCore, children: Token[], env: IssueTextEnv): Toke
       tokens.push(...withReferences(state, token, env));
     } else if (token.type === "image" && env.provider === "gitlab") {
       applyImageSettings(token, children[index + 1]);
-      if (linkDepth > 0) {
-        tokens.push(token);
-      } else {
-        tokens.push(linkOpen(state, String(token.attrGet("src") ?? ""), token.level), token, linkClose(state, token.level));
-      }
+      tokens.push(token);
     } else {
       tokens.push(token);
     }
@@ -164,15 +160,16 @@ export function issueLink(href: string, issueUrl: string): string | undefined {
   return URL.parse(href.startsWith("/uploads/") ? project + href : href, issueUrl)?.href;
 }
 
-/** The file of the repository a link of a GitLab issue's text means, as written: any other than a web
- *  address, an upload or one into its own project. Undefined for those, and on GitHub. */
-export function issueFileLink(href: string, provider: ProviderId, issueUrl: string): string | undefined {
-  if (provider !== "gitlab" || href === "" || href.startsWith("#") || href.startsWith("//") || href.startsWith("/uploads/")) {
+/** The file of the repository a link of an issue's text means, as written: any other than a web
+ *  address, an upload or one into its own project. Undefined for those. */
+export function issueFileLink(href: string, issueUrl: string): string | undefined {
+  if (href === "" || href.startsWith("#") || href.startsWith("//") || href.startsWith("/uploads/")) {
     return undefined;
   }
   if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
     return undefined;
   }
-  const project = new URL(issueUrl).pathname.split("/-/")[0].replace(/^\//, "");
+  // GitLab's issue lies under `/-/`, GitHub's under `/issues/<number>`.
+  const project = new URL(issueUrl).pathname.replace(/(?:\/-\/.*|\/issues\/\d+)$/, "").replace(/^\//, "");
   return href.replace(/^\/+/, "").startsWith(project) ? undefined : href;
 }

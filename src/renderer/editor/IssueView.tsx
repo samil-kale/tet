@@ -164,7 +164,7 @@ function IssueText({ text, provider, issueUrl, loadImage, openFile }: TextRender
       if (link) {
         event.preventDefault();
         const href = link.getAttribute("href") ?? "";
-        const file = issueFileLink(href, provider, issueUrl);
+        const file = issueFileLink(href, issueUrl);
         const path = file === undefined ? undefined : resolveLink("", file);
         const target = issueLink(href, issueUrl);
         if (path !== undefined) {

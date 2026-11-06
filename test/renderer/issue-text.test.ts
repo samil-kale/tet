@@ -45,6 +45,16 @@ describe("an issue's text on GitHub", () => {
     assert.equal(github("~~gone~~"), "<p><s>gone</s></p>");
     assert.equal(github("https://example.com"), '<p><a href="https://example.com">https://example.com</a></p>');
   });
+
+  it("opens a link in the repository, as on GitLab", () => {
+    assert.equal(issueFileLink("bla.md", GITHUB_ISSUE), "bla.md");
+    assert.equal(issueFileLink("directory/a/bla.md", GITHUB_ISSUE), "directory/a/bla.md");
+    assert.equal(issueFileLink("/some/path?query=1", GITHUB_ISSUE), "/some/path?query=1");
+    assert.equal(issueFileLink("/o/r/pull/3", GITHUB_ISSUE), undefined);
+    assert.equal(issueFileLink("https://example.com/a", GITHUB_ISSUE), undefined);
+    assert.equal(issueFileLink("mailto:a@example.com", GITHUB_ISSUE), undefined);
+    assert.equal(issueFileLink("#note", GITHUB_ISSUE), undefined);
+  });
 });
 
 describe("an issue's text on GitLab", () => {
@@ -54,9 +64,9 @@ describe("an issue's text on GitLab", () => {
     assert.equal(gitlab("See #1"), "<p>See #1</p>");
   });
 
-  const image = '<a href="/uploads/a/c.jpg"><img src="/uploads/a/c.jpg" alt="i"></a>';
+  const image = '<img src="/uploads/a/c.jpg" alt="i">';
 
-  it("makes an image a link to itself", () => {
+  it("leaves an image no link of its own, but the one the text puts it in", () => {
     assert.equal(gitlab("![i](/uploads/a/c.jpg)"), `<p>${image}</p>`);
     assert.equal(
       gitlab("[![i](/uploads/a/c.jpg)](https://example.com)"),
@@ -65,7 +75,7 @@ describe("an issue's text on GitLab", () => {
   });
 
   it("sizes an image by its settings and keeps what follows them", () => {
-    const sized = (size: string): string => `<a href="/uploads/a/c.jpg"><img src="/uploads/a/c.jpg" alt="i" ${size}></a>`;
+    const sized = (size: string): string => `<img src="/uploads/a/c.jpg" alt="i" ${size}>`;
     assert.equal(gitlab("![i](/uploads/a/c.jpg){width=900 height=520}"), `<p>${sized('width="900" height="520"')}</p>`);
     assert.equal(gitlab("![i](/uploads/a/c.jpg){width=10% height=10px}"), `<p>${sized('width="10%" height="10"')}</p>`);
     assert.equal(gitlab('![i](/uploads/a/c.jpg){width="10"} some text'), `<p>${sized('width="10"')} some text</p>`);
@@ -77,15 +87,14 @@ describe("an issue's text on GitLab", () => {
   });
 
   it("opens a link in the repository, and only that", () => {
-    assert.equal(issueFileLink("bla.md", "gitlab", GITLAB_ISSUE), "bla.md");
-    assert.equal(issueFileLink("directory/a/bla.md", "gitlab", GITLAB_ISSUE), "directory/a/bla.md");
-    assert.equal(issueFileLink("/some/path?query=1", "gitlab", GITLAB_ISSUE), "/some/path?query=1");
-    assert.equal(issueFileLink("/g/p/-/merge_requests/1", "gitlab", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("/uploads/a/c.pdf", "gitlab", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("https://example.com/a", "gitlab", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("mailto:a@example.com", "gitlab", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("#note", "gitlab", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("bla.md", "github", GITHUB_ISSUE), undefined);
+    assert.equal(issueFileLink("bla.md", GITLAB_ISSUE), "bla.md");
+    assert.equal(issueFileLink("directory/a/bla.md", GITLAB_ISSUE), "directory/a/bla.md");
+    assert.equal(issueFileLink("/some/path?query=1", GITLAB_ISSUE), "/some/path?query=1");
+    assert.equal(issueFileLink("/g/p/-/merge_requests/1", GITLAB_ISSUE), undefined);
+    assert.equal(issueFileLink("/uploads/a/c.pdf", GITLAB_ISSUE), undefined);
+    assert.equal(issueFileLink("https://example.com/a", GITLAB_ISSUE), undefined);
+    assert.equal(issueFileLink("mailto:a@example.com", GITLAB_ISSUE), undefined);
+    assert.equal(issueFileLink("#note", GITLAB_ISSUE), undefined);
   });
 
   it("leads a link to the tracker, an upload's from its project", () => {

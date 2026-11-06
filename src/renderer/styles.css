@@ -96,7 +96,8 @@ input[type="password"],
   height: var(--field-height);
 }
 
-input::placeholder {
+input::placeholder,
+textarea::placeholder {
   color: var(--tet-input-placeholderForeground);
 }
 
@@ -1394,7 +1395,13 @@ textarea:focus,
 }
 
 .issue-empty {
+  padding: 12px;
+}
+
+/* The empty preview stands in for the textarea's placeholder, so it reads alike. */
+.issue-box-preview .issue-empty {
   padding: 3px 6px;
+  color: var(--tet-input-placeholderForeground);
 }
 
 .issue-side {

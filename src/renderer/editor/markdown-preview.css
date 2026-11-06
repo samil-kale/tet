@@ -12,7 +12,7 @@
 
 /* An issue's text, in its card (`IssueText`). */
 .markdown-body.compact {
-  padding: 10px 10px 0;
+  padding: 8px 10px 0;
 }
 
 .markdown-body.compact img {
@@ -74,7 +74,7 @@
 }
 
 .markdown-body p {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .markdown-body li p {
