@@ -40,7 +40,7 @@ import { sbxAccess } from "./sbx/sbx-access";
 import { SbxAccountStore } from "./sbx/sbx-accounts";
 import type { SandboxChannel } from "./sbx/sbx-status";
 import { SbxLocalStore } from "./sbx/sbx-local";
-import { anyAgentInstalled } from "./requirements";
+import { anyAgentInstalled, checkRequirements } from "./requirements";
 import { prepareDataRoot, resolveDataRoot } from "./store/data-root";
 import { augmentAgentPath } from "./agents/agent-path";
 import type { TerminalEnv } from "./terminals/pty";
@@ -355,8 +355,8 @@ if (!app.requestSingleInstanceLock()) {
   void app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
-    // only after the window: on macOS/Linux it asks the login shell, which with nvm takes most of a
-    // second. The requirements re-check (ipc/app.ts) joins the same run.
+    // only after the window: on macOS/Linux it asks the login shell. The initial requirements
+    // check uses this preparation even when it finishes before the window loads.
     const pathReady = augmentAgentPath();
     sweepDropFiles(dataRoot);
     try {
@@ -365,6 +365,10 @@ if (!app.requestSingleInstanceLock()) {
       // The window still opens: tet-ctl then reports nothing to reach (startControl).
       logError("control channel not prepared", error);
     }
+    // The checks overlap the renderer and its fonts; projects still wait for startup:check.
+    const initialRequirements = pathReady.then(checkRequirements);
+    // The renderer receives the failure through startup:check even if it arrives before the page.
+    void initialRequirements.catch(() => undefined);
     registerIpc({
       store,
       settings: settingsAccess,
@@ -381,6 +385,7 @@ if (!app.requestSingleInstanceLock()) {
       records,
       projectDeps,
       notice,
+      initialRequirements,
       openWorkspace,
       shutdown,
     });

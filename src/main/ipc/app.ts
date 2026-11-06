@@ -11,12 +11,19 @@ import type { IpcDeps } from "./deps";
 import { PLATFORM } from "../util/host-platform";
 
 /** The startup gate, the app's own facts, the settings, and what the agents are. */
-export function registerAppIpc({ settings, openWorkspace, shutdown }: Pick<IpcDeps, "settings" | "openWorkspace" | "shutdown">): void {
+export function registerAppIpc({
+  settings,
+  initialRequirements,
+  openWorkspace,
+  shutdown,
+}: Pick<IpcDeps, "settings" | "initialRequirements" | "openWorkspace" | "shutdown">): void {
+  let firstCheck: Promise<Requirements> | undefined = initialRequirements;
   /** The startup gate, asked on every re-check; passing opens the workspace. */
   handle("startup:check", async (): Promise<Requirements> => {
-    // Re-scans for manager bin dirs created since startup, so "Check again" finds them.
-    await augmentAgentPath();
-    const requirements = await checkRequirements();
+    const initial = firstCheck;
+    firstCheck = undefined;
+    // Re-checks re-scan manager bin dirs, so an install since startup is found.
+    const requirements = await (initial ?? augmentAgentPath().then(checkRequirements));
     if (requirements.met) {
       await openWorkspace();
     }

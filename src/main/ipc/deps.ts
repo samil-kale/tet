@@ -1,4 +1,5 @@
 import type { NoticeSeverity } from "../../shared/types/app";
+import type { Requirements } from "../../shared/types/agents";
 import type { ControlRecords } from "../ctl/ctl-records";
 import type { EnvRequests } from "../ctl/env-requests";
 import type { EnvStore } from "../store/environment";
@@ -37,6 +38,8 @@ export interface IpcDeps {
   projectDeps: ProjectDeps;
   /** Tells the user (Notices.tsx), as main.ts does; a handler with a dialog up answers it instead. */
   notice: (severity: NoticeSeverity, message: string) => void;
+  /** The first requirements check, started while the window loads and after PATH is ready. */
+  initialRequirements: Promise<Requirements>;
   /** Opens the stored projects, once, when the requirements are met; resolves once their ids are
    *  read, so the window's first list has them. */
   openWorkspace: () => Promise<void>;
