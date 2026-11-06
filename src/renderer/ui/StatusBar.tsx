@@ -3,7 +3,7 @@ import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { Project } from "../../shared/types/project";
 import { shortcutLabel } from "../shortcuts";
 import { agentEntry } from "./agent-icons";
-import { ArchiveIcon, BellIcon, BranchIcon, ProjectsIcon, SquareTerminalIcon } from "./icons";
+import { BellIcon, BranchIcon, ProjectsIcon, SquareTerminalIcon } from "./icons";
 import { MARK_ORDER, removable, toggleCenter, useNoticeList } from "./Notices";
 import { StatusList, type StatusListItem } from "./StatusList";
 import { TabMark } from "./TabMark";
@@ -12,7 +12,7 @@ import { useClosing } from "./use-closing";
 /** What the tabs' button and list say while there is no tab to name. */
 const NO_TABS = "No tabs open";
 
-type ListName = "projects" | "tabs" | "branches" | "archive";
+type ListName = "projects" | "tabs" | "branches";
 
 interface StatusBarProps {
   /** The active repository's or worktree's project; absent while none is open. */
@@ -37,10 +37,6 @@ interface StatusBarProps {
   branch: string | undefined;
   /** Its uncommitted changes, by the branch. */
   changesCount: number;
-  /** Its archived sessions, as the archive's click lists them. */
-  archived: StatusListItem[];
-  /** An archived session's click in that list reopens its tab. */
-  onSelectArchived: (tabId: string) => void;
   /** Its local branches in the branch tree's order, as the branch's click lists them. */
   branches: StatusListItem[];
   /** A branch's click in that list switches to it. */
@@ -63,8 +59,6 @@ export const StatusBar = memo(function StatusBar({
   onNewTab,
   branch,
   changesCount,
-  archived,
-  onSelectArchived,
   branches,
   onSelectBranch,
 }: StatusBarProps) {
@@ -118,12 +112,6 @@ export const StatusBar = memo(function StatusBar({
             {branch}: {changesCount}
           </button>
         )}
-        {project && (
-          <button type="button" className="status-bar-item status-bar-archive" title="Archive" onClick={() => toggleList("archive")}>
-            <ArchiveIcon className="line-icon" />
-            archive: {archived.length}
-          </button>
-        )}
         <button
           type="button"
           className={`status-bar-item status-bar-notices${highlighted ? " highlighted" : ""}`}
@@ -161,18 +149,6 @@ export const StatusBar = memo(function StatusBar({
           newTabEntries={project ? newTabEntries : undefined}
           emptyText={NO_TABS}
           sorted
-        />
-      )}
-      {openList === "archive" && (
-        <StatusList
-          title="Archive"
-          items={archived}
-          activeId={undefined}
-          trigger="status-bar-archive"
-          onSelect={onSelectArchived}
-          closing={closing}
-          onClose={closeList}
-          emptyText="No archived sessions"
         />
       )}
       {openList === "branches" && (

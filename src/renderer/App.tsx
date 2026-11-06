@@ -9,7 +9,6 @@ import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
 import { ArchiveList } from "./lanes/archive/ArchiveList";
-import { useArchive } from "./lanes/archive/use-archive";
 import { CommandList } from "./lanes/projects/CommandList";
 import { checkout } from "./git/checkout";
 import { useBranchActions } from "./git/run-action";
@@ -254,32 +253,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       : heads[activeResolved.refKey]?.head
     : undefined;
   const activeChangesCount = activeResolved ? (states[activeResolved.refKey]?.changes.length ?? 0) : 0;
-  const archivedTabs = useArchive(activeResolved);
-  /** The status bar's archive list: a click reopens the session's tab. */
-  const archiveItems = useMemo(
-    () =>
-      archivedTabs.map((tab): StatusListItem => ({
-        id: tab.tabId,
-        label: tab.title || "New session",
-        icon: <AgentIcon agentId={tab.agentId} className="line-icon" />,
-      })),
-    [archivedTabs],
-  );
-  const reopenArchived = useCallback(
-    (tabId: string) => {
-      if (!activeResolved) {
-        return;
-      }
-      void window.tet.archive.reopen(activeResolved.ref, tabId).then((result) => {
-        if (result.ok) {
-          showTab(activeResolved.refKey, tabId);
-        } else {
-          notify("error", result.error);
-        }
-      });
-    },
-    [activeResolved, showTab],
-  );
 
   /** The status bar's tabs: the active repository's or worktree's tabs in the strip's order, and the
    *  focused pane's active one. */
@@ -593,8 +566,6 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         onNewTab={newTab}
         branch={activeBranchName}
         changesCount={activeChangesCount}
-        archived={archiveItems}
-        onSelectArchived={reopenArchived}
         branches={branchItems}
         onSelectBranch={checkoutBranch}
       />

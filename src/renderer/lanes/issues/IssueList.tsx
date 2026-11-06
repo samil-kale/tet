@@ -183,7 +183,6 @@ export const IssueList = memo(function IssueList({
       <Section
         title="ISSUES"
         count={issues?.length}
-        detail={source}
         busy={busy}
         actions={
           <>
