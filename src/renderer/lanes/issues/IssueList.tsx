@@ -56,16 +56,19 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
 
 function IssueRow({
   issue,
+  active,
   onOpen,
   onMenu,
 }: {
   issue: Issue;
+  /** Its tab is the active editor tab. */
+  active: boolean;
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
   return (
     <div
-      className="list-row issue-row two-line"
+      className={`list-row issue-row two-line${active ? " active" : ""}`}
       title={[`#${issue.number} ${issue.title}`, ...(issue.labels.length > 0 ? [`Labels: ${issue.labels.join(", ")}`] : [])].join("\n")}
       draggable
       onDragStart={(event) => event.dataTransfer.setData(ISSUE_DRAG_TYPE, String(issue.number))}
@@ -98,11 +101,14 @@ function IssueRow({
 export const IssueList = memo(function IssueList({
   resolved,
   shown,
+  openIssue,
   onOpenFile,
   onOpenAccounts,
 }: {
   resolved: ResolvedRef;
   shown: boolean;
+  /** The active editor tab's issue — its row is marked. */
+  openIssue: number | null;
   onOpenFile: (ref: ProjectRef, path: string, how?: OpenEditor) => void;
   onOpenAccounts: () => void;
 }) {
@@ -217,6 +223,7 @@ export const IssueList = memo(function IssueList({
               <IssueRow
                 key={issue.number}
                 issue={issue}
+                active={issue.number === openIssue}
                 onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
                 onMenu={(event) => menu.open(event, issue)}
               />

@@ -174,6 +174,11 @@ export function workingTreePathOf(tabs: EditorTab[] | undefined, tabId: string |
   return tab && inWorkingTree(tab) ? tab.path : null;
 }
 
+/** The number of the issue tab `tabId` shows, the one the ISSUES section marks open. */
+export function issueOf(tabs: EditorTab[] | undefined, tabId: string | undefined): number | null {
+  return tabs?.find((candidate) => candidate.tabId === tabId)?.issue ?? null;
+}
+
 export function isEditorTabId(tabId: string): boolean {
   return tabId.startsWith(EDITOR_TAB_PREFIX);
 }

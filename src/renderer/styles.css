@@ -1325,8 +1325,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 6px;
-  /* A pixel more than a card's padding, for its border: the avatars stand above each other. */
-  padding: 0 10px 0 11px;
+  padding: 0 10px;
 }
 
 /* The line joining a thread's entries, through the avatars' middle: over the thread's gap above a
@@ -1341,14 +1340,14 @@ textarea:focus,
 
 .issue-thread > .issue-card:not(:first-child)::before {
   top: -13px;
-  left: 20px;
-  height: 13px;
+  left: 19px;
+  height: 14px;
 }
 
 .issue-thread > .issue-event::before {
   top: -12px;
   bottom: 0;
-  left: 21px;
+  left: 20px;
 }
 
 /* A filled dot in the place of an avatar: the same 22px footprint, so the line and the message keep
@@ -1356,8 +1355,8 @@ textarea:focus,
 .issue-event-dot {
   position: relative;
   flex: none;
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   margin: 0 5.5px;
   box-sizing: border-box;
   border: 1px solid var(--tet-menu-border);
@@ -2108,7 +2107,7 @@ textarea:focus,
   flex: none;
   height: var(--bar-height);
   padding: 0 2px 0 0;
-  background: var(--tet-app-background);
+  background: var(--tet-editorGroupHeader-noTabsBackground, var(--tet-app-background));
   border-bottom: 1px solid var(--tet-app-border);
 }
 

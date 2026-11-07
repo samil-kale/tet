@@ -44,7 +44,7 @@ import { PLATFORM } from "./platform";
 import { DEFAULT_LAYOUT, inOrder, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS } from "./tabs/layout-state";
 import { useProjectLayouts } from "./tabs/use-project-layouts";
-import { workingTreePathOf, type EditorTab } from "./editor/editor-tab";
+import { issueOf, workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import { editorLabel, kindOf, terminalLabel, type PaneTab } from "./tabs/pane-tab";
 import { canDiscardRefEdits } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
@@ -490,6 +490,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     key={activeResolved.ref.projectId}
                     resolved={activeResolved}
                     shown={shown}
+                    openIssue={issueOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
                     onOpenFile={openEditor}
                     onOpenAccounts={openAccounts}
                   />

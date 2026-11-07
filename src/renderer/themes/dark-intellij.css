@@ -51,6 +51,8 @@
   --tet-tab-inactiveBackground: #1e1f22;
   --tet-tab-inactiveForeground: #bbbdc0;
   --tet-tab-border: #1e1f22;
+  /* The editor tab's bar: the theme's own editorGroupHeader.noTabsBackground, the editor's ground. */
+  --tet-editorGroupHeader-noTabsBackground: #1e1f22;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
