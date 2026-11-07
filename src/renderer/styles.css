@@ -1351,9 +1351,18 @@ textarea:focus,
   left: 21px;
 }
 
-.issue-event .issue-person {
+/* A filled dot in the place of an avatar: the same 22px footprint, so the line and the message keep
+   their places. */
+.issue-event-dot {
   position: relative;
-  background: var(--tet-editor-background);
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin: 0 5.5px;
+  box-sizing: border-box;
+  border: 1px solid var(--tet-menu-border);
+  border-radius: 50%;
+  background: var(--tet-lane-background);
 }
 
 .issue-event-message {

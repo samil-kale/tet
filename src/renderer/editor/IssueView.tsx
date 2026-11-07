@@ -519,10 +519,10 @@ function eventMessage(event: ThreadEvent): React.ReactNode {
 }
 
 /** A line of the thread saying what happened, as the plugin's timeline draws one. */
-function IssueEventLine({ event, avatar }: { event: ThreadEvent; avatar: string | undefined }) {
+function IssueEventLine({ event }: { event: ThreadEvent }) {
   return (
     <div className="issue-event">
-      <Person login={event.actor} avatar={avatar} />
+      <span className="issue-event-dot" />
       <span className="issue-event-message">
         {login(event.actor)} {eventMessage(event)} <span className="issue-event-time">{agoOf(event.createdAt)}</span>
       </span>
@@ -699,7 +699,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
             />
             {issueThread(issue.notes, issue.events).map((entry, index) => {
               if ("event" in entry) {
-                return <IssueEventLine key={`event${index}`} event={entry.event} avatar={issue.avatars[entry.event.actor]} />;
+                return <IssueEventLine key={`event${index}`} event={entry.event} />;
               }
               const { note } = entry;
               return (
