@@ -59,9 +59,6 @@ export function useTabRestore(
         if (kind === "editor" && editor && !open.some((tab) => showsSame(tab, editor))) {
           // One preview tab: a file opened meanwhile may have taken it.
           openEditorFile(ref, id, editor.path, editor.preview && previewEditorTab(ref) === undefined, {
-            diff: editor.diff,
-            commit: editor.commit,
-            issue: editor.issue,
             restored: editor,
           });
           editors.push({ tabId: id, ref, path: editor.path, commit: editor.commit, issue: editor.issue });

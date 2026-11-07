@@ -56,7 +56,7 @@ export interface OpenEditor {
   background?: boolean;
   /** A Markdown file with its preview beside the editor, and the default for the ones after. */
   markdownPreview?: boolean;
-  /** Brought back by a restart (`use-tab-restore.ts`): its Markdown preview and the editor's view
+  /** Brought back by a restart (`use-tab-restore.ts`): its source, diff, Markdown preview and view
    *  as they were left, the default left alone; a file gone meanwhile shows as such, unannounced. */
   restored?: EditorEntry;
   /** A search result's match, selected once the file's text is in the editor. */

@@ -479,6 +479,7 @@ export function editorContent(tabId: string): string | undefined {
  * before the tab is drawn, whose host attaches the element made here.
  */
 export function openEditorFile(ref: ProjectRef, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
+  const { commit, issue, diff } = how.restored ?? how;
   let view = views.get(tabId);
   if (!view) {
     const host = document.createElement("div");
@@ -533,9 +534,9 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     saving: false,
     dirty: false,
     preview,
-    diff: how.diff === true || how.commit !== undefined,
-    commit: how.commit,
-    issue: how.issue,
+    diff: diff === true || commit !== undefined,
+    commit,
+    issue,
     issueDetail: undefined,
     markdownPreview: isMarkdown(path) ? (how.restored?.markdownPreview ?? markdownPreviewByDefault.get()) : "off",
     sideBySide: diffDefaults.sideBySide.get(),
@@ -546,10 +547,10 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   applyDiffOptions(view);
   const current = view;
   const read =
-    how.issue !== undefined
-      ? readIssueFile(view, seq, path, how.issue)
-      : how.commit
-        ? readCommitFile(ref, path, how.commit)
+    issue !== undefined
+      ? readIssueFile(view, seq, path, issue)
+      : commit
+        ? readCommitFile(ref, path, commit)
         : window.tet.repository.readFile(ref, path);
   void read.then((file) => {
     if (stale(current, seq)) {
@@ -560,7 +561,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
       notify("error", `${file.path}: ${file.error}`);
     }
     // An issue draws its own view, no editor.
-    const text = editorKind(file) === "text" && how.issue === undefined;
+    const text = editorKind(file) === "text" && issue === undefined;
     publish(current, { file, loading: false, building: text });
     if (text) {
       void showText(current, seq, file);
