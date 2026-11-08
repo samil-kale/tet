@@ -317,6 +317,8 @@ textarea:focus,
   --list-row-height: 28px;
   /* `.list-row.two-line`'s, two lines of text: the one list row of another height. */
   --two-line-row-height: 52px;
+  /* An issue's text box (`TextBox`, the new issue's description) and its preview. */
+  --text-box-height: 120px;
   --popup-row-height: 30px;
   --popup-radius: 3px;
   --menu-padding: 3px;
@@ -1104,12 +1106,51 @@ textarea:focus,
   height: calc(var(--icon-size) - 2px);
 }
 
-/* The ISSUES section (lanes/issues/). Its filter row and two-line rows are IntelliJ's merge request
-   list's. */
-.issue-filter-bar {
+/* The ISSUES section (lanes/issues/) and an issue's tab (editor/IssueView.tsx) declare once what
+   they share: a row of items centered on its line, entries one under the next, the secondary text
+   and the bold names. */
+.issue-filter-bar,
+.issue-person,
+.issue-line,
+.issue-attach,
+.issue-card-header,
+.issue-event,
+.issue-side-title,
+.issue-side-person,
+.issue-time-log-line {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+}
+
+.issue-thread,
+.issue-side,
+.issue-side-section,
+.issue-comment,
+.issue-time-log {
+  display: flex;
+  flex-direction: column;
+}
+
+.issue-empty,
+.issue-none,
+.issue-side-name,
+.issue-card-title,
+.issue-bar-number,
+.issue-attach,
+.issue-event-old,
+.issue-event-time {
+  color: var(--tet-descriptionForeground);
+}
+
+.issue-card-author,
+.issue-event-name,
+.issue-side-title {
+  font-weight: 600;
+}
+
+/* The section's filter row and two-line rows are IntelliJ's merge request list's. */
+.issue-filter-bar {
+  flex-wrap: wrap;
   flex: none;
   gap: 2px 5px;
   padding: 0 7px 7px 7px;
@@ -1146,20 +1187,8 @@ textarea:focus,
   --icon-size: 11px;
 }
 
-.pick-menu {
-  min-width: 200px;
-}
-
-/* What marks a picked option stands at the entry's right edge, as `.context-menu-chevron` does; the
-   one left empty keeps the room, so the list's width holds as options are picked. */
-.pick-menu .line-icon {
-  order: 1;
-  margin-left: auto;
-}
-
+/* An avatar (`Person`), in the section's rows and in the tab. */
 .issue-person {
-  display: flex;
-  align-items: center;
   justify-content: center;
   flex: none;
   width: 22px;
@@ -1181,8 +1210,20 @@ textarea:focus,
   visibility: hidden;
 }
 
-/* An issue's tab (editor/IssueView.tsx), shaped as VS Code's GitHub Pull Requests and Issues. */
+/* An issue's text box, a comment's or a card's in the tab and the new issue's description, and its
+   preview (`.issue-box-preview`) share one height. A block, so no line's gap is left under it. */
+.issue-comment textarea,
+.issue-new-body {
+  display: block;
+  width: 100%;
+  min-height: var(--text-box-height);
+  resize: vertical;
+}
+
+/* An issue's tab, shaped as VS Code's GitHub Pull Requests and Issues. */
 .issue-view {
+  /* How far a card's contents, and an event beside it, stand in from its edge. */
+  --issue-card-padding: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -1206,23 +1247,53 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-.issue-bar-number {
-  color: var(--tet-descriptionForeground);
+.issue-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+/* Takes the room; the side column goes under it in a narrow pane. */
+.issue-thread {
+  flex: 999 1 320px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.issue-card {
+  position: relative;
+  border: 1px solid var(--tet-app-border);
+  border-radius: 3px;
+}
+
+.issue-card-header {
+  gap: 8px;
+  height: var(--bar-height);
+  padding: 0 var(--issue-card-padding);
+  border-bottom: 1px solid var(--tet-app-border);
+  border-radius: 3px 3px 0 0;
+  background: var(--tet-lane-background);
+  font-size: var(--small-font-size);
 }
 
 .issue-card-title {
   flex: 1;
   min-width: 0;
-  color: var(--tet-descriptionForeground);
 }
 
 .issue-card-author {
-  font-weight: 600;
   color: var(--tet-foreground);
 }
 
+/* Grows with its text in the card, which scrolls with the view. */
+.issue-text > .markdown-preview {
+  position: static;
+  overflow: visible;
+}
+
 .issue-card-edit {
-  padding: 10px;
+  padding: var(--issue-card-padding);
 }
 
 /* Write and Preview above a text box: a card header's height, pulled to the card's edges as a
@@ -1231,7 +1302,7 @@ textarea:focus,
   display: flex;
   align-items: stretch;
   height: var(--bar-height);
-  margin: -10px -10px 10px;
+  margin: calc(-1 * var(--issue-card-padding)) calc(-1 * var(--issue-card-padding)) var(--issue-card-padding);
   border-bottom: 1px solid var(--tet-app-border);
   background: var(--tet-tab-inactiveBackground);
 }
@@ -1249,87 +1320,58 @@ textarea:focus,
 
 /* The size and look of the textarea it stands in for. */
 .issue-box-preview {
-  min-height: 120px;
+  min-height: var(--text-box-height);
   overflow-y: auto;
   border: 1px solid var(--tet-input-border);
   border-radius: 2px;
   background: var(--tet-input-background);
 }
 
+/* The empty preview stands in for the textarea's placeholder, so it reads alike. */
+.issue-box-preview .issue-empty {
+  padding: 3px 6px;
+  color: var(--tet-input-placeholderForeground);
+}
+
+.issue-empty {
+  padding: 12px;
+}
+
 .issue-attach {
-  display: flex;
-  align-items: center;
   gap: 4px;
   margin-top: 6px;
   padding: 0;
   font-size: var(--small-font-size);
-  color: var(--tet-descriptionForeground);
 }
 
 .issue-attach:hover:not(:disabled) {
   color: var(--tet-foreground);
 }
 
-.issue-new-body {
-  width: 100%;
-  min-height: 120px;
-  resize: vertical;
+.issue-comment {
+  gap: 8px;
+}
+
+/* The box to write in, apart from the thread above it; the one a card edits in is not. */
+.issue-thread > .issue-comment {
+  margin-top: 30px;
 }
 
 .issue-line {
-  display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  margin-bottom: 14px;
 }
 
-.issue-columns {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 20px;
-}
-
-/* Takes the room; the side column goes under it in a narrow pane. */
-.issue-thread {
-  display: flex;
-  flex-direction: column;
-  flex: 999 1 320px;
-  gap: 12px;
-  min-width: 0;
-}
-
-.issue-card {
-  position: relative;
-  border: 1px solid var(--tet-app-border);
-  border-radius: 3px;
-}
-
-.issue-card-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--bar-height);
-  padding: 0 10px;
-  border-bottom: 1px solid var(--tet-app-border);
-  border-radius: 3px 3px 0 0;
-  background: var(--tet-lane-background);
-  font-size: var(--small-font-size);
-}
-
-/* Grows with its text in the card, which scrolls with the view. */
-.issue-text > .markdown-preview {
-  position: static;
-  overflow: visible;
+/* The buttons stay at the end; the checkbox stands alone at the start. */
+.issue-line > .dialog-checkbox {
+  margin-right: auto;
 }
 
 .issue-event {
   position: relative;
-  display: flex;
-  align-items: center;
   gap: 6px;
-  padding: 0 10px;
+  padding: 0 var(--issue-card-padding);
 }
 
 /* The line joining a thread's entries, through the avatars' middle: over the thread's gap above a
@@ -1338,20 +1380,19 @@ textarea:focus,
 .issue-thread > .issue-event::before {
   content: "";
   position: absolute;
+  left: 19px;
   width: 1px;
   background: var(--tet-app-border);
 }
 
 .issue-thread > .issue-card:not(:first-child)::before {
   top: -13px;
-  left: 19px;
   height: 14px;
 }
 
 .issue-thread > .issue-event::before {
   top: -12px;
   bottom: 0;
-  left: 19px;
 }
 
 /* A filled dot in the place of an avatar: the same 22px footprint, so the line and the message keep
@@ -1362,7 +1403,6 @@ textarea:focus,
   width: 10px;
   height: 9px;
   margin: 0 4.5px;
-  box-sizing: border-box;
   border: 2px solid var(--tet-menu-border);
   border-radius: 50%;
   background: var(--tet-lane-background);
@@ -1374,38 +1414,11 @@ textarea:focus,
   overflow-wrap: anywhere;
 }
 
-.issue-event-name {
-  font-weight: 600;
-}
-
-.issue-event-old,
-.issue-event-time {
-  color: var(--tet-descriptionForeground);
-}
-
 .issue-event-new {
   text-decoration: none;
 }
 
-.issue-empty,
-.issue-none,
-.issue-side-name {
-  color: var(--tet-descriptionForeground);
-}
-
-.issue-empty {
-  padding: 12px;
-}
-
-/* The empty preview stands in for the textarea's placeholder, so it reads alike. */
-.issue-box-preview .issue-empty {
-  padding: 3px 6px;
-  color: var(--tet-input-placeholderForeground);
-}
-
 .issue-side {
-  display: flex;
-  flex-direction: column;
   flex: 1 0 25%;
   gap: 6px;
   min-width: 180px;
@@ -1414,54 +1427,17 @@ textarea:focus,
 }
 
 .issue-side-section {
-  display: flex;
-  flex-direction: column;
   gap: 6px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--tet-app-border);
 }
 
 .issue-side-title {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
   min-height: var(--action-size);
-  font-weight: 600;
-  font-size: var(--small-font-size);
-}
-
-.issue-comment {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* The box to write in, apart from the thread above it; the one a card edits in is not. */
-.issue-thread > .issue-comment {
-  margin-top: 30px;
-}
-
-.issue-comment textarea {
-  display: block;
-  width: 100%;
-  height: 120px;
-  min-height: 120px;
-  resize: vertical;
-}
-
-.issue-comment .issue-line {
-  justify-content: flex-end;
-  margin-bottom: 0;
-}
-
-/* The buttons stay at the end; the checkbox stands alone at the start. */
-.issue-comment .issue-line > .dialog-checkbox {
-  margin-right: auto;
 }
 
 .issue-side-person {
-  display: flex;
-  align-items: center;
   gap: 6px;
 }
 
@@ -1474,15 +1450,11 @@ textarea:focus,
 /* A booking of time (`TimeLogs`): its time and day with the button to take it back at the end, then
    who made it and what for. */
 .issue-time-log {
-  display: flex;
-  flex-direction: column;
   gap: 2px;
   overflow-wrap: anywhere;
 }
 
 .issue-time-log-line {
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
@@ -1884,6 +1856,17 @@ textarea:focus,
 .dropdown-menu,
 .pick-menu {
   overflow-y: auto;
+}
+
+.pick-menu {
+  min-width: 200px;
+}
+
+/* What marks a picked option stands at the entry's right edge, as `.context-menu-chevron` does; the
+   one left empty keeps the room, so the list's width holds as options are picked. */
+.pick-menu .line-icon {
+  order: 1;
+  margin-left: auto;
 }
 
 /* Plain text, no icon or arrow: a block, which can end in an ellipsis; centered by its line, as
@@ -2819,8 +2802,8 @@ textarea:focus,
 /* A row of IntelliJ's checkbox height, 24px, whatever the font's own line height. Stated so the
    offsets are arithmetic: the box's optical middle, 4px plus half of 15, is where the first line's
    middle sits. The 15 is not the box: centring the real 18 sits high, the line box holding
-   descender space. The sides are Chromium's own for a checkbox, stated so the icon takes the same
-   column. */
+   descender space. Chromium's own side margins for a checkbox are dropped (left 0, right 2px on top
+   of the gap), stated so the icon takes the same column. */
 .dialog-checkbox input,
 .sbx-governance-icon {
   display: grid;
@@ -2828,7 +2811,7 @@ textarea:focus,
   width: 16px;
   height: 16px;
   flex: none;
-  margin: 4px 3px 2px 4px;
+  margin: 4px 2px 0 0;
 }
 
 .dialog-checkbox > span,
@@ -2859,11 +2842,13 @@ textarea:focus,
   border-color: var(--tet-focusBorder);
 }
 
-/* Lucide's `check`, as a mask so it takes the theme's color. */
+/* Lucide's `check`, as a mask so it takes the theme's color. The box centres its margin box, so
+   the top margin sets the mark 1px below the middle. */
 .dialog-checkbox input:checked::before,
 .tree-checkbox[aria-checked="true"]::before,
 .tree-checkbox[aria-checked="mixed"]::before {
   content: "";
+  margin-top: 2px;
   width: 14px;
   height: 14px;
   background: var(--tet-settings-checkboxForeground, var(--tet-input-foreground));
