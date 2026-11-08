@@ -509,6 +509,14 @@ const VERBS = [
     sandbox: "ownProject",
   },
   {
+    verb: "issues-open-in-agent",
+    group: "Tabs",
+    usage: "issues-open-in-agent <number> --agent <id> [--background] [TARGET]",
+    summary:
+      "Open a tab of an agent (see agents-list) on the project's issue, read from the tracker as the ISSUES section's Open in Agent does, and bring it to the front.",
+    positionals: ["number"],
+  },
+  {
     verb: "commands-list",
     group: "Tabs",
     usage: "commands-list [--project <id>]",
@@ -522,6 +530,22 @@ const VERBS = [
     summary:
       "Read the project's issues from another repository on its host, group/subgroup/name or its url, checked against the tracker and saved in tet.json as the path. No path goes back to the repository's own.",
     positionals: ["source"],
+  },
+  {
+    verb: "issues-get-source",
+    group: "Projects",
+    usage: "issues-get-source [--project <id>]",
+    summary:
+      "Where the project's issues are read from: provider, host and repository path, the source tet.json names (null: the repository's own) and the accounts for the host, by user name in the order they are tried (none: the issues cannot be read).",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-unread",
+    group: "Projects",
+    usage: "issues-unread [--project <id>]",
+    summary: "The project's open issues the tracker created or changed since their tab last showed them (number, title, url, updatedAt).",
+    positionals: [],
   },
   {
     verb: "tabs-run-command",
@@ -571,6 +595,14 @@ const VERBS = [
     positionals: ["path"],
     sandbox: "ownRef",
     sandboxFile: "opened",
+  },
+  {
+    verb: "issues-open",
+    group: "Editor",
+    usage: "issues-open <number> [--keep] [--background] [TARGET]",
+    summary:
+      "Open the project's issue in the preview tab of the repository or a worktree and bring it to the front, for the user to read; the next file or issue replaces it, --keep gives it a tab of its own.",
+    positionals: ["number"],
   },
   {
     verb: "editor-get",

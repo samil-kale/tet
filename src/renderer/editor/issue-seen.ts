@@ -1,4 +1,4 @@
-import type { Issue, IssuesSeen } from "../../shared/types/providers";
+import type { IssuesSeen } from "../../shared/types/providers";
 import { notify } from "../ui/Notices";
 import { createStore, useStore } from "../ui/store";
 
@@ -37,10 +37,4 @@ export async function keepAllIssuesSeen(projectId: string): Promise<void> {
 /** Undefined until the project's list was read. */
 export function useIssuesSeen(projectId: string): IssuesSeen | undefined {
   return useStore(seenByProject)[projectId];
-}
-
-/** Whether the tracker created or changed the issue after its tab last showed it or, if none did,
- *  after `seen.since`. Dates are compared as times: the trackers spell them differently. */
-export function isUnread(issue: Issue, seen: IssuesSeen | undefined): boolean {
-  return seen !== undefined && Date.parse(issue.updatedAt) > Date.parse(seen.issues[issue.number] ?? seen.since);
 }

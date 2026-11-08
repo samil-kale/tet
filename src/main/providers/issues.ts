@@ -1,6 +1,6 @@
 import { errorMessage } from "../../shared/errors";
 import type { RepositoryState } from "../../shared/types/git";
-import type { IssueDetail, IssueField } from "../../shared/types/providers";
+import type { IssueDetail, IssueField, ProviderId } from "../../shared/types/providers";
 import { isIssueSource, readIssueSource, writeIssueSource } from "../store/tet-json";
 import type { AccountStore } from "./accounts";
 import { PROVIDERS } from "./index";
@@ -67,10 +67,27 @@ async function trackerRemote(repository: IssueRepository): Promise<{ host: strin
 }
 
 /**
- * Runs `call` against the repository's tracker: on the host of its first remote (`origin`, where it
- * has one), for `source`, its tet.json's `issues` or else the remote's own path. An account that
- * fails hands over to the next of that host, where a second one may reach what the first cannot;
- * when all fail, the first's reason is the one told. `handsOver` narrows which failures do.
+ * The tracker the repository's issues are read from: the host of its first remote (`origin`, where
+ * it has one) with that host's accounts, in the order they are tried, and the path read there: the
+ * one asked for (`asked`), else tet.json's `issues` (`source`, read only without `asked`), else the
+ * remote's own.
+ */
+async function resolveTracker(accounts: IssueAccounts, repository: IssueRepository, asked?: string) {
+  const remote = await trackerRemote(repository);
+  const source = asked === undefined ? await readIssueSource(repository.at.path) : undefined;
+  return {
+    host: remote.host,
+    source,
+    path: asked ?? source ?? remote.path,
+    candidates: accounts.list().filter((account) => account.host.toLowerCase() === remote.host),
+  };
+}
+
+/**
+ * Runs `call` against the repository's tracker (`resolveTracker`), for `source` where given. An
+ * account that fails hands over to the next of that host, where a second one may reach what the
+ * first cannot; when all fail, the first's reason is the one told. `handsOver` narrows which
+ * failures do.
  */
 export async function onTracker<T>(
   accounts: IssueAccounts,
@@ -78,14 +95,12 @@ export async function onTracker<T>(
   call: TrackerCall<T>,
   { source, handsOver }: { source?: string; handsOver?: (error: unknown) => boolean } = {},
 ): Promise<T> {
-  const remote = await trackerRemote(repository);
-  const path = source ?? (await readIssueSource(repository.at.path)) ?? remote.path;
+  const { host, path, candidates } = await resolveTracker(accounts, repository, source);
   if (!isIssueSource(path)) {
-    throw new Error(`Not a repository path on ${remote.host}: ${path}`);
+    throw new Error(`Not a repository path on ${host}: ${path}`);
   }
-  const candidates = accounts.list().filter((account) => account.host.toLowerCase() === remote.host);
   if (candidates.length === 0) {
-    throw new NoAccountError(remote.host);
+    throw new NoAccountError(host);
   }
   let failure: string | undefined;
   for (const account of candidates) {
@@ -139,6 +154,31 @@ export async function setIssueSource(accounts: IssueAccounts, repository: IssueR
   await onTracker(accounts, repository, (provider, tracker) => provider.listLabels(tracker), { source: sourcePath });
   await writeIssueSource(repository.at.path, sourcePath);
   return sourcePath;
+}
+
+/** Where a repository's issues are read from (`readIssueTracker`). */
+export interface IssueTrackerInfo {
+  /** The provider of the host's accounts; null with none. */
+  provider: ProviderId | null;
+  host: string;
+  /** The repository path the issues are read from: `source`, or else the remote's own. */
+  path: string;
+  /** What the repository's tet.json names; null for the remote's own path. */
+  source: string | null;
+  /** The users of the host's accounts, in the order `onTracker` tries them. */
+  accounts: string[];
+}
+
+/** The tracker `onTracker` reads the repository's issues from, without asking it. */
+export async function readIssueTracker(accounts: IssueAccounts, repository: IssueRepository): Promise<IssueTrackerInfo> {
+  const { host, source, path, candidates } = await resolveTracker(accounts, repository);
+  return {
+    provider: candidates[0]?.provider ?? null,
+    host,
+    path,
+    source: source ?? null,
+    accounts: candidates.map((account) => account.user),
+  };
 }
 
 /** A field as the issue's text gives it; undefined where it holds nothing. */

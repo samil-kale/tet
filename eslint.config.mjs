@@ -208,7 +208,16 @@ const MAIN_LAYERS = [
   { git: [], agents: [], sbx: ["agents"], providers: [], update: [] },
   { terminals: [] },
   { ctl: [] },
-  { ipc: ["*"], main: ["*"], window: ["*"], projects: ["*"], requirements: ["*"], "settings-access": ["*"], uncaught: ["*"] },
+  {
+    ipc: ["*"],
+    main: ["*"],
+    window: ["*"],
+    projects: ["*"],
+    issues: ["*"],
+    requirements: ["*"],
+    "settings-access": ["*"],
+    uncaught: ["*"],
+  },
 ];
 
 const RENDERER_LAYERS = [

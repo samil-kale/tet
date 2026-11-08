@@ -96,11 +96,6 @@ export interface EditorTab {
   issue?: number;
 }
 
-/** What an issue's text is called as a file, in its tab. */
-export function issueFileName(number: number): string {
-  return `issue-${number}.md`;
-}
-
 /** Closes every tab of an issue that is gone, in the repository and its worktrees. Set by App. */
 let issueGoneHandler: ((projectId: string, number: number) => void) | undefined;
 

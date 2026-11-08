@@ -5,6 +5,7 @@ import type { EnvRequests } from "../ctl/env-requests";
 import type { EnvStore } from "../store/environment";
 import type { GitLoginStore } from "../git/git-logins";
 import type { RepositoryManager } from "../git/repository";
+import type { IssueDeps } from "../issues";
 import type { ProjectDeps } from "../projects";
 import type { ProjectStore } from "../store/project-store";
 import type { AccountStore } from "../providers/accounts";
@@ -36,6 +37,8 @@ export interface IpcDeps {
   records: ControlRecords;
   /** Shared with the control channel (main.ts). */
   projectDeps: ProjectDeps;
+  /** Shared with the control channel (main.ts). */
+  issueDeps: IssueDeps;
   /** Tells the user (Notices.tsx), as main.ts does; a handler with a dialog up answers it instead. */
   notice: (severity: NoticeSeverity, message: string) => void;
   /** The first requirements check, started while the window loads and after PATH is ready. */

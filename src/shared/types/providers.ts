@@ -60,6 +60,14 @@ export interface IssueFilter {
   labels: string[];
 }
 
+/** What the ISSUES section shows until its filter is changed. */
+export const DEFAULT_ISSUE_FILTER: IssueFilter = { state: "open", labels: [] };
+
+/** What an issue's text is called as a file: in its tab, and in a tab opened on it. */
+export function issueFileName(number: number): string {
+  return `issue-${number}.md`;
+}
+
 /** What the tracker says of a list of issues without sending it: how many it holds and when the most
  *  recently changed one changed. Two reads that agree found nothing new in it. */
 export interface IssuesLatest {
@@ -76,6 +84,12 @@ export interface IssuesSeen {
   since: string;
   /** Each issue's `updatedAt` as its tab last showed it, by number. */
   issues: Record<number, string>;
+}
+
+/** Whether the tracker created or changed the issue after its tab last showed it or, if none did,
+ *  after `seen.since`. Dates are compared as times: the trackers spell them differently. */
+export function isUnread(issue: Issue, seen: IssuesSeen | undefined): boolean {
+  return seen !== undefined && Date.parse(issue.updatedAt) > Date.parse(seen.issues[issue.number] ?? seen.since);
 }
 
 export type IssuesSeenResult = (ActionDone & { seen: IssuesSeen }) | ActionRefused;

@@ -1,9 +1,9 @@
 import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
-import type { Issue, IssueFilter } from "../../../shared/types/providers";
-import { issueFileName, issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
+import { DEFAULT_ISSUE_FILTER, isUnread, issueFileName, type Issue } from "../../../shared/types/providers";
+import { issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
 import { reloadIssueTabs } from "../../editor/editor-views";
-import { isUnread, keepAllIssuesSeen, useIssuesSeen } from "../../editor/issue-seen";
+import { keepAllIssuesSeen, useIssuesSeen } from "../../editor/issue-seen";
 import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
@@ -19,8 +19,6 @@ import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssues } from "./use-issues";
-
-const INITIAL_FILTER: IssueFilter = { state: "open", labels: [] };
 
 interface NewIssue {
   title: string;
@@ -115,7 +113,7 @@ export const IssueList = memo(function IssueList({
   onOpenAccounts: () => void;
 }) {
   const { projectId, worktree } = resolved.ref;
-  const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, INITIAL_FILTER);
+  const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, DEFAULT_ISSUE_FILTER);
   const { issues, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
   const seen = useIssuesSeen(projectId);
   // The open one is on screen, so read.

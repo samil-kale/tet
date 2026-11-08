@@ -1,7 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isUnread } from "../../src/renderer/editor/issue-seen";
-import type { Issue, IssuesSeen } from "../../src/shared/types/providers";
+import { isUnread, type Issue, type IssuesSeen } from "../../src/shared/types/providers";
 
 const issue = (number: number, updatedAt: string): Issue =>
   ({ number, title: "t", updatedAt, createdAt: "2026-10-01T00:00:00Z", author: "mira", labels: [], avatars: {} }) as unknown as Issue;

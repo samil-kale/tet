@@ -5,10 +5,11 @@ import type { EditorListing, EditorReport, NoticeMark, NoticeReport, NoticeSever
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
+import type { Issue } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { IssueRepository } from "../providers/issues";
+import type { IssueTrackerInfo } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
 import type { CallerSide } from "./caller-side";
@@ -88,13 +89,19 @@ export function bringToFront(deps: Pick<ControlDeps, "showTab">, args: Record<st
   }
 }
 
+/** A positive whole number as `value` spells it; undefined for anything else. */
+export function positiveInteger(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
 /** A positive integer flag, or `fallback` when absent. */
 export function count(args: Record<string, unknown>, name: string, fallback: number): number {
   if (args[name] === undefined) {
     return fallback;
   }
-  const value = Number(args[name]);
-  if (!Number.isInteger(value) || value <= 0) {
+  const value = positiveInteger(args[name]);
+  if (value === undefined) {
     throw new ControlError("bad_args", `--${name} takes a positive whole number`);
   }
   return value;
@@ -163,8 +170,14 @@ export interface ControlDeps {
   addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
   deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
-  /** providers/issues.ts's, with the accounts of main.ts. */
-  setIssueSource(repository: IssueRepository, source: string): Promise<string | undefined>;
+  /** issues.ts's, by project, with the deps of main.ts. */
+  setIssueSource(projectId: string, source: string): Promise<string | undefined>;
+  readIssueTracker(projectId: string): Promise<IssueTrackerInfo>;
+  unreadIssues(projectId: string): Promise<Issue[]>;
+  /** Opens the project's issue in the repository's or worktree's preview tab, or a kept tab, and brings
+   *  it to the front unless `background`. */
+  openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
+  openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId): Promise<HandoverResult>;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
@@ -273,6 +286,20 @@ export function projectById(store: ProjectLookup, id: string): Project {
     throw new ControlError("not_found", PROJECT_NOT_FOUND);
   }
   return project;
+}
+
+/** The agent of `id`, one TET has. */
+export function agentById(deps: Pick<ControlDeps, "agents">, id: string): AgentDefinition {
+  const agent = deps.agents.find((candidate) => candidate.id === id);
+  if (!agent) {
+    throw new ControlError("bad_args", `unknown agent: ${id} (see agents-list)`);
+  }
+  return agent;
+}
+
+/** `--agent`, one TET has. */
+export function agentFlag(deps: Pick<ControlDeps, "agents">, args: Record<string, unknown>): AgentDefinition {
+  return agentById(deps, text(args, "agent", "agent: pass --agent <id> (see agents-list)"));
 }
 
 /** The repository's or worktree's terminals; one closed meanwhile is an internal error. */

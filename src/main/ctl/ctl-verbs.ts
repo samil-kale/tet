@@ -11,12 +11,14 @@ import { isWorking, TERMINAL_STATUSES, type TabRef } from "../../shared/types/te
 import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
-import { errorMessage } from "../../shared/errors";
 import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
+import { issueVerbs } from "./ctl-issue-verbs";
 import { sbxVerbs } from "./ctl-sbx-verbs";
 import { worktreeVerbs } from "./ctl-worktree-verbs";
 import {
+  agentById,
+  agentFlag,
   bringToFront,
   callerRef,
   ControlError,
@@ -24,7 +26,6 @@ import {
   list,
   onOff,
   oneOf,
-  optionalText,
   projectById,
   refuseUnsaved,
   repositoryOf,
@@ -84,21 +85,10 @@ export function verbs(deps: ControlDeps): Handlers {
     return { tabs, tabId, ref, own };
   };
 
-  /** `--agent` (or the positional `hint` names), one TET knows. */
-  const knownAgent = (args: Record<string, unknown>, hint: string): AgentDefinition => agentNamed(text(args, "agent", hint));
-
-  const agentNamed = (id: string): AgentDefinition => {
-    const agent = deps.agents.find((candidate) => candidate.id === id);
-    if (!agent) {
-      throw new ControlError("bad_args", `unknown agent: ${id} (see agents-list)`);
-    }
-    return agent;
-  };
-
   /** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
    *  opens only an sbx agent's tab, held to the sandbox (createTab, handOver). */
   const openableAgent = (args: Record<string, unknown>, caller: Caller): AgentDefinition => {
-    const agent = knownAgent(args, "agent: pass --agent <id> (see agents-list)");
+    const agent = agentFlag(deps, args);
     if (!caller.side.opens(agent)) {
       throw new ControlError("unauthorized", `a ${agent.id} tab does not run in a sandbox, so a sandbox cannot open one`);
     }
@@ -108,6 +98,7 @@ export function verbs(deps: ControlDeps): Handlers {
   return {
     ...sbxVerbs(deps, refFrom),
     ...worktreeVerbs(deps, refFrom),
+    ...issueVerbs(deps, refFrom),
 
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
@@ -190,7 +181,7 @@ export function verbs(deps: ControlDeps): Handlers {
       for (const pick of picked) {
         // An agent id has no "=": the first one parts it from the model, which may hold any.
         const at = pick.indexOf("=");
-        const agent = agentNamed(at < 0 ? pick : pick.slice(0, at));
+        const agent = agentById(deps, at < 0 ? pick : pick.slice(0, at));
         const model = at < 0 ? "" : pick.slice(at + 1);
         if (!agent.ask) {
           throw new ControlError("bad_args", `${agent.id} cannot suggest a commit message`);
@@ -462,16 +453,6 @@ export function verbs(deps: ControlDeps): Handlers {
       // Without `env` and `color`: what a caller needs to pick a command and know where it runs.
       const commands = await deps.readCommands(found.path);
       return { result: commands.map(({ name, command, cwd, os }) => ({ name, command, cwd, os })) };
-    },
-
-    "issues-set-source": async (args, caller) => {
-      const { ref } = refFrom(args, caller);
-      const source = optionalText(args, "source") ?? "";
-      try {
-        return { result: { source: (await deps.setIssueSource(repository(ref), source)) ?? null } };
-      } catch (error) {
-        throw new ControlError("bad_args", errorMessage(error));
-      }
     },
 
     "tabs-run-command": async (args, caller) => {

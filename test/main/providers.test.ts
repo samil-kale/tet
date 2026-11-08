@@ -39,6 +39,7 @@ import {
   NoAccountError,
   onTracker,
   parseRemoteUrl,
+  readIssueTracker,
   setIssueSource,
   writeOnTracker,
   type IssueAccounts,
@@ -858,6 +859,27 @@ describe("the issues of a tracker", () => {
       fs.writeFileSync(path.join(root, "tet.json"), '{"issues": {"source": "g/tracker"}}');
       await setIssueSource(accountsOf(), repositoryAt(root), "  ");
       assert.equal(await readIssueSource(root), undefined);
+    });
+
+    it("tells the tracker the issues are read from, without asking it", async () => {
+      const root = tempDir("tet-issues-");
+      const accounts = accountsOf(account("a"), account("b"), account("c", "gitlab.example.com"));
+      assert.deepEqual(await readIssueTracker(accounts, repositoryAt(root, ORIGIN)), {
+        provider: "github",
+        host: "github.com",
+        path: "o/r",
+        source: null,
+        accounts: ["a", "b"],
+      });
+      fs.writeFileSync(path.join(root, "tet.json"), '{"issues": {"source": "g/tracker"}}');
+      assert.deepEqual(await readIssueTracker(accountsOf(), repositoryAt(root, ORIGIN)), {
+        provider: null,
+        host: "github.com",
+        path: "g/tracker",
+        source: "g/tracker",
+        accounts: [],
+      });
+      await assert.rejects(() => readIssueTracker(accountsOf(), repositoryAt(root)), /no remote/);
     });
   });
 

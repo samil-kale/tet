@@ -2,16 +2,17 @@ import * as path from "node:path";
 import { app, BrowserWindow, Menu } from "electron";
 import { AGENTS, listAskModels, listInstalledAgents } from "./agents";
 import { AccountStore } from "./providers/accounts";
-import { setIssueSource } from "./providers/issues";
 import { RepoCache } from "./providers/repo-cache";
 import { GitLoginStore } from "./git/git-logins";
 import { CONTROL_ENV } from "../shared/ctl";
 import { RELEASES_URL } from "../shared/release";
 import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
+import { issueFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
+import { changeIssueSource, issueTrackerOf, openIssueInAgent, unreadIssues, type IssueDeps } from "./issues";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -297,7 +298,12 @@ async function startControl(): Promise<void> {
         addWorktree: (projectId, branch) => addWorktree(projectDeps, projectId, branch),
         deleteWorktree: (worktree, force) => deleteWorktree(projectDeps, worktree, { force, onRemote: false }),
         readCommands,
-        setIssueSource: (repository, source) => setIssueSource(accounts, repository, source),
+        setIssueSource: (projectId, source) => changeIssueSource(issueDeps, projectId, source),
+        readIssueTracker: (projectId) => issueTrackerOf(issueDeps, projectId),
+        unreadIssues: (projectId) => unreadIssues(issueDeps, projectId),
+        openIssue: (ref, number, keep, background) =>
+          send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
+        openIssueInAgent: (ref, number, agentId) => openIssueInAgent(issueDeps, ref, number, agentId),
         shutdown,
         records,
         projectRefPath: (ref) => {
@@ -324,6 +330,8 @@ async function startControl(): Promise<void> {
 }
 
 const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
+
+const issueDeps: IssueDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
 
 function createWindow(): void {
   appWindow.create(currentTheme(settings));
@@ -384,6 +392,7 @@ if (!app.requestSingleInstanceLock()) {
       tabManagers,
       records,
       projectDeps,
+      issueDeps,
       notice,
       initialRequirements,
       openWorkspace,

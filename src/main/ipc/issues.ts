@@ -1,10 +1,8 @@
 import { handle } from "./channels";
 import { errorMessage, failure } from "../../shared/errors";
-import { effectivePrompt } from "../../shared/prompts";
 import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { HandoverResult } from "../../shared/types/terminals";
 import type {
   IssueChange,
   IssueCreateResult,
@@ -19,9 +17,9 @@ import type {
   IssueUploadResult,
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
-import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker, type TrackerCall } from "../providers/issues";
-import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
-import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
+import { changeIssueSource, issueRepository, openIssueInAgent } from "../issues";
+import { issueMarkdown, NoAccountError, onTracker, writeOnTracker, type TrackerCall } from "../providers/issues";
+import { forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
 import { logFailure } from "../util/json-file";
@@ -30,32 +28,13 @@ import type { IpcDeps } from "./deps";
 /** More than either tracker takes of one file: past this it does not cross to main's memory. */
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
-/** The first prompt of a tab opened on an issue: the settings' text, then which issue it is, ended
- *  by its file's path. */
-function issuePrompt(text: string, number: number): string {
-  return `${text}\n\nThe issue: #${number}. The file:`;
-}
-
 /** The ISSUES section: read from the project's tracker, by project, since the repository and its
  *  worktrees share one. Each answers its failure for the section to notify; `setSource` for the
  *  question still up to show it at its field. */
-export function registerIssuesIpc({
-  accounts,
-  projectDeps,
-  repositories,
-  settings,
-  store,
-  tabManagers,
-}: Pick<IpcDeps, "accounts" | "projectDeps" | "repositories" | "settings" | "store" | "tabManagers">): void {
-  const { dataRoot } = projectDeps;
+export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): void {
+  const { accounts, dataRoot } = issueDeps;
 
-  const repositoryOf = (projectId: string) => {
-    const repository = repositories.get({ projectId });
-    if (!repository) {
-      throw new Error(PROJECT_NOT_FOUND);
-    }
-    return repository;
-  };
+  const repositoryOf = (projectId: string) => issueRepository(issueDeps, projectId);
 
   /** A write to the project's tracker (`writeOnTracker`), as an `ActionResult`. */
   const written = async (projectId: string, call: TrackerCall<unknown>): Promise<ActionResult> => {
@@ -117,19 +96,9 @@ export function registerIssuesIpc({
     }
   });
 
-  handle("issues:open-in-agent", async (_event, ref: ProjectRef, number: number, agentId: AgentId): Promise<HandoverResult> => {
-    try {
-      const manager = tabManagers.get(ref);
-      if (!manager) {
-        throw new Error(notOpenMessage(store, ref));
-      }
-      const issue = await onTracker(accounts, repositoryOf(ref.projectId), (provider, tracker) => provider.readIssue(tracker, number));
-      const file = { name: `issue-${number}.md`, content: issueMarkdown(issue), prompt: issuePrompt(effectivePrompt(settings.get().prompts.texts, "issue"), number) };
-      return { ok: true, tab: manager.createTabOnFile(agentId, file) };
-    } catch (error) {
-      return failure(error);
-    }
-  });
+  handle("issues:open-in-agent", (_event, ref: ProjectRef, number: number, agentId: AgentId) =>
+    openIssueInAgent(issueDeps, ref, number, agentId),
+  );
 
   // Null when it takes no token or cannot be read: the text stands without it, as a preview's does.
   handle("issues:image", async (_event, projectId: string, source: string): Promise<string | null> => {
@@ -222,11 +191,7 @@ export function registerIssuesIpc({
 
   handle("issues:set-source", async (_event, projectId: string, source: string): Promise<ActionResult> => {
     try {
-      const repository = repositoryOf(projectId);
-      const before = await readIssueSource(repository.at.path);
-      if ((await setIssueSource(accounts, repository, source)) !== before) {
-        forgetAllIssuesSeen(dataRoot, projectId);
-      }
+      await changeIssueSource(issueDeps, projectId, source);
       return { ok: true };
     } catch (error) {
       return failure(error);

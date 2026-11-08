@@ -322,8 +322,11 @@ export interface TETApi {
     /** `tet-ctl editor-get` asks for the active editor tab's text; the listener answers. */
     onEditorContentRequest: (listener: (ref: ProjectRef) => string | undefined) => Unsubscribe;
     /** `tet-ctl editor-open`: in the preview tab, or kept with `--keep`; left behind the active tab
-     *  with `--background`. */
-    onOpenEditor: (listener: (payload: { ref: ProjectRef; path: string; keep: boolean; background: boolean }) => void) => Unsubscribe;
+     *  with `--background`. `tet-ctl issues-open` the same, with the issue's number as `issue` and its
+     *  `issueFileName` as `path`. */
+    onOpenEditor: (
+      listener: (payload: { ref: ProjectRef; path: string; keep: boolean; background: boolean; issue?: number }) => void,
+    ) => Unsubscribe;
   };
   /** Saved shell commands, in the project root's tet.json so they travel with it. */
   commands: {

@@ -88,6 +88,10 @@ interface Calls {
   handedOff: [string, string, boolean][];
   commands: string[];
   issueSources: [string, string][];
+  /** `[refKey, number, keep, background]` per issue opened in a tab. */
+  issuesOpened: [string, number, boolean, boolean][];
+  /** `[refKey, number, agentId]` per tab opened on an issue. */
+  issueAgents: [string, number, string][];
   added: string[];
   removed: string[];
   /** `[projectId, branch]` per worktree-add, `[refKey, force]` per worktree-delete. */
@@ -378,12 +382,45 @@ function deps(): ControlDeps {
       return force ? { ok: true } : (merging.deleteRefused ?? { ok: true });
     },
     readCommands: async () => [{ command: "npm run build", name: "build" }],
-    setIssueSource: async (repository, source) => {
+    setIssueSource: async (projectId, source) => {
       if (source === "no/such") {
         throw new Error("404 Not Found");
       }
-      calls.issueSources.push([repository.at.path, source]);
+      calls.issueSources.push([projectId, source]);
       return source.replace("https://host/", "") || undefined;
+    },
+    readIssueTracker: async (projectId) => ({
+      provider: "gitlab",
+      host: "gitlab.example.com",
+      path: `${projectId}/tracker`,
+      source: null,
+      accounts: ["skale"],
+    }),
+    // The other project has no account for its tracker's host.
+    unreadIssues: async (projectId) => {
+      if (projectId === OTHER.id) {
+        throw new Error("No account for gitlab.example.com: add one under Accounts in Settings");
+      }
+      return [
+        {
+          number: 7,
+          title: "Changed",
+          url: "https://gitlab.example.com/g/r/-/issues/7",
+          open: true,
+          author: "mira",
+          createdAt: "2026-11-01T00:00:00Z",
+          updatedAt: "2026-11-06T09:00:00Z",
+          labels: ["bug"],
+          avatars: {},
+        },
+      ];
+    },
+    openIssue: (ref, number, keep, background) => {
+      calls.issuesOpened.push([refKeyOf(ref), number, keep, background]);
+    },
+    openIssueInAgent: async (ref, number, agentId) => {
+      calls.issueAgents.push([refKeyOf(ref), number, agentId]);
+      return number === 404 ? { ok: false, error: "404 Not Found" } : { ok: true, tab: tab("tab-issue") };
     },
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
@@ -499,6 +536,8 @@ describe("tet-ctl against the control server", () => {
       handedOff: [],
       commands: [],
       issueSources: [],
+      issuesOpened: [],
+      issueAgents: [],
       added: [],
       removed: [],
       worktreesAdded: [],
@@ -935,6 +974,51 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["issues-set-source", "no/such"]), /404 Not Found/);
   });
 
+  it("tells where the project's issues are read from", async () => {
+    assert.deepEqual((await tetCtl(["issues-get-source"])).result, {
+      provider: "gitlab",
+      host: "gitlab.example.com",
+      path: `${PROJECT.id}/tracker`,
+      source: null,
+      accounts: ["skale"],
+    });
+  });
+
+  it("lists the open issues the tracker changed since their tab showed them, and says why it cannot", async () => {
+    assert.deepEqual((await tetCtl(["issues-unread"])).result, [
+      { number: 7, title: "Changed", url: "https://gitlab.example.com/g/r/-/issues/7", updatedAt: "2026-11-06T09:00:00Z" },
+    ]);
+    assertUsage(await tetCtl(["issues-unread", "--project", OTHER.id]), /No account for gitlab\.example\.com/);
+  });
+
+  it("opens an issue in the preview tab, kept or in the background on request", async () => {
+    assert.deepEqual((await tetCtl(["issues-open", "42"])).result, { opened: 42, keep: false });
+    assert.deepEqual((await tetCtl(["issues-open", "43", "--keep", "--background"])).result, { opened: 43, keep: true });
+    assert.deepEqual(calls.issuesOpened, [
+      [PROJECT.id, 42, false, false],
+      [PROJECT.id, 43, true, true],
+    ]);
+    assert.equal((await tetCtl(["issues-open"])).status, EXIT_CODES.usage, "no number");
+    assertUsage(await tetCtl(["issues-open", "four"]), /not an issue number: four/);
+    assertUsage(await tetCtl(["issues-open", "0"]), /not an issue number: 0/);
+    assert.equal(calls.issuesOpened.length, 2);
+  });
+
+  it("opens a tab of an agent on an issue and brings it to the front", async () => {
+    assert.deepEqual((await tetCtl(["issues-open-in-agent", "42", "--agent", "claude"])).result, tab("tab-issue"));
+    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 42, "claude"]]);
+    assert.deepEqual(calls.shown, [[PROJECT.id, "tab-issue"]]);
+  });
+
+  it("opens no tab on an issue for an agent that takes none, an unknown one or one the tracker cannot read", async () => {
+    assertUsage(await tetCtl(["issues-open-in-agent", "42", "--agent", "shell"]), /a shell tab takes no issue/);
+    assertUsage(await tetCtl(["issues-open-in-agent", "42", "--agent", "gpt"]), /unknown agent: gpt/);
+    assert.equal((await tetCtl(["issues-open-in-agent", "42"])).status, EXIT_CODES.usage, "no agent");
+    assertUsage(await tetCtl(["issues-open-in-agent", "404", "--agent", "claude"]), /404 Not Found/);
+    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 404, "claude"]]);
+    assert.deepEqual(calls.shown, []);
+  });
+
   it("reports a saved command that does not exist", async () => {
     assertUsage(await tetCtl(["tabs-run-command", "deploy"]), /no saved command named deploy/);
   });
@@ -1099,6 +1183,9 @@ describe("tet-ctl against the control server", () => {
       ["tabs-run-command", "build"],
       ["commands-list"],
       ["issues-set-source", "group/tracker"],
+      ["issues-unread"],
+      ["issues-open", "42"],
+      ["issues-open-in-agent", "42", "--agent", "claude"],
       ["projects-add", workDir],
       ["projects-remove", "--project", OTHER.id],
       ["settings-set-theme", "dark-modern"],
@@ -1275,7 +1362,7 @@ describe("tet-ctl against the control server", () => {
   it("answers a sandboxed tab for its own project only", async () => {
     // editor-get: its own test below, since a sandbox reads only a file inside the repository.
     assertRefused(await tetCtl(["editor-get", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-get");
-    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-environment", "MODE=1"]]) {
+    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-environment", "MODE=1"], ["issues-get-source"]]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own project/, args[0]);
       assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }

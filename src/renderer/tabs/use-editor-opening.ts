@@ -93,14 +93,14 @@ export function useEditorOpening(
     [activateTab, editorTabsRef, setEditorTabs],
   );
 
-  // A file the control channel asked for, brought to front unless in the background.
+  // A file or issue the control channel asked for, brought to front unless in the background.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ ref, path, keep, background }) => {
+      window.tet.repository.onOpenEditor(({ ref, path, keep, background, issue }) => {
         if (!background) {
           activateRef(refKeyOf(ref));
         }
-        openEditor(ref, path, { keep, background });
+        openEditor(ref, path, { keep, background, issue });
       }),
     [openEditor, activateRef],
   );
