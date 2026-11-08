@@ -1347,7 +1347,7 @@ textarea:focus,
 .issue-thread > .issue-event::before {
   top: -12px;
   bottom: 0;
-  left: 20px;
+  left: 19px;
 }
 
 /* A filled dot in the place of an avatar: the same 22px footprint, so the line and the message keep
@@ -1357,7 +1357,7 @@ textarea:focus,
   flex: none;
   width: 11px;
   height: 11px;
-  margin: 0 5px;
+  margin: 0 4px;
   box-sizing: border-box;
   border: 1px solid var(--tet-menu-border);
   border-radius: 50%;
