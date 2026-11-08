@@ -154,6 +154,21 @@ export function subscribeIssues(listener: (projectId: string) => void): () => vo
   return () => issueListeners.delete(listener);
 }
 
+const seenListeners = new Set<(projectId: string, number: number, updatedAt: string) => void>();
+
+/** An issue's tab shows the issue as last changed at `updatedAt`, for the ISSUES section to stop
+ *  marking it. */
+export function issueSeen(projectId: string, number: number, updatedAt: string): void {
+  for (const listener of seenListeners) {
+    listener(projectId, number, updatedAt);
+  }
+}
+
+export function subscribeIssueSeen(listener: (projectId: string, number: number, updatedAt: string) => void): () => void {
+  seenListeners.add(listener);
+  return () => seenListeners.delete(listener);
+}
+
 /** What an editor tab shows, beside its path. */
 type EditorSource = Pick<EditorTab, "commit" | "issue">;
 

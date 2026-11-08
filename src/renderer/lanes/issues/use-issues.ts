@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Issue, IssueFilter, IssuesLatest } from "../../../shared/types/providers";
-import { subscribeIssues } from "../../editor/editor-tab";
+import type { Issue, IssueFilter, IssuesLatest, IssuesSeen } from "../../../shared/types/providers";
+import { subscribeIssues, subscribeIssueSeen } from "../../editor/editor-tab";
 import { reloadChangedIssueTabs, type IssueOptions } from "../../editor/editor-views";
 import { subscribeAccounts } from "../../git/ProviderAccount";
 import { notify } from "../../ui/Notices";
@@ -20,6 +20,8 @@ function differ(shown: IssuesLatest | undefined, found: IssuesLatest): boolean {
 interface Issues {
   /** Undefined until the first answer. */
   issues: Issue[] | undefined;
+  /** What the tabs last showed of the issues, as the list came and since. */
+  seen: IssuesSeen;
   /** tet.json's `issues`, where it has one. */
   source: string | undefined;
   /** No account is added for the tracker. */
@@ -42,6 +44,7 @@ interface Issues {
  */
 export function useIssues(projectId: string, filter: IssueFilter, shown: boolean): Issues {
   const [issues, setIssues] = useState<Issue[]>();
+  const [seen, setSeen] = useState<IssuesSeen>({});
   const [source, setSource] = useState<string>();
   const [noAccount, setNoAccount] = useState(false);
   const [options, setOptions] = useState(NO_OPTIONS);
@@ -93,6 +96,16 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     [projectId, reload],
   );
 
+  useEffect(
+    () =>
+      subscribeIssueSeen((changed, number, updatedAt) => {
+        if (changed === projectId) {
+          setSeen((current) => ({ ...current, [number]: updatedAt }));
+        }
+      }),
+    [projectId],
+  );
+
   const filterKey = JSON.stringify(filter);
   const loaded = useRef<string | undefined>(undefined);
   /** What the tracker said of the list shown when it was read. */
@@ -141,6 +154,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       setSource(result.source);
       setNoAccount(result.noAccount === true);
       setIssues(result.issues ?? []);
+      setSeen(result.seen ?? {});
       if (result.error !== undefined) {
         notify("error", result.error);
         return;
@@ -191,5 +205,5 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     return () => window.clearInterval(timer);
   }, [shown, focused, check]);
 
-  return { issues, source, noAccount, options, busy: busy || held, reload, write };
+  return { issues, seen, source, noAccount, options, busy: busy || held, reload, write };
 }

@@ -83,6 +83,7 @@ const api: TETApi = {
     filterOptions: (projectId) => invoke("issues:filter-options", projectId),
     read: (projectId, number) => invoke("issues:read", projectId, number),
     image: (projectId, source) => invoke("issues:image", projectId, source),
+    markSeen: (projectId, number, updatedAt) => invoke("issues:mark-seen", projectId, number, updatedAt),
     comment: (projectId, number, body, internal) => invoke("issues:comment", projectId, number, body, internal),
     update: (projectId, number, change) => invoke("issues:update", projectId, number, change),
     fieldOptions: (projectId, number, fieldId) => invoke("issues:field-options", projectId, number, fieldId),

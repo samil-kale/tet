@@ -12,7 +12,8 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * ```
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   archive.json                   the sessions kept archived, per repository and worktree (archive.ts)
- *   drops/                         pasted or dropped content without a path, for host tabs
+ *   issues-seen.json               each issue's update as its tab last showed it (issues-seen.ts)
+ *   drops/                        pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
@@ -27,8 +28,8 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * copy here.
  *
  * Never anything a sandbox must not see (settings, tokens, SBX settings): an organization governing
- * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `archive.json` is the
- * one file, session ids alone.
+ * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `archive.json` and
+ * `issues-seen.json` are the two files, session ids and issue numbers with timestamps alone.
  */
 export function projectsDir(dataRoot: string): string {
   return path.join(dataRoot, "projects");
@@ -41,6 +42,11 @@ export function projectDir(dataRoot: string, projectId: string): string {
 /** The project's archived session ids (archive.ts). */
 export function archiveFile(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "archive.json");
+}
+
+/** The project's issues as their tabs last showed them (issues-seen.ts). */
+export function issuesSeenFile(dataRoot: string, projectId: string): string {
+  return path.join(projectDir(dataRoot, projectId), "issues-seen.json");
 }
 
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs

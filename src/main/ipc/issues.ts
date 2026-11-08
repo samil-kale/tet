@@ -19,9 +19,11 @@ import type {
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker, type TrackerCall } from "../providers/issues";
+import { forgetIssueSeen, forgetIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
+import { logFailure } from "../util/json-file";
 import type { IpcDeps } from "./deps";
 
 /** More than either tracker takes of one file: past this it does not cross to main's memory. */
@@ -38,11 +40,14 @@ function issuePrompt(text: string, number: number): string {
  *  question still up to show it at its field. */
 export function registerIssuesIpc({
   accounts,
+  projectDeps,
   repositories,
   settings,
   store,
   tabManagers,
-}: Pick<IpcDeps, "accounts" | "repositories" | "settings" | "store" | "tabManagers">): void {
+}: Pick<IpcDeps, "accounts" | "projectDeps" | "repositories" | "settings" | "store" | "tabManagers">): void {
+  const { dataRoot } = projectDeps;
+
   const repositoryOf = (projectId: string) => {
     const repository = repositories.get({ projectId });
     if (!repository) {
@@ -71,7 +76,7 @@ export function registerIssuesIpc({
         latest: await provider.readLatest(tracker, filter),
         issues: await provider.listIssues(tracker, filter),
       }));
-      return { issues, latest, source };
+      return { issues, latest, source, seen: readIssuesSeen(dataRoot, projectId) };
     } catch (error) {
       return { source, error: errorMessage(error), noAccount: error instanceof NoAccountError };
     }
@@ -177,9 +182,17 @@ export function registerIssuesIpc({
     written(projectId, (provider, tracker) => provider.setField(tracker, number, fieldId, value)),
   );
 
-  handle("issues:delete", (_event, projectId: string, number: number) =>
-    written(projectId, (provider, tracker) => provider.deleteIssue(tracker, number)),
-  );
+  handle("issues:delete", async (_event, projectId: string, number: number) => {
+    const result = await written(projectId, (provider, tracker) => provider.deleteIssue(tracker, number));
+    if (result.ok) {
+      forgetIssueSeen(dataRoot, projectId, number);
+    }
+    return result;
+  });
+
+  handle("issues:mark-seen", (_event, projectId: string, number: number, updatedAt: string) => {
+    logFailure("keep an issue's last seen update", () => setIssueSeen(dataRoot, projectId, number, updatedAt));
+  });
 
   handle("issues:upload", async (_event, projectId: string, name: string, dataBase64: string): Promise<IssueUploadResult> => {
     try {
@@ -200,7 +213,11 @@ export function registerIssuesIpc({
 
   handle("issues:set-source", async (_event, projectId: string, source: string): Promise<ActionResult> => {
     try {
-      await setIssueSource(accounts, repositoryOf(projectId), source);
+      const repository = repositoryOf(projectId);
+      const before = await readIssueSource(repository.at.path);
+      if ((await setIssueSource(accounts, repository, source)) !== before) {
+        forgetIssuesSeen(dataRoot, projectId);
+      }
       return { ok: true };
     } catch (error) {
       return failure(error);

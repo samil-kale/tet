@@ -12,8 +12,10 @@ import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root";
 import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
+import { forgetIssueSeen, forgetIssuesSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
 import {
   archiveFile,
+  issuesSeenFile,
   newWorktreeKey,
   ownedWorktreeKeys,
   sandboxDir,
@@ -132,6 +134,50 @@ describe("the archived sessions", () => {
     setArchived(root, repository, "s2", false);
     setArchivedOrder(root, repository, ["s2", "s1", "s9", "s3"]);
     assert.deepEqual([...archivedIds(root, repository)], ["s1", "s3"]);
+  });
+});
+
+describe("the issues' last seen updates", () => {
+  it("are kept per project by issue number, in the project's folder, and removed with the last one", () => {
+    const root = tempDir("tet-issues-seen-");
+    assert.deepEqual(readIssuesSeen(root, "p"), {}, "none before the first");
+    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
+    setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
+    setIssueSeen(root, "p", 3, "2026-11-09T09:00:00Z");
+    assert.deepEqual(readIssuesSeen(root, "p"), { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" });
+    assert.deepEqual(readIssuesSeen(root, "q"), {}, "another project's");
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(issuesSeenFile(root, "p"))),
+      ["issues-seen.json"],
+      "renamed into place, no temporary file left",
+    );
+
+    forgetIssueSeen(root, "p", 3);
+    assert.deepEqual(readIssuesSeen(root, "p"), { 7: "2026-11-08T11:00:00Z" });
+    forgetIssueSeen(root, "p", 7);
+    assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
+    forgetIssueSeen(root, "p", 7);
+  });
+
+  it("are all forgotten at once, as when the tracker changes", () => {
+    const root = tempDir("tet-issues-seen-");
+    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
+    setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
+    forgetIssuesSeen(root, "p");
+    assert.deepEqual(readIssuesSeen(root, "p"), {});
+    assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
+    forgetIssuesSeen(root, "p");
+  });
+
+  it("start empty from a file that cannot be read, and drop what is not a number with a timestamp", () => {
+    const root = tempDir("tet-issues-seen-");
+    fs.mkdirSync(path.dirname(issuesSeenFile(root, "p")), { recursive: true });
+    fs.writeFileSync(issuesSeenFile(root, "p"), "{ nope");
+    assert.deepEqual(readIssuesSeen(root, "p"), {});
+    fs.writeFileSync(issuesSeenFile(root, "p"), JSON.stringify({ 3: "2026-11-08T10:00:00Z", x: "junk", 5: 5, 6: null }));
+    assert.deepEqual(readIssuesSeen(root, "p"), { 3: "2026-11-08T10:00:00Z" });
+    setIssueSeen(root, "p", 8, "2026-11-08T12:00:00Z");
+    assert.deepEqual(readIssuesSeen(root, "p"), { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" });
   });
 });
 

@@ -52,12 +52,15 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
 function IssueRow({
   issue,
   active,
+  changed,
   onOpen,
   onMenu,
 }: {
   issue: Issue;
   /** Its tab is the active editor tab. */
   active: boolean;
+  /** The tracker changed it since its tab last showed it. */
+  changed: boolean;
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
@@ -74,9 +77,11 @@ function IssueRow({
       <span className="list-main">
         <span className="list-label">{issue.title}</span>
         <span className="list-detail">
-          #{issue.number} · opened {dayOf(issue.createdAt)}, by {issue.author}
+          #{issue.number} · {changed ? `updated ${dayOf(issue.updatedAt)}, opened by` : `opened ${dayOf(issue.createdAt)}, by`}{" "}
+          {issue.author}
         </span>
       </span>
+      <span className={`issue-mark${changed ? " changed" : ""}`} />
       {issue.assignee === undefined ? (
         <span className="issue-person vacant" />
       ) : (
@@ -109,7 +114,7 @@ export const IssueList = memo(function IssueList({
 }) {
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, INITIAL_FILTER);
-  const { issues, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
+  const { issues, seen, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
@@ -224,6 +229,8 @@ export const IssueList = memo(function IssueList({
                 key={issue.number}
                 issue={issue}
                 active={issue.number === openIssue}
+                // The open one is on screen, so seen; one never shown has no update to compare.
+                changed={issue.number !== openIssue && seen[issue.number] !== undefined && seen[issue.number] !== issue.updatedAt}
                 onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
                 onMenu={(event) => menu.open(event, issue)}
               />

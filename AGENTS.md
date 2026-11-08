@@ -126,6 +126,7 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
     archive.json                   the sessions kept archived in the repository and its worktrees
+    issues-seen.json               each issue's update as its tab last showed it, shared by all
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
@@ -137,7 +138,8 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
 
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see — never a setting, a token or an sbx value — and
-  `archive.json`, session ids alone. Removing a project deletes its folder.
+  `archive.json` and `issues-seen.json`, session ids and issue numbers with timestamps alone.
+  Removing a project deletes its folder.
 - **A sandbox sees its agent folder, and nothing else of `~/.tet`** — but the worktree it runs in,
   and a worktree or path handed to it (dropped, or by `worktree-agent-merge`), mounted as a drop.
   What a sandboxed tab needs from TET lies in `sandboxes/<repository|key>/<agent>/`, mounted whole;

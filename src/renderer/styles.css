@@ -1204,6 +1204,19 @@ textarea:focus,
   border-radius: 50%;
 }
 
+/* A dot left of an issue's avatar when the tracker changed it since its tab last showed it. Every
+   row holds its place, so the texts are cut where the other rows' are. */
+.issue-mark {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.issue-mark.changed {
+  background: var(--tet-focusBorder);
+}
+
 /* An issue row without an assignee holds the avatar's place, so its texts are cut where the other
    rows' are. */
 .issue-person.vacant {

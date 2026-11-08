@@ -23,7 +23,7 @@ import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Mona
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
 import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
-import { inWorkingTree, issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, openIssueInAgent } from "./editor-tab";
+import { inWorkingTree, issueGone, issueSeen, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, openIssueInAgent } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
 
 /**
@@ -681,6 +681,17 @@ async function reloadIssue(tabId: string): Promise<void> {
   });
   if (!issue) {
     notify("error", error ?? `Could not read issue #${number}`);
+  }
+}
+
+/** The tab's issue is on screen as the tab has read it: kept, and the ISSUES section told. */
+export function markIssueSeen(tabId: string): void {
+  const tab = issueTab(tabId);
+  const read = tab?.view.snapshot.issueDetail;
+  if (tab && read) {
+    const { projectId } = tab.view.ref;
+    void window.tet.issues.markSeen(projectId, tab.number, read.updatedAt);
+    issueSeen(projectId, tab.number, read.updatedAt);
   }
 }
 

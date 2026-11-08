@@ -183,6 +183,8 @@ export interface TETApi {
     read: (projectId: string, number: number) => Promise<IssueReadResult>;
     /** An image of an issue's text that takes the account's token, as a data URL; null for any other. */
     image: (projectId: string, source: string) => Promise<string | null>;
+    /** Keeps the issue's `updatedAt` as its tab showed it (`IssuesSeen`); a failure is logged. */
+    markSeen: (projectId: string, number: number, updatedAt: string) => Promise<void>;
     comment: (projectId: string, number: number, body: string, internal: boolean) => Promise<ActionResult>;
     update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
     /** What a pick field of the issue can be set to. */

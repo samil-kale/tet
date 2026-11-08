@@ -20,6 +20,7 @@ import {
   isReadOnly,
   issueFieldOptions,
   loadIssueImage,
+  markIssueSeen,
   openIssueFile,
   openTabIssueInAgent,
   previewWithheld,
@@ -145,6 +146,15 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       void saveEditorFile(tabId);
     }
   };
+
+  // An issue on screen counts as seen with what the tab has read of it: a later change on the tracker
+  // marks it in the ISSUES section, one made from this tab, once read back, does not.
+  const updatedAt = issueDetail?.updatedAt;
+  useEffect(() => {
+    if (issue !== undefined && updatedAt !== undefined && visible && active) {
+      markIssueSeen(tabId);
+    }
+  }, [tabId, issue, updatedAt, visible, active]);
 
   const issueActions = useMemo<IssueActions>(
     () => ({

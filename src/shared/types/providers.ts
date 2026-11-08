@@ -68,8 +68,13 @@ export interface IssuesLatest {
   updatedAt?: string;
 }
 
+/** Each issue's `updatedAt` as its tab last showed it, by number: one listed with another is changed on
+ *  the tracker since. An issue never shown has none. */
+export type IssuesSeen = Record<number, string>;
+
 export interface IssueListResult {
   issues?: Issue[];
+  seen?: IssuesSeen;
   /** Read just before `issues`, so that a change made while the list came is found by the next read. */
   latest?: IssuesLatest;
   /** The `issues` of the project's tet.json, where it has one. */
