@@ -1,14 +1,25 @@
-import type { Issue, IssueChange, IssueEvent, IssueFilter, IssueNote, RemoteRepository } from "../../shared/types/providers";
+import { ownValue } from "../../shared/own-value";
+import type { Issue, IssueChange, IssueEvent, IssueField, IssueFilter, IssueNote, RemoteRepository } from "../../shared/types/providers";
 import {
   allNodes,
   ApiError,
   fetchImageOk,
   fetchOk,
-  idsByName,
+  fieldMethods,
+  numberOf,
+  pickField,
+  pickHandler,
   sendGraphql,
+  sendMutation,
+  textOf,
+  valueHandler,
+  type FieldContext,
+  type FieldHandler,
   type GitProvider,
   type GraphqlPage,
   type GraphqlSend,
+  type NamedId,
+  type Write,
 } from "./provider";
 
 // All of it GraphQL, but for what it does not carry: a file going up, through the upload's own
@@ -36,7 +47,7 @@ interface GitHubUser {
   avatarUrl: string;
 }
 
-/** An issue as GraphQL says it; only one read alone has the last two. */
+/** An issue as GraphQL says it; only one read alone has its body, milestone and participants. */
 export interface GitHubIssue {
   number: number;
   title: string;
@@ -48,6 +59,43 @@ export interface GitHubIssue {
   labels: { nodes: { name: string }[] };
   body?: string | null;
   milestone?: { title: string } | null;
+  participants?: { nodes: (GitHubUser | null)[] };
+}
+
+/** A parent as GraphQL says it. */
+export interface GitHubParent {
+  number: number;
+  title: string;
+  repository: { nameWithOwner: string };
+}
+
+/** An issue field of a repository's organization, by the type it is: `__typename` tells which, and
+ *  `options` are a select's. */
+export interface GitHubFieldDefinition {
+  __typename: string;
+  id: string;
+  name: string;
+  options?: NamedId[];
+}
+
+/** What an issue holds in one issue field: a select's `value` is its option's name, a multi select's
+ *  are its `options`. */
+export interface GitHubFieldValue {
+  field: { name: string };
+  value?: string | number | null;
+  options?: NamedId[];
+}
+
+/** What an issue has of the fields only some hosts have, a GitHub Enterprise Server lacking them
+ *  until a version: each is read on its own (`readExtras`), and left out where the host refuses it. */
+export interface GitHubExtras {
+  /** What the issue's type is, which the repository offers, and whether the viewer may change it. */
+  issueType?: { current: string | null; available: string[]; editable: boolean };
+  /** Null for an issue with no parent. */
+  parent?: GitHubParent | null;
+  /** `pinned` are the names of the fields shown for the issue whatever they hold: those pinned to its
+   *  type or, if it has none, to issues without one, in the order they are shown. */
+  issueFields?: { definitions: GitHubFieldDefinition[]; values: GitHubFieldValue[]; pinned: string[]; editable: boolean };
 }
 
 /** A comment as GraphQL says it. */
@@ -125,23 +173,67 @@ const ISSUES_QUERY = `query($owner: String!, $name: String!, $cursor: String, $f
   }
 }`;
 
-const ISSUE_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+const ISSUE_VARIABLES = "$owner: String!, $name: String!, $number: Int!";
+
+const ISSUE_QUERY = `query(${ISSUE_VARIABLES}) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) {
       ${ISSUE_ROW}
       body
       milestone { title }
+      participants(first: 100) { nodes { login avatarUrl } }
       commentPage: comments(first: 100) { ${COMMENT_PAGE} }
       timelineItems(first: 100, ${TIMELINE_ARGUMENTS}) { ${TIMELINE_PAGE} }
     }
   }
 }`;
 
-const COMMENTS_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+/** The issue fields an organization defines, by the type each is; a select's options only where a
+ *  list is made of them. */
+function fieldDefinitions(withOptions: boolean): string {
+  const options = withOptions ? " options { id name }" : "";
+  return `__typename
+  ... on IssueFieldText { id name }
+  ... on IssueFieldNumber { id name }
+  ... on IssueFieldDate { id name }
+  ... on IssueFieldSingleSelect { id name${options} }
+  ... on IssueFieldMultiSelect { id name${options} }`;
+}
+
+const FIELD_VALUES = `... on IssueFieldTextValue { value field { ... on IssueFieldCommon { name } } }
+  ... on IssueFieldNumberValue { value field { ... on IssueFieldCommon { name } } }
+  ... on IssueFieldDateValue { value field { ... on IssueFieldCommon { name } } }
+  ... on IssueFieldSingleSelectValue { value field { ... on IssueFieldCommon { name } } }
+  ... on IssueFieldMultiSelectValue { options { id name } field { ... on IssueFieldCommon { name } } }`;
+
+const TYPE_QUERY = `query(${ISSUE_VARIABLES}) {
+  repository(owner: $owner, name: $name) {
+    issueTypes(first: 50) { nodes { name isEnabled } }
+    issue(number: $number) { viewerCanType issueType { name } }
+  }
+}`;
+
+const PARENT_QUERY = `query(${ISSUE_VARIABLES}) {
+  repository(owner: $owner, name: $name) { issue(number: $number) { parent { number title repository { nameWithOwner } } } }
+}`;
+
+const FIELDS_QUERY = `query(${ISSUE_VARIABLES}) {
+  repository(owner: $owner, name: $name) {
+    issueFields(first: 50) { nodes { ${fieldDefinitions(false)} } }
+    owner { ... on Organization { pinnedIssueFields(first: 50) { nodes { ... on IssueFieldCommon { name } } } } }
+    issue(number: $number) {
+      viewerCanSetFields
+      issueType { pinnedFields { ... on IssueFieldCommon { name } } }
+      issueFieldValues(first: 50) { nodes { ${FIELD_VALUES} } }
+    }
+  }
+}`;
+
+const COMMENTS_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
   repository(owner: $owner, name: $name) { issue(number: $number) { comments(first: 100, after: $cursor) { ${COMMENT_PAGE} } } }
 }`;
 
-const TIMELINE_QUERY = `query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+const TIMELINE_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
   repository(owner: $owner, name: $name) {
     issue(number: $number) { timelineItems(first: 100, after: $cursor, ${TIMELINE_ARGUMENTS}) { ${TIMELINE_PAGE} } }
   }
@@ -184,34 +276,151 @@ export function toIssueInput(issueId: string, { title, body, state }: IssueChang
   return { id: issueId, title, body, state: state && (state === "open" ? "OPEN" : "CLOSED") };
 }
 
-/** What `updateIssue` takes of a pick field: its input, and where its names and ids are listed. */
-interface PickField {
-  input: string;
-  /** What one of its values is, for the refusal of an unknown name. */
-  what: string;
-  /** Takes one value, null taking it off, instead of a list. */
-  single?: boolean;
-  list: (send: GraphqlSend, path: string) => Promise<{ id: string; name: string }[]>;
+/** A parent as its field shows and lists it: its title and where it is, since a number is only unique
+ *  in its repository. */
+export function parentName(parent: GitHubParent): string {
+  return `${parent.title} (${parent.repository.nameWithOwner}#${parent.number})`;
 }
 
-const PICK_FIELDS: Record<string, PickField> = {
-  assignees: { input: "assigneeIds", what: "person to assign", list: allAssignable },
-  labels: { input: "labelIds", what: "label", list: allLabels },
-  milestone: { input: "milestoneId", what: "milestone", single: true, list: allMilestones },
+/** What a change of an issue's field needs of the issue: its id, and the id of its parent, which
+ *  taking the parent off names. */
+interface Target {
+  id: string;
+  parentId?: string;
+}
+
+function updateIssueWrite(input: object): Write {
+  return { mutation: "updateIssue", inputType: "UpdateIssueInput", input };
+}
+
+/** The fields of GitHub, by the id `toFields` gives them. */
+export const FIELD_HANDLERS: Record<string, FieldHandler<Target>> = {
+  assignees: pickHandler({ what: "person to assign", choices: ({ send, path }) => allAssignable(send, path) }, (target, ids) =>
+    updateIssueWrite({ id: target.id, assigneeIds: ids }),
+  ),
+  labels: pickHandler({ what: "label", choices: ({ send, path }) => allLabels(send, path) }, (target, ids) =>
+    updateIssueWrite({ id: target.id, labelIds: ids }),
+  ),
+  type: pickHandler({ what: "issue type", choices: ({ send, path }) => allIssueTypes(send, path) }, (target, [issueTypeId]) => ({
+    mutation: "updateIssueIssueType",
+    inputType: "UpdateIssueIssueTypeInput",
+    input: { issueId: target.id, issueTypeId: issueTypeId ?? null },
+  })),
+  milestone: pickHandler({ what: "milestone", choices: ({ send, path }) => allMilestones(send, path) }, (target, [milestoneId]) =>
+    updateIssueWrite({ id: target.id, milestoneId: milestoneId ?? null }),
+  ),
+  parent: pickHandler({ what: "parent", choices: openIssues }, (target, [parentId]) => {
+    if (parentId !== undefined) {
+      return {
+        mutation: "addSubIssue",
+        inputType: "AddSubIssueInput",
+        input: { issueId: parentId, subIssueId: target.id, replaceParent: true },
+      };
+    }
+    if (target.parentId === undefined) {
+      throw new Error("It has no parent");
+    }
+    return { mutation: "removeSubIssue", inputType: "RemoveSubIssueInput", input: { issueId: target.parentId, subIssueId: target.id } };
+  }),
 };
 
-function pickFieldOf(fieldId: string): PickField {
-  const field = PICK_FIELDS[fieldId];
-  if (!field) {
-    throw new Error(`An issue of GitHub has no field ${fieldId}`);
-  }
-  return field;
+/** What `setIssueFieldValue` takes to set an issue field of the organization; a value taken off is
+ *  deleted. */
+function issueFieldWrite(definition: GitHubFieldDefinition, target: Target, entry: object | null): Write {
+  return {
+    mutation: "setIssueFieldValue",
+    inputType: "SetIssueFieldValueInput",
+    input: { issueId: target.id, issueFields: [{ fieldId: definition.id, ...(entry ?? { delete: true }) }] },
+  };
 }
 
-/** What `updateIssue` sets of a pick field, in GitHub's words: the ids of its values. */
-export function toFieldInput(issueId: string, fieldId: string, ids: string[]): object {
-  const { input, single } = pickFieldOf(fieldId);
-  return { id: issueId, [input]: single ? (ids[0] ?? null) : ids };
+/** The handler of one of the organization's issue fields, by the type it is. */
+export function issueFieldOf(definition: GitHubFieldDefinition): FieldHandler<Target> {
+  const options = { what: definition.name, choices: () => Promise.resolve(definition.options ?? []) };
+  switch (definition.__typename) {
+    case "IssueFieldText":
+      return valueHandler((target, value) => issueFieldWrite(definition, target, textOf(value) === null ? null : { textValue: value }));
+    case "IssueFieldNumber":
+      return valueHandler((target, value) => issueFieldWrite(definition, target, numberOf(value) === null ? null : { numberValue: value }));
+    case "IssueFieldDate":
+      return valueHandler((target, value) => issueFieldWrite(definition, target, textOf(value) === null ? null : { dateValue: value }));
+    case "IssueFieldSingleSelect":
+      return pickHandler(options, (target, [optionId]) =>
+        issueFieldWrite(definition, target, optionId ? { singleSelectOptionId: optionId } : null),
+      );
+    case "IssueFieldMultiSelect":
+      return pickHandler(options, (target, ids) =>
+        issueFieldWrite(definition, target, ids.length > 0 ? { multiSelectOptionIds: ids } : null),
+      );
+    default:
+      throw new Error(`${definition.name} is a kind of issue field this app does not know`);
+  }
+}
+
+/** What an issue field of the organization holds of an issue, as the tab lists it. */
+function toIssueField(
+  definition: GitHubFieldDefinition,
+  { values, editable }: { values: GitHubFieldValue[]; editable: boolean },
+): IssueField[] {
+  const held = values.find((candidate) => candidate.field.name === definition.name);
+  const base = { id: definition.id, name: definition.name, editable };
+  switch (definition.__typename) {
+    case "IssueFieldText":
+      return [{ ...base, kind: "text", value: typeof held?.value === "string" ? held.value : undefined }];
+    case "IssueFieldNumber":
+      return [{ ...base, kind: "number", value: typeof held?.value === "number" ? held.value : undefined }];
+    case "IssueFieldDate":
+      return [{ ...base, kind: "date", value: typeof held?.value === "string" ? held.value.slice(0, 10) : undefined }];
+    case "IssueFieldSingleSelect":
+      return [pickField(definition.id, definition.name, typeof held?.value === "string" ? [held.value] : [], { editable })];
+    case "IssueFieldMultiSelect":
+      return [
+        pickField(definition.id, definition.name, held?.options?.map((option) => option.name) ?? [], {
+          several: true,
+          shown: "labels",
+          editable,
+        }),
+      ];
+    default:
+      return [];
+  }
+}
+
+/** The issue fields GitHub's sidebar shows: the pinned ones in their order, then each other that holds
+ *  a value. */
+function shownIssueFields({ definitions, values, pinned }: NonNullable<GitHubExtras["issueFields"]>): GitHubFieldDefinition[] {
+  const named = (name: string) => definitions.filter((definition) => definition.name === name);
+  return [
+    ...pinned.flatMap(named),
+    ...definitions.filter(
+      (definition) => !pinned.includes(definition.name) && values.some((value) => value.field.name === definition.name),
+    ),
+  ];
+}
+
+/** The fields an issue has, as the tab lists them, in the order of GitHub's own sidebar: those every
+ *  issue has, then each that `extras` found the host to have. */
+export function toFields(issue: GitHubIssue, extras: GitHubExtras): IssueField[] {
+  const { issueType, parent, issueFields } = extras;
+  const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
+  return [
+    pickField("assignees", "Assignees", people(issue.assignees.nodes), { several: true, shown: "people" }),
+    pickField(
+      "labels",
+      "Labels",
+      issue.labels.nodes.map((label) => label.name),
+      { several: true, shown: "labels" },
+    ),
+    ...(issueType && (issueType.current !== null || issueType.available.length > 0)
+      ? [pickField("type", "Type", issueType.current === null ? [] : [issueType.current], { editable: issueType.editable })]
+      : []),
+    pickField("milestone", "Milestone", issue.milestone ? [issue.milestone.title] : []),
+    ...(parent === undefined ? [] : [pickField("parent", "Parent", parent === null ? [] : [parentName(parent)])]),
+    ...(issueFields ? shownIssueFields(issueFields).flatMap((definition) => toIssueField(definition, issueFields)) : []),
+    ...(issue.participants
+      ? [pickField("participants", "Participants", people(issue.participants.nodes), { several: true, shown: "people", editable: false })]
+      : []),
+  ];
 }
 
 /** github.com's GraphQL lives on its own subdomain; GitHub Enterprise serves it under /api. */
@@ -229,12 +438,21 @@ function repositoryOf(path: string): { owner: string; name: string } {
   return { owner, name };
 }
 
-/** The node id GraphQL addresses a repository's issue by. */
+/** An issue of a repository by its number, as far as `selection` reads it beside its node id, the id
+ *  GraphQL addresses it by. */
+async function readIssueNode<T extends object = object>(
+  send: GraphqlSend,
+  path: string,
+  number: number,
+  selection = "",
+): Promise<{ id: string } & T> {
+  const query = `query(${ISSUE_VARIABLES}) { repository(owner: $owner, name: $name) { issue(number: $number) { id ${selection} } } }`;
+  const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { issue: { id: string } & T } };
+  return data.repository.issue;
+}
+
 async function issueNodeId(send: GraphqlSend, path: string, number: number): Promise<string> {
-  const query =
-    "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { issue(number: $number) { id } } }";
-  const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { issue: { id: string } } };
-  return data.repository.issue.id;
+  return (await readIssueNode(send, path, number)).id;
 }
 
 /** The node id GraphQL addresses a repository by, and the number its upload goes by. */
@@ -297,6 +515,120 @@ async function allMilestones(send: GraphqlSend, path: string): Promise<{ id: str
     (data) => (data as { repository: { milestones: GraphqlPage<{ id: string; title: string }> } }).repository.milestones,
   );
   return entries.map((entry) => ({ id: entry.id, name: entry.title }));
+}
+
+/** The issue types a repository offers, by name, with their ids. */
+async function allIssueTypes(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  const query = `query($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) { issueTypes(first: 50) { nodes { id name isEnabled } } }
+  }`;
+  const data = (await send(query, repositoryOf(path))) as {
+    repository: { issueTypes: { nodes: { id: string; name: string; isEnabled: boolean }[] } | null };
+  };
+  return (data.repository.issueTypes?.nodes ?? []).filter((type) => type.isEnabled).map(({ id, name }) => ({ id, name }));
+}
+
+/** The open issues of a repository but the issue itself, by the name `parentName` gives them: the
+ *  parents it can be given. */
+async function openIssues({ send, path, number }: FieldContext<Target>): Promise<NamedId[]> {
+  const query = `query($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      issues(first: 100, after: $cursor, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id number title }
+      }
+    }
+  }`;
+  type Entry = { id: string; number: number; title: string };
+  const entries = await allNodes<Entry>(
+    send,
+    query,
+    repositoryOf(path),
+    (data) => (data as { repository: { issues: GraphqlPage<Entry> } }).repository.issues,
+  );
+  return entries
+    .filter((entry) => entry.number !== number)
+    .map((entry) => ({ id: entry.id, name: parentName({ ...entry, repository: { nameWithOwner: path } }) }));
+}
+
+/** The issue fields an organization defines for a repository. */
+async function readFieldDefinitions(send: GraphqlSend, path: string): Promise<GitHubFieldDefinition[]> {
+  const query = `query($owner: String!, $name: String!) {
+    repository(owner: $owner, name: $name) { issueFields(first: 50) { nodes { ${fieldDefinitions(true)} } } }
+  }`;
+  const data = (await send(query, repositoryOf(path))) as { repository: { issueFields: { nodes: GitHubFieldDefinition[] } | null } };
+  return data.repository.issueFields?.nodes ?? [];
+}
+
+/** The field of GitHub an id names: one of the table, or an issue field of the organization. */
+async function fieldHandlerOf(send: GraphqlSend, path: string, fieldId: string): Promise<FieldHandler<Target>> {
+  const known = ownValue(FIELD_HANDLERS, fieldId);
+  if (known) {
+    return known;
+  }
+  const definition = (await readFieldDefinitions(send, path)).find((candidate) => candidate.id === fieldId);
+  if (!definition) {
+    throw new Error(`An issue of GitHub has no field ${fieldId}`);
+  }
+  return issueFieldOf(definition);
+}
+
+/** The issue a change of a field is made on. */
+async function readTarget(send: GraphqlSend, path: string, number: number): Promise<Target> {
+  type WithParent = { parent?: { id: string } | null };
+  // A host without sub-issues refuses the query that asks for the parent.
+  const issue = await readIssueNode<WithParent>(send, path, number, "parent { id }").catch(() =>
+    readIssueNode<WithParent>(send, path, number),
+  );
+  return { id: issue.id, parentId: issue.parent?.id };
+}
+
+/** The fields only some hosts have, each asked on its own: a host that lacks one refuses its query
+ *  whole, and the issue then shows without it. */
+async function readExtras(send: GraphqlSend, variables: object): Promise<GitHubExtras> {
+  const ask = async <T>(query: string): Promise<T | undefined> => {
+    try {
+      return ((await send(query, variables)) as { repository: T }).repository;
+    } catch {
+      return undefined;
+    }
+  };
+  const [types, parent, fields] = await Promise.all([
+    ask<{
+      issueTypes: { nodes: { name: string; isEnabled: boolean }[] } | null;
+      issue: { viewerCanType: boolean; issueType: { name: string } | null };
+    }>(TYPE_QUERY),
+    ask<{ issue: { parent: GitHubParent | null } }>(PARENT_QUERY),
+    ask<{
+      issueFields: { nodes: GitHubFieldDefinition[] } | null;
+      owner: { pinnedIssueFields?: { nodes: { name: string }[] } | null };
+      issue: {
+        viewerCanSetFields: boolean;
+        issueType: { pinnedFields: { name: string }[] } | null;
+        issueFieldValues: { nodes: GitHubFieldValue[] } | null;
+      };
+    }>(FIELDS_QUERY),
+  ]);
+  return {
+    issueType: types && {
+      current: types.issue.issueType?.name ?? null,
+      available: (types.issueTypes?.nodes ?? []).filter((type) => type.isEnabled).map((type) => type.name),
+      editable: types.issue.viewerCanType,
+    },
+    parent: parent?.issue.parent,
+    issueFields: fields && {
+      definitions: fields.issueFields?.nodes ?? [],
+      values: fields.issue.issueFieldValues?.nodes ?? [],
+      pinned: (fields.issue.issueType?.pinnedFields ?? fields.owner.pinnedIssueFields?.nodes ?? []).map((field) => field.name),
+      editable: fields.issue.viewerCanSetFields,
+    },
+  };
+}
+
+/** One mutation. GitHub words a refusal as a GraphQL error, so a payload is asked for no more than its
+ *  `clientMutationId`. */
+function mutate<T>(send: GraphqlSend, write: Write, selection = "clientMutationId"): Promise<T> {
+  return sendMutation<T>(send, write, selection);
 }
 
 /** The only files its upload takes from a token, by extension: it refuses any other type. */
@@ -449,7 +781,8 @@ export const github: GitProvider = {
   async readIssue({ host, token, path }, number) {
     const send = sender(host, token);
     const variables = { ...repositoryOf(path), number };
-    const data = (await send(ISSUE_QUERY, variables)) as {
+    const [issueData, extras] = await Promise.all([send(ISSUE_QUERY, variables), readExtras(send, variables)]);
+    const data = issueData as {
       repository: {
         issue: GitHubIssue & { commentPage: GraphqlPage<GitHubComment>; timelineItems: GraphqlPage<GitHubEvent> };
       };
@@ -479,37 +812,15 @@ export const github: GitProvider = {
     return {
       ...toIssue(found),
       provider: "github",
-      avatars: avatarsOf([found.author, ...assignees, ...comments.map((comment) => comment.author), ...items.map((item) => item.actor)]),
+      avatars: avatarsOf([
+        found.author,
+        ...assignees,
+        ...(found.participants?.nodes ?? []),
+        ...comments.map((comment) => comment.author),
+        ...items.map((item) => item.actor),
+      ]),
       events: toEvents(items),
-      fields: [
-        {
-          id: "assignees",
-          name: "Assignees",
-          editable: true,
-          kind: "pick",
-          several: true,
-          shown: "people",
-          value: assignees.map((assignee) => assignee.login),
-        },
-        {
-          id: "labels",
-          name: "Labels",
-          editable: true,
-          kind: "pick",
-          several: true,
-          shown: "labels",
-          value: found.labels.nodes.map((label) => label.name),
-        },
-        {
-          id: "milestone",
-          name: "Milestone",
-          editable: true,
-          kind: "pick",
-          several: false,
-          shown: "text",
-          value: found.milestone ? [found.milestone.title] : [],
-        },
-      ],
+      fields: toFields(found, extras),
       body: found.body ?? "",
       notes: comments.map(toNote),
     };
@@ -523,58 +834,48 @@ export const github: GitProvider = {
 
   async addComment({ host, token, path }, number, body) {
     const send = sender(host, token);
-    await send("mutation($input: AddCommentInput!) { addComment(input: $input) { clientMutationId } }", {
+    await mutate(send, {
+      mutation: "addComment",
+      inputType: "AddCommentInput",
       input: { subjectId: await issueNodeId(send, path, number), body },
     });
   },
 
   async updateIssue({ host, token, path }, number, change) {
     const send = sender(host, token);
-    await send("mutation($input: UpdateIssueInput!) { updateIssue(input: $input) { clientMutationId } }", {
-      input: toIssueInput(await issueNodeId(send, path, number), change),
-    });
+    await mutate(send, updateIssueWrite(toIssueInput(await issueNodeId(send, path, number), change)));
   },
 
-  async listOptions({ host, token, path }, _number, fieldId) {
-    return (await pickFieldOf(fieldId).list(sender(host, token), path)).map((entry) => entry.name);
-  },
-
-  async setField({ host, token, path }, number, fieldId, value) {
-    const send = sender(host, token);
-    const pick = pickFieldOf(fieldId);
-    if (!Array.isArray(value)) {
-      throw new Error(`${fieldId} takes a list of values`);
-    }
-    const [issueId, entries] = await Promise.all([issueNodeId(send, path, number), pick.list(send, path)]);
-    await send("mutation($input: UpdateIssueInput!) { updateIssue(input: $input) { clientMutationId } }", {
-      input: toFieldInput(issueId, fieldId, idsByName(value, entries, pick.what)),
-    });
-  },
+  ...fieldMethods({ graphql: sender, handlerOf: fieldHandlerOf, readTarget, mutate }),
 
   async createIssue({ host, token, path }, title, body) {
     const send = sender(host, token);
     const { id } = await repositoryIds(send, path);
-    const data = (await send("mutation($input: CreateIssueInput!) { createIssue(input: $input) { issue { number } } }", {
-      input: { repositoryId: id, title, body },
-    })) as { createIssue: { issue: { number: number } } };
-    return data.createIssue.issue.number;
+    const { issue } = await mutate<{ issue: { number: number } }>(
+      send,
+      { mutation: "createIssue", inputType: "CreateIssueInput", input: { repositoryId: id, title, body } },
+      "issue { number }",
+    );
+    return issue.number;
   },
 
   async editComment({ host, token }, id, body) {
-    await sender(host, token)("mutation($input: UpdateIssueCommentInput!) { updateIssueComment(input: $input) { clientMutationId } }", {
+    await mutate(sender(host, token), {
+      mutation: "updateIssueComment",
+      inputType: "UpdateIssueCommentInput",
       input: { id, body },
     });
   },
 
   async deleteComment({ host, token }, id) {
-    await sender(host, token)("mutation($input: DeleteIssueCommentInput!) { deleteIssueComment(input: $input) { clientMutationId } }", {
-      input: { id },
-    });
+    await mutate(sender(host, token), { mutation: "deleteIssueComment", inputType: "DeleteIssueCommentInput", input: { id } });
   },
 
   async deleteIssue({ host, token, path }, number) {
     const send = sender(host, token);
-    await send("mutation($input: DeleteIssueInput!) { deleteIssue(input: $input) { clientMutationId } }", {
+    await mutate(send, {
+      mutation: "deleteIssue",
+      inputType: "DeleteIssueInput",
       input: { issueId: await issueNodeId(send, path, number) },
     });
   },

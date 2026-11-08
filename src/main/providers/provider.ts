@@ -3,6 +3,7 @@ import type {
   Issue,
   IssueChange,
   IssueDetail,
+  IssueField,
   IssueFieldValue,
   IssueFilter,
   IssueUploads,
@@ -151,9 +152,15 @@ export async function allNodes<T>(
   return nodes;
 }
 
+/** What a pick field lists: a name as `IssueField.value` shows it, with the id the tracker addresses it by. */
+export interface NamedId {
+  id: string;
+  name: string;
+}
+
 /** The ids of what a host names, by those names; GraphQL sets labels and people by id alone. Refuses a
  *  name it does not know, so nothing is dropped unseen. */
-export function idsByName(names: string[], known: { id: string; name: string }[], what: string): string[] {
+export function idsByName(names: string[], known: NamedId[], what: string): string[] {
   return names.map((name) => {
     const entry = known.find((candidate) => candidate.name === name);
     if (!entry) {
@@ -161,6 +168,158 @@ export function idsByName(names: string[], known: { id: string; name: string }[]
     }
     return entry.id;
   });
+}
+
+/** A field the tab picks from a list. */
+export function pickField(
+  id: string,
+  name: string,
+  value: string[],
+  {
+    several = false,
+    shown = "text",
+    editable = true,
+  }: { several?: boolean; shown?: "text" | "people" | "labels"; editable?: boolean } = {},
+): IssueField {
+  return { id, name, editable, kind: "pick", value, several, shown };
+}
+
+/** The text a field is set to, null taking it off; refuses a value of another kind. */
+export function textOf(value: IssueFieldValue): string | null {
+  if (value !== null && typeof value !== "string") {
+    throw new Error("It takes text");
+  }
+  return value;
+}
+
+/** The number a field is set to, null taking it off; refuses a value of another kind. */
+export function numberOf(value: IssueFieldValue, whole = false): number | null {
+  if (value !== null && (typeof value !== "number" || !Number.isFinite(value) || (whole && !Number.isInteger(value)))) {
+    throw new Error(whole ? "It takes a whole number" : "It takes a number");
+  }
+  return value;
+}
+
+/** A mutation in a host's words: its name, the type of its input, and the input. */
+export interface Write {
+  mutation: string;
+  inputType: string;
+  input: object;
+}
+
+/**
+ * One mutation, answering what it was asked to select. A refusal comes as a GraphQL error
+ * (`sendGraphql`) or, where the host words it in a field of the payload, in the `errors` the caller
+ * selects.
+ */
+export async function sendMutation<T>(send: GraphqlSend, { mutation, inputType, input }: Write, selection: string): Promise<T> {
+  const query = `mutation($input: ${inputType}!) { ${mutation}(input: $input) { ${selection} } }`;
+  const data = (await send(query, { input })) as Record<string, (T & { errors?: string[] }) | null> | null;
+  const result = data?.[mutation];
+  if (!result) {
+    throw new Error("The host answered the change with nothing");
+  }
+  if (result.errors && result.errors.length > 0) {
+    throw new Error(result.errors.join("; "));
+  }
+  return result;
+}
+
+/** What a field's choices and its change are made with: the issue, and the target a change is made
+ *  on, which is read when first asked for and once. */
+export interface FieldContext<Target> {
+  send: GraphqlSend;
+  path: string;
+  number: number;
+  target: () => Promise<Target>;
+}
+
+export function fieldContext<Target>(send: GraphqlSend, path: string, number: number, read: () => Promise<Target>): FieldContext<Target> {
+  let target: Promise<Target> | undefined;
+  return {
+    send,
+    path,
+    number,
+    target: () => {
+      target ??= read();
+      return target;
+    },
+  };
+}
+
+/** A field of a tracker: where its choices are listed, for a pick, and the mutation that sets it. */
+export interface FieldHandler<Target> {
+  pick?: {
+    /** What one value is, for the refusal of an unknown name. */
+    what: string;
+    choices: (context: FieldContext<Target>) => Promise<NamedId[]>;
+  };
+  /** `ids` are those of the values of a pick, which `writeOf` looks up. */
+  write: (target: Target, value: IssueFieldValue, ids: string[]) => Write;
+}
+
+/** A pick, set by the ids of the values chosen. */
+export function pickHandler<Target>(
+  pick: NonNullable<FieldHandler<Target>["pick"]>,
+  write: (target: Target, ids: string[]) => Write,
+): FieldHandler<Target> {
+  return { pick, write: (target, _value, ids) => write(target, ids) };
+}
+
+/** A field set by its value. */
+export function valueHandler<Target>(write: (target: Target, value: IssueFieldValue) => Write): FieldHandler<Target> {
+  return { write };
+}
+
+/** What a pick field can be set to, by the names `IssueField.value` uses. */
+export async function optionsOf<Target>(handler: FieldHandler<Target>, context: FieldContext<Target>, fieldId: string): Promise<string[]> {
+  if (!handler.pick) {
+    throw new Error(`${fieldId} is no field to choose from`);
+  }
+  return (await handler.pick.choices(context)).map((entry) => entry.name);
+}
+
+/** The mutation that sets a field to `value`; a pick's names are looked up in its choices. */
+export async function writeOf<Target>(
+  handler: FieldHandler<Target>,
+  context: FieldContext<Target>,
+  fieldId: string,
+  value: IssueFieldValue,
+): Promise<Write> {
+  if (!handler.pick) {
+    return handler.write(await context.target(), value, []);
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldId} takes a list of values`);
+  }
+  const [choices, target] = await Promise.all([handler.pick.choices(context), context.target()]);
+  return handler.write(target, value, idsByName(value, choices, handler.pick.what));
+}
+
+/** `listOptions` and `setField` of a tracker, by its fields' handlers: the same steps for every one. */
+export function fieldMethods<Target>(tracker: {
+  graphql: (host: string, token: string) => GraphqlSend;
+  /** The field an id names; a tracker whose fields depend on the repository looks it up in it. */
+  handlerOf: (send: GraphqlSend, path: string, fieldId: string) => FieldHandler<Target> | Promise<FieldHandler<Target>>;
+  /** What a change of a field needs of the issue. */
+  readTarget: (send: GraphqlSend, path: string, number: number) => Promise<Target>;
+  mutate: (send: GraphqlSend, write: Write) => Promise<unknown>;
+}): Pick<GitProvider, "listOptions" | "setField"> {
+  const contextOf = (send: GraphqlSend, path: string, number: number): FieldContext<Target> =>
+    fieldContext(send, path, number, () => tracker.readTarget(send, path, number));
+  return {
+    async listOptions({ host, token, path }, number, fieldId) {
+      const send = tracker.graphql(host, token);
+      return optionsOf(await tracker.handlerOf(send, path, fieldId), contextOf(send, path, number), fieldId);
+    },
+    async setField({ host, token, path }, number, fieldId, value) {
+      const send = tracker.graphql(host, token);
+      await tracker.mutate(
+        send,
+        await writeOf(await tracker.handlerOf(send, path, fieldId), contextOf(send, path, number), fieldId, value),
+      );
+    },
+  };
 }
 
 /** One GET as JSON — see fetchOk. */

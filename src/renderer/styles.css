@@ -1359,11 +1359,11 @@ textarea:focus,
 .issue-event-dot {
   position: relative;
   flex: none;
-  width: 11px;
-  height: 11px;
-  margin: 0 4px;
+  width: 10px;
+  height: 9px;
+  margin: 0 4.5px;
   box-sizing: border-box;
-  border: 1px solid var(--tet-menu-border);
+  border: 2px solid var(--tet-menu-border);
   border-radius: 50%;
   background: var(--tet-lane-background);
 }
@@ -1388,7 +1388,8 @@ textarea:focus,
 }
 
 .issue-empty,
-.issue-none {
+.issue-none,
+.issue-side-name {
   color: var(--tet-descriptionForeground);
 }
 
@@ -1467,10 +1468,6 @@ textarea:focus,
 .issue-side-row {
   display: flex;
   gap: 8px;
-}
-
-.issue-side-name {
-  color: var(--tet-descriptionForeground);
 }
 
 /* A booking of time (`TimeLogs`): its time and day with the button to take it back at the end, then

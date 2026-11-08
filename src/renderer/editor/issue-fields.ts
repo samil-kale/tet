@@ -1,10 +1,10 @@
 import type { IssueField } from "../../shared/types/providers";
 
-/** A field changed by a question of its own, rather than picked from a list. */
-export type AskedField = Extract<IssueField, { kind: "number" | "date" | "duration" | "timelog" }>;
+/** A field changed by a question of its own, rather than picked from a list or ticked. */
+export type AskedField = Exclude<IssueField, { kind: "pick" | "flag" }>;
 
 export function isAsked(field: IssueField): field is AskedField {
-  return field.kind === "number" || field.kind === "date" || field.kind === "duration" || field.kind === "timelog";
+  return field.kind !== "pick" && field.kind !== "flag";
 }
 
 /** The side column's sections: a field alone, or the fields of one group together at the place of

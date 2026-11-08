@@ -4,7 +4,7 @@ import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import { agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirmed, filled, prompt } from "../ui/Dialog";
+import { askName, confirmed, filled, prompt, singleField } from "../ui/Dialog";
 import { Checkbox, FieldRow, TextAreaField, TextField } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import {
@@ -352,11 +352,14 @@ function CommentBox({ open, internalNotes, actions, writing }: CommentBoxProps) 
   const [busy, setBusy] = useState(false);
   const typed = text.trim() !== "";
   const noun = internal ? "Internal Note" : "Comment";
+  const reset = (): void => {
+    setText("");
+    setInternal(false);
+  };
   const submit = async (): Promise<void> => {
     setBusy(true);
     if (await actions.comment(text, internal)) {
-      setText("");
-      setInternal(false);
+      reset();
     }
     setBusy(false);
   };
@@ -364,8 +367,7 @@ function CommentBox({ open, internalNotes, actions, writing }: CommentBoxProps) 
   const changeState = async (): Promise<void> => {
     setBusy(true);
     if (!typed || (await actions.comment(text, internal))) {
-      setText("");
-      setInternal(false);
+      reset();
       actions.update({ state: open ? "closed" : "open" });
     }
     setBusy(false);
@@ -462,12 +464,12 @@ function IssueCard({ author, avatar, opened, at, text, writing, internal, onEdit
   );
 }
 
-/** Names as a sentence lists them, each set apart by `show`, the last joined by `joiner`. */
-function listed(names: string[], show: (name: string) => React.ReactNode, joiner = "and"): React.ReactNode {
-  return names.map((name, index) => (
-    <Fragment key={name}>
-      {index > 0 && (index === names.length - 1 ? ` ${joiner} ` : ", ")}
-      {show(name)}
+/** Items as a sentence lists them, each set apart by `show`, the last joined by `joiner`. */
+function listed<T = string>(items: T[], show: (item: T) => React.ReactNode, joiner = "and"): React.ReactNode {
+  return items.map((item, index) => (
+    <Fragment key={index}>
+      {index > 0 && (index === items.length - 1 ? ` ${joiner} ` : ", ")}
+      {show(item)}
     </Fragment>
   ));
 }
@@ -570,6 +572,16 @@ export function confirmDeleteIssue(number: number): Promise<boolean> {
   });
 }
 
+/** The question deleting a comment or a time entry asks: it is deleted on the tracker for good. */
+function confirmDeleteOnTracker(what: string): Promise<boolean> {
+  return confirmed({
+    title: `Delete ${what}`,
+    message: `Delete this ${what}?`,
+    detail: "It is deleted on the tracker for good.",
+    confirmLabel: "Delete",
+  });
+}
+
 /** The agents an issue can be opened in, wherever that is offered: those a prompt can start. */
 export function issueAgentEntries(agents: readonly AgentInfo[], open: (agentId: AgentId) => void): ContextMenuEntry[] {
   return agents.filter((agent) => agent.takesPrompt).map((agent) => agentEntry(agent, () => open(agent.id)));
@@ -638,6 +650,7 @@ function PickSection({
   title,
   picked,
   several,
+  editable,
   load,
   onChange,
   children,
@@ -645,33 +658,41 @@ function PickSection({
   title: string;
   picked: string[];
   several: boolean;
+  editable: boolean;
   load: () => Promise<string[] | undefined>;
   onChange: (picked: string[]) => void;
   children: React.ReactNode;
 }) {
   const [options, setOptions] = useState<string[]>();
+  // One request however many times the menu is opened; a failed one is asked again.
+  const asked = useRef<Promise<void> | undefined>(undefined);
   return (
     <SideSection
       title={title}
       action={
-        <PickMenu
-          className="icon-button"
-          title={`Change ${title}`}
-          options={options && [...new Set([...options, ...picked])]}
-          isPicked={(option) => picked.includes(option)}
-          onPick={(option) => {
-            const rest = picked.filter((entry) => entry !== option);
-            onChange(picked.includes(option) ? rest : several ? [...picked, option] : [option]);
-          }}
-          several={several}
-          onOpen={() => {
-            if (options === undefined) {
-              void load().then(setOptions);
-            }
-          }}
-        >
-          <GearIcon />
-        </PickMenu>
+        editable && (
+          <PickMenu
+            className="icon-button"
+            title={`Change ${title}`}
+            options={options && [...new Set([...options, ...picked])]}
+            isPicked={(option) => picked.includes(option)}
+            onPick={(option) => {
+              const rest = picked.filter((entry) => entry !== option);
+              onChange(picked.includes(option) ? rest : several ? [...picked, option] : [option]);
+            }}
+            several={several}
+            onOpen={() => {
+              if (options === undefined) {
+                asked.current ??= load().then((loaded) => {
+                  asked.current = undefined;
+                  setOptions(loaded);
+                });
+              }
+            }}
+          >
+            <GearIcon />
+          </PickMenu>
+        )
       }
     >
       {children}
@@ -680,56 +701,29 @@ function PickSection({
 }
 
 /** A field that is typed rather than picked. */
-type TypedField = Extract<IssueField, { kind: "number" | "date" | "duration" }>;
+type TypedField = Exclude<AskedField, { kind: "timelog" }>;
 
-/** What a typed field's dialog tells of what to type; an empty answer takes the value off where it
- *  can be taken off. */
-function typingDetail(field: TypedField): string {
-  switch (field.kind) {
-    case "number":
-      return "A number. Empty takes it off.";
-    case "date":
-      return "A date. Empty takes it off.";
-    case "duration":
-      return "For example 3h 30m. Empty takes it off.";
-  }
-}
+/** What a typed field's dialog tells of what to type. */
+const TYPING_HINTS: Record<TypedField["kind"], string> = {
+  text: "Some text",
+  number: "A number",
+  date: "A date",
+  duration: "For example 3h 30m",
+};
 
-/** The value a typed field's answer stands for, null for none; what refuses it where it stands for
- *  nothing. */
-function typedValue(field: TypedField, typed: string): { value: IssueFieldValue } | { refused: string } {
-  const text = typed.trim();
-  if (text === "") {
-    return { value: null };
-  }
-  if (field.kind === "number") {
-    return Number.isFinite(Number(text)) ? { value: Number(text) } : { refused: `${text} is not a number` };
-  }
-  return { value: text };
-}
-
-/** The question a number, a date or a duration is changed in; `edit` answers what the tracker refused. */
+/** The question a text, a number, a date or a duration is changed in; an empty answer takes the value
+ *  off, and `edit` answers what the tracker refused. */
 async function askFieldValue(field: TypedField, edit: (value: IssueFieldValue) => Promise<string | undefined>): Promise<void> {
   await prompt({
     title: `Change ${field.name.toLowerCase()}`,
-    detail: typingDetail(field),
+    detail: `${TYPING_HINTS[field.kind]}. Empty takes it off.`,
     confirmLabel: "Save",
     value: field.value === undefined ? "" : String(field.value),
     ready: () => true,
-    render: ({ value, onChange, error, busy, field: input }) => (
-      <TextField
-        label={field.name}
-        type={field.kind === "date" ? "date" : "text"}
-        value={value}
-        onChange={onChange}
-        disabled={busy}
-        ref={input}
-        error={error}
-      />
-    ),
+    render: singleField(field.name, undefined, field.kind === "date" ? "date" : undefined),
     submit: (typed) => {
-      const parsed = typedValue(field, typed);
-      return "refused" in parsed ? Promise.resolve(parsed.refused) : edit(parsed.value);
+      const text = typed.trim();
+      return edit(text === "" ? null : field.kind === "number" ? Number(text) : text);
     },
   });
 }
@@ -797,11 +791,11 @@ function changeLabel(field: AskedField): string {
  *  viewer's rights allow is taken back after a question. */
 function TimeLogs({
   field,
-  issue,
+  avatars,
   actions,
 }: {
   field: Extract<IssueField, { kind: "timelog" }>;
-  issue: IssueDetail;
+  avatars: IssueDetail["avatars"];
   actions: IssueActions;
 }) {
   return field.entries.map((entry) => (
@@ -813,12 +807,9 @@ function TimeLogs({
           <IconButton
             title="Delete..."
             onClick={() =>
-              void confirmed({
-                title: "Delete time entry",
-                message: "Delete this time entry?",
-                detail: "It is deleted on the tracker for good.",
-                confirmLabel: "Delete",
-              }).then((answer) => (answer ? actions.setField(field.id, { remove: entry.id }) : undefined))
+              void confirmDeleteOnTracker("time entry").then((answer) =>
+                answer ? actions.setField(field.id, { remove: entry.id }) : undefined,
+              )
             }
           >
             <TrashIcon />
@@ -826,7 +817,7 @@ function TimeLogs({
         )}
       </div>
       <div className="issue-side-person">
-        <Person login={entry.author} avatar={issue.avatars[entry.author]} />
+        <Person login={entry.author} avatar={avatars[entry.author]} />
         <span className="issue-side-name">{entry.author}</span>
       </div>
       {entry.summary && <div className="issue-side-name">{entry.summary}</div>}
@@ -834,17 +825,22 @@ function TimeLogs({
   ));
 }
 
+/** A typed field's value in the side column, "None" where it has none. */
+function FieldValue({ value }: { value: string | number | undefined }) {
+  return <span className={value === undefined ? "issue-none" : undefined}>{value ?? "None"}</span>;
+}
+
 /** The fields of one group as a section: their values or, where none has one, a sentence offering to
  *  add them; its one button opens a menu of what can be set. */
 function GroupSection({
   title,
   fields,
-  issue,
+  avatars,
   actions,
 }: {
   title: string;
   fields: AskedField[];
-  issue: IssueDetail;
+  avatars: IssueDetail["avatars"];
   actions: IssueActions;
 }) {
   const menu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom }));
@@ -878,11 +874,10 @@ function GroupSection({
             <>
               Add{" "}
               {listed(
-                editable.map((field) => field.id),
-                (id) => {
-                  const field = editable.find((candidate) => candidate.id === id);
-                  return field && <ActionLink onClick={() => void askField(field, actions)}>{field.name.toLowerCase()}</ActionLink>;
-                },
+                editable,
+                (field) => (
+                  <ActionLink onClick={() => void askField(field, actions)}>{field.name.toLowerCase()}</ActionLink>
+                ),
                 "or",
               )}
               .
@@ -893,22 +888,29 @@ function GroupSection({
         fields.map((field) => (
           <div key={field.id} className="issue-side-row">
             <span className="issue-side-name">{field.name}</span>
-            <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
+            <FieldValue value={field.value} />
           </div>
         ))
       )}
-      {fields.map((field) => field.kind === "timelog" && <TimeLogs key={field.id} field={field} issue={issue} actions={actions} />)}
+      {fields.map((field) => field.kind === "timelog" && <TimeLogs key={field.id} field={field} avatars={avatars} actions={actions} />)}
     </SideSection>
   );
 }
 
-/** What a field's pick holds, as its values are drawn: who, a label, or plain text. */
-function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kind: "pick" }>; issue: IssueDetail; actions: IssueActions }) {
-  const { viewer } = issue;
+/** What a field's pick holds, as its values are drawn: as labels, people too, or plain text. */
+function PickValue({
+  field,
+  viewer,
+  actions,
+}: {
+  field: Extract<IssueField, { kind: "pick" }>;
+  viewer: string | undefined;
+  actions: IssueActions;
+}) {
   return (
     <>
       {field.value.length === 0 && <span className="issue-none">None</span>}
-      {field.shown === "labels" && (
+      {field.shown !== "text" && (
         <div className="issue-labels">
           {field.value.map((label) => (
             <span key={label} className="issue-label">
@@ -917,13 +919,6 @@ function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kin
           ))}
         </div>
       )}
-      {field.shown === "people" &&
-        field.value.map((login) => (
-          <div key={login} className="issue-side-person">
-            <Person login={login} avatar={issue.avatars[login]} />
-            <span>{login}</span>
-          </div>
-        ))}
       {field.shown === "text" && field.value.length > 0 && <span>{field.value.join(", ")}</span>}
       {field.shown === "people" && field.editable && viewer !== undefined && !field.value.includes(viewer) && (
         <ActionLink onClick={() => actions.setField(field.id, field.several ? [...field.value, viewer] : [viewer])}>
@@ -939,20 +934,17 @@ function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kin
 function FieldSection({ field, issue, actions }: { field: IssueField; issue: IssueDetail; actions: IssueActions }) {
   switch (field.kind) {
     case "pick":
-      return field.editable ? (
+      return (
         <PickSection
           title={field.name}
           picked={field.value}
           several={field.several}
+          editable={field.editable}
           load={() => actions.fieldOptions(field.id)}
           onChange={(value) => actions.setField(field.id, value)}
         >
-          <PickValue field={field} issue={issue} actions={actions} />
+          <PickValue field={field} viewer={issue.viewer} actions={actions} />
         </PickSection>
-      ) : (
-        <SideSection title={field.name}>
-          <PickValue field={field} issue={issue} actions={actions} />
-        </SideSection>
       );
     case "flag":
       return (
@@ -977,10 +969,11 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
             )
           }
         >
-          <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
-          <TimeLogs field={field} issue={issue} actions={actions} />
+          <FieldValue value={field.value} />
+          <TimeLogs field={field} avatars={issue.avatars} actions={actions} />
         </SideSection>
       );
+    case "text":
     case "number":
     case "date":
     case "duration":
@@ -995,7 +988,7 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
             )
           }
         >
-          <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
+          <FieldValue value={field.value} />
         </SideSection>
       );
   }
@@ -1050,13 +1043,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                   onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}
                   onDelete={
                     note.author === viewer
-                      ? () =>
-                          void confirmed({
-                            title: "Delete comment",
-                            message: "Delete this comment?",
-                            detail: "It is deleted on the tracker for good.",
-                            confirmLabel: "Delete",
-                          }).then((answer) => (answer ? actions.deleteComment(note.id) : undefined))
+                      ? () => void confirmDeleteOnTracker("comment").then((answer) => (answer ? actions.deleteComment(note.id) : undefined))
                       : undefined
                   }
                 />
@@ -1067,7 +1054,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
           <div className="issue-side">
             {sectionsOf(issue.fields).map((section) =>
               "group" in section ? (
-                <GroupSection key={section.group} title={section.group} fields={section.fields} issue={issue} actions={actions} />
+                <GroupSection key={section.group} title={section.group} fields={section.fields} avatars={issue.avatars} actions={actions} />
               ) : (
                 <FieldSection key={section.field.id} field={section.field} issue={issue} actions={actions} />
               ),

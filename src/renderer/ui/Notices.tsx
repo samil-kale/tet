@@ -191,6 +191,17 @@ function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "t
   report(severity, message, title);
 }
 
+/** A runner with its failure notified rather than handed back: what a change with no question up (a
+ *  reorder, a remove, a field set) calls. */
+export function notifying<A extends unknown[]>(ask: (...args: A) => Promise<string | undefined>): (...args: A) => void {
+  return (...args) =>
+    void ask(...args).then((refused) => {
+      if (refused !== undefined) {
+        notify("error", refused);
+      }
+    });
+}
+
 function targetKey(target: TabRef | undefined): string {
   return target ? `${refKeyOf(target.ref)}\u0000${target.tabId}` : "";
 }

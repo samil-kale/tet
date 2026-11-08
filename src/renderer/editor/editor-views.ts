@@ -5,12 +5,12 @@ import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { IssueChange, IssueDetail, IssueField, IssueFieldValue } from "../../shared/types/providers";
+import { isTimeRemoval, type IssueChange, type IssueDetail, type IssueField, type IssueFieldValue } from "../../shared/types/providers";
 import { toBase64 } from "../ui/base64";
 import { confirmed, confirmedFollowUp, refusal } from "../ui/Dialog";
 import { layoutChoice, layoutFlag } from "../ui/layout-storage";
 import { named } from "../ui/named";
-import { notify } from "../ui/Notices";
+import { notify, notifying } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
@@ -773,7 +773,8 @@ export async function uploadIssueFile(tabId: string, file: File): Promise<string
 }
 
 /** Changes the tab's issue: `show` shown at once, `write` run in turn after the writes before it, and
- *  the issue read back from the tracker. Answers what the tracker refused. */
+ *  the issue read back from the tracker once the last of them is through. Answers what the tracker
+ *  refused. */
 async function changeIssue(
   tabId: string,
   show: (detail: IssueDetail) => IssueDetail,
@@ -786,7 +787,8 @@ async function changeIssue(
   }
   const { view, number } = tab;
   publish(view, { issueDetail: show(detail) });
-  view.issueEdits = (view.issueEdits ?? 0) + 1;
+  const edit = (view.issueEdits ?? 0) + 1;
+  view.issueEdits = edit;
   const { projectId } = view.ref;
   const previous = view.issueWrites ?? Promise.resolve();
   const written = underIssueBar(view, async () => {
@@ -795,7 +797,9 @@ async function changeIssue(
     if (result.ok) {
       issuesChanged(projectId);
     }
-    void reloadIssue(tabId);
+    if (view.issueEdits === edit) {
+      void reloadIssue(tabId);
+    }
     return refusal(result);
   });
   view.issueWrites = written;
@@ -821,45 +825,33 @@ function withValue(field: IssueField, value: IssueFieldValue): IssueField {
     case "flag":
       return { ...field, value: value as boolean };
     case "timelog":
-      return value !== null && typeof value === "object" && !Array.isArray(value) && "remove" in value
-        ? { ...field, entries: field.entries.filter((entry) => entry.id !== value.remove) }
-        : field;
+      return isTimeRemoval(value) ? { ...field, entries: field.entries.filter((entry) => entry.id !== value.remove) } : field;
+    case "text":
+    case "date":
     case "duration":
       return { ...field, value: (value as string | null) ?? undefined };
     case "number":
       return { ...field, value: (value as number | null) ?? undefined };
-    case "date":
-      return { ...field, value: (value as string | null) ?? undefined };
   }
 }
 
-/** Reports a refusal as a notice, for a change nothing asked about. */
-function told(change: Promise<string | undefined>): void {
-  void change.then((refused) => {
-    if (refused !== undefined) {
-      notify("error", refused);
-    }
-  });
-}
-
-/** Changes the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
-export function updateIssue(tabId: string, change: IssueChange): void {
-  told(
-    changeIssue(
-      tabId,
-      (detail) => withChange(detail, change),
-      (projectId, number) => window.tet.issues.update(projectId, number, change),
-    ),
-  );
-}
-
-/** The tab's issue under a new title, answering what the tracker refused (`changeIssue`). */
-export function renameIssue(tabId: string, title: string): Promise<string | undefined> {
+/** Changes the tab's issue's own parts, answering what the tracker refused (`changeIssue`). */
+function changeParts(tabId: string, change: IssueChange): Promise<string | undefined> {
   return changeIssue(
     tabId,
-    (detail) => withChange(detail, { title }),
-    (projectId, number) => window.tet.issues.update(projectId, number, { title }),
+    (detail) => withChange(detail, change),
+    (projectId, number) => window.tet.issues.update(projectId, number, change),
   );
+}
+
+/** Changes the tab's issue, with a notice if the tracker refuses (`changeParts`). */
+export function updateIssue(tabId: string, change: IssueChange): void {
+  notifying(changeParts)(tabId, change);
+}
+
+/** The tab's issue under a new title, answering what the tracker refused (`changeParts`). */
+export function renameIssue(tabId: string, title: string): Promise<string | undefined> {
+  return changeParts(tabId, { title });
 }
 
 /** Sets a field of the tab's issue, answering what the tracker refused (`changeIssue`). */
@@ -873,7 +865,7 @@ export function editIssueField(tabId: string, fieldId: string, value: IssueField
 
 /** Sets a field of the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
 export function setIssueField(tabId: string, fieldId: string, value: IssueFieldValue): void {
-  told(editIssueField(tabId, fieldId, value));
+  notifying(editIssueField)(tabId, fieldId, value);
 }
 
 /** What the ISSUES section is filtered by, off its tracker. */

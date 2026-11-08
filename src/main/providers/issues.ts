@@ -143,17 +143,13 @@ export async function setIssueSource(accounts: IssueAccounts, repository: IssueR
 
 /** A field as the issue's text gives it; undefined where it holds nothing. */
 function fieldText(field: IssueField): string | undefined {
-  switch (field.kind) {
-    case "pick":
-      return field.value.length === 0 ? undefined : field.value.join(", ");
-    case "flag":
-      return field.value ? "yes" : undefined;
-    case "number":
-    case "date":
-    case "duration":
-    case "timelog":
-      return field.value === undefined ? undefined : String(field.value);
+  if (field.kind === "pick") {
+    return field.value.length === 0 ? undefined : field.value.join(", ");
   }
+  if (field.kind === "flag") {
+    return field.value ? "yes" : undefined;
+  }
+  return field.value === undefined ? undefined : String(field.value);
 }
 
 /** The issue as text, for an agent: its tab's, and the file a tab opened on it starts with. It opens by saying where it comes from: other people wrote

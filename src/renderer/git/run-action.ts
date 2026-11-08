@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { GitActionResult, GitLogin, GitQuestion } from "../../shared/types/git";
 import { refusal } from "../ui/Dialog";
-import { notify } from "../ui/Notices";
+import { notify, notifying } from "../ui/Notices";
 import { useBusy } from "../ui/use-busy";
 import { askLogin } from "./GitLogin";
 
@@ -97,17 +97,6 @@ export function runWithFollowUp(
     });
     return { ok: true };
   });
-}
-
-/** A runner with its failure notified rather than handed back: what `FileAct` and `GitRun.run`
- *  are, and what a change with no question up (a reorder, a remove) calls. */
-export function notifying<A extends unknown[]>(ask: (...args: A) => Promise<string | undefined>): (...args: A) => void {
-  return (...args) =>
-    void ask(...args).then((refused) => {
-      if (refused !== undefined) {
-        notify("error", refused);
-      }
-    });
 }
 
 /**

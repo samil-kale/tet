@@ -1,11 +1,12 @@
 import * as assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it } from "node:test";
-import { keepGlobals } from "../helpers";
+import { afterEach, beforeEach, describe, it, mock } from "node:test";
+import { fakeWindow, keepGlobals } from "../helpers";
 import {
   centerOrder,
   clearNotices,
   listNotices,
   notify,
+  notifying,
   removable,
   removeStaleNotices,
   syncWorkingNotices,
@@ -162,5 +163,40 @@ describe("the working sessions' notices", () => {
     removeStaleNotices({ [refKey]: [tab("a", { inTurn: true, waitingAt: 1 })] });
     await later();
     assert.deepEqual(messages(), [], "a stopped on a question: it does not work");
+  });
+});
+
+describe("a runner whose failure is notified", () => {
+  const reported: { severity: string; message: string }[] = [];
+  const settled = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+  keepGlobals("window");
+
+  beforeEach(() => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    reported.length = 0;
+    fakeWindow({
+      tet: { app: { reportNotice: (notice: (typeof reported)[number]) => reported.push(notice) } },
+    });
+  });
+
+  afterEach(() => {
+    mock.timers.reset();
+  });
+
+  it("tells a refusal as an error notice, once", async () => {
+    notifying(async () => "Could not push")();
+    await settled();
+    assert.deepEqual(
+      reported.map(({ severity, message }) => ({ severity, message })),
+      [{ severity: "error", message: "Could not push" }],
+    );
+  });
+
+  it("tells nothing when the action went through, and hands the arguments on", async () => {
+    const seen: unknown[][] = [];
+    notifying(async (...args: unknown[]) => void seen.push(args))("a", 1);
+    await settled();
+    assert.deepEqual(seen, [["a", 1]]);
+    assert.deepEqual(reported, []);
   });
 });

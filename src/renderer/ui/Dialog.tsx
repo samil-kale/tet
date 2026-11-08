@@ -163,9 +163,18 @@ export function refusal(result: GitActionResult, fallback?: string): string | un
 }
 
 /** `render` for a question asking one line of text, e.g. a name. */
-export function singleField(label: ReactNode, maxLength?: number): PromptOptions<string>["render"] {
+export function singleField(label: ReactNode, maxLength?: number, type?: "date"): PromptOptions<string>["render"] {
   return ({ value, onChange, error, busy, field }) => (
-    <TextField label={label} value={value} onChange={onChange} maxLength={maxLength} disabled={busy} ref={field} error={error} />
+    <TextField
+      label={label}
+      type={type}
+      value={value}
+      onChange={onChange}
+      maxLength={maxLength}
+      disabled={busy}
+      ref={field}
+      error={error}
+    />
   );
 }
 

@@ -1,26 +1,37 @@
-import type {
-  Issue,
-  IssueChange,
-  IssueEvent,
-  IssueField,
-  IssueFieldValue,
-  IssueFilter,
-  IssueNote,
-  IssueTimeLog,
-  RemoteRepository,
+import { ownValue } from "../../shared/own-value";
+import {
+  isTimeRemoval,
+  type Issue,
+  type IssueChange,
+  type IssueEvent,
+  type IssueField,
+  type IssueFilter,
+  type IssueNote,
+  type IssueTimeLog,
+  type RemoteRepository,
 } from "../../shared/types/providers";
 import {
   allNodes,
   ApiError,
   fetchImageOk,
   fetchOk,
+  fieldMethods,
   getPaged,
-  idsByName,
+  numberOf,
+  pickField,
+  pickHandler,
   sendDelete,
   sendGraphql,
+  sendMutation,
+  textOf,
+  valueHandler,
+  type FieldContext,
+  type FieldHandler,
   type GitProvider,
   type GraphqlPage,
   type GraphqlSend,
+  type NamedId,
+  type Write,
 } from "./provider";
 
 // GraphQL for all that it answers in structure and out of experiment. REST for the rest: an issue's
@@ -53,31 +64,16 @@ function reachedIssue<T>(project: { issue: T | null } | null, path: string, numb
   return reached(reached(project, path).issue, `Issue #${number}`);
 }
 
-/** What a mutation answered, which says what it refused in a field of its own. */
-export function mutationError(result: { errors?: string[] } | null | undefined): string | undefined {
-  if (!result) {
-    return "GitLab answered the change with nothing";
-  }
-  return result.errors && result.errors.length > 0 ? result.errors.join("; ") : undefined;
-}
-
-/** One mutation, answering what it was asked to select beside its `errors`. */
-async function mutate<T>(send: GraphqlSend, name: string, inputType: string, input: object, selection = ""): Promise<T> {
-  const query = `mutation($input: ${inputType}!) { ${name}(input: $input) { ${selection} errors } }`;
-  const data = (await send(query, { input })) as Record<string, (T & { errors?: string[] }) | null> | null;
-  const result = data?.[name];
-  const refused = mutationError(result);
-  if (refused !== undefined || !result) {
-    throw new Error(refused);
-  }
-  return result;
+/** One mutation. GitLab words what it refused in the payload's `errors`, so every one asks for them. */
+function mutate<T>(send: GraphqlSend, write: Write, selection = ""): Promise<T> {
+  return sendMutation<T>(send, write, `${selection} errors`);
 }
 
 interface GitLabUser {
   username: string;
 }
 
-/** An issue as GraphQL says it; only one read alone has the last two. */
+/** An issue as GraphQL says it; only one read alone has its description. */
 export interface GitLabIssue {
   iid: string;
   title: string;
@@ -258,12 +254,6 @@ export function toIssueInput(path: string, number: number, { title, body, state 
   };
 }
 
-/** What a pick field lists: a name as `IssueField.value` shows it, with the id GitLab addresses it by. */
-interface NamedId {
-  id: string;
-  name: string;
-}
-
 /** A project's labels by name, with their ids, those of its groups included. */
 async function allLabels(send: GraphqlSend, path: string): Promise<NamedId[]> {
   const entries = await allNodes<{ id: string; title: string }>(send, LABELS_QUERY, { path }, (data) => {
@@ -385,19 +375,6 @@ const HEALTH_STATUSES: NamedId[] = [
   { id: "atRisk", name: "At risk" },
 ];
 
-function pickField(
-  id: string,
-  name: string,
-  value: string[],
-  {
-    several = false,
-    shown = "text",
-    editable = true,
-  }: { several?: boolean; shown?: "text" | "people" | "labels"; editable?: boolean } = {},
-): IssueField {
-  return { id, name, editable, kind: "pick", value, several, shown };
-}
-
 /** The fields of the widget of a work item of `type`, none where it has no such widget, or where what
  *  its field holds (`read`) was not read: a query answers every widget by its type, but those of a
  *  plan the instance lacks without their data. */
@@ -484,45 +461,35 @@ interface Target {
   labels: NamedId[];
 }
 
-/** What a pick field's choices are read with. */
-interface FieldContext {
-  send: GraphqlSend;
-  path: string;
-  number: number;
-  target: Target;
-}
+type Context = FieldContext<Target>;
 
-/** A pick field of GitLab: what its values are, where its choices are listed and what `workItemUpdate`
- *  takes to set the ids chosen. */
-interface PickField {
-  /** What one value is, for the refusal of an unknown name. */
-  what: string;
-  choices: (context: FieldContext) => Promise<NamedId[]>;
-  input: (ids: string[], target: Pick<Target, "labels">) => object;
-}
-
-/** What a work item's type allows of one widget's definition: its statuses, the types of its parent. */
-async function definitionOf(
-  context: FieldContext,
-  selection: string,
-): Promise<{ allowedStatuses?: NamedId[]; allowedParentTypes?: { nodes: { name: string }[] } }[]> {
+/** The work item an issue is, as far as `selection` reads it. */
+async function readWorkItem<T>(send: GraphqlSend, path: string, number: number, selection: string): Promise<T> {
   const query = `query($path: ID!, $iid: String!) {
-    project(fullPath: $path) { workItems(iids: [$iid]) { nodes { workItemType { widgetDefinitions { type ${selection} } } } } }
+    project(fullPath: $path) { workItems(iids: [$iid]) { nodes { ${selection} } } }
   }`;
-  const { project } = (await context.send(query, { path: context.path, iid: String(context.number) })) as {
-    project: {
-      workItems: {
-        nodes: {
-          workItemType: { widgetDefinitions: { allowedStatuses?: NamedId[]; allowedParentTypes?: { nodes: { name: string }[] } }[] };
-        }[];
-      };
-    } | null;
-  };
-  return reached(reached(project, context.path).workItems.nodes[0], `Issue #${context.number}`).workItemType.widgetDefinitions;
+  const { project } = (await send(query, { path, iid: String(number) })) as { project: { workItems: { nodes: T[] } } | null };
+  return reached(reached(project, path).workItems.nodes[0], `Issue #${number}`);
+}
+
+/** What a work item's type allows of one widget: its statuses, the types of its parent. */
+interface WidgetDefinition {
+  allowedStatuses?: NamedId[];
+  allowedParentTypes?: { nodes: { name: string }[] };
+}
+
+async function definitionOf(context: Context, selection: string): Promise<WidgetDefinition[]> {
+  const item = await readWorkItem<{ workItemType: { widgetDefinitions: WidgetDefinition[] } }>(
+    context.send,
+    context.path,
+    context.number,
+    `workItemType { widgetDefinitions { type ${selection} } }`,
+  );
+  return item.workItemType.widgetDefinitions;
 }
 
 /** The work items of a namespace that are one of `types`, open and not the item itself. */
-async function openWorkItems(context: FieldContext, namespace: string, types: string[], ancestors: boolean): Promise<NamedId[]> {
+async function openWorkItems(context: Context, namespace: string, types: string[], ancestors: boolean): Promise<NamedId[]> {
   const query = `query($path: ID!, $types: [IssueType!], $ancestors: Boolean, $cursor: String) {
     namespace(fullPath: $path) {
       workItems(first: 100, after: $cursor, types: $types, state: opened, includeAncestors: $ancestors) {
@@ -535,149 +502,127 @@ async function openWorkItems(context: FieldContext, namespace: string, types: st
     const { namespace: found } = data as { namespace: { workItems: GraphqlPage<GitLabParent & { id: string }> } | null };
     return found?.workItems ?? { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] };
   });
-  return entries.filter((entry) => entry.id !== context.target.id).map((entry) => ({ id: entry.id, name: parentName(entry) }));
+  const itself = (entry: GitLabParent) => entry.iid === String(context.number) && entry.namespace.fullPath === context.path;
+  return entries.filter((entry) => !itself(entry)).map((entry) => ({ id: entry.id, name: parentName(entry) }));
 }
 
-const PICK_FIELDS: Record<string, PickField> = {
-  status: {
-    what: "status",
-    choices: async (context) => {
-      const definitions = await definitionOf(context, "... on WorkItemWidgetDefinitionStatus { allowedStatuses { id name } }");
-      return definitions.flatMap((definition) => definition.allowedStatuses ?? []);
+/** What `workItemUpdate` takes to set one of a work item's widgets. */
+function workItemUpdate(target: Target, input: object): Write {
+  return { mutation: "workItemUpdate", inputType: "WorkItemUpdateInput", input: { id: target.id, ...input } };
+}
+
+/** The fields of GitLab, by the id `toFields` gives them. */
+export const FIELD_HANDLERS: Record<string, FieldHandler<Target>> = {
+  status: pickHandler(
+    {
+      what: "status",
+      choices: async (context) => {
+        const definitions = await definitionOf(context, "... on WorkItemWidgetDefinitionStatus { allowedStatuses { id name } }");
+        return definitions.flatMap((definition) => definition.allowedStatuses ?? []);
+      },
     },
-    input: ([status]) => {
+    (target, [status]) => {
       if (status === undefined) {
         throw new Error("A status cannot be taken off");
       }
-      return { statusWidget: { status } };
+      return workItemUpdate(target, { statusWidget: { status } });
     },
-  },
-  assignees: {
-    what: "person to assign",
-    choices: ({ send, path }) => allPeople(send, path),
-    input: (assigneeIds) => ({ assigneesWidget: { assigneeIds } }),
-  },
-  labels: {
-    what: "label",
-    // What the item carries stays offered, as a group's labels may be left out of what the project lists.
-    choices: async ({ send, path, target }) => {
-      const listed = await allLabels(send, path);
-      return [...listed, ...target.labels.filter((label) => !listed.some((entry) => entry.id === label.id))];
-    },
-    input: (ids, target) => ({
-      labelsWidget: {
-        addLabelIds: ids.filter((id) => !target.labels.some((label) => label.id === id)),
-        removeLabelIds: target.labels.map((label) => label.id).filter((id) => !ids.includes(id)),
+  ),
+  assignees: pickHandler({ what: "person to assign", choices: ({ send, path }) => allPeople(send, path) }, (target, assigneeIds) =>
+    workItemUpdate(target, { assigneesWidget: { assigneeIds } }),
+  ),
+  labels: pickHandler(
+    {
+      what: "label",
+      // What the item carries stays offered, as a group's labels may be left out of what the project lists.
+      choices: async ({ send, path, target }) => {
+        const [listed, { labels }] = await Promise.all([allLabels(send, path), target()]);
+        return [...listed, ...labels.filter((label) => !listed.some((entry) => entry.id === label.id))];
       },
-    }),
-  },
-  parent: {
-    what: "parent",
-    // An epic belongs to a group, whose own and ancestors' are listed from its path; the other types
-    // are work items of the project.
-    choices: async (context) => {
-      const definitions = await definitionOf(context, "... on WorkItemWidgetDefinitionHierarchy { allowedParentTypes { nodes { name } } }");
-      const types = definitions.flatMap(
-        (definition) => definition.allowedParentTypes?.nodes.map((type) => type.name.toUpperCase().replaceAll(" ", "_")) ?? [],
-      );
-      const others = types.filter((type) => type !== "EPIC");
-      const [inProject, inGroup] = await Promise.all([
-        others.length > 0 ? openWorkItems(context, context.path, others, false) : [],
-        types.includes("EPIC") ? openWorkItems(context, context.path.slice(0, context.path.lastIndexOf("/")), ["EPIC"], true) : [],
-      ]);
-      return [...inProject, ...inGroup];
     },
-    input: ([parentId]) => ({ hierarchyWidget: { parentId: parentId ?? null } }),
-  },
-  milestone: {
-    what: "milestone",
-    choices: ({ send, path }) => allMilestones(send, path),
-    input: ([milestoneId]) => ({ milestoneWidget: { milestoneId: milestoneId ?? null } }),
-  },
-  iteration: {
-    what: "iteration",
-    choices: ({ send, path }) => allIterations(send, path),
-    input: ([iterationId]) => ({ iterationWidget: { iterationId: iterationId ?? null } }),
-  },
-  health: {
-    what: "health status",
-    choices: () => Promise.resolve(HEALTH_STATUSES),
-    input: ([healthStatus]) => ({ healthStatusWidget: { healthStatus: healthStatus ?? null } }),
-  },
-};
-
-function pickFieldOf(fieldId: string): PickField {
-  const pick = PICK_FIELDS[fieldId];
-  if (!pick) {
-    throw new Error(`${fieldId} is no field to choose from`);
-  }
-  return pick;
-}
-
-function numberOf(value: IssueFieldValue): number | null {
-  if (value !== null && !Number.isInteger(value)) {
-    throw new Error("It takes a whole number");
-  }
-  return value as number | null;
-}
-
-function textOf(value: IssueFieldValue): string | null {
-  if (value !== null && typeof value !== "string") {
-    throw new Error("It takes text");
-  }
-  return value;
-}
-
-/** The other fields of GitLab: what `workItemUpdate` takes to set the value typed. */
-const VALUE_FIELDS: Record<string, (value: IssueFieldValue) => object> = {
-  weight: (value) => ({ weightWidget: { weight: numberOf(value) } }),
-  startDate: (value) => ({ startAndDueDateWidget: { startDate: textOf(value) } }),
-  dueDate: (value) => ({ startAndDueDateWidget: { dueDate: textOf(value) } }),
+    (target, ids) =>
+      workItemUpdate(target, {
+        labelsWidget: {
+          addLabelIds: ids.filter((id) => !target.labels.some((label) => label.id === id)),
+          removeLabelIds: target.labels.map((label) => label.id).filter((id) => !ids.includes(id)),
+        },
+      }),
+  ),
+  parent: pickHandler(
+    {
+      what: "parent",
+      // An epic belongs to a group, whose own and ancestors' are listed from its path; the other types
+      // are work items of the project.
+      choices: async (context) => {
+        const definitions = await definitionOf(
+          context,
+          "... on WorkItemWidgetDefinitionHierarchy { allowedParentTypes { nodes { name } } }",
+        );
+        const types = definitions.flatMap(
+          (definition) => definition.allowedParentTypes?.nodes.map((type) => type.name.toUpperCase().replaceAll(" ", "_")) ?? [],
+        );
+        const others = types.filter((type) => type !== "EPIC");
+        const [inProject, inGroup] = await Promise.all([
+          others.length > 0 ? openWorkItems(context, context.path, others, false) : [],
+          types.includes("EPIC") ? openWorkItems(context, context.path.slice(0, context.path.lastIndexOf("/")), ["EPIC"], true) : [],
+        ]);
+        return [...inProject, ...inGroup];
+      },
+    },
+    (target, [parentId]) => workItemUpdate(target, { hierarchyWidget: { parentId: parentId ?? null } }),
+  ),
+  milestone: pickHandler({ what: "milestone", choices: ({ send, path }) => allMilestones(send, path) }, (target, [milestoneId]) =>
+    workItemUpdate(target, { milestoneWidget: { milestoneId: milestoneId ?? null } }),
+  ),
+  iteration: pickHandler({ what: "iteration", choices: ({ send, path }) => allIterations(send, path) }, (target, [iterationId]) =>
+    workItemUpdate(target, { iterationWidget: { iterationId: iterationId ?? null } }),
+  ),
+  health: pickHandler({ what: "health status", choices: () => Promise.resolve(HEALTH_STATUSES) }, (target, [healthStatus]) =>
+    workItemUpdate(target, { healthStatusWidget: { healthStatus: healthStatus ?? null } }),
+  ),
+  weight: valueHandler((target, value) => workItemUpdate(target, { weightWidget: { weight: numberOf(value, true) } })),
+  startDate: valueHandler((target, value) => workItemUpdate(target, { startAndDueDateWidget: { startDate: textOf(value) } })),
+  dueDate: valueHandler((target, value) => workItemUpdate(target, { startAndDueDateWidget: { dueDate: textOf(value) } })),
   // "0" is how GitLab takes an estimate off.
-  timeEstimate: (value) => ({ timeTrackingWidget: { timeEstimate: textOf(value) ?? "0" } }),
-  timeSpent: (value) => {
+  timeEstimate: valueHandler((target, value) => workItemUpdate(target, { timeTrackingWidget: { timeEstimate: textOf(value) ?? "0" } })),
+  timeSpent: valueHandler((target, value) => {
+    // `workItemUpdate` has no way to take a booking back: it has a mutation of its own.
+    if (isTimeRemoval(value)) {
+      return { mutation: "timelogDelete", inputType: "TimelogDeleteInput", input: { id: value.remove } };
+    }
     if (value === null || typeof value !== "object" || Array.isArray(value) || !("timeSpent" in value)) {
       throw new Error("Time spent is added as an entry");
     }
     const { timeSpent, spentAt, summary } = value;
     // What was left empty is left out, as GitLab takes now and no summary then.
-    return { timeTrackingWidget: { timelog: { timeSpent, spentAt: spentAt || undefined, summary: summary || undefined } } };
-  },
-  confidential: (value) => {
+    return workItemUpdate(target, {
+      timeTrackingWidget: { timelog: { timeSpent, spentAt: spentAt || undefined, summary: summary || undefined } },
+    });
+  }),
+  confidential: valueHandler((target, value) => {
     if (typeof value !== "boolean") {
       throw new Error("It is on or off");
     }
-    return { confidential: value };
-  },
+    return workItemUpdate(target, { confidential: value });
+  }),
 };
 
-/** What `workItemUpdate` takes to set a field to `value`: for a pick field, `ids` are the ids of the
- *  values, which only `setField` can look up. */
-export function toWorkItemInput(fieldId: string, value: IssueFieldValue, ids: string[], target: Pick<Target, "labels">): object {
-  const pick = PICK_FIELDS[fieldId];
-  if (pick) {
-    return pick.input(ids, target);
-  }
-  const set = VALUE_FIELDS[fieldId];
-  if (!set) {
+function fieldHandlerOf(fieldId: string): FieldHandler<Target> {
+  const handler = ownValue(FIELD_HANDLERS, fieldId);
+  if (!handler) {
     throw new Error(`An issue of GitLab has no field ${fieldId}`);
   }
-  return set(value);
+  return handler;
 }
 
 /** The work item an issue is, with what a change of its fields needs of it. */
 async function readTarget(send: GraphqlSend, path: string, number: number): Promise<Target> {
-  const query = `query($path: ID!, $iid: String!) {
-    project(fullPath: $path) {
-      workItems(iids: [$iid]) { nodes { id widgets { type ... on WorkItemWidgetLabels { labels { nodes { id title } } } } } }
-    }
-  }`;
-  const { project } = (await send(query, { path, iid: String(number) })) as {
-    project: {
-      workItems: { nodes: { id: string; widgets: { type: string; labels?: { nodes: { id: string; title: string }[] } }[] }[] };
-    } | null;
-  };
-  const item = reached(reached(project, path).workItems.nodes[0], `Issue #${number}`);
+  const item = await readWorkItem<{ id: string; widgets: { type: string; labels?: { nodes: { id: string; title: string }[] } }[] }>(
+    send,
+    path,
+    number,
+    "id widgets { type ... on WorkItemWidgetLabels { labels { nodes { id title } } } }",
+  );
   const labels = item.widgets.find((widget) => widget.type === "LABELS")?.labels?.nodes ?? [];
   return { id: item.id, labels: labels.map((label) => ({ id: label.id, name: label.title })) };
 }
@@ -910,49 +855,26 @@ export const gitlab: GitProvider = {
     const query = "query($path: ID!, $iid: String!) { project(fullPath: $path) { issue(iid: $iid) { id } } }";
     const { project } = (await send(query, { path, iid: String(number) })) as { project: { issue: { id: string } | null } | null };
     const { id } = reachedIssue(project, path, number);
-    await mutate(send, "createNote", "CreateNoteInput", { noteableId: id, body, internal });
+    await mutate(send, { mutation: "createNote", inputType: "CreateNoteInput", input: { noteableId: id, body, internal } });
   },
 
-  async listOptions({ host, token, path }, number, fieldId) {
-    const pick = pickFieldOf(fieldId);
-    const send = sender(host, token);
-    const choices = await pick.choices({ send, path, number, target: await readTarget(send, path, number) });
-    return choices.map((choice) => choice.name);
-  },
-
-  async setField({ host, token, path }, number, fieldId, value) {
-    const send = sender(host, token);
-    // `workItemUpdate` has no way to take a booking back: it has a mutation of its own.
-    if (fieldId === "timeSpent" && value !== null && typeof value === "object" && !Array.isArray(value) && "remove" in value) {
-      await mutate(send, "timelogDelete", "TimelogDeleteInput", { id: value.remove });
-      return;
-    }
-    const target = await readTarget(send, path, number);
-    const pick = PICK_FIELDS[fieldId];
-    if (pick && !Array.isArray(value)) {
-      throw new Error(`${fieldId} takes a list of values`);
-    }
-    const ids = pick ? idsByName(value as string[], await pick.choices({ send, path, number, target }), pick.what) : [];
-    await mutate(send, "workItemUpdate", "WorkItemUpdateInput", { id: target.id, ...toWorkItemInput(fieldId, value, ids, target) });
-  },
+  ...fieldMethods({ graphql: sender, handlerOf: (_send, _path, fieldId) => fieldHandlerOf(fieldId), readTarget, mutate }),
 
   async createIssue({ host, token, path }, title, body) {
     const { issue } = await mutate<{ issue: { iid: string } | null }>(
       sender(host, token),
-      "createIssue",
-      "CreateIssueInput",
-      { projectPath: path, title, description: body },
+      { mutation: "createIssue", inputType: "CreateIssueInput", input: { projectPath: path, title, description: body } },
       "issue { iid }",
     );
     return Number(reached(issue, `The new issue of ${path}`).iid);
   },
 
   async editComment({ host, token }, id, body) {
-    await mutate(sender(host, token), "updateNote", "UpdateNoteInput", { id, body });
+    await mutate(sender(host, token), { mutation: "updateNote", inputType: "UpdateNoteInput", input: { id, body } });
   },
 
   async deleteComment({ host, token }, id) {
-    await mutate(sender(host, token), "destroyNote", "DestroyNoteInput", { id });
+    await mutate(sender(host, token), { mutation: "destroyNote", inputType: "DestroyNoteInput", input: { id } });
   },
 
   deleteIssue({ host, token, path }, number) {
@@ -969,6 +891,10 @@ export const gitlab: GitProvider = {
   },
 
   async updateIssue({ host, token, path }, number, change) {
-    await mutate(sender(host, token), "updateIssue", "UpdateIssueInput", toIssueInput(path, number, change));
+    await mutate(sender(host, token), {
+      mutation: "updateIssue",
+      inputType: "UpdateIssueInput",
+      input: toIssueInput(path, number, change),
+    });
   },
 };

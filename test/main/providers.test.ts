@@ -11,17 +11,20 @@ import {
   issuesVariables as gitHubIssuesVariables,
   readsWithToken,
   toEvents as toGitHubEvents,
+  FIELD_HANDLERS as GITHUB_FIELD_HANDLERS,
+  issueFieldOf as gitHubIssueFieldOf,
+  parentName as gitHubParentName,
+  toFields as toGitHubFields,
   toIssue as toGitHubIssue,
-  toFieldInput as toGitHubFieldInput,
   toIssueInput as toGitHubInput,
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
   durationText,
+  FIELD_HANDLERS as GITLAB_FIELD_HANDLERS,
   gitlab,
   issuesVariables,
   iterationName,
-  mutationError,
   parentName,
   toEvents as toGitLabEvents,
   toFields as toGitLabFields,
@@ -29,7 +32,6 @@ import {
   toIssueInput,
   toNotes as toGitLabNotes,
   toTimeLogs,
-  toWorkItemInput,
   uploadOf,
 } from "../../src/main/providers/gitlab";
 import {
@@ -42,7 +44,18 @@ import {
   type IssueAccounts,
   type IssueRepository,
 } from "../../src/main/providers/issues";
-import { ApiError, graphqlError, idsByName, type Tracker } from "../../src/main/providers/provider";
+import {
+  ApiError,
+  fieldContext,
+  graphqlError,
+  idsByName,
+  optionsOf,
+  pickHandler,
+  sendMutation,
+  valueHandler,
+  writeOf,
+  type Tracker,
+} from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
 import { readIssueSource } from "../../src/main/store/tet-json";
 import type { IssueFieldValue, ProviderAccount } from "../../src/shared/types/providers";
@@ -240,14 +253,25 @@ describe("the issues of a tracker", () => {
 
   it("puts the change of a field in GitLab's words, a pick by the ids of its values", () => {
     const target = {
+      id: "W1",
       labels: [
         { id: "L1", name: "bug" },
         { id: "L2", name: "ui" },
       ],
     };
-    // As it is sent: a null stays in, what is left out stays out.
-    const sent = (fieldId: string, value: IssueFieldValue, ids: string[] = []): unknown =>
-      JSON.parse(JSON.stringify(toWorkItemInput(fieldId, value, ids, target)));
+    const write = (fieldId: string, value: IssueFieldValue, ids: string[] = []) => GITLAB_FIELD_HANDLERS[fieldId].write(target, value, ids);
+    // What `workItemUpdate` is sent, as it is sent: a null stays in, what is left out stays out.
+    const sent = (fieldId: string, value: IssueFieldValue, ids: string[] = []): unknown => {
+      const { mutation, inputType, input } = JSON.parse(JSON.stringify(write(fieldId, value, ids))) as {
+        mutation: string;
+        inputType: string;
+        input: { id: string };
+      };
+      assert.deepEqual([mutation, inputType, input.id], ["workItemUpdate", "WorkItemUpdateInput", "W1"]);
+      const { id, ...widgets } = input;
+      assert.equal(id, "W1");
+      return widgets;
+    };
     assert.deepEqual(sent("assignees", ["a"], ["U1"]), { assigneesWidget: { assigneeIds: ["U1"] } });
     assert.deepEqual(sent("labels", ["ui", "new"], ["L2", "L3"]), { labelsWidget: { addLabelIds: ["L3"], removeLabelIds: ["L1"] } });
     assert.deepEqual(sent("milestone", [], []), { milestoneWidget: { milestoneId: null } });
@@ -272,10 +296,14 @@ describe("the issues of a tracker", () => {
     });
     assert.throws(() => sent("timeSpent", "1h"), /added as an entry/);
     assert.throws(() => sent("timeSpent", null), /added as an entry/);
-    assert.throws(() => sent("timeSpent", { remove: "T1" }), /added as an entry/);
+    assert.deepEqual(write("timeSpent", { remove: "T1" }), {
+      mutation: "timelogDelete",
+      inputType: "TimelogDeleteInput",
+      input: { id: "T1" },
+    });
     assert.deepEqual(sent("confidential", true), { confidential: true });
     assert.throws(() => sent("confidential", "yes"), /on or off/);
-    assert.throws(() => sent("nothing", null), /no field nothing/);
+    assert.equal(GITLAB_FIELD_HANDLERS.nothing, undefined, "a field GitLab does not have");
   });
 
   it("lists the fields a GitLab work item has, each only where its widget is", () => {
@@ -400,11 +428,53 @@ describe("the issues of a tracker", () => {
     });
   });
 
-  it("reads what a GitLab mutation refused in its own field", () => {
-    assert.equal(mutationError({ errors: [] }), undefined);
-    assert.equal(mutationError({}), undefined);
-    assert.equal(mutationError({ errors: ["No", "Other"] }), "No; Other");
-    assert.equal(mutationError(null), "GitLab answered the change with nothing");
+  it("sets a field of either tracker by the same steps: names to ids, the target read once, one mutation", async () => {
+    let reads = 0;
+    const unused = () => Promise.reject(new Error("not sent"));
+    const context = fieldContext(unused, "g/t", 12, () => {
+      reads++;
+      return Promise.resolve({ id: "W1" });
+    });
+    const pick = pickHandler<{ id: string }>(
+      { what: "milestone", choices: () => Promise.resolve([{ id: "M1", name: "May" }]) },
+      (target, ids) => ({ mutation: "change", inputType: "ChangeInput", input: { id: target.id, ids } }),
+    );
+    assert.deepEqual(await optionsOf(pick, context, "milestone"), ["May"]);
+    assert.deepEqual(await writeOf(pick, context, "milestone", ["May"]), {
+      mutation: "change",
+      inputType: "ChangeInput",
+      input: { id: "W1", ids: ["M1"] },
+    });
+    await writeOf(pick, context, "milestone", []);
+    assert.equal(reads, 1, "the target is read when asked for, and once");
+    await assert.rejects(writeOf(pick, context, "milestone", "May"), /takes a list of values/);
+    await assert.rejects(writeOf(pick, context, "milestone", ["April"]), /April is no milestone/);
+    const typed = valueHandler<{ id: string }>((target, value) => ({
+      mutation: "set",
+      inputType: "SetInput",
+      input: { id: target.id, value },
+    }));
+    assert.deepEqual(await writeOf(typed, context, "weight", 3), { mutation: "set", inputType: "SetInput", input: { id: "W1", value: 3 } });
+    await assert.rejects(optionsOf(typed, context, "weight"), /weight is no field to choose from/);
+  });
+
+  it("sends a mutation as asked and throws what the host refused", async () => {
+    const write = { mutation: "change", inputType: "ChangeInput", input: { id: "W1" } };
+    const asked: { query: string; variables: object }[] = [];
+    const answering = (data: unknown) => (query: string, variables: object) => {
+      asked.push({ query, variables });
+      return Promise.resolve(data);
+    };
+    await sendMutation(answering({ change: { clientMutationId: null } }), write, "clientMutationId");
+    assert.deepEqual(asked, [
+      { query: "mutation($input: ChangeInput!) { change(input: $input) { clientMutationId } }", variables: { input: { id: "W1" } } },
+    ]);
+    assert.deepEqual(await sendMutation(answering({ change: { issue: { iid: "4" }, errors: [] } }), write, "issue { iid } errors"), {
+      issue: { iid: "4" },
+      errors: [],
+    });
+    await assert.rejects(sendMutation(answering({ change: { errors: ["No", "Other"] } }), write, "errors"), /No; Other/);
+    await assert.rejects(sendMutation(answering({ change: null }), write, "errors"), /answered the change with nothing/);
   });
 
   it("puts a change in GitHub's words", () => {
@@ -416,11 +486,118 @@ describe("the issues of a tracker", () => {
   });
 
   it("puts the change of a field in GitHub's words, by the ids of its values", () => {
-    assert.deepEqual(toGitHubFieldInput("I1", "labels", ["L1"]), { id: "I1", labelIds: ["L1"] });
-    assert.deepEqual(toGitHubFieldInput("I1", "assignees", []), { id: "I1", assigneeIds: [] });
-    assert.deepEqual(toGitHubFieldInput("I1", "milestone", ["m3"]), { id: "I1", milestoneId: "m3" });
-    assert.deepEqual(toGitHubFieldInput("I1", "milestone", []), { id: "I1", milestoneId: null });
-    assert.throws(() => toGitHubFieldInput("I1", "weight", []), /no field weight/);
+    const target = { id: "I1", parentId: "P0" };
+    const write = (fieldId: string, ids: string[]) => GITHUB_FIELD_HANDLERS[fieldId].write(target, ids, ids);
+    const update = (input: object) => ({ mutation: "updateIssue", inputType: "UpdateIssueInput", input });
+    assert.deepEqual(write("labels", ["L1"]), update({ id: "I1", labelIds: ["L1"] }));
+    assert.deepEqual(write("assignees", []), update({ id: "I1", assigneeIds: [] }));
+    assert.deepEqual(write("milestone", ["m3"]), update({ id: "I1", milestoneId: "m3" }));
+    assert.deepEqual(write("milestone", []), update({ id: "I1", milestoneId: null }));
+    assert.deepEqual(write("type", ["T1"]), {
+      mutation: "updateIssueIssueType",
+      inputType: "UpdateIssueIssueTypeInput",
+      input: { issueId: "I1", issueTypeId: "T1" },
+    });
+    assert.deepEqual(write("type", []).input, { issueId: "I1", issueTypeId: null });
+    assert.deepEqual(write("parent", ["P1"]), {
+      mutation: "addSubIssue",
+      inputType: "AddSubIssueInput",
+      input: { issueId: "P1", subIssueId: "I1", replaceParent: true },
+    });
+    assert.deepEqual(write("parent", []), {
+      mutation: "removeSubIssue",
+      inputType: "RemoveSubIssueInput",
+      input: { issueId: "P0", subIssueId: "I1" },
+    });
+    assert.throws(() => GITHUB_FIELD_HANDLERS.parent.write({ id: "I1" }, [], []), /no parent/);
+    assert.equal(GITHUB_FIELD_HANDLERS.weight, undefined, "a field GitHub does not have");
+  });
+
+  it("sets an issue field of the organization by the type it is", () => {
+    const target = { id: "I1" };
+    const field = (typename: string) => gitHubIssueFieldOf({ __typename: typename, id: "F1", name: "Priority" });
+    const set = (entry: object) => ({
+      mutation: "setIssueFieldValue",
+      inputType: "SetIssueFieldValueInput",
+      input: { issueId: "I1", issueFields: [{ fieldId: "F1", ...entry }] },
+    });
+    assert.deepEqual(field("IssueFieldText").write(target, "soon", []), set({ textValue: "soon" }));
+    assert.deepEqual(field("IssueFieldText").write(target, null, []), set({ delete: true }));
+    assert.deepEqual(field("IssueFieldNumber").write(target, 2.5, []), set({ numberValue: 2.5 }));
+    assert.deepEqual(field("IssueFieldNumber").write(target, null, []), set({ delete: true }));
+    assert.throws(() => field("IssueFieldNumber").write(target, "2", []), /takes a number/);
+    assert.deepEqual(field("IssueFieldDate").write(target, "2026-11-30", []), set({ dateValue: "2026-11-30" }));
+    assert.deepEqual(field("IssueFieldSingleSelect").write(target, ["High"], ["O1"]), set({ singleSelectOptionId: "O1" }));
+    assert.deepEqual(field("IssueFieldSingleSelect").write(target, [], []), set({ delete: true }));
+    assert.deepEqual(field("IssueFieldMultiSelect").write(target, ["a", "b"], ["O1", "O2"]), set({ multiSelectOptionIds: ["O1", "O2"] }));
+    assert.deepEqual(field("IssueFieldMultiSelect").write(target, [], []), set({ delete: true }));
+    assert.ok(field("IssueFieldSingleSelect").pick && field("IssueFieldMultiSelect").pick, "selects list their options");
+    assert.equal(field("IssueFieldText").pick, undefined);
+    assert.throws(() => field("IssueFieldSomethingNew"), /does not know/);
+  });
+
+  it("lists the fields a GitHub issue has, each of the extras only where the host has it", () => {
+    const parent = { number: 7, title: "Epic one", repository: { nameWithOwner: "o/epics" } };
+    assert.equal(gitHubParentName(parent), "Epic one (o/epics#7)");
+    const issue = {
+      ...githubIssue,
+      milestone: { title: "May" },
+      participants: { nodes: [{ login: "mira", avatarUrl: "https://avatars.example.com/u/1" }, null] },
+    };
+    const summary = (extras: Parameters<typeof toGitHubFields>[1]) =>
+      toGitHubFields(issue, extras).map(({ id, name, editable, ...rest }) => [id, name, editable, rest]);
+    assert.deepEqual(summary({}), [
+      ["assignees", "Assignees", true, { kind: "pick", value: ["jonas", "lena"], several: true, shown: "people" }],
+      ["labels", "Labels", true, { kind: "pick", value: ["bug", "terminals"], several: true, shown: "labels" }],
+      ["milestone", "Milestone", true, { kind: "pick", value: ["May"], several: false, shown: "text" }],
+      ["participants", "Participants", false, { kind: "pick", value: ["mira"], several: true, shown: "people" }],
+    ]);
+    assert.deepEqual(
+      toGitHubFields(
+        { ...issue, participants: undefined },
+        {
+          issueType: { current: "Bug", available: ["Bug", "Task"], editable: false },
+          parent,
+          issueFields: {
+            editable: true,
+            pinned: ["Areas", "Priority", "Customer"],
+            definitions: [
+              { __typename: "IssueFieldSingleSelect", id: "F1", name: "Priority", options: [{ id: "O1", name: "High" }] },
+              { __typename: "IssueFieldMultiSelect", id: "F2", name: "Areas", options: [{ id: "O2", name: "UI" }] },
+              { __typename: "IssueFieldText", id: "F3", name: "Customer" },
+              { __typename: "IssueFieldNumber", id: "F4", name: "Estimate" },
+              { __typename: "IssueFieldDate", id: "F5", name: "Target" },
+              { __typename: "IssueFieldFuture", id: "F6", name: "Unknown" },
+              { __typename: "IssueFieldText", id: "F7", name: "Not pinned, not held" },
+            ],
+            values: [
+              { field: { name: "Priority" }, value: "High" },
+              { field: { name: "Areas" }, options: [{ id: "O2", name: "UI" }] },
+              { field: { name: "Estimate" }, value: 5 },
+              { field: { name: "Target" }, value: "2026-11-30T00:00:00Z" },
+            ],
+          },
+        },
+      ).map(({ id, editable, ...rest }) => [id, editable, rest]),
+      [
+        ["assignees", true, { name: "Assignees", kind: "pick", value: ["jonas", "lena"], several: true, shown: "people" }],
+        ["labels", true, { name: "Labels", kind: "pick", value: ["bug", "terminals"], several: true, shown: "labels" }],
+        ["type", false, { name: "Type", kind: "pick", value: ["Bug"], several: false, shown: "text" }],
+        ["milestone", true, { name: "Milestone", kind: "pick", value: ["May"], several: false, shown: "text" }],
+        ["parent", true, { name: "Parent", kind: "pick", value: ["Epic one (o/epics#7)"], several: false, shown: "text" }],
+        ["F2", true, { name: "Areas", kind: "pick", value: ["UI"], several: true, shown: "labels" }],
+        ["F1", true, { name: "Priority", kind: "pick", value: ["High"], several: false, shown: "text" }],
+        ["F3", true, { name: "Customer", kind: "text", value: undefined }],
+        ["F4", true, { name: "Estimate", kind: "number", value: 5 }],
+        ["F5", true, { name: "Target", kind: "date", value: "2026-11-30" }],
+      ],
+      "the pinned fields in their order, held or not, then the others that hold a value",
+    );
+    assert.deepEqual(
+      summary({ issueType: { current: null, available: [], editable: true }, parent: null }).map(([id]) => id),
+      ["assignees", "labels", "milestone", "parent", "participants"],
+      "a repository without types has no type field, an issue with no parent still offers one",
+    );
   });
 
   it("keeps an issue only with all of a filter's labels, as GitHub's own filter takes any", () => {

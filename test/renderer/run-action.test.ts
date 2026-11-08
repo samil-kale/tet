@@ -1,7 +1,6 @@
 import * as assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, it, mock } from "node:test";
-import { notifying, runWithFollowUp } from "../../src/renderer/git/run-action";
-import { fakeWindow, keepGlobals } from "../helpers";
+import { describe, it } from "node:test";
+import { runWithFollowUp } from "../../src/renderer/git/run-action";
 import type { GitActionResult } from "../../src/shared/types/git";
 
 /** git/run-action.ts: how an action's follow-up question and failure are handled. */
@@ -85,39 +84,5 @@ describe("an action with a follow-up question", () => {
     assert.equal(await started[0](), other);
     await settled();
     assert.equal(started.length, 1);
-  });
-});
-
-describe("a runner whose failure is notified", () => {
-  const reported: { severity: string; message: string }[] = [];
-  keepGlobals("window");
-
-  beforeEach(() => {
-    mock.timers.enable({ apis: ["setTimeout"] });
-    reported.length = 0;
-    fakeWindow({
-      tet: { app: { reportNotice: (notice: (typeof reported)[number]) => reported.push(notice) } },
-    });
-  });
-
-  afterEach(() => {
-    mock.timers.reset();
-  });
-
-  it("tells a refusal as an error notice, once", async () => {
-    notifying(async () => "Could not push")();
-    await settled();
-    assert.deepEqual(
-      reported.map(({ severity, message }) => ({ severity, message })),
-      [{ severity: "error", message: "Could not push" }],
-    );
-  });
-
-  it("tells nothing when the action went through, and hands the arguments on", async () => {
-    const seen: unknown[][] = [];
-    notifying(async (...args: unknown[]) => void seen.push(args))("a", 1);
-    await settled();
-    assert.deepEqual(seen, [["a", 1]]);
-    assert.deepEqual(reported, []);
   });
 });

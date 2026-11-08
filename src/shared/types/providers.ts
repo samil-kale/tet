@@ -111,7 +111,7 @@ export type IssueField = {
   /** Whether the tracker takes a change of it; its rights can still refuse one. */
   editable: boolean;
   /** Fields of one group are one section, titled by it, at the place of the first; only typed ones
-   *  (number, date, duration, timelog) go in one, as the section's one button asks for them. */
+   *  (text, number, date, duration, timelog) go in one, as the section's one button asks for them. */
   group?: string;
 } & (
   | {
@@ -119,9 +119,11 @@ export type IssueField = {
       /** What it names, each as `listOptions` lists it. */
       value: string[];
       several: boolean;
-      /** How its values are drawn: as people, as labels or as plain text. */
+      /** How its values are drawn: as labels, as labels of people, whose field offers the viewer to add
+       *  themselves, or as plain text. */
       shown: "text" | "people" | "labels";
     }
+  | { kind: "text"; value?: string }
   | { kind: "number"; value?: number }
   | { kind: "date"; /** YYYY-MM-DD. */ value?: string }
   | { kind: "duration"; /** As the tracker words it, "1h 30m". */ value?: string }
@@ -159,9 +161,13 @@ export interface IssueTimeEntry {
   summary?: string;
 }
 
-/** What `setField` sets, by the field's kind: a pick's values; a number, a date or a duration, null
+/** What `setField` sets, by the field's kind: a pick's values; a text, number, date or duration, null
  *  taking it off; a flag's state; a timelog's new entry or the removal of one. */
 export type IssueFieldValue = string[] | number | string | boolean | IssueTimeEntry | IssueTimeRemoval | null;
+
+export function isTimeRemoval(value: IssueFieldValue): value is IssueTimeRemoval {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && "remove" in value;
+}
 
 export interface IssueFieldOptionsResult {
   /** What a pick field can be set to, by the names `IssueField.value` uses. */
