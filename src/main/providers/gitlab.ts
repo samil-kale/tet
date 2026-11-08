@@ -94,6 +94,8 @@ export interface GitLabNote {
   id: string;
   /** What GitLab wrote itself (a label added, an assignee changed), not a comment. */
   system: boolean;
+  /** Visible to the project's members alone. */
+  internal: boolean;
   body: string;
   createdAt: string;
   author: GitLabUser | null;
@@ -105,7 +107,7 @@ const ISSUE_ROW = `iid title webUrl state createdAt
   labels(first: 100) { nodes { title } }`;
 
 const NOTE_PAGE = `pageInfo { hasNextPage endCursor }
-  nodes { id system body createdAt author { username } }`;
+  nodes { id system internal body createdAt author { username } }`;
 
 const ISSUES_QUERY = `query($path: ID!, $cursor: String, $state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String]) {
   project(fullPath: $path) {
@@ -248,7 +250,7 @@ function authorOf(note: GitLabNote): string {
 export function toNotes(entries: GitLabNote[]): IssueNote[] {
   return entries
     .filter((entry) => !entry.system)
-    .map((entry) => ({ id: entry.id, author: authorOf(entry), createdAt: entry.createdAt, body: entry.body }));
+    .map((entry) => ({ id: entry.id, author: authorOf(entry), createdAt: entry.createdAt, body: entry.body, internal: entry.internal }));
 }
 
 const ESCAPED: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
@@ -404,12 +406,14 @@ export const gitlab: GitProvider = {
     return upload && fetchImageOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
   },
 
-  async addComment({ host, token, path }, number, body) {
+  internalNotes: true,
+
+  async addComment({ host, token, path }, number, body, internal) {
     const send = sender(host, token);
     const query = "query($path: ID!, $iid: String!) { project(fullPath: $path) { issue(iid: $iid) { id } } }";
     const { project } = (await send(query, { path, iid: String(number) })) as { project: { issue: { id: string } | null } | null };
     const { id } = reachedIssue(project, path, number);
-    await mutate(send, "createNote", "CreateNoteInput", { noteableId: id, body });
+    await mutate(send, "createNote", "CreateNoteInput", { noteableId: id, body, internal });
   },
 
   async listMilestones({ host, token, path }) {

@@ -178,7 +178,7 @@ export interface TETApi {
     read: (projectId: string, number: number) => Promise<IssueReadResult>;
     /** An image of an issue's text that takes the account's token, as a data URL; null for any other. */
     image: (projectId: string, source: string) => Promise<string | null>;
-    comment: (projectId: string, number: number, body: string) => Promise<ActionResult>;
+    comment: (projectId: string, number: number, body: string, internal: boolean) => Promise<ActionResult>;
     update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
     milestones: (projectId: string) => Promise<IssueMilestonesResult>;
     create: (projectId: string, title: string, body: string) => Promise<IssueCreateResult>;

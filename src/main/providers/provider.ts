@@ -37,7 +37,9 @@ export interface GitProvider {
   readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
   listMilestones(tracker: Tracker): Promise<IssueMilestone[]>;
   createIssue(tracker: Tracker, title: string, body: string): Promise<number>;
-  addComment(tracker: Tracker, number: number, body: string): Promise<void>;
+  /** Whether a comment can be made internal, visible to the project's members alone. */
+  readonly internalNotes: boolean;
+  addComment(tracker: Tracker, number: number, body: string, internal: boolean): Promise<void>;
   /** A comment by its id, which the tracker knows without its issue. */
   editComment(tracker: Tracker, id: string, body: string): Promise<void>;
   deleteComment(tracker: Tracker, id: string): Promise<void>;

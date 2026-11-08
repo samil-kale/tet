@@ -711,8 +711,8 @@ async function writeIssue(tabId: string, write: (projectId: string, number: numb
 }
 
 /** A comment on the tab's issue, which shows once it is up (`writeIssue`). */
-export function commentOnIssue(tabId: string, body: string): Promise<boolean> {
-  return writeIssue(tabId, (projectId, number) => window.tet.issues.comment(projectId, number, body));
+export function commentOnIssue(tabId: string, body: string, internal: boolean): Promise<boolean> {
+  return writeIssue(tabId, (projectId, number) => window.tet.issues.comment(projectId, number, body, internal));
 }
 
 /** A comment of the tab's issue changed (`writeIssue`). */

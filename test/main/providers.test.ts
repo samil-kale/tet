@@ -145,8 +145,8 @@ describe("the issues of a tracker", () => {
     assert.deepEqual(
       toGitLabEvents(
         [
-          { id: "n1", system: true, author: user, createdAt: created_at, body: "assigned to @anna" },
-          { id: "n2", system: false, author: user, createdAt: created_at, body: "Comment" },
+          { id: "n1", system: true, internal: false, author: user, createdAt: created_at, body: "assigned to @anna" },
+          { id: "n2", system: false, internal: false, author: user, createdAt: created_at, body: "Comment" },
         ],
         [
           { user, created_at, action: "add", label: { name: "bug" } },
@@ -248,7 +248,8 @@ describe("the issues of a tracker", () => {
   it("reads a title change off GitLab's system note, rendered or in Markdown", () => {
     const author = { username: "anna" };
     const created_at = "2026-10-01T10:00:00Z";
-    const titleOf = (body: string) => toGitLabEvents([{ id: "n", system: true, author, createdAt: created_at, body }], [], [], [])[0];
+    const titleOf = (body: string) =>
+      toGitLabEvents([{ id: "n", system: true, internal: false, author, createdAt: created_at, body }], [], [], [])[0];
     const base = { actor: "anna", createdAt: created_at };
     assert.deepEqual(
       titleOf(
@@ -320,13 +321,15 @@ describe("the issues of a tracker", () => {
     const author = { username: "anna" };
     assert.deepEqual(
       toGitLabNotes([
-        { id: "n1", system: true, author, createdAt: "a", body: "added label" },
-        { id: "n2", system: false, author, createdAt: "b", body: "Comment" },
-        { id: "n3", system: false, author: null, createdAt: "c", body: "Gone" },
+        { id: "n1", system: true, internal: false, author, createdAt: "a", body: "added label" },
+        { id: "n2", system: false, internal: false, author, createdAt: "b", body: "Comment" },
+        { id: "n3", system: false, internal: false, author: null, createdAt: "c", body: "Gone" },
+        { id: "n4", system: false, internal: true, author, createdAt: "d", body: "Between us" },
       ]),
       [
-        { id: "n2", author: "anna", createdAt: "b", body: "Comment" },
-        { id: "n3", author: "ghost", createdAt: "c", body: "Gone" },
+        { id: "n2", author: "anna", createdAt: "b", body: "Comment", internal: false },
+        { id: "n3", author: "ghost", createdAt: "c", body: "Gone", internal: false },
+        { id: "n4", author: "anna", createdAt: "d", body: "Between us", internal: true },
       ],
     );
   });

@@ -88,6 +88,7 @@ export function registerIssuesIpc({
         ...(await provider.readIssue(tracker, number)),
         viewer,
         uploads: provider.uploads(tracker.host),
+        internalNotes: provider.internalNotes,
       }));
       return { issue, markdown: issueMarkdown(issue) };
     } catch (error) {
@@ -139,8 +140,8 @@ export function registerIssuesIpc({
     }
   });
 
-  handle("issues:comment", (_event, projectId: string, number: number, body: string) =>
-    written(projectId, (provider, tracker) => provider.addComment(tracker, number, body)),
+  handle("issues:comment", (_event, projectId: string, number: number, body: string, internal: boolean) =>
+    written(projectId, (provider, tracker) => provider.addComment(tracker, number, body, internal)),
   );
 
   handle("issues:edit-comment", (_event, projectId: string, id: string, body: string) =>

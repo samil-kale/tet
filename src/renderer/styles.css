@@ -1451,6 +1451,11 @@ textarea:focus,
   margin-bottom: 0;
 }
 
+/* The buttons stay at the end; the checkbox stands alone at the start. */
+.issue-comment .issue-line > .dialog-checkbox {
+  margin-right: auto;
+}
+
 .issue-side-person {
   display: flex;
   align-items: center;

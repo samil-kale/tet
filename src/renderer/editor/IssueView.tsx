@@ -5,6 +5,7 @@ import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import { agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed } from "../ui/Dialog";
+import { Checkbox } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import {
   BoldIcon,
@@ -118,7 +119,7 @@ export interface IssueActions {
   /** A file of the repository a link of its text leads to. */
   openFile: (path: string) => void;
   refresh: () => void;
-  comment: (body: string) => Promise<boolean>;
+  comment: (body: string, internal: boolean) => Promise<boolean>;
   editComment: (id: string, body: string) => Promise<boolean>;
   deleteComment: (id: string) => Promise<void>;
   deleteIssue: () => Promise<void>;
@@ -333,22 +334,34 @@ function TextBox({
   );
 }
 
-function CommentBox({ open, actions, writing }: { open: boolean; actions: IssueActions; writing: TextWriting }) {
+interface CommentBoxProps {
+  open: boolean;
+  /** Offered where the tracker has internal comments. */
+  internalNotes: boolean;
+  actions: IssueActions;
+  writing: TextWriting;
+}
+
+function CommentBox({ open, internalNotes, actions, writing }: CommentBoxProps) {
   const [text, setText] = useState("");
+  const [internal, setInternal] = useState(false);
   const [busy, setBusy] = useState(false);
   const typed = text.trim() !== "";
+  const noun = internal ? "Internal Note" : "Comment";
   const submit = async (): Promise<void> => {
     setBusy(true);
-    if (await actions.comment(text)) {
+    if (await actions.comment(text, internal)) {
       setText("");
+      setInternal(false);
     }
     setBusy(false);
   };
   /** What was typed goes up first: refused, the state stays as well. */
   const changeState = async (): Promise<void> => {
     setBusy(true);
-    if (!typed || (await actions.comment(text))) {
+    if (!typed || (await actions.comment(text, internal))) {
       setText("");
+      setInternal(false);
       actions.update({ state: open ? "closed" : "open" });
     }
     setBusy(false);
@@ -361,12 +374,13 @@ function CommentBox({ open, actions, writing }: { open: boolean; actions: IssueA
         </div>
       </div>
       <div className="issue-line">
+        {internalNotes && <Checkbox label="Make this an internal note" checked={internal} onChange={setInternal} disabled={busy} />}
         <button type="button" className="button secondary" disabled={busy} onClick={() => void changeState()}>
           {open ? "Close Issue" : "Reopen Issue"}
-          {typed && " with Comment"}
+          {typed && ` with ${noun}`}
         </button>
         <button type="button" className="button" disabled={busy || !typed} onClick={() => void submit()}>
-          Comment
+          {internal ? "Add Internal Note" : "Comment"}
         </button>
       </div>
     </div>
@@ -382,12 +396,14 @@ interface IssueCardProps {
   /** The Markdown as written. */
   text: string;
   writing: TextWriting;
+  /** A comment the project's members alone see: marked as such. */
+  internal?: boolean;
   /** Offered where it can be changed; false keeps the box open. */
   onEdit?: (text: string) => Promise<boolean>;
   onDelete?: () => void;
 }
 
-function IssueCard({ author, avatar, opened, at, text, writing, onEdit, onDelete }: IssueCardProps) {
+function IssueCard({ author, avatar, opened, at, text, writing, internal, onEdit, onDelete }: IssueCardProps) {
   const [draft, setDraft] = useState<string>();
   const [busy, setBusy] = useState(false);
   const save = async (): Promise<void> => {
@@ -405,6 +421,11 @@ function IssueCard({ author, avatar, opened, at, text, writing, onEdit, onDelete
           <span className="issue-card-author">{author}</span> {opened && "opened "}
           {agoOf(at)}
         </span>
+        {internal && (
+          <span className="issue-label" title="Visible to project members only">
+            Internal note
+          </span>
+        )}
         {onEdit && (
           <IconButton title="Edit" onClick={() => setDraft(text)}>
             <PencilIcon />
@@ -710,6 +731,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                   at={note.createdAt}
                   text={note.body}
                   writing={writing}
+                  internal={note.internal}
                   onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}
                   onDelete={
                     note.author === viewer
@@ -725,7 +747,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
                 />
               );
             })}
-            <CommentBox open={issue.open} actions={actions} writing={writing} />
+            <CommentBox open={issue.open} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
           </div>
           <div className="issue-side">
             <PickSection

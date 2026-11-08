@@ -83,6 +83,8 @@ export interface IssueNote {
   /** ISO 8601. */
   createdAt: string;
   body: string;
+  /** Visible to the project's members alone; absent where the tracker has no such comments. */
+  internal?: boolean;
 }
 
 /** What happened to an issue, shown between its comments. */
@@ -111,6 +113,8 @@ export interface IssueDetail extends Issue {
   viewer?: string;
   /** What its tracker takes for its text; absent where it takes no file. */
   uploads?: IssueUploads;
+  /** Whether a comment can be made internal (`GitProvider.internalNotes`). */
+  internalNotes?: boolean;
 }
 
 /** What a tracker takes of a file for an issue's text. */

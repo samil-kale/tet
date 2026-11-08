@@ -465,6 +465,8 @@ export const github: GitProvider = {
     return readsWithToken(host, source) ? fetchImageOk(source, { Authorization: `Bearer ${token}`, "User-Agent": "tet" }) : undefined;
   },
 
+  internalNotes: false,
+
   async addComment({ host, token, path }, number, body) {
     const send = sender(host, token);
     await send("mutation($input: AddCommentInput!) { addComment(input: $input) { clientMutationId } }", {
