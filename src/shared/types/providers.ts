@@ -99,13 +99,61 @@ export type IssueEvent = { actor: string; /** ISO 8601. */ createdAt: string } &
   | { kind: "text"; text: string }
 );
 
+/**
+ * One field of an issue, as the tab's side column lists them: what the tracker keeps of an issue
+ * beside its text and comments, in the tracker's own words and order. A field the tracker does not
+ * have for this issue (its type or plan lacks it) is not listed.
+ */
+export type IssueField = {
+  /** What the provider addresses it by in `listOptions` and `setField`. */
+  id: string;
+  name: string;
+  /** Whether the tracker takes a change of it; its rights can still refuse one. */
+  editable: boolean;
+  /** Fields of one group are one section, titled by it, at the place of the first; only typed ones
+   *  (number, date, duration, timelog) go in one, as the section's one button asks for them. */
+  group?: string;
+} & (
+  | {
+      kind: "pick";
+      /** What it names, each as `listOptions` lists it. */
+      value: string[];
+      several: boolean;
+      /** How its values are drawn: as people, as labels or as plain text. */
+      shown: "text" | "people" | "labels";
+    }
+  | { kind: "number"; value?: number }
+  | { kind: "date"; /** YYYY-MM-DD. */ value?: string }
+  | { kind: "duration"; /** As the tracker words it, "1h 30m". */ value?: string }
+  /** Time booked to the issue, only ever added to: `value` is the total, `setField` takes an entry. */
+  | { kind: "timelog"; value?: string }
+  | { kind: "flag"; value: boolean }
+);
+
+/** One booking of time to an issue: how long, when and what was done. */
+export interface IssueTimeEntry {
+  /** As the tracker takes a duration, "1h 30m". */
+  timeSpent: string;
+  /** YYYY-MM-DD; left out, it is now. */
+  spentAt?: string;
+  summary?: string;
+}
+
+/** What `setField` sets, by the field's kind: a pick's values; a number, a date or a duration, null
+ *  taking it off; a flag's state; a timelog's new entry. */
+export type IssueFieldValue = string[] | number | string | boolean | IssueTimeEntry | null;
+
+export interface IssueFieldOptionsResult {
+  /** What a pick field can be set to, by the names `IssueField.value` uses. */
+  options?: string[];
+  error?: string;
+}
+
 /** One issue with what its row leaves out, for its tab. */
 export interface IssueDetail extends Issue {
   /** Whose Markdown its texts are written in (`issueTextHtml`). */
   provider: ProviderId;
-  /** All of them; `assignee` is the first. */
-  assignees: string[];
-  milestone?: string;
+  fields: IssueField[];
   body: string;
   notes: IssueNote[];
   events: IssueEvent[];
@@ -123,27 +171,12 @@ export interface IssueUploads {
   extensions?: string[];
 }
 
-export interface IssueMilestone {
-  /** What the tracker addresses it by, its GraphQL id. */
-  id: string;
-  title: string;
-}
-
-export interface IssueMilestonesResult {
-  /** The open ones. */
-  milestones?: IssueMilestone[];
-  error?: string;
-}
-
-/** What the issue's tab sets, a list as a whole; a field left out stays as it is. */
+/** What the issue's tab sets of the issue itself; a part left out stays as it is. Its fields are set
+ *  one at a time (`IssueField`). */
 export interface IssueChange {
   title?: string;
   body?: string;
   state?: "open" | "closed";
-  /** Null takes it off. */
-  milestone?: IssueMilestone | null;
-  labels?: string[];
-  assignees?: string[];
 }
 
 export type IssueCreateResult = (ActionDone & { number: number }) | ActionRefused;

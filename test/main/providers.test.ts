@@ -12,17 +12,22 @@ import {
   readsWithToken,
   toEvents as toGitHubEvents,
   toIssue as toGitHubIssue,
+  toFieldInput as toGitHubFieldInput,
   toIssueInput as toGitHubInput,
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
   gitlab,
   issuesVariables,
+  iterationName,
   mutationError,
+  parentName,
   toEvents as toGitLabEvents,
+  toFields as toGitLabFields,
   toIssue as toGitLabIssue,
   toIssueInput,
   toNotes as toGitLabNotes,
+  toWorkItemInput,
   uploadOf,
 } from "../../src/main/providers/gitlab";
 import {
@@ -38,7 +43,7 @@ import {
 import { ApiError, graphqlError, idsByName, type Tracker } from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
 import { readIssueSource } from "../../src/main/store/tet-json";
-import type { ProviderAccount } from "../../src/shared/types/providers";
+import type { IssueFieldValue, ProviderAccount } from "../../src/shared/types/providers";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
 /** providers/: the accounts kept for the providers, and the issues read through them. */
@@ -224,15 +229,110 @@ describe("the issues of a tracker", () => {
 
   it("puts a change in GitLab's words", () => {
     const issue = { projectPath: "g/t", iid: "12" };
-    // As it is sent: what is left out stays out of the request, a null stays in.
-    const sent = (change: Parameters<typeof toIssueInput>[2], labelIds?: string[]): unknown =>
-      JSON.parse(JSON.stringify(toIssueInput("g/t", 12, change, labelIds)));
+    // As it is sent: what is left out stays out of the request.
+    const sent = (change: Parameters<typeof toIssueInput>[2]): unknown => JSON.parse(JSON.stringify(toIssueInput("g/t", 12, change)));
     assert.deepEqual(sent({ title: "T", body: "B" }), { ...issue, title: "T", description: "B" });
     assert.deepEqual(sent({ state: "closed" }), { ...issue, stateEvent: "CLOSE" });
     assert.deepEqual(sent({ state: "open" }), { ...issue, stateEvent: "REOPEN" });
-    assert.deepEqual(sent({ milestone: { id: "m3", title: "M" } }), { ...issue, milestoneId: "m3" });
-    assert.deepEqual(sent({ milestone: null }), { ...issue, milestoneId: null });
-    assert.deepEqual(sent({ labels: [] }, []), { ...issue, labelIds: [] });
+  });
+
+  it("puts the change of a field in GitLab's words, a pick by the ids of its values", () => {
+    const target = {
+      labels: [
+        { id: "L1", name: "bug" },
+        { id: "L2", name: "ui" },
+      ],
+    };
+    // As it is sent: a null stays in, what is left out stays out.
+    const sent = (fieldId: string, value: IssueFieldValue, ids: string[] = []): unknown =>
+      JSON.parse(JSON.stringify(toWorkItemInput(fieldId, value, ids, target)));
+    assert.deepEqual(sent("assignees", ["a"], ["U1"]), { assigneesWidget: { assigneeIds: ["U1"] } });
+    assert.deepEqual(sent("labels", ["ui", "new"], ["L2", "L3"]), { labelsWidget: { addLabelIds: ["L3"], removeLabelIds: ["L1"] } });
+    assert.deepEqual(sent("milestone", [], []), { milestoneWidget: { milestoneId: null } });
+    assert.deepEqual(sent("iteration", ["i"], ["I1"]), { iterationWidget: { iterationId: "I1" } });
+    assert.deepEqual(sent("parent", ["p"], ["P1"]), { hierarchyWidget: { parentId: "P1" } });
+    assert.deepEqual(sent("health", [], []), { healthStatusWidget: { healthStatus: null } });
+    assert.deepEqual(sent("status", ["Done"], ["S3"]), { statusWidget: { status: "S3" } });
+    assert.throws(() => sent("status", [], []), /status cannot be taken off/);
+    assert.deepEqual(sent("weight", 3), { weightWidget: { weight: 3 } });
+    assert.deepEqual(sent("weight", null), { weightWidget: { weight: null } });
+    assert.throws(() => sent("weight", 1.5), /whole number/);
+    assert.deepEqual(sent("startDate", "2026-11-01"), { startAndDueDateWidget: { startDate: "2026-11-01" } });
+    assert.deepEqual(sent("dueDate", null), { startAndDueDateWidget: { dueDate: null } });
+    assert.deepEqual(sent("timeEstimate", "3h"), { timeTrackingWidget: { timeEstimate: "3h" } });
+    assert.deepEqual(sent("timeEstimate", null), { timeTrackingWidget: { timeEstimate: "0" } });
+    assert.deepEqual(sent("timeSpent", { timeSpent: "1h 30m" }), { timeTrackingWidget: { timelog: { timeSpent: "1h 30m" } } });
+    assert.deepEqual(sent("timeSpent", { timeSpent: "1h", spentAt: "2026-11-08", summary: "Fixed it" }), {
+      timeTrackingWidget: { timelog: { timeSpent: "1h", spentAt: "2026-11-08", summary: "Fixed it" } },
+    });
+    assert.deepEqual(sent("timeSpent", { timeSpent: "1h", spentAt: "", summary: "" }), {
+      timeTrackingWidget: { timelog: { timeSpent: "1h" } },
+    });
+    assert.throws(() => sent("timeSpent", "1h"), /added as an entry/);
+    assert.throws(() => sent("timeSpent", null), /added as an entry/);
+    assert.deepEqual(sent("confidential", true), { confidential: true });
+    assert.throws(() => sent("confidential", "yes"), /on or off/);
+    assert.throws(() => sent("nothing", null), /no field nothing/);
+  });
+
+  it("lists the fields a GitLab work item has, each only where its widget is", () => {
+    const iteration = { id: "I1", title: null, startDate: "2026-11-11", dueDate: "2026-12-08", iterationCadence: { title: "Scrum" } };
+    assert.equal(iterationName(iteration), "Scrum: 2026-11-11 – 2026-12-08");
+    assert.equal(iterationName({ ...iteration, title: "Sprint 4" }), "Scrum: Sprint 4");
+    const parent = { iid: "42", title: "Epic one", workItemType: { name: "Epic" }, namespace: { fullPath: "g/m" } };
+    assert.equal(parentName(parent), "Epic one (g/m&42)");
+    assert.equal(parentName({ ...parent, workItemType: { name: "Issue" } }), "Epic one (g/m#42)");
+    const user = (username: string) => ({ username });
+    assert.deepEqual(
+      toGitLabFields({
+        confidential: true,
+        widgets: [
+          { type: "PARTICIPANTS", participants: { nodes: [user("anna")] } },
+          { type: "LABELS", labels: { nodes: [{ title: "bug" }] } },
+          { type: "ASSIGNEES", assignees: { nodes: [user("jonas"), user("lena")] } },
+          { type: "WEIGHT", weight: 3 },
+          { type: "MILESTONE", milestone: null },
+          { type: "ITERATION", iteration },
+          { type: "HIERARCHY", parent },
+          { type: "START_AND_DUE_DATE", startDate: "2026-11-01", dueDate: null },
+          { type: "HEALTH_STATUS", healthStatus: "atRisk" },
+          { type: "TIME_TRACKING", humanReadableAttributes: { timeEstimate: "3h", totalTimeSpent: null } },
+          { type: "STATUS", status: { name: "In progress" } },
+          { type: "DESCRIPTION" },
+        ],
+      }).map(({ id, name, editable, ...rest }) => [id, name, editable, rest]),
+      [
+        ["status", "Status", true, { kind: "pick", value: ["In progress"], several: false, shown: "labels" }],
+        ["assignees", "Assignees", true, { kind: "pick", value: ["jonas", "lena"], several: true, shown: "people" }],
+        ["labels", "Labels", true, { kind: "pick", value: ["bug"], several: true, shown: "labels" }],
+        ["parent", "Parent", true, { kind: "pick", value: ["Epic one (g/m&42)"], several: false, shown: "text" }],
+        ["weight", "Weight", true, { kind: "number", value: 3 }],
+        ["milestone", "Milestone", true, { kind: "pick", value: [], several: false, shown: "text" }],
+        ["iteration", "Iteration", true, { kind: "pick", value: ["Scrum: 2026-11-11 – 2026-12-08"], several: false, shown: "text" }],
+        ["startDate", "Start date", true, { kind: "date", group: "Dates", value: "2026-11-01" }],
+        ["dueDate", "Due date", true, { kind: "date", group: "Dates", value: undefined }],
+        ["health", "Health status", true, { kind: "pick", value: ["At risk"], several: false, shown: "text" }],
+        ["timeEstimate", "Estimate", true, { kind: "duration", group: "Time tracking", value: "3h" }],
+        ["timeSpent", "Time spent", true, { kind: "timelog", group: "Time tracking", value: undefined }],
+        ["confidential", "Confidential", true, { kind: "flag", value: true }],
+        ["participants", "Participants", false, { kind: "pick", value: ["anna"], several: true, shown: "people" }],
+      ],
+    );
+    assert.deepEqual(
+      toGitLabFields({ confidential: false, widgets: [{ type: "LABELS", labels: { nodes: [] } }] }).map((field) => field.id),
+      ["labels", "confidential"],
+      "a type without the widgets has no such fields",
+    );
+    assert.deepEqual(
+      toGitLabFields({ confidential: false, widgets: [{ type: "WEIGHT" }, { type: "WEIGHT", weight: null }] }).map((field) => field.id),
+      ["weight", "confidential"],
+      "a widget answered without its data is skipped for the one with it",
+    );
+    assert.deepEqual(
+      toGitLabFields({ confidential: false, widgets: [{ type: "WEIGHT" }, { type: "HEALTH_STATUS" }] }).map((field) => field.id),
+      ["confidential"],
+      "a widget whose data was not read has no field",
+    );
   });
 
   it("finds ids by their names, refusing a name it does not know", () => {
@@ -273,16 +373,19 @@ describe("the issues of a tracker", () => {
   });
 
   it("puts a change in GitHub's words", () => {
-    // As it is sent: what is left out stays out of the request, a null stays in.
-    const sent = (change: Parameters<typeof toGitHubInput>[1], labelIds?: string[], assigneeIds?: string[]): unknown =>
-      JSON.parse(JSON.stringify(toGitHubInput("I1", change, labelIds, assigneeIds)));
+    // As it is sent: what is left out stays out of the request.
+    const sent = (change: Parameters<typeof toGitHubInput>[1]): unknown => JSON.parse(JSON.stringify(toGitHubInput("I1", change)));
     assert.deepEqual(sent({ title: "T", body: "B" }), { id: "I1", title: "T", body: "B" });
     assert.deepEqual(sent({ state: "closed" }), { id: "I1", state: "CLOSED" });
     assert.deepEqual(sent({ state: "open" }), { id: "I1", state: "OPEN" });
-    assert.deepEqual(sent({ milestone: { id: "m3", title: "M" } }), { id: "I1", milestoneId: "m3" });
-    assert.deepEqual(sent({ milestone: null }), { id: "I1", milestoneId: null });
-    assert.deepEqual(sent({ labels: ["a"] }, ["L1"]), { id: "I1", labelIds: ["L1"] });
-    assert.deepEqual(sent({ assignees: [] }, undefined, []), { id: "I1", assigneeIds: [] });
+  });
+
+  it("puts the change of a field in GitHub's words, by the ids of its values", () => {
+    assert.deepEqual(toGitHubFieldInput("I1", "labels", ["L1"]), { id: "I1", labelIds: ["L1"] });
+    assert.deepEqual(toGitHubFieldInput("I1", "assignees", []), { id: "I1", assigneeIds: [] });
+    assert.deepEqual(toGitHubFieldInput("I1", "milestone", ["m3"]), { id: "I1", milestoneId: "m3" });
+    assert.deepEqual(toGitHubFieldInput("I1", "milestone", []), { id: "I1", milestoneId: null });
+    assert.throws(() => toGitHubFieldInput("I1", "weight", []), /no field weight/);
   });
 
   it("keeps an issue only with all of a filter's labels, as GitHub's own filter takes any", () => {
@@ -491,8 +594,13 @@ describe("the issues of a tracker", () => {
     const markdown = issueMarkdown({
       ...toGitHubIssue(githubIssue),
       provider: "github",
-      assignees: ["jonas", "lena"],
-      milestone: "May",
+      fields: [
+        { id: "assignees", name: "Assignees", editable: true, kind: "pick", several: true, shown: "people", value: ["jonas", "lena"] },
+        { id: "labels", name: "Labels", editable: true, kind: "pick", several: true, shown: "labels", value: ["bug", "terminals"] },
+        { id: "milestone", name: "Milestone", editable: true, kind: "pick", several: false, shown: "text", value: ["May"] },
+        { id: "weight", name: "Weight", editable: true, kind: "number", value: 3 },
+        { id: "confidential", name: "Confidential", editable: true, kind: "flag", value: true },
+      ],
       body: "Text",
       notes: [{ id: "n1", author: "lena", createdAt: "2026-10-03", body: "Comment" }],
       events: [{ actor: "lena", createdAt: "2026-10-03", kind: "closed" }],
@@ -503,6 +611,8 @@ describe("the issues of a tracker", () => {
       "- Assignees: jonas, lena",
       "- Milestone: May",
       "- Labels: bug, terminals",
+      "- Weight: 3",
+      "- Confidential: yes",
       "\nText\n",
       "## Comments",
       "### lena, 2026-10-03",
@@ -513,12 +623,16 @@ describe("the issues of a tracker", () => {
     const bare = issueMarkdown({
       ...toGitHubIssue({ ...githubIssue, assignees: { nodes: [] }, labels: { nodes: [] } }),
       provider: "github",
-      assignees: [],
+      fields: [
+        { id: "assignees", name: "Assignees", editable: true, kind: "pick", several: true, shown: "people", value: [] },
+        { id: "weight", name: "Weight", editable: true, kind: "number", value: undefined },
+        { id: "confidential", name: "Confidential", editable: true, kind: "flag", value: false },
+      ],
       body: "",
       notes: [],
       events: [],
     });
-    assert.ok(!bare.includes("Assignees") && !bare.includes("Milestone") && !bare.includes("Labels") && !bare.includes("Comments"));
+    assert.ok(!bare.includes("Assignees") && !bare.includes("Weight") && !bare.includes("Confidential") && !bare.includes("Comments"));
   });
 });
 

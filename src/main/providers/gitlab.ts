@@ -2,8 +2,9 @@ import type {
   Issue,
   IssueChange,
   IssueEvent,
+  IssueField,
+  IssueFieldValue,
   IssueFilter,
-  IssueMilestone,
   IssueNote,
   RemoteRepository,
 } from "../../shared/types/providers";
@@ -86,7 +87,47 @@ export interface GitLabIssue {
   assignees: { nodes: GitLabUser[] };
   labels: { nodes: { title: string }[] };
   description?: string | null;
+}
+
+/** An iteration as GraphQL says it; `title` is null for one named by its dates alone. */
+export interface GitLabIteration {
+  id: string;
+  title: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  iterationCadence: { title: string };
+}
+
+/** The work item a parent is, as the parent field names it. */
+export interface GitLabParent {
+  iid: string;
+  title: string;
+  workItemType: { name: string };
+  namespace: { fullPath: string };
+}
+
+/** One of a work item's widgets as GraphQL says it: `type` names it, and it holds what its own
+ *  fragment of `WIDGETS` selected, the rest left out. */
+export interface GitLabWidget {
+  type: string;
+  assignees?: { nodes: GitLabUser[] };
+  labels?: { nodes: { title: string }[] };
+  status?: { name: string } | null;
+  parent?: GitLabParent | null;
+  weight?: number | null;
   milestone?: { title: string } | null;
+  iteration?: GitLabIteration | null;
+  startDate?: string | null;
+  dueDate?: string | null;
+  healthStatus?: string | null;
+  humanReadableAttributes?: { timeEstimate: string | null; totalTimeSpent: string | null };
+  participants?: { nodes: GitLabUser[] };
+}
+
+/** An issue as the work item it also is: what its type and plan give it beside its text. */
+export interface GitLabWorkItem {
+  confidential: boolean;
+  widgets: GitLabWidget[];
 }
 
 /** A note as GraphQL says it; `author` is null for a deleted account. */
@@ -118,15 +159,43 @@ const ISSUES_QUERY = `query($path: ID!, $cursor: String, $state: IssuableState, 
   }
 }`;
 
+/** The widgets of a work item every GitLab has, by the fields each holds; `type` tells which one a
+ *  node is. */
+const WIDGETS = `confidential
+  widgets {
+    type
+    ... on WorkItemWidgetAssignees { assignees { nodes { username } } }
+    ... on WorkItemWidgetLabels { labels { nodes { title } } }
+    ... on WorkItemWidgetHierarchy { parent { iid title workItemType { name } namespace { fullPath } } }
+    ... on WorkItemWidgetMilestone { milestone { title } }
+    ... on WorkItemWidgetStartAndDueDate { startDate dueDate }
+    ... on WorkItemWidgetTimeTracking { humanReadableAttributes { timeEstimate totalTimeSpent } }
+    ... on WorkItemWidgetParticipants { participants { nodes { username } } }
+  }`;
+
+/** The widgets only some plans and versions have: a schema without one of these types refuses the
+ *  whole query, so they are asked for apart (`readExtraWidgets`). */
+const EXTRA_WIDGETS = `widgets {
+    type
+    ... on WorkItemWidgetStatus { status { name } }
+    ... on WorkItemWidgetWeight { weight }
+    ... on WorkItemWidgetIteration { iteration { id title startDate dueDate iterationCadence { title } } }
+    ... on WorkItemWidgetHealthStatus { healthStatus }
+  }`;
+
 const ISSUE_QUERY = `query($path: ID!, $iid: String!) {
   project(fullPath: $path) {
     issue(iid: $iid) {
       ${ISSUE_ROW}
       description
-      milestone { title }
       notes(first: 100) { ${NOTE_PAGE} }
     }
+    workItems(iids: [$iid]) { nodes { ${WIDGETS} } }
   }
+}`;
+
+const EXTRA_WIDGETS_QUERY = `query($path: ID!, $iid: String!) {
+  project(fullPath: $path) { workItems(iids: [$iid]) { nodes { ${EXTRA_WIDGETS} } } }
 }`;
 
 const NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
@@ -135,7 +204,7 @@ const NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
 
 const LABELS_QUERY = `query($path: ID!, $cursor: String) {
   project(fullPath: $path) {
-    labels(first: 100, after: $cursor) {
+    labels(first: 100, after: $cursor, includeAncestorGroups: true) {
       pageInfo { hasNextPage endCursor }
       nodes { id title }
     }
@@ -163,28 +232,412 @@ export interface GitLabStateEvent extends GitLabResourceEvent {
   state: string;
 }
 
-/** What of a change `updateIssue` sets, in GitLab's words: labels by their ids, a milestone by its id,
- *  null taking it off. */
-export function toIssueInput(path: string, number: number, change: IssueChange, labelIds: string[] | undefined): object {
-  const { title, body, milestone, state } = change;
+/** What of a change `updateIssue` sets, in GitLab's words. */
+export function toIssueInput(path: string, number: number, { title, body, state }: IssueChange): object {
   return {
     projectPath: path,
     iid: String(number),
     title,
     description: body,
-    milestoneId: milestone === undefined ? undefined : (milestone?.id ?? null),
-    labelIds,
     stateEvent: state && (state === "open" ? "REOPEN" : "CLOSE"),
   };
 }
 
-/** A project's labels by name, with their ids. */
-async function allLabels(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
+/** What a pick field lists: a name as `IssueField.value` shows it, with the id GitLab addresses it by. */
+interface NamedId {
+  id: string;
+  name: string;
+}
+
+/** A project's labels by name, with their ids, those of its groups included. */
+async function allLabels(send: GraphqlSend, path: string): Promise<NamedId[]> {
   const entries = await allNodes<{ id: string; title: string }>(send, LABELS_QUERY, { path }, (data) => {
     const { project } = data as { project: { labels: GraphqlPage<{ id: string; title: string }> } | null };
     return reached(project, path).labels;
   });
   return entries.map((entry) => ({ id: entry.id, name: entry.title }));
+}
+
+/** Who can be assigned, by login, with their ids. */
+async function allPeople(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  // relations: the default leaves out who reaches the project through a group shared with it.
+  const query = `query($path: ID!, $cursor: String) {
+    project(fullPath: $path) {
+      projectMembers(relations: [DIRECT, INHERITED, INVITED_GROUPS, SHARED_INTO_ANCESTORS], first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { user { id username } }
+      }
+    }
+  }`;
+  type Member = { user: { id: string; username: string } | null };
+  const entries = await allNodes<Member>(send, query, { path }, (data) => {
+    const { project } = data as { project: { projectMembers: GraphqlPage<Member> } | null };
+    return reached(project, path).projectMembers;
+  });
+  return entries.flatMap((entry) => (entry.user ? [{ id: entry.user.id, name: entry.user.username }] : []));
+}
+
+/** The milestones a project can set, those of its groups included, with their ids. */
+async function allMilestones(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  const query = `query($path: ID!, $cursor: String) {
+    project(fullPath: $path) {
+      milestones(first: 100, after: $cursor, state: active, includeAncestors: true) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id title }
+      }
+    }
+  }`;
+  const entries = await allNodes<{ id: string; title: string }>(send, query, { path }, (data) => {
+    const { project } = data as { project: { milestones: GraphqlPage<{ id: string; title: string }> } | null };
+    return reached(project, path).milestones;
+  });
+  return entries.map((entry) => ({ id: entry.id, name: entry.title }));
+}
+
+/** The iterations a project can set, those of its groups included, with their ids. */
+async function allIterations(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  const query = `query($path: ID!, $cursor: String) {
+    project(fullPath: $path) {
+      iterations(first: 100, after: $cursor, state: opened, includeAncestors: true) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id title startDate dueDate iterationCadence { title } }
+      }
+    }
+  }`;
+  const entries = await allNodes<GitLabIteration>(send, query, { path }, (data) => {
+    const { project } = data as { project: { iterations: GraphqlPage<GitLabIteration> } | null };
+    return reached(project, path).iterations;
+  });
+  return entries.map((entry) => ({ id: entry.id, name: iterationName(entry) }));
+}
+
+/** An iteration as its field shows and lists it: its cadence, then its title or, as most have none,
+ *  its dates. */
+export function iterationName(iteration: GitLabIteration): string {
+  const dates = [iteration.startDate, iteration.dueDate].map((date) => date?.slice(0, 10) ?? "").join(" – ");
+  return `${iteration.iterationCadence.title}: ${iteration.title ?? dates}`;
+}
+
+/** A parent as its field shows and lists it: its title and where it is, since an iid is only unique
+ *  in its namespace; an epic's is marked as GitLab marks one, `&`. */
+export function parentName(parent: GitLabParent): string {
+  return `${parent.title} (${parent.namespace.fullPath}${parent.workItemType.name === "Epic" ? "&" : "#"}${parent.iid})`;
+}
+
+/** What `health status` is called, by GitLab's name for it. */
+const HEALTH_STATUSES: NamedId[] = [
+  { id: "onTrack", name: "On track" },
+  { id: "needsAttention", name: "Needs attention" },
+  { id: "atRisk", name: "At risk" },
+];
+
+function pickField(
+  id: string,
+  name: string,
+  value: string[],
+  {
+    several = false,
+    shown = "text",
+    editable = true,
+  }: { several?: boolean; shown?: "text" | "people" | "labels"; editable?: boolean } = {},
+): IssueField {
+  return { id, name, editable, kind: "pick", value, several, shown };
+}
+
+/** The fields of the widget of a work item of `type`, none where it has no such widget, or where what
+ *  its field holds (`read`) was not read: a query answers every widget by its type, but those of a
+ *  plan the instance lacks without their data. */
+function fromWidget(
+  type: string,
+  read: keyof GitLabWidget,
+  fields: (widget: GitLabWidget) => IssueField[],
+): (item: GitLabWorkItem) => IssueField[] {
+  return (item) => {
+    const widget = item.widgets.find((candidate) => candidate.type === type && candidate[read] !== undefined);
+    return widget ? fields(widget) : [];
+  };
+}
+
+/** Where each field comes from, in the order GitLab's own sidebar lists them. */
+const FIELD_SOURCES: ((item: GitLabWorkItem) => IssueField[])[] = [
+  fromWidget("STATUS", "status", (widget) => [
+    pickField("status", "Status", widget.status ? [widget.status.name] : [], { shown: "labels" }),
+  ]),
+  fromWidget("ASSIGNEES", "assignees", (widget) => [
+    pickField("assignees", "Assignees", widget.assignees?.nodes.map((user) => user.username) ?? [], { several: true, shown: "people" }),
+  ]),
+  fromWidget("LABELS", "labels", (widget) => [
+    pickField("labels", "Labels", widget.labels?.nodes.map((label) => label.title) ?? [], { several: true, shown: "labels" }),
+  ]),
+  fromWidget("HIERARCHY", "parent", (widget) => [pickField("parent", "Parent", widget.parent ? [parentName(widget.parent)] : [])]),
+  fromWidget("WEIGHT", "weight", (widget) => [
+    { id: "weight", name: "Weight", editable: true, kind: "number", value: widget.weight ?? undefined },
+  ]),
+  fromWidget("MILESTONE", "milestone", (widget) => [pickField("milestone", "Milestone", widget.milestone ? [widget.milestone.title] : [])]),
+  fromWidget("ITERATION", "iteration", (widget) => [
+    pickField("iteration", "Iteration", widget.iteration ? [iterationName(widget.iteration)] : []),
+  ]),
+  fromWidget("START_AND_DUE_DATE", "startDate", (widget) => [
+    { id: "startDate", name: "Start date", group: "Dates", editable: true, kind: "date", value: widget.startDate ?? undefined },
+    { id: "dueDate", name: "Due date", group: "Dates", editable: true, kind: "date", value: widget.dueDate ?? undefined },
+  ]),
+  fromWidget("HEALTH_STATUS", "healthStatus", (widget) => [
+    pickField(
+      "health",
+      "Health status",
+      widget.healthStatus ? [HEALTH_STATUSES.find((status) => status.id === widget.healthStatus)?.name ?? widget.healthStatus] : [],
+    ),
+  ]),
+  fromWidget("TIME_TRACKING", "humanReadableAttributes", (widget) => [
+    {
+      id: "timeEstimate",
+      name: "Estimate",
+      group: "Time tracking",
+      editable: true,
+      kind: "duration",
+      value: widget.humanReadableAttributes?.timeEstimate ?? undefined,
+    },
+    {
+      id: "timeSpent",
+      name: "Time spent",
+      group: "Time tracking",
+      editable: true,
+      kind: "timelog",
+      value: widget.humanReadableAttributes?.totalTimeSpent ?? undefined,
+    },
+  ]),
+  (item) => [{ id: "confidential", name: "Confidential", editable: true, kind: "flag", value: item.confidential }],
+  fromWidget("PARTICIPANTS", "participants", (widget) => [
+    pickField("participants", "Participants", widget.participants?.nodes.map((user) => user.username) ?? [], {
+      several: true,
+      shown: "people",
+      editable: false,
+    }),
+  ]),
+];
+
+/** The fields a work item has, as the tab lists them: one for what a widget holds, only where the
+ *  item's type and the plan give it the widget. */
+export function toFields(item: GitLabWorkItem): IssueField[] {
+  return FIELD_SOURCES.flatMap((source) => source(item));
+}
+
+/** What a change of a work item's field needs of it: its id, and the labels it carries, whose ids a
+ *  new set is told apart from. */
+interface Target {
+  id: string;
+  labels: NamedId[];
+}
+
+/** What a pick field's choices are read with. */
+interface FieldContext {
+  send: GraphqlSend;
+  path: string;
+  number: number;
+  target: Target;
+}
+
+/** A pick field of GitLab: what its values are, where its choices are listed and what `workItemUpdate`
+ *  takes to set the ids chosen. */
+interface PickField {
+  /** What one value is, for the refusal of an unknown name. */
+  what: string;
+  choices: (context: FieldContext) => Promise<NamedId[]>;
+  input: (ids: string[], target: Pick<Target, "labels">) => object;
+}
+
+/** What a work item's type allows of one widget's definition: its statuses, the types of its parent. */
+async function definitionOf(
+  context: FieldContext,
+  selection: string,
+): Promise<{ allowedStatuses?: NamedId[]; allowedParentTypes?: { nodes: { name: string }[] } }[]> {
+  const query = `query($path: ID!, $iid: String!) {
+    project(fullPath: $path) { workItems(iids: [$iid]) { nodes { workItemType { widgetDefinitions { type ${selection} } } } } }
+  }`;
+  const { project } = (await context.send(query, { path: context.path, iid: String(context.number) })) as {
+    project: {
+      workItems: {
+        nodes: {
+          workItemType: { widgetDefinitions: { allowedStatuses?: NamedId[]; allowedParentTypes?: { nodes: { name: string }[] } }[] };
+        }[];
+      };
+    } | null;
+  };
+  return reached(reached(project, context.path).workItems.nodes[0], `Issue #${context.number}`).workItemType.widgetDefinitions;
+}
+
+/** The work items of a namespace that are one of `types`, open and not the item itself. */
+async function openWorkItems(context: FieldContext, namespace: string, types: string[], ancestors: boolean): Promise<NamedId[]> {
+  const query = `query($path: ID!, $types: [IssueType!], $ancestors: Boolean, $cursor: String) {
+    namespace(fullPath: $path) {
+      workItems(first: 100, after: $cursor, types: $types, state: opened, includeAncestors: $ancestors) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id iid title workItemType { name } namespace { fullPath } }
+      }
+    }
+  }`;
+  const entries = await allNodes<GitLabParent & { id: string }>(context.send, query, { path: namespace, types, ancestors }, (data) => {
+    const { namespace: found } = data as { namespace: { workItems: GraphqlPage<GitLabParent & { id: string }> } | null };
+    return found?.workItems ?? { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] };
+  });
+  return entries.filter((entry) => entry.id !== context.target.id).map((entry) => ({ id: entry.id, name: parentName(entry) }));
+}
+
+const PICK_FIELDS: Record<string, PickField> = {
+  status: {
+    what: "status",
+    choices: async (context) => {
+      const definitions = await definitionOf(context, "... on WorkItemWidgetDefinitionStatus { allowedStatuses { id name } }");
+      return definitions.flatMap((definition) => definition.allowedStatuses ?? []);
+    },
+    input: ([status]) => {
+      if (status === undefined) {
+        throw new Error("A status cannot be taken off");
+      }
+      return { statusWidget: { status } };
+    },
+  },
+  assignees: {
+    what: "person to assign",
+    choices: ({ send, path }) => allPeople(send, path),
+    input: (assigneeIds) => ({ assigneesWidget: { assigneeIds } }),
+  },
+  labels: {
+    what: "label",
+    // What the item carries stays offered, as a group's labels may be left out of what the project lists.
+    choices: async ({ send, path, target }) => {
+      const listed = await allLabels(send, path);
+      return [...listed, ...target.labels.filter((label) => !listed.some((entry) => entry.id === label.id))];
+    },
+    input: (ids, target) => ({
+      labelsWidget: {
+        addLabelIds: ids.filter((id) => !target.labels.some((label) => label.id === id)),
+        removeLabelIds: target.labels.map((label) => label.id).filter((id) => !ids.includes(id)),
+      },
+    }),
+  },
+  parent: {
+    what: "parent",
+    // An epic belongs to a group, whose own and ancestors' are listed from its path; the other types
+    // are work items of the project.
+    choices: async (context) => {
+      const definitions = await definitionOf(context, "... on WorkItemWidgetDefinitionHierarchy { allowedParentTypes { nodes { name } } }");
+      const types = definitions.flatMap(
+        (definition) => definition.allowedParentTypes?.nodes.map((type) => type.name.toUpperCase().replaceAll(" ", "_")) ?? [],
+      );
+      const others = types.filter((type) => type !== "EPIC");
+      const [inProject, inGroup] = await Promise.all([
+        others.length > 0 ? openWorkItems(context, context.path, others, false) : [],
+        types.includes("EPIC") ? openWorkItems(context, context.path.slice(0, context.path.lastIndexOf("/")), ["EPIC"], true) : [],
+      ]);
+      return [...inProject, ...inGroup];
+    },
+    input: ([parentId]) => ({ hierarchyWidget: { parentId: parentId ?? null } }),
+  },
+  milestone: {
+    what: "milestone",
+    choices: ({ send, path }) => allMilestones(send, path),
+    input: ([milestoneId]) => ({ milestoneWidget: { milestoneId: milestoneId ?? null } }),
+  },
+  iteration: {
+    what: "iteration",
+    choices: ({ send, path }) => allIterations(send, path),
+    input: ([iterationId]) => ({ iterationWidget: { iterationId: iterationId ?? null } }),
+  },
+  health: {
+    what: "health status",
+    choices: () => Promise.resolve(HEALTH_STATUSES),
+    input: ([healthStatus]) => ({ healthStatusWidget: { healthStatus: healthStatus ?? null } }),
+  },
+};
+
+function pickFieldOf(fieldId: string): PickField {
+  const pick = PICK_FIELDS[fieldId];
+  if (!pick) {
+    throw new Error(`${fieldId} is no field to choose from`);
+  }
+  return pick;
+}
+
+function numberOf(value: IssueFieldValue): number | null {
+  if (value !== null && !Number.isInteger(value)) {
+    throw new Error("It takes a whole number");
+  }
+  return value as number | null;
+}
+
+function textOf(value: IssueFieldValue): string | null {
+  if (value !== null && typeof value !== "string") {
+    throw new Error("It takes text");
+  }
+  return value;
+}
+
+/** The other fields of GitLab: what `workItemUpdate` takes to set the value typed. */
+const VALUE_FIELDS: Record<string, (value: IssueFieldValue) => object> = {
+  weight: (value) => ({ weightWidget: { weight: numberOf(value) } }),
+  startDate: (value) => ({ startAndDueDateWidget: { startDate: textOf(value) } }),
+  dueDate: (value) => ({ startAndDueDateWidget: { dueDate: textOf(value) } }),
+  // "0" is how GitLab takes an estimate off.
+  timeEstimate: (value) => ({ timeTrackingWidget: { timeEstimate: textOf(value) ?? "0" } }),
+  timeSpent: (value) => {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("Time spent is added as an entry");
+    }
+    const { timeSpent, spentAt, summary } = value;
+    // What was left empty is left out, as GitLab takes now and no summary then.
+    return { timeTrackingWidget: { timelog: { timeSpent, spentAt: spentAt || undefined, summary: summary || undefined } } };
+  },
+  confidential: (value) => {
+    if (typeof value !== "boolean") {
+      throw new Error("It is on or off");
+    }
+    return { confidential: value };
+  },
+};
+
+/** What `workItemUpdate` takes to set a field to `value`: for a pick field, `ids` are the ids of the
+ *  values, which only `setField` can look up. */
+export function toWorkItemInput(fieldId: string, value: IssueFieldValue, ids: string[], target: Pick<Target, "labels">): object {
+  const pick = PICK_FIELDS[fieldId];
+  if (pick) {
+    return pick.input(ids, target);
+  }
+  const set = VALUE_FIELDS[fieldId];
+  if (!set) {
+    throw new Error(`An issue of GitLab has no field ${fieldId}`);
+  }
+  return set(value);
+}
+
+/** The work item an issue is, with what a change of its fields needs of it. */
+async function readTarget(send: GraphqlSend, path: string, number: number): Promise<Target> {
+  const query = `query($path: ID!, $iid: String!) {
+    project(fullPath: $path) {
+      workItems(iids: [$iid]) { nodes { id widgets { type ... on WorkItemWidgetLabels { labels { nodes { id title } } } } } }
+    }
+  }`;
+  const { project } = (await send(query, { path, iid: String(number) })) as {
+    project: {
+      workItems: { nodes: { id: string; widgets: { type: string; labels?: { nodes: { id: string; title: string }[] } }[] }[] };
+    } | null;
+  };
+  const item = reached(reached(project, path).workItems.nodes[0], `Issue #${number}`);
+  const labels = item.widgets.find((widget) => widget.type === "LABELS")?.labels?.nodes ?? [];
+  return { id: item.id, labels: labels.map((label) => ({ id: label.id, name: label.title })) };
+}
+
+/** The widgets only some plans have, which an instance without them does not answer: the item shows
+ *  without their fields, as it has none there. */
+async function readExtraWidgets(send: GraphqlSend, path: string, iid: string): Promise<GitLabWidget[]> {
+  try {
+    const data = (await send(EXTRA_WIDGETS_QUERY, { path, iid })) as {
+      project: { workItems: { nodes: { widgets: GitLabWidget[] }[] } } | null;
+    };
+    return data.project?.workItems.nodes[0]?.widgets ?? [];
+  } catch {
+    return [];
+  }
 }
 
 /** A project's API path takes its whole path as one segment. */
@@ -354,35 +807,25 @@ export const gitlab: GitProvider = {
   },
 
   async listPeople({ host, token, path }) {
-    // relations: the default leaves out who reaches the project through a group shared with it.
-    const query = `query($path: ID!, $cursor: String) {
-      project(fullPath: $path) {
-        projectMembers(relations: [DIRECT, INHERITED, INVITED_GROUPS, SHARED_INTO_ANCESTORS], first: 100, after: $cursor) {
-          pageInfo { hasNextPage endCursor }
-          nodes { user { username } }
-        }
-      }
-    }`;
-    type Member = { user: { username: string } | null };
-    const entries = await allNodes<Member>(sender(host, token), query, { path }, (data) => {
-      const { project } = data as { project: { projectMembers: GraphqlPage<Member> } | null };
-      return reached(project, path).projectMembers;
-    });
-    return entries.flatMap((entry) => entry.user?.username ?? []);
+    return (await allPeople(sender(host, token), path)).map((entry) => entry.name);
   },
 
   async readIssue({ host, token, path }, number) {
     const send = sender(host, token);
     const url = `${projectUrl(host, path)}/issues/${number}`;
     const iid = String(number);
-    const [issue, labels, states, milestones] = await Promise.all([
+    const [issue, labels, states, milestones, extraWidgets] = await Promise.all([
       send(ISSUE_QUERY, { path, iid }),
       getPaged(`${url}/resource_label_events?per_page=100`, headers(token)),
       getPaged(`${url}/resource_state_events?per_page=100`, headers(token)),
       getPaged(`${url}/resource_milestone_events?per_page=100`, headers(token)),
+      readExtraWidgets(send, path, iid),
     ]);
-    const { project } = issue as { project: { issue: (GitLabIssue & { notes: GraphqlPage<GitLabNote> }) | null } | null };
+    const { project } = issue as {
+      project: { issue: (GitLabIssue & { notes: GraphqlPage<GitLabNote> }) | null; workItems: { nodes: GitLabWorkItem[] } } | null;
+    };
     const found = reachedIssue(project, path, number);
+    const item = reached(project?.workItems.nodes[0], `Issue #${number}`);
     const later = found.notes.pageInfo.hasNextPage
       ? await allNodes<GitLabNote>(send, NOTES_QUERY, { path, iid, cursor: found.notes.pageInfo.endCursor }, (data) => {
           const answer = data as { project: { issue: { notes: GraphqlPage<GitLabNote> } | null } | null };
@@ -394,8 +837,7 @@ export const gitlab: GitProvider = {
       ...toIssue(found),
       provider: "gitlab",
       events: toEvents(notes, labels as GitLabLabelEvent[], states as GitLabStateEvent[], milestones as GitLabMilestoneEvent[]),
-      assignees: found.assignees.nodes.map((assignee) => assignee.username),
-      milestone: found.milestone?.title,
+      fields: toFields({ ...item, widgets: [...item.widgets, ...extraWidgets] }),
       body: found.description ?? "",
       notes: toNotes(notes),
     };
@@ -416,20 +858,22 @@ export const gitlab: GitProvider = {
     await mutate(send, "createNote", "CreateNoteInput", { noteableId: id, body, internal });
   },
 
-  async listMilestones({ host, token, path }) {
-    // includeAncestors: those of its groups can be set as well.
-    const query = `query($path: ID!, $cursor: String) {
-      project(fullPath: $path) {
-        milestones(first: 100, after: $cursor, state: active, includeAncestors: true) {
-          pageInfo { hasNextPage endCursor }
-          nodes { id title }
-        }
-      }
-    }`;
-    return allNodes<IssueMilestone>(sender(host, token), query, { path }, (data) => {
-      const { project } = data as { project: { milestones: GraphqlPage<IssueMilestone> } | null };
-      return reached(project, path).milestones;
-    });
+  async listOptions({ host, token, path }, number, fieldId) {
+    const pick = pickFieldOf(fieldId);
+    const send = sender(host, token);
+    const choices = await pick.choices({ send, path, number, target: await readTarget(send, path, number) });
+    return choices.map((choice) => choice.name);
+  },
+
+  async setField({ host, token, path }, number, fieldId, value) {
+    const send = sender(host, token);
+    const target = await readTarget(send, path, number);
+    const pick = PICK_FIELDS[fieldId];
+    if (pick && !Array.isArray(value)) {
+      throw new Error(`${fieldId} takes a list of values`);
+    }
+    const ids = pick ? idsByName(value as string[], await pick.choices({ send, path, number, target }), pick.what) : [];
+    await mutate(send, "workItemUpdate", "WorkItemUpdateInput", { id: target.id, ...toWorkItemInput(fieldId, value, ids, target) });
   },
 
   async createIssue({ host, token, path }, title, body) {
@@ -465,18 +909,6 @@ export const gitlab: GitProvider = {
   },
 
   async updateIssue({ host, token, path }, number, change) {
-    const send = sender(host, token);
-    const { assignees, ...rest } = change;
-    if (assignees !== undefined) {
-      await mutate(send, "issueSetAssignees", "IssueSetAssigneesInput", {
-        projectPath: path,
-        iid: String(number),
-        assigneeUsernames: assignees,
-      });
-    }
-    if (Object.values(rest).some((value) => value !== undefined)) {
-      const labelIds = rest.labels && idsByName(rest.labels, await allLabels(send, path), "label");
-      await mutate(send, "updateIssue", "UpdateIssueInput", toIssueInput(path, number, rest, labelIds));
-    }
+    await mutate(sender(host, token), "updateIssue", "UpdateIssueInput", toIssueInput(path, number, change));
   },
 };

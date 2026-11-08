@@ -5,7 +5,7 @@ import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import type { IssueChange, IssueDetail, IssueMilestone } from "../../shared/types/providers";
+import type { IssueChange, IssueDetail, IssueField, IssueFieldValue } from "../../shared/types/providers";
 import { toBase64 } from "../ui/base64";
 import { confirmed, confirmedFollowUp, refusal } from "../ui/Dialog";
 import { layoutChoice, layoutFlag } from "../ui/layout-storage";
@@ -741,17 +741,18 @@ export async function deleteIssue(tabId: string): Promise<void> {
   issueGone(projectId, tab.number);
 }
 
-/** The tab's project's milestones; undefined, with a notice, when the tracker cannot say. */
-export async function issueMilestones(tabId: string): Promise<IssueMilestone[] | undefined> {
-  const view = views.get(tabId);
-  if (!view) {
+/** What a pick field of the tab's issue can be set to; undefined, with a notice, when the tracker
+ *  cannot say. */
+export async function issueFieldOptions(tabId: string, fieldId: string): Promise<string[] | undefined> {
+  const tab = issueTab(tabId);
+  if (!tab) {
     return undefined;
   }
-  const { milestones, error } = await window.tet.issues.milestones(view.ref.projectId);
-  if (milestones === undefined) {
-    notify("error", error ?? "Could not read the milestones");
+  const { options, error } = await window.tet.issues.fieldOptions(tab.view.ref.projectId, tab.number, fieldId);
+  if (options === undefined) {
+    notify("error", error ?? "Could not read the options");
   }
-  return milestones;
+  return options;
 }
 
 /** A file up on the tab's tracker, answered as the Markdown that shows it; undefined, with a notice,
@@ -771,76 +772,112 @@ export async function uploadIssueFile(tabId: string, file: File): Promise<string
   return markdown;
 }
 
-/** Changes the tab's issue: shown at once and read back from the tracker, answering what it refused. */
-async function changeIssue(tabId: string, change: IssueChange): Promise<string | undefined> {
+/** Changes the tab's issue: `show` shown at once, `write` run in turn after the writes before it, and
+ *  the issue read back from the tracker. Answers what the tracker refused. */
+async function changeIssue(
+  tabId: string,
+  show: (detail: IssueDetail) => IssueDetail,
+  write: (projectId: string, number: number) => Promise<ActionResult>,
+): Promise<string | undefined> {
   const tab = issueTab(tabId);
   const detail = tab?.view.snapshot.issueDetail;
   if (!tab || !detail) {
     return undefined;
   }
   const { view, number } = tab;
-  const assignees = change.assignees ?? detail.assignees;
-  publish(view, {
-    issueDetail: {
-      ...detail,
-      title: change.title ?? detail.title,
-      body: change.body ?? detail.body,
-      open: change.state === undefined ? detail.open : change.state === "open",
-      milestone: change.milestone === undefined ? detail.milestone : change.milestone?.title,
-      labels: change.labels ?? detail.labels,
-      assignees,
-      assignee: assignees[0],
-    },
-  });
+  publish(view, { issueDetail: show(detail) });
   view.issueEdits = (view.issueEdits ?? 0) + 1;
   const { projectId } = view.ref;
   const previous = view.issueWrites ?? Promise.resolve();
-  const write = underIssueBar(view, async () => {
+  const written = underIssueBar(view, async () => {
     await previous;
-    const result = await window.tet.issues.update(projectId, number, change);
+    const result = await write(projectId, number);
     if (result.ok) {
       issuesChanged(projectId);
     }
     void reloadIssue(tabId);
     return refusal(result);
   });
-  view.issueWrites = write;
-  return await write;
+  view.issueWrites = written;
+  return await written;
 }
 
-/** Changes the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
-export function updateIssue(tabId: string, change: IssueChange): void {
-  void changeIssue(tabId, change).then((refused) => {
+/** The issue with a change of its own parts shown. */
+function withChange(detail: IssueDetail, change: IssueChange): IssueDetail {
+  return {
+    ...detail,
+    title: change.title ?? detail.title,
+    body: change.body ?? detail.body,
+    open: change.state === undefined ? detail.open : change.state === "open",
+  };
+}
+
+/** The field as it reads once set to `value`; a timelog's total is left to the read back. */
+function withValue(field: IssueField, value: IssueFieldValue): IssueField {
+  switch (field.kind) {
+    case "pick":
+      return { ...field, value: value as string[] };
+    case "flag":
+      return { ...field, value: value as boolean };
+    case "timelog":
+      return field;
+    case "duration":
+      return { ...field, value: (value as string | null) ?? undefined };
+    case "number":
+      return { ...field, value: (value as number | null) ?? undefined };
+    case "date":
+      return { ...field, value: (value as string | null) ?? undefined };
+  }
+}
+
+/** Reports a refusal as a notice, for a change nothing asked about. */
+function told(change: Promise<string | undefined>): void {
+  void change.then((refused) => {
     if (refused !== undefined) {
       notify("error", refused);
     }
   });
 }
 
-/** The tab's issue under a new title, answering what the tracker refused (`changeIssue`). */
-export function renameIssue(tabId: string, title: string): Promise<string | undefined> {
-  return changeIssue(tabId, { title });
+/** Changes the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
+export function updateIssue(tabId: string, change: IssueChange): void {
+  told(
+    changeIssue(
+      tabId,
+      (detail) => withChange(detail, change),
+      (projectId, number) => window.tet.issues.update(projectId, number, change),
+    ),
+  );
 }
 
-/** What an issue can be given and the ISSUES section filtered by, off its tracker. */
+/** The tab's issue under a new title, answering what the tracker refused (`changeIssue`). */
+export function renameIssue(tabId: string, title: string): Promise<string | undefined> {
+  return changeIssue(
+    tabId,
+    (detail) => withChange(detail, { title }),
+    (projectId, number) => window.tet.issues.update(projectId, number, { title }),
+  );
+}
+
+/** Sets a field of the tab's issue, answering what the tracker refused (`changeIssue`). */
+export function editIssueField(tabId: string, fieldId: string, value: IssueFieldValue): Promise<string | undefined> {
+  return changeIssue(
+    tabId,
+    (detail) => ({ ...detail, fields: detail.fields.map((field) => (field.id === fieldId ? withValue(field, value) : field)) }),
+    (projectId, number) => window.tet.issues.setField(projectId, number, fieldId, value),
+  );
+}
+
+/** Sets a field of the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
+export function setIssueField(tabId: string, fieldId: string, value: IssueFieldValue): void {
+  told(editIssueField(tabId, fieldId, value));
+}
+
+/** What the ISSUES section is filtered by, off its tracker. */
 export interface IssueOptions {
   labels: string[];
   /** Offered for both author and assignee. */
   people: string[];
-}
-
-/** What the tab's issue can be given, off its tracker; undefined, with a notice, when it cannot say. */
-export async function issueOptions(tabId: string): Promise<IssueOptions | undefined> {
-  const view = views.get(tabId);
-  if (!view) {
-    return undefined;
-  }
-  const { labels, people, error } = await window.tet.issues.filterOptions(view.ref.projectId);
-  if (error !== undefined) {
-    notify("error", error);
-    return undefined;
-  }
-  return { labels: labels ?? [], people: people ?? [] };
 }
 
 /**

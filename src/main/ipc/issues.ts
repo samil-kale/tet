@@ -8,10 +8,11 @@ import type { HandoverResult } from "../../shared/types/terminals";
 import type {
   IssueChange,
   IssueCreateResult,
+  IssueFieldOptionsResult,
+  IssueFieldValue,
   IssueFilter,
   IssueFilterOptions,
   IssueListResult,
-  IssueMilestonesResult,
   IssueReadResult,
   IssueUploadResult,
 } from "../../shared/types/providers";
@@ -120,10 +121,12 @@ export function registerIssuesIpc({
     }
   });
 
-  handle("issues:milestones", async (_event, projectId: string): Promise<IssueMilestonesResult> => {
+  handle("issues:field-options", async (_event, projectId: string, number: number, fieldId: string): Promise<IssueFieldOptionsResult> => {
     try {
-      const milestones = await onTracker(accounts, repositoryOf(projectId), (provider, tracker) => provider.listMilestones(tracker));
-      return { milestones };
+      const options = await onTracker(accounts, repositoryOf(projectId), (provider, tracker) =>
+        provider.listOptions(tracker, number, fieldId),
+      );
+      return { options };
     } catch (error) {
       return { error: errorMessage(error) };
     }
@@ -154,6 +157,10 @@ export function registerIssuesIpc({
 
   handle("issues:update", (_event, projectId: string, number: number, change: IssueChange) =>
     written(projectId, (provider, tracker) => provider.updateIssue(tracker, number, change)),
+  );
+
+  handle("issues:set-field", (_event, projectId: string, number: number, fieldId: string, value: IssueFieldValue) =>
+    written(projectId, (provider, tracker) => provider.setField(tracker, number, fieldId, value)),
   );
 
   handle("issues:delete", (_event, projectId: string, number: number) =>

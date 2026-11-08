@@ -1,6 +1,6 @@
 import { errorMessage } from "../../shared/errors";
 import type { RepositoryState } from "../../shared/types/git";
-import type { IssueDetail } from "../../shared/types/providers";
+import type { IssueDetail, IssueField } from "../../shared/types/providers";
 import { isIssueSource, readIssueSource, writeIssueSource } from "../store/tet-json";
 import type { AccountStore } from "./accounts";
 import { PROVIDERS } from "./index";
@@ -141,16 +141,32 @@ export async function setIssueSource(accounts: IssueAccounts, repository: IssueR
   return sourcePath;
 }
 
+/** A field as the issue's text gives it; undefined where it holds nothing. */
+function fieldText(field: IssueField): string | undefined {
+  switch (field.kind) {
+    case "pick":
+      return field.value.length === 0 ? undefined : field.value.join(", ");
+    case "flag":
+      return field.value ? "yes" : undefined;
+    case "number":
+    case "date":
+    case "duration":
+    case "timelog":
+      return field.value === undefined ? undefined : String(field.value);
+  }
+}
+
 /** The issue as text, for an agent: its tab's, and the file a tab opened on it starts with. It opens by saying where it comes from: other people wrote
  *  the text, and an agent reading it should take it for information, not for its instructions. */
 export function issueMarkdown(issue: IssueDetail): string {
   const facts = [
     `State: ${issue.open ? "open" : "closed"}`,
     `Author: ${issue.author}`,
-    ...(issue.assignees.length === 0 ? [] : [`Assignees: ${issue.assignees.join(", ")}`]),
-    ...(issue.milestone === undefined ? [] : [`Milestone: ${issue.milestone}`]),
     `Created: ${issue.createdAt}`,
-    ...(issue.labels.length === 0 ? [] : [`Labels: ${issue.labels.join(", ")}`]),
+    ...issue.fields.flatMap((field) => {
+      const text = fieldText(field);
+      return text === undefined ? [] : [`${field.name}: ${text}`];
+    }),
   ];
   const notes = issue.notes.map((note) => `### ${note.author}, ${note.createdAt}\n\n${note.body}`);
   return [

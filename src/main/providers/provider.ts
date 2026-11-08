@@ -3,8 +3,8 @@ import type {
   Issue,
   IssueChange,
   IssueDetail,
+  IssueFieldValue,
   IssueFilter,
-  IssueMilestone,
   IssueUploads,
   RemoteRepository,
 } from "../../shared/types/providers";
@@ -35,7 +35,11 @@ export interface GitProvider {
   readIssue(tracker: Tracker, number: number): Promise<IssueDetail>;
   /** An image of an issue's text that takes the token to read; undefined for any other source. */
   readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
-  listMilestones(tracker: Tracker): Promise<IssueMilestone[]>;
+  /** What a pick field of the issue can be set to, by the names `IssueField.value` uses. */
+  listOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
+  /** Sets one field of the issue, a pick's values as a whole; refuses one it does not have or a value
+   *  it does not take. */
+  setField(tracker: Tracker, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
   createIssue(tracker: Tracker, title: string, body: string): Promise<number>;
   /** Whether a comment can be made internal, visible to the project's members alone. */
   readonly internalNotes: boolean;

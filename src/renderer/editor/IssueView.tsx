@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
-import type { IssueChange, IssueDetail, IssueMilestone, ProviderId } from "../../shared/types/providers";
+import type { IssueChange, IssueDetail, IssueField, IssueFieldValue, ProviderId } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import { agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
-import { askName, confirmed } from "../ui/Dialog";
-import { Checkbox } from "../ui/Field";
+import { askName, confirmed, filled, prompt } from "../ui/Dialog";
+import { Checkbox, FieldRow, TextAreaField, TextField } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import {
   BoldIcon,
@@ -19,6 +19,7 @@ import {
   ListOrderedIcon,
   PaperclipIcon,
   PencilIcon,
+  PlusIcon,
   QuoteIcon,
   RemoteIcon,
   SquareSparklesIcon,
@@ -30,7 +31,7 @@ import { PickMenu } from "../ui/PickMenu";
 import { SwitchTabs } from "../ui/SwitchTabs";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
-import type { IssueOptions } from "./editor-views";
+import { sectionsOf, type AskedField } from "./issue-fields";
 import { issueThread, type ThreadEvent } from "./issue-thread";
 import { issueFileLink, issueLink, issueTextHtml } from "./issue-text";
 import { createMarkdownPreview, renderHtmlInto, resolveLink } from "./markdown";
@@ -126,8 +127,11 @@ export interface IssueActions {
   update: (change: IssueChange) => void;
   /** The title changed; what the tracker refused, for the dialog that asked (`askName`). */
   rename: (title: string) => Promise<string | undefined>;
-  options: () => Promise<IssueOptions | undefined>;
-  milestones: () => Promise<IssueMilestone[] | undefined>;
+  /** What a pick field can be set to; undefined, with a notice, when the tracker cannot say. */
+  fieldOptions: (fieldId: string) => Promise<string[] | undefined>;
+  setField: (fieldId: string, value: IssueFieldValue) => void;
+  /** A field set; what the tracker refused, for the dialog that asked (`askFieldValue`). */
+  editField: (fieldId: string, value: IssueFieldValue) => Promise<string | undefined>;
   /** The Markdown that shows the file, once it is up. */
   upload: (file: File) => Promise<string | undefined>;
   openInAgent: (agentId: AgentId) => void;
@@ -458,11 +462,11 @@ function IssueCard({ author, avatar, opened, at, text, writing, internal, onEdit
   );
 }
 
-/** Names as a sentence lists them, each set apart by `show`. */
-function listed(names: string[], show: (name: string) => React.ReactNode): React.ReactNode {
+/** Names as a sentence lists them, each set apart by `show`, the last joined by `joiner`. */
+function listed(names: string[], show: (name: string) => React.ReactNode, joiner = "and"): React.ReactNode {
   return names.map((name, index) => (
     <Fragment key={name}>
-      {index > 0 && (index === names.length - 1 ? " and " : ", ")}
+      {index > 0 && (index === names.length - 1 ? ` ${joiner} ` : ", ")}
       {show(name)}
     </Fragment>
   ));
@@ -675,12 +679,281 @@ function PickSection({
   );
 }
 
+/** A field that is typed rather than picked. */
+type TypedField = Extract<IssueField, { kind: "number" | "date" | "duration" }>;
+
+/** What a typed field's dialog tells of what to type; an empty answer takes the value off where it
+ *  can be taken off. */
+function typingDetail(field: TypedField): string {
+  switch (field.kind) {
+    case "number":
+      return "A number. Empty takes it off.";
+    case "date":
+      return "A date. Empty takes it off.";
+    case "duration":
+      return "For example 3h 30m. Empty takes it off.";
+  }
+}
+
+/** The value a typed field's answer stands for, null for none; what refuses it where it stands for
+ *  nothing. */
+function typedValue(field: TypedField, typed: string): { value: IssueFieldValue } | { refused: string } {
+  const text = typed.trim();
+  if (text === "") {
+    return { value: null };
+  }
+  if (field.kind === "number") {
+    return Number.isFinite(Number(text)) ? { value: Number(text) } : { refused: `${text} is not a number` };
+  }
+  return { value: text };
+}
+
+/** The question a number, a date or a duration is changed in; `edit` answers what the tracker refused. */
+async function askFieldValue(field: TypedField, edit: (value: IssueFieldValue) => Promise<string | undefined>): Promise<void> {
+  await prompt({
+    title: `Change ${field.name.toLowerCase()}`,
+    detail: typingDetail(field),
+    confirmLabel: "Save",
+    value: field.value === undefined ? "" : String(field.value),
+    ready: () => true,
+    render: ({ value, onChange, error, busy, field: input }) => (
+      <TextField
+        label={field.name}
+        type={field.kind === "date" ? "date" : "text"}
+        value={value}
+        onChange={onChange}
+        disabled={busy}
+        ref={input}
+        error={error}
+      />
+    ),
+    submit: (typed) => {
+      const parsed = typedValue(field, typed);
+      return "refused" in parsed ? Promise.resolve(parsed.refused) : edit(parsed.value);
+    },
+  });
+}
+
+/** What the time entry's question holds while it is typed. */
+interface TimeEntryDraft {
+  timeSpent: string;
+  spentAt: string;
+  summary: string;
+}
+
+/** The question a booking of time is made in; `edit` answers what the tracker refused. */
+async function askTimeEntry(edit: (value: IssueFieldValue) => Promise<string | undefined>): Promise<void> {
+  await prompt<TimeEntryDraft>({
+    title: "Add time entry",
+    detail: "Track time spent on this issue.",
+    confirmLabel: "Save",
+    value: { timeSpent: "", spentAt: "", summary: "" },
+    ready: (draft) => filled(draft.timeSpent),
+    render: ({ value, onChange, error, busy, field: input }) => (
+      <>
+        <FieldRow>
+          <TextField
+            label="Time spent"
+            placeholder="1h 30m"
+            value={value.timeSpent}
+            onChange={(timeSpent) => onChange({ ...value, timeSpent })}
+            disabled={busy}
+            ref={input}
+            error={error}
+          />
+          <TextField
+            label="Spent at (optional)"
+            type="date"
+            value={value.spentAt}
+            onChange={(spentAt) => onChange({ ...value, spentAt })}
+            disabled={busy}
+          />
+        </FieldRow>
+        <TextAreaField
+          label="Summary (optional)"
+          value={value.summary}
+          onChange={(summary) => onChange({ ...value, summary })}
+          disabled={busy}
+        />
+      </>
+    ),
+    submit: ({ timeSpent, spentAt, summary }) =>
+      edit({ timeSpent: timeSpent.trim(), spentAt: spentAt || undefined, summary: summary.trim() || undefined }),
+  });
+}
+
+/** Asks for the field's change; `actions.editField` answers what the tracker refused. */
+function askField(field: AskedField, actions: IssueActions): Promise<void> {
+  const edit = (value: IssueFieldValue) => actions.editField(field.id, value);
+  return field.kind === "timelog" ? askTimeEntry(edit) : askFieldValue(field, edit);
+}
+
+/** What a group's menu calls the change of one of its fields. */
+function changeLabel(field: AskedField): string {
+  return field.kind === "timelog" ? "Add time entry" : `Set ${field.name.toLowerCase()}`;
+}
+
+/** The fields of one group as a section: their values or, where none has one, a sentence offering to
+ *  add them; its one button opens a menu of what can be set. */
+function GroupSection({ title, fields, actions }: { title: string; fields: AskedField[]; actions: IssueActions }) {
+  const menu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom }));
+  const editable = fields.filter((field) => field.editable);
+  const entries = (): ContextMenuEntry[] =>
+    editable.map((field) => ({ label: changeLabel(field), run: () => void askField(field, actions) }));
+  return (
+    <SideSection
+      title={title}
+      action={
+        editable.length > 0 && (
+          <>
+            <button
+              type="button"
+              className={menu.isOpen ? "icon-button open" : "icon-button"}
+              title={`Change ${title}`}
+              onMouseDown={menu.open}
+            >
+              <PlusIcon />
+            </button>
+            {menu.render(entries, "field-menu")}
+          </>
+        )
+      }
+    >
+      {fields.every((field) => field.value === undefined) ? (
+        <span className="issue-none">
+          {editable.length === 0 ? (
+            "None"
+          ) : (
+            <>
+              Add{" "}
+              {listed(
+                editable.map((field) => field.id),
+                (id) => {
+                  const field = editable.find((candidate) => candidate.id === id);
+                  return field && <ActionLink onClick={() => void askField(field, actions)}>{field.name.toLowerCase()}</ActionLink>;
+                },
+                "or",
+              )}
+              .
+            </>
+          )}
+        </span>
+      ) : (
+        fields.map((field) => (
+          <div key={field.id} className="issue-side-row">
+            <span className="issue-side-name">{field.name}</span>
+            <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
+          </div>
+        ))
+      )}
+    </SideSection>
+  );
+}
+
+/** What a field's pick holds, as its values are drawn: who, a label, or plain text. */
+function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kind: "pick" }>; issue: IssueDetail; actions: IssueActions }) {
+  const { viewer } = issue;
+  return (
+    <>
+      {field.value.length === 0 && <span className="issue-none">None</span>}
+      {field.shown === "labels" && (
+        <div className="issue-labels">
+          {field.value.map((label) => (
+            <span key={label} className="issue-label">
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
+      {field.shown === "people" &&
+        field.value.map((login) => (
+          <div key={login} className="issue-side-person">
+            <Person login={login} avatar={issue.avatars[login]} />
+            <span>{login}</span>
+          </div>
+        ))}
+      {field.shown === "text" && field.value.length > 0 && <span>{field.value.join(", ")}</span>}
+      {field.shown === "people" && field.editable && viewer !== undefined && !field.value.includes(viewer) && (
+        <ActionLink onClick={() => actions.setField(field.id, field.several ? [...field.value, viewer] : [viewer])}>
+          Assign yourself
+        </ActionLink>
+      )}
+    </>
+  );
+}
+
+/** One field of the issue in the side column, drawn by its kind; where it can be changed, its section
+ *  offers how. */
+function FieldSection({ field, issue, actions }: { field: IssueField; issue: IssueDetail; actions: IssueActions }) {
+  switch (field.kind) {
+    case "pick":
+      return field.editable ? (
+        <PickSection
+          title={field.name}
+          picked={field.value}
+          several={field.several}
+          load={() => actions.fieldOptions(field.id)}
+          onChange={(value) => actions.setField(field.id, value)}
+        >
+          <PickValue field={field} issue={issue} actions={actions} />
+        </PickSection>
+      ) : (
+        <SideSection title={field.name}>
+          <PickValue field={field} issue={issue} actions={actions} />
+        </SideSection>
+      );
+    case "flag":
+      return (
+        <div className="issue-side-section">
+          <Checkbox
+            label={field.name}
+            checked={field.value}
+            disabled={!field.editable}
+            onChange={(checked) => actions.setField(field.id, checked)}
+          />
+        </div>
+      );
+    case "timelog":
+      return (
+        <SideSection
+          title={field.name}
+          action={
+            field.editable && (
+              <IconButton title="Add time entry" onClick={() => void askField(field, actions)}>
+                <PlusIcon />
+              </IconButton>
+            )
+          }
+        >
+          <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
+        </SideSection>
+      );
+    case "number":
+    case "date":
+    case "duration":
+      return (
+        <SideSection
+          title={field.name}
+          action={
+            field.editable && (
+              <IconButton title={`Change ${field.name}`} onClick={() => void askField(field, actions)}>
+                <GearIcon />
+              </IconButton>
+            )
+          }
+        >
+          <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
+        </SideSection>
+      );
+  }
+}
+
 /**
  * An issue's tab: a bar as a file's, with its actions, title and state, then, as VS Code's GitHub Pull
  * Requests and Issues draws them, the description and comments with a box for one more, and beside
- * them who and what it is assigned. Only the viewer's own comments offer to change: what is read of
- * the tracker says nothing of who else may, and a description it refuses says so in a notice, a
- * title in the dialog that asked.
+ * them the fields the tracker keeps of it. Only the viewer's own comments offer to change: what is
+ * read of the tracker says nothing of who else may, and a description it refuses says so in a notice,
+ * a title in the dialog that asked.
  */
 export function IssueView({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
   const writing: TextWriting = {
@@ -688,17 +961,6 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
     upload: issue.uploads ? actions.upload : undefined,
     accept: issue.uploads?.extensions?.map((extension) => `.${extension}`).join(","),
   };
-  // One request for both lists, however many are opened; a failed one is asked again.
-  const options = useRef<ReturnType<IssueActions["options"]>>(undefined);
-  const loadOptions = async (): ReturnType<IssueActions["options"]> => {
-    options.current ??= actions.options();
-    const loaded = await options.current;
-    if (!loaded) {
-      options.current = undefined;
-    }
-    return loaded;
-  };
-  const milestones = useRef<IssueMilestone[]>([]);
   const { viewer } = issue;
   return (
     <>
@@ -750,54 +1012,13 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
             <CommentBox open={issue.open} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
           </div>
           <div className="issue-side">
-            <PickSection
-              title="Assignees"
-              picked={issue.assignees}
-              several
-              load={() => loadOptions().then((loaded) => loaded?.people)}
-              onChange={(assignees) => actions.update({ assignees })}
-            >
-              {issue.assignees.length === 0 && <span className="issue-none">None</span>}
-              {issue.assignees.map((login) => (
-                <div key={login} className="issue-side-person">
-                  <Person login={login} avatar={issue.avatars[login]} />
-                  <span>{login}</span>
-                </div>
-              ))}
-              {viewer !== undefined && !issue.assignees.includes(viewer) && (
-                <ActionLink onClick={() => actions.update({ assignees: [...issue.assignees, viewer] })}>Assign yourself</ActionLink>
-              )}
-            </PickSection>
-            <PickSection
-              title="Labels"
-              picked={issue.labels}
-              several
-              load={() => loadOptions().then((loaded) => loaded?.labels)}
-              onChange={(labels) => actions.update({ labels })}
-            >
-              {issue.labels.length === 0 && <span className="issue-none">None</span>}
-              <div className="issue-labels">
-                {issue.labels.map((label) => (
-                  <span key={label} className="issue-label">
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </PickSection>
-            <PickSection
-              title="Milestone"
-              picked={issue.milestone === undefined ? [] : [issue.milestone]}
-              several={false}
-              load={async () => {
-                milestones.current = (await actions.milestones()) ?? [];
-                return milestones.current.map((milestone) => milestone.title);
-              }}
-              onChange={([title]) =>
-                actions.update({ milestone: milestones.current.find((milestone) => milestone.title === title) ?? null })
-              }
-            >
-              <span className={issue.milestone === undefined ? "issue-none" : undefined}>{issue.milestone ?? "None"}</span>
-            </PickSection>
+            {sectionsOf(issue.fields).map((section) =>
+              "group" in section ? (
+                <GroupSection key={section.group} title={section.group} fields={section.fields} actions={actions} />
+              ) : (
+                <FieldSection key={section.field.id} field={section.field} issue={issue} actions={actions} />
+              ),
+            )}
           </div>
         </div>
       </div>

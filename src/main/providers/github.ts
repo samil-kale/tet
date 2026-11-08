@@ -1,12 +1,4 @@
-import type {
-  Issue,
-  IssueChange,
-  IssueEvent,
-  IssueFilter,
-  IssueMilestone,
-  IssueNote,
-  RemoteRepository,
-} from "../../shared/types/providers";
+import type { Issue, IssueChange, IssueEvent, IssueFilter, IssueNote, RemoteRepository } from "../../shared/types/providers";
 import {
   allNodes,
   ApiError,
@@ -187,23 +179,39 @@ export function toEvents(items: GitHubEvent[]): IssueEvent[] {
   return items.map(toEvent).filter((event) => event !== undefined);
 }
 
-/** What of a change `updateIssue` sets, in GitHub's words: a milestone, labels and assignees by their
- *  ids, null taking the milestone off. */
-export function toIssueInput(
-  issueId: string,
-  { title, body, state, milestone }: IssueChange,
-  labelIds: string[] | undefined,
-  assigneeIds: string[] | undefined,
-): object {
-  return {
-    id: issueId,
-    title,
-    body,
-    state: state && (state === "open" ? "OPEN" : "CLOSED"),
-    milestoneId: milestone === undefined ? undefined : (milestone?.id ?? null),
-    labelIds,
-    assigneeIds,
-  };
+/** What of a change `updateIssue` sets, in GitHub's words. */
+export function toIssueInput(issueId: string, { title, body, state }: IssueChange): object {
+  return { id: issueId, title, body, state: state && (state === "open" ? "OPEN" : "CLOSED") };
+}
+
+/** What `updateIssue` takes of a pick field: its input, and where its names and ids are listed. */
+interface PickField {
+  input: string;
+  /** What one of its values is, for the refusal of an unknown name. */
+  what: string;
+  /** Takes one value, null taking it off, instead of a list. */
+  single?: boolean;
+  list: (send: GraphqlSend, path: string) => Promise<{ id: string; name: string }[]>;
+}
+
+const PICK_FIELDS: Record<string, PickField> = {
+  assignees: { input: "assigneeIds", what: "person to assign", list: allAssignable },
+  labels: { input: "labelIds", what: "label", list: allLabels },
+  milestone: { input: "milestoneId", what: "milestone", single: true, list: allMilestones },
+};
+
+function pickFieldOf(fieldId: string): PickField {
+  const field = PICK_FIELDS[fieldId];
+  if (!field) {
+    throw new Error(`An issue of GitHub has no field ${fieldId}`);
+  }
+  return field;
+}
+
+/** What `updateIssue` sets of a pick field, in GitHub's words: the ids of its values. */
+export function toFieldInput(issueId: string, fieldId: string, ids: string[]): object {
+  const { input, single } = pickFieldOf(fieldId);
+  return { id: issueId, [input]: single ? (ids[0] ?? null) : ids };
 }
 
 /** github.com's GraphQL lives on its own subdomain; GitHub Enterprise serves it under /api. */
@@ -270,6 +278,25 @@ async function allAssignable(send: GraphqlSend, path: string): Promise<{ id: str
     (data) => (data as { repository: { assignableUsers: GraphqlPage<{ id: string; login: string }> } }).repository.assignableUsers,
   );
   return entries.map((entry) => ({ id: entry.id, name: entry.login }));
+}
+
+/** A repository's open milestones by title, with their ids. */
+async function allMilestones(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
+  const query = `query($owner: String!, $name: String!, $cursor: String) {
+    repository(owner: $owner, name: $name) {
+      milestones(first: 100, after: $cursor, states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }) {
+        pageInfo { hasNextPage endCursor }
+        nodes { id title }
+      }
+    }
+  }`;
+  const entries = await allNodes<{ id: string; title: string }>(
+    send,
+    query,
+    repositoryOf(path),
+    (data) => (data as { repository: { milestones: GraphqlPage<{ id: string; title: string }> } }).repository.milestones,
+  );
+  return entries.map((entry) => ({ id: entry.id, name: entry.title }));
 }
 
 /** The only files its upload takes from a token, by extension: it refuses any other type. */
@@ -454,8 +481,35 @@ export const github: GitProvider = {
       provider: "github",
       avatars: avatarsOf([found.author, ...assignees, ...comments.map((comment) => comment.author), ...items.map((item) => item.actor)]),
       events: toEvents(items),
-      assignees: assignees.map((assignee) => assignee.login),
-      milestone: found.milestone?.title,
+      fields: [
+        {
+          id: "assignees",
+          name: "Assignees",
+          editable: true,
+          kind: "pick",
+          several: true,
+          shown: "people",
+          value: assignees.map((assignee) => assignee.login),
+        },
+        {
+          id: "labels",
+          name: "Labels",
+          editable: true,
+          kind: "pick",
+          several: true,
+          shown: "labels",
+          value: found.labels.nodes.map((label) => label.name),
+        },
+        {
+          id: "milestone",
+          name: "Milestone",
+          editable: true,
+          kind: "pick",
+          several: false,
+          shown: "text",
+          value: found.milestone ? [found.milestone.title] : [],
+        },
+      ],
       body: found.body ?? "",
       notes: comments.map(toNote),
     };
@@ -476,31 +530,25 @@ export const github: GitProvider = {
 
   async updateIssue({ host, token, path }, number, change) {
     const send = sender(host, token);
-    const [issueId, labelIds, assigneeIds] = await Promise.all([
-      issueNodeId(send, path, number),
-      change.labels && allLabels(send, path).then((labels) => idsByName(change.labels ?? [], labels, "label")),
-      change.assignees && allAssignable(send, path).then((people) => idsByName(change.assignees ?? [], people, "person to assign")),
-    ]);
     await send("mutation($input: UpdateIssueInput!) { updateIssue(input: $input) { clientMutationId } }", {
-      input: toIssueInput(issueId, change, labelIds, assigneeIds),
+      input: toIssueInput(await issueNodeId(send, path, number), change),
     });
   },
 
-  async listMilestones({ host, token, path }) {
-    const query = `query($owner: String!, $name: String!, $cursor: String) {
-      repository(owner: $owner, name: $name) {
-        milestones(first: 100, after: $cursor, states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }) {
-          pageInfo { hasNextPage endCursor }
-          nodes { id title }
-        }
-      }
-    }`;
-    return allNodes<IssueMilestone>(
-      sender(host, token),
-      query,
-      repositoryOf(path),
-      (data) => (data as { repository: { milestones: GraphqlPage<IssueMilestone> } }).repository.milestones,
-    );
+  async listOptions({ host, token, path }, _number, fieldId) {
+    return (await pickFieldOf(fieldId).list(sender(host, token), path)).map((entry) => entry.name);
+  },
+
+  async setField({ host, token, path }, number, fieldId, value) {
+    const send = sender(host, token);
+    const pick = pickFieldOf(fieldId);
+    if (!Array.isArray(value)) {
+      throw new Error(`${fieldId} takes a list of values`);
+    }
+    const [issueId, entries] = await Promise.all([issueNodeId(send, path, number), pick.list(send, path)]);
+    await send("mutation($input: UpdateIssueInput!) { updateIssue(input: $input) { clientMutationId } }", {
+      input: toFieldInput(issueId, fieldId, idsByName(value, entries, pick.what)),
+    });
   },
 
   async createIssue({ host, token, path }, title, body) {

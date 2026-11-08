@@ -19,10 +19,11 @@ import type {
   AddAccountResult,
   IssueChange,
   IssueCreateResult,
+  IssueFieldOptionsResult,
+  IssueFieldValue,
   IssueFilter,
   IssueFilterOptions,
   IssueListResult,
-  IssueMilestonesResult,
   IssueReadResult,
   IssueUploadResult,
   ListRepositoriesResult,
@@ -180,7 +181,9 @@ export interface TETApi {
     image: (projectId: string, source: string) => Promise<string | null>;
     comment: (projectId: string, number: number, body: string, internal: boolean) => Promise<ActionResult>;
     update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
-    milestones: (projectId: string) => Promise<IssueMilestonesResult>;
+    /** What a pick field of the issue can be set to. */
+    fieldOptions: (projectId: string, number: number, fieldId: string) => Promise<IssueFieldOptionsResult>;
+    setField: (projectId: string, number: number, fieldId: string, value: IssueFieldValue) => Promise<ActionResult>;
     create: (projectId: string, title: string, body: string) => Promise<IssueCreateResult>;
     /** For good, with its comments. */
     delete: (projectId: string, number: number) => Promise<ActionResult>;

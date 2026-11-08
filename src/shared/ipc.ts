@@ -60,7 +60,8 @@ export interface InvokeChannels {
   "issues:image": TETApi["issues"]["image"];
   "issues:comment": TETApi["issues"]["comment"];
   "issues:update": TETApi["issues"]["update"];
-  "issues:milestones": TETApi["issues"]["milestones"];
+  "issues:field-options": TETApi["issues"]["fieldOptions"];
+  "issues:set-field": TETApi["issues"]["setField"];
   "issues:create": TETApi["issues"]["create"];
   "issues:delete": TETApi["issues"]["delete"];
   "issues:edit-comment": TETApi["issues"]["editComment"];

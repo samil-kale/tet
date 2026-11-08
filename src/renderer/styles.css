@@ -92,6 +92,7 @@ textarea,
 
 input[type="text"],
 input[type="password"],
+input[type="date"],
 .dropdown-trigger {
   height: var(--field-height);
 }
@@ -1462,6 +1463,16 @@ textarea:focus,
   gap: 6px;
 }
 
+/* A group's field and its value on one line (`GroupSection`). */
+.issue-side-row {
+  display: flex;
+  gap: 8px;
+}
+
+.issue-side-name {
+  color: var(--tet-descriptionForeground);
+}
+
 .issue-labels {
   display: flex;
   flex-wrap: wrap;
@@ -2734,6 +2745,12 @@ textarea:focus,
 /* A checkbox's label in a field group is a control's, not the group's label. */
 .dialog-field .dialog-checkbox > span {
   color: var(--tet-foreground);
+}
+
+/* A note of a few lines (`TextAreaField`): the height of four, taller by dragging. */
+.dialog-textarea {
+  height: 90px;
+  resize: vertical;
 }
 
 /* Every row of controls in a dialog (`FieldRow`), spaced alike. */

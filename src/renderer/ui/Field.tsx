@@ -136,8 +136,9 @@ interface TextFieldProps {
   label: ReactNode;
   value: string;
   onChange: (value: string) => void;
-  /** `password` for a secret entered once and never shown again. */
-  type?: "text" | "password";
+  /** `password` for a secret entered once and never shown again; `date` for one picked or typed as
+   *  YYYY-MM-DD, empty for none. */
+  type?: "text" | "password" | "date";
   placeholder?: string;
   maxLength?: number;
   disabled?: boolean;
@@ -161,6 +162,32 @@ export function TextField({ label, value, onChange, type = "text", placeholder, 
         onChange={(event) => onChange(event.target.value)}
         onContextMenu={textMenu.onContextMenu}
         ref={ref}
+      />
+      {textMenu.menu}
+    </Field>
+  );
+}
+
+interface TextAreaFieldProps {
+  label: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  /** See `Field`. */
+  error?: string;
+}
+
+/** A `Field` holding a box for several lines of text, e.g. a note. */
+export function TextAreaField({ label, value, onChange, disabled, error }: TextAreaFieldProps) {
+  const textMenu = useTextContextMenu(onChange);
+  return (
+    <Field label={label} error={error}>
+      <textarea
+        className="dialog-textarea"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onContextMenu={textMenu.onContextMenu}
       />
       {textMenu.menu}
     </Field>
