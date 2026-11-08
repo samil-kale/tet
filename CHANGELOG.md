@@ -3,6 +3,25 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.24.0 (2026-11-08)
+
+- **Issues.** A new ISSUES lane lists a project's GitHub or GitLab issues, read from the tracker
+  with an account added in the new Accounts tab of Settings. The list refreshes on its own, and an
+  issue the tracker changed since its tab last showed it is marked unread. A repository on the same
+  host can be set as the source.
+- **Issue tabs.** An issue opens in a tab that shows and edits its title, text, comments (internal
+  notes where the tracker has them), state, every field the tracker lists and its time entries,
+  with Write and Preview for the text as the tracker will render it. Issues can be created,
+  renamed and deleted from the lane.
+- **Open in Agent.** An issue's row and tab open a new tab of the agent you pick with the issue as
+  its first prompt, which is a setting.
+- **tet-ctl for issues.** Agents can open an issue, open it in an agent tab, list the unread ones
+  and read or change the issues source.
+- **Fixes.** A tab no longer keeps showing a waiting mark after Claude Code or Codex got its
+  permission answered or ran the tool. Editor tabs come back with their source and diff state, the
+  window rises on Windows when focus is held back, and requirements are checked while the window
+  loads.
+
 ## 0.23.1 (2026-11-03)
 
 - **Status bar tabs.** The tabs list opens a new tab from its plus and lists the newest first. Its
