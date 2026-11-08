@@ -70,6 +70,7 @@ describe("the issues of a tracker", () => {
     url: "https://github.com/o/r/issues/412",
     state: "OPEN",
     createdAt: "2026-10-01T10:00:00Z",
+    updatedAt: "2026-10-04T10:00:00Z",
     author: { login: "mira", avatarUrl: "https://avatars.example.com/u/1?v=4" },
     assignees: {
       nodes: [
@@ -87,6 +88,7 @@ describe("the issues of a tracker", () => {
     webUrl: "https://gitlab.example.com/g/t/-/issues/12",
     state: "closed",
     createdAt: "2026-10-02T10:00:00Z",
+    updatedAt: "2026-10-05T10:00:00Z",
     author: { username: "anna" },
     assignees: { nodes: [] },
     labels: { nodes: [{ title: "type::bug" }] },
@@ -102,6 +104,7 @@ describe("the issues of a tracker", () => {
       author: "mira",
       assignee: "jonas",
       createdAt: "2026-10-01T10:00:00Z",
+      updatedAt: "2026-10-04T10:00:00Z",
       labels: ["bug", "terminals"],
       avatars: {
         mira: "https://avatars.example.com/u/1?v=4&s=40",
@@ -117,6 +120,7 @@ describe("the issues of a tracker", () => {
       author: "anna",
       assignee: undefined,
       createdAt: "2026-10-02T10:00:00Z",
+      updatedAt: "2026-10-05T10:00:00Z",
       labels: ["type::bug"],
       avatars: {},
     });

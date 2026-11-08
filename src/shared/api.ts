@@ -23,6 +23,7 @@ import type {
   IssueFieldValue,
   IssueFilter,
   IssueFilterOptions,
+  IssueLatestResult,
   IssueListResult,
   IssueReadResult,
   IssueUploadResult,
@@ -174,6 +175,9 @@ export interface TETApi {
   issues: {
     /** Newest first, from the project's tracker. */
     list: (projectId: string, filter: IssueFilter) => Promise<IssueListResult>;
+    /** How many issues the filter leaves and when the latest changed: the list is read again once this
+     *  differs from the `latest` of the list shown. */
+    latest: (projectId: string, filter: IssueFilter) => Promise<IssueLatestResult>;
     filterOptions: (projectId: string) => Promise<IssueFilterOptions>;
     /** The issue with its comments, for its tab and as the file a terminal it is dropped on reads. */
     read: (projectId: string, number: number) => Promise<IssueReadResult>;

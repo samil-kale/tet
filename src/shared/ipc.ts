@@ -55,6 +55,7 @@ export interface InvokeChannels {
   "providers:repos": TETApi["providers"]["repos"];
   "providers:cached-repos": TETApi["providers"]["cachedRepos"];
   "issues:list": TETApi["issues"]["list"];
+  "issues:latest": TETApi["issues"]["latest"];
   "issues:filter-options": TETApi["issues"]["filterOptions"];
   "issues:read": TETApi["issues"]["read"];
   "issues:image": TETApi["issues"]["image"];

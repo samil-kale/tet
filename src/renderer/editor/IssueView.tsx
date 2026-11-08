@@ -23,7 +23,6 @@ import {
   QuoteIcon,
   RemoteIcon,
   SquareSparklesIcon,
-  SyncIcon,
   TrashIcon,
   type IconProps,
 } from "../ui/icons";
@@ -119,7 +118,6 @@ export interface IssueActions {
   loadImage: LoadImage;
   /** A file of the repository a link of its text leads to. */
   openFile: (path: string) => void;
-  refresh: () => void;
   comment: (body: string, internal: boolean) => Promise<boolean>;
   editComment: (id: string, body: string) => Promise<boolean>;
   deleteComment: (id: string) => Promise<void>;
@@ -601,9 +599,6 @@ function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueAction
     <>
       <div className="editor-bar issue-bar">
         <div className="toolbar editor-bar-actions">
-          <IconButton title="Refresh" onClick={actions.refresh}>
-            <SyncIcon />
-          </IconButton>
           <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
             <RemoteIcon />
           </IconButton>

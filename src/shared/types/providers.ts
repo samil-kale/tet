@@ -44,6 +44,8 @@ export interface Issue {
   assignee?: string;
   /** ISO 8601. */
   createdAt: string;
+  /** ISO 8601. Of its last change on the tracker: a tab that read it earlier is out of date. */
+  updatedAt: string;
   labels: string[];
   /** The picture of whom it names, by login, where the host has one. */
   avatars: Record<string, string>;
@@ -58,13 +60,28 @@ export interface IssueFilter {
   labels: string[];
 }
 
+/** What the tracker says of a list of issues without sending it: how many it holds and when the most
+ *  recently changed one changed. Two reads that agree found nothing new in it. */
+export interface IssuesLatest {
+  total: number;
+  /** ISO 8601; absent for an empty list. */
+  updatedAt?: string;
+}
+
 export interface IssueListResult {
   issues?: Issue[];
+  /** Read just before `issues`, so that a change made while the list came is found by the next read. */
+  latest?: IssuesLatest;
   /** The `issues` of the project's tet.json, where it has one. */
   source?: string;
   error?: string;
   /** `error` is that no account is added for the repository's tracker. */
   noAccount?: boolean;
+}
+
+export interface IssueLatestResult {
+  latest?: IssuesLatest;
+  error?: string;
 }
 
 /** What the ISSUES section's filters offer. */

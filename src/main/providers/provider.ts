@@ -6,6 +6,7 @@ import type {
   IssueField,
   IssueFieldValue,
   IssueFilter,
+  IssuesLatest,
   IssueUploads,
   RemoteRepository,
 } from "../../shared/types/providers";
@@ -29,6 +30,9 @@ export interface GitProvider {
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
   /** The issues the filter leaves, newest first. */
   listIssues(tracker: Tracker, filter: IssueFilter): Promise<Issue[]>;
+  /** How many issues the host counts for the filter and when the latest changed one changed: one
+   *  request however long the list. */
+  readLatest(tracker: Tracker, filter: IssueFilter): Promise<IssuesLatest>;
   /** Refuses a path the token cannot read, which is how a new issue source is checked. */
   listLabels(tracker: Tracker): Promise<string[]>;
   /** Who can be assigned, so external authors are not among them. */

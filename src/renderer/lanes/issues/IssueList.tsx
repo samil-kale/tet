@@ -154,10 +154,15 @@ export const IssueList = memo(function IssueList({
       const result = await window.tet.issues.update(projectId, issue.number, { title: typed });
       if (result.ok) {
         reload();
-        reloadIssueTabs(projectId, issue.number);
       }
       return refusal(result);
     });
+
+  /** The list and, for an issue the list no longer shows too, every open tab read afresh. */
+  const refresh = (): void => {
+    reload();
+    reloadIssueTabs(projectId);
+  };
 
   const askDelete = async (issue: Issue): Promise<void> => {
     if (!(await confirmDeleteIssue(issue.number))) {
@@ -201,7 +206,7 @@ export const IssueList = memo(function IssueList({
                 <UserPlusIcon />
               </IconButton>
             )}
-            <IconButton title="Refresh" disabled={busy} onClick={reload}>
+            <IconButton title="Refresh" disabled={busy} onClick={refresh}>
               <SyncIcon />
             </IconButton>
             <IconButton title="New Issue..." onClick={() => void askNewIssue()}>

@@ -5,7 +5,14 @@ import { MISSING_MTIME_MS, type FileContent } from "../../shared/types/files";
 import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import { isTimeRemoval, type IssueChange, type IssueDetail, type IssueField, type IssueFieldValue } from "../../shared/types/providers";
+import {
+  isTimeRemoval,
+  type Issue,
+  type IssueChange,
+  type IssueDetail,
+  type IssueField,
+  type IssueFieldValue,
+} from "../../shared/types/providers";
 import { toBase64 } from "../ui/base64";
 import { confirmed, confirmedFollowUp, refusal } from "../ui/Dialog";
 import { layoutChoice, layoutFlag } from "../ui/layout-storage";
@@ -645,7 +652,7 @@ function issueTab(tabId: string): { view: EditorView; number: number } | undefin
  *  reads once the changes on their way are through, and again if one overtakes the answer, or it
  *  would take back what the tab already shows. Never awaited from within `issueWrites`, which it
  *  waits for. */
-export async function reloadIssue(tabId: string): Promise<void> {
+async function reloadIssue(tabId: string): Promise<void> {
   const tab = issueTab(tabId);
   if (!tab) {
     return;
@@ -685,10 +692,26 @@ export function openTabIssueInAgent(tabId: string, agentId: AgentId): void {
   }
 }
 
-/** Every tab open on the issue reads it again, after a change made outside them. */
-export function reloadIssueTabs(projectId: string, number: number): void {
-  for (const [tabId, view] of views) {
-    if (view.ref.projectId === projectId && view.snapshot.issue === number) {
+/** The tabs of the project open on an issue, with its number and what the tab has read of it. */
+function issueTabsOf(projectId: string): { tabId: string; number: number; read: IssueDetail | undefined }[] {
+  return [...views].flatMap(([tabId, { ref, snapshot }]) =>
+    ref.projectId === projectId && snapshot.issue !== undefined ? [{ tabId, number: snapshot.issue, read: snapshot.issueDetail }] : [],
+  );
+}
+
+/** Every tab of the project open on an issue reads it again. */
+export function reloadIssueTabs(projectId: string): void {
+  for (const { tabId } of issueTabsOf(projectId)) {
+    void reloadIssue(tabId);
+  }
+}
+
+/** Every tab of the project whose issue `issues` lists as changed since the tab read it reads it
+ *  again. A tab whose issue is not listed stays as it is. */
+export function reloadChangedIssueTabs(projectId: string, issues: Issue[]): void {
+  for (const { tabId, number, read } of issueTabsOf(projectId)) {
+    const listed = issues.find((candidate) => candidate.number === number);
+    if (read && listed && listed.updatedAt !== read.updatedAt) {
       void reloadIssue(tabId);
     }
   }

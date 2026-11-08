@@ -12,6 +12,7 @@ import type {
   IssueFieldValue,
   IssueFilter,
   IssueFilterOptions,
+  IssueLatestResult,
   IssueListResult,
   IssueReadResult,
   IssueUploadResult,
@@ -65,10 +66,23 @@ export function registerIssuesIpc({
     try {
       const repository = repositoryOf(projectId);
       source = await readIssueSource(repository.at.path);
-      const issues = await onTracker(accounts, repository, (provider, tracker) => provider.listIssues(tracker, filter));
-      return { issues, source };
+      const { issues, latest } = await onTracker(accounts, repository, async (provider, tracker) => ({
+        // First: a change made while the list comes then differs from it at the next read.
+        latest: await provider.readLatest(tracker, filter),
+        issues: await provider.listIssues(tracker, filter),
+      }));
+      return { issues, latest, source };
     } catch (error) {
       return { source, error: errorMessage(error), noAccount: error instanceof NoAccountError };
+    }
+  });
+
+  handle("issues:latest", async (_event, projectId: string, filter: IssueFilter): Promise<IssueLatestResult> => {
+    try {
+      const latest = await onTracker(accounts, repositoryOf(projectId), (provider, tracker) => provider.readLatest(tracker, filter));
+      return { latest };
+    } catch (error) {
+      return { error: errorMessage(error) };
     }
   });
 

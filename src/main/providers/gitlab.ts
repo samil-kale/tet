@@ -80,6 +80,7 @@ export interface GitLabIssue {
   webUrl: string;
   state: string;
   createdAt: string;
+  updatedAt: string;
   author: GitLabUser;
   assignees: { nodes: GitLabUser[] };
   labels: { nodes: { title: string }[] };
@@ -150,7 +151,7 @@ export interface GitLabNote {
   author: GitLabUser | null;
 }
 
-const ISSUE_ROW = `iid title webUrl state createdAt
+const ISSUE_ROW = `iid title webUrl state createdAt updatedAt
   author { username }
   assignees(first: 100) { nodes { username } }
   labels(first: 100) { nodes { title } }`;
@@ -158,11 +159,24 @@ const ISSUE_ROW = `iid title webUrl state createdAt
 const NOTE_PAGE = `pageInfo { hasNextPage endCursor }
   nodes { id system internal body createdAt author { username } }`;
 
-const ISSUES_QUERY = `query($path: ID!, $cursor: String, $state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String]) {
+/** What a filter asks for (`issuesVariables`), as the queries of a list and of its latest change take it. */
+const FILTER_VARIABLES = "$state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String]";
+const FILTER_ARGUMENTS = "state: $state, authorUsername: $authorUsername, assigneeUsernames: $assigneeUsernames, labelName: $labelName";
+
+const ISSUES_QUERY = `query($path: ID!, $cursor: String, ${FILTER_VARIABLES}) {
   project(fullPath: $path) {
-    issues(first: 100, after: $cursor, sort: created_desc, state: $state, authorUsername: $authorUsername, assigneeUsernames: $assigneeUsernames, labelName: $labelName) {
+    issues(first: 100, after: $cursor, sort: created_desc, ${FILTER_ARGUMENTS}) {
       pageInfo { hasNextPage endCursor }
       nodes { ${ISSUE_ROW} }
+    }
+  }
+}`;
+
+const LATEST_QUERY = `query($path: ID!, ${FILTER_VARIABLES}) {
+  project(fullPath: $path) {
+    issues(first: 1, sort: updated_desc, ${FILTER_ARGUMENTS}) {
+      count
+      nodes { updatedAt }
     }
   }
 }`;
@@ -642,7 +656,7 @@ export function uploadOf(host: string, source: string): { secret: string; file: 
   }
 }
 
-/** What a filter asks for, in the words of `ISSUES_QUERY`. */
+/** What a filter asks for, in the words of `FILTER_VARIABLES`. */
 export function issuesVariables(path: string, filter: IssueFilter): Record<string, unknown> {
   return {
     path,
@@ -664,6 +678,7 @@ export function toIssue(entry: GitLabIssue): Issue {
     author: entry.author.username,
     assignee: entry.assignees.nodes[0]?.username,
     createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
     labels: entry.labels.nodes.map((label) => label.title),
     avatars: {},
   };
@@ -775,6 +790,13 @@ export const gitlab: GitProvider = {
       return reached(project, path).issues;
     });
     return entries.map(toIssue);
+  },
+
+  async readLatest({ host, token, path }, filter) {
+    const data = await sender(host, token)(LATEST_QUERY, issuesVariables(path, filter));
+    const { project } = data as { project: { issues: { count: number; nodes: { updatedAt: string }[] } } | null };
+    const { count, nodes } = reached(project, path).issues;
+    return { total: count, updatedAt: nodes[0]?.updatedAt };
   },
 
   async listLabels({ host, token, path }) {

@@ -54,6 +54,7 @@ export interface GitHubIssue {
   url: string;
   state: string;
   createdAt: string;
+  updatedAt: string;
   author: GitHubUser | null;
   assignees: { nodes: (GitHubUser | null)[] };
   labels: { nodes: { name: string }[] };
@@ -119,7 +120,7 @@ export interface GitHubEvent {
   source?: { number?: number; title?: string; url?: string };
 }
 
-const ISSUE_ROW = `number title url state createdAt
+const ISSUE_ROW = `number title url state createdAt updatedAt
   author { login avatarUrl }
   assignees(first: 100) { nodes { login avatarUrl } }
   labels(first: 100) { nodes { name } }`;
@@ -169,6 +170,15 @@ const ISSUES_QUERY = `query($owner: String!, $name: String!, $cursor: String, $f
     issues(first: 100, after: $cursor, orderBy: { field: CREATED_AT, direction: DESC }, filterBy: $filter) {
       pageInfo { hasNextPage endCursor }
       nodes { ${ISSUE_ROW} }
+    }
+  }
+}`;
+
+const LATEST_QUERY = `query($owner: String!, $name: String!, $filter: IssueFilters) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 1, orderBy: { field: UPDATED_AT, direction: DESC }, filterBy: $filter) {
+      totalCount
+      nodes { updatedAt }
     }
   }
 }`;
@@ -618,7 +628,7 @@ function hasUpload(host: string): boolean {
   return host === "github.com" || host.endsWith(".ghe.com");
 }
 
-/** What a filter asks for, in the words of `ISSUES_QUERY`. Its `labels` leave an issue with any of
+/** What a filter asks for, in the words of `ISSUES_QUERY` and `LATEST_QUERY`. Its `labels` leave an issue with any of
  *  them, so `carriesAll` narrows what it answers. */
 export function issuesVariables(path: string, filter: IssueFilter): Record<string, unknown> {
   return {
@@ -665,6 +675,7 @@ export function toIssue(entry: GitHubIssue): Issue {
     author: entry.author?.login ?? "ghost",
     assignee: assignees[0]?.login,
     createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
     labels: entry.labels.nodes.map((label) => label.name),
     avatars: avatarsOf([entry.author, ...assignees]),
   };
@@ -727,6 +738,14 @@ export const github: GitProvider = {
       (data) => (data as { repository: { issues: GraphqlPage<GitHubIssue> } }).repository.issues,
     );
     return entries.filter((entry) => carriesAll(entry, filter.labels)).map(toIssue);
+  },
+
+  async readLatest({ host, token, path }, filter) {
+    const data = (await sender(host, token)(LATEST_QUERY, issuesVariables(path, filter))) as {
+      repository: { issues: { totalCount: number; nodes: { updatedAt: string }[] } };
+    };
+    const { totalCount, nodes } = data.repository.issues;
+    return { total: totalCount, updatedAt: nodes[0]?.updatedAt };
   },
 
   async listLabels({ host, token, path }) {

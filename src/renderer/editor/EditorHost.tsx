@@ -23,7 +23,6 @@ import {
   openIssueFile,
   openTabIssueInAgent,
   previewWithheld,
-  reloadIssue,
   renameIssue,
   saveEditorFile,
   setDiffOption,
@@ -151,7 +150,6 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     () => ({
       loadImage: (source) => loadIssueImage(tabId, source),
       openFile: (path) => openIssueFile(tabId, path),
-      refresh: () => void reloadIssue(tabId),
       comment: (body, internal) => commentOnIssue(tabId, body, internal),
       editComment: (id, body) => editIssueComment(tabId, id, body),
       deleteComment: (id) => deleteIssueComment(tabId, id),

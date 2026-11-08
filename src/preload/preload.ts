@@ -79,6 +79,7 @@ const api: TETApi = {
   },
   issues: {
     list: (projectId, filter) => invoke("issues:list", projectId, filter),
+    latest: (projectId, filter) => invoke("issues:latest", projectId, filter),
     filterOptions: (projectId) => invoke("issues:filter-options", projectId),
     read: (projectId, number) => invoke("issues:read", projectId, number),
     image: (projectId, source) => invoke("issues:image", projectId, source),

@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Issue, IssueFilter } from "../../../shared/types/providers";
+import type { Issue, IssueFilter, IssuesLatest } from "../../../shared/types/providers";
 import { subscribeIssues } from "../../editor/editor-tab";
-import type { IssueOptions } from "../../editor/editor-views";
+import { reloadChangedIssueTabs, type IssueOptions } from "../../editor/editor-views";
 import { subscribeAccounts } from "../../git/ProviderAccount";
 import { notify } from "../../ui/Notices";
+import { useWindowFocused } from "../../ui/use-window-focused";
 
 const NO_OPTIONS: IssueOptions = { labels: [], people: [] };
+
+/** How often the tracker is asked whether the list shown is out of date, while the lane is shown and
+ *  the window focused. */
+const CHECK_MS = 15_000;
+
+/** Whether two answers of the tracker differ: the list they stand for has changed. */
+function differ(shown: IssuesLatest | undefined, found: IssuesLatest): boolean {
+  return shown?.total !== found.total || shown.updatedAt !== found.updatedAt;
+}
 
 interface Issues {
   /** Undefined until the first answer. */
@@ -24,10 +34,11 @@ interface Issues {
 
 /**
  * The project's issues under `filter`, read from its tracker while the lane is shown: nothing is
- * read before, and nothing again until the filter, tet.json or an issue changes through its tab or
- * `reload` is called. What
- * the filters offer comes once a list came, so one failure is told once. Held per project by the
- * caller's `key`.
+ * read before, and nothing again until the filter, tet.json or an issue changes through its tab,
+ * `reload` is called, or the tracker says the list is out of date. It is asked on every return of
+ * the lane or the window and then every `CHECK_MS`, in one request however long the list. A list
+ * that came has the tabs read again whose issue it shows changed. What the filters offer comes once
+ * a list came, so one failure is told once. Held per project by the caller's `key`.
  */
 export function useIssues(projectId: string, filter: IssueFilter, shown: boolean): Issues {
   const [issues, setIssues] = useState<Issue[]>();
@@ -54,8 +65,10 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     },
     [reload],
   );
-  /** The next read follows what an issue's tab did, whose own bar says it is busy. */
-  const quiet = useRef(false);
+  /** How the next read is made: "quiet" as it follows what an issue's tab did, whose own bar says it is
+   *  busy; "unasked" as it follows the tracker's saying the list is out of date, a failure leaving the
+   *  list as it is and telling nothing, as nobody asked for that read. */
+  const nextRead = useRef<"asked" | "quiet" | "unasked">("asked");
 
   useEffect(
     () =>
@@ -73,7 +86,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     () =>
       subscribeIssues((changed) => {
         if (changed === projectId) {
-          quiet.current = true;
+          nextRead.current = "quiet";
           reload();
         }
       }),
@@ -82,6 +95,11 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
 
   const filterKey = JSON.stringify(filter);
   const loaded = useRef<string | undefined>(undefined);
+  /** What the tracker said of the list shown when it was read. */
+  const latest = useRef<IssuesLatest | undefined>(undefined);
+  /** A list is on its way. */
+  const reading = useRef(false);
+  const checking = useRef(false);
   const optionsLoaded = useRef<number | undefined>(undefined);
   /** The latest list asked for: only its answer counts. */
   const request = useRef(0);
@@ -99,20 +117,27 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       return;
     }
     loaded.current = key;
+    reading.current = true;
     const asked = ++request.current;
-    if (!quiet.current) {
+    const how = nextRead.current;
+    nextRead.current = "asked";
+    if (how === "asked") {
       setBusy(true);
     }
-    quiet.current = false;
     void window.tet.issues.list(projectId, JSON.parse(filterKey) as IssueFilter).then((result) => {
       if (!mounted.current || asked !== request.current) {
         return;
       }
+      reading.current = false;
       setBusy(false);
       if (releaseOnList.current) {
         releaseOnList.current = false;
         setHeld(false);
       }
+      if (how === "unasked" && result.error !== undefined) {
+        return;
+      }
+      latest.current = result.latest;
       setSource(result.source);
       setNoAccount(result.noAccount === true);
       setIssues(result.issues ?? []);
@@ -120,6 +145,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
         notify("error", result.error);
         return;
       }
+      reloadChangedIssueTabs(projectId, result.issues ?? []);
       if (optionsLoaded.current !== generation) {
         optionsLoaded.current = generation;
         void window.tet.issues.filterOptions(projectId).then((answer) => {
@@ -135,6 +161,35 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       }
     });
   }, [projectId, filterKey, shown, generation]);
+
+  /** Asks the tracker about the list shown, and reads it again where the answer differs. Nothing is
+   *  told of a failure: the next check asks again. */
+  const check = useCallback(async (): Promise<void> => {
+    if (checking.current || reading.current) {
+      return;
+    }
+    checking.current = true;
+    const asked = request.current;
+    const answer = await window.tet.issues.latest(projectId, JSON.parse(filterKey) as IssueFilter).finally(() => {
+      checking.current = false;
+    });
+    // A list asked for meanwhile has its own answer to go by.
+    if (!mounted.current || request.current !== asked || answer.latest === undefined || !differ(latest.current, answer.latest)) {
+      return;
+    }
+    nextRead.current = "unasked";
+    reload();
+  }, [projectId, filterKey, reload]);
+
+  const focused = useWindowFocused();
+  useEffect(() => {
+    if (!shown || !focused) {
+      return;
+    }
+    void check();
+    const timer = window.setInterval(() => void check(), CHECK_MS);
+    return () => window.clearInterval(timer);
+  }, [shown, focused, check]);
 
   return { issues, source, noAccount, options, busy: busy || held, reload, write };
 }
