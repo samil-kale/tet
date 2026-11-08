@@ -178,6 +178,16 @@ export class AppWindow {
     if (!window) {
       return;
     }
+    if (PLATFORM.foregroundLock) {
+      // Minimized, restored and held on top while it takes the focus: focus() alone would only flash
+      // the taskbar button.
+      window.minimize();
+      window.restore();
+      window.setAlwaysOnTop(true);
+      window.focus();
+      window.setAlwaysOnTop(false);
+      return;
+    }
     if (window.isMinimized()) {
       window.restore();
     }

@@ -74,6 +74,9 @@ export interface Platform {
   /** Notifications go through Windows' activator (an AppUserModelID, notification XML), clicked even
    *  after TET quit; elsewhere Electron's own notification, held while it shows. */
   readonly windowsNotifications: boolean;
+  /** A process without the last input cannot bring its window forward: `focus()` alone only flashes
+   *  the taskbar button (AppWindow.reveal). */
+  readonly foregroundLock: boolean;
   /** The file whose presence keeps Docker Sandboxes' first-run wizard out of a tab (sbx-cli.ts);
    *  undefined where sbx shows none. */
   sbxFirstRunMarker(env: Record<string, string | undefined>): string | undefined;
@@ -171,6 +174,7 @@ export const WINDOWS: Platform = {
   centersTitle: false,
   quitsWithLastWindow: true,
   windowsNotifications: true,
+  foregroundLock: true,
   sbxFirstRunMarker: (env) =>
     env.LOCALAPPDATA ? `${env.LOCALAPPDATA}\\DockerSandboxes\\sandboxes\\config\\first-run-import.json` : undefined,
   checksGpu: false,
@@ -222,6 +226,7 @@ export const MAC: Platform = {
   centersTitle: true,
   quitsWithLastWindow: false,
   windowsNotifications: false,
+  foregroundLock: false,
   checksGpu: false,
   startsWithoutChromeSandbox: false,
   modifierKey: "Meta",
@@ -265,6 +270,7 @@ export const LINUX: Platform = {
   centersTitle: false,
   quitsWithLastWindow: true,
   windowsNotifications: false,
+  foregroundLock: false,
   checksGpu: true,
   startsWithoutChromeSandbox: true,
   modifierKey: "Control",
