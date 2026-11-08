@@ -196,6 +196,9 @@ export const IssueList = memo(function IssueList({
         busy={busy}
         actions={
           <>
+            <IconButton title="Refresh" disabled={busy} onClick={refresh}>
+              <SyncIcon />
+            </IconButton>
             {worktree === undefined && (
               <IconButton title="Issue source..." onClick={() => void askSource()}>
                 <LinkIcon />
@@ -206,9 +209,6 @@ export const IssueList = memo(function IssueList({
                 <UserPlusIcon />
               </IconButton>
             )}
-            <IconButton title="Refresh" disabled={busy} onClick={refresh}>
-              <SyncIcon />
-            </IconButton>
             <IconButton title="New Issue..." onClick={() => void askNewIssue()}>
               <PlusIcon />
             </IconButton>
