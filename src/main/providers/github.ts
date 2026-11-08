@@ -461,90 +461,54 @@ async function repositoryIds(send: GraphqlSend, path: string): Promise<{ id: str
   return ((await send(query, repositoryOf(path))) as { repository: { id: string; databaseId: number } }).repository;
 }
 
-/** A repository's labels by name, with their ids. */
-async function allLabels(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
+/** Every node of one of a repository's connections, up to the cap; `args` beyond the paging. */
+function repositoryNodes<T>(send: GraphqlSend, path: string, connection: string, selection: string, args = ""): Promise<T[]> {
   const query = `query($owner: String!, $name: String!, $cursor: String) {
     repository(owner: $owner, name: $name) {
-      labels(first: 100, after: $cursor) {
+      ${connection}(first: 100, after: $cursor${args === "" ? "" : `, ${args}`}) {
         pageInfo { hasNextPage endCursor }
-        nodes { id name }
+        nodes { ${selection} }
       }
     }
   }`;
-  return allNodes<{ id: string; name: string }>(
+  return allNodes<T>(
     send,
     query,
     repositoryOf(path),
-    (data) => (data as { repository: { labels: GraphqlPage<{ id: string; name: string }> } }).repository.labels,
+    (data) => (data as { repository: Record<string, GraphqlPage<T>> }).repository[connection],
   );
+}
+
+/** A repository's labels by name, with their ids. */
+function allLabels(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  return repositoryNodes(send, path, "labels", "id name");
 }
 
 /** Who can be assigned, by login, with their ids. */
-async function allAssignable(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
-  const query = `query($owner: String!, $name: String!, $cursor: String) {
-    repository(owner: $owner, name: $name) {
-      assignableUsers(first: 100, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        nodes { id login }
-      }
-    }
-  }`;
-  const entries = await allNodes<{ id: string; login: string }>(
-    send,
-    query,
-    repositoryOf(path),
-    (data) => (data as { repository: { assignableUsers: GraphqlPage<{ id: string; login: string }> } }).repository.assignableUsers,
-  );
-  return entries.map((entry) => ({ id: entry.id, name: entry.login }));
+function allAssignable(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  return repositoryNodes(send, path, "assignableUsers", "id name: login");
 }
 
 /** A repository's open milestones by title, with their ids. */
-async function allMilestones(send: GraphqlSend, path: string): Promise<{ id: string; name: string }[]> {
-  const query = `query($owner: String!, $name: String!, $cursor: String) {
-    repository(owner: $owner, name: $name) {
-      milestones(first: 100, after: $cursor, states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }) {
-        pageInfo { hasNextPage endCursor }
-        nodes { id title }
-      }
-    }
-  }`;
-  const entries = await allNodes<{ id: string; title: string }>(
-    send,
-    query,
-    repositoryOf(path),
-    (data) => (data as { repository: { milestones: GraphqlPage<{ id: string; title: string }> } }).repository.milestones,
-  );
-  return entries.map((entry) => ({ id: entry.id, name: entry.title }));
+function allMilestones(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  return repositoryNodes(send, path, "milestones", "id name: title", "states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }");
 }
 
 /** The issue types a repository offers, by name, with their ids. */
 async function allIssueTypes(send: GraphqlSend, path: string): Promise<NamedId[]> {
-  const query = `query($owner: String!, $name: String!) {
-    repository(owner: $owner, name: $name) { issueTypes(first: 50) { nodes { id name isEnabled } } }
-  }`;
-  const data = (await send(query, repositoryOf(path))) as {
-    repository: { issueTypes: { nodes: { id: string; name: string; isEnabled: boolean }[] } | null };
-  };
-  return (data.repository.issueTypes?.nodes ?? []).filter((type) => type.isEnabled).map(({ id, name }) => ({ id, name }));
+  const types = await repositoryNodes<NamedId & { isEnabled: boolean }>(send, path, "issueTypes", "id name isEnabled");
+  return types.filter((type) => type.isEnabled).map(({ id, name }) => ({ id, name }));
 }
 
 /** The open issues of a repository but the issue itself, by the name `parentName` gives them: the
  *  parents it can be given. */
 async function openIssues({ send, path, number }: FieldContext<Target>): Promise<NamedId[]> {
-  const query = `query($owner: String!, $name: String!, $cursor: String) {
-    repository(owner: $owner, name: $name) {
-      issues(first: 100, after: $cursor, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
-        pageInfo { hasNextPage endCursor }
-        nodes { id number title }
-      }
-    }
-  }`;
-  type Entry = { id: string; number: number; title: string };
-  const entries = await allNodes<Entry>(
+  const entries = await repositoryNodes<{ id: string; number: number; title: string }>(
     send,
-    query,
-    repositoryOf(path),
-    (data) => (data as { repository: { issues: GraphqlPage<Entry> } }).repository.issues,
+    path,
+    "issues",
+    "id number title",
+    "states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }",
   );
   return entries
     .filter((entry) => entry.number !== number)
@@ -586,13 +550,8 @@ async function readTarget(send: GraphqlSend, path: string, number: number): Prom
 /** The fields only some hosts have, each asked on its own: a host that lacks one refuses its query
  *  whole, and the issue then shows without it. */
 async function readExtras(send: GraphqlSend, variables: object): Promise<GitHubExtras> {
-  const ask = async <T>(query: string): Promise<T | undefined> => {
-    try {
-      return ((await send(query, variables)) as { repository: T }).repository;
-    } catch {
-      return undefined;
-    }
-  };
+  const ask = async <T>(query: string): Promise<T | undefined> =>
+    ((await send(query, variables).catch(() => undefined)) as { repository: T } | undefined)?.repository;
   const [types, parent, fields] = await Promise.all([
     ask<{
       issueTypes: { nodes: { name: string; isEnabled: boolean }[] } | null;

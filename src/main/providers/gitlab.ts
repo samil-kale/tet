@@ -213,15 +213,6 @@ const NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
   project(fullPath: $path) { issue(iid: $iid) { notes(first: 100, after: $cursor) { ${NOTE_PAGE} } } }
 }`;
 
-const LABELS_QUERY = `query($path: ID!, $cursor: String) {
-  project(fullPath: $path) {
-    labels(first: 100, after: $cursor, includeAncestorGroups: true) {
-      pageInfo { hasNextPage endCursor }
-      nodes { id title }
-    }
-  }
-}`;
-
 /** An entry of an issue's `resource_*_events`; `user` is null for a deleted account. */
 interface GitLabResourceEvent {
   user: GitLabUser | null;
@@ -254,66 +245,55 @@ export function toIssueInput(path: string, number: number, { title, body, state 
   };
 }
 
-/** A project's labels by name, with their ids, those of its groups included. */
-async function allLabels(send: GraphqlSend, path: string): Promise<NamedId[]> {
-  const entries = await allNodes<{ id: string; title: string }>(send, LABELS_QUERY, { path }, (data) => {
-    const { project } = data as { project: { labels: GraphqlPage<{ id: string; title: string }> } | null };
-    return reached(project, path).labels;
+/** Every node of one of a project's connections, up to the cap; `args` beyond the paging. */
+function projectNodes<T>(send: GraphqlSend, path: string, connection: string, selection: string, args: string): Promise<T[]> {
+  const query = `query($path: ID!, $cursor: String) {
+    project(fullPath: $path) {
+      ${connection}(first: 100, after: $cursor, ${args}) {
+        pageInfo { hasNextPage endCursor }
+        nodes { ${selection} }
+      }
+    }
+  }`;
+  return allNodes<T>(send, query, { path }, (data) => {
+    const { project } = data as { project: Record<string, GraphqlPage<T>> | null };
+    return reached(project, path)[connection];
   });
-  return entries.map((entry) => ({ id: entry.id, name: entry.title }));
+}
+
+/** A project's labels by name, with their ids, those of its groups included. */
+function allLabels(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  return projectNodes(send, path, "labels", "id name: title", "includeAncestorGroups: true");
 }
 
 /** Who can be assigned, by login, with their ids. */
 async function allPeople(send: GraphqlSend, path: string): Promise<NamedId[]> {
   // relations: the default leaves out who reaches the project through a group shared with it.
-  const query = `query($path: ID!, $cursor: String) {
-    project(fullPath: $path) {
-      projectMembers(relations: [DIRECT, INHERITED, INVITED_GROUPS, SHARED_INTO_ANCESTORS], first: 100, after: $cursor) {
-        pageInfo { hasNextPage endCursor }
-        nodes { user { id username } }
-      }
-    }
-  }`;
-  type Member = { user: { id: string; username: string } | null };
-  const entries = await allNodes<Member>(send, query, { path }, (data) => {
-    const { project } = data as { project: { projectMembers: GraphqlPage<Member> } | null };
-    return reached(project, path).projectMembers;
-  });
-  return entries.flatMap((entry) => (entry.user ? [{ id: entry.user.id, name: entry.user.username }] : []));
+  const members = await projectNodes<{ user: NamedId | null }>(
+    send,
+    path,
+    "projectMembers",
+    "user { id name: username }",
+    "relations: [DIRECT, INHERITED, INVITED_GROUPS, SHARED_INTO_ANCESTORS]",
+  );
+  return members.flatMap((member) => (member.user ? [member.user] : []));
 }
 
 /** The milestones a project can set, those of its groups included, with their ids. */
-async function allMilestones(send: GraphqlSend, path: string): Promise<NamedId[]> {
-  const query = `query($path: ID!, $cursor: String) {
-    project(fullPath: $path) {
-      milestones(first: 100, after: $cursor, state: active, includeAncestors: true) {
-        pageInfo { hasNextPage endCursor }
-        nodes { id title }
-      }
-    }
-  }`;
-  const entries = await allNodes<{ id: string; title: string }>(send, query, { path }, (data) => {
-    const { project } = data as { project: { milestones: GraphqlPage<{ id: string; title: string }> } | null };
-    return reached(project, path).milestones;
-  });
-  return entries.map((entry) => ({ id: entry.id, name: entry.title }));
+function allMilestones(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  return projectNodes(send, path, "milestones", "id name: title", "state: active, includeAncestors: true");
 }
 
 /** The iterations a project can set, those of its groups included, with their ids. */
 async function allIterations(send: GraphqlSend, path: string): Promise<NamedId[]> {
-  const query = `query($path: ID!, $cursor: String) {
-    project(fullPath: $path) {
-      iterations(first: 100, after: $cursor, state: opened, includeAncestors: true) {
-        pageInfo { hasNextPage endCursor }
-        nodes { id title startDate dueDate iterationCadence { title } }
-      }
-    }
-  }`;
-  const entries = await allNodes<GitLabIteration>(send, query, { path }, (data) => {
-    const { project } = data as { project: { iterations: GraphqlPage<GitLabIteration> } | null };
-    return reached(project, path).iterations;
-  });
-  return entries.map((entry) => ({ id: entry.id, name: iterationName(entry) }));
+  const iterations = await projectNodes<GitLabIteration>(
+    send,
+    path,
+    "iterations",
+    "id title startDate dueDate iterationCadence { title }",
+    "state: opened, includeAncestors: true",
+  );
+  return iterations.map((iteration) => ({ id: iteration.id, name: iterationName(iteration) }));
 }
 
 /** An iteration as its field shows and lists it: its cadence, then its title or, as most have none,
@@ -630,14 +610,9 @@ async function readTarget(send: GraphqlSend, path: string, number: number): Prom
 /** The widgets only some plans have, which an instance without them does not answer: the item shows
  *  without their fields, as it has none there. */
 async function readExtraWidgets(send: GraphqlSend, path: string, iid: string): Promise<GitLabWidget[]> {
-  try {
-    const data = (await send(EXTRA_WIDGETS_QUERY, { path, iid })) as {
-      project: { workItems: { nodes: { widgets: GitLabWidget[] }[] } } | null;
-    };
-    return data.project?.workItems.nodes[0]?.widgets ?? [];
-  } catch {
-    return [];
-  }
+  const data = (await send(EXTRA_WIDGETS_QUERY, { path, iid }).catch(() => undefined)) as
+    { project: { workItems: { nodes: { widgets: GitLabWidget[] }[] } } | null } | undefined;
+  return data?.project?.workItems.nodes[0]?.widgets ?? [];
 }
 
 /** A project's API path takes its whole path as one segment. */

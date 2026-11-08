@@ -398,6 +398,33 @@ describe("the issues of a tracker", () => {
     );
   });
 
+  it("has a handler for each field a GitLab work item lists as changeable, and for no other", () => {
+    const listed = toGitLabFields({
+      confidential: false,
+      widgets: [
+        { type: "STATUS", status: null },
+        { type: "ASSIGNEES", assignees: { nodes: [] } },
+        { type: "LABELS", labels: { nodes: [] } },
+        { type: "HIERARCHY", parent: null },
+        { type: "WEIGHT", weight: null },
+        { type: "MILESTONE", milestone: null },
+        { type: "ITERATION", iteration: null },
+        { type: "START_AND_DUE_DATE", startDate: null, dueDate: null },
+        { type: "HEALTH_STATUS", healthStatus: null },
+        { type: "TIME_TRACKING", humanReadableAttributes: { timeEstimate: null, totalTimeSpent: null } },
+        { type: "PARTICIPANTS", participants: { nodes: [] } },
+      ],
+    });
+    assert.equal(listed.length, 14);
+    for (const field of listed) {
+      const handler = Object.hasOwn(GITLAB_FIELD_HANDLERS, field.id) ? GITLAB_FIELD_HANDLERS[field.id] : undefined;
+      assert.equal(handler !== undefined, field.editable, field.id);
+      if (handler) {
+        assert.equal(handler.pick !== undefined, field.kind === "pick", `${field.id} is picked from a list`);
+      }
+    }
+  });
+
   it("finds ids by their names, refusing a name it does not know", () => {
     const labels = [
       { id: "gid://gitlab/ProjectLabel/1", name: "bug" },
@@ -598,6 +625,34 @@ describe("the issues of a tracker", () => {
       ["assignees", "labels", "milestone", "parent", "participants"],
       "a repository without types has no type field, an issue with no parent still offers one",
     );
+  });
+
+  it("has a handler for each field a GitHub issue lists as changeable, and for no other", () => {
+    const definitions = [
+      { __typename: "IssueFieldSingleSelect", id: "F1", name: "Priority", options: [{ id: "O1", name: "High" }] },
+      { __typename: "IssueFieldMultiSelect", id: "F2", name: "Areas", options: [{ id: "O2", name: "UI" }] },
+      { __typename: "IssueFieldText", id: "F3", name: "Customer" },
+      { __typename: "IssueFieldNumber", id: "F4", name: "Estimate" },
+      { __typename: "IssueFieldDate", id: "F5", name: "Target" },
+    ];
+    const listed = toGitHubFields(
+      { ...githubIssue, participants: { nodes: [] } },
+      {
+        issueType: { current: "Bug", available: ["Bug"], editable: true },
+        parent: null,
+        issueFields: { editable: true, pinned: definitions.map((definition) => definition.name), values: [], definitions },
+      },
+    );
+    assert.equal(listed.length, 11);
+    for (const field of listed) {
+      const handler = Object.hasOwn(GITHUB_FIELD_HANDLERS, field.id)
+        ? GITHUB_FIELD_HANDLERS[field.id]
+        : definitions.filter((definition) => definition.id === field.id).map(gitHubIssueFieldOf)[0];
+      assert.equal(handler !== undefined, field.editable, field.id);
+      if (handler) {
+        assert.equal(handler.pick !== undefined, field.kind === "pick", `${field.id} is picked from a list`);
+      }
+    }
   });
 
   it("keeps an issue only with all of a filter's labels, as GitHub's own filter takes any", () => {

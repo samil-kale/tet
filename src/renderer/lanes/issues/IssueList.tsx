@@ -7,7 +7,7 @@ import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person } f
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
-import { Field, TextField } from "../../ui/Field";
+import { TextAreaField, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
 import { LinkIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
@@ -16,7 +16,6 @@ import { notify } from "../../ui/Notices";
 import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
 import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
-import { useTextContextMenu } from "../../ui/use-text-context-menu";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssues } from "./use-issues";
 
@@ -29,7 +28,6 @@ interface NewIssue {
 
 /** The fields of a new issue. No upload here: nothing is written until the question's answer. */
 function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<NewIssue>) {
-  const textMenu = useTextContextMenu((body) => onChange((current) => ({ ...current, body })));
   return (
     <>
       <TextField
@@ -40,16 +38,13 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
         ref={field}
         error={error}
       />
-      <Field label="Description">
-        <textarea
-          className="issue-new-body"
-          value={value.body}
-          disabled={busy}
-          onChange={(event) => onChange((current) => ({ ...current, body: event.target.value }))}
-          onContextMenu={textMenu.onContextMenu}
-        />
-        {textMenu.menu}
-      </Field>
+      <TextAreaField
+        label="Description"
+        className="issue-new-body"
+        value={value.body}
+        onChange={(body) => onChange((current) => ({ ...current, body }))}
+        disabled={busy}
+      />
     </>
   );
 }
