@@ -107,11 +107,13 @@ const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
 const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message",
   handover: "Session handover",
+  issue: "Open issue in agent",
 };
 
 const PROMPT_DETAILS: Record<PromptId, string> = {
   commitMessage: "Asked in the background",
   handover: "Sent to the tab taking over",
+  issue: "Sent to the tab opened on an issue",
 };
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
@@ -411,7 +413,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
             ))}
           </div>
           <FieldColumn fill>
-            {/* Only for a prompt TET asks in the background; a handover's goes to the tab taking over. */}
+            {/* Only for a prompt TET asks in the background; a handover's and an issue's go to the tab they open. */}
             {promptId === "commitMessage" && (
               <SuggesterList
                 value={settings.prompts.commitSuggesters}

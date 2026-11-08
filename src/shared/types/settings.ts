@@ -60,7 +60,7 @@ export const GIT_SETTING_IDS = [
 ] as const satisfies readonly (keyof GitSettings)[];
 
 /** What TET asks of an agent (prompts.ts), in the Prompts tab's picker. */
-export const PROMPT_IDS = ["commitMessage", "handover"] as const;
+export const PROMPT_IDS = ["commitMessage", "handover", "issue"] as const;
 
 export type PromptId = (typeof PROMPT_IDS)[number];
 

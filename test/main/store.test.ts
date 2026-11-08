@@ -351,7 +351,7 @@ describe("the stores", () => {
       "an entry without a model, an agent or a place of its own is none; a missing switch is on",
     );
     assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
-    assert.equal(effectivePrompt({ commitMessage: "write a subject", handover: "" }, "commitMessage"), "write a subject");
+    assert.equal(effectivePrompt({ commitMessage: "write a subject", handover: "", issue: "" }, "commitMessage"), "write a subject");
     const store = new SettingsStore(dir);
     store.patch({ appearance: { colorScheme: "light" } });
     assert.equal(new SettingsStore(dir).get().appearance.colorScheme, "light", "written and read back");

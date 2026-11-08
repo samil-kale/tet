@@ -544,7 +544,7 @@ describe("tet-ctl against the control server", () => {
         deleteTagOnRemote: false,
         deleteWorktreeOnRemote: false,
       },
-      prompts: { texts: { commitMessage: "", handover: "" }, commitSuggesters: [] },
+      prompts: { texts: { commitMessage: "", handover: "", issue: "" }, commitSuggesters: [] },
     };
     for (const list of Object.values(calls) as unknown[][]) {
       list.length = 0;

@@ -219,7 +219,7 @@ const VERBS = [
     group: "Settings",
     usage: `settings-set-prompt <${PROMPT_IDS.join("|")}> [text]`,
     summary:
-      "Set the text of a prompt TET sends an agent: a background question or a handover's first prompt. No text restores TET's own. Applies from the next use.",
+      "Set the text of a prompt TET sends an agent: a background question or the first prompt of a handover or of a tab opened on an issue. No text restores TET's own. Applies from the next use.",
     positionals: ["id", "text"],
   },
   {
