@@ -1185,7 +1185,10 @@ textarea:focus,
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 20px 20px;
+  /* The scrollbar's room is kept, so the cards' width holds when a text box opens and the view starts
+     to scroll; the right padding is the left's less the 11px scrollbar a tab's content has. */
+  scrollbar-gutter: stable;
+  padding: 20px 9px 20px 20px;
   background: var(--tet-editor-background);
   color: var(--tet-editor-foreground);
   user-select: text;
