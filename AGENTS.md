@@ -126,7 +126,7 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
     archive.json                   the sessions kept archived in the repository and its worktrees
-    issues-seen.json               each issue's update as its tab last showed it, shared by all
+    issues-seen.json               each issue's update as its tab showed it, and since when others count as unread
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts

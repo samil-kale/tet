@@ -12,7 +12,7 @@ import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root";
 import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
-import { forgetAllIssuesSeen, forgetIssueSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
+import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
 import {
   archiveFile,
   issuesSeenFile,
@@ -137,47 +137,75 @@ describe("the archived sessions", () => {
   });
 });
 
-describe("the issues' last seen updates", () => {
-  it("are kept per project by issue number, in the project's folder, and removed with the last one", () => {
+describe("the issues read", () => {
+  const stored = (root: string): unknown => JSON.parse(fs.readFileSync(issuesSeenFile(root, "p"), "utf8"));
+
+  it("start counting at the first read of a project, kept in its folder, and keep each issue's update by number", () => {
     const root = tempDir("tet-issues-seen-");
-    assert.deepEqual(readIssuesSeen(root, "p"), {}, "none before the first");
+    const before = Date.now();
+    const { since, issues } = readIssuesSeen(root, "p");
+    assert.ok(Date.parse(since) >= before && Date.parse(since) <= Date.now(), "from now");
+    assert.deepEqual(issues, {});
+    assert.equal(readIssuesSeen(root, "p").since, since, "once, not at every read");
+
     setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
     setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
     setIssueSeen(root, "p", 3, "2026-11-09T09:00:00Z");
-    assert.deepEqual(readIssuesSeen(root, "p"), { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" });
-    assert.deepEqual(readIssuesSeen(root, "q"), {}, "another project's");
+    assert.deepEqual(readIssuesSeen(root, "p"), { since, issues: { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" } });
+    assert.deepEqual(readIssuesSeen(root, "q").issues, {}, "another project's own");
     assert.deepEqual(
       fs.readdirSync(path.dirname(issuesSeenFile(root, "p"))),
       ["issues-seen.json"],
       "renamed into place, no temporary file left",
     );
-
-    forgetIssueSeen(root, "p", 3);
-    assert.deepEqual(readIssuesSeen(root, "p"), { 7: "2026-11-08T11:00:00Z" });
-    forgetIssueSeen(root, "p", 7);
-    assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
-    forgetIssueSeen(root, "p", 7);
   });
 
-  it("are all forgotten at once, as when the tracker changes", () => {
+  it("forget a deleted issue's entry alone", () => {
     const root = tempDir("tet-issues-seen-");
     setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
     setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
-    forgetAllIssuesSeen(root, "p");
-    assert.deepEqual(readIssuesSeen(root, "p"), {});
-    assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
-    forgetAllIssuesSeen(root, "p");
+    const { since } = readIssuesSeen(root, "p");
+    forgetIssueSeen(root, "p", 3);
+    assert.deepEqual(readIssuesSeen(root, "p"), { since, issues: { 7: "2026-11-08T11:00:00Z" } });
+    forgetIssueSeen(root, "p", 3);
+    assert.deepEqual(readIssuesSeen(root, "p"), { since, issues: { 7: "2026-11-08T11:00:00Z" } }, "none to forget");
   });
 
-  it("start empty from a file that cannot be read, and drop what is not a number with a timestamp", () => {
+  it("count from now on once all are read, the entries before dropped", () => {
+    const root = tempDir("tet-issues-seen-");
+    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
+    const first = readIssuesSeen(root, "p").since;
+    const all = markAllIssuesSeen(root, "p");
+    assert.ok(Date.parse(all.since) >= Date.parse(first));
+    assert.deepEqual(all.issues, {});
+    assert.deepEqual(readIssuesSeen(root, "p"), all, "what was answered is what is kept");
+  });
+
+  it("start afresh when forgotten whole, as when the tracker changes", () => {
+    const root = tempDir("tet-issues-seen-");
+    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
+    forgetAllIssuesSeen(root, "p");
+    assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
+    assert.deepEqual(readIssuesSeen(root, "p").issues, {}, "the old numbers name other issues now");
+    forgetAllIssuesSeen(root, "q");
+  });
+
+  it("read a file that cannot be read as a new start, and drop what is not a number with a timestamp", () => {
     const root = tempDir("tet-issues-seen-");
     fs.mkdirSync(path.dirname(issuesSeenFile(root, "p")), { recursive: true });
     fs.writeFileSync(issuesSeenFile(root, "p"), "{ nope");
-    assert.deepEqual(readIssuesSeen(root, "p"), {});
-    fs.writeFileSync(issuesSeenFile(root, "p"), JSON.stringify({ 3: "2026-11-08T10:00:00Z", x: "junk", 5: 5, 6: null }));
-    assert.deepEqual(readIssuesSeen(root, "p"), { 3: "2026-11-08T10:00:00Z" });
+    assert.deepEqual(readIssuesSeen(root, "p").issues, {});
+    assert.equal(typeof (stored(root) as { since: unknown }).since, "string", "started over it");
+    fs.writeFileSync(
+      issuesSeenFile(root, "p"),
+      JSON.stringify({ since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-08T10:00:00Z", x: "junk", 5: 5, 6: null } }),
+    );
+    assert.deepEqual(readIssuesSeen(root, "p"), { since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-08T10:00:00Z" } });
     setIssueSeen(root, "p", 8, "2026-11-08T12:00:00Z");
-    assert.deepEqual(readIssuesSeen(root, "p"), { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" });
+    assert.deepEqual(readIssuesSeen(root, "p"), {
+      since: "2026-11-01T00:00:00Z",
+      issues: { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" },
+    });
   });
 });
 
@@ -387,7 +415,11 @@ describe("the stores", () => {
       compactFolders: true,
       sortOrder: "default",
     });
-    assert.deepEqual(settings.prompts.texts, { commitMessage: "", handover: "" }, "TET's own text spelled out is stored as none");
+    assert.deepEqual(
+      settings.prompts.texts,
+      { commitMessage: "", handover: "", issue: "" },
+      "TET's own text spelled out is stored as none",
+    );
     assert.deepEqual(
       settings.prompts.commitSuggesters,
       [

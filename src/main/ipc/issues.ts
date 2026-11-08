@@ -15,11 +15,12 @@ import type {
   IssueLatestResult,
   IssueListResult,
   IssueReadResult,
+  IssuesSeenResult,
   IssueUploadResult,
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker, type TrackerCall } from "../providers/issues";
-import { forgetAllIssuesSeen, forgetIssueSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
+import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
@@ -192,6 +193,14 @@ export function registerIssuesIpc({
 
   handle("issues:mark-seen", (_event, projectId: string, number: number, updatedAt: string) => {
     logFailure("keep an issue's last seen update", () => setIssueSeen(dataRoot, projectId, number, updatedAt));
+  });
+
+  handle("issues:mark-all-seen", (_event, projectId: string): IssuesSeenResult => {
+    try {
+      return { ok: true, seen: markAllIssuesSeen(dataRoot, projectId) };
+    } catch (error) {
+      return failure(error);
+    }
   });
 
   handle("issues:upload", async (_event, projectId: string, name: string, dataBase64: string): Promise<IssueUploadResult> => {

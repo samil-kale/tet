@@ -12,7 +12,7 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * ```
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   archive.json                   the sessions kept archived, per repository and worktree (archive.ts)
- *   issues-seen.json               each issue's update as its tab last showed it (issues-seen.ts)
+ *   issues-seen.json               what the issue tabs showed, and since when others count unread (issues-seen.ts)
  *   drops/                        pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent

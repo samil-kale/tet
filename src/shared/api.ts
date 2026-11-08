@@ -26,6 +26,7 @@ import type {
   IssueLatestResult,
   IssueListResult,
   IssueReadResult,
+  IssuesSeenResult,
   IssueUploadResult,
   ListRepositoriesResult,
   ProviderAccount,
@@ -185,6 +186,8 @@ export interface TETApi {
     image: (projectId: string, source: string) => Promise<string | null>;
     /** Keeps the issue's `updatedAt` as its tab showed it (`IssuesSeen`); a failure is logged. */
     markSeen: (projectId: string, number: number, updatedAt: string) => Promise<void>;
+    /** Every issue of the project read, from now on: `IssuesSeen` starts afresh. */
+    markAllSeen: (projectId: string) => Promise<IssuesSeenResult>;
     comment: (projectId: string, number: number, body: string, internal: boolean) => Promise<ActionResult>;
     update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
     /** What a pick field of the issue can be set to. */

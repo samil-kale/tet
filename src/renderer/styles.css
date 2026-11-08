@@ -1204,8 +1204,8 @@ textarea:focus,
   border-radius: 50%;
 }
 
-/* A dot left of an issue's avatar when the tracker changed it since its tab last showed it. Every
-   row holds its place, so the texts are cut where the other rows' are. */
+/* A dot left of an issue's avatar while it is unread (`isUnread`). Every row holds its place, so the
+   texts are cut where the other rows' are. */
 .issue-mark {
   flex: none;
   width: 6px;
@@ -1213,7 +1213,7 @@ textarea:focus,
   border-radius: 50%;
 }
 
-.issue-mark.changed {
+.issue-mark.unread {
   background: var(--tet-focusBorder);
 }
 

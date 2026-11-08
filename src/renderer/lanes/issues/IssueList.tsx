@@ -3,7 +3,7 @@ import type { ProjectRef } from "../../../shared/types/project";
 import type { Issue, IssueFilter } from "../../../shared/types/providers";
 import { issueFileName, issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
 import { reloadIssueTabs } from "../../editor/editor-views";
-import { useIssuesSeen } from "../../editor/issue-seen";
+import { isUnread, keepAllIssuesSeen, useIssuesSeen } from "../../editor/issue-seen";
 import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
@@ -11,7 +11,7 @@ import { filled, prompt, refusal, singleField, type PromptFields } from "../../u
 import { TextAreaField, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
-import { LinkIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
+import { CheckCheckIcon, LinkIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
 import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
@@ -53,21 +53,20 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
 function IssueRow({
   issue,
   active,
-  seen,
+  unread,
   onOpen,
   onMenu,
 }: {
   issue: Issue;
   /** Its tab is the active editor tab. */
   active: boolean;
-  /** Its `updatedAt` as its tab last showed it; none for one never shown. */
-  seen: string | undefined;
+  /** The tracker created or changed it since its tab last showed it (`isUnread`). */
+  unread: boolean;
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
-  // The open one is on screen, so seen.
-  const changed = !active && seen !== undefined && seen !== issue.updatedAt;
-  const detail = changed ? `updated ${dayOf(issue.updatedAt)}, opened by` : `opened ${dayOf(issue.createdAt)}, by`;
+  const detail =
+    unread && issue.updatedAt !== issue.createdAt ? `updated ${dayOf(issue.updatedAt)}, opened by` : `opened ${dayOf(issue.createdAt)}, by`;
   return (
     <div
       className={`list-row issue-row two-line${active ? " active" : ""}`}
@@ -84,7 +83,7 @@ function IssueRow({
           #{issue.number} · {detail} {issue.author}
         </span>
       </span>
-      <span className={`issue-mark${changed ? " changed" : ""}`} />
+      <span className={`issue-mark${unread ? " unread" : ""}`} />
       {issue.assignee === undefined ? (
         <span className="issue-person vacant" />
       ) : (
@@ -119,6 +118,8 @@ export const IssueList = memo(function IssueList({
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, INITIAL_FILTER);
   const { issues, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
   const seen = useIssuesSeen(projectId);
+  // The open one is on screen, so read.
+  const unread = (issue: Issue): boolean => issue.number !== openIssue && isUnread(issue, seen);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
@@ -208,6 +209,13 @@ export const IssueList = memo(function IssueList({
             <IconButton title="Refresh" disabled={busy} onClick={refresh}>
               <SyncIcon />
             </IconButton>
+            <IconButton
+              title="Mark All as Read"
+              disabled={busy || !(issues ?? []).some(unread)}
+              onClick={() => void keepAllIssuesSeen(projectId)}
+            >
+              <CheckCheckIcon />
+            </IconButton>
             {worktree === undefined && (
               <IconButton title="Issue source..." onClick={() => void askSource()}>
                 <LinkIcon />
@@ -233,7 +241,7 @@ export const IssueList = memo(function IssueList({
                 key={issue.number}
                 issue={issue}
                 active={issue.number === openIssue}
-                seen={seen[issue.number]}
+                unread={unread(issue)}
                 onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
                 onMenu={(event) => menu.open(event, issue)}
               />

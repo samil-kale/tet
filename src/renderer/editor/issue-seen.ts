@@ -1,10 +1,9 @@
-import type { IssuesSeen } from "../../shared/types/providers";
+import type { Issue, IssuesSeen } from "../../shared/types/providers";
+import { notify } from "../ui/Notices";
 import { createStore, useStore } from "../ui/store";
 
-const NONE: IssuesSeen = {};
-
-/** What the tabs last showed of each project's issues: what the file held when the list was read,
- *  since then what `keepIssueSeen` kept. */
+/** What the tabs showed of each project's issues: what the file held when the list was read, since
+ *  then what `keepIssueSeen` and `keepAllIssuesSeen` kept. */
 const seenByProject = createStore<Record<string, IssuesSeen>>({});
 
 /** The project's list came with what the file holds. */
@@ -15,13 +14,33 @@ export function setIssuesSeen(projectId: string, seen: IssuesSeen): void {
 /** An issue's tab shows it as last changed at `updatedAt`: kept, and the ISSUES section stops marking
  *  it. What is already kept is not sent again. */
 export function keepIssueSeen(projectId: string, number: number, updatedAt: string): void {
-  const seen = seenByProject.get()[projectId] ?? NONE;
-  if (seen[number] !== updatedAt) {
-    setIssuesSeen(projectId, { ...seen, [number]: updatedAt });
-    void window.tet.issues.markSeen(projectId, number, updatedAt);
+  const seen = seenByProject.get()[projectId];
+  if (seen?.issues[number] === updatedAt) {
+    return;
+  }
+  if (seen) {
+    setIssuesSeen(projectId, { ...seen, issues: { ...seen.issues, [number]: updatedAt } });
+  }
+  void window.tet.issues.markSeen(projectId, number, updatedAt);
+}
+
+/** Every issue of the project read, from now on; a notice when that cannot be kept. */
+export async function keepAllIssuesSeen(projectId: string): Promise<void> {
+  const result = await window.tet.issues.markAllSeen(projectId);
+  if (result.ok) {
+    setIssuesSeen(projectId, result.seen);
+  } else {
+    notify("error", result.error);
   }
 }
 
-export function useIssuesSeen(projectId: string): IssuesSeen {
-  return useStore(seenByProject)[projectId] ?? NONE;
+/** Undefined until the project's list was read. */
+export function useIssuesSeen(projectId: string): IssuesSeen | undefined {
+  return useStore(seenByProject)[projectId];
+}
+
+/** Whether the tracker created or changed the issue after its tab last showed it or, if none did,
+ *  after `seen.since`. Dates are compared as times: the trackers spell them differently. */
+export function isUnread(issue: Issue, seen: IssuesSeen | undefined): boolean {
+  return seen !== undefined && Date.parse(issue.updatedAt) > Date.parse(seen.issues[issue.number] ?? seen.since);
 }

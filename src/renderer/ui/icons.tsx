@@ -6,6 +6,7 @@ import {
   BookOpen,
   CaseSensitive,
   Check,
+  CheckCheck,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
@@ -233,6 +234,11 @@ export function LogInIcon(props: IconProps) {
 /** Lucide's `check` — the SBX access token signed in with. */
 export function CheckIcon(props: IconProps) {
   return <Lucide {...props} icon={Check} />;
+}
+
+/** Lucide's `check-check` — mark all issues as read. */
+export function CheckCheckIcon(props: IconProps) {
+  return <Lucide {...props} icon={CheckCheck} />;
 }
 
 /** Lucide's `shield` — a project, or a tab, sandboxed by sbx. A tab's badge sizes its own box. */

@@ -68,9 +68,17 @@ export interface IssuesLatest {
   updatedAt?: string;
 }
 
-/** Each issue's `updatedAt` as its tab last showed it, by number: one listed with another is changed on
- *  the tracker since. An issue never shown has none. */
-export type IssuesSeen = Record<number, string>;
+/** What the project's issue tabs showed, against what the tracker says now. An issue is unread once its
+ *  `updatedAt` is past its entry in `issues` or, with none, past `since`: one created or changed
+ *  since then counts without ever having been shown, an older one does not. */
+export interface IssuesSeen {
+  /** ISO 8601. From when an issue without an entry counts as unread. */
+  since: string;
+  /** Each issue's `updatedAt` as its tab last showed it, by number. */
+  issues: Record<number, string>;
+}
+
+export type IssuesSeenResult = (ActionDone & { seen: IssuesSeen }) | ActionRefused;
 
 export interface IssueListResult {
   issues?: Issue[];
