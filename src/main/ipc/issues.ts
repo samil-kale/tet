@@ -19,7 +19,7 @@ import type {
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { issueMarkdown, NoAccountError, onTracker, setIssueSource, writeOnTracker, type TrackerCall } from "../providers/issues";
-import { forgetIssueSeen, forgetIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
+import { forgetAllIssuesSeen, forgetIssueSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
@@ -216,7 +216,7 @@ export function registerIssuesIpc({
       const repository = repositoryOf(projectId);
       const before = await readIssueSource(repository.at.path);
       if ((await setIssueSource(accounts, repository, source)) !== before) {
-        forgetIssuesSeen(dataRoot, projectId);
+        forgetAllIssuesSeen(dataRoot, projectId);
       }
       return { ok: true };
     } catch (error) {

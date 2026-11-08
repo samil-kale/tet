@@ -12,7 +12,7 @@ import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root";
 import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
-import { forgetIssueSeen, forgetIssuesSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
+import { forgetAllIssuesSeen, forgetIssueSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
 import {
   archiveFile,
   issuesSeenFile,
@@ -163,10 +163,10 @@ describe("the issues' last seen updates", () => {
     const root = tempDir("tet-issues-seen-");
     setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
     setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
-    forgetIssuesSeen(root, "p");
+    forgetAllIssuesSeen(root, "p");
     assert.deepEqual(readIssuesSeen(root, "p"), {});
     assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
-    forgetIssuesSeen(root, "p");
+    forgetAllIssuesSeen(root, "p");
   });
 
   it("start empty from a file that cannot be read, and drop what is not a number with a timestamp", () => {

@@ -1,19 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { IssuesSeen } from "../../shared/types/providers";
-import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
+import { logFailure, readJson, recordOf, writeJson } from "../util/json-file";
 import { issuesSeenFile } from "./project-dirs";
 
 /** The file as stored, one per project since its repository and worktrees share the tracker: issue
  *  numbers with their `updatedAt`, anything else dropped. */
 export function readIssuesSeen(dataRoot: string, projectId: string): IssuesSeen {
-  const parsed = readJson(issuesSeenFile(dataRoot, projectId));
   const seen: IssuesSeen = {};
-  if (isRecord(parsed)) {
-    for (const [number, updatedAt] of Object.entries(parsed)) {
-      if (/^\d+$/.test(number) && typeof updatedAt === "string") {
-        seen[Number(number)] = updatedAt;
-      }
+  for (const [number, updatedAt] of Object.entries(recordOf(readJson(issuesSeenFile(dataRoot, projectId))))) {
+    if (/^\d+$/.test(number) && typeof updatedAt === "string") {
+      seen[Number(number)] = updatedAt;
     }
   }
   return seen;
@@ -49,6 +46,6 @@ export function forgetIssueSeen(dataRoot: string, projectId: string, number: num
 
 /** Every entry of the project: its issue numbers name other issues once the source changed. Left
  *  behind they would mark them, so a failure is logged. */
-export function forgetIssuesSeen(dataRoot: string, projectId: string): void {
+export function forgetAllIssuesSeen(dataRoot: string, projectId: string): void {
   logFailure("forget the last seen updates of the project's issues", () => write(dataRoot, projectId, {}));
 }

@@ -3,6 +3,7 @@ import type { ProjectRef } from "../../../shared/types/project";
 import type { Issue, IssueFilter } from "../../../shared/types/providers";
 import { issueFileName, issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
 import { reloadIssueTabs } from "../../editor/editor-views";
+import { useIssuesSeen } from "../../editor/issue-seen";
 import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
@@ -52,18 +53,21 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
 function IssueRow({
   issue,
   active,
-  changed,
+  seen,
   onOpen,
   onMenu,
 }: {
   issue: Issue;
   /** Its tab is the active editor tab. */
   active: boolean;
-  /** The tracker changed it since its tab last showed it. */
-  changed: boolean;
+  /** Its `updatedAt` as its tab last showed it; none for one never shown. */
+  seen: string | undefined;
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
+  // The open one is on screen, so seen.
+  const changed = !active && seen !== undefined && seen !== issue.updatedAt;
+  const detail = changed ? `updated ${dayOf(issue.updatedAt)}, opened by` : `opened ${dayOf(issue.createdAt)}, by`;
   return (
     <div
       className={`list-row issue-row two-line${active ? " active" : ""}`}
@@ -77,8 +81,7 @@ function IssueRow({
       <span className="list-main">
         <span className="list-label">{issue.title}</span>
         <span className="list-detail">
-          #{issue.number} · {changed ? `updated ${dayOf(issue.updatedAt)}, opened by` : `opened ${dayOf(issue.createdAt)}, by`}{" "}
-          {issue.author}
+          #{issue.number} · {detail} {issue.author}
         </span>
       </span>
       <span className={`issue-mark${changed ? " changed" : ""}`} />
@@ -114,7 +117,8 @@ export const IssueList = memo(function IssueList({
 }) {
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, INITIAL_FILTER);
-  const { issues, seen, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
+  const { issues, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
+  const seen = useIssuesSeen(projectId);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
@@ -229,8 +233,7 @@ export const IssueList = memo(function IssueList({
                 key={issue.number}
                 issue={issue}
                 active={issue.number === openIssue}
-                // The open one is on screen, so seen; one never shown has no update to compare.
-                changed={issue.number !== openIssue && seen[issue.number] !== undefined && seen[issue.number] !== issue.updatedAt}
+                seen={seen[issue.number]}
                 onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
                 onMenu={(event) => menu.open(event, issue)}
               />
