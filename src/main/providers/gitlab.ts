@@ -6,6 +6,7 @@ import type {
   IssueFieldValue,
   IssueFilter,
   IssueNote,
+  IssueTimeLog,
   RemoteRepository,
 } from "../../shared/types/providers";
 import {
@@ -106,6 +107,16 @@ export interface GitLabParent {
   namespace: { fullPath: string };
 }
 
+/** A booking of time as GraphQL says it; `timeSpent` is in seconds, negative for time taken off. */
+export interface GitLabTimelog {
+  id: string;
+  timeSpent: number;
+  spentAt: string | null;
+  summary: string | null;
+  user: GitLabUser;
+  userPermissions: { adminTimelog: boolean };
+}
+
 /** One of a work item's widgets as GraphQL says it: `type` names it, and it holds what its own
  *  fragment of `WIDGETS` selected, the rest left out. */
 export interface GitLabWidget {
@@ -121,6 +132,7 @@ export interface GitLabWidget {
   dueDate?: string | null;
   healthStatus?: string | null;
   humanReadableAttributes?: { timeEstimate: string | null; totalTimeSpent: string | null };
+  timelogs?: { nodes: GitLabTimelog[] };
   participants?: { nodes: GitLabUser[] };
 }
 
@@ -169,7 +181,10 @@ const WIDGETS = `confidential
     ... on WorkItemWidgetHierarchy { parent { iid title workItemType { name } namespace { fullPath } } }
     ... on WorkItemWidgetMilestone { milestone { title } }
     ... on WorkItemWidgetStartAndDueDate { startDate dueDate }
-    ... on WorkItemWidgetTimeTracking { humanReadableAttributes { timeEstimate totalTimeSpent } }
+    ... on WorkItemWidgetTimeTracking {
+      humanReadableAttributes { timeEstimate totalTimeSpent }
+      timelogs(first: 100) { nodes { id timeSpent spentAt summary user { username } userPermissions { adminTimelog } } }
+    }
     ... on WorkItemWidgetParticipants { participants { nodes { username } } }
   }`;
 
@@ -324,6 +339,45 @@ export function parentName(parent: GitLabParent): string {
   return `${parent.title} (${parent.namespace.fullPath}${parent.workItemType.name === "Epic" ? "&" : "#"}${parent.iid})`;
 }
 
+/** What a duration is counted in, longest first, by GitLab's calendar: 8 hours a day, 5 days a week,
+ *  4 weeks a month. */
+const DURATION_UNITS: [unit: string, seconds: number][] = [
+  ["mo", 4 * 5 * 8 * 3600],
+  ["w", 5 * 8 * 3600],
+  ["d", 8 * 3600],
+  ["h", 3600],
+  ["m", 60],
+];
+
+/** A duration in seconds as GitLab words one, "1h 30m"; a minute is its smallest. */
+export function durationText(seconds: number): string {
+  let rest = Math.abs(seconds);
+  const parts: string[] = [];
+  for (const [unit, size] of DURATION_UNITS) {
+    const count = Math.floor(rest / size);
+    rest -= count * size;
+    if (count > 0) {
+      parts.push(`${count}${unit}`);
+    }
+  }
+  const text = parts.length > 0 ? parts.join(" ") : "0m";
+  return seconds < 0 ? `-${text}` : text;
+}
+
+/** The bookings of time a work item has, newest first. */
+export function toTimeLogs(logs: GitLabTimelog[]): IssueTimeLog[] {
+  return [...logs]
+    .sort((a, b) => (b.spentAt ?? "").localeCompare(a.spentAt ?? ""))
+    .map((log) => ({
+      id: log.id,
+      author: log.user.username,
+      timeSpent: durationText(log.timeSpent),
+      spentAt: log.spentAt?.slice(0, 10),
+      summary: log.summary || undefined,
+      removable: log.userPermissions.adminTimelog,
+    }));
+}
+
 /** What `health status` is called, by GitLab's name for it. */
 const HEALTH_STATUSES: NamedId[] = [
   { id: "onTrack", name: "On track" },
@@ -404,6 +458,7 @@ const FIELD_SOURCES: ((item: GitLabWorkItem) => IssueField[])[] = [
       editable: true,
       kind: "timelog",
       value: widget.humanReadableAttributes?.totalTimeSpent ?? undefined,
+      entries: toTimeLogs(widget.timelogs?.nodes ?? []),
     },
   ]),
   (item) => [{ id: "confidential", name: "Confidential", editable: true, kind: "flag", value: item.confidential }],
@@ -581,7 +636,7 @@ const VALUE_FIELDS: Record<string, (value: IssueFieldValue) => object> = {
   // "0" is how GitLab takes an estimate off.
   timeEstimate: (value) => ({ timeTrackingWidget: { timeEstimate: textOf(value) ?? "0" } }),
   timeSpent: (value) => {
-    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    if (value === null || typeof value !== "object" || Array.isArray(value) || !("timeSpent" in value)) {
       throw new Error("Time spent is added as an entry");
     }
     const { timeSpent, spentAt, summary } = value;
@@ -867,6 +922,11 @@ export const gitlab: GitProvider = {
 
   async setField({ host, token, path }, number, fieldId, value) {
     const send = sender(host, token);
+    // `workItemUpdate` has no way to take a booking back: it has a mutation of its own.
+    if (fieldId === "timeSpent" && value !== null && typeof value === "object" && !Array.isArray(value) && "remove" in value) {
+      await mutate(send, "timelogDelete", "TimelogDeleteInput", { id: value.remove });
+      return;
+    }
     const target = await readTarget(send, path, number);
     const pick = PICK_FIELDS[fieldId];
     if (pick && !Array.isArray(value)) {

@@ -17,6 +17,7 @@ import {
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
+  durationText,
   gitlab,
   issuesVariables,
   iterationName,
@@ -27,6 +28,7 @@ import {
   toIssue as toGitLabIssue,
   toIssueInput,
   toNotes as toGitLabNotes,
+  toTimeLogs,
   toWorkItemInput,
   uploadOf,
 } from "../../src/main/providers/gitlab";
@@ -270,6 +272,7 @@ describe("the issues of a tracker", () => {
     });
     assert.throws(() => sent("timeSpent", "1h"), /added as an entry/);
     assert.throws(() => sent("timeSpent", null), /added as an entry/);
+    assert.throws(() => sent("timeSpent", { remove: "T1" }), /added as an entry/);
     assert.deepEqual(sent("confidential", true), { confidential: true });
     assert.throws(() => sent("confidential", "yes"), /on or off/);
     assert.throws(() => sent("nothing", null), /no field nothing/);
@@ -313,7 +316,7 @@ describe("the issues of a tracker", () => {
         ["dueDate", "Due date", true, { kind: "date", group: "Dates", value: undefined }],
         ["health", "Health status", true, { kind: "pick", value: ["At risk"], several: false, shown: "text" }],
         ["timeEstimate", "Estimate", true, { kind: "duration", group: "Time tracking", value: "3h" }],
-        ["timeSpent", "Time spent", true, { kind: "timelog", group: "Time tracking", value: undefined }],
+        ["timeSpent", "Time spent", true, { kind: "timelog", group: "Time tracking", value: undefined, entries: [] }],
         ["confidential", "Confidential", true, { kind: "flag", value: true }],
         ["participants", "Participants", false, { kind: "pick", value: ["anna"], several: true, shown: "people" }],
       ],
@@ -332,6 +335,38 @@ describe("the issues of a tracker", () => {
       toGitLabFields({ confidential: false, widgets: [{ type: "WEIGHT" }, { type: "HEALTH_STATUS" }] }).map((field) => field.id),
       ["confidential"],
       "a widget whose data was not read has no field",
+    );
+  });
+
+  it("words a duration in seconds as GitLab does, by its calendar of 8 hours a day", () => {
+    assert.equal(durationText(5400), "1h 30m");
+    assert.equal(durationText(8 * 3600), "1d");
+    assert.equal(durationText(5 * 8 * 3600 + 3 * 8 * 3600 + 3600 + 60), "1w 3d 1h 1m");
+    assert.equal(durationText(4 * 5 * 8 * 3600 + 60), "1mo 1m");
+    assert.equal(durationText(-1800), "-30m");
+    assert.equal(durationText(0), "0m");
+  });
+
+  it("lists the bookings of time of a work item, newest first", () => {
+    const log = (id: string, timeSpent: number, spentAt: string | null, summary: string | null, adminTimelog: boolean) => ({
+      id,
+      timeSpent,
+      spentAt,
+      summary,
+      user: { username: "anna" },
+      userPermissions: { adminTimelog },
+    });
+    assert.deepEqual(
+      toTimeLogs([
+        log("T1", 3600, "2026-10-30T00:00:00Z", "Fixed it", true),
+        log("T2", 5400, "2026-11-02T08:15:00Z", "", false),
+        log("T3", 60, null, null, true),
+      ]),
+      [
+        { id: "T2", author: "anna", timeSpent: "1h 30m", spentAt: "2026-11-02", summary: undefined, removable: false },
+        { id: "T1", author: "anna", timeSpent: "1h", spentAt: "2026-10-30", summary: "Fixed it", removable: true },
+        { id: "T3", author: "anna", timeSpent: "1m", spentAt: undefined, summary: undefined, removable: true },
+      ],
     );
   });
 

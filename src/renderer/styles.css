@@ -1406,7 +1406,7 @@ textarea:focus,
   display: flex;
   flex-direction: column;
   flex: 1 0 25%;
-  gap: 14px;
+  gap: 12px;
   min-width: 180px;
   max-width: 400px;
 }
@@ -1471,6 +1471,25 @@ textarea:focus,
 
 .issue-side-name {
   color: var(--tet-descriptionForeground);
+}
+
+/* A booking of time (`TimeLogs`): its time and day with the button to take it back at the end, then
+   who made it and what for. */
+.issue-time-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+
+.issue-time-log-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issue-time-log-line > .icon-button {
+  margin-left: auto;
 }
 
 .issue-labels {

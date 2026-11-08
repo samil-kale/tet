@@ -5,7 +5,7 @@ import type { IssueField } from "../../src/shared/types/providers";
 
 const pick = (id: string): IssueField => ({ id, name: id, editable: true, kind: "pick", value: [], several: false, shown: "text" });
 const typed = (id: string, group?: string): IssueField => ({ id, name: id, group, editable: true, kind: "date", value: undefined });
-const timelog = (id: string, group?: string): IssueField => ({ id, name: id, group, editable: true, kind: "timelog" });
+const timelog = (id: string, group?: string): IssueField => ({ id, name: id, group, editable: true, kind: "timelog", entries: [] });
 
 describe("an issue's fields as sections", () => {
   it("makes a section of each field alone and of each group's fields together, at the first one's place", () => {

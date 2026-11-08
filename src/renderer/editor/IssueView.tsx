@@ -793,9 +793,60 @@ function changeLabel(field: AskedField): string {
   return field.kind === "timelog" ? "Add time entry" : `Set ${field.name.toLowerCase()}`;
 }
 
+/** The bookings of time an issue has, each with its time, day, who made it and what it was for; one the
+ *  viewer's rights allow is taken back after a question. */
+function TimeLogs({
+  field,
+  issue,
+  actions,
+}: {
+  field: Extract<IssueField, { kind: "timelog" }>;
+  issue: IssueDetail;
+  actions: IssueActions;
+}) {
+  return field.entries.map((entry) => (
+    <div key={entry.id} className="issue-time-log">
+      <div className="issue-time-log-line">
+        <span>{entry.timeSpent}</span>
+        {entry.spentAt && <span className="issue-side-name">{entry.spentAt}</span>}
+        {entry.removable && (
+          <IconButton
+            title="Delete..."
+            onClick={() =>
+              void confirmed({
+                title: "Delete time entry",
+                message: "Delete this time entry?",
+                detail: "It is deleted on the tracker for good.",
+                confirmLabel: "Delete",
+              }).then((answer) => (answer ? actions.setField(field.id, { remove: entry.id }) : undefined))
+            }
+          >
+            <TrashIcon />
+          </IconButton>
+        )}
+      </div>
+      <div className="issue-side-person">
+        <Person login={entry.author} avatar={issue.avatars[entry.author]} />
+        <span className="issue-side-name">{entry.author}</span>
+      </div>
+      {entry.summary && <div className="issue-side-name">{entry.summary}</div>}
+    </div>
+  ));
+}
+
 /** The fields of one group as a section: their values or, where none has one, a sentence offering to
  *  add them; its one button opens a menu of what can be set. */
-function GroupSection({ title, fields, actions }: { title: string; fields: AskedField[]; actions: IssueActions }) {
+function GroupSection({
+  title,
+  fields,
+  issue,
+  actions,
+}: {
+  title: string;
+  fields: AskedField[];
+  issue: IssueDetail;
+  actions: IssueActions;
+}) {
   const menu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom }));
   const editable = fields.filter((field) => field.editable);
   const entries = (): ContextMenuEntry[] =>
@@ -846,6 +897,7 @@ function GroupSection({ title, fields, actions }: { title: string; fields: Asked
           </div>
         ))
       )}
+      {fields.map((field) => field.kind === "timelog" && <TimeLogs key={field.id} field={field} issue={issue} actions={actions} />)}
     </SideSection>
   );
 }
@@ -926,6 +978,7 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
           }
         >
           <span className={field.value === undefined ? "issue-none" : undefined}>{field.value ?? "None"}</span>
+          <TimeLogs field={field} issue={issue} actions={actions} />
         </SideSection>
       );
     case "number":
@@ -1014,7 +1067,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
           <div className="issue-side">
             {sectionsOf(issue.fields).map((section) =>
               "group" in section ? (
-                <GroupSection key={section.group} title={section.group} fields={section.fields} actions={actions} />
+                <GroupSection key={section.group} title={section.group} fields={section.fields} issue={issue} actions={actions} />
               ) : (
                 <FieldSection key={section.field.id} field={section.field} issue={issue} actions={actions} />
               ),

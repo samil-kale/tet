@@ -812,7 +812,8 @@ function withChange(detail: IssueDetail, change: IssueChange): IssueDetail {
   };
 }
 
-/** The field as it reads once set to `value`; a timelog's total is left to the read back. */
+/** The field as it reads once set to `value`; a timelog's new entry and total are left to the read
+ *  back. */
 function withValue(field: IssueField, value: IssueFieldValue): IssueField {
   switch (field.kind) {
     case "pick":
@@ -820,7 +821,9 @@ function withValue(field: IssueField, value: IssueFieldValue): IssueField {
     case "flag":
       return { ...field, value: value as boolean };
     case "timelog":
-      return field;
+      return value !== null && typeof value === "object" && !Array.isArray(value) && "remove" in value
+        ? { ...field, entries: field.entries.filter((entry) => entry.id !== value.remove) }
+        : field;
     case "duration":
       return { ...field, value: (value as string | null) ?? undefined };
     case "number":

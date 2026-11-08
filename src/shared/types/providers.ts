@@ -125,10 +125,30 @@ export type IssueField = {
   | { kind: "number"; value?: number }
   | { kind: "date"; /** YYYY-MM-DD. */ value?: string }
   | { kind: "duration"; /** As the tracker words it, "1h 30m". */ value?: string }
-  /** Time booked to the issue, only ever added to: `value` is the total, `setField` takes an entry. */
-  | { kind: "timelog"; value?: string }
+  /** Time booked to the issue: `value` is the total, `entries` the bookings, newest first; `setField`
+   *  takes a new entry, or the removal of one. */
+  | { kind: "timelog"; value?: string; entries: IssueTimeLog[] }
   | { kind: "flag"; value: boolean }
 );
+
+/** A booking of time already made to an issue. */
+export interface IssueTimeLog {
+  /** What an `IssueTimeRemoval` names it by. */
+  id: string;
+  author: string;
+  /** As the tracker words a duration, "1h 30m". */
+  timeSpent: string;
+  /** YYYY-MM-DD. */
+  spentAt?: string;
+  summary?: string;
+  /** Whether the viewer's rights take it back. */
+  removable: boolean;
+}
+
+/** The taking back of a booking, by its `IssueTimeLog.id`. */
+export interface IssueTimeRemoval {
+  remove: string;
+}
 
 /** One booking of time to an issue: how long, when and what was done. */
 export interface IssueTimeEntry {
@@ -140,8 +160,8 @@ export interface IssueTimeEntry {
 }
 
 /** What `setField` sets, by the field's kind: a pick's values; a number, a date or a duration, null
- *  taking it off; a flag's state; a timelog's new entry. */
-export type IssueFieldValue = string[] | number | string | boolean | IssueTimeEntry | null;
+ *  taking it off; a flag's state; a timelog's new entry or the removal of one. */
+export type IssueFieldValue = string[] | number | string | boolean | IssueTimeEntry | IssueTimeRemoval | null;
 
 export interface IssueFieldOptionsResult {
   /** What a pick field can be set to, by the names `IssueField.value` uses. */
