@@ -102,7 +102,8 @@ describe("the startup gate", () => {
     assert.equal(gate.opened(), 1);
     assert.ok(programs.mock.callCount() > 0);
     if (!PLATFORM.agentDirsKnown) {
-      assert.equal(paths.mock.callCount(), 1);
+      // git.ts runs through execFile too, for the requirements' own git version.
+      assert.equal(paths.mock.calls.filter((call) => call.arguments[0] !== "git").length, 1);
     }
   });
 
