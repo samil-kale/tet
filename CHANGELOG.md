@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.24.2 (2026-11-09)
+
+- **New issue dialog.** The description is written in the same box as in an issue's tab, with Write
+  and Preview showing the text as the tracker will render it. New Issue waits until the list has
+  been read from the tracker.
+- **Fixes.** The issue filter and side menus list the picked options without a heading, marking all
+  issues read has its own icon, and a text box keeps its height when switching to Preview and back.
+
 ## 0.24.1 (2026-11-09)
 
 - **tet-ctl provider-api.** Agents can call the rest of the tracker's API (GitHub or GitLab, GraphQL
