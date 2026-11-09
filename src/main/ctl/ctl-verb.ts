@@ -1,3 +1,4 @@
+import { errorMessage } from "../../shared/errors";
 import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
@@ -9,6 +10,7 @@ import type { Issue } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
+import type { ApiAnswer, ApiRequest } from "../providers/api-request";
 import type { IssueTrackerInfo } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -174,10 +176,14 @@ export interface ControlDeps {
   setIssueSource(projectId: string, source: string): Promise<string | undefined>;
   readIssueTracker(projectId: string): Promise<IssueTrackerInfo>;
   unreadIssues(projectId: string): Promise<Issue[]>;
+  markIssuesSeen(projectId: string, number?: number): Promise<void>;
+  /** One request to the API of the project's tracker (`GitProvider.request`). */
+  providerRequest(projectId: string, request: ApiRequest): Promise<ApiAnswer>;
   /** Opens the project's issue in the repository's or worktree's preview tab, or a kept tab, and brings
    *  it to the front unless `background`. */
   openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
-  openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId): Promise<HandoverResult>;
+  /** `sandboxOnly` as for `ControlTerminals.createTab`. */
+  openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
@@ -300,6 +306,25 @@ export function agentById(deps: Pick<ControlDeps, "agents">, id: string): AgentD
 /** `--agent`, one TET has. */
 export function agentFlag(deps: Pick<ControlDeps, "agents">, args: Record<string, unknown>): AgentDefinition {
   return agentById(deps, text(args, "agent", "agent: pass --agent <id> (see agents-list)"));
+}
+
+/** What the tracker or the account refused, answered as a call the caller can mend. */
+export async function refusable<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    throw new ControlError("bad_args", errorMessage(error));
+  }
+}
+
+/** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
+ *  opens only an sbx agent's tab, held to the sandbox (`CallerSide.holdsTabs`). */
+export function openableAgent(deps: Pick<ControlDeps, "agents">, args: Record<string, unknown>, caller: Caller): AgentDefinition {
+  const agent = agentFlag(deps, args);
+  if (!caller.side.opens(agent)) {
+    throw new ControlError("unauthorized", `a ${agent.id} tab does not run in a sandbox, so a sandbox cannot open one`);
+  }
+  return agent;
 }
 
 /** The repository's or worktree's terminals; one closed meanwhile is an internal error. */

@@ -1,11 +1,11 @@
 import type { ControlVerbName } from "../../shared/ctl";
-import { errorMessage } from "../../shared/errors";
 import {
-  agentFlag,
   bringToFront,
   ControlError,
+  openableAgent,
   optionalText,
   positiveInteger,
+  refusable,
   text,
   type ControlDeps,
   type Handler,
@@ -17,15 +17,6 @@ import {
  * repository or worktree `refFrom` finds (resolveCallerRef), whichever of them that is.
  */
 export function issueVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `issues-${string}`>, Handler> {
-  /** What the tracker or the account refused, answered as a call the caller can mend. */
-  const refusable = async <T>(call: () => Promise<T>): Promise<T> => {
-    try {
-      return await call();
-    } catch (error) {
-      throw new ControlError("bad_args", errorMessage(error));
-    }
-  };
-
   /** The first positional, an issue's number. */
   const issueNumber = (args: Record<string, unknown>): number => {
     const typed = text(args, "number", "issue number");
@@ -56,6 +47,15 @@ export function issueVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<
       });
     },
 
+    "issues-mark-seen": (args, caller) => {
+      const { project } = refFrom(args, caller);
+      const number = optionalText(args, "number") === undefined ? undefined : issueNumber(args);
+      return refusable(async () => {
+        await deps.markIssuesSeen(project.id, number);
+        return { result: { seen: number ?? "all" } };
+      });
+    },
+
     "issues-open": (args, caller) => {
       const { ref } = refFrom(args, caller);
       const number = issueNumber(args);
@@ -67,11 +67,11 @@ export function issueVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<
     "issues-open-in-agent": async (args, caller) => {
       const { ref } = refFrom(args, caller);
       const number = issueNumber(args);
-      const agent = agentFlag(deps, args);
+      const agent = openableAgent(deps, args, caller);
       if (!agent.terminal) {
         throw new ControlError("bad_args", `a ${agent.id} tab takes no issue`);
       }
-      const opened = await deps.openIssueInAgent(ref, number, agent.id);
+      const opened = await deps.openIssueInAgent(ref, number, agent.id, caller.side.holdsTabs);
       if (!opened.ok) {
         throw new ControlError("bad_args", opened.error);
       }

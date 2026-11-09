@@ -4,6 +4,9 @@ import { ChevronIcon, CloseIcon } from "../../ui/icons";
 import { PickMenu } from "../../ui/PickMenu";
 import type { IssueOptions } from "../../editor/editor-views";
 
+/** The widest a filter's list gets, in px: longer names end in an ellipsis. */
+const FILTER_MENU_MAX_WIDTH = 300;
+
 interface FilterControlProps {
   title: string;
   /** What it stands at, as shown after the title; undefined narrows nothing. */
@@ -22,7 +25,14 @@ interface FilterControlProps {
 function FilterControl({ title, value, options, isPicked, onPick, onClear, several }: FilterControlProps) {
   return (
     <span className={value === undefined ? "issue-filter" : "issue-filter set"}>
-      <PickMenu className="issue-filter-trigger" options={options} isPicked={isPicked} onPick={onPick} several={several}>
+      <PickMenu
+        className="issue-filter-trigger"
+        maxWidth={FILTER_MENU_MAX_WIDTH}
+        options={options}
+        isPicked={isPicked}
+        onPick={onPick}
+        several={several}
+      >
         <span className="issue-filter-text">{value === undefined ? title : `${title}: ${value}`}</span>
         {value === undefined && <ChevronIcon expanded />}
       </PickMenu>

@@ -9,11 +9,14 @@ import {
   onTracker,
   readIssueTracker,
   setIssueSource,
+  writeOnTracker,
   type IssueAccounts,
   type IssueRepository,
   type IssueTrackerInfo,
+  type TrackerCall,
 } from "./providers/issues";
-import { forgetAllIssuesSeen, readIssuesSeen } from "./store/issues-seen";
+import type { ApiAnswer, ApiRequest } from "./providers/api-request";
+import { forgetAllIssuesSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
 import type { ProjectStore } from "./store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
 import type { SettingsAccess } from "./store/settings";
@@ -21,7 +24,7 @@ import { readIssueSource } from "./store/tet-json";
 import type { SessionManagerRegistry } from "./terminals/session-registry";
 
 /**
- * What the ISSUES section and `tet-ctl`'s issue verbs share, built once in main.ts like
+ * What the ISSUES section and `tet-ctl`'s issue and provider verbs share, built once in main.ts like
  * `ProjectDeps`. A project's tracker is read through its repository, never a worktree's: the
  * repository and its worktrees share one.
  */
@@ -76,6 +79,40 @@ export async function unreadIssues(deps: Pick<IssueDeps, "accounts" | "dataRoot"
   return issues.filter((issue) => isUnread(issue, seen));
 }
 
+/**
+ * Counts the issue as its tab shows it, at the update the tracker has now; without a number, every
+ * issue created or changed until now.
+ */
+export async function markIssuesSeen(
+  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  projectId: string,
+  number?: number,
+): Promise<void> {
+  if (number === undefined) {
+    markAllIssuesSeen(deps.dataRoot, projectId);
+    return;
+  }
+  const { updatedAt } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.readIssue(tracker, number),
+  );
+  setIssueSeen(deps.dataRoot, projectId, number, updatedAt);
+}
+
+/**
+ * One request to the API of the project's tracker (`GitProvider.request`): a GET through `onTracker`,
+ * anything else through `writeOnTracker`, whose next account takes over only from one that does not
+ * reach the tracker.
+ */
+export function requestTracker(
+  deps: Pick<IssueDeps, "accounts" | "repositories">,
+  projectId: string,
+  request: ApiRequest,
+): Promise<ApiAnswer> {
+  const call: TrackerCall<ApiAnswer> = (provider, tracker) => provider.request(tracker, request);
+  const onProject = request.method === "GET" ? onTracker : writeOnTracker;
+  return onProject(deps.accounts, issueRepository(deps, projectId), call);
+}
+
 /** The first prompt of a tab opened on an issue: the settings' text, then which issue it is, ended
  *  by its file's path. */
 function issuePrompt(text: string, number: number): string {
@@ -84,13 +121,15 @@ function issuePrompt(text: string, number: number): string {
 
 /**
  * A new tab of the agent in the repository or worktree, read from the tracker, the issue its first
- * prompt; the tab shows it as a file. The caller checks that the agent takes a prompt.
+ * prompt; the tab shows it as a file. The caller checks that the agent takes a prompt. `sandboxOnly`:
+ * opened from a sandbox, so it never runs on this machine (`TabSessionManager.createTab`).
  */
 export async function openIssueInAgent(
   deps: Pick<IssueDeps, "accounts" | "repositories" | "settings" | "store" | "tabManagers">,
   ref: ProjectRef,
   number: number,
   agentId: AgentId,
+  sandboxOnly = false,
 ): Promise<HandoverResult> {
   try {
     const manager = deps.tabManagers.get(ref);
@@ -105,7 +144,7 @@ export async function openIssueInAgent(
       content: issueMarkdown(issue),
       prompt: issuePrompt(effectivePrompt(deps.settings.get().prompts.texts, "issue"), number),
     };
-    return { ok: true, tab: manager.createTabOnFile(agentId, file) };
+    return { ok: true, tab: manager.createTabOnFile(agentId, file, sandboxOnly) };
   } catch (error) {
     return failure(error);
   }

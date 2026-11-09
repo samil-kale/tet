@@ -11,6 +11,7 @@ import type {
   RemoteRepository,
 } from "../../shared/types/providers";
 import { fetchHttpsImage } from "../util/image-response";
+import type { ApiAnswer, ApiRequest } from "./api-request";
 
 /** A repository's issue tracker as one call reaches it: the host, the token of the account it goes
  *  through, and the repository's path there, "owner/name" or "group/subgroup/name". */
@@ -58,6 +59,9 @@ export interface GitProvider {
   /** Uploads a file for an issue's text and answers the Markdown that shows it. */
   uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
   updateIssue(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
+  /** One request to the host's API (REST or `/graphql`) as the account: the rest of the API, which this
+   *  interface leaves out. A path outside the API and a non-2xx answer reject (`sendApi`). */
+  request(tracker: Tracker, request: ApiRequest): Promise<ApiAnswer>;
 }
 
 /** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching
@@ -79,9 +83,10 @@ export class ApiError extends Error {
  * Chromium's stack applies the machine's proxy settings and certificate store, so a company proxy or
  * private root certificate works. `no-store`: its HTTP cache would answer a host's reads for their
  * `max-age`, and a write invalidates only its own URL, so what was just written would not read back.
+ * `redirect: "error"`: the stack sends a request's headers, the token's, on to wherever a redirect leads.
  */
 export async function fetchOk(url: string, headers: Record<string, string>, init?: { method: string; body?: BodyInit }): Promise<Response> {
-  const response = await net.fetch(url, { headers, cache: "no-store", ...init });
+  const response = await net.fetch(url, { headers, cache: "no-store", redirect: "error", ...init });
   if (!response.ok) {
     throw new ApiError(response.status, await apiError(response));
   }

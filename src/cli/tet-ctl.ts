@@ -73,6 +73,7 @@ function usage(): string {
     lines: CONTROL_VERBS.filter((entry) => entry.group === heading && listed(entry)).flatMap((entry) => [
       `  ${entry.usage}`,
       `      ${entry.summary}`,
+      ...(entry.examples ?? []).map((example) => `        e.g. ${example}`),
     ]),
   })).filter((group) => group.lines.length > 0);
   return [
@@ -230,6 +231,10 @@ async function main(): Promise<void> {
   const quiet = entry?.stdout === true;
   if (entry?.stdin) {
     args.payload = await readStdin();
+  }
+  // A body too long or too quoted for an argument.
+  if (args.data === "-") {
+    args.data = await readStdin();
   }
   const portVar = process.env[CONTROL_ENV.port];
   const token = process.env[CONTROL_ENV.token];

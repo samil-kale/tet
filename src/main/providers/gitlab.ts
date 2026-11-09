@@ -10,6 +10,7 @@ import {
   type IssueTimeLog,
   type RemoteRepository,
 } from "../../shared/types/providers";
+import { sendApi, type ApiEndpoints } from "./api-request";
 import {
   allNodes,
   ApiError,
@@ -46,8 +47,16 @@ function headers(token: string): Record<string, string> {
   return { "PRIVATE-TOKEN": token };
 }
 
+function graphqlUrl(host: string): string {
+  return `https://${host}/api/graphql`;
+}
+
+function bearer(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
+}
+
 function sender(host: string, token: string): GraphqlSend {
-  return (query, variables) => sendGraphql(`https://${host}/api/graphql`, { Authorization: `Bearer ${token}` }, query, variables);
+  return (query, variables) => sendGraphql(graphqlUrl(host), bearer(token), query, variables);
 }
 
 /** A project GraphQL answers null for says neither that it is missing nor that the token cannot read
@@ -753,7 +762,14 @@ export function toEvents(
   return events;
 }
 
+export function endpoints(host: string): ApiEndpoints {
+  return { rest: apiBase(host), graphql: graphqlUrl(host) };
+}
+
 export const gitlab: GitProvider = {
+  /** A project's path in GitLab's REST paths is one URL-encoded segment. */
+  request: (tracker, request) => sendApi(endpoints(tracker.host), encodeURIComponent(tracker.path), bearer(tracker.token), request),
+
   async validate(host, token) {
     const data = (await sender(host, token)("{ currentUser { username } }", {})) as { currentUser: { username?: unknown } | null };
     const username = data.currentUser?.username;

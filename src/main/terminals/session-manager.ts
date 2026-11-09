@@ -465,8 +465,8 @@ export class TabSessionManager {
   }
 
   /** A new tab of `agentId` starting on `file`, for an agent with a `terminal`; the caller checks. */
-  createTabOnFile(agentId: AgentId, file: InitialFile): TabDescriptor {
-    return this.addTab(agentId, { initialFile: file });
+  createTabOnFile(agentId: AgentId, file: InitialFile, sandboxOnly = false): TabDescriptor {
+    return this.addTab(agentId, { initialFile: file, ...(sandboxOnly && { sandboxOnly }) });
   }
 
   /**

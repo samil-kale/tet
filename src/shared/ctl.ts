@@ -93,6 +93,8 @@ export interface ControlVerb {
    * `sandbox`, so a new verb that gives out a file cannot leave it out.
    */
   sandboxFile?: string;
+  /** Lines of `tet-ctl help` under the summary: ready calls, for a verb whose use is not obvious. */
+  examples?: readonly string[];
   /** The last positional takes every argument left, as a list. */
   variadic?: true;
   /** Stdin goes in as `args.payload` — an agent's hook payload. */
@@ -135,11 +137,15 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   toast: "switch",
   title: "value",
   severity: "value",
+  data: "value",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
  *  drawn for until one does, and so the size `tabs-output` reads it at. */
 export const CONTROL_START_SIZE = { cols: 120, rows: 30 };
+
+/** What `provider-api` sends. */
+export const API_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
 
 /** What `tabs-keys` presses, as a terminal sends each key. Single keys only: a burst of text is a
  *  paste to an agent's TUI, `tabs-text`'s. */
@@ -515,6 +521,7 @@ const VERBS = [
     summary:
       "Open a tab of an agent (see agents-list) on the project's issue, read from the tracker as the ISSUES section's Open in Agent does, and bring it to the front.",
     positionals: ["number"],
+    sandbox: "ownProject",
   },
   {
     verb: "commands-list",
@@ -530,6 +537,7 @@ const VERBS = [
     summary:
       "Read the project's issues from another repository on its host, group/subgroup/name or its url, checked against the tracker and saved in tet.json as the path. No path goes back to the repository's own.",
     positionals: ["source"],
+    sandbox: "ownProject",
   },
   {
     verb: "issues-get-source",
@@ -546,6 +554,38 @@ const VERBS = [
     usage: "issues-unread [--project <id>]",
     summary: "The project's open issues the tracker created or changed since their tab last showed them (number, title, url, updatedAt).",
     positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-mark-seen",
+    group: "Projects",
+    usage: "issues-mark-seen [<number>] [--project <id>]",
+    summary:
+      "Count the issue as shown at its current update, so issues-unread leaves it out; without a number every issue created or changed until now. The ISSUES section shows it at its next refresh.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "provider-api",
+    group: "Projects",
+    usage: `provider-api <${API_METHODS.join("|")}> <path> [--data <json>|-] [--project <id>]`,
+    summary:
+      "One request to the API of the host the project's issues are read from (GitHub or GitLab), made with the account's token: pull and merge requests, branches, pipelines, issues and their fields. <path> is relative to the API, REST or /graphql, with {repo} standing for the repository's path. --data - reads the JSON body from stdin. Answers status, headers (link, rate limit) and body; what the host refuses is the error.",
+    positionals: ["method", "path"],
+    sandbox: "ownProject",
+    examples: [
+      "GitLab: provider-api GET '/projects/{repo}/merge_requests?state=opened'",
+      `GitLab: provider-api POST '/projects/{repo}/merge_requests' --data '{"source_branch":"feat","target_branch":"main","title":"Title"}'`,
+      "GitLab: provider-api PUT '/projects/{repo}/merge_requests/<iid>/merge'",
+      "GitLab: provider-api GET '/projects/{repo}/issues/<iid>'",
+      `GitLab: provider-api POST '/projects/{repo}/issues/<iid>/notes' --data '{"body":"Text"}'`,
+      "GitHub: provider-api GET '/repos/{repo}/pulls?state=open'",
+      `GitHub: provider-api POST '/repos/{repo}/pulls' --data '{"title":"Title","head":"feat","base":"main"}'`,
+      "GitHub: provider-api PUT '/repos/{repo}/pulls/<number>/merge'",
+      "GitHub: provider-api GET '/repos/{repo}/issues/<number>'",
+      `GitHub: provider-api POST '/repos/{repo}/issues/<number>/comments' --data '{"body":"Text"}'`,
+      `Either: provider-api POST /graphql --data '{"query":"{ __schema { mutationType { fields { name } } } }"}'`,
+    ],
   },
   {
     verb: "tabs-run-command",
@@ -603,6 +643,7 @@ const VERBS = [
     summary:
       "Open the project's issue in the preview tab of the repository or a worktree and bring it to the front, for the user to read; the next file or issue replaces it, --keep gives it a tab of its own.",
     positionals: ["number"],
+    sandbox: "ownProject",
   },
   {
     verb: "editor-get",

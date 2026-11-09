@@ -12,7 +12,15 @@ import { issueFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
-import { changeIssueSource, issueTrackerOf, openIssueInAgent, unreadIssues, type IssueDeps } from "./issues";
+import {
+  changeIssueSource,
+  issueTrackerOf,
+  markIssuesSeen,
+  openIssueInAgent,
+  requestTracker,
+  unreadIssues,
+  type IssueDeps,
+} from "./issues";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -301,9 +309,11 @@ async function startControl(): Promise<void> {
         setIssueSource: (projectId, source) => changeIssueSource(issueDeps, projectId, source),
         readIssueTracker: (projectId) => issueTrackerOf(issueDeps, projectId),
         unreadIssues: (projectId) => unreadIssues(issueDeps, projectId),
+        markIssuesSeen: (projectId, number) => markIssuesSeen(issueDeps, projectId, number),
+        providerRequest: (projectId, request) => requestTracker(issueDeps, projectId, request),
         openIssue: (ref, number, keep, background) =>
           send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
-        openIssueInAgent: (ref, number, agentId) => openIssueInAgent(issueDeps, ref, number, agentId),
+        openIssueInAgent: (ref, number, agentId, sandboxOnly) => openIssueInAgent(issueDeps, ref, number, agentId, sandboxOnly),
         shutdown,
         records,
         projectRefPath: (ref) => {

@@ -6,17 +6,25 @@ const FETCH_IMAGE_TIMEOUT_MS = 15_000;
 /** As many hops as a badge service needs; past that it is a loop, not a move. */
 const MAX_IMAGE_REDIRECTS = 5;
 
+/** What `requestUnfollowed` takes. */
+interface UnfollowedInit {
+  signal: AbortSignal;
+  headers?: Record<string, string>;
+  method?: string;
+  body?: string;
+}
+
 /** What `fetchHttpsImage` sends a request with; `requestUnfollowed` in the app, a stand-in in the tests. */
-type FetchLike = (url: string, init: { signal: AbortSignal; redirect: "manual"; headers?: Record<string, string> }) => Promise<Response>;
+export type FetchLike = (url: string, init: UnfollowedInit & { redirect: "manual" }) => Promise<Response>;
 
 /** The statuses a `Response` refuses a body for. */
 const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
 /** One request answering a redirect instead of following it. `net.request`, as `net.fetch` throws on
  *  `redirect: "manual"`. */
-function requestUnfollowed(url: string, init: { signal: AbortSignal; headers?: Record<string, string> }): Promise<Response> {
+export function requestUnfollowed(url: string, init: UnfollowedInit): Promise<Response> {
   return new Promise((resolve, reject) => {
-    const request = net.request({ url, redirect: "manual" });
+    const request = net.request({ url, method: init.method, redirect: "manual" });
     for (const [name, value] of Object.entries(init.headers ?? {})) {
       request.setHeader(name, value);
     }
@@ -39,7 +47,7 @@ function requestUnfollowed(url: string, init: { signal: AbortSignal; headers?: R
     });
     request.on("abort", () => reject(new Error("The request was stopped")));
     request.on("error", reject);
-    request.end();
+    request.end(init.body);
   });
 }
 

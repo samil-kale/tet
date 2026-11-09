@@ -36,8 +36,17 @@ const WORKTREE_SENTENCE =
 const TASK_SENTENCE =
   " When the user wants another agent or a tab of its own on a task, open one with tet-ctl; your own subagents stay as they are.";
 
+/** Only where the verb answers. */
+const PROVIDER_SENTENCE =
+  " For GitHub or GitLab work beyond the files, such as pull requests, merge requests and issues, use tet-ctl provider-api, which uses the account token TET already has.";
+
 export function systemPrompt(side: ControlSide): string {
   return (
-    tetSentences(side) + WORKTREE_SENTENCE + TASK_SENTENCE + (admitsVerb(side, "env-request") ? ENVIRONMENT_SENTENCE : "") + side.promptNote
+    tetSentences(side) +
+    WORKTREE_SENTENCE +
+    TASK_SENTENCE +
+    (admitsVerb(side, "env-request") ? ENVIRONMENT_SENTENCE : "") +
+    (admitsVerb(side, "provider-api") ? PROVIDER_SENTENCE : "") +
+    side.promptNote
   );
 }

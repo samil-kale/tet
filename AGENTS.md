@@ -376,7 +376,9 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
   appended to each agent's system prompt (Codex: its `SessionStart` hook's added context), never
   replacing the user's instructions.
 - **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent needs
-  are typed only into TET's dialog (`env-request`), never the chat.
+  are typed only into TET's dialog (`env-request`), never the chat. The account tokens TET holds go
+  through `provider-api` alone, to the host the project's issues are read from and under its API
+  (`apiUrl`); a redirect never leaves that host.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`ctl-token.ts`): a terminal gets its tab's token, never the run's.
 - **Where a caller runs is its side** (`ControlSide`, `src/shared/ctl-side.ts`, extended in main by

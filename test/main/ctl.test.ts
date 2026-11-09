@@ -90,8 +90,10 @@ interface Calls {
   issueSources: [string, string][];
   /** `[refKey, number, keep, background]` per issue opened in a tab. */
   issuesOpened: [string, number, boolean, boolean][];
-  /** `[refKey, number, agentId]` per tab opened on an issue. */
-  issueAgents: [string, number, string][];
+  /** `[refKey, number, agentId, sandboxOnly]` per tab opened on an issue. */
+  issueAgents: [string, number, string, boolean][];
+  /** What each issue verb that reads or writes the tracker asked, as `verb:projectId:details`. */
+  issueCalls: string[];
   added: string[];
   removed: string[];
   /** `[projectId, branch]` per worktree-add, `[refKey, force]` per worktree-delete. */
@@ -415,11 +417,21 @@ function deps(): ControlDeps {
         },
       ];
     },
+    providerRequest: async (projectId, request) => {
+      calls.issueCalls.push(`api:${projectId}:${request.method} ${request.path} ${request.body ?? ""}`.trimEnd());
+      if (request.path === "/missing") {
+        throw new Error("404 Not Found: no such thing");
+      }
+      return { status: 200, headers: { link: '<next>; rel="next"' }, body: { ok: true } };
+    },
+    markIssuesSeen: async (projectId, number) => {
+      calls.issueCalls.push(`seen:${projectId}:${number ?? "all"}`);
+    },
     openIssue: (ref, number, keep, background) => {
       calls.issuesOpened.push([refKeyOf(ref), number, keep, background]);
     },
-    openIssueInAgent: async (ref, number, agentId) => {
-      calls.issueAgents.push([refKeyOf(ref), number, agentId]);
+    openIssueInAgent: async (ref, number, agentId, sandboxOnly) => {
+      calls.issueAgents.push([refKeyOf(ref), number, agentId, sandboxOnly]);
       return number === 404 ? { ok: false, error: "404 Not Found" } : { ok: true, tab: tab("tab-issue") };
     },
     shutdown: (relaunch) => {
@@ -538,6 +550,7 @@ describe("tet-ctl against the control server", () => {
       issueSources: [],
       issuesOpened: [],
       issueAgents: [],
+      issueCalls: [],
       added: [],
       removed: [],
       worktreesAdded: [],
@@ -991,6 +1004,39 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["issues-unread", "--project", OTHER.id]), /No account for gitlab\.example\.com/);
   });
 
+  it("counts an issue or all of them as shown, and refuses what is no issue number", async () => {
+    assert.deepEqual((await tetCtl(["issues-mark-seen", "7"])).result, { seen: 7 });
+    assert.deepEqual((await tetCtl(["issues-mark-seen"])).result, { seen: "all" });
+    assert.deepEqual(calls.issueCalls, [`seen:${PROJECT.id}:7`, `seen:${PROJECT.id}:all`]);
+    assertUsage(await tetCtl(["issues-mark-seen", "four"]), /not an issue number: four/);
+  });
+
+  it("sends a request to the tracker's API and answers what it said or why it refused", async () => {
+    const run = await tetCtl(["provider-api", "POST", "/projects/{repo}/merge_requests", "--data", '{"title":"T"}']);
+    assert.deepEqual(run.result, { status: 200, headers: { link: '<next>; rel="next"' }, body: { ok: true } });
+    await tetCtl(["provider-api", "GET", "/projects/{repo}/merge_requests"]);
+    assert.deepEqual(calls.issueCalls, [
+      `api:${PROJECT.id}:POST /projects/{repo}/merge_requests {"title":"T"}`,
+      `api:${PROJECT.id}:GET /projects/{repo}/merge_requests`,
+    ]);
+    assertUsage(await tetCtl(["provider-api", "GET", "/missing"]), /404 Not Found: no such thing/);
+    assertUsage(await tetCtl(["provider-api", "post", "/x"]), /unknown method: post \(one of GET, POST, PUT, PATCH, DELETE\)/);
+  });
+
+  it("refuses a request with an unknown method, a body on a GET or no path before asking the tracker", async () => {
+    assertUsage(await tetCtl(["provider-api", "TRACE", "/x"]), /unknown method: TRACE/);
+    assertUsage(await tetCtl(["provider-api", "GET", "/x", "--data", "{}"]), /a GET takes no body/);
+    assert.equal((await tetCtl(["provider-api", "GET"])).status, EXIT_CODES.usage, "no path");
+    assert.deepEqual(calls.issueCalls, []);
+  });
+
+  it("opens a tab on an issue for a sandbox held to the sandbox, and for an agent that runs in one only", async () => {
+    await tetCtl(["issues-open-in-agent", "7", "--agent", "claude"], FROM_SANDBOX);
+    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 7, "claude", true]]);
+    assertRefused(await tetCtl(["issues-open-in-agent", "7", "--agent", "shell"], FROM_SANDBOX), /does not run in a sandbox/, "shell");
+    assert.equal(calls.issueAgents.length, 1);
+  });
+
   it("opens an issue in the preview tab, kept or in the background on request", async () => {
     assert.deepEqual((await tetCtl(["issues-open", "42"])).result, { opened: 42, keep: false });
     assert.deepEqual((await tetCtl(["issues-open", "43", "--keep", "--background"])).result, { opened: 43, keep: true });
@@ -1006,7 +1052,7 @@ describe("tet-ctl against the control server", () => {
 
   it("opens a tab of an agent on an issue and brings it to the front", async () => {
     assert.deepEqual((await tetCtl(["issues-open-in-agent", "42", "--agent", "claude"])).result, tab("tab-issue"));
-    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 42, "claude"]]);
+    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 42, "claude", false]]);
     assert.deepEqual(calls.shown, [[PROJECT.id, "tab-issue"]]);
   });
 
@@ -1015,7 +1061,7 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["issues-open-in-agent", "42", "--agent", "gpt"]), /unknown agent: gpt/);
     assert.equal((await tetCtl(["issues-open-in-agent", "42"])).status, EXIT_CODES.usage, "no agent");
     assertUsage(await tetCtl(["issues-open-in-agent", "404", "--agent", "claude"]), /404 Not Found/);
-    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 404, "claude"]]);
+    assert.deepEqual(calls.issueAgents, [[PROJECT.id, 404, "claude", false]]);
     assert.deepEqual(calls.shown, []);
   });
 
@@ -1182,10 +1228,6 @@ describe("tet-ctl against the control server", () => {
     const refused = [
       ["tabs-run-command", "build"],
       ["commands-list"],
-      ["issues-set-source", "group/tracker"],
-      ["issues-unread"],
-      ["issues-open", "42"],
-      ["issues-open-in-agent", "42", "--agent", "claude"],
       ["projects-add", workDir],
       ["projects-remove", "--project", OTHER.id],
       ["settings-set-theme", "dark-modern"],
@@ -1362,7 +1404,16 @@ describe("tet-ctl against the control server", () => {
   it("answers a sandboxed tab for its own project only", async () => {
     // editor-get: its own test below, since a sandbox reads only a file inside the repository.
     assertRefused(await tetCtl(["editor-get", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-get");
-    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-environment", "MODE=1"], ["issues-get-source"]]) {
+    const issueVerbs = [
+      ["issues-get-source"],
+      ["provider-api", "GET", "/projects/{repo}"],
+      ["issues-set-source", "group/tracker"],
+      ["issues-unread"],
+      ["issues-mark-seen", "7"],
+      ["issues-open", "7"],
+      ["issues-open-in-agent", "7", "--agent", "claude"],
+    ];
+    for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-environment", "MODE=1"], ...issueVerbs]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own project/, args[0]);
       assert.equal((await tetCtl(args, FROM_SANDBOX)).status, EXIT_CODES.ok, `${args[0]} in its own`);
     }

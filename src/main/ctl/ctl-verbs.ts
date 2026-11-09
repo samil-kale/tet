@@ -8,17 +8,16 @@ import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/f
 import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES, type TabRef } from "../../shared/types/terminals";
-import type { AgentDefinition } from "../agents/agent";
 import type { InspectedTab } from "../terminals/session-manager";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
 import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
 import { issueVerbs } from "./ctl-issue-verbs";
+import { providerVerbs } from "./ctl-provider-verbs";
 import { sbxVerbs } from "./ctl-sbx-verbs";
 import { worktreeVerbs } from "./ctl-worktree-verbs";
 import {
   agentById,
-  agentFlag,
   bringToFront,
   callerRef,
   ControlError,
@@ -26,6 +25,7 @@ import {
   list,
   onOff,
   oneOf,
+  openableAgent,
   projectById,
   refuseUnsaved,
   repositoryOf,
@@ -85,20 +85,11 @@ export function verbs(deps: ControlDeps): Handlers {
     return { tabs, tabId, ref, own };
   };
 
-  /** `--agent`, one the caller may open a tab of: a shell would run on this machine, so a sandbox
-   *  opens only an sbx agent's tab, held to the sandbox (createTab, handOver). */
-  const openableAgent = (args: Record<string, unknown>, caller: Caller): AgentDefinition => {
-    const agent = agentFlag(deps, args);
-    if (!caller.side.opens(agent)) {
-      throw new ControlError("unauthorized", `a ${agent.id} tab does not run in a sandbox, so a sandbox cannot open one`);
-    }
-    return agent;
-  };
-
   return {
     ...sbxVerbs(deps, refFrom),
     ...worktreeVerbs(deps, refFrom),
     ...issueVerbs(deps, refFrom),
+    ...providerVerbs(deps, refFrom),
 
     version: () => ({ result: { version: deps.version, pid: deps.pid } }),
 
@@ -424,7 +415,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "tabs-create": (args, caller) => {
       const { ref } = refFrom(args, caller);
-      const agent = openableAgent(args, caller);
+      const agent = openableAgent(deps, args, caller);
       const prompt = args.prompt;
       if (prompt !== undefined && (typeof prompt !== "string" || prompt.trim() === "")) {
         throw new ControlError("bad_args", "missing text after --prompt");
@@ -439,7 +430,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "tabs-hand-over": async (args, caller) => {
       const { tabs, tabId, ref } = ownedTab(args, caller);
-      const handed = await tabs.handOver(tabId, openableAgent(args, caller).id, caller.side.holdsTabs);
+      const handed = await tabs.handOver(tabId, openableAgent(deps, args, caller).id, caller.side.holdsTabs);
       if (!handed.ok) {
         // A state the tab is in, not a mistyped call — as tabs-rename's refusal.
         throw new ControlError("internal", handed.error);
