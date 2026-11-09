@@ -150,6 +150,12 @@ export function issueTextHtml(text: string, provider: ProviderId, issueUrl: stri
   return markdown.render(text, { provider, issueUrl } satisfies IssueTextEnv);
 }
 
+/** The address a new issue of the repository at `repositoryUrl` is given, short of its number: what
+ *  its text's references and links lead from while it is being written. */
+export function newIssueUrl(provider: ProviderId, repositoryUrl: string): string {
+  return provider === "gitlab" ? `${repositoryUrl}/-/issues/new` : `${repositoryUrl}/issues/new`;
+}
+
 /** Where a link of an issue's text at `issueUrl` leads; undefined for one within the text. An
  *  upload's is relative to the project, whatever else is to the host. */
 export function issueLink(href: string, issueUrl: string): string | undefined {
@@ -169,7 +175,7 @@ export function issueFileLink(href: string, issueUrl: string): string | undefine
   if (/^[a-z][a-z0-9+.-]*:/i.test(href)) {
     return undefined;
   }
-  // GitLab's issue lies under `/-/`, GitHub's under `/issues/<number>`.
-  const project = new URL(issueUrl).pathname.replace(/(?:\/-\/.*|\/issues\/\d+)$/, "").replace(/^\//, "");
+  // GitLab's issue lies under `/-/`, GitHub's under `/issues/<number>`, a new one's under `/issues/new`.
+  const project = new URL(issueUrl).pathname.replace(/(?:\/-\/.*|\/issues\/(?:\d+|new))$/, "").replace(/^\//, "");
   return href.replace(/^\/+/, "").startsWith(project) ? undefined : href;
 }

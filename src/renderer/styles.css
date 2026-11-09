@@ -319,6 +319,9 @@ textarea:focus,
   --two-line-row-height: 52px;
   /* An issue's text box (`TextBox`, the new issue's description) and its preview. */
   --text-box-height: 120px;
+  /* How far a card's contents, and an event beside it, stand in from its edge; the card of the new
+     issue's description in its dialog too. */
+  --issue-card-padding: 10px;
   --popup-row-height: 30px;
   --popup-radius: 3px;
   --menu-padding: 3px;
@@ -1235,8 +1238,7 @@ textarea:focus,
 
 /* An issue's text box, a comment's or a card's in the tab and the new issue's description, and its
    preview (`.issue-box-preview`) share one height. A block, so no line's gap is left under it. */
-.issue-comment textarea,
-.issue-new-body {
+.issue-comment textarea {
   display: block;
   width: 100%;
   min-height: var(--text-box-height);
@@ -1245,8 +1247,6 @@ textarea:focus,
 
 /* An issue's tab, shaped as VS Code's GitHub Pull Requests and Issues. */
 .issue-view {
-  /* How far a card's contents, and an event beside it, stand in from its edge. */
-  --issue-card-padding: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -2714,6 +2714,11 @@ textarea:focus,
 
 .dialog.wide {
   width: var(--dialog-wide-width);
+}
+
+/* Room for the description's box to be read and written at length. */
+.dialog.new-issue-dialog {
+  width: 700px;
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can

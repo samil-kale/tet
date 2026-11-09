@@ -611,9 +611,14 @@ async function readIssueFile(view: EditorView, seq: number, path: string, number
 
 /** An image of the text of tab `tabId`'s issue: through the account where it takes the token, else
  *  a web image as a preview's. */
-export async function loadIssueImage(tabId: string, source: string): Promise<string | undefined> {
-  const view = views.get(tabId);
-  const image = view ? await window.tet.issues.image(view.ref.projectId, source) : null;
+export function loadIssueImage(tabId: string, source: string): Promise<string | undefined> {
+  return loadProjectIssueImage(views.get(tabId)?.ref.projectId, source);
+}
+
+/** `loadIssueImage` for the text of an issue of project `projectId`, an issue yet to be made too; a
+ *  text of no project has web images alone. */
+export async function loadProjectIssueImage(projectId: string | undefined, source: string): Promise<string | undefined> {
+  const image = projectId === undefined ? null : await window.tet.issues.image(projectId, source);
   if (image !== null) {
     return image;
   }

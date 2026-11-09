@@ -101,6 +101,12 @@ export interface IssueListResult {
   latest?: IssuesLatest;
   /** The `issues` of the project's tet.json, where it has one. */
   source?: string;
+  /** Where the issues are read from, for what a text that is not yet an issue's links to. */
+  tracker?: {
+    provider: ProviderId;
+    /** The repository's address on its host. */
+    url: string;
+  };
   error?: string;
   /** `error` is that no account is added for the repository's tracker. */
   noAccount?: boolean;

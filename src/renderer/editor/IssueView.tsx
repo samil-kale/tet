@@ -140,7 +140,7 @@ export interface IssueActions {
 }
 
 /** What an issue's text is rendered with. */
-interface TextRendering {
+export interface TextRendering {
   provider: ProviderId;
   /** What a relative link leads from. */
   issueUrl: string;
@@ -149,7 +149,7 @@ interface TextRendering {
 }
 
 /** What a box writing an issue's text takes beside its value, the same for every box of the issue. */
-interface TextWriting {
+export interface TextWriting {
   /** What the preview renders the text with. */
   rendering: TextRendering;
   /** Where the tracker takes a file for the text. */
@@ -210,24 +210,35 @@ const BOX_FORMATS: { format: MarkdownFormat; title: string; Icon: ComponentType<
 /** The box text for the tracker is typed into, with a preview of it as the tracker will show it: with
  *  `upload`, a file picked, pasted or dropped is uploaded at once, its Markdown following what stands
  *  there. */
-function TextBox({
+export function TextBox({
   label,
   value,
   onChange,
   disabled,
   writing: { rendering, upload, accept },
+  height,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
   writing: TextWriting;
+  /** The box's and its preview's least height, in px; absent takes `--text-box-height`. */
+  height?: number;
 }) {
   const textMenu = useTextContextMenu(onChange);
   const picker = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
+  // What the textarea was dragged to, kept across the switch to the preview, which unmounts it.
+  const [dragged, setDragged] = useState<number>();
+  const switchTo = (preview: boolean): void => {
+    if (preview && field.current) {
+      setDragged(field.current.offsetHeight);
+    }
+    setPreviewing(preview);
+  };
   const format = (kind: MarkdownFormat): void => {
     const area = field.current;
     if (!area) {
@@ -257,6 +268,7 @@ function TextBox({
   const busy = disabled || uploading;
   return (
     <div
+      style={height === undefined ? undefined : ({ "--text-box-height": `${height}px` } as React.CSSProperties)}
       onDragOver={(event) => {
         if (upload && !busy && event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
@@ -271,12 +283,7 @@ function TextBox({
       }}
     >
       <div className="issue-box-tabs">
-        <SwitchTabs
-          tabs={BOX_TABS}
-          active={previewing ? "preview" : "write"}
-          onSelect={(id) => setPreviewing(id === "preview")}
-          locked={busy}
-        />
+        <SwitchTabs tabs={BOX_TABS} active={previewing ? "preview" : "write"} onSelect={(id) => switchTo(id === "preview")} locked={busy} />
         {!previewing && (
           <div className="toolbar issue-box-tools">
             {BOX_FORMATS.map(({ format: kind, title, Icon }) => (
@@ -295,7 +302,7 @@ function TextBox({
         )}
       </div>
       {previewing ? (
-        <div className="issue-box-preview">
+        <div className="issue-box-preview" style={{ minHeight: dragged }}>
           {value.trim() === "" ? <div className="issue-empty">Nothing to preview</div> : <IssueText {...rendering} text={value} />}
         </div>
       ) : (
@@ -303,6 +310,7 @@ function TextBox({
           ref={field}
           aria-label={label}
           placeholder="Use Markdown to format your text"
+          style={{ height: dragged }}
           value={value}
           disabled={busy}
           onChange={(event) => onChange(event.target.value)}

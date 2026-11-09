@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Issue, IssueFilter, IssuesLatest } from "../../../shared/types/providers";
+import type { Issue, IssueFilter, IssueListResult, IssuesLatest } from "../../../shared/types/providers";
 import { subscribeIssues } from "../../editor/editor-tab";
 import { reloadChangedIssueTabs, type IssueOptions } from "../../editor/editor-views";
 import { setIssuesSeen } from "../../editor/issue-seen";
@@ -23,6 +23,8 @@ interface Issues {
   issues: Issue[] | undefined;
   /** tet.json's `issues`, where it has one. */
   source: string | undefined;
+  /** Where the list was read from; undefined until a list came, and after one that failed. */
+  tracker: IssueListResult["tracker"];
   /** No account is added for the tracker. */
   noAccount: boolean;
   options: IssueOptions;
@@ -44,6 +46,7 @@ interface Issues {
 export function useIssues(projectId: string, filter: IssueFilter, shown: boolean): Issues {
   const [issues, setIssues] = useState<Issue[]>();
   const [source, setSource] = useState<string>();
+  const [tracker, setTracker] = useState<IssueListResult["tracker"]>();
   const [noAccount, setNoAccount] = useState(false);
   const [options, setOptions] = useState(NO_OPTIONS);
   const [busy, setBusy] = useState(false);
@@ -140,6 +143,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       }
       latest.current = result.latest;
       setSource(result.source);
+      setTracker(result.tracker);
       setNoAccount(result.noAccount === true);
       setIssues(result.issues ?? []);
       if (result.seen !== undefined) {
@@ -195,5 +199,5 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     return () => window.clearInterval(timer);
   }, [shown, focused, check]);
 
-  return { issues, source, noAccount, options, busy: busy || held, reload, write };
+  return { issues, source, tracker, noAccount, options, busy: busy || held, reload, write };
 }

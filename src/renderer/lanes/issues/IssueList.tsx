@@ -2,13 +2,14 @@ import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
 import { DEFAULT_ISSUE_FILTER, isUnread, issueFileName, type Issue } from "../../../shared/types/providers";
 import { issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
-import { reloadIssueTabs } from "../../editor/editor-views";
+import { loadProjectIssueImage, reloadIssueTabs } from "../../editor/editor-views";
 import { keepAllIssuesSeen, useIssuesSeen } from "../../editor/issue-seen";
-import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person } from "../../editor/IssueView";
+import { newIssueUrl } from "../../editor/issue-text";
+import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person, TextBox, type TextRendering } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
-import { TextAreaField, TextField } from "../../ui/Field";
+import { FieldGroup, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
 import { LinkIcon, ListCheckIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
@@ -20,13 +21,18 @@ import { useAgents } from "../../ui/use-agents";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssues } from "./use-issues";
 
+/** The description's box in the new issue's dialog, in px: taller than the tab's, as it is the
+ *  dialog's one big field. */
+const NEW_ISSUE_BOX_HEIGHT = 220;
+
 interface NewIssue {
   title: string;
   body: string;
 }
 
-/** The fields of a new issue. No upload here: nothing is written until the question's answer. */
-function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<NewIssue>) {
+/** The fields of a new issue, its description in the tab's box. No upload here: nothing is written
+ *  until the question's answer. */
+function NewIssueFields({ value, onChange, error, busy, field, rendering }: PromptFields<NewIssue> & { rendering: TextRendering }) {
   return (
     <>
       <TextField
@@ -37,13 +43,22 @@ function NewIssueFields({ value, onChange, error, busy, field }: PromptFields<Ne
         ref={field}
         error={error}
       />
-      <TextAreaField
-        label="Description"
-        className="issue-new-body"
-        value={value.body}
-        onChange={(body) => onChange((current) => ({ ...current, body }))}
-        disabled={busy}
-      />
+      <FieldGroup label="Description">
+        <div className="issue-comment">
+          <div className="issue-card">
+            <div className="issue-card-edit">
+              <TextBox
+                label="Description"
+                value={value.body}
+                onChange={(body) => onChange((current) => ({ ...current, body }))}
+                disabled={busy}
+                writing={{ rendering, upload: undefined, accept: undefined }}
+                height={NEW_ISSUE_BOX_HEIGHT}
+              />
+            </div>
+          </div>
+        </div>
+      </FieldGroup>
     </>
   );
 }
@@ -116,7 +131,7 @@ export const IssueList = memo(function IssueList({
 }) {
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, DEFAULT_ISSUE_FILTER);
-  const { issues, source, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
+  const { issues, source, tracker, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
   const seen = useIssuesSeen(projectId);
   // The open one is on screen, so read.
   const unread = (issue: Issue): boolean => issue.number !== openIssue && isUnread(issue, seen);
@@ -139,13 +154,23 @@ export const IssueList = memo(function IssueList({
   };
 
   const askNewIssue = async (): Promise<void> => {
+    if (tracker === undefined) {
+      return;
+    }
+    const rendering: TextRendering = {
+      provider: tracker.provider,
+      issueUrl: newIssueUrl(tracker.provider, tracker.url),
+      loadImage: (source) => loadProjectIssueImage(projectId, source),
+      openFile: (path) => onOpenFile(resolved.ref, path),
+    };
     let created: number | undefined;
     await prompt<NewIssue>({
       title: "New issue",
+      className: "new-issue-dialog",
       confirmLabel: "Create",
       value: { title: "", body: "" },
       ready: (value) => filled(value.title),
-      render: (fields) => <NewIssueFields {...fields} />,
+      render: (fields) => <NewIssueFields {...fields} rendering={rendering} />,
       submit: async ({ title: typed, body }) => {
         const result = await write(() => window.tet.issues.create(projectId, typed.trim(), body));
         if (result.ok) {
@@ -226,7 +251,7 @@ export const IssueList = memo(function IssueList({
                 <UserPlusIcon />
               </IconButton>
             )}
-            <IconButton title="New Issue..." onClick={() => void askNewIssue()}>
+            <IconButton title="New Issue..." disabled={tracker === undefined} onClick={() => void askNewIssue()}>
               <PlusIcon />
             </IconButton>
           </>

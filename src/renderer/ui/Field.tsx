@@ -175,17 +175,15 @@ interface TextAreaFieldProps {
   disabled?: boolean;
   /** See `Field`. */
   error?: string;
-  /** For a size of its own. */
-  className?: string;
 }
 
 /** A `Field` holding a box for several lines of text, e.g. a note. */
-export function TextAreaField({ label, value, onChange, disabled, error, className }: TextAreaFieldProps) {
+export function TextAreaField({ label, value, onChange, disabled, error }: TextAreaFieldProps) {
   const textMenu = useTextContextMenu(onChange);
   return (
     <Field label={label} error={error}>
       <textarea
-        className={className ? `dialog-textarea ${className}` : "dialog-textarea"}
+        className="dialog-textarea"
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}

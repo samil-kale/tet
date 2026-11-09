@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { issueFileLink, issueLink, issueTextHtml } from "../../src/renderer/editor/issue-text";
+import { issueFileLink, issueLink, issueTextHtml, newIssueUrl } from "../../src/renderer/editor/issue-text";
 
 const GITHUB_ISSUE = "https://github.com/o/r/issues/5";
 const GITLAB_ISSUE = "https://gitlab.example.com/g/p/-/issues/5";
@@ -102,5 +102,18 @@ describe("an issue's text on GitLab", () => {
     assert.equal(issueLink("/g/p/-/issues/3", GITLAB_ISSUE), "https://gitlab.example.com/g/p/-/issues/3");
     assert.equal(issueLink("https://example.com/x", GITLAB_ISSUE), "https://example.com/x");
     assert.equal(issueLink("#note", GITLAB_ISSUE), undefined);
+  });
+});
+
+describe("the text of an issue not yet made", () => {
+  it("leads from where the issue will be, on either host", () => {
+    const github = newIssueUrl("github", "https://github.com/o/r");
+    const gitlab = newIssueUrl("gitlab", "https://gitlab.example.com/g/p");
+    assert.equal(issueTextHtml("#1", "github", github).trim(), '<p><a href="https://github.com/o/r/issues/1">#1</a></p>');
+    assert.equal(issueTextHtml("!2", "gitlab", gitlab).trim(), '<p><a href="https://gitlab.example.com/g/p/-/merge_requests/2">!2</a></p>');
+    assert.equal(issueFileLink("/o/r/pull/3", github), undefined);
+    assert.equal(issueFileLink("bla.md", github), "bla.md");
+    assert.equal(issueFileLink("/g/p/-/merge_requests/1", gitlab), undefined);
+    assert.equal(issueLink("/uploads/abc/a.pdf", gitlab), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
   });
 });

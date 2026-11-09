@@ -18,7 +18,7 @@ import type {
 } from "../../shared/types/providers";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { changeIssueSource, issueRepository, openIssueInAgent } from "../issues";
-import { issueMarkdown, NoAccountError, onTracker, writeOnTracker, type TrackerCall } from "../providers/issues";
+import { issueMarkdown, NoAccountError, onTracker, readIssueTracker, writeOnTracker, type TrackerCall } from "../providers/issues";
 import { forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
 import { readIssueSource } from "../store/tet-json";
 import { imageDataUrl } from "../util/image-response";
@@ -56,7 +56,14 @@ export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): vo
         latest: await provider.readLatest(tracker, filter),
         issues: await provider.listIssues(tracker, filter),
       }));
-      return { issues, latest, source, seen: readIssuesSeen(dataRoot, projectId) };
+      const { provider, host, path } = await readIssueTracker(accounts, repository);
+      return {
+        issues,
+        latest,
+        source,
+        tracker: provider === null ? undefined : { provider, url: `https://${host}/${path}` },
+        seen: readIssuesSeen(dataRoot, projectId),
+      };
     } catch (error) {
       return { source, error: errorMessage(error), noAccount: error instanceof NoAccountError };
     }
