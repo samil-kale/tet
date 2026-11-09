@@ -18,18 +18,14 @@ export function providerVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extra
       if (method === "GET" && body !== undefined) {
         throw new ControlError("bad_args", "a GET takes no body");
       }
-      /** Every request is kept, as the user's token acts for the caller. */
-      const log = (outcome: string) =>
-        appendLog(
-          `[TET] provider-api ${method} ${path} (project ${project.id}, tab ${caller.tabId ?? "none"}): ${outcome} ${new Date().toISOString()}\n`,
-        );
       return refusable(async () => {
         try {
-          const answer = await deps.providerRequest(project.id, { method, path, body });
-          log(String(answer.status));
-          return { result: answer };
+          return { result: await deps.providerRequest(project.id, { method, path, body }) };
         } catch (error) {
-          log(errorMessage(error));
+          /** A failed request is kept, as the user's token acts for the caller. */
+          appendLog(
+            `[TET] provider-api ${method} ${path} (project ${project.id}, tab ${caller.tabId ?? "none"}): ${errorMessage(error)} ${new Date().toISOString()}\n`,
+          );
           throw error;
         }
       });
