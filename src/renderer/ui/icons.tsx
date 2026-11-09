@@ -6,7 +6,6 @@ import {
   BookOpen,
   CaseSensitive,
   Check,
-  CheckCheck,
   ChevronDown,
   ChevronRight,
   ChevronsDownUp,
@@ -33,6 +32,7 @@ import {
   Landmark,
   Link,
   List,
+  ListCheck,
   ListChecks,
   ListOrdered,
   ListTree,
@@ -236,9 +236,9 @@ export function CheckIcon(props: IconProps) {
   return <Lucide {...props} icon={Check} />;
 }
 
-/** Lucide's `check-check` — mark all issues as read. */
-export function CheckCheckIcon(props: IconProps) {
-  return <Lucide {...props} icon={CheckCheck} />;
+/** Lucide's `list-check` — mark all issues as read. */
+export function ListCheckIcon(props: IconProps) {
+  return <Lucide {...props} icon={ListCheck} extent={17.5} />;
 }
 
 /** Lucide's `shield` — a project, or a tab, sandboxed by sbx. A tab's badge sizes its own box. */
@@ -519,12 +519,12 @@ export function ClearIcon(props: IconProps) {
 
 /** LOCAL CHANGES' "View as List", and a text box's bullet list: Lucide's `list`. */
 export function ListIcon(props: IconProps) {
-  return <Lucide {...props} icon={List} />;
+  return <Lucide {...props} icon={List} extent={17.5} />;
 }
 
 /** LOCAL CHANGES' "View as Tree": Lucide's `list-tree`. */
 export function ListTreeIcon(props: IconProps) {
-  return <Lucide {...props} icon={ListTree} />;
+  return <Lucide {...props} icon={ListTree} extent={17.5} />;
 }
 
 /** Lucide's `save`. */

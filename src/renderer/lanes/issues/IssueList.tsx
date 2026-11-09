@@ -11,7 +11,7 @@ import { filled, prompt, refusal, singleField, type PromptFields } from "../../u
 import { TextAreaField, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
-import { CheckCheckIcon, LinkIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
+import { LinkIcon, ListCheckIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
 import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
@@ -214,7 +214,7 @@ export const IssueList = memo(function IssueList({
               disabled={busy || !(issues ?? []).some(unread)}
               onClick={() => void keepAllIssuesSeen(projectId)}
             >
-              <CheckCheckIcon />
+              <ListCheckIcon />
             </IconButton>
             {worktree === undefined && (
               <IconButton title="Issue source..." onClick={() => void askSource()}>
