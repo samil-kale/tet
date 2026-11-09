@@ -1,9 +1,5 @@
 {
-  "exclude": [
-    ".github/workflows",
-    ".claude",
-    ".gitignore"
-  ],
+  "exclude": [".github/workflows", ".claude", ".gitignore"],
   "commands": [
     {
       "command": "npm run compile",
@@ -22,9 +18,7 @@
     "ports": [],
     "paths": [],
     "hosts": [],
-    "environment": [
-      "CLAUDE_CODE_SCROLL_SPEED"
-    ],
+    "environment": ["CLAUDE_CODE_SCROLL_SPEED"],
     "mcp": [],
     "setup": []
   }

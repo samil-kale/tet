@@ -33,5 +33,10 @@ module.exports = {
   ipcMain: {},
   safeStorage: {},
   Notification,
-  app: { isPackaged: false, whenReady: () => Promise.resolve(), setAppUserModelId: () => undefined, setToastActivatorCLSID: () => undefined },
+  app: {
+    isPackaged: false,
+    whenReady: () => Promise.resolve(),
+    setAppUserModelId: () => undefined,
+    setToastActivatorCLSID: () => undefined,
+  },
 };

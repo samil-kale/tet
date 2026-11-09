@@ -32,7 +32,7 @@ const PALETTE = {
   "#e37933": "orange",
   "#cc3e44": "red",
   "#a074c4": "purple",
-  "#f55385": "pink"
+  "#f55385": "pink",
 };
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
@@ -68,11 +68,18 @@ function suffixes(name) {
 }
 
 function languageOf(name) {
-  return languageNames[name] ?? suffixes(name).map((suffix) => languageExtensions[suffix]).find(Boolean);
+  return (
+    languageNames[name] ??
+    suffixes(name)
+      .map((suffix) => languageExtensions[suffix])
+      .find(Boolean)
+  );
 }
 
 function iconOf(name) {
-  const byExtension = suffixes(name).map((suffix) => setiTheme.extensions[suffix]).find(Boolean);
+  const byExtension = suffixes(name)
+    .map((suffix) => setiTheme.extensions[suffix])
+    .find(Boolean);
   const language = languageOf(name);
   return setiTheme.names[name] ?? byExtension ?? (language && setiTheme.languages[language]);
 }
@@ -145,14 +152,18 @@ const lines = [
   "",
   "/** Lowercased extension, without its leading dot, to its file icon; null for none. */",
   "export const FILE_EXTENSIONS: Record<string, FileIcon | null> = {",
-  ...sorted(fileExtensions).map(([key, fileIcon], index) => `  ${JSON.stringify(key)}: ${fileIconSource(fileIcon)}${index < fileExtensions.size - 1 ? "," : ""}`),
+  ...sorted(fileExtensions).map(
+    ([key, fileIcon], index) => `  ${JSON.stringify(key)}: ${fileIconSource(fileIcon)}${index < fileExtensions.size - 1 ? "," : ""}`,
+  ),
   "};",
   "",
   "/** Lowercased file name to its file icon, where it differs from its extensions'; null for none. */",
   "export const FILE_NAMES: Record<string, FileIcon | null> = {",
-  ...sorted(fileNames).map(([key, fileIcon], index) => `  ${JSON.stringify(key)}: ${fileIconSource(fileIcon)}${index < fileNames.size - 1 ? "," : ""}`),
+  ...sorted(fileNames).map(
+    ([key, fileIcon], index) => `  ${JSON.stringify(key)}: ${fileIconSource(fileIcon)}${index < fileNames.size - 1 ? "," : ""}`,
+  ),
   "};",
-  ""
+  "",
 ];
 fs.writeFileSync(path.join(outDir, "file-icons.ts"), lines.join("\r\n"));
 fs.copyFileSync(path.join(setiDir, "seti.woff"), path.join(outDir, "seti.woff"));

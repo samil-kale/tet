@@ -17,7 +17,7 @@ const common = {
   bundle: true,
   sourcemap: !production,
   minify: production,
-  tsconfig
+  tsconfig,
 };
 
 /** Everything electron's node runs: main, the git host, preload, the CLIs, the tests. */
@@ -33,7 +33,7 @@ const mainConfig = {
   outfile: path.join(dist, "main.js"),
   // electron (and its original-fs) is provided by the runtime; node-pty is a native addon and
   // cannot be bundled.
-  external: ["electron", "original-fs", "node-pty"]
+  external: ["electron", "original-fs", "node-pty"],
 };
 
 /** Fails the build where anything in a bundle imports electron: resolvable as an npm package, it
@@ -43,9 +43,9 @@ const noElectron = {
   name: "no-electron",
   setup(build) {
     build.onResolve({ filter: /^electron$/ }, ({ importer }) => ({
-      errors: [{ text: `${path.relative(__dirname, importer)} imports electron, in a bundle that runs without it` }]
+      errors: [{ text: `${path.relative(__dirname, importer)} imports electron, in a bundle that runs without it` }],
     }));
-  }
+  },
 };
 
 /** A module for a utilityProcess: git's CLI wrapper or the Explorer's walk and search.
@@ -56,7 +56,7 @@ function hostConfig(folder, name) {
     ...node,
     entryPoints: [path.join(__dirname, "src", "main", folder, `${name}-host.ts`)],
     outfile: path.join(dist, `${name}-host.js`),
-    plugins: [noElectron]
+    plugins: [noElectron],
   };
 }
 
@@ -69,7 +69,7 @@ function cliConfig(name) {
   return {
     ...node,
     entryPoints: [path.join(__dirname, "src", "cli", `${name}.ts`)],
-    outfile: path.join(dist, `${name}.js`)
+    outfile: path.join(dist, `${name}.js`),
   };
 }
 
@@ -80,7 +80,7 @@ function preloadConfig(name) {
     ...node,
     entryPoints: [path.join(__dirname, "src", "preload", `${name}.ts`)],
     outfile: path.join(dist, `${name}.js`),
-    external: ["electron"]
+    external: ["electron"],
   };
 }
 
@@ -95,7 +95,7 @@ const rendererConfig = {
   // monaco reads `import.meta.url` as a worker-location fallback (unreached, see editor.ts's
   // `getWorker`); esbuild replaces `import.meta` with `{}` under `format: "iife"` and warns at
   // every such site, burying real warnings.
-  logOverride: { "empty-import-meta": "silent" }
+  logOverride: { "empty-import-meta": "silent" },
 };
 
 /** The editor's own web worker (tokenization, etc. off the main thread) — see editor.ts. */
@@ -103,7 +103,7 @@ const rendererConfig = {
 const editorWorkerConfig = {
   ...browser,
   entryPoints: [require.resolve("monaco-editor/editor/editor.worker.js")],
-  outfile: path.join(dist, "editor.worker.js")
+  outfile: path.join(dist, "editor.worker.js"),
 };
 
 /** The tests, for node's own runner (`npm test`). Bundled like the CLI, so a test imports the
@@ -119,7 +119,7 @@ const testConfig = {
   // main/agents.test.ts compiles pi's generated extension with it. electron is a stub: node's runner
   // has none (helpers/ finds the binary through its own require).
   alias: { electron: "./test/helpers/electron-stub.js", "original-fs": "node:fs" },
-  external: ["node-pty", "esbuild"]
+  external: ["node-pty", "esbuild"],
 };
 
 function copyStaticAssets() {
@@ -156,7 +156,7 @@ async function build() {
     preloadConfig("preload"),
     rendererConfig,
     editorWorkerConfig,
-    ...(tests ? [testConfig] : [])
+    ...(tests ? [testConfig] : []),
   ];
   if (watch) {
     const contexts = await Promise.all(configs.map((config) => esbuild.context(config)));
