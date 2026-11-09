@@ -45,17 +45,18 @@ const ANSWER_HEADERS = [
 ];
 
 /**
- * The address of a request, on the host's API and nowhere else: `{repo}` is replaced by `repo` as the
- * host's paths take it, `/graphql` is the host's GraphQL endpoint (which does not lie under its REST
+ * The address of a request, on the host's API and nowhere else: `path` with or without its leading
+ * slash (a shell on Windows turns one into a path of its own), `{repo}` replaced by `repo` as the
+ * host's paths take it, `graphql` the host's GraphQL endpoint (which does not lie under its REST
  * one), and the address as the URL parser reads it has to stay under the endpoint it was built on —
  * `..` is resolved by then, however it is spelled.
  */
 export function apiUrl(endpoints: ApiEndpoints, path: string, repo: string): string {
-  const full = path.replaceAll("{repo}", repo);
+  const full = `/${path.replaceAll("{repo}", repo).replace(/^\/+/, "")}`;
   const route = full.split("?", 1)[0];
   const endpoint = route === "/graphql" ? endpoints.graphql : endpoints.rest;
   const root = new URL(endpoint);
-  const url = full.startsWith("/") ? URL.parse(endpoint + (route === "/graphql" ? full.slice(route.length) : full)) : null;
+  const url = URL.parse(endpoint + (route === "/graphql" ? full.slice(route.length) : full));
   if (url?.origin !== root.origin || !(url.pathname === root.pathname || url.pathname.startsWith(`${root.pathname.replace(/\/$/, "")}/`))) {
     throw new Error(`not a path of the host's API: ${path}`);
   }

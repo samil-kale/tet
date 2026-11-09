@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { apiUrl, sendApi, type ApiEndpoints } from "../../src/main/providers/api-request";
-import { endpoints as gitHubEndpoints, github } from "../../src/main/providers/github";
+import { endpoints as gitHubEndpoints } from "../../src/main/providers/github";
 import { endpoints as gitLabEndpoints, gitlab } from "../../src/main/providers/gitlab";
 import { ApiError } from "../../src/main/providers/provider";
 import type { FetchLike } from "../../src/main/util/image-response";
@@ -47,22 +47,20 @@ describe("the address of a request to the host's API", () => {
   });
 
   it("refuses what is no path of the API, or leaves its tree however `..` is spelled", () => {
-    for (const path of [
-      "https://evil.example/x",
-      "x",
-      "",
-      "@evil.example/x",
-      "/../graphql",
-      "/a/../../graphql",
-      "/%2e%2e/%2E%2E/user",
-      "/..\\..\\x",
-    ]) {
+    for (const path of ["/../graphql", "/a/../../graphql", "/%2e%2e/%2E%2E/user", "/..\\..\\x"]) {
       assert.throws(() => apiUrl(GITLAB, path, REPO), /not a path of the host's API/, JSON.stringify(path));
     }
   });
 
+  it("takes a path without its leading slash, as a shell on Windows leaves it", () => {
+    assert.equal(apiUrl(GITLAB, "projects/{repo}", REPO), `https://gitlab.example.com/api/v4/projects/${REPO}`);
+    assert.equal(apiUrl(GITLAB, "graphql", REPO), "https://gitlab.example.com/api/graphql");
+  });
+
   it("keeps a path that only looks like leaving the host on the host", () => {
-    assert.equal(apiUrl(GITLAB, "//evil.example/x", REPO), "https://gitlab.example.com/api/v4//evil.example/x");
+    assert.equal(apiUrl(GITLAB, "https://evil.example/x", REPO), "https://gitlab.example.com/api/v4/https://evil.example/x");
+    assert.equal(apiUrl(GITLAB, "@evil.example/x", REPO), "https://gitlab.example.com/api/v4/@evil.example/x");
+    assert.equal(apiUrl(GITLAB, "//evil.example/x", REPO), "https://gitlab.example.com/api/v4/evil.example/x");
     assert.equal(apiUrl(GITLAB, "/a/../b", REPO), "https://gitlab.example.com/api/v4/b");
   });
 });
@@ -171,10 +169,6 @@ describe("the providers' requests", () => {
   });
 
   it("refuse a path outside the API before sending anything", async () => {
-    await assert.rejects(
-      github.request({ host: "github.com", token: "t", path: "o/r" }, { method: "GET", path: "https://evil.example" }),
-      /not a path/,
-    );
     await assert.rejects(
       gitlab.request({ host: "gitlab.example.com", token: "t", path: "g/r" }, { method: "GET", path: "/../graphql" }),
       /not a path/,
