@@ -46,13 +46,13 @@ export function PickMenu({ options, isPicked, onPick, several, className, title,
       keepsOpen: several,
       run: () => onPick(option),
     });
-  // What is picked leads under its heading, the rest follows below a separator.
+  // What is picked leads, the rest follows below a separator.
   const picked: string[] = [];
   const rest: string[] = [];
   for (const option of filter.matching) {
     (isPicked(option) ? picked : rest).push(option);
   }
-  const pickedGroup: ContextMenuEntry[] = picked.length > 0 ? [{ label: "Selected", heading: true }, ...picked.map(entryOf(true))] : [];
+  const pickedGroup: ContextMenuEntry[] = picked.map(entryOf(true));
   const separator: ContextMenuEntry[] = picked.length > 0 && rest.length > 0 ? [SEPARATOR] : [];
   const entries: ContextMenuEntry[] =
     filter.matching.length === 0 ? [{ label: empty }] : [...pickedGroup, ...separator, ...rest.map(entryOf(false))];

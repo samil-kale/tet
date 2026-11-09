@@ -17,8 +17,6 @@ interface ContextMenuAction {
   keepsOpen?: boolean;
   /** A submenu, opened on hover or click, in place of a `run`. */
   entries?: ContextMenuEntry[];
-  /** Names the group of entries below it: no action, not hovered. */
-  heading?: boolean;
 }
 
 /** Divides the menu's action groups. */
@@ -208,10 +206,6 @@ export function ContextMenu({
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (
           <div key={index} className="context-menu-separator" />
-        ) : entry.heading ? (
-          <div key={index} className="context-menu-heading">
-            {entry.label}
-          </div>
         ) : (
           <div
             key={index}

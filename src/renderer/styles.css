@@ -1921,16 +1921,6 @@ textarea:focus,
   flex: none;
 }
 
-.context-menu-heading {
-  display: flex;
-  align-items: center;
-  height: var(--popup-row-height);
-  padding: 0 10px;
-  font-size: 11px;
-  text-transform: uppercase;
-  color: var(--tet-descriptionForeground);
-}
-
 .context-menu-separator {
   height: 0;
   margin: 4px 0;
