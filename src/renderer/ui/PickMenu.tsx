@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
-import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
-import { listMaxHeight } from "./Dropdown";
+import { useRef, type ReactNode } from "react";
+import { SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
 import { CheckIcon } from "./icons";
+import { MenuButton, type MenuButtonHandle } from "./MenuButton";
 import { useOptionFilter } from "./use-option-filter";
 
 interface PickMenuProps {
@@ -15,6 +15,8 @@ interface PickMenuProps {
   /** The button's, with `open` beside it while the list is up. */
   className: string;
   title?: string;
+  /** Caps the list's width in px: longer options end in an ellipsis. */
+  maxWidth?: number;
   /** A press on the button, which may fetch the options. */
   onOpen?: () => void;
   /** What the button shows. */
@@ -22,50 +24,54 @@ interface PickMenuProps {
 }
 
 /** A button of the caller's own look and the list it opens, marking what is picked: `Dropdown`'s list. */
-export function PickMenu({ options, isPicked, onPick, several, className, title, onOpen, children }: PickMenuProps) {
-  const menu = useAnchoredMenu((rect) => ({
-    x: rect.left,
-    y: rect.bottom,
-    flipX: rect.right,
-    maxHeight: listMaxHeight(rect),
-  }));
+export function PickMenu({ options, isPicked, onPick, several, className, title, maxWidth, onOpen, children }: PickMenuProps) {
+  const menu = useRef<MenuButtonHandle>(null);
   const filter = useOptionFilter(
     options ?? [],
     (option) => option,
     (option) => {
       if (!several) {
-        menu.close();
+        menu.current?.close();
       }
       onPick(option);
     },
   );
 
   const empty = options === undefined ? "Loading..." : options.length === 0 ? "None" : "No matches";
+  const entryOf =
+    (marked: boolean) =>
+    (option: string): ContextMenuEntry => ({
+      label: option,
+      icon: marked ? <CheckIcon className="line-icon" /> : <span className="line-icon" />,
+      keepsOpen: several,
+      run: () => onPick(option),
+    });
+  // What is picked leads under its heading, the rest follows below a separator.
+  const picked: string[] = [];
+  const rest: string[] = [];
+  for (const option of filter.matching) {
+    (isPicked(option) ? picked : rest).push(option);
+  }
+  const pickedGroup: ContextMenuEntry[] = picked.length > 0 ? [{ label: "Selected", heading: true }, ...picked.map(entryOf(true))] : [];
+  const separator: ContextMenuEntry[] = picked.length > 0 && rest.length > 0 ? [SEPARATOR] : [];
   const entries: ContextMenuEntry[] =
-    filter.matching.length === 0
-      ? [{ label: empty }]
-      : filter.matching.map((option) => ({
-          label: option,
-          icon: isPicked(option) ? <CheckIcon className="line-icon" /> : <span className="line-icon" />,
-          keepsOpen: several,
-          run: () => onPick(option),
-        }));
+    filter.matching.length === 0 ? [{ label: empty }] : [...pickedGroup, ...separator, ...rest.map(entryOf(false))];
 
   return (
-    <>
-      <button
-        type="button"
-        className={menu.isOpen ? `${className} open` : className}
-        title={title}
-        onMouseDown={(event) => {
-          filter.reset();
-          menu.open(event);
-          onOpen?.();
-        }}
-      >
-        {children}
-      </button>
-      {menu.render(() => entries, "pick-menu", filter.field)}
-    </>
+    <MenuButton
+      ref={menu}
+      className={className}
+      title={title}
+      entries={entries}
+      menuClassName="pick-menu"
+      maxWidth={maxWidth}
+      header={filter.field}
+      onOpen={() => {
+        filter.reset();
+        onOpen?.();
+      }}
+    >
+      {children}
+    </MenuButton>
   );
 }

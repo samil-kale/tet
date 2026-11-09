@@ -17,6 +17,8 @@ interface ContextMenuAction {
   keepsOpen?: boolean;
   /** A submenu, opened on hover or click, in place of a `run`. */
   entries?: ContextMenuEntry[];
+  /** Names the group of entries below it: no action, not hovered. */
+  heading?: boolean;
 }
 
 /** Divides the menu's action groups. */
@@ -42,6 +44,8 @@ interface ContextMenuProps {
   className?: string;
   /** Matches a trigger's width, e.g. `Dropdown` standing in for a `<select>`. */
   width?: number;
+  /** Caps the width, which cuts longer labels short with an ellipsis. */
+  maxWidth?: number;
   /** Caps the height, which then scrolls; kept within the window, it is never clamped upward. */
   maxHeight?: number;
   /** Where it ends when the window has no room right of `x`: a submenu's parent entry's left edge, a
@@ -77,7 +81,7 @@ export function useContextMenu<T>() {
 export const BAR_MENU_DROP = 12;
 
 /** Where a menu opened from a button goes, worked out from the button's box. */
-type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxHeight" | "flipX" | "above">;
+type AnchoredPlace = Pick<ContextMenuProps, "x" | "y" | "width" | "maxWidth" | "maxHeight" | "flipX" | "above">;
 
 /**
  * A menu opened from a button: `open` as the button's `onMouseDown`, `place` saying where from its
@@ -105,7 +109,20 @@ export function useAnchoredMenu(place: (anchor: DOMRect) => AnchoredPlace, fades
   return { open, close, render, isOpen: menu !== null };
 }
 
-export function ContextMenu({ x, y, entries, onClose, className, width, maxHeight, flipX, above, anchor, header }: ContextMenuProps) {
+export function ContextMenu({
+  x,
+  y,
+  entries,
+  onClose,
+  className,
+  width,
+  maxWidth,
+  maxHeight,
+  flipX,
+  above,
+  anchor,
+  header,
+}: ContextMenuProps) {
   const menu = useRef<HTMLDivElement>(null);
   const [submenu, setSubmenu] = useState<{ index: number; x: number; y: number; flipX: number } | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -182,11 +199,19 @@ export function ContextMenu({ x, y, entries, onClose, className, width, maxHeigh
   const opened = submenu && entries[submenu.index];
 
   const content = (
-    <div ref={menu} className={`context-menu${className ? ` ${className}` : ""}`} style={{ left: x, top: y, width, maxHeight }}>
+    <div
+      ref={menu}
+      className={`context-menu${maxWidth === undefined ? "" : " truncating"}${className ? ` ${className}` : ""}`}
+      style={{ left: x, top: y, width, maxWidth, maxHeight }}
+    >
       {header && <div className="context-menu-header">{header}</div>}
       {entries.map((entry, index) =>
         entry === SEPARATOR ? (
           <div key={index} className="context-menu-separator" />
+        ) : entry.heading ? (
+          <div key={index} className="context-menu-heading">
+            {entry.label}
+          </div>
         ) : (
           <div
             key={index}

@@ -1900,6 +1900,27 @@ textarea:focus,
   background: var(--tet-menu-background);
 }
 
+/* A menu with a `maxWidth`: a label too long for it ends in an ellipsis, its icon keeps its room. */
+.context-menu.truncating .context-menu-item > span:not(.line-icon) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.context-menu.truncating .context-menu-item > .line-icon {
+  flex: none;
+}
+
+.context-menu-heading {
+  display: flex;
+  align-items: center;
+  height: var(--popup-row-height);
+  padding: 0 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--tet-descriptionForeground);
+}
+
 .context-menu-separator {
   height: 0;
   margin: 4px 0;

@@ -26,6 +26,7 @@ import {
   TrashIcon,
   type IconProps,
 } from "../ui/icons";
+import { MenuButton } from "../ui/MenuButton";
 import { PickMenu } from "../ui/PickMenu";
 import { SwitchTabs } from "../ui/SwitchTabs";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
@@ -37,6 +38,9 @@ import { createMarkdownPreview, renderHtmlInto, resolveLink } from "./markdown";
 import { markdownEdit, type MarkdownFormat } from "./markdown-format";
 
 const DAY_MS = 86_400_000;
+
+/** The widest a list opened from the side column's icons gets, in px: longer names end in an ellipsis. */
+const SIDE_MENU_MAX_WIDTH = 300;
 
 /** The day of a time, counted from today where that says more than the date. */
 export function dayOf(at: string): string {
@@ -669,6 +673,7 @@ function PickSection({
           <PickMenu
             className="icon-button"
             title={`Change ${title}`}
+            maxWidth={SIDE_MENU_MAX_WIDTH}
             options={options && [...new Set([...options, ...picked])]}
             isPicked={(option) => picked.includes(option)}
             onPick={(option) => {
@@ -838,26 +843,25 @@ function GroupSection({
   avatars: IssueDetail["avatars"];
   actions: IssueActions;
 }) {
-  const menu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom }));
   const editable = fields.filter((field) => field.editable);
-  const entries = (): ContextMenuEntry[] =>
-    editable.map((field) => ({ label: changeLabel(field), run: () => void askField(field, actions) }));
+  const entries: ContextMenuEntry[] = editable.map((field) => ({
+    label: changeLabel(field),
+    run: () => void askField(field, actions),
+  }));
   return (
     <SideSection
       title={title}
       action={
         editable.length > 0 && (
-          <>
-            <button
-              type="button"
-              className={menu.isOpen ? "icon-button open" : "icon-button"}
-              title={`Change ${title}`}
-              onMouseDown={menu.open}
-            >
-              <PlusIcon />
-            </button>
-            {menu.render(entries, "field-menu")}
-          </>
+          <MenuButton
+            className="icon-button"
+            title={`Change ${title}`}
+            entries={entries}
+            menuClassName="field-menu"
+            maxWidth={SIDE_MENU_MAX_WIDTH}
+          >
+            <PlusIcon />
+          </MenuButton>
         )
       }
     >
