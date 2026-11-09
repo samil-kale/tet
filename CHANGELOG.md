@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.24.1 (2026-11-09)
+
+- **tet-ctl provider-api.** Agents can call the rest of the tracker's API (GitHub or GitLab, GraphQL
+  included) with the account TET holds, with paths taken with or without a leading slash.
+- **Fixes.** The issue filter and side menus keep to a sensible width and list the picked options
+  under a heading, and the unread mark of an issue sits beside its detail line.
+
 ## 0.24.0 (2026-11-08)
 
 - **Issues.** A new ISSUES lane lists a project's GitHub or GitLab issues, read from the tracker
