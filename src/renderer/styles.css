@@ -1204,16 +1204,26 @@ textarea:focus,
   border-radius: 50%;
 }
 
-/* A dot left of an issue's avatar while it is unread (`isUnread`). Every row holds its place, so the
-   texts are cut where the other rows' are. */
+/* An issue row's second line: its detail, and after it the dot while the issue is unread (`isUnread`).
+   The detail is cut, never the dot. */
+.issue-detail-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.issue-detail-line > .list-detail {
+  margin-bottom: 0;
+}
+
 .issue-mark {
   flex: none;
   width: 6px;
   height: 6px;
+  margin-top: 3px;
   border-radius: 50%;
-}
-
-.issue-mark.unread {
   background: var(--tet-focusBorder);
 }
 

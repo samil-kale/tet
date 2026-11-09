@@ -77,11 +77,13 @@ function IssueRow({
     >
       <span className="list-main">
         <span className="list-label">{issue.title}</span>
-        <span className="list-detail">
-          #{issue.number} · {detail} {issue.author}
+        <span className="issue-detail-line">
+          <span className="list-detail">
+            #{issue.number} · {detail} {issue.author}
+          </span>
+          {unread && <span className="issue-mark" />}
         </span>
       </span>
-      <span className={`issue-mark${unread ? " unread" : ""}`} />
       {issue.assignee === undefined ? (
         <span className="issue-person vacant" />
       ) : (
