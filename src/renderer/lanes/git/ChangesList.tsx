@@ -309,6 +309,8 @@ export const ChangesList = memo(function ChangesList({
       { label: "Open Changes", run: () => onOpenDiff(change.path) },
       ...openEntries(resolved.ref, change.path, true, true, (how) => onOpenDiff(change.path, how)),
       ...pathEntries(resolved, [change.path], "file path"),
+      SEPARATOR,
+      { label: "Discard Changes...", run: () => void confirmDiscard(resolved.ref, [change.path], act) },
     ];
     if (change.status === "untracked") {
       entries.push(SEPARATOR, { label: "Ignore file (add to .gitignore)", run: ignore("file") });

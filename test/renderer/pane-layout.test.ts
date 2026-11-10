@@ -552,7 +552,7 @@ describe("what is persisted", () => {
         { id: "s2", pane: "b", kind: "session" },
         { id: "s1", pane: "a", kind: "session" },
       ],
-      activeTab: { a: "s1" },
+      activeTab: { a: "s1", b: "s2" },
       recent: ["s2", "s1"],
       commandPane: {},
     });
@@ -561,7 +561,7 @@ describe("what is persisted", () => {
       preset: "cols2",
       focusedPane: "b",
       tabPane: { s1: "a", s2: "b" },
-      activeTab: { a: "s1" },
+      activeTab: { a: "s1", b: "s2" },
       order: ["s2", "s1"],
       recent: ["s2", "s1"],
       commandPane: {},
@@ -614,6 +614,28 @@ describe("what is persisted", () => {
       JSON.stringify({ preset: "cols2", focusedPane: "a", tabs: [], commandPane: { x: { preset: "cols2", pane: "d" }, y: 3 } }),
     );
     assert.deepEqual(loadLayout("r").commandPane, {}, "a pane the preset does not have, or no place at all, is dropped");
+  });
+
+  it("collapses a pane that holds only tabs that do not return, so the next start never shows it", () => {
+    const layout: ProjectLayout = {
+      preset: "cols2",
+      focusedPane: "b",
+      tabPane: { "new-1": "a", "new-2": "b" },
+      activeTab: { a: "new-1", b: "new-2" },
+      order: ["new-1", "new-2"],
+      recent: [],
+      commandPane: {},
+    };
+    const running: TabDescriptor = { ...tab("new-2"), command: "npm test" };
+    const serialized = serializeLayout(layout, [tab("new-1", 0, "s1"), running], NO_EDITOR);
+    assert.deepEqual(JSON.parse(serialized), {
+      preset: "single",
+      focusedPane: "a",
+      tabs: [{ id: "s1", pane: "a", kind: "session" }],
+      activeTab: { a: "s1" },
+      recent: [],
+      commandPane: { "npm test": { preset: "cols2", pane: "b" } },
+    });
   });
 
   it("falls back to a fresh layout for anything hand-edited into the wrong shape", () => {

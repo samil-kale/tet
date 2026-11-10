@@ -842,34 +842,40 @@ function persistedOf(tab: LayoutTab, editorEntry: (tabId: string) => EditorEntry
 /**
  * Only tabs that come back are written, under their persisted id (`persistedOf`), so disk never
  * names an id the next run could hand to another tab. `editorEntry` reads an editor tab's file and
- * editor, which the layout does not hold.
+ * editor, which the layout does not hold. The preset is the one the returning tabs alone need: a
+ * pane holding only tabs that do not return (a saved command) is collapsed here, so the next start
+ * never shows it only to collapse it.
  */
 export function serializeLayout(layout: ProjectLayout, tabs: LayoutTab[], editorEntry: (tabId: string) => EditorEntry | undefined): string {
   // The open command tabs' panes over the recorded ones.
   const commandPane = { ...layout.commandPane };
-  const activeTab: Partial<Record<PaneId, string>> = {};
-  const persistedTabs: PersistedTab[] = [];
-  const persistedIds = new Map<string, string>();
-  for (const tab of inOrder(layout.order, tabs)) {
-    const pane = layout.tabPane[tab.tabId];
-    const persisted = pane !== undefined ? persistedOf(tab, editorEntry) : undefined;
-    if (persisted !== undefined && pane !== undefined) {
-      persistedTabs.push({ ...persisted, pane });
-      persistedIds.set(tab.tabId, persisted.id);
-      if (layout.activeTab[pane] === tab.tabId) {
-        activeTab[pane] = persisted.id;
-      }
-    }
+  for (const tab of tabs) {
     if (tab.command !== undefined) {
       commandPane[tab.command] = { preset: layout.preset, pane: paneOf(layout, tab.tabId) };
     }
   }
+  const returning = tabs.filter((tab) => layout.tabPane[tab.tabId] !== undefined && persistedOf(tab, editorEntry) !== undefined);
+  const kept = collapseEmpty(layout, returning);
+  const activeTab: Partial<Record<PaneId, string>> = {};
+  const persistedTabs: PersistedTab[] = [];
+  const persistedIds = new Map<string, string>();
+  for (const tab of inOrder(kept.order, returning)) {
+    const pane = kept.tabPane[tab.tabId];
+    const persisted = persistedOf(tab, editorEntry);
+    if (persisted !== undefined && pane !== undefined) {
+      persistedTabs.push({ ...persisted, pane });
+      persistedIds.set(tab.tabId, persisted.id);
+      if (kept.activeTab[pane] === tab.tabId) {
+        activeTab[pane] = persisted.id;
+      }
+    }
+  }
   const persisted: PersistedLayout = {
-    preset: layout.preset,
-    focusedPane: layout.focusedPane,
+    preset: kept.preset,
+    focusedPane: kept.focusedPane,
     tabs: persistedTabs,
     activeTab,
-    recent: layout.recent.flatMap((tabId) => persistedIds.get(tabId) ?? []),
+    recent: kept.recent.flatMap((tabId) => persistedIds.get(tabId) ?? []),
     commandPane,
   };
   return JSON.stringify(persisted);
