@@ -6,7 +6,7 @@ import type { EditorListing, EditorReport, NoticeMark, NoticeReport, NoticeSever
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { Issue } from "../../shared/types/providers";
+import type { Issue, IssueChange, IssueDetail, IssueFieldValue, IssueFilter, IssuesLatest } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
@@ -176,6 +176,22 @@ export interface ControlDeps {
   readIssueTracker(projectId: string): Promise<IssueTrackerInfo>;
   unreadIssues(projectId: string): Promise<Issue[]>;
   markIssuesSeen(projectId: string, number?: number): Promise<void>;
+  /** What the tracker refused is thrown (`refusable`). */
+  listIssues(projectId: string, filter: IssueFilter): Promise<Issue[]>;
+  latestIssues(projectId: string, filter: IssueFilter): Promise<IssuesLatest>;
+  issueFilterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
+  readIssue(projectId: string, number: number): Promise<IssueDetail>;
+  issueImage(projectId: string, source: string): Promise<string | null>;
+  issueFieldOptions(projectId: string, number: number, fieldId: string): Promise<string[]>;
+  setIssueField(projectId: string, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  createIssue(projectId: string, title: string, body: string): Promise<number>;
+  updateIssue(projectId: string, number: number, change: IssueChange): Promise<void>;
+  deleteIssue(projectId: string, number: number): Promise<void>;
+  commentIssue(projectId: string, number: number, body: string, internal: boolean): Promise<void>;
+  editIssueComment(projectId: string, id: string, body: string): Promise<void>;
+  deleteIssueComment(projectId: string, id: string): Promise<void>;
+  /** Answers the Markdown that shows the file in an issue's text. */
+  uploadIssueFile(projectId: string, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
   /** Opens the project's issue in the repository's or worktree's preview tab, or a kept tab, and brings
    *  it to the front unless `background`. */
   openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;

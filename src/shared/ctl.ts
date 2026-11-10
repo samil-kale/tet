@@ -1,6 +1,7 @@
 import { SBX_SKILLS_KINDS } from "./sbx-rules";
 import { NOTICE_SEVERITIES } from "./types/app";
 import { EXPLORER_SORT_ORDERS } from "./types/files";
+import { ISSUE_STATE_FILTERS, ISSUE_STATES } from "./types/providers";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
 
@@ -135,6 +136,15 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   toast: "switch",
   title: "value",
   severity: "value",
+  state: "value",
+  author: "value",
+  assignee: "value",
+  label: "value",
+  body: "value",
+  internal: "switch",
+  date: "value",
+  summary: "value",
+  remove: "value",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
@@ -558,6 +568,125 @@ const VERBS = [
       "Count the issue as shown at its current update, so issues-unread leaves it out; without a number every issue created or changed until now. The ISSUES section shows it at its next refresh.",
     positionals: ["number"],
     sandbox: "ownProject",
+  },
+  {
+    verb: "issues-list",
+    group: "Projects",
+    usage: `issues-list [--state <${ISSUE_STATE_FILTERS.join("|")}>] [--author <login>] [--assignee <login>] [--label <name>[,<name>...]] [--project <id>]`,
+    summary:
+      "The project's issues read from the tracker as the ISSUES section lists them (number, title, url, open, author, assignee, createdAt, updatedAt, labels): the open ones, or those the filter narrows to; --label needs an issue to carry all of them.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-latest",
+    group: "Projects",
+    usage: `issues-latest [--state <${ISSUE_STATE_FILTERS.join("|")}>] [--author <login>] [--assignee <login>] [--label <name>[,<name>...]] [--project <id>]`,
+    summary:
+      "What the tracker says of the same list without sending it: how many issues it holds (total) and when the latest changed (updatedAt). Two answers that agree found nothing new.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-filter-options",
+    group: "Projects",
+    usage: "issues-filter-options [--project <id>]",
+    summary: "What the ISSUES section's filters offer: the labels, and the people for --author and --assignee.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-read",
+    group: "Projects",
+    usage: "issues-read <number> [--project <id>]",
+    summary:
+      "One issue as its tab shows it: text (body), comments (notes, each with the id issues-edit-comment takes), events and fields (each with the id issues-set-field takes, its kind and value).",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-image",
+    group: "Projects",
+    usage: "issues-image <source> [--project <id>]",
+    summary:
+      "An image of an issue's text, by the address its Markdown gives, as a data url (dataUrl; null where it takes no token or cannot be read).",
+    positionals: ["source"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-field-options",
+    group: "Projects",
+    usage: "issues-field-options <number> <field> [--project <id>]",
+    summary: "What a pick field of the issue (its id from issues-read) can be set to.",
+    positionals: ["number", "field"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-set-field",
+    group: "Projects",
+    usage: "issues-set-field <number> <field> [<value>...] [--date <YYYY-MM-DD>] [--summary <text>] [--remove <id>] [--project <id>]",
+    summary:
+      "Set a field of the issue (its id and kind from issues-read), as its kind takes it: a pick the values from issues-field-options (none empties it), a text, date or duration one value (none takes it off), a number, a flag on or off, a timelog a booking <time spent> [--date] [--summary] or --remove <id of a booking>.",
+    positionals: ["number", "field", "value"],
+    variadic: true,
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-create",
+    group: "Projects",
+    usage: "issues-create <title> [<body>] [--project <id>]",
+    summary: "Create an issue on the project's tracker; answers its number.",
+    positionals: ["title", "body"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-update",
+    group: "Projects",
+    usage: `issues-update <number> [--title <text>] [--body <text>] [--state <${ISSUE_STATES.join("|")}>] [--project <id>]`,
+    summary: "Change the issue's title, text or state; what is left out stays. Its fields are set one at a time (issues-set-field).",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-delete",
+    group: "Projects",
+    usage: "issues-delete <number> --confirm [--project <id>]",
+    summary: "Delete the issue from the tracker, for good. Ask the user, then pass --confirm.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-comment",
+    group: "Projects",
+    usage: "issues-comment <number> <body> [--internal] [--project <id>]",
+    summary: "Comment on the issue as the account of the project's host; --internal where the tracker has comments for its members alone.",
+    positionals: ["number", "body"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-edit-comment",
+    group: "Projects",
+    usage: "issues-edit-comment <comment-id> <body> [--project <id>]",
+    summary: "Replace the text of a comment (its id from issues-read).",
+    positionals: ["commentId", "body"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-delete-comment",
+    group: "Projects",
+    usage: "issues-delete-comment <comment-id> --confirm [--project <id>]",
+    summary: "Delete a comment (its id from issues-read), for good. Ask the user, then pass --confirm.",
+    positionals: ["commentId"],
+    sandbox: "ownProject",
+  },
+  // Not for a sandbox: it names a file of this machine, which a sandbox reads only where it is mounted.
+  {
+    verb: "issues-upload",
+    group: "Projects",
+    usage: "issues-upload <path> [--project <id>]",
+    summary:
+      "Upload a file (absolute, or relative to the repository or worktree) to the tracker; answers the Markdown (markdown) that shows it in an issue's text, for issues-comment, issues-create or issues-update.",
+    positionals: ["path"],
   },
   {
     verb: "tabs-run-command",

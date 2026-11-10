@@ -2,23 +2,37 @@ import { failure } from "../shared/errors";
 import { effectivePrompt } from "../shared/prompts";
 import type { AgentId } from "../shared/types/agents";
 import type { ProjectRef } from "../shared/types/project";
-import { DEFAULT_ISSUE_FILTER, isUnread, issueFileName, type Issue } from "../shared/types/providers";
+import {
+  DEFAULT_ISSUE_FILTER,
+  isUnread,
+  issueFileName,
+  type Issue,
+  type IssueChange,
+  type IssueDetail,
+  type IssueFieldValue,
+  type IssueFilter,
+  type IssueFilterOptions,
+  type IssuesLatest,
+} from "../shared/types/providers";
 import type { HandoverResult } from "../shared/types/terminals";
+import { MAX_EDIT_BYTES } from "./git/explorer-read";
 import {
   issueMarkdown,
   onTracker,
   readIssueTracker,
   setIssueSource,
+  writeOnTracker,
   type IssueAccounts,
   type IssueRepository,
   type IssueTrackerInfo,
 } from "./providers/issues";
-import { forgetAllIssuesSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
+import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
 import type { ProjectStore } from "./store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
 import type { SettingsAccess } from "./store/settings";
 import { readIssueSource } from "./store/tet-json";
 import type { SessionManagerRegistry } from "./terminals/session-registry";
+import { imageDataUrl } from "./util/image-response";
 
 /**
  * What the ISSUES section and `tet-ctl`'s issue verbs share, built once in main.ts like
@@ -93,6 +107,121 @@ export async function markIssuesSeen(
     provider.readIssue(tracker, number),
   );
   setIssueSeen(deps.dataRoot, projectId, number, updatedAt);
+}
+
+/** More than either tracker takes of one file: past this it does not cross to main's memory. */
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
+
+/**
+ * What the ISSUES section and `tet-ctl` do on the project's tracker beyond the above, each throwing
+ * what the tracker or the account refused: the callers tell it as their transport does.
+ */
+
+/** The project's issues the filter narrows to. */
+export function listIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<Issue[]> {
+  return onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.listIssues(tracker, filter));
+}
+
+/** What the tracker says of the filtered list without sending it. */
+export function latestIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<IssuesLatest> {
+  return onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.readLatest(tracker, filter));
+}
+
+/** What the filters offer. */
+export function issueFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<IssueFilterOptions, "error">>> {
+  return onTracker(deps.accounts, issueRepository(deps, projectId), async (provider, tracker) => {
+    const [labels, people] = await Promise.all([provider.listLabels(tracker), provider.listPeople(tracker)]);
+    return { labels, people };
+  });
+}
+
+/** One issue with what its tab shows beside it. */
+export function readIssue(deps: TrackerDeps, projectId: string, number: number): Promise<IssueDetail> {
+  return onTracker(deps.accounts, issueRepository(deps, projectId), async (provider, tracker, viewer) => ({
+    ...(await provider.readIssue(tracker, number)),
+    viewer,
+    uploads: provider.uploads(tracker.host),
+    internalNotes: provider.internalNotes,
+  }));
+}
+
+/** An image of an issue's text as a data url; null when it takes no token or cannot be read: the text
+ *  stands without it, as a preview's does. */
+export async function issueImage(deps: TrackerDeps, projectId: string, source: string): Promise<string | null> {
+  try {
+    const response = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+      provider.readImage(tracker, source),
+    );
+    return response ? await imageDataUrl(response, MAX_EDIT_BYTES) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What a pick field of the issue can be set to. */
+export function issueFieldOptions(deps: TrackerDeps, projectId: string, number: number, fieldId: string): Promise<string[]> {
+  return onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.listOptions(tracker, number, fieldId));
+}
+
+/** A new issue, answered by its number. */
+export function createIssue(deps: TrackerDeps, projectId: string, title: string, body: string): Promise<number> {
+  return writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.createIssue(tracker, title, body));
+}
+
+export async function commentIssue(deps: TrackerDeps, projectId: string, number: number, body: string, internal: boolean): Promise<void> {
+  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.addComment(tracker, number, body, internal),
+  );
+}
+
+export async function editIssueComment(deps: TrackerDeps, projectId: string, id: string, body: string): Promise<void> {
+  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.editComment(tracker, id, body));
+}
+
+export async function deleteIssueComment(deps: TrackerDeps, projectId: string, id: string): Promise<void> {
+  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteComment(tracker, id));
+}
+
+export async function updateIssue(deps: TrackerDeps, projectId: string, number: number, change: IssueChange): Promise<void> {
+  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.updateIssue(tracker, number, change),
+  );
+}
+
+export async function setIssueField(
+  deps: TrackerDeps,
+  projectId: string,
+  number: number,
+  fieldId: string,
+  value: IssueFieldValue,
+): Promise<void> {
+  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.setField(tracker, number, fieldId, value),
+  );
+}
+
+/** Deletes the issue; its entry of what the tabs showed goes with it. */
+export async function deleteIssue(
+  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  projectId: string,
+  number: number,
+): Promise<void> {
+  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
+  forgetIssueSeen(deps.dataRoot, projectId, number);
+}
+
+/** Uploads a file to the tracker, answered by what shows it in an issue's text. */
+export function uploadIssueFile(deps: TrackerDeps, projectId: string, name: string, bytes: Buffer<ArrayBuffer>): Promise<string> {
+  if (bytes.byteLength > MAX_UPLOAD_BYTES) {
+    return Promise.reject(new Error(`${name} is too large to upload`));
+  }
+  return writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.uploads(tracker.host)
+      ? provider.uploadFile(tracker, name, bytes)
+      : Promise.reject(new Error(`${tracker.host} takes no upload`)),
+  );
 }
 
 /** The first prompt of a tab opened on an issue: the settings' text, then which issue it is, ended

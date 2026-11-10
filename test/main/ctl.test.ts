@@ -420,6 +420,84 @@ function deps(): ControlDeps {
     markIssuesSeen: async (projectId, number) => {
       calls.issueCalls.push(`seen:${projectId}:${number ?? "all"}`);
     },
+    listIssues: async (projectId, filter) => {
+      calls.issueCalls.push(`list:${projectId}:${JSON.stringify(filter)}`);
+      return [
+        {
+          number: 7,
+          title: "Changed",
+          url: "https://gitlab.example.com/g/r/-/issues/7",
+          open: true,
+          author: "mira",
+          createdAt: "2026-11-01T00:00:00Z",
+          updatedAt: "2026-11-06T09:00:00Z",
+          labels: ["bug"],
+          avatars: { mira: "https://gitlab.example.com/mira.png" },
+        },
+      ];
+    },
+    latestIssues: async (projectId, filter) => {
+      calls.issueCalls.push(`latest:${projectId}:${JSON.stringify(filter)}`);
+      return { total: 1, updatedAt: "2026-11-06T09:00:00Z" };
+    },
+    issueFilterOptions: async () => ({ labels: ["bug"], people: ["mira"] }),
+    readIssue: async (_projectId, number) => {
+      if (number === 404) {
+        throw new Error("404 Not Found");
+      }
+      return {
+        number,
+        title: "Changed",
+        url: `https://gitlab.example.com/g/r/-/issues/${number}`,
+        open: true,
+        author: "mira",
+        createdAt: "2026-11-01T00:00:00Z",
+        updatedAt: "2026-11-06T09:00:00Z",
+        labels: ["bug"],
+        avatars: { mira: "https://gitlab.example.com/mira.png" },
+        provider: "gitlab",
+        body: "The text",
+        notes: [{ id: "note-1", author: "mira", createdAt: "2026-11-02T00:00:00Z", body: "A comment" }],
+        events: [],
+        fields: [
+          { id: "labels", name: "Labels", editable: true, kind: "pick", value: ["bug"], several: true, shown: "labels" },
+          { id: "milestone", name: "Milestone", editable: true, kind: "pick", value: [], several: false, shown: "text" },
+          { id: "weight", name: "Weight", editable: true, kind: "number" },
+          { id: "due", name: "Due date", editable: true, kind: "date" },
+          { id: "confidential", name: "Confidential", editable: true, kind: "flag", value: false },
+          { id: "time", name: "Time", editable: true, kind: "timelog", entries: [] },
+          { id: "type", name: "Type", editable: false, kind: "text", value: "Issue" },
+        ],
+      };
+    },
+    issueImage: async (_projectId, source) => (source === "missing.png" ? null : `data:image/png;base64,${source}`),
+    issueFieldOptions: async (_projectId, number, fieldId) => [`${number}:${fieldId}`],
+    setIssueField: async (_projectId, number, fieldId, value) => {
+      calls.issueCalls.push(`field:${number}:${fieldId}:${JSON.stringify(value)}`);
+    },
+    createIssue: async (projectId, title, body) => {
+      calls.issueCalls.push(`create:${projectId}:${title}:${body}`);
+      return 51;
+    },
+    updateIssue: async (_projectId, number, change) => {
+      calls.issueCalls.push(`update:${number}:${JSON.stringify(change)}`);
+    },
+    deleteIssue: async (_projectId, number) => {
+      calls.issueCalls.push(`delete:${number}`);
+    },
+    commentIssue: async (_projectId, number, body, internal) => {
+      calls.issueCalls.push(`comment:${number}:${body}:${internal}`);
+    },
+    editIssueComment: async (_projectId, id, body) => {
+      calls.issueCalls.push(`edit-comment:${id}:${body}`);
+    },
+    deleteIssueComment: async (_projectId, id) => {
+      calls.issueCalls.push(`delete-comment:${id}`);
+    },
+    uploadIssueFile: async (_projectId, name, bytes) => {
+      calls.issueCalls.push(`upload:${name}:${bytes.toString("utf8")}`);
+      return `![${name}](/uploads/${name})`;
+    },
     openIssue: (ref, number, keep, background) => {
       calls.issuesOpened.push([refKeyOf(ref), number, keep, background]);
     },
@@ -1005,6 +1083,107 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["issues-mark-seen", "four"]), /not an issue number: four/);
   });
 
+  it("lists the issues the filter narrows to, the open ones until told otherwise, and what the tracker says of them", async () => {
+    const listed = (await tetCtl(["issues-list"])).result as Record<string, unknown>[];
+    assert.equal(listed.length, 1);
+    assert.equal(listed[0].number, 7);
+    assert.equal("avatars" in listed[0], false, "the pictures belong to the section");
+    await tetCtl(["issues-list", "--state", "all", "--author", "mira", "--assignee", "jo", "--label", "bug, ui"]);
+    await tetCtl(["issues-latest", "--state", "closed"]);
+    assert.deepEqual(calls.issueCalls, [
+      `list:${PROJECT.id}:${JSON.stringify({ state: "open", labels: [] })}`,
+      `list:${PROJECT.id}:${JSON.stringify({ author: "mira", assignee: "jo", labels: ["bug", "ui"] })}`,
+      `latest:${PROJECT.id}:${JSON.stringify({ state: "closed", labels: [] })}`,
+    ]);
+    assert.deepEqual((await tetCtl(["issues-latest"])).result, { total: 1, updatedAt: "2026-11-06T09:00:00Z" });
+    assertUsage(await tetCtl(["issues-list", "--state", "done"]), /unknown state: done \(one of open, closed, all\)/);
+    assert.deepEqual((await tetCtl(["issues-filter-options"])).result, { labels: ["bug"], people: ["mira"] });
+  });
+
+  it("reads an issue with its comments and fields, and an image of its text", async () => {
+    const read = (await tetCtl(["issues-read", "7"])).result as { number: number; notes: { id: string }[]; fields: { id: string }[] };
+    assert.equal(read.number, 7);
+    assert.equal(read.notes[0].id, "note-1");
+    assert.equal(read.fields[0].id, "labels");
+    assert.equal("avatars" in read, false);
+    assertUsage(await tetCtl(["issues-read", "404"]), /404 Not Found/);
+    assert.deepEqual((await tetCtl(["issues-image", "abc"])).result, { dataUrl: "data:image/png;base64,abc" });
+    assert.deepEqual((await tetCtl(["issues-image", "missing.png"])).result, { dataUrl: null });
+    assert.deepEqual((await tetCtl(["issues-field-options", "7", "labels"])).result, { options: ["7:labels"] });
+  });
+
+  it("sets a field as its kind takes it, and refuses what it does not", async () => {
+    await tetCtl(["issues-set-field", "7", "labels", "bug", "ui"]);
+    await tetCtl(["issues-set-field", "7", "labels"]);
+    await tetCtl(["issues-set-field", "7", "milestone", "v2"]);
+    await tetCtl(["issues-set-field", "7", "weight", "3"]);
+    await tetCtl(["issues-set-field", "7", "weight"]);
+    await tetCtl(["issues-set-field", "7", "due", "2026-12-01"]);
+    await tetCtl(["issues-set-field", "7", "confidential", "on"]);
+    await tetCtl(["issues-set-field", "7", "time", "1h 30m", "--date", "2026-11-05", "--summary", "review"]);
+    await tetCtl(["issues-set-field", "7", "time", "--remove", "log-1"]);
+    assert.deepEqual(calls.issueCalls, [
+      'field:7:labels:["bug","ui"]',
+      "field:7:labels:[]",
+      'field:7:milestone:["v2"]',
+      "field:7:weight:3",
+      "field:7:weight:null",
+      'field:7:due:"2026-12-01"',
+      "field:7:confidential:true",
+      'field:7:time:{"timeSpent":"1h 30m","spentAt":"2026-11-05","summary":"review"}',
+      'field:7:time:{"remove":"log-1"}',
+    ]);
+    calls.issueCalls.length = 0;
+    assertUsage(await tetCtl(["issues-set-field", "7", "milestone", "v1", "v2"]), /takes one value/);
+    assertUsage(await tetCtl(["issues-set-field", "7", "weight", "heavy"]), /not a number: heavy/);
+    assertUsage(await tetCtl(["issues-set-field", "7", "confidential", "yes"]), /takes on or off/);
+    assertUsage(await tetCtl(["issues-set-field", "7", "time"]), /takes the time spent/);
+    assertUsage(await tetCtl(["issues-set-field", "7", "type", "Bug"]), /cannot be changed/);
+    assertUsage(await tetCtl(["issues-set-field", "7", "nope", "x"]), /has no field nope/);
+    assert.deepEqual(calls.issueCalls, []);
+  });
+
+  it("creates, changes and comments on issues, and deletes them and their comments only when confirmed", async () => {
+    assert.deepEqual((await tetCtl(["issues-create", "A title", "The text"])).result, { created: 51 });
+    await tetCtl(["issues-create", "Only a title"]);
+    await tetCtl(["issues-update", "7", "--title", "New", "--state", "closed"]);
+    await tetCtl(["issues-update", "7", "--body", ""]);
+    await tetCtl(["issues-comment", "7", "A comment"]);
+    await tetCtl(["issues-comment", "7", "Members only", "--internal"]);
+    await tetCtl(["issues-edit-comment", "note-1", "Edited"]);
+    await tetCtl(["issues-delete", "7", "--confirm"]);
+    await tetCtl(["issues-delete-comment", "note-1", "--confirm"]);
+    assert.deepEqual(calls.issueCalls, [
+      `create:${PROJECT.id}:A title:The text`,
+      `create:${PROJECT.id}:Only a title:`,
+      'update:7:{"title":"New","state":"closed"}',
+      'update:7:{"body":""}',
+      "comment:7:A comment:false",
+      "comment:7:Members only:true",
+      "edit-comment:note-1:Edited",
+      "delete:7",
+      "delete-comment:note-1",
+    ]);
+    calls.issueCalls.length = 0;
+    assertUsage(await tetCtl(["issues-update", "7"]), /nothing to change/);
+    assertUsage(await tetCtl(["issues-update", "7", "--state", "merged"]), /unknown state: merged \(one of open, closed\)/);
+    assertUsage(await tetCtl(["issues-delete", "7"]), /Ask the user, then pass --confirm/);
+    assertUsage(await tetCtl(["issues-delete-comment", "note-1"]), /Ask the user, then pass --confirm/);
+    assert.equal((await tetCtl(["issues-create"])).status, EXIT_CODES.usage, "no title");
+    assert.equal((await tetCtl(["issues-comment", "7"])).status, EXIT_CODES.usage, "no text");
+    assert.deepEqual(calls.issueCalls, []);
+  });
+
+  it("uploads a file to the tracker, and refuses a sandbox and what is no file", async () => {
+    const file = path.join(workDir, "shot.png");
+    fs.writeFileSync(file, "pixels");
+    assert.deepEqual((await tetCtl(["issues-upload", file])).result, { markdown: "![shot.png](/uploads/shot.png)" });
+    assert.deepEqual(calls.issueCalls, ["upload:shot.png:pixels"]);
+    assertUsage(await tetCtl(["issues-upload", workDir]), /not a file/);
+    assertUsage(await tetCtl(["issues-upload", path.join(workDir, "none.png")]), /ENOENT/);
+    assertRefused(await tetCtl(["issues-upload", file], FROM_SANDBOX), /sandbox/, "issues-upload");
+  });
+
   it("opens a tab on an issue for a sandbox held to the sandbox, and for an agent that runs in one only", async () => {
     await tetCtl(["issues-open-in-agent", "7", "--agent", "claude"], FROM_SANDBOX);
     assert.deepEqual(calls.issueAgents, [[PROJECT.id, 7, "claude", true]]);
@@ -1384,6 +1563,19 @@ describe("tet-ctl against the control server", () => {
       ["issues-set-source", "group/tracker"],
       ["issues-unread"],
       ["issues-mark-seen", "7"],
+      ["issues-list"],
+      ["issues-latest"],
+      ["issues-filter-options"],
+      ["issues-read", "7"],
+      ["issues-image", "abc"],
+      ["issues-field-options", "7", "labels"],
+      ["issues-set-field", "7", "weight", "3"],
+      ["issues-create", "A title"],
+      ["issues-update", "7", "--title", "New"],
+      ["issues-delete", "7", "--confirm"],
+      ["issues-comment", "7", "A comment"],
+      ["issues-edit-comment", "note-1", "Edited"],
+      ["issues-delete-comment", "note-1", "--confirm"],
       ["issues-open", "7"],
       ["issues-open-in-agent", "7", "--agent", "claude"],
     ];

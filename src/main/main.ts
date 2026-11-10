@@ -12,7 +12,28 @@ import { issueFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
-import { changeIssueSource, issueTrackerOf, markIssuesSeen, openIssueInAgent, unreadIssues, type IssueDeps } from "./issues";
+import {
+  changeIssueSource,
+  commentIssue,
+  createIssue,
+  deleteIssue,
+  deleteIssueComment,
+  editIssueComment,
+  issueFieldOptions,
+  issueFilterOptions,
+  issueImage,
+  issueTrackerOf,
+  latestIssues,
+  listIssues,
+  markIssuesSeen,
+  openIssueInAgent,
+  readIssue,
+  setIssueField,
+  unreadIssues,
+  updateIssue,
+  uploadIssueFile,
+  type IssueDeps,
+} from "./issues";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -327,6 +348,20 @@ async function startControl(): Promise<void> {
         readIssueTracker: (projectId) => issueTrackerOf(issueDeps, projectId),
         unreadIssues: (projectId) => unreadIssues(issueDeps, projectId),
         markIssuesSeen: (projectId, number) => markIssuesSeen(issueDeps, projectId, number),
+        listIssues: (projectId, filter) => listIssues(issueDeps, projectId, filter),
+        latestIssues: (projectId, filter) => latestIssues(issueDeps, projectId, filter),
+        issueFilterOptions: (projectId) => issueFilterOptions(issueDeps, projectId),
+        readIssue: (projectId, number) => readIssue(issueDeps, projectId, number),
+        issueImage: (projectId, source) => issueImage(issueDeps, projectId, source),
+        issueFieldOptions: (projectId, number, fieldId) => issueFieldOptions(issueDeps, projectId, number, fieldId),
+        setIssueField: (projectId, number, fieldId, value) => setIssueField(issueDeps, projectId, number, fieldId, value),
+        createIssue: (projectId, title, body) => createIssue(issueDeps, projectId, title, body),
+        updateIssue: (projectId, number, change) => updateIssue(issueDeps, projectId, number, change),
+        deleteIssue: (projectId, number) => deleteIssue(issueDeps, projectId, number),
+        commentIssue: (projectId, number, body, internal) => commentIssue(issueDeps, projectId, number, body, internal),
+        editIssueComment: (projectId, id, body) => editIssueComment(issueDeps, projectId, id, body),
+        deleteIssueComment: (projectId, id) => deleteIssueComment(issueDeps, projectId, id),
+        uploadIssueFile: (projectId, name, bytes) => uploadIssueFile(issueDeps, projectId, name, bytes),
         openIssue: (ref, number, keep, background) =>
           send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
         openIssueInAgent: (ref, number, agentId, sandboxOnly) => openIssueInAgent(issueDeps, ref, number, agentId, sandboxOnly),

@@ -51,6 +51,10 @@ export interface Issue {
   avatars: Record<string, string>;
 }
 
+/** The states an issue has; `tet-ctl` also filters by `all`. */
+export const ISSUE_STATES = ["open", "closed"] as const;
+export const ISSUE_STATE_FILTERS = [...ISSUE_STATES, "all"] as const;
+
 /** What the host narrows the ISSUES section to; a field left out narrows nothing. */
 export interface IssueFilter {
   state?: "open" | "closed";
