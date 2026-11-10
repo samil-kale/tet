@@ -97,6 +97,9 @@ export interface SbxProjectSettings {
  *  rows hold a value here — never a value — and the skills. */
 export interface SbxStoredLocal {
   environment: string[];
+  /** The names of TET's environment variables (environment.ts), whose value a row of that name takes
+   *  where it has none of its own. */
+  tet: string[];
   skills: SbxSkillsSettings;
 }
 

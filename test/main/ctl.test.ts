@@ -466,7 +466,8 @@ function deps(): ControlDeps {
       status: async () => ({ status: sbxStatus }),
       anyAgentInstalled: async () => true,
       settings: async () => structuredClone(sbxSettings),
-      stored: async () => ({ environment: ["API_KEY"], skills: structuredClone(sbxSkills) }),
+      // DB_PASSWORD is one of TET's variables no row names, which sbx-get leaves out.
+      stored: async () => ({ environment: ["API_KEY"], tet: ["API_KEY", "MODE", "DB_PASSWORD"], skills: structuredClone(sbxSkills) }),
       problems: async () => sbxProblems,
       save: async (project, request, local) => {
         calls.sbxSaved.push([project.id, request, local]);
@@ -1320,7 +1321,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { environment: ["API_KEY"], skills: sbxSkills },
+      stored: { environment: ["API_KEY"], tet: ["MODE"], skills: sbxSkills },
       problems: {},
     });
   });
@@ -1353,7 +1354,7 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual((await tetCtl(["sbx-get"])).result, {
       status: sbxStatus,
       settings: sbxSettings,
-      stored: { environment: ["API_KEY"], skills: sbxSkills },
+      stored: { environment: ["API_KEY"], tet: ["API_KEY"], skills: sbxSkills },
       problems: sbxProblems,
     });
   });

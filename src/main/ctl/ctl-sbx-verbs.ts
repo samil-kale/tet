@@ -158,7 +158,10 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       const stored = await deps.sbx.stored(found.id);
       const [reading, settings] = await Promise.all([deps.sbx.status(found), deps.sbx.settings(found)]);
       const problems = await deps.sbx.problems(found, settings, stored.skills, stored, reading);
-      return { result: { status: reading.status, settings, stored, problems } };
+      // Of TET's variables only the rows that take one: the others are this machine's, which a
+      // sandboxed caller never lists (env-list).
+      const tet = stored.tet.filter((name) => settings.environment.includes(name));
+      return { result: { status: reading.status, settings, stored: { ...stored, tet }, problems } };
     },
 
     "sbx-set-enabled": async (args, caller) => {

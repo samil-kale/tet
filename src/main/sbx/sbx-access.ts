@@ -17,7 +17,7 @@ import { signInToSbx, type SbxAccountStore } from "./sbx-accounts";
 import { readSbxUser } from "./sbx-cli";
 import type { SbxLocalStore } from "./sbx-local";
 import { readRegisteredMcp, signInMcp } from "./sbx-mcp";
-import { readProjectSbxProblems, saveProjectSbx } from "./sbx-settings";
+import { readProjectSbxProblems, saveProjectSbx, type ValueNames } from "./sbx-settings";
 import { readSbxReading, readSbxSignedIn, type SandboxChannel, type SbxReading } from "./sbx-status";
 
 /** The SBX Settings dialog's reads and Save (ipc/sbx.ts, sbx-settings.ts), as tet-ctl's verbs take
@@ -34,7 +34,7 @@ export interface SbxAccess {
     project: Project,
     settings: SbxProjectSettings,
     skills: SbxSkillsSettings,
-    values: Pick<SbxStoredLocal, "environment">,
+    values: ValueNames,
     reading?: SbxReading,
   ): Promise<SbxProblems>;
   /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */

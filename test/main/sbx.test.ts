@@ -721,7 +721,7 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
     it("stops before changing anything when sbx cannot list the sandboxes, and keeps the values it had", async () => {
       fakeSafeStorage();
       const { dir, repoFolder } = fakeSbx({ published: [], fail: ["ls"] });
-      const sbxLocal = new SbxLocalStore(tempDir("tet-sbx-local-"));
+      const sbxLocal = new SbxLocalStore(tempDir("tet-sbx-local-"), async () => ({}));
       await sbxLocal.update(projectId, noLocal({ OLD: "kept" }));
       const { result } = await saveProject(dir, repoFolder, settings([]), noLocal({ NEW: "typed" }), sbxLocal).catch(() => ({
         result: undefined,
@@ -741,7 +741,10 @@ if ((answers.fail ?? []).some((prefix) => args.join(" ").startsWith(prefix))) {
       const notices: string[] = [];
       const { result, calls } = await withSbx(dir, () =>
         saveProjectSbx(
-          { sbxLocal: new SbxLocalStore(tempDir("tet-sbx-local-")), notice: (_severity, message) => notices.push(message) },
+          {
+            sbxLocal: new SbxLocalStore(tempDir("tet-sbx-local-"), async () => ({})),
+            notice: (_severity, message) => notices.push(message),
+          },
           projectOf(repoFolder),
           { ...EMPTY_SBX_SETTINGS, enabled: false },
           noLocal(),
@@ -875,18 +878,31 @@ describe("a sandboxed tab's variables", () => {
 describe("what sbx keeps on this machine", () => {
   it("counts a value as stored only where it can still be decrypted", async () => {
     fakeSafeStorage();
-    const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
+    const store = new SbxLocalStore(tempDir("tet-sbx-local-"), async () => ({}));
     const base64 = (text: string) => Buffer.from(text).toString("base64");
     store.restore("p", {
       environment: { NPM_TOKEN: base64("sealed:npm"), LOST: base64("under another keychain") },
     });
-    assert.deepEqual(await store.stored("p"), { environment: ["NPM_TOKEN"], skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual(await store.stored("p"), { environment: ["NPM_TOKEN"], tet: [], skills: EMPTY_SBX_SKILLS });
     assert.deepEqual([...(await store.environmentValues("p"))], [["NPM_TOKEN", "npm"]]);
+  });
+
+  it("gives a row without a value of its own TET's variable of its name, read at each start", async () => {
+    fakeSafeStorage();
+    let tet: Record<string, string> = { NPM_TOKEN: "from-tet", DB_PASSWORD: "tet-db" };
+    const store = new SbxLocalStore(tempDir("tet-sbx-local-"), async () => tet);
+    await store.update("p", { environment: { values: { NPM_TOKEN: "own" }, from: {} }, skills: EMPTY_SBX_SKILLS });
+    assert.deepEqual(await store.stored("p"), { environment: ["NPM_TOKEN"], tet: ["NPM_TOKEN", "DB_PASSWORD"], skills: EMPTY_SBX_SKILLS });
+    const values = await store.environmentValues("p");
+    assert.equal(values.get("NPM_TOKEN"), "own", "its own value wins");
+    assert.equal(values.get("DB_PASSWORD"), "tet-db");
+    tet = { DB_PASSWORD: "changed" };
+    assert.equal((await store.environmentValues("p")).get("DB_PASSWORD"), "changed", "never copied");
   });
 
   it("carries a stored value along a renamed row, and gives none to a row added under a stored name", async () => {
     fakeSafeStorage();
-    const store = new SbxLocalStore(tempDir("tet-sbx-local-"));
+    const store = new SbxLocalStore(tempDir("tet-sbx-local-"), async () => ({}));
     await store.update("p", { environment: { values: { OLD: "kept", GONE: "dropped" }, from: {} }, skills: EMPTY_SBX_SKILLS });
     // OLD renamed to NEW; GONE removed and a new row added under its name, left without a value.
     await store.update("p", { environment: { values: {}, from: { NEW: "OLD" } }, skills: EMPTY_SBX_SKILLS });
@@ -896,11 +912,11 @@ describe("what sbx keeps on this machine", () => {
   it("keeps the skills on this machine, and no entry once it is all off", async () => {
     fakeSafeStorage(false);
     const root = tempDir("tet-sbx-local-");
-    const store = new SbxLocalStore(root);
+    const store = new SbxLocalStore(root, async () => ({}));
     const none = { values: {}, from: {} };
     const skills = { skills: "ro" as const, instructions: "rw" as const, skillsFolder: "/skills" };
     await store.update("p", { environment: none, skills });
-    assert.deepEqual(new SbxLocalStore(root).skills("p"), skills, "read back, with no keyring needed");
+    assert.deepEqual(new SbxLocalStore(root, async () => ({})).skills("p"), skills, "read back, with no keyring needed");
     await store.update("p", { environment: none, skills: EMPTY_SBX_SKILLS });
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "sbx-local.json"), "utf8")), {}, "all off leaves no entry");
   });

@@ -50,7 +50,7 @@ export const HOST_SIDE: ControlSide = {
   // looks there instead of asking.
   promptNote:
     " TET sets the token of the account added in TET for the host of this project in this tab: " +
-    "GITLAB_TOKEN with GITLAB_HOST for GitLab, GH_TOKEN for GitHub, GH_ENTERPRISE_TOKEN with GH_HOST for GitHub Enterprise, " +
+    "GITLAB_TOKEN with GITLAB_HOST for GitLab, GITHUB_TOKEN for GitHub, GITHUB_ENTERPRISE_TOKEN with GH_HOST for GitHub Enterprise, " +
     "and git uses it to push and fetch there. Use them with git, curl, glab or gh and never ask the user for a token. " +
     "If none is set, the host has no account in TET: point the user to Accounts in Settings.",
 };
@@ -77,7 +77,10 @@ export const SANDBOX_SIDE: ControlSide = {
     " You run in an sbx sandbox TET set up, holding only what TET brings in from the user's machine. " +
     "When something is missing, point the user to TET's SBX Settings: Skills for your skills and CLAUDE.md or AGENTS.md, " +
     "Paths for folders and files, Ports, Allowed hosts, Variables, and a Setup script for packages; " +
-    "or to drop a file or folder onto this tab, which mounts it until TET quits.",
+    "or to drop a file or folder onto this tab, which mounts it until TET quits. " +
+    // The account's token reaches a sandbox only as an Environment row (sbx-local.ts), git's login not with it.
+    "When GITLAB_TOKEN, GITHUB_TOKEN or GITHUB_ENTERPRISE_TOKEN is set here, it is the token of the account for the project host: " +
+    "use it with curl, glab or gh, and for git through a credential helper given with git -c, and never ask the user for a token.",
 };
 
 /** Whether the side admits the verb named; what the help and the system prompt mention follows it. */

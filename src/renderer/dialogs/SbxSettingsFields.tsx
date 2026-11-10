@@ -26,6 +26,7 @@ import {
 import { CodeField } from "../editor/CodeField";
 import { PLATFORM } from "../platform";
 import { ActionLink } from "../ui/ActionLink";
+import { useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import {
   atLeastOne,
   EditRow,
@@ -238,6 +239,12 @@ function holdsValue(row: { from?: string }, stored: readonly string[]): boolean 
   return row.from !== undefined && stored.includes(row.from);
 }
 
+/** Whether the row takes TET's variable of its name (SbxStoredLocal.tet): it has none of its own,
+ *  typed or stored. */
+function takesTet(row: { env: string; value: string; from?: string }, stored: SbxStoredLocal): boolean {
+  return row.value === "" && !holdsValue(row, stored.environment) && stored.tet.includes(row.env.trim());
+}
+
 /** Whether the edits since opening reach a running tab only once it restarts (sbxNeedsRestart);
  *  a variable's value is set by `sbx run -e` too. */
 export function needsRestart(loaded: SbxProjectSettings, loadedSkills: SbxSkillsSettings, state: FieldsState): boolean {
@@ -246,10 +253,12 @@ export function needsRestart(loaded: SbxProjectSettings, loadedSkills: SbxSkills
   );
 }
 
-/** The env names of the rows that hold a value: typed now, or stored under the name the row was
- *  opened under. */
-function valueNames(rows: { env: string; value: string; from?: string }[], stored: readonly string[]): string[] {
-  return rows.filter((row) => row.env.trim() !== "" && (row.value !== "" || holdsValue(row, stored))).map((row) => row.env.trim());
+/** The env names of the rows that hold a value: typed now, stored under the name the row was
+ *  opened under, or TET's variable of its name. */
+function valueNames(rows: { env: string; value: string; from?: string }[], stored: SbxStoredLocal): string[] {
+  return rows
+    .filter((row) => row.env.trim() !== "" && (row.value !== "" || holdsValue(row, stored.environment) || takesTet(row, stored)))
+    .map((row) => row.env.trim());
 }
 
 /**
@@ -270,7 +279,7 @@ export function useSbxProblems(
   const [problems, setProblems] = useState<SbxProblems>({});
   const settings = { enabled: true, ...toSettings(state) };
   const skills = toSkills(state.skills);
-  const values = { environment: valueNames(state.environment, stored.environment) };
+  const values = { environment: valueNames(state.environment, stored) };
   const key = JSON.stringify([settings, skills, values, organization]);
   /** The loaded rows go at once; an edit waits (CHECK_DELAY_MS). */
   const opened = useRef(true);
@@ -368,6 +377,8 @@ export function SbxSettingsFields({
 }: SbxSettingsFieldsProps) {
   const update = <K extends keyof FieldsState>(key: K, change: (value: FieldsState[K]) => FieldsState[K]): void =>
     setState((current) => ({ ...current, [key]: change(current[key]) }));
+  /** The Environment tab's picker of TET's variables. */
+  const tetMenu = useAnchoredMenu((rect) => ({ x: rect.left, y: rect.bottom }));
 
   /** `false` turns a kind off; an `SbxAccess` turns it on with that access. */
   const setSkills = (kind: SbxSkillsKind, value: SbxAccess | false): void => update("skills", (skills) => ({ ...skills, [kind]: value }));
@@ -531,6 +542,17 @@ export function SbxSettingsFields({
 
   if (section === "environment") {
     const variables = typedRows("variable", BLANK_VARIABLE, (change) => update("environment", change));
+    /** TET's variables no row names yet; a pick takes a blank row's place (`atLeastOne`). */
+    const tetEntries = (): ContextMenuEntry[] => {
+      const offered = stored.tet.filter((name) => !state.environment.some((row) => row.env.trim() === name));
+      if (offered.length === 0) {
+        return [{ label: "No other variable is kept in TET" }];
+      }
+      return offered.map((name) => ({
+        label: name,
+        run: () => update("environment", (rows) => [...rows.filter((row) => !isEmptyVariableRow(row)), withId({ env: name, value: "" })]),
+      }));
+    };
     return (
       <RowSection
         label="Environment"
@@ -538,6 +560,7 @@ export function SbxSettingsFields({
         renderRow={(row) => {
           const setVariable = (change: Partial<typeof row>): void => update("environment", (rows) => patched(rows, row.id, change));
           const valueStored = holdsValue(row, stored.environment);
+          const fromTet = takesTet(row, stored);
           return (
             <EditRow key={row.id} mark={variableMark(row, state, problems)} {...variables.remove(row.id)}>
               <RowInput
@@ -549,14 +572,27 @@ export function SbxSettingsFields({
               <SecretInput
                 stored={valueStored}
                 storedTitle="Stored on this machine; typing replaces it. The sandbox sees it."
-                emptyTitle="Stored on this machine, never in tet.json. The sandbox sees it."
+                emptyTitle={
+                  fromTet
+                    ? "Takes TET's variable of this name (Settings, Environment); typing sets one for the sandboxes alone. The sandbox sees it."
+                    : "Stored on this machine, never in tet.json. The sandbox sees it."
+                }
+                placeholder={fromTet ? "from TET" : undefined}
                 value={row.value}
                 onChange={(value) => setVariable({ value })}
               />
             </EditRow>
           );
         }}
-        add={variables.add}
+        add={
+          <FieldRow>
+            {variables.add}
+            <button type="button" className="action-link" onMouseDown={(event) => tetMenu.open(event)}>
+              + Add from TET…
+            </button>
+            {tetMenu.render(tetEntries, "dropdown-menu")}
+          </FieldRow>
+        }
       />
     );
   }

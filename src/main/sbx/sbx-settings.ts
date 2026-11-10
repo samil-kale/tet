@@ -26,9 +26,10 @@ interface SaveDeps {
   notice: (severity: NoticeSeverity, message: string) => void;
 }
 
-/** The env names holding a value. */
-interface ValueNames {
+/** The env names holding a value: of their own, or as TET's variables (`tet`, SbxStoredLocal). */
+export interface ValueNames {
   environment: Iterable<string>;
+  tet?: Iterable<string>;
 }
 
 /** A Save's check, for every agent's sandbox: all of it is applied now. */
@@ -45,7 +46,7 @@ function checkProject(
     projectId: project.id,
     settings,
     skills,
-    values: { environment: new Set(values.environment) },
+    values: { environment: new Set([...values.environment, ...(values.tet ?? [])]) },
     agents: SANDBOXED_AGENTS,
     organization,
     ports: true,

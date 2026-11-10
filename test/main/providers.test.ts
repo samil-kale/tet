@@ -1021,8 +1021,8 @@ describe("the accounts kept for the providers", () => {
 
   it("name an account's token for the host's own CLI", () => {
     assert.deepEqual(gitlab.tokenEnv("gitlab.example.com", "t"), { GITLAB_TOKEN: "t", GITLAB_HOST: "https://gitlab.example.com" });
-    assert.deepEqual(github.tokenEnv("github.com", "t"), { GH_TOKEN: "t" });
-    assert.deepEqual(github.tokenEnv("ghe.example.com", "t"), { GH_ENTERPRISE_TOKEN: "t", GH_HOST: "ghe.example.com" });
+    assert.deepEqual(github.tokenEnv("github.com", "t"), { GITHUB_TOKEN: "t" });
+    assert.deepEqual(github.tokenEnv("ghe.example.com", "t"), { GITHUB_ENTERPRISE_TOKEN: "t", GH_HOST: "ghe.example.com" });
   });
 });
 

@@ -41,7 +41,7 @@ function whenToUse(side: ControlSide): string[] {
       ? [
           "",
           "The token of the account added in TET for the project's host is set already: GITLAB_TOKEN with",
-          "GITLAB_HOST, GH_TOKEN, or GH_ENTERPRISE_TOKEN with GH_HOST, and git uses it for that host. A",
+          "GITLAB_HOST, GITHUB_TOKEN, or GITHUB_ENTERPRISE_TOKEN with GH_HOST, and git uses it for that host. A",
           "missing one is added under Accounts in Settings, not as a variable.",
           "Any other token or password you need is an environment variable ($STRIPE_KEY); TET sets the ones it",
           "keeps (env-list) in every tab, over the machine's own. When one is missing, never ask for its",

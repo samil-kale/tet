@@ -49,7 +49,7 @@ function resolver(reads: PlaceReads, { sbxOnly = false, sandboxed = true } = {})
   const resolving = new PlaceResolver(
     AT,
     new SettingsStore(root),
-    new SbxLocalStore(root),
+    new SbxLocalStore(root, async () => ({})),
     { placeContext: () => context, onNotice, sandboxChannel: () => ({}) },
     reads,
   );

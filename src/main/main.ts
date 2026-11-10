@@ -45,9 +45,9 @@ import { anyAgentInstalled, checkRequirements } from "./requirements";
 import { prepareDataRoot, resolveDataRoot } from "./store/data-root";
 import { augmentAgentPath } from "./agents/agent-path";
 import type { TerminalEnv } from "./terminals/pty";
-import { accountEnv } from "./terminals/account-env";
+import { accountEnv, sandboxTetValues } from "./terminals/account-env";
 import { ensureAskpass } from "./git/askpass";
-import { trackerAccount } from "./providers/issues";
+import { trackerAccount, type TabAccount } from "./providers/issues";
 import { dropOuterKept } from "./store/env-names";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
@@ -134,9 +134,9 @@ const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
 const repoCache = new RepoCache(dataRoot);
 const logins = new GitLoginStore(dataRoot);
-const sbxLocal = new SbxLocalStore(dataRoot);
-const sbxAccounts = new SbxAccountStore(dataRoot);
 const environment = new EnvStore(dataRoot);
+const sbxLocal = new SbxLocalStore(dataRoot, async (projectId) => sandboxTetValues(await projectAccount(projectId), environment.values()));
+const sbxAccounts = new SbxAccountStore(dataRoot);
 // Held until the window listens (send), like any notice this early.
 const overriding = environment
   .list()
@@ -190,17 +190,22 @@ const terminalEnv: TerminalEnv = {
   control: () => controlChannel,
   stored: () => environment.values(),
   account: async (projectId) => {
-    try {
-      const repository = repositories.get({ projectId });
-      const account = repository && (await trackerAccount(accounts, repository));
-      return account ? accountEnv(account, await ensureAskpass(logins.askpassDir), environment.values()) : {};
-    } catch (error) {
-      // The tab starts without it, as without an account.
-      logError("could not read the project's account for a tab", error);
-      return {};
-    }
+    const account = await projectAccount(projectId);
+    return account ? accountEnv(account, await ensureAskpass(logins.askpassDir), environment.values()) : {};
   },
 };
+
+/** The account a tab of the project acts as (trackerAccount); a tab starts without one it cannot
+ *  read, as without an account. */
+async function projectAccount(projectId: string): Promise<TabAccount | undefined> {
+  try {
+    const repository = repositories.get({ projectId });
+    return repository && (await trackerAccount(accounts, repository));
+  } catch (error) {
+    logError("could not read the project's account for a tab", error);
+    return undefined;
+  }
+}
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, terminalEnv, {
   onTabs: (ref, tabs) => {
     send("tabs:changed", { ref, tabs });

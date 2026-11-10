@@ -325,7 +325,7 @@ const VERBS = [
     group: "SBX",
     usage: "sbx-get [--project <id>]",
     summary:
-      "A project's SBX Settings: sbx's status, the configuration, which environment variables hold a value (never the values), and the problems per option (what cannot be applied here). Every sbx-set-* saves only what can be applied and answers notApplied (what was left out, and why) and restartRequired.",
+      "A project's SBX Settings: sbx's status, the configuration, which environment variables hold a value of their own (never the values) and which take TET's variable of their name instead (tet), and the problems per option (what cannot be applied here). Every sbx-set-* saves only what can be applied and answers notApplied (what was left out, and why) and restartRequired.",
     positionals: [],
     sandbox: "ownProject",
   },
@@ -380,7 +380,7 @@ const VERBS = [
     group: "SBX",
     usage: "sbx-set-environment [<NAME>[=<value>]...] [--project <id>]",
     summary:
-      "Replace the environment variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the stored one.",
+      "Replace the environment variables set in the sandboxes with their real value. NAME=value stores a value, a bare NAME keeps the stored one, else takes TET's variable of that name.",
     positionals: ["environment"],
     variadic: true,
     sandbox: "ownProject",

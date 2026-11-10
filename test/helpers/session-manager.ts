@@ -84,7 +84,7 @@ export async function withEmptyPath(
       { ref: { projectId: "p" }, path: project, name: () => "repo" },
       root,
       settings,
-      new SbxLocalStore(root),
+      new SbxLocalStore(root, async () => ({})),
       new HostSetups(root, settings, () => undefined),
       NO_TERMINAL_ENV,
       {

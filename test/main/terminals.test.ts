@@ -10,7 +10,7 @@ import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
 import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminals/pty";
-import { accountEnv } from "../../src/main/terminals/account-env";
+import { accountEnv, sandboxTetValues } from "../../src/main/terminals/account-env";
 import { PROVIDERS } from "../../src/main/providers";
 import type { TabAccount } from "../../src/main/providers/issues";
 import { HostSetups } from "../../src/main/terminals/host-setup";
@@ -41,7 +41,7 @@ describe("a turn's notification", () => {
       { ref: { projectId: "p" }, path: root, name: () => "repo" },
       root,
       settings,
-      new SbxLocalStore(root),
+      new SbxLocalStore(root, async () => ({})),
       new HostSetups(root, settings, () => undefined),
       NO_TERMINAL_ENV,
       { ...NO_CALLBACKS, onTabs: (_projectId, tabs) => (pushed = tabs) },
@@ -554,6 +554,13 @@ describe("what a host tab gets of its project's account", () => {
     const stored = withEnv(NONE, () => accountEnv(ACCOUNT, "askpass.sh", { GIT_ASKPASS: "mine" }));
     assert.equal(stored.GIT_CONFIG_COUNT, undefined, "nothing of git's beside an askpass of the user's");
     assert.equal(stored.GITLAB_TOKEN, "glpat");
+  });
+
+  it("gives a sandbox's rows the account's variables by the same rule, the machine's aside", () => {
+    const tet = withEnv({ ...NONE, GITLAB_TOKEN: "machine" }, () => sandboxTetValues(ACCOUNT, { NPM_TOKEN: "npm" }));
+    assert.deepEqual(tet, { GITLAB_TOKEN: "glpat", GITLAB_HOST: "https://gitlab.example.com", NPM_TOKEN: "npm" });
+    assert.deepEqual(sandboxTetValues(ACCOUNT, { GITLAB_TOKEN: "own" }), { GITLAB_TOKEN: "own" }, "no host beside a stored token");
+    assert.deepEqual(sandboxTetValues(undefined, { NPM_TOKEN: "npm" }), { NPM_TOKEN: "npm" });
   });
 });
 

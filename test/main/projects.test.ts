@@ -93,7 +93,7 @@ function open(onClose: (ref: ProjectRef) => void = () => undefined) {
     repositories,
     tabManagers: { close: async (ref) => onClose(ref), forProject: () => [] },
     records: { forget: () => undefined },
-    sbxLocal: new SbxLocalStore(dataRoot),
+    sbxLocal: new SbxLocalStore(dataRoot, async () => ({})),
     openProjectRef: (ref) => void repositories.open(resolveProjectRef(dataRoot, store, ref)),
     dataRoot,
     projectsChanged: (change) => changes.push(change),

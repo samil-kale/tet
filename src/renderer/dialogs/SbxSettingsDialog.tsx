@@ -40,7 +40,7 @@ type Phase =
 type SbxSettingsTab = "general" | keyof FieldsState;
 
 /** Nothing kept on this machine; also the dialog's initial state. */
-const EMPTY_STORED: SbxStoredLocal = { environment: [], skills: EMPTY_SBX_SKILLS };
+const EMPTY_STORED: SbxStoredLocal = { environment: [], tet: [], skills: EMPTY_SBX_SKILLS };
 
 /** Split along the sections stored in tet.json, and the skills kept on this machine. */
 const TABS: { id: SbxSettingsTab; label: string }[] = [

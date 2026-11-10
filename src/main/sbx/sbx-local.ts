@@ -55,23 +55,31 @@ function toLocal(project: Record<string, unknown>): StoredSbxLocal {
 
 /**
  * The values of the SBX Settings' Environment, which tet.json never holds (its rows are only names),
- * and its Skills, which names this machine's folders. A value leaves this class only decrypted into
- * a sandboxed tab's `sbx run` (sbx.ts's sandboxEnv); the renderer never sees one.
+ * and its Skills, which names this machine's folders. A row without a value of its own here takes
+ * TET's variable of its name (`tetValues`: environment.ts's, and the project's account), read at each
+ * start: handed over, never copied. A value leaves this class only decrypted into a sandboxed tab's
+ * `sbx run` (sbx.ts's sandboxEnv); the renderer never sees one.
  */
 export class SbxLocalStore {
   private readonly file: string;
   private projects: Record<string, StoredSbxLocal> = {};
 
-  constructor(dataRoot: string) {
+  constructor(
+    dataRoot: string,
+    /** TET's variables for a project: EnvStore.values over its host's account (GitProvider.tokenEnv). */
+    private readonly tetValues: (projectId: string) => Promise<Record<string, string>>,
+  ) {
     this.file = path.join(dataRoot, "sbx-local.json");
     this.load();
   }
 
-  /** The env names holding a value for the project that can still be decrypted — the ones a spawn
-   *  applies, so the dialog asks again for the others. */
+  /** The env names holding a value of their own for the project that can still be decrypted — the
+   *  ones a spawn applies, so the dialog asks again for the others — and the names of TET's
+   *  variables, which a row without one takes. */
   async stored(projectId: string): Promise<SbxStoredLocal> {
     return {
-      environment: [...(await this.environmentValues(projectId)).keys()],
+      environment: [...(await this.ownValues(projectId)).keys()],
+      tet: Object.keys(await this.tetValues(projectId)),
       skills: this.skills(projectId),
     };
   }
@@ -106,8 +114,13 @@ export class SbxLocalStore {
     this.setProject(projectId, next);
   }
 
-  /** The decrypted values by env name; one that cannot be decrypted is left out. */
+  /** What a sandboxed tab's rows take, by env name: the project's own values over TET's variables. */
   async environmentValues(projectId: string): Promise<Map<string, string>> {
+    return new Map([...Object.entries(await this.tetValues(projectId)), ...(await this.ownValues(projectId))]);
+  }
+
+  /** The project's own decrypted values by env name; one that cannot be decrypted is left out. */
+  private async ownValues(projectId: string): Promise<Map<string, string>> {
     const values = new Map<string, string>();
     for (const [env, encrypted] of Object.entries(this.projects[projectId]?.environment ?? {})) {
       const value = await unseal(encrypted);

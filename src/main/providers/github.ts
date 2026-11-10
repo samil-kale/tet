@@ -691,9 +691,10 @@ function toNote(entry: GitHubComment): IssueNote {
 }
 
 export const github: GitProvider = {
-  /** gh's names: its own for github.com, and for GitHub Enterprise the token and which host it is. */
+  /** The names most tools take, gh among them: for github.com its token, for GitHub Enterprise the
+   *  token and which host it is. */
   tokenEnv: (host, token): Record<string, string> =>
-    host === "github.com" ? { GH_TOKEN: token } : { GH_ENTERPRISE_TOKEN: token, GH_HOST: host },
+    host === "github.com" ? { GITHUB_TOKEN: token } : { GITHUB_ENTERPRISE_TOKEN: token, GH_HOST: host },
 
   async validate(host, token) {
     const data = (await sender(host, token)("{ viewer { login } }", {})) as { viewer: { login?: unknown } | null };

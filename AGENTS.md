@@ -379,7 +379,8 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
   are typed only into TET's dialog (`env-request`), never the chat. The account of the project's
   host is kept like them: a host tab gets its token as the host CLI's variables (`tokenEnv`) and as
   git's login for that host alone, through askpass after the user's helper, as for TET's own git
-  runs (`terminals/account-env.ts`); a sandboxed tab gets none.
+  runs (`terminals/account-env.ts`); a sandboxed tab only as an Environment row of its SBX Settings
+  (sbx section).
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`ctl-token.ts`): a terminal gets its tab's token, never the run's.
 - **Where a caller runs is its side** (`ControlSide`, `src/shared/ctl-side.ts`, extended in main by
@@ -412,6 +413,9 @@ the `sbx` CLI.
 - **tet.json holds what was applied**: a row that cannot be applied is neither saved nor applied, by
   one check for the dialog, `sbx-set-*` and a session's start (`readSbxProblems`). A session's start
   applies it as it stands and never writes it (`prepareSbxRun`).
+- An Environment row takes its value of its own on this machine, else TET's variable of its name —
+  `environment.json`'s, or the project's account (`tokenEnv`) — read at each start
+  (`SbxLocalStore.environmentValues`): handed over, never copied.
 
 ## npm scripts
 
