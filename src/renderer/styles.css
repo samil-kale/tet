@@ -2615,7 +2615,7 @@ textarea:focus,
 
 /* A name or value beside a field filling the row (.row-fill-input): an environment variable's value. */
 .row-fixed-input {
-  --field-width: 140px;
+  --field-width: 200px;
   width: var(--field-width);
 }
 
