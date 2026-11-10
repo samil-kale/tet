@@ -3,6 +3,20 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.24.3 (2026-11-10)
+
+- **tet-ctl issues.** Agents can list, read, create and change the project's issues through the
+  control channel.
+- **Project account in host tabs.** A host tab gets the token of its project's account as the host
+  CLI's variables and as git's login for that host, so `gh`, `glab` and git work without asking
+  for one. `tet-ctl provider-api` is gone: agents call the tracker with that token themselves.
+- **Sandbox variables from TET.** An Environment row of the SBX settings with no value of its own
+  takes TET's variable of that name; typing a value sets one for the sandboxes alone. Add from TET
+  picks from the variables TET keeps.
+- **Changes menu.** Discard Changes joins the changes menu.
+- **Fixes.** Saving the layout collapses panes that hold only saved commands, and the value field of
+  an environment variable is wider.
+
 ## 0.24.2 (2026-11-09)
 
 - **New issue dialog.** The description is written in the same box as in an issue's tab, with Write
