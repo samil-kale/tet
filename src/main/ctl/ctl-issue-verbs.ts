@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ControlVerbName } from "../../shared/ctl";
 import {
@@ -284,10 +283,7 @@ export function issueVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<
       }
       const file = path.resolve(root, text(args, "path", "path"));
       return refusable(async () => {
-        if (!(await fs.promises.stat(file)).isFile()) {
-          throw new Error(`not a file: ${file}`);
-        }
-        const markdown = await deps.uploadIssueFile(project.id, path.basename(file), await fs.promises.readFile(file));
+        const markdown = await deps.uploadIssueFile(project.id, path.basename(file), await caller.side.readFile(root, file));
         return { result: { markdown } };
       });
     },

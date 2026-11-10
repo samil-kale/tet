@@ -1174,14 +1174,35 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.issueCalls, []);
   });
 
-  it("uploads a file to the tracker, and refuses a sandbox and what is no file", async () => {
+  it("uploads a file to the tracker, and refuses what is no file", async () => {
     const file = path.join(workDir, "shot.png");
     fs.writeFileSync(file, "pixels");
     assert.deepEqual((await tetCtl(["issues-upload", file])).result, { markdown: "![shot.png](/uploads/shot.png)" });
     assert.deepEqual(calls.issueCalls, ["upload:shot.png:pixels"]);
     assertUsage(await tetCtl(["issues-upload", workDir]), /not a file/);
     assertUsage(await tetCtl(["issues-upload", path.join(workDir, "none.png")]), /ENOENT/);
-    assertRefused(await tetCtl(["issues-upload", file], FROM_SANDBOX), /sandbox/, "issues-upload");
+  });
+
+  it("uploads only a file inside the repository for a sandbox, links followed", async (t) => {
+    const root = fs.mkdtempSync(path.join(workDir, "repo-"));
+    const outside = fs.mkdtempSync(path.join(workDir, "outside-"));
+    fs.writeFileSync(path.join(root, "shot.png"), "pixels");
+    fs.writeFileSync(path.join(outside, "secret.txt"), "host");
+    // A junction on win32, where a file symlink needs developer mode; ignored elsewhere.
+    fs.symlinkSync(outside, path.join(root, "leak"), "junction");
+    const original = PROJECT.path;
+    PROJECT.path = root;
+    t.after(() => {
+      PROJECT.path = original;
+    });
+    calls.issueCalls.length = 0;
+    assert.deepEqual((await tetCtl(["issues-upload", "shot.png"], FROM_SANDBOX)).result, { markdown: "![shot.png](/uploads/shot.png)" });
+    assert.deepEqual(calls.issueCalls, ["upload:shot.png:pixels"]);
+    for (const typed of ["leak/secret.txt", path.join(outside, "secret.txt"), "../outside/secret.txt"]) {
+      assert.notEqual((await tetCtl(["issues-upload", typed], FROM_SANDBOX)).status, EXIT_CODES.ok, typed);
+    }
+    assert.deepEqual(calls.issueCalls, ["upload:shot.png:pixels"]);
+    assertRefused(await tetCtl(["issues-upload", "shot.png", "--project", OTHER.id], FROM_SANDBOX), /own/, "other project");
   });
 
   it("opens a tab on an issue for a sandbox held to the sandbox, and for an agent that runs in one only", async () => {

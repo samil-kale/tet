@@ -340,7 +340,7 @@ export function TextBox({
           />
           <button type="button" className="issue-attach" disabled={busy} onClick={() => picker.current?.click()}>
             <PaperclipIcon className="line-icon" />
-            Paste, drop, or click to add files
+            Paste, drop, or click to add {accept === undefined ? "files" : "images"}
           </button>
         </>
       )}

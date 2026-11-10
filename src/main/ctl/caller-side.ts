@@ -4,7 +4,7 @@ import type { ControlVerb } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
 import { hasSandbox, type AgentDefinition } from "../agents/agent";
 import { HOST_TAB, SANDBOX_TAB, type TabSide } from "../terminals/tab-side";
-import { relativeInside } from "../util/path-inside";
+import { readInside, relativeInside } from "../util/path-inside";
 import type { InspectedTab } from "../terminals/session-manager";
 import { ControlError } from "./ctl-verb";
 
@@ -26,6 +26,9 @@ export interface CallerSide extends TabSide {
   projects(list: Project[], own: { projectId?: string; worktree?: string }): Project[];
   /** Refuses an answer that would hand the caller what its side must not see. */
   checkAnswer(entry: ControlVerb, result: unknown, root: string | undefined): Promise<void>;
+  /** The file a verb is told to read, `file` being under `root` (the caller's repository or worktree)
+   *  where the side may read nothing else. */
+  readFile(root: string, file: string): Promise<Buffer<ArrayBuffer>>;
 }
 
 /** A tab on this machine: its variables, every agent, every tab and project. */
@@ -36,6 +39,12 @@ export const HOST_CALLER: CallerSide = {
   reachesTab: () => true,
   projects: (list) => list,
   checkAnswer: () => Promise.resolve(),
+  readFile: async (_root, file) => {
+    if (!(await fs.promises.stat(file)).isFile()) {
+      throw new Error(`not a file: ${file}`);
+    }
+    return fs.promises.readFile(file);
+  },
 };
 
 /**
@@ -59,6 +68,7 @@ export const SANDBOX_CALLER: CallerSide = {
       })),
   checkAnswer: (entry, result, root) =>
     entry.sandboxFile === undefined ? Promise.resolve() : assertSandboxFile(root, result, entry.sandboxFile),
+  readFile: (root, file) => readInside(root, file),
 };
 
 /** Both, for the server to try a tab's token against (ctl-token.ts). */

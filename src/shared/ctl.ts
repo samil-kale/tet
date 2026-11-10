@@ -679,7 +679,6 @@ const VERBS = [
     positionals: ["commentId"],
     sandbox: "ownProject",
   },
-  // Not for a sandbox: it names a file of this machine, which a sandbox reads only where it is mounted.
   {
     verb: "issues-upload",
     group: "Projects",
@@ -687,6 +686,7 @@ const VERBS = [
     summary:
       "Upload a file (absolute, or relative to the repository or worktree) to the tracker; answers the Markdown (markdown) that shows it in an issue's text, for issues-comment, issues-create or issues-update.",
     positionals: ["path"],
+    sandbox: "ownRef",
   },
   {
     verb: "tabs-run-command",

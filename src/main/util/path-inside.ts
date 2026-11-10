@@ -62,7 +62,7 @@ export async function openInside(root: string, file: string, flags: string | num
 }
 
 /** Reads `file`, opened as openInside opens it. */
-export async function readInside(root: string, file: string): Promise<Buffer> {
+export async function readInside(root: string, file: string): Promise<Buffer<ArrayBuffer>> {
   const handle = await openInside(root, file, "r");
   try {
     return await handle.readFile();
