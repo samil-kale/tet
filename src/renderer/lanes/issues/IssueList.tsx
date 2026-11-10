@@ -3,7 +3,7 @@ import type { ProjectRef } from "../../../shared/types/project";
 import { DEFAULT_ISSUE_FILTER, isUnread, issueFileName, type Issue } from "../../../shared/types/providers";
 import { issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
 import { loadProjectIssueImage, reloadIssueTabs } from "../../editor/editor-views";
-import { keepAllIssuesSeen, useIssuesSeen } from "../../editor/issue-seen";
+import { keepAllIssuesSeen, keepIssueSeen, keepIssueUnread, useIssuesSeen } from "../../editor/issue-seen";
 import { newIssueUrl } from "../../editor/issue-text";
 import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person, TextBox, type TextRendering } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
@@ -218,6 +218,12 @@ export const IssueList = memo(function IssueList({
       label: "Open in Agent",
       entries: issueAgentEntries(agents, (agentId) => void openIssueInAgent(resolved.ref, issue.number, agentId)),
     },
+    SEPARATOR,
+    unread(issue)
+      ? { label: "Mark as Read", run: () => keepIssueSeen(projectId, issue.number, issue.updatedAt) }
+      : issue.number === openIssue
+        ? { label: "Mark as Unread" }
+        : { label: "Mark as Unread", run: () => keepIssueUnread(projectId, issue.number, issue.updatedAt) },
     SEPARATOR,
     { label: "Rename...", run: () => void askRename(issue) },
     { label: "Delete...", run: () => void askDelete(issue) },

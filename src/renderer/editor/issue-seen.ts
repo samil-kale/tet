@@ -24,6 +24,12 @@ export function keepIssueSeen(projectId: string, number: number, updatedAt: stri
   void window.tet.issues.markSeen(projectId, number, updatedAt);
 }
 
+/** The issue counts as unread again: kept as shown just before its `updatedAt`, so that `isUnread`
+ *  holds until its tab shows it. */
+export function keepIssueUnread(projectId: string, number: number, updatedAt: string): void {
+  keepIssueSeen(projectId, number, new Date(Date.parse(updatedAt) - 1).toISOString());
+}
+
 /** Every issue of the project read, from now on; a notice when that cannot be kept. */
 export async function keepAllIssuesSeen(projectId: string): Promise<void> {
   const result = await window.tet.issues.markAllSeen(projectId);
