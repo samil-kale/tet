@@ -9,13 +9,10 @@ import {
   onTracker,
   readIssueTracker,
   setIssueSource,
-  writeOnTracker,
   type IssueAccounts,
   type IssueRepository,
   type IssueTrackerInfo,
-  type TrackerCall,
 } from "./providers/issues";
-import type { ApiAnswer, ApiRequest } from "./providers/api-request";
 import { forgetAllIssuesSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
 import type { ProjectStore } from "./store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
@@ -24,7 +21,7 @@ import { readIssueSource } from "./store/tet-json";
 import type { SessionManagerRegistry } from "./terminals/session-registry";
 
 /**
- * What the ISSUES section and `tet-ctl`'s issue and provider verbs share, built once in main.ts like
+ * What the ISSUES section and `tet-ctl`'s issue verbs share, built once in main.ts like
  * `ProjectDeps`. A project's tracker is read through its repository, never a worktree's: the
  * repository and its worktrees share one.
  */
@@ -96,21 +93,6 @@ export async function markIssuesSeen(
     provider.readIssue(tracker, number),
   );
   setIssueSeen(deps.dataRoot, projectId, number, updatedAt);
-}
-
-/**
- * One request to the API of the project's tracker (`GitProvider.request`): a GET through `onTracker`,
- * anything else through `writeOnTracker`, whose next account takes over only from one that does not
- * reach the tracker.
- */
-export function requestTracker(
-  deps: Pick<IssueDeps, "accounts" | "repositories">,
-  projectId: string,
-  request: ApiRequest,
-): Promise<ApiAnswer> {
-  const call: TrackerCall<ApiAnswer> = (provider, tracker) => provider.request(tracker, request);
-  const onProject = request.method === "GET" ? onTracker : writeOnTracker;
-  return onProject(deps.accounts, issueRepository(deps, projectId), call);
 }
 
 /** The first prompt of a tab opened on an issue: the settings' text, then which issue it is, ended

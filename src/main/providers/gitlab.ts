@@ -10,7 +10,6 @@ import {
   type IssueTimeLog,
   type RemoteRepository,
 } from "../../shared/types/providers";
-import { sendApi, type ApiEndpoints } from "./api-request";
 import {
   allNodes,
   ApiError,
@@ -762,13 +761,9 @@ export function toEvents(
   return events;
 }
 
-export function endpoints(host: string): ApiEndpoints {
-  return { rest: apiBase(host), graphql: graphqlUrl(host) };
-}
-
 export const gitlab: GitProvider = {
-  /** A project's path in GitLab's REST paths is one URL-encoded segment. */
-  request: (tracker, request) => sendApi(endpoints(tracker.host), encodeURIComponent(tracker.path), bearer(tracker.token), request),
+  /** glab's names, which scripts for GitLab take too; glab takes the host as a url. */
+  tokenEnv: (host, token) => ({ GITLAB_TOKEN: token, GITLAB_HOST: `https://${host}` }),
 
   async validate(host, token) {
     const data = (await sender(host, token)("{ currentUser { username } }", {})) as { currentUser: { username?: unknown } | null };

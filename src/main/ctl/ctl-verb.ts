@@ -10,7 +10,6 @@ import type { Issue } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { ApiAnswer, ApiRequest } from "../providers/api-request";
 import type { IssueTrackerInfo } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -177,8 +176,6 @@ export interface ControlDeps {
   readIssueTracker(projectId: string): Promise<IssueTrackerInfo>;
   unreadIssues(projectId: string): Promise<Issue[]>;
   markIssuesSeen(projectId: string, number?: number): Promise<void>;
-  /** One request to the API of the project's tracker (`GitProvider.request`). */
-  providerRequest(projectId: string, request: ApiRequest): Promise<ApiAnswer>;
   /** Opens the project's issue in the repository's or worktree's preview tab, or a kept tab, and brings
    *  it to the front unless `background`. */
   openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;

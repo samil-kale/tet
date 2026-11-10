@@ -417,13 +417,6 @@ function deps(): ControlDeps {
         },
       ];
     },
-    providerRequest: async (projectId, request) => {
-      calls.issueCalls.push(`api:${projectId}:${request.method} ${request.path} ${request.body ?? ""}`.trimEnd());
-      if (request.path === "/missing") {
-        throw new Error("404 Not Found: no such thing");
-      }
-      return { status: 200, headers: { link: '<next>; rel="next"' }, body: { ok: true } };
-    },
     markIssuesSeen: async (projectId, number) => {
       calls.issueCalls.push(`seen:${projectId}:${number ?? "all"}`);
     },
@@ -1011,25 +1004,6 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["issues-mark-seen", "four"]), /not an issue number: four/);
   });
 
-  it("sends a request to the tracker's API and answers what it said or why it refused", async () => {
-    const run = await tetCtl(["provider-api", "POST", "/projects/{repo}/merge_requests", "--data", '{"title":"T"}']);
-    assert.deepEqual(run.result, { status: 200, headers: { link: '<next>; rel="next"' }, body: { ok: true } });
-    await tetCtl(["provider-api", "GET", "/projects/{repo}/merge_requests"]);
-    assert.deepEqual(calls.issueCalls, [
-      `api:${PROJECT.id}:POST /projects/{repo}/merge_requests {"title":"T"}`,
-      `api:${PROJECT.id}:GET /projects/{repo}/merge_requests`,
-    ]);
-    assertUsage(await tetCtl(["provider-api", "GET", "/missing"]), /404 Not Found: no such thing/);
-    assertUsage(await tetCtl(["provider-api", "post", "/x"]), /unknown method: post \(one of GET, POST, PUT, PATCH, DELETE\)/);
-  });
-
-  it("refuses a request with an unknown method, a body on a GET or no path before asking the tracker", async () => {
-    assertUsage(await tetCtl(["provider-api", "TRACE", "/x"]), /unknown method: TRACE/);
-    assertUsage(await tetCtl(["provider-api", "GET", "/x", "--data", "{}"]), /a GET takes no body/);
-    assert.equal((await tetCtl(["provider-api", "GET"])).status, EXIT_CODES.usage, "no path");
-    assert.deepEqual(calls.issueCalls, []);
-  });
-
   it("opens a tab on an issue for a sandbox held to the sandbox, and for an agent that runs in one only", async () => {
     await tetCtl(["issues-open-in-agent", "7", "--agent", "claude"], FROM_SANDBOX);
     assert.deepEqual(calls.issueAgents, [[PROJECT.id, 7, "claude", true]]);
@@ -1406,7 +1380,6 @@ describe("tet-ctl against the control server", () => {
     assertRefused(await tetCtl(["editor-get", "--project", OTHER.id], FROM_SANDBOX), /own repository or worktree/, "editor-get");
     const issueVerbs = [
       ["issues-get-source"],
-      ["provider-api", "GET", "/projects/{repo}"],
       ["issues-set-source", "group/tracker"],
       ["issues-unread"],
       ["issues-mark-seen", "7"],

@@ -10,6 +10,9 @@ import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
 import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminals/pty";
+import { accountEnv } from "../../src/main/terminals/account-env";
+import { PROVIDERS } from "../../src/main/providers";
+import type { TabAccount } from "../../src/main/providers/issues";
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
@@ -430,6 +433,18 @@ describe("a terminal's environment", () => {
     });
   });
 
+  it("sets a tab's account like the variables kept in TET, named with them, and none in a sandbox", () => {
+    const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => ({ TET_TEST_STORED: "stored" }) };
+    const account = { TET_TEST_ACCOUNT: "token" };
+    assert.deepEqual(storedEnvOf(terminal, HOST_CALLER, account), {
+      TET_TEST_ACCOUNT: "token",
+      TET_TEST_STORED: "stored",
+      TET_KEPT_ENV: "TET_TEST_ACCOUNT,TET_TEST_STORED",
+    });
+    assert.equal(buildEnv(terminal, { account }).TET_TEST_ACCOUNT, "token");
+    assert.deepEqual(storedEnvOf(terminal, SANDBOX_CALLER, account), {}, "a sandbox gets none");
+  });
+
   it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
     const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => ({ tet_test_case: "stored" }) };
     const env = withEnv({ TET_TEST_CASE: "machine" }, () => buildEnv(terminal, {}));
@@ -504,6 +519,41 @@ describe("a terminal's environment", () => {
       names.map((name) => env[name]),
       ["command"],
     );
+  });
+});
+
+describe("what a host tab gets of its project's account", () => {
+  const ACCOUNT: TabAccount = { provider: PROVIDERS.gitlab, host: "gitlab.example.com", user: "mira", token: "glpat" };
+  const FULL = {
+    GITLAB_TOKEN: "glpat",
+    GITLAB_HOST: "https://gitlab.example.com",
+    GIT_CONFIG_COUNT: "1",
+    GIT_CONFIG_KEY_0: "credential.https://gitlab.example.com.interactive",
+    GIT_CONFIG_VALUE_0: "false",
+    GIT_ASKPASS: "askpass.sh",
+    TET_ASKPASS_ORIGIN: "https://gitlab.example.com",
+    TET_ASKPASS_USER: "mira",
+    TET_ASKPASS_TOKEN: "glpat",
+  };
+  // The tests may run in a TET tab, which has some of these from the TET it runs in, named in its
+  // TET_KEPT_ENV, which machineSets reads.
+  const NONE = { ...Object.fromEntries(Object.keys(FULL).map((name) => [name, undefined])), TET_KEPT_ENV: undefined };
+
+  it("names the token for the host's CLI and hands it to git for that host alone, after the user's helper", () => {
+    assert.deepEqual(
+      withEnv(NONE, () => accountEnv(ACCOUNT, "askpass.sh", {})),
+      FULL,
+    );
+  });
+
+  it("leaves out a set whole where the machine or a stored variable has one of its names", () => {
+    const machine = withEnv({ ...NONE, GITLAB_TOKEN: "own" }, () => accountEnv(ACCOUNT, "askpass.sh", {}));
+    assert.equal(machine.GITLAB_TOKEN, undefined, "the machine's own token wins");
+    assert.equal(machine.GITLAB_HOST, undefined, "and no host beside it");
+    assert.equal(machine.TET_ASKPASS_TOKEN, "glpat", "git's login is a set of its own");
+    const stored = withEnv(NONE, () => accountEnv(ACCOUNT, "askpass.sh", { GIT_ASKPASS: "mine" }));
+    assert.equal(stored.GIT_CONFIG_COUNT, undefined, "nothing of git's beside an askpass of the user's");
+    assert.equal(stored.GITLAB_TOKEN, "glpat");
   });
 });
 

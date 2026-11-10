@@ -16,7 +16,6 @@ import {
   createTag,
   deleteRemoteBranch,
   discard,
-  ensureAskpass,
   fastForwardBranches,
   fetch,
   hasCredentialHelper,
@@ -43,6 +42,7 @@ import {
   version,
   worktreeAdd,
 } from "../../src/main/git/git";
+import { ensureAskpass } from "../../src/main/git/askpass";
 import { worktreesSupported } from "../../src/shared/types/git";
 import { commitFiles, git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
 

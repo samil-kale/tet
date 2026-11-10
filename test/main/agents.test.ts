@@ -224,7 +224,7 @@ describe("TET's system prompt", () => {
   // It crosses cmd.exe and `sbx run`, safe only as a plain line (system-prompt.ts).
   it("stays one line of letters, digits and plain punctuation", () => {
     for (const side of [HOST_SIDE, SANDBOX_SIDE]) {
-      assert.match(systemPrompt(side), /^[A-Za-z0-9 .,;:'-]+$/);
+      assert.match(systemPrompt(side), /^[A-Za-z0-9 .,;:'_-]+$/);
     }
   });
 });

@@ -41,6 +41,7 @@ import {
   parseRemoteUrl,
   readIssueTracker,
   setIssueSource,
+  trackerAccount,
   writeOnTracker,
   type IssueAccounts,
   type IssueRepository,
@@ -881,6 +882,24 @@ describe("the issues of a tracker", () => {
       });
       await assert.rejects(() => readIssueTracker(accountsOf(), repositoryAt(root)), /no remote/);
     });
+
+    it("gives a host tab the host's first account with its token, and nothing it cannot have", async () => {
+      const root = tempDir("tet-issues-");
+      const accounts = accountsOf(account("c", "gitlab.example.com"), account("a"), account("b"));
+      assert.deepEqual(await trackerAccount(accounts, repositoryAt(root, ORIGIN)), {
+        provider: PROVIDERS.github,
+        host: "github.com",
+        user: "a",
+        token: "token-a",
+      });
+      assert.equal(await trackerAccount(accounts, repositoryAt(root)), undefined, "no remote");
+      assert.equal(
+        await trackerAccount(accountsOf(account("c", "gitlab.example.com")), repositoryAt(root, ORIGIN)),
+        undefined,
+        "no account",
+      );
+      assert.equal(await trackerAccount(accountsOf(account("unreadable")), repositoryAt(root, ORIGIN)), undefined, "no token");
+    });
   });
 
   it("writes an issue as a file that says where its text comes from", () => {
@@ -998,6 +1017,12 @@ describe("the accounts kept for the providers", () => {
     await assert.rejects(() => store.add("github", "github.com", "d", "t"));
     assert.equal(store.list().length, 1, "the row is not kept for a token that could not be sealed");
     assert.deepEqual(Object.keys(PROVIDERS).sort(), ["github", "gitlab"]);
+  });
+
+  it("name an account's token for the host's own CLI", () => {
+    assert.deepEqual(gitlab.tokenEnv("gitlab.example.com", "t"), { GITLAB_TOKEN: "t", GITLAB_HOST: "https://gitlab.example.com" });
+    assert.deepEqual(github.tokenEnv("github.com", "t"), { GH_TOKEN: "t" });
+    assert.deepEqual(github.tokenEnv("ghe.example.com", "t"), { GH_ENTERPRISE_TOKEN: "t", GH_HOST: "ghe.example.com" });
   });
 });
 

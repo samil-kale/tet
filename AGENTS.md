@@ -121,7 +121,7 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   repos-cache.json
   errors.log
   bin/                             tet-ctl, first on every tab's PATH
-  askpass/                         for TET's own git runs only
+  askpass/                         for TET's git runs and its host tabs
   update/
   config/<agent>/                  a host tab's setup, once per agent (HostSetups)
   projects/<id>/                   id: the repository's `tet.id`
@@ -376,9 +376,10 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
   appended to each agent's system prompt (Codex: its `SessionStart` hook's added context), never
   replacing the user's instructions.
 - **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent needs
-  are typed only into TET's dialog (`env-request`), never the chat. The account tokens TET holds go
-  through `provider-api` alone, to the host the project's issues are read from and under its API
-  (`apiUrl`); a redirect never leaves that host.
+  are typed only into TET's dialog (`env-request`), never the chat. The account of the project's
+  host is kept like them: a host tab gets its token as the host CLI's variables (`tokenEnv`) and as
+  git's login for that host alone, through askpass after the user's helper, as for TET's own git
+  runs (`terminals/account-env.ts`); a sandboxed tab gets none.
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`ctl-token.ts`): a terminal gets its tab's token, never the run's.
 - **Where a caller runs is its side** (`ControlSide`, `src/shared/ctl-side.ts`, extended in main by

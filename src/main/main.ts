@@ -12,15 +12,7 @@ import { issueFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
-import {
-  changeIssueSource,
-  issueTrackerOf,
-  markIssuesSeen,
-  openIssueInAgent,
-  requestTracker,
-  unreadIssues,
-  type IssueDeps,
-} from "./issues";
+import { changeIssueSource, issueTrackerOf, markIssuesSeen, openIssueInAgent, unreadIssues, type IssueDeps } from "./issues";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -53,6 +45,10 @@ import { anyAgentInstalled, checkRequirements } from "./requirements";
 import { prepareDataRoot, resolveDataRoot } from "./store/data-root";
 import { augmentAgentPath } from "./agents/agent-path";
 import type { TerminalEnv } from "./terminals/pty";
+import { accountEnv } from "./terminals/account-env";
+import { ensureAskpass } from "./git/askpass";
+import { trackerAccount } from "./providers/issues";
+import { dropOuterKept } from "./store/env-names";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
 import type { ControlChannel } from "./util/control-channel";
@@ -64,6 +60,8 @@ import { settingsAccessOf } from "./settings-access";
 import { SettingsStore } from "./store/settings";
 import { currentTheme } from "./store/theme";
 import { PLATFORM } from "./util/host-platform";
+
+dropOuterKept();
 
 /**
  * A separate profile for tests driving the real app via tet-ctl (test/e2e/app.test.ts): own
@@ -188,7 +186,21 @@ const repositories = new RepositoryManager(dataRoot, logins, {
     void removeMissingProject(projectDeps, projectId).catch((error: unknown) => logError("could not remove a missing project", error));
   },
 });
-const terminalEnv: TerminalEnv = { control: () => controlChannel, stored: () => environment.values() };
+const terminalEnv: TerminalEnv = {
+  control: () => controlChannel,
+  stored: () => environment.values(),
+  account: async (projectId) => {
+    try {
+      const repository = repositories.get({ projectId });
+      const account = repository && (await trackerAccount(accounts, repository));
+      return account ? accountEnv(account, await ensureAskpass(logins.askpassDir), environment.values()) : {};
+    } catch (error) {
+      // The tab starts without it, as without an account.
+      logError("could not read the project's account for a tab", error);
+      return {};
+    }
+  },
+};
 const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, terminalEnv, {
   onTabs: (ref, tabs) => {
     send("tabs:changed", { ref, tabs });
@@ -310,7 +322,6 @@ async function startControl(): Promise<void> {
         readIssueTracker: (projectId) => issueTrackerOf(issueDeps, projectId),
         unreadIssues: (projectId) => unreadIssues(issueDeps, projectId),
         markIssuesSeen: (projectId, number) => markIssuesSeen(issueDeps, projectId, number),
-        providerRequest: (projectId, request) => requestTracker(issueDeps, projectId, request),
         openIssue: (ref, number, keep, background) =>
           send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
         openIssueInAgent: (ref, number, agentId, sandboxOnly) => openIssueInAgent(issueDeps, ref, number, agentId, sandboxOnly),

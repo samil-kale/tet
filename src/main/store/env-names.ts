@@ -16,6 +16,16 @@ export function machineName(name: string): string {
   return envNameKey(name, PLATFORM.envNamesIgnoreCase);
 }
 
+/** Takes out of this process's environment what a TET it was started from kept in that tab (a tab
+ *  of it running `npm start`): not the machine's, and git run from here would otherwise act on that
+ *  TET's account and git login. Before anything starts a process. */
+export function dropOuterKept(): void {
+  for (const name of (process.env[KEPT_ENV_NAME] ?? "").split(",").filter((entry) => entry !== "")) {
+    delete process.env[name];
+  }
+  delete process.env[KEPT_ENV_NAME];
+}
+
 /** Whether the environment TET was started with — what every tab would inherit — has the name. One
  *  a TET it was started from set itself (a tab of it running `npm start`) is not the machine's. */
 export function machineSets(name: string): boolean {

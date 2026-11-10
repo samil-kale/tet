@@ -55,7 +55,7 @@ export class FakeProcess {
 }
 
 /** No control channel, nothing kept. */
-export const NO_TERMINAL_ENV: TerminalEnv = { control: () => undefined, stored: () => ({}) };
+export const NO_TERMINAL_ENV: TerminalEnv = { control: () => undefined, stored: () => ({}), account: async () => ({}) };
 
 export const NO_CALLBACKS: SessionManagerCallbacks = {
   onTabs: () => undefined,

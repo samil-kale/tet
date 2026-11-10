@@ -11,7 +11,6 @@ import type {
   RemoteRepository,
 } from "../../shared/types/providers";
 import { fetchHttpsImage } from "../util/image-response";
-import type { ApiAnswer, ApiRequest } from "./api-request";
 
 /** A repository's issue tracker as one call reaches it: the host, the token of the account it goes
  *  through, and the repository's path there, "owner/name" or "group/subgroup/name". */
@@ -59,9 +58,10 @@ export interface GitProvider {
   /** Uploads a file for an issue's text and answers the Markdown that shows it. */
   uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
   updateIssue(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
-  /** One request to the host's API (REST or `/graphql`) as the account: the rest of the API, which this
-   *  interface leaves out. A path outside the API and a non-2xx answer reject (`sendApi`). */
-  request(tracker: Tracker, request: ApiRequest): Promise<ApiAnswer>;
+  /** The variables the host's own CLI and scripts read the account's token from, which a host tab of
+   *  a project on this host gets: the rest of the API, which this interface leaves out, is the
+   *  agent's to call. */
+  tokenEnv(host: string, token: string): Record<string, string>;
 }
 
 /** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching

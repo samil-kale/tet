@@ -46,7 +46,13 @@ export const HOST_SIDE: ControlSide = {
   refusal: "does not answer here",
   reach: () => "any",
   limits: [...OWN_LIMITS, "restartRequired in an answer means the change waits for a restart — tell the user, never", "restart for them."],
-  promptNote: "",
+  // What a host tab gets of its project's account (terminals/account-env.ts), named, so the agent
+  // looks there instead of asking.
+  promptNote:
+    " TET sets the token of the account added in TET for the host of this project in this tab: " +
+    "GITLAB_TOKEN with GITLAB_HOST for GitLab, GH_TOKEN for GitHub, GH_ENTERPRISE_TOKEN with GH_HOST for GitHub Enterprise, " +
+    "and git uses it to push and fetch there. Use them with git, curl, glab or gh and never ask the user for a token. " +
+    "If none is set, the host has no account in TET: point the user to Accounts in Settings.",
 };
 
 /** A tab in an sbx sandbox: only the verbs that say how far it may reach (ControlVerb.sandbox) —

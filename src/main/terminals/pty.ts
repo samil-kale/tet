@@ -14,6 +14,9 @@ export interface TerminalEnv {
   /** The variables the user keeps in TET (environment.ts), so a restarted tab sees what was saved
    *  meanwhile. */
   stored(): Record<string, string>;
+  /** What a tab of the project gets of its host's account (account-env.ts), read before each start
+   *  like `stored`; empty without one. */
+  account(projectId: string): Promise<Record<string, string>>;
 }
 
 export interface SpawnOptions {
@@ -31,16 +34,19 @@ export interface SpawnOptions {
    *  token, which is what the control server reads it back off (ctl-token.ts). This machine
    *  where omitted. */
   side?: TabSide;
+  /** What `terminalEnv.account` answered for this start, kept like the stored variables. */
+  account?: Record<string, string>;
   terminalEnv: TerminalEnv;
 }
 
-/** The variables kept in TET that a tab of `side` gets (TabSide.storedEnv), with the one naming them
+/** The variables kept in TET that a tab of `side` gets (TabSide.storedEnv) — the stored ones and its
+ *  `account`'s, which leaves out what the stored ones set — with the one naming them
  *  (KEPT_ENV_NAME) so a TET started from that tab does not take them for the machine's. Also what
  *  the OS's own terminal opened for a tab is set with. */
-export function storedEnvOf(terminalEnv: TerminalEnv, side: TabSide): Record<string, string> {
-  const stored = side.storedEnv ? terminalEnv.stored() : {};
-  const names = Object.keys(stored);
-  return names.length > 0 ? { ...stored, [KEPT_ENV_NAME]: names.join(",") } : stored;
+export function storedEnvOf(terminalEnv: TerminalEnv, side: TabSide, account: Record<string, string> = {}): Record<string, string> {
+  const kept = side.storedEnv ? { ...account, ...terminalEnv.stored() } : {};
+  const names = Object.keys(kept);
+  return names.length > 0 ? { ...kept, [KEPT_ENV_NAME]: names.join(",") } : kept;
 }
 
 /** Deletes from `env` the variables `names` replace, and returns it: on win32 names ignore case, a
@@ -60,10 +66,10 @@ function withoutNames(env: Record<string, string>, names: string[]): Record<stri
  *  (ctl-token.ts), then options.envOverride. Testable without a pty. */
 export function buildEnv(
   terminalEnv: TerminalEnv,
-  options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side">,
+  options: Pick<SpawnOptions, "env" | "envOverride" | "own" | "side" | "account">,
 ): Record<string, string> {
   const side = options.side ?? HOST_TAB;
-  const stored = storedEnvOf(terminalEnv, side);
+  const stored = storedEnvOf(terminalEnv, side, options.account);
   const control = terminalEnv.control();
   const inherited = withoutNames({ ...(process.env as Record<string, string>) }, Object.keys(stored));
   // Never an outer TET's caller ids or list of kept variables (a TET started from a TET tab): only

@@ -25,7 +25,7 @@ describe("node-pty's Windows input pipe", () => {
       cwd: tempDir("tet-pty-"),
       cols: 80,
       rows: 24,
-      terminalEnv: { control: () => undefined, stored: () => ({}) },
+      terminalEnv: { control: () => undefined, stored: () => ({}), account: async () => ({}) },
     });
     try {
       const agent = (spawned as IPty & { _agent?: { inSocket?: { listenerCount(event: string): number } } })._agent;

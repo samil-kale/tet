@@ -40,7 +40,10 @@ function whenToUse(side: ControlSide): string[] {
     ...(admitsVerb(side, "env-request")
       ? [
           "",
-          "A token or password you need is an environment variable ($GITLAB_TOKEN); TET sets the ones it",
+          "The token of the account added in TET for the project's host is set already: GITLAB_TOKEN with",
+          "GITLAB_HOST, GH_TOKEN, or GH_ENTERPRISE_TOKEN with GH_HOST, and git uses it for that host. A",
+          "missing one is added under Accounts in Settings, not as a variable.",
+          "Any other token or password you need is an environment variable ($STRIPE_KEY); TET sets the ones it",
           "keeps (env-list) in every tab, over the machine's own. When one is missing, never ask for its",
           "value in the chat: ask the user which way they want, naming every missing variable at once —",
           "  1. in TET: env-request NAME [NAME...] opens TET's dialog for them to type the values; TET",
@@ -73,7 +76,6 @@ function usage(): string {
     lines: CONTROL_VERBS.filter((entry) => entry.group === heading && listed(entry)).flatMap((entry) => [
       `  ${entry.usage}`,
       `      ${entry.summary}`,
-      ...(entry.examples ?? []).map((example) => `        e.g. ${example}`),
     ]),
   })).filter((group) => group.lines.length > 0);
   return [
@@ -231,10 +233,6 @@ async function main(): Promise<void> {
   const quiet = entry?.stdout === true;
   if (entry?.stdin) {
     args.payload = await readStdin();
-  }
-  // A body too long or too quoted for an argument.
-  if (args.data === "-") {
-    args.data = await readStdin();
   }
   const portVar = process.env[CONTROL_ENV.port];
   const token = process.env[CONTROL_ENV.token];

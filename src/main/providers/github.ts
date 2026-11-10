@@ -1,6 +1,5 @@
 import { ownValue } from "../../shared/own-value";
 import type { Issue, IssueChange, IssueEvent, IssueField, IssueFilter, IssueNote, RemoteRepository } from "../../shared/types/providers";
-import { sendApi, type ApiEndpoints } from "./api-request";
 import {
   allNodes,
   ApiError,
@@ -691,13 +690,10 @@ function toNote(entry: GitHubComment): IssueNote {
   };
 }
 
-/** github.com's REST API lives on its own subdomain; GitHub Enterprise serves it under /api/v3. */
-export function endpoints(host: string): ApiEndpoints {
-  return { rest: host === "github.com" ? "https://api.github.com" : `https://${host}/api/v3`, graphql: graphqlUrl(host) };
-}
-
 export const github: GitProvider = {
-  request: (tracker, request) => sendApi(endpoints(tracker.host), tracker.path, headers(tracker.token), request),
+  /** gh's names: its own for github.com, and for GitHub Enterprise the token and which host it is. */
+  tokenEnv: (host, token): Record<string, string> =>
+    host === "github.com" ? { GH_TOKEN: token } : { GH_ENTERPRISE_TOKEN: token, GH_HOST: host },
 
   async validate(host, token) {
     const data = (await sender(host, token)("{ viewer { login } }", {})) as { viewer: { login?: unknown } | null };

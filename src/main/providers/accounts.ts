@@ -21,8 +21,8 @@ function toAccount(entry: StoredAccount): ProviderAccount {
   };
 }
 
-/** The configured accounts. A token leaves this class only decrypted into a provider call or a
- *  clone; the renderer never sees one. */
+/** The configured accounts. A token leaves this class only decrypted into a provider call, a clone
+ *  or a host tab's environment (account-env.ts); the renderer never sees one. */
 export class AccountStore {
   private readonly file: string;
   private accounts: StoredAccount[] = [];

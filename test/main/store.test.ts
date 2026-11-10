@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { PLATFORM } from "../../src/main/util/host-platform";
-import { machineSets } from "../../src/main/store/env-names";
+import { dropOuterKept, machineSets } from "../../src/main/store/env-names";
 import { EnvRequests } from "../../src/main/ctl/env-requests";
 import { EnvStore } from "../../src/main/store/environment";
 import type { EnvRequest } from "../../src/shared/types/environment";
@@ -249,6 +249,15 @@ describe("the environment variables kept in TET", () => {
     withEnv({ TET_TEST_FROM_OUTER: "outer", TET_TEST_OWN_MACHINE: "machine", TET_KEPT_ENV: "TET_TEST_FROM_OUTER" }, () => {
       assert.equal(machineSets("TET_TEST_FROM_OUTER"), false, "an outer TET's, not the machine's");
       assert.equal(machineSets("TET_TEST_OWN_MACHINE"), true);
+    });
+  });
+
+  it("drop at startup what a TET it was started from kept, and only that", () => {
+    withEnv({ TET_TEST_FROM_OUTER: "outer", TET_TEST_OWN_MACHINE: "machine", TET_KEPT_ENV: "TET_TEST_FROM_OUTER" }, () => {
+      dropOuterKept();
+      assert.equal(process.env.TET_TEST_FROM_OUTER, undefined);
+      assert.equal(process.env.TET_KEPT_ENV, undefined);
+      assert.equal(process.env.TET_TEST_OWN_MACHINE, "machine");
     });
   });
 

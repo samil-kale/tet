@@ -1,6 +1,6 @@
 import { errorMessage } from "../../shared/errors";
 import type { RepositoryState } from "../../shared/types/git";
-import type { IssueDetail, IssueField, ProviderId } from "../../shared/types/providers";
+import type { IssueDetail, IssueField, ProviderAccount, ProviderId } from "../../shared/types/providers";
 import { isIssueSource, readIssueSource, writeIssueSource } from "../store/tet-json";
 import type { AccountStore } from "./accounts";
 import { PROVIDERS } from "./index";
@@ -66,6 +66,11 @@ async function trackerRemote(repository: IssueRepository): Promise<{ host: strin
   return remote;
 }
 
+/** The host's accounts, in the order they are tried. */
+function accountsOf(accounts: IssueAccounts, host: string): ProviderAccount[] {
+  return accounts.list().filter((account) => account.host.toLowerCase() === host);
+}
+
 /**
  * The tracker the repository's issues are read from: the host of its first remote (`origin`, where
  * it has one) with that host's accounts, in the order they are tried, and the path read there: the
@@ -79,8 +84,27 @@ async function resolveTracker(accounts: IssueAccounts, repository: IssueReposito
     host: remote.host,
     source,
     path: asked ?? source ?? remote.path,
-    candidates: accounts.list().filter((account) => account.host.toLowerCase() === remote.host),
+    candidates: accountsOf(accounts, remote.host),
   };
+}
+
+/** The account a host tab acts as, with its token. */
+export interface TabAccount {
+  provider: GitProvider;
+  host: string;
+  user: string;
+  token: string;
+}
+
+/** The first account of the tracker's host, the one `onTracker` tries first; undefined without a
+ *  remote on a host, an account there, or a token that can be read. */
+export async function trackerAccount(accounts: IssueAccounts, repository: IssueRepository): Promise<TabAccount | undefined> {
+  const remote = await trackerRemote(repository).catch(() => undefined);
+  const account = remote && accountsOf(accounts, remote.host)[0];
+  const token = account && (await accounts.token(account.id));
+  return account && token !== undefined
+    ? { provider: PROVIDERS[account.provider], host: account.host, user: account.user, token }
+    : undefined;
 }
 
 /**

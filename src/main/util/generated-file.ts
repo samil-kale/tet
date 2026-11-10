@@ -18,7 +18,7 @@ export function writeIfChanged(file: string, contents: string, options?: { mode?
 
 /**
  * Line endings and quoting for files TET generates for other processes to run (control
- * launchers). git's `askpass.sh` is one too, written in `git.ts`, which may not import this: LF by
+ * launchers). git's `askpass.sh` is one too, written in `git/askpass.ts`, which may not import this: LF by
  * its own `join("\n")`, nothing interpolated.
  */
 

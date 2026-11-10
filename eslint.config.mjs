@@ -373,6 +373,7 @@ export default tseslint.config(
     // same — util/utility-client.ts is the main-process side of that boundary.
     files: [
       "src/main/git/git.ts",
+      "src/main/git/askpass.ts",
       "src/main/git/git-host.ts",
       "src/main/git/explorer-read.ts",
       "src/main/git/explorer-host.ts",
