@@ -78,8 +78,6 @@ function IssueRow({
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
-  const detail =
-    unread && issue.updatedAt !== issue.createdAt ? `updated ${dayOf(issue.updatedAt)}, opened by` : `opened ${dayOf(issue.createdAt)}, by`;
   return (
     <div
       className={`list-row issue-row two-line${active ? " active" : ""}`}
@@ -94,7 +92,7 @@ function IssueRow({
         <span className="list-label">{issue.title}</span>
         <span className="issue-detail-line">
           <span className="list-detail">
-            #{issue.number} · {detail} {issue.author}
+            #{issue.number} · opened {dayOf(issue.createdAt)}, by {issue.author}
           </span>
           {unread && <span className="issue-mark" />}
         </span>
@@ -133,8 +131,7 @@ export const IssueList = memo(function IssueList({
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, DEFAULT_ISSUE_FILTER);
   const { issues, source, tracker, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
   const seen = useIssuesSeen(projectId);
-  // The open one is on screen, so read.
-  const unread = (issue: Issue): boolean => issue.number !== openIssue && isUnread(issue, seen);
+  const unread = (issue: Issue): boolean => isUnread(issue, seen);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
@@ -221,9 +218,7 @@ export const IssueList = memo(function IssueList({
     SEPARATOR,
     unread(issue)
       ? { label: "Mark as Read", run: () => keepIssueSeen(projectId, issue.number, issue.updatedAt) }
-      : issue.number === openIssue
-        ? { label: "Mark as Unread" }
-        : { label: "Mark as Unread", run: () => keepIssueUnread(projectId, issue.number, issue.updatedAt) },
+      : { label: "Mark as Unread", run: () => keepIssueUnread(projectId, issue.number, issue.updatedAt) },
     SEPARATOR,
     { label: "Rename...", run: () => void askRename(issue) },
     { label: "Delete...", run: () => void askDelete(issue) },
