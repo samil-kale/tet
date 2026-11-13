@@ -689,6 +689,26 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
+/* A section row's actions show only while it is hovered, as VS Code's lists; a status
+   (`.row-status`, the projects' marks) always shows. They fade, and `allow-discrete` holds
+   `display` until the fade out ends. */
+.section .list-row > .icon-button:not(.row-status) {
+  transition:
+    opacity 0.1s ease,
+    display 0.1s allow-discrete;
+}
+
+.section .list-row:not(:hover) > .icon-button:not(.row-status) {
+  display: none;
+  opacity: 0;
+}
+
+@starting-style {
+  .section .list-row:hover > .icon-button:not(.row-status) {
+    opacity: 0;
+  }
+}
+
 .project-row,
 .worktree-row,
 .archive-row,

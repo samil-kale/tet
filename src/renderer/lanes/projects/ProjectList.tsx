@@ -15,17 +15,17 @@ import { setDragName } from "../../ui/row-drag";
 import { Section } from "../../ui/Section";
 import { TabMark } from "../../ui/TabMark";
 import { IconButton } from "../../ui/IconButton";
-import { ChangesIcon, CloseIcon, PlusIcon, ShieldIcon } from "../../ui/icons";
+import { ChangesIcon, PlusIcon, ShieldIcon } from "../../ui/icons";
 import type { RefMarks } from "../../tabs/tab-marks";
 
 /** This list's own type: no other list takes the drop. */
 const DRAG_TYPE = "application/x-tet-project";
 
-/** One action in a row; its click must not reach the row, which makes its repository or
- *  worktree active. */
+/** One status in a row, a button to what it says, shown without hover (`.row-status`); its click
+ *  must not reach the row, which makes its repository or worktree active. */
 function rowButton(title: string, run: () => void, icon: ReactNode) {
   return (
-    <IconButton title={title} isolated onClick={run}>
+    <IconButton title={title} className="row-status" isolated onClick={run}>
       {icon}
     </IconButton>
   );
@@ -318,7 +318,6 @@ export const ProjectList = memo(function ProjectList({
           ) : (
             rowButton("SBX enabled", () => onSbxSettings(projectId), <ShieldIcon />)
           ))}
-        {rowButton(worktree ? "Delete worktree" : "Remove project", () => close(resolved), <CloseIcon />)}
       </div>
     );
   };
