@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefCallback, type SetStateAction } from "react";
 import type { ActionResult } from "../../shared/types/action";
 import type { GitActionResult } from "../../shared/types/git";
 import { DialogFrame, useSubmit } from "./DialogFrame";
@@ -41,8 +41,8 @@ export interface PromptFields<T> {
   /** `submit` is underway: the field it may refuse is disabled meanwhile. */
   busy: boolean;
   /** For the field a refusal returns the focus to; the dialog opens on it, selected
-   *  (`DialogFrame`'s `selectField`). */
-  field: RefObject<HTMLInputElement | null>;
+   *  (`DialogFrame`'s `selectField`). A callback, so a line and a box of lines both take it. */
+  field: RefCallback<HTMLInputElement | HTMLTextAreaElement>;
   /** A field still fetching its value (`SuggestField`'s wand) holds the answer back meanwhile, and
    *  runs the frame's bar. */
   hold: (held: boolean) => void;
@@ -236,7 +236,10 @@ function ConfirmDialog({ dialog }: { dialog: Extract<Pending, { kind: "confirm" 
 function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }> }) {
   const [value, setValue] = useState(dialog.value);
   const [held, setHeld] = useState(false);
-  const field = useRef<HTMLInputElement>(null);
+  const field = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const fieldRef = useCallback((element: HTMLInputElement | HTMLTextAreaElement | null) => {
+    field.current = element;
+  }, []);
 
   /** What `submit` refused is handed to the fields (`error`). */
   const { busy, refused, submit, changing } = useSubmit(
@@ -264,7 +267,7 @@ function PromptDialog({ dialog }: { dialog: Extract<Pending, { kind: "prompt" }>
       primary={{ label: dialog.confirmLabel, disabled: held || !dialog.ready(value), run: () => void submit() }}
       selectField
     >
-      {dialog.render({ value, onChange, error: refused, busy, field, hold: setHeld })}
+      {dialog.render({ value, onChange, error: refused, busy, field: fieldRef, hold: setHeld })}
       {dialog.detail && <p className="dialog-detail">{dialog.detail}</p>}
     </DialogFrame>
   );

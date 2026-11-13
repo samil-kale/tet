@@ -2721,6 +2721,11 @@ textarea:focus,
   width: 700px;
 }
 
+/* The hint set off from the row of the push checkbox and the suggest button above it. */
+.dialog.commit-dialog .dialog-detail {
+  margin: 8px 0;
+}
+
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
    shrink into it. */
 .dialog.tall .dialog-body {
@@ -2819,10 +2824,14 @@ textarea:focus,
   padding-right: 46px;
 }
 
-/* Just its wand: squared off, as tall as the field beside it. */
+/* Under the field (`SuggestField`): what shares the row on the left, at its top, right under the
+   box; the button on the right. */
+.dialog-suggest-row {
+  align-items: flex-start;
+}
+
 .dialog-suggest {
-  align-self: stretch;
-  padding: 0 8px;
+  margin-left: auto;
 }
 
 /* Aligned to the top: a label that wraps would leave a centred box between its lines. The SBX

@@ -4,18 +4,12 @@ import { askAgent } from "./ask";
 import { AGENTS } from "./index";
 import { stoppable } from "../util/process";
 
-/** The subject between the answer's last `<commit>` and `</commit>` (`COMMIT_MESSAGE_PROMPT`); an
- *  answer without them is none, so whatever an agent says around its answer never becomes the
- *  message. */
+/** The message between the answer's last `<commit>` and `</commit>` (`COMMIT_MESSAGE_PROMPT`),
+ *  whole: how many lines it has is the prompt's to say. An answer without them is none, so whatever
+ *  an agent says around its answer never becomes the message. */
 export function commitMessageFrom(reply: string): string {
   const answers = [...reply.matchAll(/<commit>([\s\S]*?)<\/commit>/gi)];
-  const inside = answers.at(-1)?.[1] ?? "";
-  return (
-    inside
-      .split(/\r?\n/)
-      .map((entry) => entry.trim())
-      .find((entry) => entry.length > 0) ?? ""
-  );
+  return (answers.at(-1)?.[1] ?? "").trim();
 }
 
 /** The agent the commit prompt waits on, for `cancelCommitSuggestion`: one question is up at a

@@ -418,6 +418,13 @@ describe("a suggested commit message", () => {
     assert.equal(commitMessageFrom("<commit>fix terminal focus</commit>"), "fix terminal focus");
   });
 
+  it("keeps a message of several lines whole", () => {
+    assert.equal(
+      commitMessageFrom("<commit>\nfix terminal focus\n\nrefit after a drag\n</commit>"),
+      "fix terminal focus\n\nrefit after a drag",
+    );
+  });
+
   it("ignores what the agent says around its answer", () => {
     const reply = "Let me look at the subjects first.\n<commit>\n add commit suggestions \n</commit>\nDone.";
     assert.equal(commitMessageFrom(reply), "add commit suggestions");

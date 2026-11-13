@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import type { Ref } from "react";
 import { urlUsername } from "../../shared/git-url";
 import type { GitLogin } from "../../shared/types/git";
 import { filled, followUpHeldBack, prompt } from "../ui/Dialog";
@@ -25,7 +25,7 @@ interface GitLoginFieldsProps {
   /** The command is underway: the fields are disabled meanwhile. */
   busy?: boolean;
   /** The first field, for the dialog to focus. */
-  field?: RefObject<HTMLInputElement | null>;
+  field?: Ref<HTMLInputElement>;
 }
 
 /**

@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode, type Ref, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactNode, type Ref, type RefCallback } from "react";
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
-import { SquareSparklesIcon } from "./icons";
+import { isModifierHeld } from "../platform";
 import { useBusy } from "./use-busy";
 import { useTextContextMenu } from "./use-text-context-menu";
 
@@ -198,15 +198,21 @@ interface SuggestFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  /** An async way to fill the field, shown as a wand beside it. Why it had none is said under the
-   *  field, in `error`'s place, until the next suggestion or keystroke. Without one, no wand. */
+  /** An async way to fill the field, shown as a button under it, on the right. Why it had none is
+   *  said under the field, in `error`'s place, until the next suggestion or keystroke. Without one,
+   *  no button. */
   suggestion?: {
-    title: string;
+    label: string;
     run: () => Promise<SuggestionResult>;
   };
+  /** What shares the button's row, on its left, e.g. a checkbox. */
+  beside?: ReactNode;
   disabled?: boolean;
-  /** The field a dialog opens focused; refocused once a suggestion arrives. */
-  ref: RefObject<HTMLInputElement | null>;
+  /** A box of several lines (`dialog-textarea`) in place of one: Enter breaks the line, Ctrl+Enter
+   *  (Cmd on the Mac) answers the dialog. */
+  multiline?: boolean;
+  /** The field a dialog opens focused (`PromptFields.field`). Stable, as that one is. */
+  ref?: RefCallback<HTMLInputElement | HTMLTextAreaElement>;
   /** See `Field`. */
   error?: string;
   /** Told while a suggestion is fetched, for the dialog to hold its answer back (`PromptFields`).
@@ -214,12 +220,32 @@ interface SuggestFieldProps {
   onSuggesting?: (suggesting: boolean) => void;
 }
 
-/** A text field with a wand beside it that fills it, e.g. a model's commit message. */
-export function SuggestField({ label, value, onChange, suggestion, disabled, ref, error, onSuggesting }: SuggestFieldProps) {
+/** A text field with a button under it that fills it, e.g. a model's commit message. */
+export function SuggestField({
+  label,
+  value,
+  onChange,
+  suggestion,
+  beside,
+  disabled,
+  multiline,
+  ref,
+  error,
+  onSuggesting,
+}: SuggestFieldProps) {
   const { busy: suggesting, run } = useBusy();
   const [refused, setRefused] = useState<string>();
   const textMenu = useTextContextMenu(onChange);
   useEffect(() => onSuggesting?.(suggesting), [suggesting, onSuggesting]);
+  // Refocused once a suggestion arrives; handed on to the dialog's own.
+  const box = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
+  const boxRef = useCallback(
+    (element: HTMLInputElement | HTMLTextAreaElement | null) => {
+      box.current = element;
+      ref?.(element);
+    },
+    [ref],
+  );
 
   const suggest = async (): Promise<void> => {
     if (suggesting || !suggestion) {
@@ -233,8 +259,8 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
         if (suggested.length > 0) {
           onChange(suggested);
           requestAnimationFrame(() => {
-            ref.current?.focus();
-            ref.current?.select();
+            box.current?.focus();
+            box.current?.select();
           });
         }
         setRefused(result.error);
@@ -244,37 +270,54 @@ export function SuggestField({ label, value, onChange, suggestion, disabled, ref
     });
   };
 
+  const typed = {
+    value,
+    disabled: disabled || suggesting,
+    onChange: (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setRefused(undefined);
+      onChange(event.target.value);
+    },
+    onContextMenu: textMenu.onContextMenu,
+    ref: boxRef,
+  };
   return (
-    <Field label={label} error={refused ?? error}>
-      {/* Paired like a path field and its Browse button; while suggesting, the dialog's bar runs
-          (`onSuggesting`). */}
-      <FieldRow>
-        <input
-          type="text"
-          value={value}
-          disabled={disabled || suggesting}
-          onChange={(event) => {
-            setRefused(undefined);
-            onChange(event.target.value);
-          }}
-          onContextMenu={textMenu.onContextMenu}
-          ref={ref}
-        />
-        {textMenu.menu}
-        {suggestion && (
-          <button
-            type="button"
-            className="button secondary dialog-suggest"
-            title={suggestion.title}
-            disabled={disabled || suggesting}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void suggest()}
-          >
-            <SquareSparklesIcon />
-          </button>
+    <>
+      <Field label={label} error={refused ?? error}>
+        {multiline ? (
+          <textarea
+            className="dialog-textarea"
+            {...typed}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && isModifierHeld(event)) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+          />
+        ) : (
+          <input type="text" {...typed} />
         )}
-      </FieldRow>
-    </Field>
+        {textMenu.menu}
+      </Field>
+      {/* Outside the field's label, which would forward a click on `beside` to the box; while
+          suggesting, the dialog's bar runs (`onSuggesting`). */}
+      {(beside || suggestion) && (
+        <FieldRow className="dialog-suggest-row">
+          {beside}
+          {suggestion && (
+            <button
+              type="button"
+              className="button secondary dialog-suggest"
+              disabled={disabled || suggesting}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => void suggest()}
+            >
+              {suggestion.label}
+            </button>
+          )}
+        </FieldRow>
+      )}
+    </>
   );
 }
 
