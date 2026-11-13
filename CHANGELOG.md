@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.25.0 (2026-11-13)
+
+- **Multi-line commit messages.** The commit message box grows with its text, and the box keeps
+  the height you gave it, as do the issue fields.
+- **Mark as Unread.** An issue can be set back to unread from the issues list, and the open issue
+  always shows its opening date.
+- **Issue uploads from sandboxes.** Sandboxed tabs can upload issue files from their repository.
+
 ## 0.24.3 (2026-11-10)
 
 - **tet-ctl issues.** Agents can list, read, create and change the project's issues through the
