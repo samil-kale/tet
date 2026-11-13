@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefCallback } from "react";
 import { createStore, useStore } from "./store";
 
 /** Layout describes the window, not a repository, so it lives in renderer storage. */
@@ -160,6 +160,52 @@ function usePersistedNumber(storageKey: string, restore: (stored: number) => num
  */
 export function useStoredSize(key: string, initial: number, min: number): [number, (size: number) => void] {
   return usePersistedNumber(layoutKey(key), (stored) => Math.max(min, Number.isFinite(stored) && stored > 0 ? stored : initial));
+}
+
+/**
+ * The ref of a textarea whose height the user sets by dragging its corner: the stored height is
+ * applied when it mounts, and a drag is written once it settles, as `usePersistedNumber`'s is. One
+ * still pending when the textarea unmounts is written then, since a dialog closes at once on its
+ * answer. Without a `key` the ref does nothing.
+ */
+export function useStoredHeight(key: string | undefined): RefCallback<HTMLTextAreaElement> {
+  const storageKey = key === undefined ? undefined : layoutKey(key);
+  const observer = useRef<ResizeObserver | undefined>(undefined);
+  const persist = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const pending = useRef<{ key: string; height: string } | undefined>(undefined);
+  return useCallback(
+    (element: HTMLTextAreaElement | null) => {
+      observer.current?.disconnect();
+      clearTimeout(persist.current);
+      if (pending.current) {
+        localStorage.setItem(pending.current.key, pending.current.height);
+      }
+      pending.current = undefined;
+      if (!element || storageKey === undefined) {
+        return;
+      }
+      const stored = Number(localStorage.getItem(storageKey));
+      if (Number.isFinite(stored) && stored > 0) {
+        element.style.height = `${stored}px`;
+      }
+      let last = element.offsetHeight;
+      observer.current = new ResizeObserver(() => {
+        const height = element.offsetHeight;
+        if (height === last) {
+          return;
+        }
+        last = height;
+        pending.current = { key: storageKey, height: String(height) };
+        clearTimeout(persist.current);
+        persist.current = setTimeout(() => {
+          localStorage.setItem(storageKey, String(height));
+          pending.current = undefined;
+        }, PERSIST_MS);
+      });
+      observer.current.observe(element);
+    },
+    [storageKey],
+  );
 }
 
 /** What storage holds as a share, `initial` when outside (0, 1) — see `usePersistedShare`. */

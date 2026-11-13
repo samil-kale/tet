@@ -3,6 +3,7 @@ import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
 import { isModifierHeld } from "../platform";
 import { useBusy } from "./use-busy";
+import { useStoredHeight } from "./layout-storage";
 import { useTextContextMenu } from "./use-text-context-menu";
 
 /**
@@ -173,17 +174,21 @@ interface TextAreaFieldProps {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  /** The layout storage key the height the user drags the box to is kept under (`useStoredHeight`). */
+  sizeKey: string;
   /** See `Field`. */
   error?: string;
 }
 
 /** A `Field` holding a box for several lines of text, e.g. a note. */
-export function TextAreaField({ label, value, onChange, disabled, error }: TextAreaFieldProps) {
+export function TextAreaField({ label, value, onChange, disabled, sizeKey, error }: TextAreaFieldProps) {
   const textMenu = useTextContextMenu(onChange);
+  const sized = useStoredHeight(sizeKey);
   return (
     <Field label={label} error={error}>
       <textarea
         className="dialog-textarea"
+        ref={sized}
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
@@ -211,6 +216,9 @@ interface SuggestFieldProps {
   /** A box of several lines (`dialog-textarea`) in place of one: Enter breaks the line, Ctrl+Enter
    *  (Cmd on the Mac) answers the dialog. */
   multiline?: boolean;
+  /** With `multiline`: the layout storage key the height the user drags the box to is kept under
+   *  (`useStoredHeight`). */
+  sizeKey?: string;
   /** The field a dialog opens focused (`PromptFields.field`). Stable, as that one is. */
   ref?: RefCallback<HTMLInputElement | HTMLTextAreaElement>;
   /** See `Field`. */
@@ -229,6 +237,7 @@ export function SuggestField({
   beside,
   disabled,
   multiline,
+  sizeKey,
   ref,
   error,
   onSuggesting,
@@ -236,15 +245,17 @@ export function SuggestField({
   const { busy: suggesting, run } = useBusy();
   const [refused, setRefused] = useState<string>();
   const textMenu = useTextContextMenu(onChange);
+  const sized = useStoredHeight(multiline ? sizeKey : undefined);
   useEffect(() => onSuggesting?.(suggesting), [suggesting, onSuggesting]);
-  // Refocused once a suggestion arrives; handed on to the dialog's own.
+  // Refocused once a suggestion arrives; handed on to the dialog's own and the stored height's.
   const box = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const boxRef = useCallback(
     (element: HTMLInputElement | HTMLTextAreaElement | null) => {
       box.current = element;
       ref?.(element);
+      sized(element instanceof HTMLTextAreaElement ? element : null);
     },
-    [ref],
+    [ref, sized],
   );
 
   const suggest = async (): Promise<void> => {

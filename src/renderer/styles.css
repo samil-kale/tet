@@ -2794,6 +2794,7 @@ textarea:focus,
 /* A note of a few lines (`TextAreaField`): the height of four, taller by dragging. */
 .dialog-textarea {
   height: 90px;
+  min-height: 70px;
   resize: vertical;
 }
 

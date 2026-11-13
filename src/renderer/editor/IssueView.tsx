@@ -776,6 +776,7 @@ async function askTimeEntry(edit: (value: IssueFieldValue) => Promise<string | u
           value={value.summary}
           onChange={(summary) => onChange({ ...value, summary })}
           disabled={busy}
+          sizeKey="time-entry-summary-height"
         />
       </>
     ),

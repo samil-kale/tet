@@ -160,6 +160,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
           }
           disabled={busy}
           multiline
+          sizeKey="commit-message-height"
           ref={field}
           error={error}
           onSuggesting={hold}
