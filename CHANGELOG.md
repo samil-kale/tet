@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.25.1 (2026-11-13)
+
+- **Sessions linked to issues.** A tab's session can be linked to an issue, and the issue's tab
+  lists the sessions linked to it.
+- **Quieter project rows.** A project row's actions show only on hover, while its status marks stay
+  visible.
+
 ## 0.25.0 (2026-11-13)
 
 - **Multi-line commit messages.** The commit message box grows with its text, and the box keeps
