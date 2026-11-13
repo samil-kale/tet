@@ -59,6 +59,24 @@ export interface TabDescriptor {
   command?: string;
 }
 
+/** A session linked to an issue, as the issue's tab lists it: its tab in the repository or a
+ *  worktree, on the strip or archived. */
+export interface IssueSession {
+  ref: ProjectRef;
+  /** The worktree's name; absent for the repository. */
+  worktree?: string;
+  tabId: string;
+  agentId: AgentId;
+  /** "" makes the UI show a placeholder, as a tab's. */
+  title: string;
+  archived: boolean;
+}
+
+export interface IssueSessionsResult {
+  sessions?: IssueSession[];
+  error?: string;
+}
+
 /** As every spinner shows it: never while waiting on a question, whatever `inTurn` says. */
 export function isWorking(tab: TabDescriptor): boolean {
   return tab.inTurn === true && tab.waitingAt === undefined;

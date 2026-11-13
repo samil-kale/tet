@@ -2,7 +2,7 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentId } from "../../shared/types/agents";
-import type { Project, ProjectRef } from "../../shared/types/project";
+import { projectRef, type Project, type ProjectRef } from "../../shared/types/project";
 import { onDisk, relativeInside } from "../util/path-inside";
 
 /**
@@ -13,7 +13,8 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   archive.json                   the sessions kept archived, per repository and worktree (archive.ts)
  *   issues-seen.json               what the issue tabs showed, and since when others count unread (issues-seen.ts)
- *   drops/                        pasted or dropped content without a path, for host tabs
+ *   issue-sessions.json            the sessions linked to each issue, per repository and worktree (issue-sessions.ts)
+ *   drops/                     pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
@@ -28,8 +29,9 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * copy here.
  *
  * Never anything a sandbox must not see (settings, tokens, SBX settings): an organization governing
- * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `archive.json` and
- * `issues-seen.json` are the two files, session ids and issue numbers with timestamps alone.
+ * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `archive.json`,
+ * `issues-seen.json` and `issue-sessions.json` are the three files, session ids and issue numbers
+ * with timestamps alone.
  */
 export function projectsDir(dataRoot: string): string {
   return path.join(dataRoot, "projects");
@@ -49,16 +51,33 @@ export function issuesSeenFile(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "issues-seen.json");
 }
 
+/** The sessions linked to the project's issues (issue-sessions.ts). */
+export function issueSessionsFile(dataRoot: string, projectId: string): string {
+  return path.join(projectDir(dataRoot, projectId), "issue-sessions.json");
+}
+
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs
  *  keep theirs in their agent's folder (sandboxDropsDir). */
 export function dropsDir(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "drops");
 }
 
+/** What the project's files call the repository or a worktree: "repository", or a worktree's key
+ *  (8 hex digits, never that). Its sandbox folder, and its entries in archive.json and
+ *  issue-sessions.json. */
+export function entryKeyOf(ref: ProjectRef): string {
+  return ref.worktree ?? "repository";
+}
+
+/** The repository or worktree `entryKeyOf` names. */
+export function refOfEntryKey(projectId: string, key: string): ProjectRef {
+  return projectRef(projectId, key === "repository" ? undefined : key);
+}
+
 /** The repository's or a worktree's sandbox folders, one per agent: `sandboxes/repository/` or
- *  `sandboxes/<key>/` (a key is 8 hex digits, never "repository"). */
+ *  `sandboxes/<key>/`. */
 function sandboxesDir(dataRoot: string, ref: ProjectRef): string {
-  return path.join(projectDir(dataRoot, ref.projectId), "sandboxes", ref.worktree ?? "repository");
+  return path.join(projectDir(dataRoot, ref.projectId), "sandboxes", entryKeyOf(ref));
 }
 
 /** The git worktree TET made under `key`, in on-disk spelling like the paths git reports. */

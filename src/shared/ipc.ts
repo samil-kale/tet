@@ -72,6 +72,7 @@ export interface InvokeChannels {
   "issues:upload": TETApi["issues"]["upload"];
   "issues:set-source": TETApi["issues"]["setSource"];
   "issues:open-in-agent": TETApi["issues"]["openInAgent"];
+  "issues:sessions": TETApi["issues"]["sessions"];
   "env:list": TETApi["env"]["list"];
   "env:save": TETApi["env"]["save"];
   "env:answer": TETApi["env"]["answer"];
@@ -125,6 +126,8 @@ export interface InvokeChannels {
   "tabs:close": TETApi["tabs"]["close"];
   "tabs:archive": TETApi["tabs"]["archive"];
   "tabs:rename": TETApi["tabs"]["rename"];
+  "tabs:link-issue": TETApi["tabs"]["linkIssue"];
+  "tabs:unlink-issue": TETApi["tabs"]["unlinkIssue"];
   "tabs:handover": TETApi["tabs"]["handOver"];
   "tabs:restart": TETApi["tabs"]["restart"];
   "tabs:open-in-terminal": TETApi["tabs"]["openInTerminal"];
@@ -184,6 +187,7 @@ export interface EventChannels {
   "commands:changed": Payload<TETApi["commands"]["onChanged"]>;
   "tabs:changed": Payload<TETApi["tabs"]["onTabs"]>;
   "archive:changed": Payload<TETApi["archive"]["onChanged"]>;
+  "issues:sessions-changed": Payload<TETApi["issues"]["onSessionsChanged"]>;
   "tabs:output": Payload<TETApi["tabs"]["onOutput"]>;
   "tabs:status": Payload<TETApi["tabs"]["onStatus"]>;
   "tabs:startup-progress": Payload<TETApi["tabs"]["onStartupProgress"]>;

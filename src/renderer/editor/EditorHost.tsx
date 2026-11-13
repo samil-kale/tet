@@ -19,6 +19,7 @@ import {
   hasChanges,
   isReadOnly,
   issueFieldOptions,
+  issueProjectOf,
   loadIssueImage,
   markIssueSeen,
   openIssueFile,
@@ -37,6 +38,7 @@ import {
   type EditorSnapshot,
 } from "./editor-views";
 import { isEditorTabId } from "./editor-tab";
+import { useIssueSessions } from "./use-issue-sessions";
 import { IconButton } from "../ui/IconButton";
 import {
   BookOpenIcon,
@@ -156,6 +158,8 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   }, [tabId, issue, updatedAt, visible, active]);
 
+  const issueSessions = useIssueSessions(issue === undefined ? undefined : issueProjectOf(tabId), issue);
+
   const issueActions = useMemo<IssueActions>(
     () => ({
       loadImage: (source) => loadIssueImage(tabId, source),
@@ -179,7 +183,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     return (
       <div className={`editor-tab${active ? "" : " hidden"}`}>
         {kind === "error" && <div className="placeholder">Could not read the issue.</div>}
-        {issueDetail && <IssueView issue={issueDetail} actions={issueActions} />}
+        {issueDetail && <IssueView issue={issueDetail} sessions={issueSessions} actions={issueActions} />}
       </div>
     );
   }

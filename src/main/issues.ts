@@ -1,7 +1,7 @@
 import { failure } from "../shared/errors";
 import { effectivePrompt } from "../shared/prompts";
 import type { AgentId } from "../shared/types/agents";
-import type { ProjectRef } from "../shared/types/project";
+import { worktreeName, worktreeOf, type ProjectRef } from "../shared/types/project";
 import {
   DEFAULT_ISSUE_FILTER,
   isUnread,
@@ -14,7 +14,7 @@ import {
   type IssueFilterOptions,
   type IssuesLatest,
 } from "../shared/types/providers";
-import type { HandoverResult } from "../shared/types/terminals";
+import type { HandoverResult, IssueSession } from "../shared/types/terminals";
 import { MAX_EDIT_BYTES } from "./git/explorer-read";
 import {
   issueMarkdown,
@@ -26,6 +26,7 @@ import {
   type IssueRepository,
   type IssueTrackerInfo,
 } from "./providers/issues";
+import { forgetAllIssueSessions, forgetIssueSessions, issueSessionLinks } from "./store/issue-sessions";
 import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
 import type { ProjectStore } from "./store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
@@ -63,8 +64,9 @@ export async function issueTrackerOf(deps: Pick<IssueDeps, "accounts" | "reposit
 }
 
 /**
- * Saves the project's issue source (`setIssueSource`). What its issue tabs showed (`IssuesSeen`) is
- * forgotten once the source changed: its entries are the old source's issue numbers.
+ * Saves the project's issue source (`setIssueSource`). What its issue tabs showed (`IssuesSeen`) and
+ * the sessions linked to its issues are forgotten once the source changed: their entries are the
+ * old source's issue numbers.
  */
 export async function changeIssueSource(
   deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
@@ -76,6 +78,7 @@ export async function changeIssueSource(
   const saved = await setIssueSource(deps.accounts, repository, source);
   if (saved !== before) {
     forgetAllIssuesSeen(deps.dataRoot, projectId);
+    forgetAllIssueSessions(deps.dataRoot, projectId);
   }
   return saved;
 }
@@ -202,7 +205,7 @@ export async function setIssueField(
   );
 }
 
-/** Deletes the issue; its entry of what the tabs showed goes with it. */
+/** Deletes the issue; its entry of what the tabs showed and its sessions' links go with it. */
 export async function deleteIssue(
   deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
   projectId: string,
@@ -210,6 +213,7 @@ export async function deleteIssue(
 ): Promise<void> {
   await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
   forgetIssueSeen(deps.dataRoot, projectId, number);
+  forgetIssueSessions(deps.dataRoot, projectId, number);
 }
 
 /** Uploads a file to the tracker, answered by what shows it in an issue's text. */
@@ -232,8 +236,9 @@ function issuePrompt(text: string, number: number): string {
 
 /**
  * A new tab of the agent in the repository or worktree, read from the tracker, the issue its first
- * prompt; the tab shows it as a file. The caller checks that the agent takes a prompt. `sandboxOnly`:
- * opened from a sandbox, so it never runs on this machine (`TabSessionManager.createTab`).
+ * prompt; the tab shows it as a file, and its session is linked to the issue once it has one. The
+ * caller checks that the agent takes a prompt. `sandboxOnly`: opened from a sandbox, so it never runs
+ * on this machine (`TabSessionManager.createTab`).
  */
 export async function openIssueInAgent(
   deps: Pick<IssueDeps, "accounts" | "repositories" | "settings" | "store" | "tabManagers">,
@@ -255,8 +260,46 @@ export async function openIssueInAgent(
       content: issueMarkdown(issue),
       prompt: issuePrompt(effectivePrompt(deps.settings.get().prompts.texts, "issue"), number),
     };
-    return { ok: true, tab: manager.createTabOnFile(agentId, file, sandboxOnly) };
+    const tab = manager.createTabOnFile(agentId, file, sandboxOnly);
+    // A fresh tab has no session yet, so this only notes the issue on it.
+    manager.linkIssue(tab.tabId, number);
+    return { ok: true, tab };
   } catch (error) {
     return failure(error);
   }
+}
+
+/**
+ * The sessions linked to the project's issue that its repository or worktrees list, on the strip or
+ * archived, oldest link first: what is shown of them is read off their tabs, so a rename or archive
+ * shows at once. One no tab lists (a worktree closed, a session gone) is left out.
+ */
+export function issueSessions(
+  deps: Pick<IssueDeps, "dataRoot" | "store" | "tabManagers">,
+  projectId: string,
+  number: number,
+): IssueSession[] {
+  const project = deps.store.get(projectId);
+  if (!project) {
+    throw new Error(PROJECT_NOT_FOUND);
+  }
+  return issueSessionLinks(deps.dataRoot, projectId, number).flatMap(({ ref, sessionId }) => {
+    const manager = deps.tabManagers.get(ref);
+    const open = manager?.snapshot().find((tab) => tab.sessionId === sessionId);
+    const tab = open ?? manager?.archivedSnapshot().find((candidate) => candidate.sessionId === sessionId);
+    if (!tab) {
+      return [];
+    }
+    const worktree = worktreeOf(project, ref);
+    return [
+      {
+        ref,
+        ...(worktree && { worktree: worktreeName(worktree) }),
+        tabId: tab.tabId,
+        agentId: tab.agentId,
+        title: tab.title,
+        archived: open === undefined,
+      },
+    ];
+  });
 }

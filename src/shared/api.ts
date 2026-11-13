@@ -48,7 +48,7 @@ import type {
   SbxStoredLocal,
 } from "./types/sbx";
 import type { AppSettings, SettingsEdits } from "./types/settings";
-import type { HandoverResult, TabDescriptor, TabRef, TerminalOutput, TerminalStatus } from "./types/terminals";
+import type { HandoverResult, IssueSessionsResult, TabDescriptor, TabRef, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
@@ -205,6 +205,11 @@ export interface TETApi {
     /** A new tab of the agent in the repository or worktree, read from the tracker, the issue its
      *  first prompt; the tab shows it as a file. */
     openInAgent: (ref: ProjectRef, number: number, agentId: AgentId) => Promise<HandoverResult>;
+    /** The sessions linked to the issue, as their tabs show them (`IssueSession`). */
+    sessions: (projectId: string, number: number) => Promise<IssueSessionsResult>;
+    /** A session of the project was linked to an issue or taken off one by hand; the tabs' own changes
+     *  come as `tabs.onTabs` and `archive.onChanged`. */
+    onSessionsChanged: (listener: (projectId: string) => void) => Unsubscribe;
   };
   env: {
     /** Never the values. */
@@ -352,6 +357,12 @@ export interface TETApi {
     archive: (ref: ProjectRef, tabIds: string[]) => Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
     rename: (ref: ProjectRef, tabId: string, title: string) => Promise<ActionResult>;
+    /** Links the tab's session to the project's issue, as `tet-ctl issues-link-session` does;
+     *  answers what refused it. */
+    linkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<ActionResult>;
+    /** Takes the session of the tab, on the strip or archived, off the project's issue; answers what
+     *  refused it. */
+    unlinkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<ActionResult>;
     /** A tab of `agentId` taking over this tab's session; this tab stays. */
     handOver: (ref: ProjectRef, tabId: string, agentId: AgentId) => Promise<HandoverResult>;
     /** Respawns a saved command in the same tab. */

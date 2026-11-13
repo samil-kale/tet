@@ -16,6 +16,7 @@ import type {
   IssuesSeenResult,
   IssueUploadResult,
 } from "../../shared/types/providers";
+import type { IssueSessionsResult } from "../../shared/types/terminals";
 import {
   changeIssueSource,
   commentIssue,
@@ -27,6 +28,7 @@ import {
   issueFilterOptions,
   issueImage,
   issueRepository,
+  issueSessions,
   latestIssues,
   openIssueInAgent,
   readIssue,
@@ -107,6 +109,14 @@ export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): vo
   handle("issues:open-in-agent", (_event, ref: ProjectRef, number: number, agentId: AgentId) =>
     openIssueInAgent(issueDeps, ref, number, agentId),
   );
+
+  handle("issues:sessions", (_event, projectId: string, number: number): IssueSessionsResult => {
+    try {
+      return { sessions: issueSessions(issueDeps, projectId, number) };
+    } catch (error) {
+      return { error: errorMessage(error) };
+    }
+  });
 
   handle("issues:image", (_event, projectId: string, source: string): Promise<string | null> => issueImage(issueDeps, projectId, source));
 

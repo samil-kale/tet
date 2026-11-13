@@ -15,9 +15,10 @@ import { IconButton } from "../../ui/IconButton";
 import { LinkIcon, ListCheckIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
-import { ISSUE_DRAG_TYPE } from "../../tabs/pane-layout";
+import { ISSUE_DRAG_TYPE, SESSION_TAB_DRAG_TYPE } from "../../tabs/pane-layout";
 import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
+import { useDropTarget } from "../../ui/use-drop-target";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssues } from "./use-issues";
 
@@ -67,6 +68,8 @@ function IssueRow({
   issue,
   active,
   unread,
+  dropTarget,
+  dropProps,
   onOpen,
   onMenu,
 }: {
@@ -75,12 +78,16 @@ function IssueRow({
   active: boolean;
   /** The tracker created or changed it since its tab last showed it (`isUnread`). */
   unread: boolean;
+  /** A tab whose session it would link is held over it. */
+  dropTarget: boolean;
+  dropProps: React.HTMLAttributes<HTMLElement>;
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
   return (
     <div
-      className={`list-row issue-row two-line${active ? " active" : ""}`}
+      {...dropProps}
+      className={`list-row issue-row two-line${active ? " active" : ""}${dropTarget ? " drop-target" : ""}`}
       title={[`#${issue.number} ${issue.title}`, ...(issue.labels.length > 0 ? [`Labels: ${issue.labels.join(", ")}`] : [])].join("\n")}
       draggable
       onDragStart={(event) => event.dataTransfer.setData(ISSUE_DRAG_TYPE, String(issue.number))}
@@ -109,7 +116,8 @@ function IssueRow({
 /**
  * The project's issues, on its tracker: a click opens one in the preview tab, a double click keeps
  * it, as the Explorer's files, and a drag onto a pane opens it there. All this writes to the
- * tracker is a new issue and a row's title or deletion; its tab changes the rest. The source is the
+ * tracker is a new issue and a row's title or deletion; its tab changes the rest. A tab with a session
+ * dropped on a row is linked to its issue, as `tet-ctl issues-link-session` does. The source is the
  * project's setting, so a worktree, which changes none, offers no button for it. An account is the
  * machine's, so every project sends the user to the Settings' Accounts while its tracker has none.
  */
@@ -137,6 +145,15 @@ export const IssueList = memo(function IssueList({
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
+  const issueDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId, number: number) => {
+    void window.tet.tabs.linkIssue(resolved.ref, tabId, number).then((result) => {
+      if (result.ok) {
+        notify("info", `Session linked to Issue #${number}`);
+      } else {
+        notify("error", result.error);
+      }
+    });
+  });
 
   const askSource = async (): Promise<void> => {
     await prompt({
@@ -268,6 +285,8 @@ export const IssueList = memo(function IssueList({
                 issue={issue}
                 active={issue.number === openIssue}
                 unread={unread(issue)}
+                dropTarget={issueDrop.over === issue.number}
+                dropProps={issueDrop.dropPropsOf(issue.number)}
                 onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
                 onMenu={(event) => menu.open(event, issue)}
               />

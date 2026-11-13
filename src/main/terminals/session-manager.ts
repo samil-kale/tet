@@ -12,7 +12,9 @@ import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TabDescriptor } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
+import { forgetSessionIssues, issuesOfSession, linkIssueSession, pruneIssueSessions, unlinkIssueSession } from "../store/issue-sessions";
 import { dropsDir } from "../store/project-dirs";
+import { logFailure } from "../util/json-file";
 import { readSbxSettings } from "../store/tet-json";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { SettingsStore } from "../store/settings";
@@ -54,6 +56,9 @@ export interface SessionManagerCallbacks extends RunCallbacks {
   /** Whether anything in this repository or worktree is still starting — drives the tab strip's
    *  bar. */
   onStartupProgress: (ref: ProjectRef, show: boolean) => void;
+  /** A session of this repository or worktree was linked to an issue or taken off one by hand
+   *  (`linkIssue`, `unlinkIssue`); what else changes the links changes the tabs too. */
+  onIssueSessions: (ref: ProjectRef) => void;
 }
 
 export interface HookOutcome {
@@ -242,9 +247,9 @@ export class TabSessionManager {
     this.resolveWindowRestored();
   }
 
-  /** Drops archive.json ids no agent recognizes anymore, once every agent with sessions was
-   *  listed (bringUp): skipped where one wasn't (not installed, sbx not ready yet), so a session
-   *  merely unreachable right now is never mistaken for one that is gone. */
+  /** Drops archive.json ids and issue links no agent recognizes anymore, once every agent with
+   *  sessions was listed (bringUp): skipped where one wasn't (not installed, sbx not ready yet), so a
+   *  session merely unreachable right now is never mistaken for one that is gone. */
   private pruneArchive(): void {
     if (this.disposed) {
       return;
@@ -257,6 +262,7 @@ export class TabSessionManager {
       [...this.tabs, ...this.archived.all()].map((tab) => tab.sessionId).filter((id): id is string => id !== undefined),
     );
     this.archived.prune(present);
+    pruneIssueSessions(this.dataRoot, this.at.ref, present);
   }
 
   /**
@@ -494,7 +500,69 @@ export class TabSessionManager {
       return { ok: false, error: `The ${agent.displayName} session's files were not found` };
     }
     const handover = { from: tab.agentId, sessionId, files, within: actions?.root };
-    return { ok: true, tab: this.addTab(agentId, { handover, ...(sandboxOnly && { sandboxOnly }) }) };
+    // The new session joins the issues this one is linked to, once it has one.
+    const issues = issuesOfSession(this.dataRoot, this.at.ref, sessionId);
+    return {
+      ok: true,
+      tab: this.addTab(agentId, { handover, ...(issues.length > 0 && { issues }), ...(sandboxOnly && { sandboxOnly }) }),
+    };
+  }
+
+  /**
+   * Links the tab's session to the project's issue: at once where it has one, else once it is
+   * claimed (reconcile). Answers what refused it, as renameTab does.
+   */
+  linkIssue(tabId: string, number: number): ActionResult {
+    const tab = this.tabOf(tabId);
+    if (!tab) {
+      return { ok: false, error: "The tab is closed" };
+    }
+    const { agent } = this.runtimeFor(tab.agentId);
+    if (!agent.sessions) {
+      return { ok: false, error: `A ${agent.displayName} tab keeps no session` };
+    }
+    if (!tab.sessionId || awaitsClaim(tab)) {
+      tab.issues = [...new Set([...(tab.issues ?? []), number])];
+      return { ok: true };
+    }
+    try {
+      linkIssueSession(this.dataRoot, this.at.ref, number, tab.sessionId);
+    } catch (error) {
+      return { ok: false, error: `Could not link the ${agent.displayName} session: ${errorMessage(error)}` };
+    }
+    this.callbacks.onIssueSessions(this.at.ref);
+    return { ok: true };
+  }
+
+  /** Takes the session of the tab, on the strip or archived, off the project's issue, and the link it
+   *  waits to make. Answers what refused it. */
+  unlinkIssue(tabId: string, number: number): ActionResult {
+    const tab = this.tabOf(tabId) ?? this.archived.all().find((candidate) => candidate.tabId === tabId);
+    if (!tab) {
+      return { ok: false, error: "The tab is closed" };
+    }
+    tab.issues = tab.issues?.filter((issue) => issue !== number);
+    if (tab.sessionId) {
+      try {
+        unlinkIssueSession(this.dataRoot, this.at.ref, number, tab.sessionId);
+      } catch (error) {
+        return {
+          ok: false,
+          error: `Could not unlink the ${this.runtimeFor(tab.agentId).agent.displayName} session: ${errorMessage(error)}`,
+        };
+      }
+      this.callbacks.onIssueSessions(this.at.ref);
+    }
+    return { ok: true };
+  }
+
+  /** The links a tab waited to make, once it claimed its session; a failure is logged, as the claim
+   *  goes on. */
+  private linkClaimedIssues(tab: TabState, sessionId: string): void {
+    for (const number of tab.issues ?? []) {
+      logFailure("link a session to its issue", () => linkIssueSession(this.dataRoot, this.at.ref, number, sessionId));
+    }
+    tab.issues = undefined;
   }
 
   /** Where this tab's pasted or dropped content without a path is written (TabPlace.dropsDir); a
@@ -620,6 +688,7 @@ export class TabSessionManager {
         await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
       }
       await this.placeOf(tab).sessionActions()?.remove(sessionId);
+      forgetSessionIssues(this.dataRoot, this.at.ref, sessionId);
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
       settleWithoutProcess(tab);
@@ -851,7 +920,10 @@ export class TabSessionManager {
       this.record({ tabId: tab.tabId, kind: "claimed", sessionId: match.id });
       Object.assign(tab, sessionFieldsOf(match));
       // A detached tab is gone from the UI; claiming its id is all that's needed.
-      changed ||= this.tabs.includes(tab);
+      if (this.tabs.includes(tab)) {
+        this.linkClaimedIssues(tab, match.id);
+        changed = true;
+      }
     }
 
     for (const tab of ownTabs) {

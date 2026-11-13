@@ -1470,6 +1470,50 @@ textarea:focus,
   gap: 8px;
 }
 
+/* A session linked to the issue (`SessionsSection`): its agent's icon, then its title over where it
+   is, and the button taking it off the issue at the end, shown on hover; a row hovered as a list's,
+   reaching a little past the section's edges. */
+.issue-session {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 -2px;
+  padding: 4px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.issue-session:hover {
+  background: var(--tet-list-hoverBackground);
+}
+
+/* Level with the title's first line. */
+.issue-session > .line-icon {
+  margin-top: 1px;
+}
+
+.issue-session-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.issue-session-where {
+  color: var(--tet-descriptionForeground);
+}
+
+/* Centred on the row's two lines, the icon and text staying at the top. */
+.issue-session > .icon-button {
+  visibility: hidden;
+  align-self: center;
+  margin-left: auto;
+}
+
+.issue-session:hover > .icon-button {
+  visibility: visible;
+}
+
 /* A booking of time (`TimeLogs`): its time and day with the button to take it back at the end, then
    who made it and what for. */
 .issue-time-log {
@@ -1540,15 +1584,16 @@ textarea:focus,
 }
 
 /* The frames of a drag: the pane a dragged tab would land in or whose terminal a file or a lane's
-   row is held over, the pane it would add (at even shares, `PANE_BOXES`) and the ARCHIVE lane a tab
-   is held over.
+   row is held over, the pane it would add (at even shares, `PANE_BOXES`), the ARCHIVE lane a tab
+   is held over and the ISSUES row it would be linked to.
    Overlays all: a border would shrink the box its children measure, an inset box-shadow's top edge
    paints behind the opaque tab strip, and panes keep their sizes until the drop, or every pty under
    them refits mid-drag. Above the layers beneath them, which xterm's decorations reach 7 of. The
    veil is VS Code's drop-target wash. */
 .pane.drag-over::after,
 .snap-preview,
-.lane-content.drag-over::after {
+.lane-content.drag-over::after,
+.issue-row.drop-target::after {
   position: absolute;
   border: 1px solid var(--tet-focusBorder);
   background: color-mix(in srgb, var(--tet-focusBorder) 15%, transparent);
@@ -2018,6 +2063,16 @@ textarea:focus,
 }
 
 .lane-content.drag-over::after {
+  content: "";
+  inset: 0;
+}
+
+/* For its `.drop-target` overlay. */
+.issue-row {
+  position: relative;
+}
+
+.issue-row.drop-target::after {
   content: "";
   inset: 0;
 }

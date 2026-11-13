@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { ARCHIVABLE_TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE, PANE_LABELS, PRESET_PANES, TAB_DRAG_TYPE } from "./pane-layout";
+import { ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE, PANE_LABELS, PRESET_PANES, SESSION_TAB_DRAG_TYPE, TAB_DRAG_TYPE } from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
@@ -550,10 +550,10 @@ export const Pane = memo(function Pane({
                 {...drag}
                 onDragStart={(event) => {
                   drag.onDragStart?.(event);
-                  // Only a session to keep: the drop would close any other tab (closeKeepingSessions).
+                  // Only a session to keep or link: archiving any other tab would close it (closeKeepingSessions).
                   const kinded = kindOf(tab);
                   if (kinded.kind === "terminal" && kinded.tab.sessionId !== undefined) {
-                    event.dataTransfer.setData(ARCHIVABLE_TAB_DRAG_TYPE, tab.tabId);
+                    event.dataTransfer.setData(SESSION_TAB_DRAG_TYPE, tab.tabId);
                   }
                   onDragStart(paneId);
                 }}

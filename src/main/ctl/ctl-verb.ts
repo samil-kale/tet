@@ -8,7 +8,7 @@ import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { Issue, IssueChange, IssueDetail, IssueFieldValue, IssueFilter, IssuesLatest } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
-import type { HandoverResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
+import type { HandoverResult, IssueSession, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { IssueTrackerInfo } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
@@ -82,6 +82,9 @@ export function optionalText(args: Record<string, unknown>, name: string): strin
 
 /** The server's lookup of the repository or worktree a verb acts on (resolveCallerRef). */
 export type RefFrom = (args: Record<string, unknown>, caller: ControlRequest["caller"]) => { project: Project; ref: ProjectRef };
+
+/** ctl-verbs.ts's lookup of the tab a verb acts on, checked to exist and to be the caller's to reach. */
+export type OwnedTab = (args: Record<string, unknown>, caller: Caller) => TabRef & { tabs: ControlTerminals; own: boolean };
 
 /** Brings the tab a verb opened or started to the front, unless `--background` leaves it behind. */
 export function bringToFront(deps: Pick<ControlDeps, "showTab">, args: Record<string, unknown>, ref: ProjectRef, tabId: string): void {
@@ -197,6 +200,8 @@ export interface ControlDeps {
   openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
   /** `sandboxOnly` as for `ControlTerminals.createTab`. */
   openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
+  /** issues.ts's: the sessions linked to the project's issue, as their tabs show them. */
+  issueSessions(projectId: string, number: number): IssueSession[];
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
@@ -235,6 +240,10 @@ export interface ControlTerminals {
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */
   renameTab(tabId: string, title: string): Promise<ActionResult>;
+  /** Links the tab's session to the project's issue, or the one it gets; answers what refused it. */
+  linkIssue(tabId: string, number: number): ActionResult;
+  /** Takes the tab's session off the project's issue; answers what refused it. */
+  unlinkIssue(tabId: string, number: number): ActionResult;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
    *  may have closed while its CLI ended the turn. */
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined, side: CallerSide): HookOutcome;

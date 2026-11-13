@@ -92,6 +92,8 @@ interface Calls {
   issuesOpened: [string, number, boolean, boolean][];
   /** `[refKey, number, agentId, sandboxOnly]` per tab opened on an issue. */
   issueAgents: [string, number, string, boolean][];
+  /** `link:tabId:number` or `unlink:tabId:number` per session linked to an issue or taken off one. */
+  issueLinks: string[];
   /** What each issue verb that reads or writes the tracker asked, as `verb:projectId:details`. */
   issueCalls: string[];
   added: string[];
@@ -263,6 +265,15 @@ function terminalsOf(key: string): ControlTerminals {
     renameTab: async (tabId, title) => {
       calls.renamed.push([tabId, title]);
       return refuseRename === undefined ? { ok: true } : { ok: false, error: refuseRename };
+    },
+    // The caller's own tab is a shell, which keeps no session to link.
+    linkIssue: (tabId, number) => {
+      calls.issueLinks.push(`link:${tabId}:${number}`);
+      return tabId === OWN_TAB ? { ok: false, error: "A Shell tab keeps no session" } : { ok: true };
+    },
+    unlinkIssue: (tabId, number) => {
+      calls.issueLinks.push(`unlink:${tabId}:${number}`);
+      return { ok: true };
     },
     hookEvent: (tabId, event, payload, at, side) => {
       calls.hooks.push([tabId, event, payload]);
@@ -505,6 +516,14 @@ function deps(): ControlDeps {
       calls.issueAgents.push([refKeyOf(ref), number, agentId, sandboxOnly]);
       return number === 404 ? { ok: false, error: "404 Not Found" } : { ok: true, tab: tab("tab-issue") };
     },
+    // Issue 7 has a session in the repository on the strip and an archived one in the worktree.
+    issueSessions: (projectId, number) =>
+      projectId === PROJECT.id && number === 7
+        ? [
+            { ref: { projectId }, tabId: "tab-2", agentId: "claude", title: "Fix it", archived: false },
+            { ref: WORKTREE, worktree: "four", tabId: "s-old", agentId: "claude", title: "", archived: true },
+          ]
+        : [],
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
     },
@@ -622,6 +641,7 @@ describe("tet-ctl against the control server", () => {
       issueSources: [],
       issuesOpened: [],
       issueAgents: [],
+      issueLinks: [],
       issueCalls: [],
       added: [],
       removed: [],
@@ -1240,6 +1260,28 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(calls.shown, []);
   });
 
+  it("links a tab's session to an issue and takes it off again", async () => {
+    assert.deepEqual((await tetCtl(["issues-link-session", "7", "tab-2"])).result, { linked: 7, tabId: "tab-2" });
+    assert.deepEqual((await tetCtl(["issues-unlink-session", "7", "tab-2"])).result, { unlinked: 7, tabId: "tab-2" });
+    assert.deepEqual(calls.issueLinks, ["link:tab-2:7", "unlink:tab-2:7"]);
+  });
+
+  it("links no session of a tab that keeps none, an unknown tab or what is no issue number", async () => {
+    assertUsage(await tetCtl(["issues-link-session", "7", OWN_TAB]), /keeps no session/);
+    assertUsage(await tetCtl(["issues-link-session", "7", "tab-9"]), /unknown tab: tab-9/);
+    assertUsage(await tetCtl(["issues-link-session", "four", "tab-2"]), /not an issue number: four/);
+    assert.equal((await tetCtl(["issues-link-session", "7"])).status, EXIT_CODES.usage, "no tab");
+    assert.deepEqual(calls.issueLinks, [`link:${OWN_TAB}:7`]);
+  });
+
+  it("lists the sessions linked to an issue, a worktree's by its name", async () => {
+    assert.deepEqual((await tetCtl(["issues-sessions", "7"])).result, [
+      { tabId: "tab-2", agentId: "claude", title: "Fix it", archived: false },
+      { worktree: "four", tabId: "s-old", agentId: "claude", title: "", archived: true },
+    ]);
+    assert.deepEqual((await tetCtl(["issues-sessions", "8"])).result, []);
+  });
+
   it("reports a saved command that does not exist", async () => {
     assertUsage(await tetCtl(["tabs-run-command", "deploy"]), /no saved command named deploy/);
   });
@@ -1599,6 +1641,7 @@ describe("tet-ctl against the control server", () => {
       ["issues-delete-comment", "note-1", "--confirm"],
       ["issues-open", "7"],
       ["issues-open-in-agent", "7", "--agent", "claude"],
+      ["issues-sessions", "7"],
     ];
     for (const args of [["tabs-list"], ["tabs-close", "tab-2"], ["sbx-get"], ["sbx-set-environment", "MODE=1"], ...issueVerbs]) {
       assertRefused(await tetCtl([...args, "--project", OTHER.id], FROM_SANDBOX), /own project/, args[0]);
@@ -1626,9 +1669,13 @@ describe("tet-ctl against the control server", () => {
       ["tabs-rename", OWN_TAB, "x"],
       ["tabs-output", OWN_TAB],
       ["tabs-hand-over", OWN_TAB, "--agent", "claude"],
+      ["issues-link-session", "7", OWN_TAB],
+      ["issues-unlink-session", "7", OWN_TAB],
     ]) {
       assertUsage(await tetCtl(args, FROM_SANDBOX), /runs on this machine/, args[0]);
     }
+    assert.deepEqual(calls.issueLinks, [], "no host tab's session linked");
+    assert.equal((await tetCtl(["issues-link-session", "7", "tab-2"], FROM_SANDBOX)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
     assert.equal((await tetCtl(["tabs-rename", "tab-2", "x"], FROM_SANDBOX)).status, EXIT_CODES.ok, "tab-2 runs in the sandbox");
     assert.deepEqual((await tetCtl(["tabs-output", "tab-2"], FROM_SANDBOX)).result, { output: "bold line\nnext" });
     assert.equal((await tetCtl(["tabs-hand-over", "tab-2", "--agent", "claude"], FROM_SANDBOX)).status, EXIT_CODES.ok);

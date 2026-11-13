@@ -13,6 +13,7 @@ import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminal
 import { accountEnv, sandboxTetValues } from "../../src/main/terminals/account-env";
 import { PROVIDERS } from "../../src/main/providers";
 import type { TabAccount } from "../../src/main/providers/issues";
+import { issueSessionLinks } from "../../src/main/store/issue-sessions";
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
@@ -94,6 +95,32 @@ describe("a tab's reported session", () => {
       manager.hookEvent(tabId, "session-start", '{"session_id":"s2"}', at + 2000, HOST_CALLER);
       manager.hookEvent(tabId, "stop", '{"session_id":"s1"}', at + 1000, HOST_CALLER);
       assert.equal(manager.inspect().find((tab) => tab.tabId === tabId)?.reportedSessionId, "s2");
+    });
+  });
+});
+
+describe("a tab linked to an issue", () => {
+  /** What a result refused, in its words; "" where it was done. */
+  const refusal = (result: { ok: boolean; error?: string }): string => result.error ?? "";
+
+  it("before it has a session links none yet, and is taken off again before it does", async () => {
+    const changed: string[] = [];
+    await withEmptyPath({ onIssueSessions: (ref) => changed.push(ref.projectId) }, (manager, project) => {
+      const { tabId } = manager.createTab("claude");
+      assert.deepEqual(manager.linkIssue(tabId, 3), { ok: true });
+      assert.deepEqual(manager.unlinkIssue(tabId, 3), { ok: true });
+      const dataRoot = path.dirname(project);
+      assert.deepEqual(issueSessionLinks(dataRoot, "p", 3), [], "nothing written without a session");
+      assert.deepEqual(changed, [], "nothing to show yet");
+    });
+  });
+
+  it("refuses a tab whose agent keeps no session, and one that is not there", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("shell");
+      assert.match(refusal(manager.linkIssue(tabId, 3)), /keeps no session/);
+      assert.match(refusal(manager.linkIssue("new-gone", 3)), /closed/);
+      assert.match(refusal(manager.unlinkIssue("new-gone", 3)), /closed/);
     });
   });
 });

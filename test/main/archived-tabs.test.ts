@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import type { SessionProvider } from "../../src/main/agents/agent";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { archivedIds } from "../../src/main/store/archive";
+import { issueSessionLinks, linkIssueSession } from "../../src/main/store/issue-sessions";
 import { archiveFile } from "../../src/main/store/project-dirs";
 import { ArchivedTabs } from "../../src/main/terminals/archived-tabs";
 import { HostPlace } from "../../src/main/terminals/tab-place";
@@ -234,6 +235,18 @@ describe("an archived tab", () => {
     assert.deepEqual(archived.all(), []);
     assert.deepEqual(archivedIds(dataRoot, REF), []);
     assert.deepEqual(posted.at(-1), []);
+  });
+
+  it("takes its session off the issues it was linked to when deleted", async () => {
+    const { archived, dataRoot, strip } = archive();
+    linkIssueSession(dataRoot, REF, 3, "s1");
+    linkIssueSession(dataRoot, REF, 3, "s2");
+    archived.keep(running(strip), "s1");
+    assert.equal(refused(await archived.delete("t1")), undefined);
+    assert.deepEqual(
+      issueSessionLinks(dataRoot, REF.projectId, 3).map((link) => link.sessionId),
+      ["s2"],
+    );
   });
 
   it("stays archived where its agent refuses to delete the session", async () => {

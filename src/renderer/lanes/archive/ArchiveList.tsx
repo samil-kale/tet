@@ -10,11 +10,11 @@ import { CloseIcon, ReopenIcon } from "../../ui/icons";
 import { Section } from "../../ui/Section";
 import { agentName, useAgents } from "../../ui/use-agents";
 import { reorder, useDragReorder } from "../../ui/drag-reorder";
+import { useDropTarget } from "../../ui/use-drop-target";
 import type { ResolvedRef } from "../../resolved-ref";
 import { MAX_TITLE_LENGTH } from "../../tabs/Pane";
-import { ARCHIVED_TAB_DRAG_TYPE } from "../../tabs/pane-layout";
+import { ARCHIVED_TAB_DRAG_TYPE, SESSION_TAB_DRAG_TYPE } from "../../tabs/pane-layout";
 import { useArchive } from "./use-archive";
-import { useArchiveDrop } from "./use-archive-drop";
 
 interface ArchiveListProps {
   /** The active repository or worktree. */
@@ -49,7 +49,8 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
   const query = filter.trim().toLowerCase();
   const shownTabs = tabs.map((tab, index) => ({ tab, index })).filter(({ tab }) => labelOf(tab).toLowerCase().includes(query));
   const menu = useContextMenu<TabDescriptor>();
-  const archiveDrop = useArchiveDrop(resolved.ref);
+  // A tab with a session dropped on the lane is archived, as the tab menu's Archive does.
+  const archiveDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId) => void window.tet.tabs.archive(resolved.ref, [tabId]));
 
   const reorderTabs = async (next: TabDescriptor[]): Promise<void> => {
     const result = await window.tet.archive.reorder(
@@ -115,7 +116,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
   ];
 
   return (
-    <div className={`lane-content${shown ? "" : " hidden"}${archiveDrop.over ? " drag-over" : ""}`} {...archiveDrop.dropProps}>
+    <div className={`lane-content${shown ? "" : " hidden"}${archiveDrop.over ? " drag-over" : ""}`} {...archiveDrop.dropPropsOf(true)}>
       <Section title="ARCHIVE" count={tabs.length}>
         <div className="filter-list">
           <FilterField placeholder="Filter archive..." value={filter} onChange={setFilter} />

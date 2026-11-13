@@ -21,6 +21,7 @@ import {
   text,
   type ControlDeps,
   type Handler,
+  type OwnedTab,
   type RefFrom,
 } from "./ctl-verb";
 
@@ -111,9 +112,14 @@ function fieldValue(issue: IssueDetail, fieldId: string, args: Record<string, un
 
 /**
  * The issue verbs. The tracker is the project's, so the verbs asking it act on the project of the
- * repository or worktree `refFrom` finds (resolveCallerRef), whichever of them that is.
+ * repository or worktree `refFrom` finds (resolveCallerRef), whichever of them that is; those linking
+ * a session act on a tab there (`ownedTab`).
  */
-export function issueVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `issues-${string}`>, Handler> {
+export function issueVerbs(
+  deps: ControlDeps,
+  refFrom: RefFrom,
+  ownedTab: OwnedTab,
+): Record<Extract<ControlVerbName, `issues-${string}`>, Handler> {
   /** The first positional, an issue's number. */
   const issueNumber = (args: Record<string, unknown>): number => {
     const typed = text(args, "number", "issue number");
@@ -309,6 +315,40 @@ export function issueVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<
       }
       bringToFront(deps, args, ref, opened.tab.tabId);
       return { result: opened.tab };
+    },
+
+    "issues-link-session": (args, caller) => {
+      const number = issueNumber(args);
+      const { tabs, tabId } = ownedTab(args, caller);
+      const linked = tabs.linkIssue(tabId, number);
+      if (!linked.ok) {
+        throw new ControlError("bad_args", linked.error);
+      }
+      return { result: { linked: number, tabId } };
+    },
+
+    "issues-unlink-session": (args, caller) => {
+      const number = issueNumber(args);
+      const { tabs, tabId } = ownedTab(args, caller);
+      const unlinked = tabs.unlinkIssue(tabId, number);
+      if (!unlinked.ok) {
+        throw new ControlError("bad_args", unlinked.error);
+      }
+      return { result: { unlinked: number, tabId } };
+    },
+
+    "issues-sessions": (args, caller) => {
+      const { project } = refFrom(args, caller);
+      const number = issueNumber(args);
+      return {
+        result: deps.issueSessions(project.id, number).map(({ worktree, tabId, agentId, title, archived }) => ({
+          ...(worktree !== undefined && { worktree }),
+          tabId,
+          agentId,
+          title,
+          archived,
+        })),
+      };
     },
   };
 }

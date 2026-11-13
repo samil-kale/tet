@@ -12,9 +12,21 @@ import { ProjectStore } from "../../src/main/store/project-store";
 import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root";
 import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
+import {
+  forgetAllIssueSessions,
+  forgetIssueSessions,
+  forgetIssueSessionsAt,
+  forgetSessionIssues,
+  issueSessionLinks,
+  issuesOfSession,
+  linkIssueSession,
+  pruneIssueSessions,
+  unlinkIssueSession,
+} from "../../src/main/store/issue-sessions";
 import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
 import {
   archiveFile,
+  issueSessionsFile,
   issuesSeenFile,
   newWorktreeKey,
   ownedWorktreeKeys,
@@ -206,6 +218,85 @@ describe("the issues read", () => {
       since: "2026-11-01T00:00:00Z",
       issues: { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" },
     });
+  });
+});
+
+describe("the sessions linked to an issue", () => {
+  const repository = { projectId: "p" };
+  const worktree = { projectId: "p", worktree: "k1" };
+  const sessionsOf = (root: string, number: number): string[] =>
+    issueSessionLinks(root, "p", number).map(({ ref, sessionId }) => `${ref.worktree ?? "repository"}:${sessionId}`);
+
+  it("are kept per issue in the project's folder, oldest link first, a session on several issues", () => {
+    const root = tempDir("tet-issue-sessions-");
+    assert.deepEqual(sessionsOf(root, 3), [], "none before the first");
+    linkIssueSession(root, repository, 3, "s1");
+    linkIssueSession(root, worktree, 3, "s2");
+    linkIssueSession(root, repository, 3, "s1");
+    linkIssueSession(root, repository, 7, "s1");
+    assert.deepEqual(sessionsOf(root, 3), ["repository:s1", "k1:s2"], "a second link of the same is none");
+    assert.deepEqual(issuesOfSession(root, repository, "s1"), [3, 7]);
+    assert.deepEqual(issuesOfSession(root, worktree, "s1"), [], "the same id in another place is another session");
+    assert.deepEqual(issueSessionLinks(root, "q", 3), [], "another project's");
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(issueSessionsFile(root, "p"))),
+      ["issue-sessions.json"],
+      "renamed into place, no temporary file left",
+    );
+
+    unlinkIssueSession(root, repository, 3, "s1");
+    assert.deepEqual(sessionsOf(root, 3), ["k1:s2"]);
+    assert.deepEqual(issuesOfSession(root, repository, "s1"), [7], "its other issue keeps it");
+  });
+
+  it("go with a deleted session, worktree or issue, and leave no file once the last is gone", () => {
+    const root = tempDir("tet-issue-sessions-");
+    linkIssueSession(root, repository, 3, "s1");
+    linkIssueSession(root, repository, 7, "s1");
+    linkIssueSession(root, repository, 7, "s3");
+    linkIssueSession(root, worktree, 3, "s2");
+    forgetSessionIssues(root, repository, "s1");
+    assert.deepEqual([sessionsOf(root, 3), sessionsOf(root, 7)], [["k1:s2"], ["repository:s3"]]);
+    forgetIssueSessionsAt(root, worktree);
+    assert.deepEqual(sessionsOf(root, 3), []);
+    forgetIssueSessions(root, "p", 7);
+    assert.equal(fs.existsSync(issueSessionsFile(root, "p")), false);
+    forgetIssueSessions(root, "p", 7);
+  });
+
+  it("drop a session no agent recognizes anymore, and keep the rest", () => {
+    const root = tempDir("tet-issue-sessions-");
+    linkIssueSession(root, repository, 3, "s1");
+    linkIssueSession(root, repository, 3, "s2");
+    linkIssueSession(root, worktree, 3, "s3");
+    pruneIssueSessions(root, repository, new Set(["s1"]));
+    assert.deepEqual(sessionsOf(root, 3), ["repository:s1", "k1:s3"], "s2 is gone, another ref's untouched");
+  });
+
+  it("are forgotten whole, as when the tracker changes", () => {
+    const root = tempDir("tet-issue-sessions-");
+    linkIssueSession(root, repository, 3, "s1");
+    forgetAllIssueSessions(root, "p");
+    assert.equal(fs.existsSync(issueSessionsFile(root, "p")), false);
+    forgetAllIssueSessions(root, "q");
+  });
+
+  it("are read field by field from a hand-edited file", () => {
+    const root = tempDir("tet-issue-sessions-");
+    fs.mkdirSync(path.dirname(issueSessionsFile(root, "p")), { recursive: true });
+    fs.writeFileSync(issueSessionsFile(root, "p"), "{ nope");
+    assert.deepEqual(sessionsOf(root, 3), []);
+    fs.writeFileSync(
+      issueSessionsFile(root, "p"),
+      JSON.stringify({
+        3: [{ at: "repository", sessionId: "s1" }, { at: 4 }, "junk"],
+        x: [{ at: "repository", sessionId: "s9" }],
+        5: "junk",
+      }),
+    );
+    assert.deepEqual(sessionsOf(root, 3), ["repository:s1"]);
+    linkIssueSession(root, worktree, 3, "s2");
+    assert.deepEqual(sessionsOf(root, 3), ["repository:s1", "k1:s2"]);
   });
 });
 

@@ -528,6 +528,32 @@ const VERBS = [
     sandbox: "ownProject",
   },
   {
+    verb: "issues-link-session",
+    group: "Tabs",
+    usage: "issues-link-session <number> <tab-id> [TARGET]",
+    summary:
+      "Link a tab's session to the project's issue, for the issue's tab to list it, as Open in Agent does; a tab with no session yet links the one it gets. A session may be linked to several issues.",
+    positionals: ["number", "tabId"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-unlink-session",
+    group: "Tabs",
+    usage: "issues-unlink-session <number> <tab-id> [TARGET]",
+    summary: "Take a tab's session off the project's issue.",
+    positionals: ["number", "tabId"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "issues-sessions",
+    group: "Tabs",
+    usage: "issues-sessions <number> [--project <id>]",
+    summary:
+      "The sessions linked to the project's issue, oldest link first, as its tab lists them: worktree (none: the repository), tabId, agentId, title, archived. One whose repository or worktree is not open is left out.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
     verb: "commands-list",
     group: "Tabs",
     usage: "commands-list [--project <id>]",

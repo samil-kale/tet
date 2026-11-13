@@ -96,6 +96,8 @@ const api: TETApi = {
     upload: (projectId, name, dataBase64) => invoke("issues:upload", projectId, name, dataBase64),
     setSource: (projectId, source) => invoke("issues:set-source", projectId, source),
     openInAgent: (ref, number, agentId) => invoke("issues:open-in-agent", ref, number, agentId),
+    sessions: (projectId, number) => invoke("issues:sessions", projectId, number),
+    onSessionsChanged: (listener) => subscribe("issues:sessions-changed", listener),
   },
   env: {
     list: () => invoke("env:list"),
@@ -169,6 +171,8 @@ const api: TETApi = {
     close: (ref, tabIds) => invoke("tabs:close", ref, tabIds),
     archive: (ref, tabIds) => invoke("tabs:archive", ref, tabIds),
     rename: (ref, tabId, title) => invoke("tabs:rename", ref, tabId, title),
+    linkIssue: (ref, tabId, number) => invoke("tabs:link-issue", ref, tabId, number),
+    unlinkIssue: (ref, tabId, number) => invoke("tabs:unlink-issue", ref, tabId, number),
     handOver: (ref, tabId, agentId) => invoke("tabs:handover", ref, tabId, agentId),
     restart: (ref, tabId) => invoke("tabs:restart", ref, tabId),
     openInTerminal: (ref, tabId) => invoke("tabs:open-in-terminal", ref, tabId),

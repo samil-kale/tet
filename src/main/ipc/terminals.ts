@@ -43,6 +43,20 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
       (await tabManagers.get(ref)?.renameTab(tabId, title)) ?? { ok: true },
   );
 
+  // A tab dropped on an ISSUES row.
+  handle(
+    "tabs:link-issue",
+    (_event, ref: ProjectRef, tabId: string, number: number): ActionResult =>
+      tabManagers.get(ref)?.linkIssue(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
+  );
+
+  // A session's row in its issue's tab.
+  handle(
+    "tabs:unlink-issue",
+    (_event, ref: ProjectRef, tabId: string, number: number): ActionResult =>
+      tabManagers.get(ref)?.unlinkIssue(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
+  );
+
   handle(
     "tabs:handover",
     async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> =>

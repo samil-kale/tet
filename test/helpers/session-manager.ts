@@ -63,6 +63,7 @@ export const NO_CALLBACKS: SessionManagerCallbacks = {
   onOutput: () => undefined,
   onStatus: () => undefined,
   onStartupProgress: () => undefined,
+  onIssueSessions: () => undefined,
   onNotice: () => undefined,
 };
 

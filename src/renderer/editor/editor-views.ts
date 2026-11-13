@@ -699,6 +699,11 @@ export function markIssueSeen(tabId: string): void {
   }
 }
 
+/** The project of the issue the tab shows: whose sessions its side column lists. */
+export function issueProjectOf(tabId: string): string | undefined {
+  return issueTab(tabId)?.view.ref.projectId;
+}
+
 /** The tab's issue opened in a new tab of the agent, beside it. */
 export function openTabIssueInAgent(tabId: string, agentId: AgentId): void {
   const tab = issueTab(tabId);

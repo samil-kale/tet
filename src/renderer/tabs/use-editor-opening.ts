@@ -136,7 +136,14 @@ export function useEditorOpening(
     [setEditorTabs],
   );
 
-  useEffect(() => setIssueTabHandler((ref, tabId) => activateTab(refKeyOf(ref), tabId)), [activateTab]);
+  useEffect(
+    () =>
+      setIssueTabHandler((ref, tabId) => {
+        activateRef(refKeyOf(ref));
+        activateTab(refKeyOf(ref), tabId);
+      }),
+    [activateTab, activateRef],
+  );
 
   useEffect(
     () =>

@@ -57,6 +57,9 @@ export interface TabState extends TabDescriptor {
   handoverDir?: string;
   /** Restarted (`restartTab`): the next `running` wipes the old run's output (`clearOutput`). */
   restarted?: true;
+  /** The project's issues its session is linked to once it is claimed (reconcile): a tab opened on
+   *  an issue, or taking over a linked session, names none yet (issue-sessions.ts). */
+  issues?: number[];
 }
 
 /** This tab's hooks named a session it has not claimed: its first, or one it moved on to. */

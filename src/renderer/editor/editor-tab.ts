@@ -1,5 +1,6 @@
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
+import type { IssueSession } from "../../shared/types/terminals";
 import { notify } from "../ui/Notices";
 
 /**
@@ -112,7 +113,8 @@ export function issueGone(projectId: string, number: number): void {
   issueGoneHandler?.(projectId, number);
 }
 
-/** Shows a tab opened on an issue. Set by App. */
+/** Shows a tab opened on an issue or linked to one, its repository or worktree made active. Set by
+ *  App. */
 let issueTabHandler: ((ref: ProjectRef, tabId: string) => void) | undefined;
 
 export function setIssueTabHandler(handler: (ref: ProjectRef, tabId: string) => void): () => void {
@@ -131,6 +133,27 @@ export async function openIssueInAgent(ref: ProjectRef, number: number, agentId:
   if (result.ok) {
     issueTabHandler?.(ref, result.tab.tabId);
   } else {
+    notify("error", result.error);
+  }
+}
+
+/** A session linked to an issue brought to the front, an archived one reopened first; a notice when
+ *  it cannot be. */
+export async function openIssueSession({ ref, tabId, archived }: IssueSession): Promise<void> {
+  if (archived) {
+    const result = await window.tet.archive.reopen(ref, tabId);
+    if (!result.ok) {
+      notify("error", result.error);
+      return;
+    }
+  }
+  issueTabHandler?.(ref, tabId);
+}
+
+/** A session taken off the issue; a notice when it cannot be. */
+export async function unlinkIssueSession({ ref, tabId }: IssueSession, number: number): Promise<void> {
+  const result = await window.tet.tabs.unlinkIssue(ref, tabId, number);
+  if (!result.ok) {
     notify("error", result.error);
   }
 }

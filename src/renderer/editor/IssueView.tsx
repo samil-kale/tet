@@ -2,13 +2,16 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentT
 import type { IssueChange, IssueDetail, IssueField, IssueFieldValue, ProviderId } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
-import { agentEntry } from "../ui/agent-icons";
+import { refKeyOf } from "../../shared/types/project";
+import type { IssueSession } from "../../shared/types/terminals";
+import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed, filled, prompt, singleField } from "../ui/Dialog";
 import { Checkbox, FieldRow, TextAreaField, TextField } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import {
   BoldIcon,
+  CloseIcon,
   CodeIcon,
   GearIcon,
   HeadingIcon,
@@ -31,6 +34,7 @@ import { PickMenu } from "../ui/PickMenu";
 import { SwitchTabs } from "../ui/SwitchTabs";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
+import { openIssueSession, unlinkIssueSession } from "./editor-tab";
 import { sectionsOf, type AskedField } from "./issue-fields";
 import { issueThread, type ThreadEvent } from "./issue-thread";
 import { issueFileLink, issueLink, issueTextHtml } from "./issue-text";
@@ -650,6 +654,32 @@ function SideSection({ title, action, children }: { title: string; action?: Reac
   );
 }
 
+/** The sessions linked to the issue (`IssueSession`), first in the side column: each as its tab, its
+ *  agent's icon and title, over the repository or worktree it is in and whether it is archived. A
+ *  click brings it to the front, reopening an archived one; its button on hover takes it off the
+ *  issue. */
+function SessionsSection({ number, sessions }: { number: number; sessions: IssueSession[] }) {
+  return (
+    <SideSection title="Sessions">
+      {sessions.length === 0 && <span className="issue-none">None</span>}
+      {sessions.map((session) => (
+        <div key={`${refKeyOf(session.ref)}/${session.tabId}`} className="issue-session" onClick={() => void openIssueSession(session)}>
+          <AgentIcon agentId={session.agentId} className="line-icon" />
+          <span className="issue-session-text">
+            <span>{session.title || "New session"}</span>
+            <span className="issue-session-where">
+              {session.worktree ?? "repository"} · {session.archived ? "archived" : "open"}
+            </span>
+          </span>
+          <IconButton title="Unlink from Issue" isolated onClick={() => void unlinkIssueSession(session, number)}>
+            <CloseIcon />
+          </IconButton>
+        </div>
+      ))}
+    </SideSection>
+  );
+}
+
 /** A section of what the issue has of a list, and the list to change it from: every pick is set at
  *  once. What it has stays offered, whether or not the tracker still lists it. `several` for more
  *  than one at a time. */
@@ -1005,11 +1035,11 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
 /**
  * An issue's tab: a bar as a file's, with its actions, title and state, then, as VS Code's GitHub Pull
  * Requests and Issues draws them, the description and comments with a box for one more, and beside
- * them the fields the tracker keeps of it. Only the viewer's own comments offer to change: what is
- * read of the tracker says nothing of who else may, and a description it refuses says so in a notice,
- * a title in the dialog that asked.
+ * them the sessions linked to it and the fields the tracker keeps of it. Only the viewer's own comments
+ * offer to change: what is read of the tracker says nothing of who else may, and a description it
+ * refuses says so in a notice, a title in the dialog that asked.
  */
-export function IssueView({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
+export function IssueView({ issue, sessions, actions }: { issue: IssueDetail; sessions: IssueSession[]; actions: IssueActions }) {
   const writing: TextWriting = {
     rendering: { provider: issue.provider, issueUrl: issue.url, loadImage: actions.loadImage, openFile: actions.openFile },
     upload: issue.uploads ? actions.upload : undefined,
@@ -1060,6 +1090,7 @@ export function IssueView({ issue, actions }: { issue: IssueDetail; actions: Iss
             <CommentBox open={issue.open} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
           </div>
           <div className="issue-side">
+            <SessionsSection number={issue.number} sessions={sessions} />
             {sectionsOf(issue.fields).map((section) =>
               "group" in section ? (
                 <GroupSection key={section.group} title={section.group} fields={section.fields} avatars={issue.avatars} actions={actions} />

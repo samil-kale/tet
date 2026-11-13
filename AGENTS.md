@@ -127,6 +127,7 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   projects/<id>/                   id: the repository's `tet.id`
     archive.json                   the sessions kept archived in the repository and its worktrees
     issues-seen.json               each issue's update as its tab showed it, and since when others count as unread
+    issue-sessions.json            the sessions linked to each issue, in the repository and its worktrees
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
@@ -138,7 +139,8 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
 
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see — never a setting, a token or an sbx value — and
-  `archive.json` and `issues-seen.json`, session ids and issue numbers with timestamps alone.
+  `archive.json`, `issues-seen.json` and `issue-sessions.json`, session ids and issue numbers with
+  timestamps alone.
   Removing a project deletes its folder.
 - **A sandbox sees its agent folder, and nothing else of `~/.tet`** — but the worktree it runs in,
   and a worktree or path handed to it (dropped, or by `worktree-agent-merge`), mounted as a drop.
@@ -160,7 +162,8 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   joins its tab's object, never the top level.
 - **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
   worktree (`SessionProvider`), and keeps only which are archived (`archive.json`, ids alone): such a
-  session shows in the ARCHIVE lane instead of as a tab, until reopened or deleted.
+  session shows in the ARCHIVE lane instead of as a tab, until reopened or deleted. Which are linked to
+  an issue is kept the same way (`issue-sessions.json`), shown by what their tabs say of them.
 - **An agent that cannot fit is not added**: one needing project data on the host, session records
   kept by TET, or a running process to list its sessions. Bending the model for one agent is the
   user's call.
