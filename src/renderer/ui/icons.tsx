@@ -50,7 +50,6 @@ import {
   Plus,
   Power,
   PowerOff,
-  Quote,
   RefreshCw,
   Regex,
   Save,
@@ -63,6 +62,7 @@ import {
   SquareSplitHorizontal,
   SquareTerminal,
   Tag,
+  TextQuote,
   Trash2,
   Undo2,
   User,
@@ -572,9 +572,9 @@ export function ItalicIcon(props: IconProps) {
   return <Lucide {...props} icon={Italic} />;
 }
 
-/** Lucide's `quote` — a text box's quote. */
+/** Lucide's `text-quote` — a text box's quote. */
 export function QuoteIcon(props: IconProps) {
-  return <Lucide {...props} icon={Quote} />;
+  return <Lucide {...props} icon={TextQuote} />;
 }
 
 /** Lucide's `code` — a text box's code. */

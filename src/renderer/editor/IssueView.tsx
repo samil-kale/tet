@@ -291,16 +291,18 @@ export function TextBox({
         {!previewing && (
           <div className="toolbar issue-box-tools">
             {BOX_FORMATS.map(({ format: kind, title, Icon }) => (
-              <IconButton
-                key={kind}
-                title={title}
-                disabled={busy}
-                // The focus stays in the textarea, whose selection is what the format reads.
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => format(kind)}
-              >
-                <Icon />
-              </IconButton>
+              <Fragment key={kind}>
+                <IconButton
+                  title={title}
+                  disabled={busy}
+                  // The focus stays in the textarea, whose selection is what the format reads.
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => format(kind)}
+                >
+                  <Icon />
+                </IconButton>
+                {kind === "link" && <span className="issue-box-separator" />}
+              </Fragment>
             ))}
           </div>
         )}

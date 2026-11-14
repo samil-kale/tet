@@ -1361,6 +1361,15 @@ textarea:focus,
   padding: 0 6px;
 }
 
+/* Between the inline formats and the lists. */
+.issue-box-separator {
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--tet-menu-separatorBackground);
+}
+
 /* The size and look of the textarea it stands in for. */
 .issue-box-preview {
   min-height: var(--text-box-height);
