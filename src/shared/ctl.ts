@@ -532,7 +532,7 @@ const VERBS = [
     group: "Tabs",
     usage: "issues-link-session <number> <tab-id> [TARGET]",
     summary:
-      "Link a tab's session to the project's issue, for the issue's tab to list it, as Open in Agent does; a tab with no session yet links the one it gets. A session may be linked to several issues.",
+      "Link a tab's session to the project's issue, for the issue's tab to list it, as Open in Agent does; a tab with no session yet links the one it gets. A session belongs to one issue: linking it to another takes it off the first (`replaced`).",
     positionals: ["number", "tabId"],
     sandbox: "ownProject",
   },

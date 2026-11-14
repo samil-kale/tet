@@ -9,7 +9,7 @@ import { hasSandbox } from "../agents/agent";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { ActionResult } from "../../shared/types/action";
-import type { HandoverResult, TabDescriptor } from "../../shared/types/terminals";
+import type { HandoverResult, LinkIssueResult, TabDescriptor } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
 import { forgetSessionIssues, issuesOfSession, linkIssueSession, pruneIssueSessions, unlinkIssueSession } from "../store/issue-sessions";
@@ -509,10 +509,11 @@ export class TabSessionManager {
   }
 
   /**
-   * Links the tab's session to the project's issue: at once where it has one, else once it is
-   * claimed (reconcile). Answers what refused it, as renameTab does.
+   * Links the tab's session to the project's issue, taking it off any other: at once where it has
+   * one, else once it is claimed (reconcile). Answers the issues it was taken off, or what refused
+   * it, as renameTab does.
    */
-  linkIssue(tabId: string, number: number): ActionResult {
+  linkIssue(tabId: string, number: number): LinkIssueResult {
     const tab = this.tabOf(tabId);
     if (!tab) {
       return { ok: false, error: "The tab is closed" };
@@ -522,16 +523,18 @@ export class TabSessionManager {
       return { ok: false, error: `A ${agent.displayName} tab keeps no session` };
     }
     if (!tab.sessionId || awaitsClaim(tab)) {
-      tab.issues = [...new Set([...(tab.issues ?? []), number])];
-      return { ok: true };
+      const replaced = (tab.issues ?? []).filter((issue) => issue !== number);
+      tab.issues = [number];
+      return { ok: true, replaced };
     }
+    let replaced: number[];
     try {
-      linkIssueSession(this.dataRoot, this.at.ref, number, tab.sessionId);
+      replaced = linkIssueSession(this.dataRoot, this.at.ref, number, tab.sessionId);
     } catch (error) {
       return { ok: false, error: `Could not link the ${agent.displayName} session: ${errorMessage(error)}` };
     }
     this.callbacks.onIssueSessions(this.at.ref);
-    return { ok: true };
+    return { ok: true, replaced };
   }
 
   /** Takes the session of the tab, on the strip or archived, off the project's issue, and the link it

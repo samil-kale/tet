@@ -324,7 +324,7 @@ export function issueVerbs(
       if (!linked.ok) {
         throw new ControlError("bad_args", linked.error);
       }
-      return { result: { linked: number, tabId } };
+      return { result: { linked: number, tabId, replaced: linked.replaced } };
     },
 
     "issues-unlink-session": (args, caller) => {

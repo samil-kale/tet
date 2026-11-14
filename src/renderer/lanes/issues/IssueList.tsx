@@ -148,7 +148,11 @@ export const IssueList = memo(function IssueList({
   const issueDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId, number: number) => {
     void window.tet.tabs.linkIssue(resolved.ref, tabId, number).then((result) => {
       if (result.ok) {
-        notify("info", `Session linked to Issue #${number}`);
+        const [replaced] = result.replaced;
+        notify(
+          "info",
+          replaced === undefined ? `Session linked to Issue #${number}` : `Session moved from Issue #${replaced} to Issue #${number}`,
+        );
       } else {
         notify("error", result.error);
       }

@@ -269,7 +269,7 @@ function terminalsOf(key: string): ControlTerminals {
     // The caller's own tab is a shell, which keeps no session to link.
     linkIssue: (tabId, number) => {
       calls.issueLinks.push(`link:${tabId}:${number}`);
-      return tabId === OWN_TAB ? { ok: false, error: "A Shell tab keeps no session" } : { ok: true };
+      return tabId === OWN_TAB ? { ok: false, error: "A Shell tab keeps no session" } : { ok: true, replaced: [] };
     },
     unlinkIssue: (tabId, number) => {
       calls.issueLinks.push(`unlink:${tabId}:${number}`);

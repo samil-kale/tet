@@ -79,15 +79,28 @@ export function issuesOfSession(dataRoot: string, ref: ProjectRef, sessionId: st
     .map(([number]) => Number(number));
 }
 
-/** Links the session to the issue, after the ones linked before. Throws when the file cannot be
- *  written, nothing changed. */
-export function linkIssueSession(dataRoot: string, ref: ProjectRef, number: number, sessionId: string): void {
+/** Links the session to the issue, after the ones linked before, and takes it off any other issue:
+ *  a session belongs to one issue. Answers the issues it was taken off. Throws when the file cannot
+ *  be written, nothing changed. */
+export function linkIssueSession(dataRoot: string, ref: ProjectRef, number: number, sessionId: string): number[] {
   const stored = read(dataRoot, ref.projectId);
-  const links = stored[number] ?? [];
-  if (links.some((link) => names(link, ref, sessionId))) {
-    return;
+  const replaced: number[] = [];
+  const kept: Record<string, StoredLink[]> = {};
+  for (const [entry, links] of Object.entries(stored)) {
+    const rest = Number(entry) === number ? links : links.filter((link) => !names(link, ref, sessionId));
+    if (rest.length !== links.length) {
+      replaced.push(Number(entry));
+    }
+    kept[entry] = rest;
   }
-  write(dataRoot, ref.projectId, { ...stored, [number]: [...links, { at: entryKeyOf(ref), sessionId }] });
+  const links = kept[number] ?? [];
+  if (!links.some((link) => names(link, ref, sessionId))) {
+    kept[number] = [...links, { at: entryKeyOf(ref), sessionId }];
+  } else if (replaced.length === 0) {
+    return replaced;
+  }
+  write(dataRoot, ref.projectId, kept);
+  return replaced;
 }
 
 /** Takes the session off the issue. Throws when the file cannot be written, nothing changed. */

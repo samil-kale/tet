@@ -227,15 +227,16 @@ describe("the sessions linked to an issue", () => {
   const sessionsOf = (root: string, number: number): string[] =>
     issueSessionLinks(root, "p", number).map(({ ref, sessionId }) => `${ref.worktree ?? "repository"}:${sessionId}`);
 
-  it("are kept per issue in the project's folder, oldest link first, a session on several issues", () => {
+  it("are kept per issue in the project's folder, oldest link first, a session on one issue", () => {
     const root = tempDir("tet-issue-sessions-");
     assert.deepEqual(sessionsOf(root, 3), [], "none before the first");
-    linkIssueSession(root, repository, 3, "s1");
+    assert.deepEqual(linkIssueSession(root, repository, 3, "s1"), []);
     linkIssueSession(root, worktree, 3, "s2");
-    linkIssueSession(root, repository, 3, "s1");
-    linkIssueSession(root, repository, 7, "s1");
-    assert.deepEqual(sessionsOf(root, 3), ["repository:s1", "k1:s2"], "a second link of the same is none");
-    assert.deepEqual(issuesOfSession(root, repository, "s1"), [3, 7]);
+    assert.deepEqual(linkIssueSession(root, repository, 3, "s1"), [], "a second link of the same is none");
+    assert.deepEqual(sessionsOf(root, 3), ["repository:s1", "k1:s2"]);
+    assert.deepEqual(linkIssueSession(root, repository, 7, "s1"), [3], "linking to another issue takes it off the first");
+    assert.deepEqual(sessionsOf(root, 3), ["k1:s2"]);
+    assert.deepEqual(issuesOfSession(root, repository, "s1"), [7]);
     assert.deepEqual(issuesOfSession(root, worktree, "s1"), [], "the same id in another place is another session");
     assert.deepEqual(issueSessionLinks(root, "q", 3), [], "another project's");
     assert.deepEqual(
@@ -244,14 +245,13 @@ describe("the sessions linked to an issue", () => {
       "renamed into place, no temporary file left",
     );
 
-    unlinkIssueSession(root, repository, 3, "s1");
-    assert.deepEqual(sessionsOf(root, 3), ["k1:s2"]);
-    assert.deepEqual(issuesOfSession(root, repository, "s1"), [7], "its other issue keeps it");
+    unlinkIssueSession(root, repository, 7, "s1");
+    assert.deepEqual(sessionsOf(root, 7), []);
+    assert.deepEqual(issuesOfSession(root, repository, "s1"), []);
   });
 
   it("go with a deleted session, worktree or issue, and leave no file once the last is gone", () => {
     const root = tempDir("tet-issue-sessions-");
-    linkIssueSession(root, repository, 3, "s1");
     linkIssueSession(root, repository, 7, "s1");
     linkIssueSession(root, repository, 7, "s3");
     linkIssueSession(root, worktree, 3, "s2");

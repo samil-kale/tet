@@ -8,7 +8,7 @@ import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type { Issue, IssueChange, IssueDetail, IssueFieldValue, IssueFilter, IssuesLatest } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
-import type { HandoverResult, IssueSession, TabDescriptor, TabRef } from "../../shared/types/terminals";
+import type { HandoverResult, IssueSession, LinkIssueResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { IssueTrackerInfo } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
@@ -241,7 +241,7 @@ export interface ControlTerminals {
   /** The agent's refusal, or nothing when it went through. */
   renameTab(tabId: string, title: string): Promise<ActionResult>;
   /** Links the tab's session to the project's issue, or the one it gets; answers what refused it. */
-  linkIssue(tabId: string, number: number): ActionResult;
+  linkIssue(tabId: string, number: number): LinkIssueResult;
   /** Takes the tab's session off the project's issue; answers what refused it. */
   unlinkIssue(tabId: string, number: number): ActionResult;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it

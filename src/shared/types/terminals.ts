@@ -5,6 +5,9 @@ import type { ProjectRef } from "./project";
 /** The tab taking over a session, or why there is none. */
 export type HandoverResult = (ActionDone & { tab: TabDescriptor }) | ActionRefused;
 
+/** A session linked to an issue, with the issues it was taken off (`replaced`), or why it was not. */
+export type LinkIssueResult = (ActionDone & { replaced: number[] }) | ActionRefused;
+
 /** A tab, addressed by its repository or worktree and its id. */
 export interface TabRef {
   ref: ProjectRef;

@@ -48,7 +48,7 @@ import type {
   SbxStoredLocal,
 } from "./types/sbx";
 import type { AppSettings, SettingsEdits } from "./types/settings";
-import type { HandoverResult, IssueSessionsResult, TabDescriptor, TabRef, TerminalOutput, TerminalStatus } from "./types/terminals";
+import type { HandoverResult, IssueSessionsResult, LinkIssueResult, TabDescriptor, TabRef, TerminalOutput, TerminalStatus } from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
@@ -357,9 +357,9 @@ export interface TETApi {
     archive: (ref: ProjectRef, tabIds: string[]) => Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
     rename: (ref: ProjectRef, tabId: string, title: string) => Promise<ActionResult>;
-    /** Links the tab's session to the project's issue, as `tet-ctl issues-link-session` does;
-     *  answers what refused it. */
-    linkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<ActionResult>;
+    /** Links the tab's session to the project's issue, as `tet-ctl issues-link-session` does, taking
+     *  it off any other (`replaced`); answers what refused it. */
+    linkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<LinkIssueResult>;
     /** Takes the session of the tab, on the strip or archived, off the project's issue; answers what
      *  refused it. */
     unlinkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<ActionResult>;

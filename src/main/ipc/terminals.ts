@@ -3,7 +3,7 @@ import type { AgentId } from "../../shared/types/agents";
 import type { EditorReport, NoticeReport } from "../../shared/types/app";
 import type { ActionResult } from "../../shared/types/action";
 import type { ProjectRef } from "../../shared/types/project";
-import type { HandoverResult, TabDescriptor } from "../../shared/types/terminals";
+import type { HandoverResult, LinkIssueResult, TabDescriptor } from "../../shared/types/terminals";
 import { notOpenMessage } from "../store/resolved-ref";
 import type { IpcDeps } from "./deps";
 
@@ -46,7 +46,7 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
   // A tab dropped on an ISSUES row.
   handle(
     "tabs:link-issue",
-    (_event, ref: ProjectRef, tabId: string, number: number): ActionResult =>
+    (_event, ref: ProjectRef, tabId: string, number: number): LinkIssueResult =>
       tabManagers.get(ref)?.linkIssue(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
   );
 
