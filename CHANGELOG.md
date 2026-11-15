@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.25.2 (2026-11-15)
+
+- **One session per issue.** An issue has one session and a session one issue: once linked, the
+  issue's row, tab and bar offer Open Session, and the session's tab Open Issue. Linking a session
+  to another issue moves it there.
+- **Fixes.** The issue text box's quote button shows a text quote, set apart from the inline
+  formats.
+
 ## 0.25.1 (2026-11-13)
 
 - **Sessions linked to issues.** A tab's session can be linked to an issue, and the issue's tab
