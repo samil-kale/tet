@@ -27,7 +27,7 @@ import {
   latestIssues,
   listIssues,
   markIssuesSeen,
-  openIssueInAgent,
+  sendIssueToAgent,
   readIssue,
   setIssueField,
   unreadIssues,
@@ -244,7 +244,7 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, ter
     send("tabs:status", { ref, tabId, status });
   },
   onStartupProgress: (ref, show) => send("tabs:startup-progress", { ref, show }),
-  onIssueSessions: (ref) => send("issues:sessions-changed", ref.projectId),
+  onIssueSessions: (projectId) => send("issues:sessions-changed", projectId),
   onNotice: notice,
 });
 
@@ -366,8 +366,8 @@ async function startControl(): Promise<void> {
         uploadIssueFile: (projectId, name, bytes) => uploadIssueFile(issueDeps, projectId, name, bytes),
         openIssue: (ref, number, keep, background) =>
           send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
-        openIssueInAgent: (ref, number, agentId, sandboxOnly) => openIssueInAgent(issueDeps, ref, number, agentId, sandboxOnly),
-        issueSessions: (projectId, number) => issueSessions(issueDeps, projectId, number),
+        sendIssueToAgent: (ref, number, agentId, sandboxOnly) => sendIssueToAgent(issueDeps, ref, number, agentId, sandboxOnly),
+        issueSession: (projectId, number) => issueSessions(issueDeps, projectId)[number],
         shutdown,
         records,
         projectRefPath: (ref) => {

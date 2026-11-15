@@ -95,8 +95,8 @@ const api: TETApi = {
     deleteComment: (projectId, id) => invoke("issues:delete-comment", projectId, id),
     upload: (projectId, name, dataBase64) => invoke("issues:upload", projectId, name, dataBase64),
     setSource: (projectId, source) => invoke("issues:set-source", projectId, source),
-    openInAgent: (ref, number, agentId) => invoke("issues:open-in-agent", ref, number, agentId),
-    sessions: (projectId, number) => invoke("issues:sessions", projectId, number),
+    sendToAgent: (ref, number, agentId) => invoke("issues:send-to-agent", ref, number, agentId),
+    sessions: (projectId) => invoke("issues:sessions", projectId),
     onSessionsChanged: (listener) => subscribe("issues:sessions-changed", listener),
   },
   env: {

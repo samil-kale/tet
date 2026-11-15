@@ -48,7 +48,15 @@ import type {
   SbxStoredLocal,
 } from "./types/sbx";
 import type { AppSettings, SettingsEdits } from "./types/settings";
-import type { HandoverResult, IssueSessionsResult, LinkIssueResult, TabDescriptor, TabRef, TerminalOutput, TerminalStatus } from "./types/terminals";
+import type {
+  HandoverResult,
+  IssueSessionsResult,
+  LinkIssueResult,
+  TabDescriptor,
+  TabRef,
+  TerminalOutput,
+  TerminalStatus,
+} from "./types/terminals";
 
 export type Unsubscribe = () => void;
 
@@ -203,10 +211,10 @@ export interface TETApi {
      *  refused it, for the question that is still up to show it at its field. */
     setSource: (projectId: string, source: string) => Promise<ActionResult>;
     /** A new tab of the agent in the repository or worktree, read from the tracker, the issue its
-     *  first prompt; the tab shows it as a file. */
-    openInAgent: (ref: ProjectRef, number: number, agentId: AgentId) => Promise<HandoverResult>;
-    /** The sessions linked to the issue, as their tabs show them (`IssueSession`). */
-    sessions: (projectId: string, number: number) => Promise<IssueSessionsResult>;
+     *  first prompt; the tab shows it as a file. Refused for an issue that has a session. */
+    sendToAgent: (ref: ProjectRef, number: number, agentId: AgentId) => Promise<HandoverResult>;
+    /** The session linked to each of the project's issues, as its tab shows it (`IssueSession`). */
+    sessions: (projectId: string) => Promise<IssueSessionsResult>;
     /** A session of the project was linked to an issue or taken off one by hand; the tabs' own changes
      *  come as `tabs.onTabs` and `archive.onChanged`. */
     onSessionsChanged: (listener: (projectId: string) => void) => Unsubscribe;
@@ -357,8 +365,9 @@ export interface TETApi {
     archive: (ref: ProjectRef, tabIds: string[]) => Promise<void>;
     /** Answers what the agent refused, for the question still up to show it at its field. */
     rename: (ref: ProjectRef, tabId: string, title: string) => Promise<ActionResult>;
-    /** Links the tab's session to the project's issue, as `tet-ctl issues-link-session` does, taking
-     *  it off any other (`replaced`); answers what refused it. */
+    /** Links the tab's session to the project's issue in place of its own, as `tet-ctl
+     *  issues-link-session` does, taking it off any other; answers what that changed, or what refused
+     *  it. */
     linkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<LinkIssueResult>;
     /** Takes the session of the tab, on the strip or archived, off the project's issue; answers what
      *  refused it. */

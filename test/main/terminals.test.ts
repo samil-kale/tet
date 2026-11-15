@@ -13,14 +13,15 @@ import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminal
 import { accountEnv, sandboxTetValues } from "../../src/main/terminals/account-env";
 import { PROVIDERS } from "../../src/main/providers";
 import type { TabAccount } from "../../src/main/providers/issues";
-import { issueSessionLinks } from "../../src/main/store/issue-sessions";
+import { issueSessionLinks, linkIssueSession } from "../../src/main/store/issue-sessions";
+import { IssueLinks } from "../../src/main/terminals/issue-links";
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { CONTROL_ENV, CONTROL_START_SIZE, type HookEvent } from "../../src/shared/ctl";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir, withEnv } from "../helpers";
-import { FakeProcess, NO_CALLBACKS, NO_TERMINAL_ENV, withEmptyPath } from "../helpers/session-manager";
+import { FakeProcess, NO_CALLBACKS, NO_TERMINAL_ENV, noIssueLinks, withEmptyPath } from "../helpers/session-manager";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 import { notificationFor } from "../../src/main/terminals/turn-reports";
 import { answersQuestion, type TabState } from "../../src/main/terminals/tab-state";
@@ -44,6 +45,7 @@ describe("a turn's notification", () => {
       settings,
       new SbxLocalStore(root, async () => ({})),
       new HostSetups(root, settings, () => undefined),
+      noIssueLinks(root),
       NO_TERMINAL_ENV,
       { ...NO_CALLBACKS, onTabs: (_projectId, tabs) => (pushed = tabs) },
     );
@@ -103,15 +105,36 @@ describe("a tab linked to an issue", () => {
   /** What a result refused, in its words; "" where it was done. */
   const refusal = (result: { ok: boolean; error?: string }): string => result.error ?? "";
 
-  it("before it has a session links none yet, and is taken off again before it does", async () => {
+  it("before it has a session links none yet, shows the issue, and is taken off again before it does", async () => {
     const changed: string[] = [];
-    await withEmptyPath({ onIssueSessions: (ref) => changed.push(ref.projectId) }, (manager, project) => {
-      const { tabId } = manager.createTab("claude");
-      assert.deepEqual(manager.linkIssue(tabId, 3), { ok: true });
-      assert.deepEqual(manager.unlinkIssue(tabId, 3), { ok: true });
-      const dataRoot = path.dirname(project);
-      assert.deepEqual(issueSessionLinks(dataRoot, "p", 3), [], "nothing written without a session");
-      assert.deepEqual(changed, [], "nothing to show yet");
+    const pushed: (number | undefined)[] = [];
+    await withEmptyPath(
+      { onIssueSessions: (projectId) => changed.push(projectId), onTabs: (_ref, tabs) => pushed.push(tabs[0]?.issue) },
+      (manager, project) => {
+        const { tabId } = manager.createTab("claude");
+        assert.deepEqual(manager.linkIssue(tabId, 3), { ok: true });
+        assert.equal(manager.snapshot()[0].issue, 3, "its descriptor shows the issue meanwhile");
+        assert.deepEqual(manager.unlinkIssue(tabId, 3), { ok: true });
+        assert.equal(manager.snapshot()[0].issue, undefined);
+        assert.deepEqual(issueSessionLinks(path.dirname(project), "p"), {}, "nothing written without a session");
+        assert.deepEqual(changed, ["p", "p"]);
+        assert.deepEqual(pushed, [undefined, 3, undefined], "each change sent the tabs again");
+      },
+    );
+  });
+
+  it("before it has a session takes the issue from another tab waiting for it, and moves off its own", async () => {
+    await withEmptyPath({}, (manager) => {
+      const first = manager.createTab("claude").tabId;
+      const second = manager.createTab("claude").tabId;
+      manager.linkIssue(first, 3);
+      assert.deepEqual(manager.linkIssue(second, 3), { ok: true, replacedSession: true });
+      assert.deepEqual(manager.linkIssue(second, 7), { ok: true, movedFrom: 3 });
+      assert.deepEqual(
+        manager.snapshot().map((tab) => tab.issue),
+        [undefined, 7],
+        "the first gave up the issue",
+      );
     });
   });
 
@@ -122,6 +145,45 @@ describe("a tab linked to an issue", () => {
       assert.match(refusal(manager.linkIssue("new-gone", 3)), /closed/);
       assert.match(refusal(manager.unlinkIssue("new-gone", 3)), /closed/);
     });
+  });
+});
+
+describe("the links of a project's issues", () => {
+  const repository = { projectId: "p" };
+  const worktree = { projectId: "p", worktree: "k1" };
+  const tab = (tabId: string, sessionId?: string): TabState => ({
+    tabId,
+    agentId: "claude",
+    title: "",
+    status: "ready",
+    ...(sessionId !== undefined && { sessionId }),
+  });
+
+  it("let one tab wait for an issue across the repository and its worktrees, until it claims its session", () => {
+    const root = tempDir("tet-issue-links-");
+    const open = new Set(["repository:a", "k1:b"]);
+    const changed: string[] = [];
+    const links = new IssueLinks(
+      root,
+      ({ ref, tabId }) => open.has(`${ref.worktree ?? "repository"}:${tabId}`),
+      (projectId) => changed.push(projectId),
+    );
+    links.link(repository, "a", undefined, 3);
+    assert.deepEqual(links.link(worktree, "b", undefined, 3), { replacedSession: true }, "the repository's tab gives the issue up");
+    assert.deepEqual([...links.issuesOf(repository, [tab("a")])], []);
+    assert.deepEqual([...links.issuesOf(worktree, [tab("b")])], [["b", 3]]);
+
+    linkIssueSession(root, repository, 5, "s1");
+    assert.deepEqual(links.link(worktree, "b", undefined, 5), { movedFrom: 3, replacedSession: true });
+    assert.deepEqual([...links.issuesOf(repository, [tab("c", "s1")])], [], "the waiting tab stands in for the issue's session");
+    links.claimed(worktree, "b", "s2");
+    assert.equal(issueSessionLinks(root, "p")[5]?.sessionId, "s2", "the claimed session takes the issue's place");
+    assert.deepEqual([...links.issuesOf(worktree, [tab("b", "s2")])], [["b", 5]]);
+
+    links.link(worktree, "b", undefined, 8);
+    open.delete("k1:b");
+    assert.deepEqual([...links.issuesOf(worktree, [])], [], "a closed tab waits no more");
+    assert.deepEqual(changed, ["p", "p", "p", "p", "p"]);
   });
 });
 

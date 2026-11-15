@@ -57,9 +57,6 @@ export interface TabState extends TabDescriptor {
   handoverDir?: string;
   /** Restarted (`restartTab`): the next `running` wipes the old run's output (`clearOutput`). */
   restarted?: true;
-  /** The project's issues its session is linked to once it is claimed (reconcile): a tab opened on
-   *  an issue, or taking over a linked session, names none yet (issue-sessions.ts). */
-  issues?: number[];
 }
 
 /** This tab's hooks named a session it has not claimed: its first, or one it moved on to. */
@@ -158,7 +155,7 @@ export function answersQuestion(data: string): boolean {
 }
 
 /** `starting` comes from the caller's `indicators`, `sandboxed` from its `placeOf`. */
-export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean): TabDescriptor {
+export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean, issue: number | undefined): TabDescriptor {
   const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, inTurn, waitingAt, command, openedInTerminal } = tab;
   return {
     tabId,
@@ -176,6 +173,7 @@ export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolea
     savedCommand: isSavedCommandTab(tab),
     command,
     openedInTerminal,
+    issue,
   };
 }
 

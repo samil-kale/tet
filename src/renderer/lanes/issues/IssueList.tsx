@@ -1,11 +1,12 @@
 import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
-import { DEFAULT_ISSUE_FILTER, isUnread, issueFileName, type Issue } from "../../../shared/types/providers";
-import { issueGone, openIssueInAgent, type OpenEditor } from "../../editor/editor-tab";
+import { DEFAULT_ISSUE_FILTER, isUnread, type Issue } from "../../../shared/types/providers";
+import { issueGone, openIssueTab, sendIssueToAgent, type OpenEditor } from "../../editor/editor-tab";
 import { loadProjectIssueImage, reloadIssueTabs } from "../../editor/editor-views";
 import { keepAllIssuesSeen, keepIssueSeen, keepIssueUnread, useIssuesSeen } from "../../editor/issue-seen";
 import { newIssueUrl } from "../../editor/issue-text";
-import { askIssueTitle, confirmDeleteIssue, dayOf, issueAgentEntries, Person, TextBox, type TextRendering } from "../../editor/IssueView";
+import { issueSessionsOf, useWatchedIssueSessions } from "../../editor/use-issue-sessions";
+import { askIssueTitle, confirmDeleteIssue, dayOf, issueSessionEntry, Person, TextBox, type TextRendering } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
@@ -145,14 +146,15 @@ export const IssueList = memo(function IssueList({
   const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
+  // Read by the row's menu alone, when it opens.
+  useWatchedIssueSessions(projectId);
   const issueDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId, number: number) => {
     void window.tet.tabs.linkIssue(resolved.ref, tabId, number).then((result) => {
       if (result.ok) {
-        const [replaced] = result.replaced;
-        notify(
-          "info",
-          replaced === undefined ? `Session linked to Issue #${number}` : `Session moved from Issue #${replaced} to Issue #${number}`,
-        );
+        const { movedFrom, replacedSession } = result;
+        const linked =
+          movedFrom === undefined ? `Session linked to Issue #${number}` : `Session moved from Issue #${movedFrom} to Issue #${number}`;
+        notify("info", replacedSession ? `${linked} in place of its previous one` : linked);
       } else {
         notify("error", result.error);
       }
@@ -198,7 +200,7 @@ export const IssueList = memo(function IssueList({
       },
     });
     if (created !== undefined) {
-      onOpenFile(resolved.ref, issueFileName(created), { issue: created, keep: true });
+      openIssueTab(onOpenFile, resolved.ref, created, { keep: true });
     }
   };
 
@@ -232,10 +234,11 @@ export const IssueList = memo(function IssueList({
   const menuEntries = (issue: Issue): ContextMenuEntry[] => [
     { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
     SEPARATOR,
-    {
-      label: "Open in Agent",
-      entries: issueAgentEntries(agents, (agentId) => void openIssueInAgent(resolved.ref, issue.number, agentId)),
-    },
+    issueSessionEntry(
+      issueSessionsOf(projectId)[issue.number],
+      agents,
+      (agentId) => void sendIssueToAgent(resolved.ref, issue.number, agentId),
+    ),
     SEPARATOR,
     unread(issue)
       ? { label: "Mark as Read", run: () => keepIssueSeen(projectId, issue.number, issue.updatedAt) }
@@ -291,7 +294,7 @@ export const IssueList = memo(function IssueList({
                 unread={unread(issue)}
                 dropTarget={issueDrop.over === issue.number}
                 dropProps={issueDrop.dropPropsOf(issue.number)}
-                onOpen={(how) => onOpenFile(resolved.ref, issueFileName(issue.number), { ...how, issue: issue.number })}
+                onOpen={(how) => openIssueTab(onOpenFile, resolved.ref, issue.number, how)}
                 onMenu={(event) => menu.open(event, issue)}
               />
             ))}

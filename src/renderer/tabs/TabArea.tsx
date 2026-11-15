@@ -2,8 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
 import type { AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import { issueFileName } from "../../shared/types/providers";
-import type { OpenEditor } from "../editor/editor-tab";
+import { openIssueTab, type OpenEditor } from "../editor/editor-tab";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import { disposeTerminal } from "./terminal-views";
@@ -279,9 +278,17 @@ export const TabArea = memo(function TabArea({
     (paneId: PaneId, number: number) => {
       const transition = dragTargetRef.current?.transition ?? null;
       onDragEnd();
-      showIn(paneId, onOpenEditor(resolved.ref, issueFileName(number), { issue: number, keep: true, background: true }), transition);
+      showIn(paneId, openIssueTab(onOpenEditor, resolved.ref, number, { keep: true, background: true }), transition);
     },
     [onDragEnd, onOpenEditor, resolved.ref, showIn],
+  );
+
+  /** A tab's "Open Issue": the issue its session is linked to, in the preview tab. */
+  const onOpenIssue = useCallback(
+    (number: number) => {
+      openIssueTab(onOpenEditor, resolved.ref, number);
+    },
+    [onOpenEditor, resolved.ref],
   );
 
   // Each pane's tabs in the strip's order, identity kept when unchanged. Keyed on the fields
@@ -352,6 +359,7 @@ export const TabArea = memo(function TabArea({
       onMoveTab={onMoveTab}
       onDropArchived={onDropArchived}
       onDropIssue={onDropIssue}
+      onOpenIssue={onOpenIssue}
     />
   );
 

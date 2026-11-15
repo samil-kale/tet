@@ -127,7 +127,7 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   projects/<id>/                   id: the repository's `tet.id`
     archive.json                   the sessions kept archived in the repository and its worktrees
     issues-seen.json               each issue's update as its tab showed it, and since when others count as unread
-    issue-sessions.json            the sessions linked to each issue, in the repository and its worktrees
+    issue-sessions.json            the session linked to each issue, in the repository or a worktree
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
@@ -283,8 +283,9 @@ per-line decision is for an agent.
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
   new kind of row in one, comes with an *offer* to add its drag — the user decides. An ISSUES or
   ARCHIVE row opens instead: the pane or snap zone it drops on takes its tab. An issue reaches an
-  agent through "Open in Agent", in its row's menu and its tab's bar: a new tab of the agent picked,
-  the issue its first prompt.
+  agent through "Send to Agent", in its row's menu, its tab's menu and bar: a new tab of the agent
+  picked, the issue its first prompt. An issue has one session, a session one issue: once it has
+  one, those places offer "Open Session", and the session's tab "Open Issue".
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.

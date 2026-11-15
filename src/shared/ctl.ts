@@ -519,11 +519,11 @@ const VERBS = [
     sandbox: "ownProject",
   },
   {
-    verb: "issues-open-in-agent",
+    verb: "issues-send-to-agent",
     group: "Tabs",
-    usage: "issues-open-in-agent <number> --agent <id> [--background] [TARGET]",
+    usage: "issues-send-to-agent <number> --agent <id> [--background] [TARGET]",
     summary:
-      "Open a tab of an agent (see agents-list) on the project's issue, read from the tracker as the ISSUES section's Open in Agent does, and bring it to the front.",
+      "Open a tab of an agent (see agents-list) on the project's issue, read from the tracker as the ISSUES section's Send to Agent does, and bring it to the front. Refused for an issue that has a session (issues-session): an issue has one.",
     positionals: ["number"],
     sandbox: "ownProject",
   },
@@ -532,7 +532,7 @@ const VERBS = [
     group: "Tabs",
     usage: "issues-link-session <number> <tab-id> [TARGET]",
     summary:
-      "Link a tab's session to the project's issue, for the issue's tab to list it, as Open in Agent does; a tab with no session yet links the one it gets. A session belongs to one issue: linking it to another takes it off the first (`replaced`).",
+      "Link a tab's session to the project's issue, for the issue's tab to show it, as Send to Agent does; a tab with no session yet links the one it gets. An issue has one session and a session one issue: the link takes the place of the issue's session (`replacedSession`) and takes the session off the issue it was on (`movedFrom`).",
     positionals: ["number", "tabId"],
     sandbox: "ownProject",
   },
@@ -545,11 +545,11 @@ const VERBS = [
     sandbox: "ownProject",
   },
   {
-    verb: "issues-sessions",
+    verb: "issues-session",
     group: "Tabs",
-    usage: "issues-sessions <number> [--project <id>]",
+    usage: "issues-session <number> [--project <id>]",
     summary:
-      "The sessions linked to the project's issue, oldest link first, as its tab lists them: worktree (none: the repository), tabId, agentId, title, archived. One whose repository or worktree is not open is left out.",
+      "The session linked to the project's issue, as its tab shows it: worktree (none: the repository), tabId, agentId, title, archived; null for none, or one whose repository or worktree is not open.",
     positionals: ["number"],
     sandbox: "ownProject",
   },

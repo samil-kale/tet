@@ -2,7 +2,6 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentT
 import type { IssueChange, IssueDetail, IssueField, IssueFieldValue, ProviderId } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
-import { refKeyOf } from "../../shared/types/project";
 import type { IssueSession } from "../../shared/types/terminals";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
@@ -140,7 +139,7 @@ export interface IssueActions {
   editField: (fieldId: string, value: IssueFieldValue) => Promise<string | undefined>;
   /** The Markdown that shows the file, once it is up. */
   upload: (file: File) => Promise<string | undefined>;
-  openInAgent: (agentId: AgentId) => void;
+  sendToAgent: (agentId: AgentId) => void;
 }
 
 /** What an issue's text is rendered with. */
@@ -603,14 +602,27 @@ export function issueAgentEntries(agents: readonly AgentInfo[], open: (agentId: 
   return agents.filter((agent) => agent.takesPrompt).map((agent) => agentEntry(agent, () => open(agent.id)));
 }
 
-/** The tab's bar, as a file's: what can be done to the issue, its state, then what names it. */
-function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueActions }) {
+/** A menu's entry for an issue: its session opened where it has one, as an issue has one, else the
+ *  agents to send it to. */
+export function issueSessionEntry(
+  session: IssueSession | undefined,
+  agents: readonly AgentInfo[],
+  send: (agentId: AgentId) => void,
+): ContextMenuEntry {
+  return session
+    ? { label: "Open Session", run: () => void openIssueSession(session) }
+    : { label: "Send to Agent", entries: issueAgentEntries(agents, send) };
+}
+
+/** The tab's bar, as a file's: what can be done to the issue, its state, then what names it. An issue
+ *  with a session offers to open it, by its agent's icon, in place of sending it to an agent. */
+function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: IssueSession | undefined; actions: IssueActions }) {
   const agents = useAgents();
   // As a pane's new-tab menu: a button's padding off it, and beside the bar, whose stacking it slides
   // out from behind.
   const agentMenu = useAnchoredMenu((rect) => ({ x: rect.left - 6, y: rect.bottom + BAR_MENU_DROP }), true);
   const agentEntries = (): ContextMenuEntry[] => {
-    const offered = issueAgentEntries(agents, actions.openInAgent);
+    const offered = issueAgentEntries(agents, actions.sendToAgent);
     return offered.length > 0 ? offered : [{ label: "No agent installed" }];
   };
   return (
@@ -620,9 +632,15 @@ function IssueBar({ issue, actions }: { issue: IssueDetail; actions: IssueAction
           <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
             <RemoteIcon />
           </IconButton>
-          <button type="button" className="icon-button" title="Open in Agent" onMouseDown={agentMenu.open}>
-            <SquareSparklesIcon />
-          </button>
+          {session ? (
+            <IconButton title="Open Session" onClick={() => void openIssueSession(session)}>
+              <AgentIcon agentId={session.agentId} className="line-icon" />
+            </IconButton>
+          ) : (
+            <button type="button" className="icon-button" title="Send to Agent" onMouseDown={agentMenu.open}>
+              <SquareSparklesIcon />
+            </button>
+          )}
           <IconButton title="Rename Issue..." onClick={() => void askIssueTitle(issue.title, actions.rename)}>
             <PencilIcon />
           </IconButton>
@@ -656,16 +674,17 @@ function SideSection({ title, action, children }: { title: string; action?: Reac
   );
 }
 
-/** The sessions linked to the issue (`IssueSession`), first in the side column: each as its tab, its
+/** The session linked to the issue (`IssueSession`), first in the side column: as its tab, its
  *  agent's icon and title, over the repository or worktree it is in and whether it is archived. A
  *  click brings it to the front, reopening an archived one; its button on hover takes it off the
  *  issue. */
-function SessionsSection({ number, sessions }: { number: number; sessions: IssueSession[] }) {
+function SessionSection({ number, session }: { number: number; session: IssueSession | undefined }) {
   return (
-    <SideSection title="Sessions">
-      {sessions.length === 0 && <span className="issue-none">None</span>}
-      {sessions.map((session) => (
-        <div key={`${refKeyOf(session.ref)}/${session.tabId}`} className="issue-session" onClick={() => void openIssueSession(session)}>
+    <SideSection title="Session">
+      {session === undefined ? (
+        <span className="issue-none">None</span>
+      ) : (
+        <div className="issue-session" onClick={() => void openIssueSession(session)}>
           <AgentIcon agentId={session.agentId} className="line-icon" />
           <span className="issue-session-text">
             <span>{session.title || "New session"}</span>
@@ -677,7 +696,7 @@ function SessionsSection({ number, sessions }: { number: number; sessions: Issue
             <CloseIcon />
           </IconButton>
         </div>
-      ))}
+      )}
     </SideSection>
   );
 }
@@ -1037,11 +1056,11 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
 /**
  * An issue's tab: a bar as a file's, with its actions, title and state, then, as VS Code's GitHub Pull
  * Requests and Issues draws them, the description and comments with a box for one more, and beside
- * them the sessions linked to it and the fields the tracker keeps of it. Only the viewer's own comments
+ * them the session linked to it and the fields the tracker keeps of it. Only the viewer's own comments
  * offer to change: what is read of the tracker says nothing of who else may, and a description it
  * refuses says so in a notice, a title in the dialog that asked.
  */
-export function IssueView({ issue, sessions, actions }: { issue: IssueDetail; sessions: IssueSession[]; actions: IssueActions }) {
+export function IssueView({ issue, session, actions }: { issue: IssueDetail; session: IssueSession | undefined; actions: IssueActions }) {
   const writing: TextWriting = {
     rendering: { provider: issue.provider, issueUrl: issue.url, loadImage: actions.loadImage, openFile: actions.openFile },
     upload: issue.uploads ? actions.upload : undefined,
@@ -1050,7 +1069,7 @@ export function IssueView({ issue, sessions, actions }: { issue: IssueDetail; se
   const { viewer } = issue;
   return (
     <>
-      <IssueBar issue={issue} actions={actions} />
+      <IssueBar issue={issue} session={session} actions={actions} />
       <div className="issue-view">
         <div className="issue-columns">
           <div className="issue-thread">
@@ -1092,7 +1111,7 @@ export function IssueView({ issue, sessions, actions }: { issue: IssueDetail; se
             <CommentBox open={issue.open} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
           </div>
           <div className="issue-side">
-            <SessionsSection number={issue.number} sessions={sessions} />
+            <SessionSection number={issue.number} session={session} />
             {sectionsOf(issue.fields).map((section) =>
               "group" in section ? (
                 <GroupSection key={section.group} title={section.group} fields={section.fields} avatars={issue.avatars} actions={actions} />

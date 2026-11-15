@@ -14,7 +14,7 @@ import {
   type IssueFilterOptions,
   type IssuesLatest,
 } from "../shared/types/providers";
-import type { HandoverResult, IssueSession } from "../shared/types/terminals";
+import type { HandoverResult, IssueSession, TabDescriptor } from "../shared/types/terminals";
 import { MAX_EDIT_BYTES } from "./git/explorer-read";
 import {
   issueMarkdown,
@@ -26,7 +26,7 @@ import {
   type IssueRepository,
   type IssueTrackerInfo,
 } from "./providers/issues";
-import { forgetAllIssueSessions, forgetIssueSessions, issueSessionLinks } from "./store/issue-sessions";
+import { forgetAllIssueSessions, forgetIssueSession } from "./store/issue-sessions";
 import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
 import type { ProjectStore } from "./store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
@@ -213,7 +213,7 @@ export async function deleteIssue(
 ): Promise<void> {
   await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
   forgetIssueSeen(deps.dataRoot, projectId, number);
-  forgetIssueSessions(deps.dataRoot, projectId, number);
+  forgetIssueSession(deps.dataRoot, projectId, number);
 }
 
 /** Uploads a file to the tracker, answered by what shows it in an issue's text. */
@@ -236,11 +236,12 @@ function issuePrompt(text: string, number: number): string {
 
 /**
  * A new tab of the agent in the repository or worktree, read from the tracker, the issue its first
- * prompt; the tab shows it as a file, and its session is linked to the issue once it has one. The
- * caller checks that the agent takes a prompt. `sandboxOnly`: opened from a sandbox, so it never runs
- * on this machine (`TabSessionManager.createTab`).
+ * prompt; the tab shows it as a file, and its session is linked to the issue once it has one. Refused
+ * for an issue that has a session: it has one. The caller checks that the agent takes a prompt.
+ * `sandboxOnly`: opened from a sandbox, so it never runs on this machine
+ * (`TabSessionManager.createTab`).
  */
-export async function openIssueInAgent(
+export async function sendIssueToAgent(
   deps: Pick<IssueDeps, "accounts" | "repositories" | "settings" | "store" | "tabManagers">,
   ref: ProjectRef,
   number: number,
@@ -251,6 +252,9 @@ export async function openIssueInAgent(
     const manager = deps.tabManagers.get(ref);
     if (!manager) {
       throw new Error(notOpenMessage(deps.store, ref));
+    }
+    if (number in issueSessions(deps, ref.projectId)) {
+      throw new Error(`Issue #${number} has a session already`);
     }
     const issue = await onTracker(deps.accounts, issueRepository(deps, ref.projectId), (provider, tracker) =>
       provider.readIssue(tracker, number),
@@ -270,36 +274,29 @@ export async function openIssueInAgent(
 }
 
 /**
- * The sessions linked to the project's issue that its repository or worktrees list, on the strip or
- * archived, oldest link first: what is shown of them is read off their tabs, so a rename or archive
- * shows at once. One no tab lists (a worktree closed, a session gone) is left out.
+ * The session linked to each of the project's issues, as its repository or worktrees show it, on the
+ * strip or archived: read off its tab's descriptor (`TabDescriptor.issue`), so a rename or archive
+ * shows at once, and a tab waiting to link its session stands in for it (issue-links.ts). One no tab
+ * shows (a worktree closed, a session gone) is left out.
  */
-export function issueSessions(
-  deps: Pick<IssueDeps, "dataRoot" | "store" | "tabManagers">,
-  projectId: string,
-  number: number,
-): IssueSession[] {
+export function issueSessions(deps: Pick<IssueDeps, "store" | "tabManagers">, projectId: string): Record<number, IssueSession> {
   const project = deps.store.get(projectId);
   if (!project) {
     throw new Error(PROJECT_NOT_FOUND);
   }
-  return issueSessionLinks(deps.dataRoot, projectId, number).flatMap(({ ref, sessionId }) => {
-    const manager = deps.tabManagers.get(ref);
-    const open = manager?.snapshot().find((tab) => tab.sessionId === sessionId);
-    const tab = open ?? manager?.archivedSnapshot().find((candidate) => candidate.sessionId === sessionId);
-    if (!tab) {
-      return [];
-    }
+  const sessions: Record<number, IssueSession> = {};
+  for (const manager of deps.tabManagers.forProject(projectId)) {
+    const { ref } = manager.at;
     const worktree = worktreeOf(project, ref);
-    return [
-      {
-        ref,
-        ...(worktree && { worktree: worktreeName(worktree) }),
-        tabId: tab.tabId,
-        agentId: tab.agentId,
-        title: tab.title,
-        archived: open === undefined,
-      },
-    ];
-  });
+    const shown = (tabs: TabDescriptor[], archived: boolean): void => {
+      for (const { issue, tabId, agentId, title } of tabs) {
+        if (issue !== undefined) {
+          sessions[issue] = { ref, ...(worktree && { worktree: worktreeName(worktree) }), tabId, agentId, title, archived };
+        }
+      }
+    };
+    shown(manager.snapshot(), false);
+    shown(manager.archivedSnapshot(), true);
+  }
+  return sessions;
 }

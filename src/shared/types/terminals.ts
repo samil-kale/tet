@@ -5,8 +5,15 @@ import type { ProjectRef } from "./project";
 /** The tab taking over a session, or why there is none. */
 export type HandoverResult = (ActionDone & { tab: TabDescriptor }) | ActionRefused;
 
-/** A session linked to an issue, with the issues it was taken off (`replaced`), or why it was not. */
-export type LinkIssueResult = (ActionDone & { replaced: number[] }) | ActionRefused;
+/** What linking a session to an issue changed beside the link: the issue it was taken off
+ *  (`movedFrom`), and whether the issue's own session gave way (`replacedSession`). */
+export interface IssueLinkChange {
+  movedFrom?: number;
+  replacedSession?: true;
+}
+
+/** A session linked to an issue, with what that changed, or why it was not. */
+export type LinkIssueResult = (ActionDone & IssueLinkChange) | ActionRefused;
 
 /** A tab, addressed by its repository or worktree and its id. */
 export interface TabRef {
@@ -60,9 +67,11 @@ export interface TabDescriptor {
   /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
    *  run lands where the last lay. The line, since `name` may be missing. */
   command?: string;
+  /** The project's issue its session is linked to, or that it links once it has one (issue-links.ts). */
+  issue?: number;
 }
 
-/** A session linked to an issue, as the issue's tab lists it: its tab in the repository or a
+/** The session linked to an issue, as the issue's tab shows it: its tab in the repository or a
  *  worktree, on the strip or archived. */
 export interface IssueSession {
   ref: ProjectRef;
@@ -75,8 +84,9 @@ export interface IssueSession {
   archived: boolean;
 }
 
+/** The session linked to each of the project's issues that has one. */
 export interface IssueSessionsResult {
-  sessions?: IssueSession[];
+  sessions?: Record<number, IssueSession>;
   error?: string;
 }
 

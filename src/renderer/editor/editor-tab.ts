@@ -1,5 +1,6 @@
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
+import { issueFileName } from "../../shared/types/providers";
 import type { IssueSession } from "../../shared/types/terminals";
 import { notify } from "../ui/Notices";
 
@@ -68,6 +69,17 @@ export interface OpenEditor {
   issue?: number;
 }
 
+/** Opens the project's issue in an editor tab as `open` opens a file: by its `issueFileName`, the
+ *  issue it shows. Answers what `open` does. */
+export function openIssueTab<T>(
+  open: (ref: ProjectRef, path: string, how: OpenEditor) => T,
+  ref: ProjectRef,
+  number: number,
+  how: Omit<OpenEditor, "issue"> = {},
+): T {
+  return open(ref, issueFileName(number), { ...how, issue: number });
+}
+
 /** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
 export type MarkdownPreviewMode = "off" | "side" | "only";
 
@@ -128,8 +140,8 @@ export function setIssueTabHandler(handler: (ref: ProjectRef, tabId: string) => 
 
 /** A new tab of the agent in the repository or worktree, shown, the issue its first prompt; a notice
  *  when it cannot be read. */
-export async function openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId): Promise<void> {
-  const result = await window.tet.issues.openInAgent(ref, number, agentId);
+export async function sendIssueToAgent(ref: ProjectRef, number: number, agentId: AgentId): Promise<void> {
+  const result = await window.tet.issues.sendToAgent(ref, number, agentId);
   if (result.ok) {
     issueTabHandler?.(ref, result.tab.tabId);
   } else {

@@ -4,7 +4,7 @@ import type { ActionResult } from "../../shared/types/action";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { archivedIds, pruneArchived, setArchived, setArchivedOrder } from "../store/archive";
-import { forgetSessionIssues } from "../store/issue-sessions";
+import { forgetSessionIssue } from "../store/issue-sessions";
 import { logError } from "../util/error-log";
 import type { TabPlace } from "./tab-place";
 import { awaitsClaim, settleWithoutProcess, type TabState } from "./tab-state";
@@ -15,7 +15,8 @@ export interface ArchiveTarget {
   agentOf(tab: TabState): AgentDefinition;
   /** Where the tab's session lives (TabSessionManager.placeOf). */
   placeOf(tab: TabState): TabPlace;
-  descriptorOf(tab: TabState): TabDescriptor;
+  /** The tabs' descriptors, in their order (TabSessionManager.descriptorsOf). */
+  descriptorsOf(tabs: readonly TabState[]): TabDescriptor[];
   /** Session ids whose removal is in flight — reconcile must not re-claim them. The session
    *  manager's own, shared. */
   deletingSessionIds: Set<string>;
@@ -68,7 +69,7 @@ export class ArchivedTabs {
   snapshot(): TabDescriptor[] {
     const order = archivedIds(this.dataRoot, this.ref);
     const position = (sessionId: string | undefined): number => (sessionId === undefined ? -1 : order.indexOf(sessionId));
-    return this.tabs.map((tab) => this.target.descriptorOf(tab)).sort((a, b) => position(a.sessionId) - position(b.sessionId));
+    return this.target.descriptorsOf(this.tabs).sort((a, b) => position(a.sessionId) - position(b.sessionId));
   }
 
   post(): void {
@@ -197,7 +198,7 @@ export class ArchivedTabs {
       }
       await this.target.placeOf(tab).sessionActions()?.remove(sessionId);
       setArchived(this.dataRoot, this.ref, sessionId, false);
-      forgetSessionIssues(this.dataRoot, this.ref, sessionId);
+      forgetSessionIssue(this.dataRoot, this.ref, sessionId);
     } catch (error) {
       return { ok: false, error: `Could not delete the ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}` };
     } finally {

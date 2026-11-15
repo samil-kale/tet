@@ -77,7 +77,7 @@ function archive(options: { filesOf?: (id: string) => string[]; refusal?: string
   const archived = new ArchivedTabs(dataRoot, REF, {
     agentOf: () => agent,
     placeOf: () => place,
-    descriptorOf: (tab) => toDescriptor(tab, false, false),
+    descriptorsOf: (tabs) => tabs.map((tab) => toDescriptor(tab, false, false, undefined)),
     deletingSessionIds,
     takeOffStrip: (tab) => {
       calls.push(`off-strip:${tab.tabId}`);
@@ -237,14 +237,14 @@ describe("an archived tab", () => {
     assert.deepEqual(posted.at(-1), []);
   });
 
-  it("takes its session off the issues it was linked to when deleted", async () => {
+  it("takes its session off the issue it was linked to when deleted", async () => {
     const { archived, dataRoot, strip } = archive();
     linkIssueSession(dataRoot, REF, 3, "s1");
-    linkIssueSession(dataRoot, REF, 3, "s2");
+    linkIssueSession(dataRoot, REF, 4, "s2");
     archived.keep(running(strip), "s1");
     assert.equal(refused(await archived.delete("t1")), undefined);
     assert.deepEqual(
-      issueSessionLinks(dataRoot, REF.projectId, 3).map((link) => link.sessionId),
+      Object.values(issueSessionLinks(dataRoot, REF.projectId)).map((link) => link.sessionId),
       ["s2"],
     );
   });

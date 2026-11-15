@@ -13,7 +13,7 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   archive.json                   the sessions kept archived, per repository and worktree (archive.ts)
  *   issues-seen.json               what the issue tabs showed, and since when others count unread (issues-seen.ts)
- *   issue-sessions.json            the sessions linked to each issue, per repository and worktree (issue-sessions.ts)
+ *   issue-sessions.json            the session linked to each issue, in the repository or a worktree (issue-sessions.ts)
  *   drops/                     pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
@@ -51,7 +51,7 @@ export function issuesSeenFile(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "issues-seen.json");
 }
 
-/** The sessions linked to the project's issues (issue-sessions.ts). */
+/** The session linked to each of the project's issues (issue-sessions.ts). */
 export function issueSessionsFile(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "issue-sessions.json");
 }

@@ -3,8 +3,10 @@ import * as path from "node:path";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
 import { HostSetups } from "../../src/main/terminals/host-setup";
+import { IssueLinks } from "../../src/main/terminals/issue-links";
 import type { spawnAgentProcess, TerminalEnv } from "../../src/main/terminals/pty";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
+import type { SessionRegistryCallbacks } from "../../src/main/terminals/session-registry";
 import { tempDir, withEnvAsync } from ".";
 
 /** A process that leaves when asked to quit or killed, or with `hang` only when the test says so. */
@@ -63,16 +65,24 @@ export const NO_CALLBACKS: SessionManagerCallbacks = {
   onOutput: () => undefined,
   onStatus: () => undefined,
   onStartupProgress: () => undefined,
-  onIssueSessions: () => undefined,
   onNotice: () => undefined,
 };
+
+/** Links for a manager whose tabs no test links. */
+export function noIssueLinks(dataRoot: string): IssueLinks {
+  return new IssueLinks(
+    dataRoot,
+    () => false,
+    () => undefined,
+  );
+}
 
 /**
  * Runs `use` on project "p" in a folder of its own with PATH empty: no agent's version check
  * passes and sbx is missing, so nothing is set up, listed or spawned. Everything goes after.
  */
 export async function withEmptyPath(
-  callbacks: Partial<SessionManagerCallbacks>,
+  callbacks: Partial<SessionRegistryCallbacks>,
   use: (manager: TabSessionManager, project: string) => Promise<void> | void,
   spawnProcess?: typeof spawnAgentProcess,
 ): Promise<void> {
@@ -81,12 +91,22 @@ export async function withEmptyPath(
   fs.mkdirSync(project);
   const settings = new SettingsStore(root);
   await withEnvAsync({ PATH: path.join(root, "empty") }, async () => {
-    const manager = new TabSessionManager(
+    // The one repository's links, as the registry keeps them.
+    const issueLinks = new IssueLinks(
+      root,
+      ({ tabId }) => manager.hasTab(tabId),
+      (projectId) => {
+        manager.repostTabs();
+        callbacks.onIssueSessions?.(projectId);
+      },
+    );
+    const manager: TabSessionManager = new TabSessionManager(
       { ref: { projectId: "p" }, path: project, name: () => "repo" },
       root,
       settings,
       new SbxLocalStore(root, async () => ({})),
       new HostSetups(root, settings, () => undefined),
+      issueLinks,
       NO_TERMINAL_ENV,
       {
         ...NO_CALLBACKS,

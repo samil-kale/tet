@@ -199,9 +199,9 @@ export interface ControlDeps {
    *  it to the front unless `background`. */
   openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
   /** `sandboxOnly` as for `ControlTerminals.createTab`. */
-  openIssueInAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
-  /** issues.ts's: the sessions linked to the project's issue, as their tabs show them. */
-  issueSessions(projectId: string, number: number): IssueSession[];
+  sendIssueToAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
+  /** issues.ts's: the session linked to the project's issue, as its tab shows it. */
+  issueSession(projectId: string, number: number): IssueSession | undefined;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */

@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProjectRef } from "../../shared/types/project";
-import { isRecord, logFailure, readJson, writeJson } from "../util/json-file";
+import type { IssueLinkChange } from "../../shared/types/terminals";
+import { hasStrings, isRecord, logFailure, readJson, writeJson } from "../util/json-file";
 import { entryKeyOf, issueSessionsFile, refOfEntryKey } from "./project-dirs";
 
 /** A session linked to an issue: where it lives (`entryKeyOf`), and its id. */
@@ -10,97 +11,93 @@ interface StoredLink {
   sessionId: string;
 }
 
+function isLink(value: unknown): value is StoredLink {
+  return hasStrings(value, "at", "sessionId");
+}
+
 /** Whether the link names this session of the repository or worktree. */
 function names(link: StoredLink, ref: ProjectRef, sessionId: string): boolean {
   return link.at === entryKeyOf(ref) && link.sessionId === sessionId;
 }
 
-/** The file as stored: the links per issue number, anything else dropped. */
-function read(dataRoot: string, projectId: string): Record<string, StoredLink[]> {
+/** The file as stored: the link per issue number, anything else dropped. */
+function read(dataRoot: string, projectId: string): Record<string, StoredLink> {
   const parsed = readJson(issueSessionsFile(dataRoot, projectId));
-  const stored: Record<string, StoredLink[]> = {};
+  const stored: Record<string, StoredLink> = {};
   if (isRecord(parsed)) {
-    for (const [number, links] of Object.entries(parsed)) {
-      if (/^\d+$/.test(number) && Array.isArray(links)) {
-        stored[number] = links.filter(
-          (link): link is StoredLink => isRecord(link) && typeof link.at === "string" && typeof link.sessionId === "string",
-        );
+    for (const [number, entry] of Object.entries(parsed)) {
+      // A list per issue, as kept while an issue could have several sessions: its latest link
+      // stands. Read until 2027-02-15.
+      const link = Array.isArray(entry) ? entry.filter(isLink).at(-1) : isLink(entry) ? entry : undefined;
+      if (/^\d+$/.test(number) && link) {
+        stored[number] = { at: link.at, sessionId: link.sessionId };
       }
     }
   }
   return stored;
 }
 
-/** Writes the file without its empty entries, and removes it once none is left. Throws when it
- *  cannot. */
-function write(dataRoot: string, projectId: string, stored: Record<string, StoredLink[]>): void {
+/** Writes the file, and removes it once no link is left. Throws when it cannot. */
+function write(dataRoot: string, projectId: string, stored: Record<string, StoredLink>): void {
   const file = issueSessionsFile(dataRoot, projectId);
-  const kept = Object.fromEntries(Object.entries(stored).filter(([, links]) => links.length > 0));
-  if (Object.keys(kept).length === 0) {
+  if (Object.keys(stored).length === 0) {
     fs.rmSync(file, { force: true });
     return;
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  writeJson(file, kept);
+  writeJson(file, stored);
 }
 
 /** Every link kept but those `drop` names; written only when one goes. */
 function dropLinks(dataRoot: string, projectId: string, drop: (number: string, link: StoredLink) => boolean): void {
   const stored = read(dataRoot, projectId);
-  let dropped = false;
-  const kept = Object.fromEntries(
-    Object.entries(stored).map(([number, links]) => {
-      const rest = links.filter((link) => !drop(number, link));
-      dropped ||= rest.length !== links.length;
-      return [number, rest];
-    }),
-  );
-  if (dropped) {
+  const kept = Object.fromEntries(Object.entries(stored).filter(([number, link]) => !drop(number, link)));
+  if (Object.keys(kept).length !== Object.keys(stored).length) {
     write(dataRoot, projectId, kept);
   }
 }
 
 /**
- * The sessions linked to the project's issue, oldest link first: kept by the agent, shown in the
- * issue's tab by what the repository's or worktree's tabs say of them. One file per project, since
- * its repository and worktrees share the tracker.
+ * The session linked to each of the project's issues: kept by the agent, shown in the issue's tab
+ * by what the repository's or worktree's tabs say of it. One file per project, since its repository
+ * and worktrees share the tracker.
  */
-export function issueSessionLinks(dataRoot: string, projectId: string, number: number): { ref: ProjectRef; sessionId: string }[] {
-  return (read(dataRoot, projectId)[number] ?? []).map((link) => ({
-    ref: refOfEntryKey(projectId, link.at),
-    sessionId: link.sessionId,
-  }));
+export function issueSessionLinks(dataRoot: string, projectId: string): Record<number, { ref: ProjectRef; sessionId: string }> {
+  return Object.fromEntries(
+    Object.entries(read(dataRoot, projectId)).map(([number, link]) => [
+      Number(number),
+      { ref: refOfEntryKey(projectId, link.at), sessionId: link.sessionId },
+    ]),
+  );
 }
 
-/** The issues the session is linked to. */
-export function issuesOfSession(dataRoot: string, ref: ProjectRef, sessionId: string): number[] {
-  return Object.entries(read(dataRoot, ref.projectId))
-    .filter(([, links]) => links.some((link) => names(link, ref, sessionId)))
-    .map(([number]) => Number(number));
+/** The issue the session is linked to. */
+export function issueOfSession(dataRoot: string, ref: ProjectRef, sessionId: string): number | undefined {
+  const entry = Object.entries(read(dataRoot, ref.projectId)).find(([, link]) => names(link, ref, sessionId));
+  return entry && Number(entry[0]);
 }
 
-/** Links the session to the issue, after the ones linked before, and takes it off any other issue:
- *  a session belongs to one issue. Answers the issues it was taken off. Throws when the file cannot
- *  be written, nothing changed. */
-export function linkIssueSession(dataRoot: string, ref: ProjectRef, number: number, sessionId: string): number[] {
-  const stored = read(dataRoot, ref.projectId);
-  const replaced: number[] = [];
-  const kept: Record<string, StoredLink[]> = {};
-  for (const [entry, links] of Object.entries(stored)) {
-    const rest = Number(entry) === number ? links : links.filter((link) => !names(link, ref, sessionId));
-    if (rest.length !== links.length) {
-      replaced.push(Number(entry));
+/** Links the session to the issue in place of the issue's own, and takes it off any other issue: an
+ *  issue has one session, a session one issue. Answers what that changed beside the link. Throws
+ *  when the file cannot be written, nothing changed. */
+export function linkIssueSession(dataRoot: string, ref: ProjectRef, number: number, sessionId: string): IssueLinkChange {
+  const kept: Record<string, StoredLink> = {};
+  let movedFrom: number | undefined;
+  for (const [entry, link] of Object.entries(read(dataRoot, ref.projectId))) {
+    if (Number(entry) !== number && names(link, ref, sessionId)) {
+      movedFrom = Number(entry);
+    } else {
+      kept[entry] = link;
     }
-    kept[entry] = rest;
   }
-  const links = kept[number] ?? [];
-  if (!links.some((link) => names(link, ref, sessionId))) {
-    kept[number] = [...links, { at: entryKeyOf(ref), sessionId }];
-  } else if (replaced.length === 0) {
-    return replaced;
+  const current = kept[number];
+  if (current && names(current, ref, sessionId) && movedFrom === undefined) {
+    return {};
   }
+  const replacing = current !== undefined && !names(current, ref, sessionId);
+  kept[number] = { at: entryKeyOf(ref), sessionId };
   write(dataRoot, ref.projectId, kept);
-  return replaced;
+  return { ...(movedFrom !== undefined && { movedFrom }), ...(replacing && { replacedSession: true }) };
 }
 
 /** Takes the session off the issue. Throws when the file cannot be written, nothing changed. */
@@ -108,9 +105,9 @@ export function unlinkIssueSession(dataRoot: string, ref: ProjectRef, number: nu
   dropLinks(dataRoot, ref.projectId, (entry, link) => Number(entry) === number && names(link, ref, sessionId));
 }
 
-/** A deleted session's links. Left behind they are only unused, so a failure is logged. */
-export function forgetSessionIssues(dataRoot: string, ref: ProjectRef, sessionId: string): void {
-  logFailure("forget the issues of a deleted session", () =>
+/** A deleted session's link. Left behind it is only unused, so a failure is logged. */
+export function forgetSessionIssue(dataRoot: string, ref: ProjectRef, sessionId: string): void {
+  logFailure("forget the issue of a deleted session", () =>
     dropLinks(dataRoot, ref.projectId, (_number, link) => names(link, ref, sessionId)),
   );
 }
@@ -121,9 +118,9 @@ export function forgetIssueSessionsAt(dataRoot: string, ref: ProjectRef): void {
   logFailure("forget the issue links of a worktree", () => dropLinks(dataRoot, ref.projectId, (_number, link) => link.at === key));
 }
 
-/** A deleted issue's links. Left behind they are only unused, so a failure is logged. */
-export function forgetIssueSessions(dataRoot: string, projectId: string, number: number): void {
-  logFailure("forget the sessions of a deleted issue", () => dropLinks(dataRoot, projectId, (entry) => Number(entry) === number));
+/** A deleted issue's link. Left behind it is only unused, so a failure is logged. */
+export function forgetIssueSession(dataRoot: string, projectId: string, number: number): void {
+  logFailure("forget the session of a deleted issue", () => dropLinks(dataRoot, projectId, (entry) => Number(entry) === number));
 }
 
 /** The whole file: its issue numbers name other issues once the source changed. Left behind it would

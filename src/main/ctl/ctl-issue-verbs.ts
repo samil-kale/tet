@@ -302,14 +302,14 @@ export function issueVerbs(
       return { result: { opened: number, keep } };
     },
 
-    "issues-open-in-agent": async (args, caller) => {
+    "issues-send-to-agent": async (args, caller) => {
       const { ref } = refFrom(args, caller);
       const number = issueNumber(args);
       const agent = openableAgent(deps, args, caller);
       if (!agent.terminal) {
         throw new ControlError("bad_args", `a ${agent.id} tab takes no issue`);
       }
-      const opened = await deps.openIssueInAgent(ref, number, agent.id, caller.side.holdsTabs);
+      const opened = await deps.sendIssueToAgent(ref, number, agent.id, caller.side.holdsTabs);
       if (!opened.ok) {
         throw new ControlError("bad_args", opened.error);
       }
@@ -324,7 +324,8 @@ export function issueVerbs(
       if (!linked.ok) {
         throw new ControlError("bad_args", linked.error);
       }
-      return { result: { linked: number, tabId, replaced: linked.replaced } };
+      // Undefined fields are left out of the JSON answer.
+      return { result: { linked: number, tabId, movedFrom: linked.movedFrom, replacedSession: linked.replacedSession } };
     },
 
     "issues-unlink-session": (args, caller) => {
@@ -337,18 +338,14 @@ export function issueVerbs(
       return { result: { unlinked: number, tabId } };
     },
 
-    "issues-sessions": (args, caller) => {
+    "issues-session": (args, caller) => {
       const { project } = refFrom(args, caller);
-      const number = issueNumber(args);
-      return {
-        result: deps.issueSessions(project.id, number).map(({ worktree, tabId, agentId, title, archived }) => ({
-          ...(worktree !== undefined && { worktree }),
-          tabId,
-          agentId,
-          title,
-          archived,
-        })),
-      };
+      const session = deps.issueSession(project.id, issueNumber(args));
+      if (!session) {
+        return { result: null };
+      }
+      const { worktree, tabId, agentId, title, archived } = session;
+      return { result: { ...(worktree !== undefined && { worktree }), tabId, agentId, title, archived } };
     },
   };
 }

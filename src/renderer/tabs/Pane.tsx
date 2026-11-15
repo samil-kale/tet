@@ -13,7 +13,9 @@ import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput, resetMouseModes } from "./terminal-views";
 import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
-import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
+import { getEditorSnapshot, keepEditor, sendTabIssueToAgent } from "../editor/editor-views";
+import { issueSessionEntry } from "../editor/IssueView";
+import { issueSessionsOf, useWatchedIssueSessions } from "../editor/use-issue-sessions";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon, FilesIcon, IssuesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
@@ -75,6 +77,8 @@ interface PaneProps {
   onDropArchived: (paneId: PaneId, tabId: string) => void;
   /** An issue's row dropped on a pane: its tab opened there (`TabArea`). */
   onDropIssue: (paneId: PaneId, number: number) => void;
+  /** The issue a tab's session is linked to, opened (`TabArea`). */
+  onOpenIssue: (number: number) => void;
 }
 
 /** A drag's pointer over a pane. `noZone`: it frames the pane alone, whatever snap zone lies under
@@ -127,8 +131,11 @@ export const Pane = memo(function Pane({
   onMoveTab,
   onDropArchived,
   onDropIssue,
+  onOpenIssue,
 }: PaneProps) {
   const newTab = useRef<HTMLDivElement>(null);
+  // Read by a tab's menu alone, when it opens.
+  useWatchedIssueSessions(at.projectId);
   // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
   const plusMenu = useAnchoredMenu(
     (rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + BAR_MENU_DROP }),
@@ -360,7 +367,8 @@ export const Pane = memo(function Pane({
    * Restart, Clear for the shell, the close actions, rename and archive and hand-over for an agent
    * with sessions, the mounts for a sandboxed tab, and the moves to sibling panes. A close with
    * nothing to close is disabled. An editor tab gets "Keep Open" while a preview, the close actions
-   * and the moves.
+   * and the moves. First the other side of an issue's link: an issue's tab opens its session, or
+   * sends the issue to an agent while it has none; a session's tab opens its issue.
    */
   const tabMenuEntries = (tabId: string): ContextMenuEntry[] => {
     const ids = tabs.map((tab) => tab.tabId);
@@ -388,9 +396,16 @@ export const Pane = memo(function Pane({
       closeAction("Close All", ids),
     ];
     const kinded = menuTab && kindOf(menuTab);
+    const linkEntries = (entry: ContextMenuEntry | undefined): ContextMenuEntry[] => (entry ? [entry, SEPARATOR] : []);
     if (kinded?.kind !== "terminal") {
+      const issue = kinded?.kind === "editor" ? kinded.tab.issue : undefined;
       return kinded?.kind === "editor"
         ? [
+            ...linkEntries(
+              issue === undefined
+                ? undefined
+                : issueSessionEntry(issueSessionsOf(at.projectId)[issue], agents, (agentId) => sendTabIssueToAgent(tabId, agentId)),
+            ),
             // VS Code's wording; a kept tab has nothing to keep.
             { label: "Keep Open", run: getEditorSnapshot(tabId).preview ? () => keepEditor(tabId) : undefined },
             SEPARATOR,
@@ -430,7 +445,9 @@ export const Pane = memo(function Pane({
             { label: "Mount Folder...", run: () => void mountPath(tabId, "folder") },
           ]
         : [];
+    const linkedIssue = terminal.issue;
     return [
+      ...linkEntries(linkedIssue === undefined ? undefined : { label: "Open Issue", run: () => onOpenIssue(linkedIssue) }),
       {
         label: "Restart",
         run: restartable ? () => restartTab(tabId) : undefined,

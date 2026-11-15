@@ -23,7 +23,7 @@ import {
   loadIssueImage,
   markIssueSeen,
   openIssueFile,
-  openTabIssueInAgent,
+  sendTabIssueToAgent,
   previewWithheld,
   renameIssue,
   saveEditorFile,
@@ -158,7 +158,8 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   }, [tabId, issue, updatedAt, visible, active]);
 
-  const issueSessions = useIssueSessions(issue === undefined ? undefined : issueProjectOf(tabId), issue);
+  const issueSessions = useIssueSessions(issue === undefined ? undefined : issueProjectOf(tabId));
+  const issueSession = issue === undefined ? undefined : issueSessions[issue];
 
   const issueActions = useMemo<IssueActions>(
     () => ({
@@ -174,7 +175,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       setField: (fieldId, value) => setIssueField(tabId, fieldId, value),
       editField: (fieldId, value) => editIssueField(tabId, fieldId, value),
       upload: (file) => uploadIssueFile(tabId, file),
-      openInAgent: (agentId) => openTabIssueInAgent(tabId, agentId),
+      sendToAgent: (agentId) => sendTabIssueToAgent(tabId, agentId),
     }),
     [tabId],
   );
@@ -183,7 +184,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     return (
       <div className={`editor-tab${active ? "" : " hidden"}`}>
         {kind === "error" && <div className="placeholder">Could not read the issue.</div>}
-        {issueDetail && <IssueView issue={issueDetail} sessions={issueSessions} actions={issueActions} />}
+        {issueDetail && <IssueView issue={issueDetail} session={issueSession} actions={issueActions} />}
       </div>
     );
   }

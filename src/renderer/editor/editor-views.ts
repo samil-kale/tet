@@ -23,7 +23,7 @@ import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Mona
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
 import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
 import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
-import { inWorkingTree, issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, openIssueInAgent } from "./editor-tab";
+import { inWorkingTree, issueGone, issuesChanged, MARKDOWN_PREVIEW_MODES, openFile, sendIssueToAgent } from "./editor-tab";
 import { keepIssueSeen } from "./issue-seen";
 import { editorFontFamily } from "../themes/theme-colors";
 
@@ -699,16 +699,16 @@ export function markIssueSeen(tabId: string): void {
   }
 }
 
-/** The project of the issue the tab shows: whose sessions its side column lists. */
+/** The project of the issue the tab shows: whose session its side column shows. */
 export function issueProjectOf(tabId: string): string | undefined {
   return issueTab(tabId)?.view.ref.projectId;
 }
 
-/** The tab's issue opened in a new tab of the agent, beside it. */
-export function openTabIssueInAgent(tabId: string, agentId: AgentId): void {
+/** The tab's issue sent to a new tab of the agent, beside it. */
+export function sendTabIssueToAgent(tabId: string, agentId: AgentId): void {
   const tab = issueTab(tabId);
   if (tab) {
-    void openIssueInAgent(tab.view.ref, tab.number, agentId);
+    void sendIssueToAgent(tab.view.ref, tab.number, agentId);
   }
 }
 

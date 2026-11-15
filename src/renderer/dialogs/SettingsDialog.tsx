@@ -107,7 +107,7 @@ const COLOR_SCHEME_LABELS: Record<ColorScheme, string> = {
 const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message",
   handover: "Session handover",
-  issue: "Open issue in agent",
+  issue: "Send issue to agent",
 };
 
 const PROMPT_DETAILS: Record<PromptId, string> = {

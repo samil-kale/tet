@@ -1,15 +1,30 @@
 import { errorMessage } from "../../shared/errors";
 import { type ProjectRef, refKeyOf } from "../../shared/types/project";
+import type { TabDescriptor } from "../../shared/types/terminals";
 import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { SettingsStore } from "../store/settings";
 import { HostSetups } from "./host-setup";
+import { IssueLinks } from "./issue-links";
 import type { TerminalEnv } from "./pty";
 import { TabSessionManager, type SessionManagerCallbacks } from "./session-manager";
 
-/** A session manager per open repository and worktree, by `refKey`. */
+export interface SessionRegistryCallbacks extends SessionManagerCallbacks {
+  /** What the project's issues show of their sessions changed (`issues.ts`'s issueSessions): a link,
+   *  a linked tab, the archive, a repository or worktree opened or closed. */
+  onIssueSessions: (projectId: string) => void;
+}
+
+/** A session manager per open repository and worktree, by `refKey`, and the project's links of
+ *  issues and sessions they share. */
 export class SessionManagerRegistry {
   private readonly managers = new Map<string, TabSessionManager>();
+  private readonly issueLinks: IssueLinks;
+  /** The callbacks the managers get: the window's, and what tells of the issues' sessions. */
+  private readonly managerCallbacks: SessionManagerCallbacks;
+  /** What each repository's or worktree's tabs linked to an issue last showed, by `refKey`: the
+   *  issues' sessions change with it alone, not with every turn. */
+  private readonly linkedShown = new Map<string, string>();
 
   /** The renderer's last report, sent only on change — for a repository or worktree opened after
    *  it. */
@@ -21,9 +36,41 @@ export class SessionManagerRegistry {
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
     private readonly terminalEnv: TerminalEnv,
-    private readonly callbacks: SessionManagerCallbacks,
+    private readonly callbacks: SessionRegistryCallbacks,
   ) {
     this.hostSetups = new HostSetups(dataRoot, settings, callbacks.onNotice);
+    this.issueLinks = new IssueLinks(
+      dataRoot,
+      ({ ref, tabId }) => this.get(ref)?.hasTab(tabId) === true,
+      (projectId) => {
+        for (const manager of this.forProject(projectId)) {
+          manager.repostTabs();
+        }
+        callbacks.onIssueSessions(projectId);
+      },
+    );
+    this.managerCallbacks = {
+      ...callbacks,
+      onTabs: (ref, tabs) => {
+        callbacks.onTabs(ref, tabs);
+        this.linkedTabsShown(ref, tabs);
+      },
+      onArchived: (ref, tabs) => {
+        callbacks.onArchived(ref, tabs);
+        callbacks.onIssueSessions(ref.projectId);
+      },
+    };
+  }
+
+  private linkedTabsShown(ref: ProjectRef, tabs: TabDescriptor[]): void {
+    const refKey = refKeyOf(ref);
+    const shown = JSON.stringify(
+      tabs.flatMap(({ tabId, issue, agentId, title }) => (issue === undefined ? [] : [[tabId, issue, agentId, title]])),
+    );
+    if (shown !== (this.linkedShown.get(refKey) ?? "[]")) {
+      this.linkedShown.set(refKey, shown);
+      this.callbacks.onIssueSessions(ref.projectId);
+    }
   }
 
   open(resolved: ResolvedRef): TabSessionManager {
@@ -38,8 +85,9 @@ export class SessionManagerRegistry {
       this.settings,
       this.sbxLocal,
       this.hostSetups,
+      this.issueLinks,
       this.terminalEnv,
-      this.callbacks,
+      this.managerCallbacks,
     );
     manager.setOnScreen(refKey === this.onScreen.refKey ? this.onScreen.tabIds : []);
     this.managers.set(refKey, manager);
@@ -83,6 +131,9 @@ export class SessionManagerRegistry {
     // Dropped before the wait, so a repository or worktree closed and reopened at once never has
     // two.
     this.managers.delete(refKey);
+    if (this.linkedShown.delete(refKey)) {
+      this.callbacks.onIssueSessions(ref.projectId);
+    }
     await manager?.dispose();
   }
 

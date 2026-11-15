@@ -30,7 +30,7 @@ import {
   issueRepository,
   issueSessions,
   latestIssues,
-  openIssueInAgent,
+  sendIssueToAgent,
   readIssue,
   setIssueField,
   updateIssue,
@@ -106,13 +106,13 @@ export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): vo
     }
   });
 
-  handle("issues:open-in-agent", (_event, ref: ProjectRef, number: number, agentId: AgentId) =>
-    openIssueInAgent(issueDeps, ref, number, agentId),
+  handle("issues:send-to-agent", (_event, ref: ProjectRef, number: number, agentId: AgentId) =>
+    sendIssueToAgent(issueDeps, ref, number, agentId),
   );
 
-  handle("issues:sessions", (_event, projectId: string, number: number): IssueSessionsResult => {
+  handle("issues:sessions", (_event, projectId: string): IssueSessionsResult => {
     try {
-      return { sessions: issueSessions(issueDeps, projectId, number) };
+      return { sessions: issueSessions(issueDeps, projectId) };
     } catch (error) {
       return { error: errorMessage(error) };
     }
