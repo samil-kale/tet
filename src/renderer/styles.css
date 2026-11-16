@@ -1487,7 +1487,7 @@ textarea:focus,
   flex: none;
   width: 10px;
   height: 10px;
-  margin: 0 4.5px;
+  margin: 2px 4.5px 0;
   border: 2px solid var(--tet-menu-border);
   border-radius: 50%;
   background: var(--tet-lane-background);
