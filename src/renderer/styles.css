@@ -1256,6 +1256,39 @@ textarea:focus,
   visibility: hidden;
 }
 
+/* An issue row the tracker added unfolds fading in, one it removed folds away fading out, as a
+   notice does (`.notice-item`) without its rise. The row states its height, so the item clips it
+   rather than it shrinking. `ROW_MS` (lanes/issues/use-issue-rows.ts) is this duration. */
+.issue-item {
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  transition:
+    grid-template-rows 0.35s ease-out,
+    opacity 0.35s ease-out;
+}
+
+.issue-item.entering {
+  animation: unfold-in 0.35s ease-out;
+}
+
+.issue-item.leaving {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.issue-item > .issue-row {
+  min-height: 0;
+}
+
+@keyframes unfold-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
 /* An issue's text box, a comment's or a card's in the tab and the new issue's description, and its
    preview (`.issue-box-preview`) share one height. A block, so no line's gap is left under it. */
 .issue-comment textarea {

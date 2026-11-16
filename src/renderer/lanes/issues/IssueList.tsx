@@ -21,6 +21,7 @@ import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { IssueFilterBar } from "./IssueFilterBar";
+import { useIssueRows } from "./use-issue-rows";
 import { useIssues } from "./use-issues";
 
 /** The description's box in the new issue's dialog, in px: taller than the tab's, as it is the
@@ -160,7 +161,7 @@ export const IssueList = memo(function IssueList({
   const unread = (issue: Issue): boolean => isUnread(issue, seen);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
-  const shownIssues = (issues ?? []).filter((issue) => issue.title.toLowerCase().includes(needle));
+  const shownRows = useIssueRows(issues, filter).filter(({ issue }) => issue.title.toLowerCase().includes(needle));
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
@@ -303,17 +304,18 @@ export const IssueList = memo(function IssueList({
           <FilterField placeholder="Filter issues..." value={title} onChange={setTitle} />
           <IssueFilterBar filter={filter} options={options} onChange={setFilter} />
           <div className="tree">
-            {shownIssues.map((issue) => (
-              <IssueRow
-                key={issue.number}
-                issue={issue}
-                active={issue.number === openIssue}
-                unread={unread(issue)}
-                dropTarget={issueDrop.over === issue.number}
-                dropProps={issueDrop.dropPropsOf(issue.number)}
-                onOpen={(how) => openIssueTab(onOpenFile, resolved.ref, issue.number, how)}
-                onMenu={(event) => menu.open(event, issue)}
-              />
+            {shownRows.map(({ issue, entering, leaving }) => (
+              <div key={issue.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
+                <IssueRow
+                  issue={issue}
+                  active={issue.number === openIssue}
+                  unread={unread(issue)}
+                  dropTarget={issueDrop.over === issue.number}
+                  dropProps={issueDrop.dropPropsOf(issue.number)}
+                  onOpen={(how) => openIssueTab(onOpenFile, resolved.ref, issue.number, how)}
+                  onMenu={(event) => menu.open(event, issue)}
+                />
+              </div>
             ))}
           </div>
         </div>
