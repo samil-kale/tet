@@ -2613,6 +2613,7 @@ textarea:focus,
   flex-direction: column;
   max-height: 245px;
   overflow-y: auto;
+  padding: 1px 0;
 }
 
 /* 2px between the rows and the scrollbar, there only while the scrollbar is: a transparent strip
@@ -2624,11 +2625,6 @@ textarea:focus,
 .row-section-rows::-webkit-scrollbar-thumb {
   border-left: 2px solid transparent;
   background-clip: padding-box;
-}
-
-/* The bar starts and ends inside the first and last row's rounded corners. */
-.row-section-rows::-webkit-scrollbar-track {
-  margin: var(--border-radius) 0;
 }
 
 /* The three skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
