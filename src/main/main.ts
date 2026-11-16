@@ -458,6 +458,7 @@ if (!app.requestSingleInstanceLock()) {
       projectDeps,
       issueDeps,
       notice,
+      noticeProgress: appWindow.noticeProgress,
       initialRequirements,
       openWorkspace,
       shutdown,

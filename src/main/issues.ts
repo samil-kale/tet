@@ -1,3 +1,4 @@
+import writeFileAtomic from "write-file-atomic";
 import { failure } from "../shared/errors";
 import { effectivePrompt } from "../shared/prompts";
 import type { AgentId } from "../shared/types/agents";
@@ -26,6 +27,7 @@ import {
   type IssueRepository,
   type IssueTrackerInfo,
 } from "./providers/issues";
+import { PROVIDERS } from "./providers/index";
 import { forgetAllIssueSessions, forgetIssueSession } from "./store/issue-sessions";
 import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
 import type { ProjectStore } from "./store/project-store";
@@ -112,7 +114,7 @@ export async function markIssuesSeen(
   setIssueSeen(deps.dataRoot, projectId, number, updatedAt);
 }
 
-/** More than either tracker takes of one file: past this it does not cross to main's memory. */
+/** More than either tracker takes of one file: past this it does not cross to main's memory, either way. */
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
 type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
@@ -161,6 +163,45 @@ export async function issueImage(deps: TrackerDeps, projectId: string, source: s
   } catch {
     return null;
   }
+}
+
+/** The file name of the upload a link of an issue's text leads to; undefined for any other link, and
+ *  on a tracker without an account: the browser opens those. */
+export async function issueUploadName(deps: TrackerDeps, projectId: string, source: string): Promise<string | undefined> {
+  const { provider, host } = await readIssueTracker(deps.accounts, issueRepository(deps, projectId));
+  return provider === null ? undefined : PROVIDERS[provider].uploadName(host, source);
+}
+
+/** Saves the upload a link of an issue's text leads to as `target`, renamed into place once whole.
+ *  `onProgress` gets the share read after each chunk, and nothing when the tracker gives no length. */
+export async function saveIssueUpload(
+  deps: TrackerDeps,
+  projectId: string,
+  source: string,
+  target: string,
+  onProgress: (fraction: number) => void,
+): Promise<void> {
+  const response = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.readUpload(tracker, source),
+  );
+  if (!response?.body) {
+    throw new Error("The tracker sent no file");
+  }
+  const length = Number(response.headers.get("content-length"));
+  // Held whole until renamed into place: a download cut short leaves nothing at `target`.
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for await (const chunk of response.body) {
+    received += chunk.byteLength;
+    if (received > MAX_UPLOAD_BYTES) {
+      throw new Error("The file is larger than either tracker takes");
+    }
+    chunks.push(chunk);
+    if (length > 0) {
+      onProgress(Math.min(received / length, 1));
+    }
+  }
+  await writeFileAtomic(target, Buffer.concat(chunks));
 }
 
 /** What a pick field of the issue can be set to. */

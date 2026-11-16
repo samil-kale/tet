@@ -94,6 +94,7 @@ const api: TETApi = {
     editComment: (projectId, id, body) => invoke("issues:edit-comment", projectId, id, body),
     deleteComment: (projectId, id) => invoke("issues:delete-comment", projectId, id),
     upload: (projectId, name, dataBase64) => invoke("issues:upload", projectId, name, dataBase64),
+    saveUpload: (projectId, source) => invoke("issues:save-upload", projectId, source),
     setSource: (projectId, source) => invoke("issues:set-source", projectId, source),
     sendToAgent: (ref, number, agentId) => invoke("issues:send-to-agent", ref, number, agentId),
     sessions: (projectId) => invoke("issues:sessions", projectId),

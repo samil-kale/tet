@@ -15,6 +15,7 @@ import {
   ApiError,
   fetchImageOk,
   fetchOk,
+  fetchUploadOk,
   fieldMethods,
   getPaged,
   numberOf,
@@ -854,6 +855,16 @@ export const gitlab: GitProvider = {
   async readImage({ host, token, path }, source) {
     const upload = uploadOf(host, source);
     return upload && fetchImageOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
+  },
+
+  uploadName(host, source) {
+    const upload = uploadOf(host, source);
+    return upload && decodeURIComponent(upload.file);
+  },
+
+  async readUpload({ host, token, path }, source) {
+    const upload = uploadOf(host, source);
+    return upload && fetchUploadOk(`${projectUrl(host, path)}/uploads/${upload.secret}/${upload.file}`, headers(token));
   },
 
   internalNotes: true,

@@ -5,6 +5,7 @@ import {
   ApiError,
   fetchImageOk,
   fetchOk,
+  fetchUploadOk,
   fieldMethods,
   numberOf,
   pickField,
@@ -39,6 +40,19 @@ function headers(token: string): Record<string, string> {
 export function readsWithToken(host: string, source: string): boolean {
   const url = URL.parse(source);
   return url?.protocol === "https:" && url.host.toLowerCase() === host.toLowerCase();
+}
+
+/** The file name of an upload in an issue's text, on the account's host alone as `readsWithToken`:
+ *  under `user-attachments/`, or an older one under its repository's `files/` or `assets/`. */
+export function attachmentName(host: string, source: string): string | undefined {
+  const match = readsWithToken(host, source)
+    ? /^\/(?:user-attachments|[^/]+\/[^/]+)\/(?:files|assets)\/(?:[^/]+\/)*([^/]+)$/.exec(new URL(source).pathname)
+    : null;
+  try {
+    return match ? decodeURIComponent(match[1]) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** A user as GraphQL says it; null for a deleted account. */
@@ -811,6 +825,14 @@ export const github: GitProvider = {
 
   async readImage({ host, token }, source) {
     return readsWithToken(host, source) ? fetchImageOk(source, { Authorization: `Bearer ${token}`, "User-Agent": "tet" }) : undefined;
+  },
+
+  uploadName: attachmentName,
+
+  async readUpload({ host, token }, source) {
+    return attachmentName(host, source) === undefined
+      ? undefined
+      : fetchUploadOk(source, { Authorization: `Bearer ${token}`, "User-Agent": "tet" });
   },
 
   internalNotes: false,

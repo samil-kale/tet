@@ -70,6 +70,7 @@ export interface InvokeChannels {
   "issues:edit-comment": TETApi["issues"]["editComment"];
   "issues:delete-comment": TETApi["issues"]["deleteComment"];
   "issues:upload": TETApi["issues"]["upload"];
+  "issues:save-upload": TETApi["issues"]["saveUpload"];
   "issues:set-source": TETApi["issues"]["setSource"];
   "issues:send-to-agent": TETApi["issues"]["sendToAgent"];
   "issues:sessions": TETApi["issues"]["sessions"];

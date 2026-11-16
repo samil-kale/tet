@@ -52,17 +52,18 @@ export function requestUnfollowed(url: string, init: UnfollowedInit): Promise<Re
 }
 
 /**
- * Fetches `url` with every hop checked to be https, the whole chain under one timeout. Undefined
- * as soon as a hop is not https, names no location, or the chain runs long — a README's image must
- * not become a request to another scheme or to a host behind the machine. `headers`, a token's, go
- * with the first hop alone: where it redirects to has no business with them.
+ * Fetches `url` with every hop checked to be https, the whole chain and its body under one timeout.
+ * Undefined as soon as a hop is not https, names no location, or the chain runs long — a README's
+ * image must not become a request to another scheme or to a host behind the machine. `headers`, a
+ * token's, go with the first hop alone: where it redirects to has no business with them.
  */
 export async function fetchHttpsImage(
   url: string,
   fetchFn: FetchLike = requestUnfollowed,
   headers?: Record<string, string>,
+  timeoutMs = FETCH_IMAGE_TIMEOUT_MS,
 ): Promise<Response | undefined> {
-  const signal = AbortSignal.timeout(FETCH_IMAGE_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(timeoutMs);
   // A relative location resolves against the hop that sent it; undefined where it is no URL at all.
   const resolve = (value: string, base?: string): string | undefined => {
     const resolved = URL.parse(value, base);

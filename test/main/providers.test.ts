@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
 import {
+  attachmentName,
   contentTypeOf,
   github,
   carriesAll,
@@ -237,6 +238,24 @@ describe("the issues of a tracker", () => {
     assert.equal(uploadOf(host, "/uploads/nothex/a.png"), undefined);
     assert.equal(uploadOf(host, `/uploads/${secret}/../../user`), undefined);
     assert.equal(uploadOf(host, "docs/a.png"), undefined);
+  });
+
+  it("names a GitLab upload by its file", () => {
+    const secret = "0123456789abcdef0123456789abcdef";
+    const host = "gitlab.example.com";
+    assert.equal(PROVIDERS.gitlab.uploadName(host, `https://${host}/g/p/uploads/${secret}/a%20b.pdf`), "a b.pdf");
+    assert.equal(PROVIDERS.gitlab.uploadName(host, `https://${host}/g/p/-/issues/3`), undefined);
+  });
+
+  it("finds a GitHub attachment on the account's host alone", () => {
+    const host = "github.com";
+    assert.equal(attachmentName(host, "https://github.com/user-attachments/files/17/report%201.pdf"), "report 1.pdf");
+    assert.equal(attachmentName(host, "https://github.com/user-attachments/assets/0a1b-2c3d"), "0a1b-2c3d");
+    assert.equal(attachmentName(host, "https://github.com/o/r/files/17/log.txt"), "log.txt");
+    assert.equal(attachmentName(host, "https://github.com/o/r/issues/3"), undefined);
+    assert.equal(attachmentName(host, "https://github.com/o/r/blob/main/files/a.txt"), undefined);
+    assert.equal(attachmentName(host, "https://example.com/user-attachments/files/17/a.pdf"), undefined);
+    assert.equal(attachmentName(host, "https://github.com/user-attachments/files/17/%E0"), undefined);
   });
 
   it("asks for an image with GitHub's token on the account's host alone", () => {

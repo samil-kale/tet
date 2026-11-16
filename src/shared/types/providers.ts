@@ -90,10 +90,11 @@ export interface IssuesSeen {
   issues: Record<number, string>;
 }
 
-/** Whether the tracker created or changed the issue after its tab last showed it or, if none did,
- *  after `seen.since`. Dates are compared as times: the trackers spell them differently. */
+/** Whether the tracker created or changed the open issue after its tab last showed it or, if none
+ *  did, after `seen.since`; a closed one needs no attention, closing it being a change too. Dates are
+ *  compared as times: the trackers spell them differently. */
 export function isUnread(issue: Issue, seen: IssuesSeen | undefined): boolean {
-  return seen !== undefined && Date.parse(issue.updatedAt) > Date.parse(seen.issues[issue.number] ?? seen.since);
+  return seen !== undefined && issue.open && Date.parse(issue.updatedAt) > Date.parse(seen.issues[issue.number] ?? seen.since);
 }
 
 export type IssuesSeenResult = (ActionDone & { seen: IssuesSeen }) | ActionRefused;
@@ -266,6 +267,15 @@ export type IssueCreateResult = (ActionDone & { number: number }) | ActionRefuse
 export interface IssueUploadResult {
   /** What shows the file in an issue's text. */
   markdown?: string;
+  error?: string;
+}
+
+/** A link of an issue's text handed to `issues.saveUpload`. */
+export interface IssueUploadSaveResult {
+  /** Whether it leads to an upload the account reads, asked for and saved there; false for any
+   *  other link, which the browser opens. */
+  upload: boolean;
+  /** What stopped the download, for the caller to notify. */
   error?: string;
 }
 

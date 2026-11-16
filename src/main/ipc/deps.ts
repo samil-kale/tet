@@ -1,4 +1,4 @@
-import type { NoticeSeverity } from "../../shared/types/app";
+import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import type { Requirements } from "../../shared/types/agents";
 import type { ControlRecords } from "../ctl/ctl-records";
 import type { EnvRequests } from "../ctl/env-requests";
@@ -41,6 +41,8 @@ export interface IpcDeps {
   issueDeps: IssueDeps;
   /** Tells the user (Notices.tsx), as main.ts does; a handler with a dialog up answers it instead. */
   notice: (severity: NoticeSeverity, message: string) => void;
+  /** A download's progress notice (Notices.tsx's `showProgress`), as the auto-update's. */
+  noticeProgress: (progress: NoticeProgress) => void;
   /** The first requirements check, started while the window loads and after PATH is ready. */
   initialRequirements: Promise<Requirements>;
   /** Opens the stored projects, once, when the requirements are met; resolves once their ids are

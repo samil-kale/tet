@@ -2,7 +2,7 @@ import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
 import { DEFAULT_ISSUE_FILTER, isUnread, type Issue } from "../../../shared/types/providers";
 import { issueGone, openIssueTab, sendIssueToAgent, type OpenEditor } from "../../editor/editor-tab";
-import { loadProjectIssueImage, reloadIssueTabs } from "../../editor/editor-views";
+import { loadProjectIssueImage, openProjectIssueLink, reloadIssueTabs } from "../../editor/editor-views";
 import { keepAllIssuesSeen, keepIssueSeen, keepIssueUnread, useIssuesSeen } from "../../editor/issue-seen";
 import { newIssueUrl } from "../../editor/issue-text";
 import { issueSessionsOf, useWatchedIssueSessions } from "../../editor/use-issue-sessions";
@@ -200,6 +200,7 @@ export const IssueList = memo(function IssueList({
       issueUrl: newIssueUrl(tracker.provider, tracker.url),
       loadImage: (source) => loadProjectIssueImage(projectId, source),
       openFile: (path) => onOpenFile(resolved.ref, path),
+      openLink: (url) => void openProjectIssueLink(projectId, url),
     };
     let created: number | undefined;
     await prompt<NewIssue>({
@@ -249,22 +250,30 @@ export const IssueList = memo(function IssueList({
     issueGone(projectId, issue.number);
   };
 
-  const menuEntries = (issue: Issue): ContextMenuEntry[] => [
-    { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
-    SEPARATOR,
-    issueSessionEntry(
-      issueSessionsOf(projectId)[issue.number],
-      agents,
-      (agentId) => void sendIssueToAgent(resolved.ref, issue.number, agentId),
-    ),
-    SEPARATOR,
-    unread(issue)
-      ? { label: "Mark as Read", run: () => keepIssueSeen(projectId, issue.number, issue.updatedAt) }
-      : { label: "Mark as Unread", run: () => keepIssueUnread(projectId, issue.number, issue.updatedAt) },
-    SEPARATOR,
-    { label: "Rename...", run: () => void askRename(issue) },
-    { label: "Delete...", run: () => void askDelete(issue) },
-  ];
+  const menuEntries = (issue: Issue): ContextMenuEntry[] => {
+    // A closed issue is never unread (`isUnread`), so it has nothing to mark.
+    const readEntries: ContextMenuEntry[] = issue.open
+      ? [
+          SEPARATOR,
+          unread(issue)
+            ? { label: "Mark as Read", run: () => keepIssueSeen(projectId, issue.number, issue.updatedAt) }
+            : { label: "Mark as Unread", run: () => keepIssueUnread(projectId, issue.number, issue.updatedAt) },
+        ]
+      : [];
+    return [
+      { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
+      SEPARATOR,
+      issueSessionEntry(
+        issueSessionsOf(projectId)[issue.number],
+        agents,
+        (agentId) => void sendIssueToAgent(resolved.ref, issue.number, agentId),
+      ),
+      ...readEntries,
+      SEPARATOR,
+      { label: "Rename...", run: () => void askRename(issue) },
+      { label: "Delete...", run: () => void askDelete(issue) },
+    ];
+  };
 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>

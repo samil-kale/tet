@@ -2,8 +2,8 @@ import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { isUnread, type Issue, type IssuesSeen } from "../../src/shared/types/providers";
 
-const issue = (number: number, updatedAt: string): Issue =>
-  ({ number, title: "t", updatedAt, createdAt: "2026-10-01T00:00:00Z", author: "mira", labels: [], avatars: {} }) as unknown as Issue;
+const issue = (number: number, updatedAt: string, open = true): Issue =>
+  ({ number, title: "t", open, updatedAt, createdAt: "2026-10-01T00:00:00Z", author: "mira", labels: [], avatars: {} }) as unknown as Issue;
 
 const seen: IssuesSeen = { since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-05T10:00:00Z" } };
 
@@ -22,6 +22,10 @@ describe("an unread issue", () => {
   it("compares times, not the trackers' spellings of them", () => {
     assert.equal(isUnread(issue(9, "2026-11-01T01:00:00+02:00"), seen), false, "an hour before `since`, in another zone");
     assert.equal(isUnread(issue(9, "2026-11-01T00:00:00.500Z"), seen), true, "with fractions of a second");
+  });
+
+  it("is never a closed one", () => {
+    assert.equal(isUnread(issue(3, "2026-11-06T09:00:00Z", false), seen), false);
   });
 
   it("is none before the project's list was read", () => {

@@ -28,6 +28,7 @@ import type {
   IssueReadResult,
   IssuesSeenResult,
   IssueUploadResult,
+  IssueUploadSaveResult,
   ListRepositoriesResult,
   ProviderAccount,
   ProviderId,
@@ -207,6 +208,9 @@ export interface TETApi {
     editComment: (projectId: string, id: string, body: string) => Promise<ActionResult>;
     deleteComment: (projectId: string, id: string) => Promise<ActionResult>;
     upload: (projectId: string, name: string, dataBase64: string) => Promise<IssueUploadResult>;
+    /** The upload a link of an issue's text leads to, saved where the user picks; one leading to
+     *  anything else is left to the caller (`IssueUploadSaveResult.upload`). */
+    saveUpload: (projectId: string, source: string) => Promise<IssueUploadSaveResult>;
     /** Checks a path against the tracker and saves it in tet.json; empty removes it. Answers what
      *  refused it, for the question that is still up to show it at its field. */
     setSource: (projectId: string, source: string) => Promise<ActionResult>;

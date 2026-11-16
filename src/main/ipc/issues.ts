@@ -1,3 +1,5 @@
+import * as path from "node:path";
+import { app, dialog } from "electron";
 import { handle } from "./channels";
 import { errorMessage, failure } from "../../shared/errors";
 import type { ActionResult } from "../../shared/types/action";
@@ -15,6 +17,7 @@ import type {
   IssueReadResult,
   IssuesSeenResult,
   IssueUploadResult,
+  IssueUploadSaveResult,
 } from "../../shared/types/providers";
 import type { IssueSessionsResult } from "../../shared/types/terminals";
 import {
@@ -29,9 +32,11 @@ import {
   issueImage,
   issueRepository,
   issueSessions,
+  issueUploadName,
   latestIssues,
   sendIssueToAgent,
   readIssue,
+  saveIssueUpload,
   setIssueField,
   updateIssue,
   uploadIssueFile,
@@ -45,7 +50,7 @@ import type { IpcDeps } from "./deps";
 /** The ISSUES section: read from the project's tracker, by project, since the repository and its
  *  worktrees share one. Each answers its failure for the section to notify; `setSource` for the
  *  question still up to show it at its field. */
-export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): void {
+export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "issueDeps" | "noticeProgress">): void {
   const { accounts, dataRoot } = issueDeps;
 
   /** A write to the project's tracker, as an `ActionResult`. */
@@ -177,6 +182,30 @@ export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): vo
       return { markdown: await uploadIssueFile(issueDeps, projectId, name, Buffer.from(dataBase64, "base64")) };
     } catch (error) {
       return { error: errorMessage(error) };
+    }
+  });
+
+  /** Asks where to save the upload, then downloads it under a progress notice of its own. */
+  handle("issues:save-upload", async (_event, projectId: string, source: string): Promise<IssueUploadSaveResult> => {
+    const name = await issueUploadName(issueDeps, projectId, source).catch(() => undefined);
+    if (name === undefined) {
+      return { upload: false };
+    }
+    const picked = await dialog.showSaveDialog({ defaultPath: path.join(app.getPath("downloads"), name) });
+    if (picked.canceled || !picked.filePath) {
+      return { upload: true };
+    }
+    const target = picked.filePath;
+    const key = `issue-upload:${target}`;
+    const message = `Downloading ${name}`;
+    noticeProgress({ key, message, fraction: null });
+    try {
+      await saveIssueUpload(issueDeps, projectId, source, target, (fraction) => noticeProgress({ key, message, fraction }));
+      noticeProgress({ key, message: `Saved ${path.basename(target)}`, fraction: undefined, done: true });
+      return { upload: true };
+    } catch (error) {
+      noticeProgress({ key, message, fraction: undefined });
+      return { upload: true, error: `Could not save ${name}: ${errorMessage(error)}` };
     }
   });
 

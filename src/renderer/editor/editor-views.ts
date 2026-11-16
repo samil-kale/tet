@@ -625,6 +625,22 @@ export async function loadProjectIssueImage(projectId: string | undefined, sourc
   return /^https:/i.test(source) ? ((await window.tet.shell.fetchImage(source)) ?? undefined) : undefined;
 }
 
+/** Any other link of the text of tab `tabId`'s issue (`openProjectIssueLink`). */
+export function openIssueLink(tabId: string, url: string): void {
+  void openProjectIssueLink(views.get(tabId)?.ref.projectId, url);
+}
+
+/** `openIssueLink` for the text of an issue of project `projectId`, an issue yet to be made too: an
+ *  upload the account reads is saved where the user picks, the rest open in the browser. */
+export async function openProjectIssueLink(projectId: string | undefined, url: string): Promise<void> {
+  const saved = projectId === undefined ? { upload: false } : await window.tet.issues.saveUpload(projectId, url);
+  if (saved.error !== undefined) {
+    notify("error", saved.error);
+  } else if (!saved.upload) {
+    void window.tet.shell.openUrl(url);
+  }
+}
+
 /** A file of the repository or worktree of tab `tabId`, led to by a link of its issue's text. */
 export function openIssueFile(tabId: string, path: string): void {
   const view = views.get(tabId);

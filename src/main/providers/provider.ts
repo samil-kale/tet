@@ -40,6 +40,11 @@ export interface GitProvider {
   readIssue(tracker: Tracker, number: number): Promise<IssueDetail>;
   /** An image of an issue's text that takes the token to read; undefined for any other source. */
   readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
+  /** The file name of an upload a link of an issue's text leads to, one that takes the token to
+   *  read; undefined for any other link. */
+  uploadName(host: string, source: string): string | undefined;
+  /** That upload, read with the token; undefined for any other link. */
+  readUpload(tracker: Tracker, source: string): Promise<Response | undefined>;
   /** What a pick field of the issue can be set to, by the names `IssueField.value` uses. */
   listOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
   /** Sets one field of the issue, a pick's values as a whole; refuses one it does not have or a value
@@ -97,13 +102,21 @@ export async function fetchOk(url: string, headers: Record<string, string>, init
 
 /** An image read with a token, which stays with its first hop: a redirect leads to storage. What the
  *  host refused throws — see fetchOk — so that the next account gets to try. */
-export async function fetchImageOk(url: string, headers: Record<string, string>): Promise<Response | undefined> {
-  const response = await fetchHttpsImage(url, undefined, headers);
+export async function fetchImageOk(url: string, headers: Record<string, string>, timeoutMs?: number): Promise<Response | undefined> {
+  const response = await fetchHttpsImage(url, undefined, headers, timeoutMs);
   if (response && !response.ok) {
     void response.body?.cancel();
     throw new ApiError(response.status, `${response.status} ${response.statusText}`.trim());
   }
   return response;
+}
+
+/** An upload may take as long as the update's download: it is a file of up to either tracker's cap. */
+const READ_UPLOAD_TIMEOUT_MS = 15 * 60_000;
+
+/** An upload of an issue's text read with a token, as `fetchImageOk` reads an image. */
+export function fetchUploadOk(url: string, headers: Record<string, string>): Promise<Response | undefined> {
+  return fetchImageOk(url, headers, READ_UPLOAD_TIMEOUT_MS);
 }
 
 /** One DELETE, whose answer is not read — see fetchOk. */

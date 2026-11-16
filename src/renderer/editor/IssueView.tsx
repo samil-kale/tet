@@ -125,6 +125,8 @@ export interface IssueActions {
   loadImage: LoadImage;
   /** A file of the repository a link of its text leads to. */
   openFile: (path: string) => void;
+  /** Any other link of its text: an upload saved where the user picks, the rest in the browser. */
+  openLink: (url: string) => void;
   comment: (body: string, internal: boolean) => Promise<boolean>;
   editComment: (id: string, body: string) => Promise<boolean>;
   deleteComment: (id: string) => Promise<void>;
@@ -149,6 +151,7 @@ export interface TextRendering {
   issueUrl: string;
   loadImage: LoadImage;
   openFile: IssueActions["openFile"];
+  openLink: IssueActions["openLink"];
 }
 
 /** What a box writing an issue's text takes beside its value, the same for every box of the issue. */
@@ -163,8 +166,8 @@ export interface TextWriting {
 
 /** Text written on the tracker, rendered in a shadow root of its own as the Markdown preview's is
  *  (`issueTextHtml`), before the card's first paint. A link to a file of the repository opens it; the
- *  rest go to main, which opens only web and mail ones. `text` is the Markdown as written. */
-function IssueText({ text, provider, issueUrl, loadImage, openFile }: TextRendering & { text: string }) {
+ *  rest go to `openLink`. `text` is the Markdown as written. */
+function IssueText({ text, provider, issueUrl, loadImage, openFile, openLink }: TextRendering & { text: string }) {
   const host = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const { scroller, body } = createMarkdownPreview();
@@ -180,7 +183,7 @@ function IssueText({ text, provider, issueUrl, loadImage, openFile }: TextRender
         if (path !== undefined) {
           openFile(path);
         } else if (target !== undefined) {
-          void window.tet.shell.openUrl(target);
+          openLink(target);
         }
       }
     });
@@ -188,7 +191,7 @@ function IssueText({ text, provider, issueUrl, loadImage, openFile }: TextRender
     renderHtmlInto(body, issueTextHtml(text, provider, issueUrl), loadImage).catch((error: unknown) =>
       console.warn("[TET] An issue's text failed to render:", error),
     );
-  }, [text, provider, issueUrl, loadImage, openFile]);
+  }, [text, provider, issueUrl, loadImage, openFile, openLink]);
   return <div ref={host} className="issue-text" />;
 }
 
@@ -1062,7 +1065,13 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
  */
 export function IssueView({ issue, session, actions }: { issue: IssueDetail; session: IssueSession | undefined; actions: IssueActions }) {
   const writing: TextWriting = {
-    rendering: { provider: issue.provider, issueUrl: issue.url, loadImage: actions.loadImage, openFile: actions.openFile },
+    rendering: {
+      provider: issue.provider,
+      issueUrl: issue.url,
+      loadImage: actions.loadImage,
+      openFile: actions.openFile,
+      openLink: actions.openLink,
+    },
     upload: issue.uploads ? actions.upload : undefined,
     accept: issue.uploads?.extensions?.map((extension) => `.${extension}`).join(","),
   };

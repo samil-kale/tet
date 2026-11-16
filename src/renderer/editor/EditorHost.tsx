@@ -23,6 +23,7 @@ import {
   loadIssueImage,
   markIssueSeen,
   openIssueFile,
+  openIssueLink,
   sendTabIssueToAgent,
   previewWithheld,
   renameIssue,
@@ -165,6 +166,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     () => ({
       loadImage: (source) => loadIssueImage(tabId, source),
       openFile: (path) => openIssueFile(tabId, path),
+      openLink: (url) => openIssueLink(tabId, url),
       comment: (body, internal) => commentOnIssue(tabId, body, internal),
       editComment: (id, body) => editIssueComment(tabId, id, body),
       deleteComment: (id) => deleteIssueComment(tabId, id),
