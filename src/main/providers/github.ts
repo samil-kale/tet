@@ -831,6 +831,8 @@ export const github: GitProvider = {
 
   ...fieldMethods({ graphql: sender, handlerOf: fieldHandlerOf, readTarget, mutate }),
 
+  confidentialIssues: false,
+
   async createIssue({ host, token, path }, title, body) {
     const send = sender(host, token);
     const { id } = await repositoryIds(send, path);

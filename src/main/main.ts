@@ -357,7 +357,7 @@ async function startControl(): Promise<void> {
         issueImage: (projectId, source) => issueImage(issueDeps, projectId, source),
         issueFieldOptions: (projectId, number, fieldId) => issueFieldOptions(issueDeps, projectId, number, fieldId),
         setIssueField: (projectId, number, fieldId, value) => setIssueField(issueDeps, projectId, number, fieldId, value),
-        createIssue: (projectId, title, body) => createIssue(issueDeps, projectId, title, body),
+        createIssue: (projectId, title, body) => createIssue(issueDeps, projectId, title, body, false),
         updateIssue: (projectId, number, change) => updateIssue(issueDeps, projectId, number, change),
         deleteIssue: (projectId, number) => deleteIssue(issueDeps, projectId, number),
         commentIssue: (projectId, number, body, internal) => commentIssue(issueDeps, projectId, number, body, internal),

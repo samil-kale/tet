@@ -201,7 +201,7 @@ export interface TETApi {
     /** What a pick field of the issue can be set to. */
     fieldOptions: (projectId: string, number: number, fieldId: string) => Promise<IssueFieldOptionsResult>;
     setField: (projectId: string, number: number, fieldId: string, value: IssueFieldValue) => Promise<ActionResult>;
-    create: (projectId: string, title: string, body: string) => Promise<IssueCreateResult>;
+    create: (projectId: string, title: string, body: string, confidential: boolean) => Promise<IssueCreateResult>;
     /** For good, with its comments. */
     delete: (projectId: string, number: number) => Promise<ActionResult>;
     editComment: (projectId: string, id: string, body: string) => Promise<ActionResult>;

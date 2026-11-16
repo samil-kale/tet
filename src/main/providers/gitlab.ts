@@ -868,10 +868,12 @@ export const gitlab: GitProvider = {
 
   ...fieldMethods({ graphql: sender, handlerOf: (_send, _path, fieldId) => fieldHandlerOf(fieldId), readTarget, mutate }),
 
-  async createIssue({ host, token, path }, title, body) {
+  confidentialIssues: true,
+
+  async createIssue({ host, token, path }, title, body, confidential) {
     const { issue } = await mutate<{ issue: { iid: string } | null }>(
       sender(host, token),
-      { mutation: "createIssue", inputType: "CreateIssueInput", input: { projectPath: path, title, description: body } },
+      { mutation: "createIssue", inputType: "CreateIssueInput", input: { projectPath: path, title, description: body, confidential } },
       "issue { iid }",
     );
     return Number(reached(issue, `The new issue of ${path}`).iid);

@@ -45,7 +45,9 @@ export interface GitProvider {
   /** Sets one field of the issue, a pick's values as a whole; refuses one it does not have or a value
    *  it does not take. */
   setField(tracker: Tracker, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
-  createIssue(tracker: Tracker, title: string, body: string): Promise<number>;
+  /** Whether a new issue can be made confidential, visible to the project's members alone. */
+  readonly confidentialIssues: boolean;
+  createIssue(tracker: Tracker, title: string, body: string, confidential: boolean): Promise<number>;
   /** Whether a comment can be made internal, visible to the project's members alone. */
   readonly internalNotes: boolean;
   addComment(tracker: Tracker, number: number, body: string, internal: boolean): Promise<void>;

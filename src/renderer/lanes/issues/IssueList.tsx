@@ -10,7 +10,7 @@ import { askIssueTitle, confirmDeleteIssue, dayOf, issueSessionEntry, Person, Te
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
-import { FieldGroup, TextField } from "../../ui/Field";
+import { Checkbox, FieldGroup, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
 import { LinkIcon, ListCheckIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
@@ -30,11 +30,20 @@ const NEW_ISSUE_BOX_HEIGHT = 220;
 interface NewIssue {
   title: string;
   body: string;
+  confidential: boolean;
 }
 
 /** The fields of a new issue, its description in the tab's box. No upload here: nothing is written
- *  until the question's answer. */
-function NewIssueFields({ value, onChange, error, busy, field, rendering }: PromptFields<NewIssue> & { rendering: TextRendering }) {
+ *  until the question's answer. The confidential checkbox is offered where the tracker has it. */
+function NewIssueFields({
+  value,
+  onChange,
+  error,
+  busy,
+  field,
+  rendering,
+  confidentialIssues,
+}: PromptFields<NewIssue> & { rendering: TextRendering; confidentialIssues: boolean }) {
   return (
     <>
       <TextField
@@ -61,6 +70,14 @@ function NewIssueFields({ value, onChange, error, busy, field, rendering }: Prom
           </div>
         </div>
       </FieldGroup>
+      {confidentialIssues && (
+        <Checkbox
+          label="Make this issue confidential"
+          checked={value.confidential}
+          onChange={(confidential) => onChange((current) => ({ ...current, confidential }))}
+          disabled={busy}
+        />
+      )}
     </>
   );
 }
@@ -188,11 +205,11 @@ export const IssueList = memo(function IssueList({
       title: "New issue",
       className: "new-issue-dialog",
       confirmLabel: "Create",
-      value: { title: "", body: "" },
+      value: { title: "", body: "", confidential: false },
       ready: (value) => filled(value.title),
-      render: (fields) => <NewIssueFields {...fields} rendering={rendering} />,
-      submit: async ({ title: typed, body }) => {
-        const result = await write(() => window.tet.issues.create(projectId, typed.trim(), body));
+      render: (fields) => <NewIssueFields {...fields} rendering={rendering} confidentialIssues={tracker.confidentialIssues} />,
+      submit: async ({ title: typed, body, confidential }) => {
+        const result = await write(() => window.tet.issues.create(projectId, typed.trim(), body, confidential));
         if (result.ok) {
           created = result.number;
         }

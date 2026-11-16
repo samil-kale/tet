@@ -169,8 +169,10 @@ export function issueFieldOptions(deps: TrackerDeps, projectId: string, number: 
 }
 
 /** A new issue, answered by its number. */
-export function createIssue(deps: TrackerDeps, projectId: string, title: string, body: string): Promise<number> {
-  return writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.createIssue(tracker, title, body));
+export function createIssue(deps: TrackerDeps, projectId: string, title: string, body: string, confidential: boolean): Promise<number> {
+  return writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.createIssue(tracker, title, body, confidential),
+  );
 }
 
 export async function commentIssue(deps: TrackerDeps, projectId: string, number: number, body: string, internal: boolean): Promise<void> {

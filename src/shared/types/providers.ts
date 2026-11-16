@@ -110,6 +110,8 @@ export interface IssueListResult {
     provider: ProviderId;
     /** The repository's address on its host. */
     url: string;
+    /** Whether a new issue can be made confidential (`GitProvider.confidentialIssues`). */
+    confidentialIssues: boolean;
   };
   error?: string;
   /** `error` is that no account is added for the repository's tracker. */

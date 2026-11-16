@@ -63,17 +63,18 @@ export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): vo
     try {
       const repository = issueRepository(issueDeps, projectId);
       source = await readIssueSource(repository.at.path);
-      const { issues, latest } = await onTracker(accounts, repository, async (provider, tracker) => ({
+      const { issues, latest, confidentialIssues } = await onTracker(accounts, repository, async (provider, tracker) => ({
         // First: a change made while the list comes then differs from it at the next read.
         latest: await provider.readLatest(tracker, filter),
         issues: await provider.listIssues(tracker, filter),
+        confidentialIssues: provider.confidentialIssues,
       }));
       const { provider, host, path } = await readIssueTracker(accounts, repository);
       return {
         issues,
         latest,
         source,
-        tracker: provider === null ? undefined : { provider, url: `https://${host}/${path}` },
+        tracker: provider === null ? undefined : { provider, url: `https://${host}/${path}`, confidentialIssues },
         seen: readIssuesSeen(dataRoot, projectId),
       };
     } catch (error) {
@@ -128,13 +129,16 @@ export function registerIssuesIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): vo
     }
   });
 
-  handle("issues:create", async (_event, projectId: string, title: string, body: string): Promise<IssueCreateResult> => {
-    try {
-      return { ok: true, number: await createIssue(issueDeps, projectId, title, body) };
-    } catch (error) {
-      return failure(error);
-    }
-  });
+  handle(
+    "issues:create",
+    async (_event, projectId: string, title: string, body: string, confidential: boolean): Promise<IssueCreateResult> => {
+      try {
+        return { ok: true, number: await createIssue(issueDeps, projectId, title, body, confidential) };
+      } catch (error) {
+        return failure(error);
+      }
+    },
+  );
 
   handle("issues:comment", (_event, projectId: string, number: number, body: string, internal: boolean) =>
     written(() => commentIssue(issueDeps, projectId, number, body, internal)),
