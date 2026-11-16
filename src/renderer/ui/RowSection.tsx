@@ -1,4 +1,4 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import { useLayoutEffect, useRef, type HTMLAttributes, type ReactNode } from "react";
 import { overridesMachineNote } from "../../shared/types/environment";
 import { ActionLink } from "./ActionLink";
 import { useDragReorder } from "./drag-reorder";
@@ -231,9 +231,18 @@ export function RowSection<T extends { id: string }>({
     indexOf: (id) => rows.findIndex((row) => row.id === id),
     onMove: (from, to) => reorder?.onMove(from, to),
   });
+  // A row added below the shown ones is scrolled into sight; the first rows, a dialog's load, are not.
+  const list = useRef<HTMLDivElement>(null);
+  const shownCount = useRef(rows.length);
+  useLayoutEffect(() => {
+    if (shownCount.current > 0 && rows.length > shownCount.current) {
+      list.current?.lastElementChild?.scrollIntoView({ block: "nearest" });
+    }
+    shownCount.current = rows.length;
+  }, [rows.length]);
   return (
     <FieldGroup label={label}>
-      <div className="row-section-rows" {...(reorder ? drag.listProps : {})}>
+      <div ref={list} className="row-section-rows" {...(reorder ? drag.listProps : {})}>
         {rows.length === 0 && empty !== undefined && <p className="dialog-detail">{empty}</p>}
         {rows.map((row, index) => renderRow(row, reorder && { props: drag.rowProps(index), classes: drag.rowClasses(index) }))}
       </div>

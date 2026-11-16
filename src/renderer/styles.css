@@ -82,7 +82,7 @@ textarea,
 .code-field,
 .dropdown-trigger {
   font: inherit;
-  border-radius: 2px;
+  border-radius: var(--border-radius);
   outline: none;
   padding: 3px 6px;
   color: var(--tet-input-foreground);
@@ -212,13 +212,13 @@ textarea:focus,
 }
 
 .radio-option:first-child {
-  border-top-left-radius: 3px;
-  border-bottom-left-radius: 3px;
+  border-top-left-radius: var(--border-radius);
+  border-bottom-left-radius: var(--border-radius);
 }
 
 .radio-option:last-child {
-  border-top-right-radius: 3px;
-  border-bottom-right-radius: 3px;
+  border-top-right-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
 }
 
 .radio-option:not(.active):not(:last-child) {
@@ -323,7 +323,7 @@ textarea:focus,
      issue's description in its dialog too. */
   --issue-card-padding: 10px;
   --popup-row-height: 30px;
-  --popup-radius: 3px;
+  --border-radius: 3px;
   --menu-padding: 3px;
   --popup-width: min(450px, 100vw);
   /* As `CLOSE_MS` (use-closing.ts). */
@@ -429,7 +429,7 @@ textarea:focus,
   /* The reset above keeps Chrome's default button padding, which with border-box squeezes every
      icon. */
   padding: 0;
-  border-radius: 3px;
+  border-radius: var(--border-radius);
 }
 
 /* The svg fills the box and its padding insets the drawing to --icon-size: centring a smaller
@@ -1200,7 +1200,7 @@ textarea:focus,
   min-width: 0;
   height: var(--action-size);
   padding: 0 2px 0 3px;
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   --icon-size: 12px;
 }
 
@@ -1340,7 +1340,7 @@ textarea:focus,
 .issue-card {
   position: relative;
   border: 1px solid var(--tet-app-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
 }
 
 .issue-card-header {
@@ -1348,7 +1348,7 @@ textarea:focus,
   height: var(--bar-height);
   padding: 0 var(--issue-card-padding);
   border-bottom: 1px solid var(--tet-app-border);
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
   background: var(--tet-lane-background);
   font-size: var(--small-font-size);
 }
@@ -1385,7 +1385,7 @@ textarea:focus,
 
 /* At the card's top, as the comment box's, it takes the card's corners. */
 .issue-card-edit:first-child .issue-box-tabs {
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
 }
 
 /* The format buttons, a `.toolbar` at the bar's end. */
@@ -1408,7 +1408,7 @@ textarea:focus,
   min-height: var(--text-box-height);
   overflow-y: auto;
   border: 1px solid var(--tet-input-border);
-  border-radius: 2px;
+  border-radius: var(--border-radius);
   background: var(--tet-input-background);
 }
 
@@ -1541,7 +1541,7 @@ textarea:focus,
   gap: 6px;
   margin: 0 -2px;
   padding: 4px;
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   cursor: pointer;
 }
 
@@ -1600,7 +1600,7 @@ textarea:focus,
 .issue-label {
   padding: 2px 7px;
   border: 1px solid var(--tet-menu-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   background: var(--tet-lane-background);
   font-size: var(--tiny-font-size);
 }
@@ -1867,7 +1867,7 @@ textarea:focus,
   color: var(--tet-menu-foreground);
   background: var(--tet-menu-background);
   border: 1px solid var(--tet-menu-border);
-  border-radius: var(--popup-radius);
+  border-radius: var(--border-radius);
 }
 
 /* The toasts stack as one box, so `.notices` casts their shadow: each one's would fall on the next. */
@@ -2254,7 +2254,7 @@ textarea:focus,
    `button` too, and a rule matching them beats the color they would inherit from the widget. */
 .editor-host .find-widget .button {
   color: var(--tet-foreground);
-  border-radius: 3px !important;
+  border-radius: var(--border-radius) !important;
   background-color: transparent !important;
   opacity: 0.8;
 }
@@ -2492,7 +2492,7 @@ textarea:focus,
   gap: 6px;
   padding: 5px 11px;
   border: 1px solid var(--tet-button-border);
-  border-radius: 2px;
+  border-radius: var(--border-radius);
   color: var(--tet-button-foreground);
   background: var(--tet-button-background);
 }
@@ -2550,7 +2550,7 @@ textarea:focus,
      reads too dark for a dialog (Dark IntelliJ's). */
   background: var(--tet-dialog-background, var(--tet-terminal-background));
   border: 1px solid var(--tet-menu-border);
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
@@ -2562,7 +2562,7 @@ textarea:focus,
   display: flex;
   height: var(--bar-height);
   margin: -16px -16px 0;
-  border-radius: 3px 3px 0 0;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
   /* A theme overrides it only where its own inactive tab color reads wrong on a dialog (Dark
      IntelliJ's, equal to its own dialog background). */
   background: var(--tet-dialogHeader-background, var(--tet-tab-inactiveBackground));
@@ -2626,6 +2626,11 @@ textarea:focus,
   background-clip: padding-box;
 }
 
+/* The bar starts and ends inside the first and last row's rounded corners. */
+.row-section-rows::-webkit-scrollbar-track {
+  margin: var(--border-radius) 0;
+}
+
 /* The three skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
    label, the skills' source, the agents, access — so the agents and access line up across rows. */
 .sbx-skills-rows {
@@ -2670,12 +2675,20 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 4px;
-  border-bottom: 1px solid var(--tet-input-border);
-  padding: 4px 2px 4px 0;
+  border: 1px solid var(--tet-input-border);
+  border-top: none;
+  padding: 4px;
 }
 
 .edit-row:first-child {
   border-top: 1px solid var(--tet-input-border);
+  border-top-left-radius: var(--border-radius);
+  border-top-right-radius: var(--border-radius);
+}
+
+.edit-row:last-child {
+  border-bottom-left-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
 }
 
 /* A row of fixed-width fields (ports) leaves room, and its remove button still sits right. */
@@ -2995,7 +3008,7 @@ textarea:focus,
   padding: 0;
   background: var(--tet-settings-checkboxBackground, var(--tet-input-background));
   border: 1px solid var(--tet-settings-checkboxBorder, var(--tet-input-border));
-  border-radius: 3px;
+  border-radius: var(--border-radius);
   cursor: pointer;
 }
 
@@ -3167,7 +3180,7 @@ textarea:focus,
   width: var(--action-size);
   height: var(--action-size);
   border: 1px solid var(--tet-app-border);
-  border-radius: 2px;
+  border-radius: var(--border-radius);
 }
 
 /* "No color": a strike, since an empty box reads as one more color. */
@@ -3284,7 +3297,7 @@ textarea:focus,
   padding: 0 0 0 8px;
   font-size: var(--tet-font-size);
   height: var(--field-height);
-  border-radius: 2px;
+  border-radius: var(--border-radius);
 }
 
 .repository-name {
@@ -3317,7 +3330,7 @@ textarea:focus,
   flex-direction: column;
   align-items: flex-end;
   max-width: 100%;
-  border-radius: var(--popup-radius);
+  border-radius: var(--border-radius);
   pointer-events: none;
 }
 
@@ -3452,7 +3465,7 @@ textarea:focus,
 
 /* VS Code's notification progress: a `.progress-bar` inside the border's radius. */
 .notice-progress {
-  border-radius: 0 0 var(--popup-radius) var(--popup-radius);
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
 }
 
 .notice-progress-fill {
@@ -3505,7 +3518,7 @@ textarea:focus,
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
 .popup-items {
   overflow-y: auto;
-  border-radius: 0 0 calc(var(--popup-radius) - 1px) calc(var(--popup-radius) - 1px);
+  border-radius: 0 0 calc(var(--border-radius) - 1px) calc(var(--border-radius) - 1px);
 }
 
 /* A session: its icon, then its name. */
