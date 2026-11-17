@@ -429,7 +429,8 @@ const VERBS = [
     verb: "env-request",
     group: "Environment",
     usage: "env-request <NAME> [NAME...]",
-    summary: "Open TET's dialog for the user to type environment variables into; waits for the answer. Every missing one in one request.",
+    summary:
+      "Open TET's dialog for the user to type environment variables into; waits for the answer. Every missing one in one request. Saved values reach only tabs started afterwards: the asking tab keeps running as it is, so tell the user to restart it (restartRequired).",
     positionals: ["names"],
     variadic: true,
   },

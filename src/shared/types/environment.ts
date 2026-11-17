@@ -18,7 +18,7 @@ export function overridesMachineNote(names: string[]): string {
 /** What `env-request` puts in front of the user: one row per variable. */
 export interface EnvRequest {
   id: number;
-  /** The asking tab, for the dialog to name and to restart. */
+  /** The asking tab, for the notification to name and to open. */
   ref?: ProjectRef;
   tabId?: string;
   /** A stored one's value the dialog replaces. */

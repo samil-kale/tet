@@ -13,17 +13,15 @@ interface EnvDialogProps {
 /**
  * What an agent asked for with `tet-ctl env-request`: environment variables typed here and never
  * into the chat. The one question the main process asks (AGENTS.md): it runs its own answer, so what
- * refuses Save stays in the dialog. A tab takes up saved values only when it starts, so saving
- * restarts the asking one; a request without a tab only saves.
+ * refuses Save stays in the dialog. A tab takes up saved values only when it starts: the asking
+ * agent tells the user to restart it (`restartRequired`), never the dialog.
  */
 export function EnvDialog({ request, onClose }: EnvDialogProps) {
   // Keyed by name: the agent's names are unique (the verb dedupes them).
   const [rows, setRows] = useState(() => request.variables.map((variable) => ({ ...variable, id: variable.name, value: "" })));
 
   const complete = rows.every((row) => row.value !== "");
-  const tab = request.ref && request.tabId ? { ref: request.ref, tabId: request.tabId } : undefined;
 
-  // The asking tab restarts once saved, so it takes up the values (pty.ts).
   const {
     busy,
     refused,
@@ -37,12 +35,7 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
           rows.map((row) => ({ name: row.name, value: row.value })),
         ),
       ),
-    () => {
-      if (tab) {
-        void window.tet.tabs.restart(tab.ref, tab.tabId);
-      }
-      onClose();
-    },
+    onClose,
   );
 
   const cancel = (): void => {
@@ -61,7 +54,7 @@ export function EnvDialog({ request, onClose }: EnvDialogProps) {
       error={refused}
       onCancel={cancel}
       // Plain to see why it waits: a value left empty.
-      primary={{ label: tab ? "Save & Restart" : "Save", disabled: !complete, run: () => void save() }}
+      primary={{ label: "Save", disabled: !complete, run: () => void save() }}
     >
       <RowSection
         label="Environment variables"
