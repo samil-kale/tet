@@ -1261,6 +1261,7 @@ textarea:focus,
    rather than it shrinking. `ROW_MS` (lanes/issues/use-issue-rows.ts) is this duration. */
 .issue-item {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr;
   overflow: hidden;
   transition:
