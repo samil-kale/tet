@@ -156,8 +156,10 @@ const settings = new SettingsStore(dataRoot);
 const accounts = new AccountStore(dataRoot);
 const repoCache = new RepoCache(dataRoot);
 const logins = new GitLoginStore(dataRoot);
-const environment = new EnvStore(dataRoot);
-const sbxLocal = new SbxLocalStore(dataRoot, async (projectId) => sandboxTetValues(await projectAccount(projectId), environment.values()));
+const environment = new EnvStore(dataRoot, () => settings.get().environment.encryptValues);
+const sbxLocal = new SbxLocalStore(dataRoot, async (projectId) =>
+  sandboxTetValues(await projectAccount(projectId), await environment.values()),
+);
 const sbxAccounts = new SbxAccountStore(dataRoot);
 // Held until the window listens (send), like any notice this early.
 const overriding = environment
@@ -213,7 +215,7 @@ const terminalEnv: TerminalEnv = {
   stored: () => environment.values(),
   account: async (projectId) => {
     const account = await projectAccount(projectId);
-    return account ? accountEnv(account, await ensureAskpass(logins.askpassDir), environment.values()) : {};
+    return account ? accountEnv(account, await ensureAskpass(logins.askpassDir), await environment.values()) : {};
   },
 };
 
@@ -431,6 +433,7 @@ if (!app.requestSingleInstanceLock()) {
     // check uses this preparation even when it finishes before the window loads.
     const pathReady = augmentAgentPath();
     sweepDropFiles(dataRoot);
+    void environment.applyEncryption();
     try {
       controlChannel = await prepareControl(dataRoot, __dirname, installed, (userDataArg && process.env[CONTROL_ENV.token]) || undefined);
     } catch (error) {

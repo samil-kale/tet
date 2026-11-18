@@ -38,7 +38,7 @@ import {
 import { SettingsStore } from "../../src/main/store/settings";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../src/shared/prompts";
 import { DEFAULT_KEYBINDING_PRESET_ID, withSettings } from "../../src/shared/types/settings";
-import { tempDir, withEnv } from "../helpers";
+import { fakeSafeStorage, tempDir, withEnv, withEnvAsync } from "../helpers";
 
 /** store/: the data folder's layout, the stores, the environment variables kept in TET. */
 
@@ -319,37 +319,98 @@ describe("the session linked to an issue", () => {
 describe("the environment variables kept in TET", () => {
   const tempRoot = (): string => tempDir("tet-environment-");
   const row = (name: string, value: string): { name: string; value: string } => ({ name, value });
+  /** The checkbox unticked: what these rows are about is not how their values lie. */
+  const clearStore = (root: string): EnvStore => new EnvStore(root, () => false);
+  const fileOf = (root: string): string => fs.readFileSync(path.join(root, "environment.json"), "utf8");
 
-  it("keep one row per name, hand out their values, and read the file fresh every time", () => {
+  it("keep one row per name, hand out their values, and read the file fresh every time", async () => {
     const root = tempRoot();
-    const store = new EnvStore(root);
-    store.set([row("GITLAB_TOKEN", "old")]);
-    store.set([row("GITLAB_TOKEN", "new"), row("STRIPE_KEY", "sk")]);
+    const store = clearStore(root);
+    await store.set([row("GITLAB_TOKEN", "old")]);
+    await store.set([row("GITLAB_TOKEN", "new"), row("STRIPE_KEY", "sk")]);
     assert.deepEqual(store.list(), [
       { name: "GITLAB_TOKEN", overridesMachine: false },
       { name: "STRIPE_KEY", overridesMachine: false },
     ]);
     // Its own name: the first one in process.env may be one a TET this runs in kept (TET_KEPT_ENV).
-    withEnv({ TET_TEST_MACHINE: "machine" }, () => {
-      store.set([row("TET_TEST_MACHINE", "x")]);
+    await withEnvAsync({ TET_TEST_MACHINE: "machine" }, async () => {
+      await store.set([row("TET_TEST_MACHINE", "x")]);
       assert.equal(store.info("TET_TEST_MACHINE")?.overridesMachine, true, "one this machine sets too");
     });
-    store.remove("TET_TEST_MACHINE");
-    assert.deepEqual(store.values(), { GITLAB_TOKEN: "new", STRIPE_KEY: "sk" });
-    const other = new EnvStore(root);
-    assert.equal(other.remove("STRIPE_KEY"), true);
-    assert.equal(other.remove("STRIPE_KEY"), false);
-    assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "a change from outside is seen, not overwritten");
+    await store.remove("TET_TEST_MACHINE");
+    assert.deepEqual(await store.values(), { GITLAB_TOKEN: "new", STRIPE_KEY: "sk" });
+    const other = clearStore(root);
+    assert.equal(await other.remove("STRIPE_KEY"), true);
+    assert.equal(await other.remove("STRIPE_KEY"), false);
+    assert.deepEqual(await store.values(), { GITLAB_TOKEN: "new" }, "a change from outside is seen, not overwritten");
   });
 
-  it("take a name in another case for the same variable where the machine does", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
-    const store = new EnvStore(tempRoot());
-    store.set([row("gitlab_token", "old")]);
-    store.set([row("GITLAB_TOKEN", "new")]);
-    assert.deepEqual(store.values(), { GITLAB_TOKEN: "new" }, "one variable, not two in every tab");
+  it("take a name in another case for the same variable where the machine does", { skip: !PLATFORM.envNamesIgnoreCase }, async () => {
+    const store = clearStore(tempRoot());
+    await store.set([row("gitlab_token", "old")]);
+    await store.set([row("GITLAB_TOKEN", "new")]);
+    assert.deepEqual(await store.values(), { GITLAB_TOKEN: "new" }, "one variable, not two in every tab");
     assert.equal(store.info("gitlab_token")?.name, "GITLAB_TOKEN");
-    assert.equal(store.remove("gitlab_token"), true);
-    assert.deepEqual(store.values(), {});
+    assert.equal(await store.remove("gitlab_token"), true);
+    assert.deepEqual(await store.values(), {});
+  });
+
+  it("lie encrypted while the checkbox is ticked and in the clear once it is not", async () => {
+    fakeSafeStorage();
+    const root = tempRoot();
+    const store = new EnvStore(root, () => true);
+    await store.set([row("GITLAB_TOKEN", "secret")]);
+    assert.doesNotMatch(fileOf(root), /secret/, "never in the clear");
+    assert.deepEqual(await store.values(), { GITLAB_TOKEN: "secret" });
+
+    await store.edit([{ name: "GITLAB_TOKEN", from: "GITLAB_TOKEN" }], false);
+    assert.deepEqual(JSON.parse(fileOf(root)), [{ name: "GITLAB_TOKEN", text: "secret" }]);
+
+    await store.edit([{ name: "GITLAB_API_TOKEN", from: "GITLAB_TOKEN" }], true);
+    assert.doesNotMatch(fileOf(root), /secret/, "encrypted again, renamed with its value");
+    assert.deepEqual(await store.values(), { GITLAB_API_TOKEN: "secret" });
+  });
+
+  it("bring the file to the checkbox at TET's start, writing only what that changes", async () => {
+    fakeSafeStorage();
+    const root = tempRoot();
+    await clearStore(root).set([row("GITLAB_TOKEN", "secret")]);
+    await new EnvStore(root, () => true).applyEncryption();
+    assert.doesNotMatch(fileOf(root), /secret/);
+
+    const written = fileOf(root);
+    await new EnvStore(root, () => true).applyEncryption();
+    assert.equal(fileOf(root), written, "nothing to change");
+
+    await clearStore(root).applyEncryption();
+    assert.deepEqual(JSON.parse(fileOf(root)), [{ name: "GITLAB_TOKEN", text: "secret" }]);
+  });
+
+  it("keep a value sealed under another keychain, out of the tabs, until it is replaced", async () => {
+    fakeSafeStorage();
+    const root = tempRoot();
+    const lost = { name: "LOST", sealed: Buffer.from("under another keychain").toString("base64") };
+    fs.writeFileSync(path.join(root, "environment.json"), JSON.stringify([lost]));
+    const store = clearStore(root);
+    assert.deepEqual(await store.values(), {});
+    await store.applyEncryption();
+    assert.deepEqual(JSON.parse(fileOf(root)), [lost], "not lost for the checkbox");
+    await store.set([row("LOST", "typed again")]);
+    assert.deepEqual(await store.values(), { LOST: "typed again" });
+  });
+
+  it("refuse to store a value where the OS offers no encryption, and keep serving what is there", async () => {
+    fakeSafeStorage(false);
+    const root = tempRoot();
+    await clearStore(root).set([row("GITLAB_TOKEN", "secret")]);
+    const before = fileOf(root);
+    const store = new EnvStore(root, () => true);
+    await assert.rejects(store.set([row("STRIPE_KEY", "sk")]), /no keyring.*Encrypt stored values/);
+    await assert.rejects(store.edit([{ name: "GITLAB_TOKEN", from: "GITLAB_TOKEN" }], true), /no keyring/);
+    await store.applyEncryption();
+    assert.equal(fileOf(root), before, "left as it was");
+    assert.deepEqual(await store.values(), { GITLAB_TOKEN: "secret" });
+    fakeSafeStorage();
   });
 
   it("tell the machine's variables from those a TET it was started from set", () => {
@@ -368,21 +429,21 @@ describe("the environment variables kept in TET", () => {
     });
   });
 
-  it("write nothing over a file they cannot read, and drop no row they do not understand", () => {
+  it("write nothing over a file they cannot read, and drop no row they do not understand", async () => {
     const root = tempRoot();
     const file = path.join(root, "environment.json");
     const unreadable = '[{"name": "GITLAB_TOKEN", "value": "c2VhbGVkOng="}, ';
     fs.writeFileSync(file, unreadable);
-    const broken = new EnvStore(root);
+    const broken = clearStore(root);
     assert.deepEqual(broken.list(), []);
-    assert.deepEqual(broken.values(), {});
-    assert.throws(() => broken.set([row("GITHUB_TOKEN", "token")]), /environment\.json/);
-    assert.throws(() => broken.remove("GITLAB_TOKEN"), /environment\.json/);
+    assert.deepEqual(await broken.values(), {});
+    await assert.rejects(broken.set([row("GITHUB_TOKEN", "token")]), /environment\.json/);
+    await assert.rejects(broken.remove("GITLAB_TOKEN"), /environment\.json/);
     assert.equal(fs.readFileSync(file, "utf8"), unreadable, "left as it was");
 
     fs.writeFileSync(file, JSON.stringify([{ name: "FUTURE", value: 7 }]));
-    const store = new EnvStore(root);
-    store.set([row("GITHUB_TOKEN", "token")]);
+    const store = clearStore(root);
+    await store.set([row("GITHUB_TOKEN", "token")]);
     assert.deepEqual(
       (JSON.parse(fs.readFileSync(file, "utf8")) as { name: string }[]).map((entry) => entry.name),
       ["FUTURE", "GITHUB_TOKEN"],
@@ -394,20 +455,23 @@ describe("the environment variables kept in TET", () => {
     );
   });
 
-  it("take the Settings' tab whole: added, renamed with its value, replaced, and the rest deleted", () => {
-    const store = new EnvStore(tempRoot());
-    store.set([row("GITLAB_TOKEN", "gl"), row("STRIPE_KEY", "sk"), row("OLD", "o")]);
-    store.edit([
-      { name: "GITLAB_API_TOKEN", from: "GITLAB_TOKEN" },
-      { name: "STRIPE_KEY", from: "STRIPE_KEY", value: "sk-new" },
-      { name: "SENDGRID_API_KEY", value: "sg" },
-    ]);
-    assert.deepEqual(store.values(), { GITLAB_API_TOKEN: "gl", STRIPE_KEY: "sk-new", SENDGRID_API_KEY: "sg" });
+  it("take the Settings' tab whole: added, renamed with its value, replaced, and the rest deleted", async () => {
+    const store = clearStore(tempRoot());
+    await store.set([row("GITLAB_TOKEN", "gl"), row("STRIPE_KEY", "sk"), row("OLD", "o")]);
+    await store.edit(
+      [
+        { name: "GITLAB_API_TOKEN", from: "GITLAB_TOKEN" },
+        { name: "STRIPE_KEY", from: "STRIPE_KEY", value: "sk-new" },
+        { name: "SENDGRID_API_KEY", value: "sg" },
+      ],
+      false,
+    );
+    assert.deepEqual(await store.values(), { GITLAB_API_TOKEN: "gl", STRIPE_KEY: "sk-new", SENDGRID_API_KEY: "sg" });
   });
 
-  it("refuse the Settings' tab with a row it cannot take, changing nothing", () => {
-    const store = new EnvStore(tempRoot());
-    store.set([row("GITLAB_TOKEN", "gl")]);
+  it("refuse the Settings' tab with a row it cannot take, changing nothing", async () => {
+    const store = clearStore(tempRoot());
+    await store.set([row("GITLAB_TOKEN", "gl")]);
     const refusals: [{ name: string; from?: string; value?: string }[], RegExp][] = [
       [[{ name: "1TOKEN", value: "x" }], /not an environment variable name/],
       [[{ name: "Path", value: "x" }], /TET's own to set/],
@@ -421,14 +485,14 @@ describe("the environment variables kept in TET", () => {
       ],
     ];
     for (const [rows, refusal] of refusals) {
-      assert.throws(() => store.edit(rows), refusal);
+      await assert.rejects(store.edit(rows, false), refusal);
     }
-    assert.deepEqual(store.values(), { GITLAB_TOKEN: "gl" }, "left as it was");
+    assert.deepEqual(await store.values(), { GITLAB_TOKEN: "gl" }, "left as it was");
   });
 
   it("are asked for one request at a time, several names in one, every one needing a value", async () => {
-    const store = new EnvStore(tempRoot());
-    store.set([row("AUTOCONTRACT_USER", "old")]);
+    const store = clearStore(tempRoot());
+    await store.set([row("AUTOCONTRACT_USER", "old")]);
     const shown: EnvRequest[] = [];
     const requests = new EnvRequests(
       store,
@@ -447,17 +511,18 @@ describe("the environment variables kept in TET", () => {
       { name: "AUTOCONTRACT_USER", overridesMachine: false, stored: true },
       { name: "AUTOCONTRACT_PASSWORD", overridesMachine: false, stored: false },
     ]);
-    const missing = requests.answer(1, [row("AUTOCONTRACT_USER", "admin")]);
+    const missing = await requests.answer(1, [row("AUTOCONTRACT_USER", "admin")]);
     assert.ok(!missing.ok);
     assert.match(missing.error, /needs a value/, "one missing");
-    assert.deepEqual(requests.answer(1, [row("AUTOCONTRACT_USER", "admin"), row("AUTOCONTRACT_PASSWORD", "secret"), row("OTHER", "x")]), {
-      ok: true,
-    });
+    assert.deepEqual(
+      await requests.answer(1, [row("AUTOCONTRACT_USER", "admin"), row("AUTOCONTRACT_PASSWORD", "secret"), row("OTHER", "x")]),
+      { ok: true },
+    );
     assert.deepEqual(await first, ["AUTOCONTRACT_USER", "AUTOCONTRACT_PASSWORD"]);
-    assert.deepEqual(store.values(), { AUTOCONTRACT_USER: "admin", AUTOCONTRACT_PASSWORD: "secret" }, "only what was asked for");
+    assert.deepEqual(await store.values(), { AUTOCONTRACT_USER: "admin", AUTOCONTRACT_PASSWORD: "secret" }, "only what was asked for");
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(shown.length, 2);
-    assert.deepEqual(requests.answer(2, null), { ok: true });
+    assert.deepEqual(await requests.answer(2, null), { ok: true });
     assert.equal(await second, undefined);
   });
 
@@ -465,7 +530,7 @@ describe("the environment variables kept in TET", () => {
     const withdrawn: number[] = [];
     let listening = true;
     const requests = new EnvRequests(
-      new EnvStore(tempRoot()),
+      clearStore(tempRoot()),
       () => listening,
       (id) => withdrawn.push(id),
     );
@@ -475,10 +540,10 @@ describe("the environment variables kept in TET", () => {
     caller.abort();
     assert.equal(await asked, undefined);
     assert.deepEqual(withdrawn, [1]);
-    const late = requests.answer(1, [row("GITHUB_TOKEN", "x")]);
+    const late = await requests.answer(1, [row("GITHUB_TOKEN", "x")]);
     assert.ok(!late.ok);
     assert.match(late.error, /stopped waiting/);
-    assert.deepEqual(requests.answer(1, null), { ok: true }, "a late Cancel needs no words");
+    assert.deepEqual(await requests.answer(1, null), { ok: true }, "a late Cancel needs no words");
     listening = false;
     await assert.rejects(requests.ask({ names: ["GITHUB_TOKEN"] }, new AbortController().signal), /not ready/);
   });
@@ -522,6 +587,9 @@ describe("the stores", () => {
       deleteTagOnRemote: false,
       deleteWorktreeOnRemote: false,
     });
+    assert.deepEqual(settings.environment, { encryptValues: true }, "encrypted unless unticked");
+    fs.writeFileSync(file, JSON.stringify({ environment: { encryptValues: false } }));
+    assert.deepEqual(new SettingsStore(dir).get().environment, { encryptValues: false });
     assert.equal(settings.appearance.colorScheme, "system");
     assert.equal(settings.appearance.darkTheme, "solarized", "an unknown id is left standing for the readers to fall back from");
     assert.equal(settings.appearance.lightTheme, "light-modern");

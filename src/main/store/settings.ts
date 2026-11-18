@@ -42,6 +42,9 @@ const DEFAULTS: AppSettings = {
     texts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptTexts,
     commitSuggesters: [],
   },
+  environment: {
+    encryptValues: true,
+  },
 };
 
 /** Reading and editing the settings, all either transport does with them: both take this rather
@@ -104,6 +107,7 @@ function normalize(stored: unknown): AppSettings {
     files: files(recordOf(value.files)),
     git: switches(recordOf(value.git), DEFAULTS.git),
     prompts: prompts(recordOf(value.prompts)),
+    environment: switches(recordOf(value.environment), DEFAULTS.environment),
   };
 }
 

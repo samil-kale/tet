@@ -102,7 +102,7 @@ const api: TETApi = {
   },
   env: {
     list: () => invoke("env:list"),
-    save: (rows) => invoke("env:save", rows),
+    save: (rows, encryptValues) => invoke("env:save", rows, encryptValues),
     answer: (id, answer) => invoke("env:answer", id, answer),
     onRequest: (listener) => subscribe("env:request", listener),
     onWithdrawn: (listener) => subscribe("env:withdrawn", listener),

@@ -256,9 +256,9 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "env-list": () => ({ result: deps.environment.list() }),
 
-    "env-remove": (args) => {
+    "env-remove": async (args) => {
       const name = text(args, "name", "variable name");
-      if (!deps.environment.remove(name)) {
+      if (!(await deps.environment.remove(name))) {
         throw new ControlError("not_found", `TET keeps no environment variable named ${name}`);
       }
       return { result: { removed: name } };

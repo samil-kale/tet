@@ -10,6 +10,7 @@ import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
 import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminals/pty";
+import { TerminalSession } from "../../src/main/terminals/terminal-session";
 import { accountEnv, sandboxTetValues } from "../../src/main/terminals/account-env";
 import { PROVIDERS } from "../../src/main/providers";
 import type { TabAccount } from "../../src/main/providers/issues";
@@ -496,47 +497,63 @@ describe("a terminal's environment", () => {
   });
 
   it("sets the variables kept in TET over the machine's own, and none in a sandbox", () => {
-    let stored: Record<string, string> = { TET_TEST_STORED: "first", TET_TEST_MACHINE: "stored" };
-    const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => stored };
+    const stored = { TET_TEST_STORED: "first", TET_TEST_MACHINE: "stored" };
+    const terminal = NO_TERMINAL_ENV;
     // TET_KEPT_ENV is set and unset below, and an outer TET leaves its own in process.env.
     withEnv({ TET_TEST_MACHINE: "machine", TET_KEPT_ENV: process.env.TET_KEPT_ENV }, () => {
-      const env = buildEnv(terminal, { env: { TET_TEST_STORED: "agent" } });
+      const env = buildEnv(terminal, { env: { TET_TEST_STORED: "agent" }, stored });
       assert.equal(env.TET_TEST_STORED, "first", "above an agent's default");
       assert.equal(env.TET_TEST_MACHINE, "stored", "above the machine's own");
-      assert.equal(buildEnv(terminal, { side: SANDBOX_CALLER }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
+      assert.equal(buildEnv(terminal, { side: SANDBOX_CALLER, stored }).TET_TEST_MACHINE, "machine", "a sandbox keeps the machine's");
       assert.equal(env.TET_KEPT_ENV, "TET_TEST_STORED,TET_TEST_MACHINE", "what it got from TET, named");
-      assert.deepEqual(storedEnvOf(terminal, HOST_CALLER), {
+      assert.deepEqual(storedEnvOf(HOST_CALLER, stored), {
         TET_TEST_STORED: "first",
         TET_TEST_MACHINE: "stored",
         TET_KEPT_ENV: "TET_TEST_STORED,TET_TEST_MACHINE",
       });
-      assert.deepEqual(storedEnvOf(terminal, SANDBOX_CALLER), {}, "a sandbox gets none");
-      stored = { TET_TEST_STORED: "second" };
-      assert.equal(buildEnv(terminal, {}).TET_TEST_STORED, "second", "read at every spawn, so a restart sees it");
+      assert.deepEqual(storedEnvOf(SANDBOX_CALLER, stored), {}, "a sandbox gets none");
       // A TET started from a tab of another inherits that one's list; its own tabs get their own.
       process.env.TET_KEPT_ENV = "OUTER";
-      stored = {};
       assert.equal(buildEnv(terminal, {}).TET_KEPT_ENV, undefined, "none kept, none named");
       delete process.env.TET_KEPT_ENV;
-      assert.equal(buildEnv(terminal, { side: SANDBOX_CALLER }).TET_TEST_STORED, undefined, "a sandbox gets none");
+      assert.equal(buildEnv(terminal, { side: SANDBOX_CALLER, stored }).TET_TEST_STORED, undefined, "a sandbox gets none");
     });
   });
 
   it("sets a tab's account like the variables kept in TET, named with them, and none in a sandbox", () => {
-    const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => ({ TET_TEST_STORED: "stored" }) };
+    const stored = { TET_TEST_STORED: "stored" };
     const account = { TET_TEST_ACCOUNT: "token" };
-    assert.deepEqual(storedEnvOf(terminal, HOST_CALLER, account), {
+    assert.deepEqual(storedEnvOf(HOST_CALLER, stored, account), {
       TET_TEST_ACCOUNT: "token",
       TET_TEST_STORED: "stored",
       TET_KEPT_ENV: "TET_TEST_ACCOUNT,TET_TEST_STORED",
     });
-    assert.equal(buildEnv(terminal, { account }).TET_TEST_ACCOUNT, "token");
-    assert.deepEqual(storedEnvOf(terminal, SANDBOX_CALLER, account), {}, "a sandbox gets none");
+    assert.equal(buildEnv(NO_TERMINAL_ENV, { stored, account }).TET_TEST_ACCOUNT, "token");
+    assert.deepEqual(storedEnvOf(SANDBOX_CALLER, stored, account), {}, "a sandbox gets none");
+  });
+
+  it("respawns in place with the variables kept in TET as they are at the restart", () => {
+    const spawned: (Record<string, string> | undefined)[] = [];
+    const session = new TerminalSession(
+      "command",
+      { cwd: ".", stored: { TET_TEST_STORED: "first" }, terminalEnv: NO_TERMINAL_ENV },
+      { onOutput: () => undefined, onStatusChange: () => undefined },
+      0,
+      [],
+      (_executable, _args, options) => {
+        spawned.push(options.stored);
+        return new FakeProcess(false) as unknown as IPty;
+      },
+    );
+    session.markInstalled(true);
+    session.ensureStarted(80, 24);
+    session.restart({ TET_TEST_STORED: "second" });
+    (session as unknown as { process: FakeProcess }).process.exit();
+    assert.deepEqual(spawned, [{ TET_TEST_STORED: "first" }, { TET_TEST_STORED: "second" }]);
   });
 
   it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {
-    const terminal: TerminalEnv = { ...NO_TERMINAL_ENV, stored: () => ({ tet_test_case: "stored" }) };
-    const env = withEnv({ TET_TEST_CASE: "machine" }, () => buildEnv(terminal, {}));
+    const env = withEnv({ TET_TEST_CASE: "machine" }, () => buildEnv(NO_TERMINAL_ENV, { stored: { tet_test_case: "stored" } }));
     const names = Object.keys(env).filter((name) => name.toUpperCase() === "TET_TEST_CASE");
     assert.deepEqual(
       names.map((name) => env[name]),

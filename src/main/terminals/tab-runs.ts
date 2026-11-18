@@ -205,7 +205,7 @@ export class TabRuns {
         }
         await this.writeInitialFile(tab, place);
         const launch = await place.launch(this.launchInput(tab));
-        const account = await this.accountOf(place.side);
+        const [stored, account] = await Promise.all([this.storedOf(place.side), this.accountOf(place.side)]);
         const dims = this.runs.get(tabId)?.size;
         if (!dims || !this.target.onStrip(tab) || this.sessionOf(tabId) || tab.openedInTerminal) {
           // Closed (or opened in a terminal) while the setup ran: nothing reads a copy it made.
@@ -214,7 +214,7 @@ export class TabRuns {
           }
           return;
         }
-        this.startSession(tab, place, launch, account).ensureStarted(dims.cols, dims.rows);
+        this.startSession(tab, place, launch, stored, account).ensureStarted(dims.cols, dims.rows);
       })
       .catch((error: unknown) => {
         this.callbacks.onNotice("error", `${runtime.agent.displayName} could not be started: ${errorMessage(error)}`);
@@ -239,6 +239,11 @@ export class TabRuns {
     const [seen] = await place.handPaths([file]);
     tab.initialFile = undefined;
     tab.initialPrompt = seen === undefined ? undefined : `${initialFile.prompt} ${seen}`;
+  }
+
+  /** The variables kept in TET, read for a start on `side`: only where they reach it. */
+  private storedOf(side: TabPlace["side"]): Promise<Record<string, string>> {
+    return side.storedEnv ? this.terminalEnv.stored() : Promise.resolve({});
   }
 
   /** What a tab on `side` gets of the project's account: only where the stored variables reach it. */
@@ -298,7 +303,13 @@ export class TabRuns {
     this.reportOutput(tab, "\x1bc");
   }
 
-  private startSession(tab: TabState, place: TabPlace, launch: Launch, account: Record<string, string>): TerminalSession {
+  private startSession(
+    tab: TabState,
+    place: TabPlace,
+    launch: Launch,
+    stored: Record<string, string>,
+    account: Record<string, string>,
+  ): TerminalSession {
     const runtime = this.target.runtimeFor(tab.agentId);
     const { agent } = runtime;
     const tabId = tab.tabId;
@@ -350,6 +361,7 @@ export class TabRuns {
           [CONTROL_ENV.tabId]: tabId,
         },
         side: place.side,
+        stored,
         account,
         terminalEnv: this.terminalEnv,
       },
@@ -459,7 +471,12 @@ export class TabRuns {
         return false;
       }
       tab.restarted = true;
-      session.restart();
+      void this.storedOf(this.target.placeOf(tab).side).then((stored) => {
+        // Closed, or started by a second click, while the variables were read.
+        if (this.sessionOf(tabId) === session && (running || tab.status !== "running")) {
+          session.restart(stored);
+        }
+      });
       return true;
     }
     if (!this.runs.get(tabId)?.size) {
@@ -525,8 +542,8 @@ export class TabRuns {
     const session = this.sessionOf(tabId);
     // Before the terminal opens, so no fit starts the tab meanwhile.
     tab.openedInTerminal = true;
-    const [gone, account] = await Promise.all([session?.stop(), this.accountOf(side)]);
-    const variables = storedEnvOf(this.terminalEnv, side, account);
+    const [gone, stored, account] = await Promise.all([session?.stop(), this.storedOf(side), this.accountOf(side)]);
+    const variables = storedEnvOf(side, stored, account);
     // Closed or archived meanwhile: the session is being deleted or kept, nothing resumes it here.
     if (!this.target.onStrip(tab)) {
       tab.openedInTerminal = undefined;

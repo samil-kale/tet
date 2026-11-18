@@ -75,8 +75,14 @@ export interface PromptSettings {
   commitSuggesters: SuggesterEntry[];
 }
 
+/** The Environment tab; its variables have a store of their own (store/environment.ts). */
+export interface EnvironmentSettings {
+  /** The values lie encrypted by the OS; unticked, in the clear, for a file shared between machines. */
+  encryptValues: boolean;
+}
+
 /** What TET keeps about itself, not about a repository; written whole, one object per tab of the
- *  settings dialog that has values here (Environment keeps its own store, Info none). A new setting
+ *  settings dialog that has values here (Info has none). A new setting
  *  joins its tab's object, never the top level. The dialog holds no setting of a project: those are
  *  tet.json's, edited where they show. `normalize` (store/settings.ts) reads every key back
  *  defensively, with its default. */
@@ -86,6 +92,7 @@ export interface AppSettings {
   files: FilesSettings;
   git: GitSettings;
   prompts: PromptSettings;
+  environment: EnvironmentSettings;
 }
 
 /**
@@ -99,6 +106,7 @@ export interface SettingsEdits {
   files?: Partial<FilesSettings>;
   git?: Partial<GitSettings>;
   prompts?: Partial<Omit<PromptSettings, "texts">> & { texts?: Partial<PromptTexts> };
+  environment?: Partial<EnvironmentSettings>;
 }
 
 /** `edits` laid over `base`, by that rule. */
@@ -109,6 +117,7 @@ export function withSettings<T extends SettingsEdits>(base: T, edits: SettingsEd
     ...(edits.notifications && { notifications: { ...base.notifications, ...edits.notifications } }),
     ...(edits.files && { files: { ...base.files, ...edits.files } }),
     ...(edits.git && { git: { ...base.git, ...edits.git } }),
+    ...(edits.environment && { environment: { ...base.environment, ...edits.environment } }),
     ...(edits.prompts && {
       prompts: {
         ...base.prompts,

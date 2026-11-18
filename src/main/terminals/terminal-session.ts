@@ -52,7 +52,7 @@ export class TerminalSession {
   constructor(
     private readonly executable: string,
     /** Every spawn's options but the size, which `ensureStarted` brings. */
-    private readonly spawn: Omit<SpawnOptions, "cols" | "rows">,
+    private spawn: Omit<SpawnOptions, "cols" | "rows">,
     private readonly callbacks: SessionCallbacks,
     /** How many Ctrl+C bytes this agent wants before it is killed; 0 asks for none. */
     private readonly quitPresses: number,
@@ -168,14 +168,15 @@ export class TerminalSession {
     }
   }
 
-  /** Kills and respawns at the same size, on the old process's exit: `start`'s handler clears
-   *  `this.process`, and firing late it would clobber an immediate respawn. No-op before the first
-   *  `ensureStarted`. */
-  restart(): void {
+  /** Kills and respawns at the same size with the variables kept in TET as they are now (`stored`), on
+   *  the old process's exit: `start`'s handler clears `this.process`, and firing late it would clobber
+   *  an immediate respawn. No-op before the first `ensureStarted`. */
+  restart(stored: Record<string, string>): void {
     const size = this.lastSize;
     if (size === undefined || this.restartQueued) {
       return;
     }
+    this.spawn = { ...this.spawn, stored };
     const respawn = (): void => {
       this.restartQueued = false;
       // A `stop()` mid-kill wins: a process spawned now would never be killed.

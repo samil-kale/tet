@@ -212,9 +212,9 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
     changing,
   } = useSubmit(
     async () => {
-      if (variablesEdited.current) {
+      if (variablesEdited.current && settings) {
         const rows = variables.flatMap((row) => envEdit(row) ?? []);
-        const saved = await window.tet.env.save(rows);
+        const saved = await window.tet.env.save(rows, settings.environment.encryptValues);
         if (!saved.ok) {
           return saved.error;
         }
@@ -286,6 +286,11 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
     setVariables(change);
   });
   const envRows = typedRows("variable", BLANK_ENV_ROW, editVariables);
+  /** Saved with the variables, which it rewrites (`env.save`), never through `edits`. */
+  const editEncryption = changing((encryptValues: boolean): void => {
+    variablesEdited.current = true;
+    setSettings((current) => (current ? { ...current, environment: { encryptValues } } : current));
+  });
 
   const envRowMarks = useMemo(() => envMarks(variables), [variables]);
   const blocked = firstMark(envRowMarks.values());
@@ -466,6 +471,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
             )}
             add={envRows.add}
           />
+          {settings && <Checkbox label="Encrypt stored values" checked={settings.environment.encryptValues} onChange={editEncryption} />}
         </FieldColumn>
       )}
       {shown === "info" && info && (

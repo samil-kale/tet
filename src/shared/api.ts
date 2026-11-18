@@ -226,8 +226,8 @@ export interface TETApi {
   env: {
     /** Never the values. */
     list: () => Promise<EnvVarInfo[]>;
-    /** The Settings' Environment tab, whole: why it could not be saved, else nothing. */
-    save: (rows: EnvEdit[]) => Promise<ActionResult>;
+    /** The Settings' Environment tab, whole, its checkbox with it: why it could not be saved, else nothing. */
+    save: (rows: EnvEdit[], encryptValues: boolean) => Promise<ActionResult>;
     /** The dialog's Save (a row per variable) or Cancel (null): why it could not be saved, else nothing. */
     answer: (id: number, answer: EnvAnswer[] | null) => Promise<ActionResult>;
     /** An agent asked through `tet-ctl env-request`; one at a time. */

@@ -539,7 +539,7 @@ function deps(): ControlDeps {
     },
     environment: {
       list: () => envNames.map((name) => ({ name, overridesMachine: name === "PATH" })),
-      remove: (name) => {
+      remove: async (name) => {
         const kept = envNames.filter((entry) => entry !== name);
         const removed = kept.length < envNames.length;
         envNames = kept;
@@ -690,6 +690,7 @@ describe("tet-ctl against the control server", () => {
         deleteWorktreeOnRemote: false,
       },
       prompts: { texts: { commitMessage: "", handover: "", issue: "" }, commitSuggesters: [] },
+      environment: { encryptValues: true },
     };
     for (const list of Object.values(calls) as unknown[][]) {
       list.length = 0;

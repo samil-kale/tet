@@ -40,7 +40,7 @@ export class EnvRequests {
   }
 
   /** The dialog's Save (a row per variable) or Cancel (null); a string is why it could not be saved. */
-  answer(id: number, answer: EnvAnswer[] | null): ActionResult {
+  async answer(id: number, answer: EnvAnswer[] | null): Promise<ActionResult> {
     const open = this.open;
     if (open?.request.id !== id) {
       // Withdrawn while the user typed: nothing waits for it any more, and nothing was saved.
@@ -57,11 +57,14 @@ export class EnvRequests {
       return { ok: false, error: "Every variable needs a value" };
     }
     try {
-      this.store.set(rows.map((row) => ({ name: row!.name, value: row!.value })));
+      await this.store.set(rows.map((row) => ({ name: row!.name, value: row!.value })));
     } catch (error) {
       return failure(error);
     }
-    open.settle(asked);
+    // Withdrawn while it saved: the next request may be the open one by now.
+    if (this.open === open) {
+      open.settle(asked);
+    }
     return { ok: true };
   }
 
