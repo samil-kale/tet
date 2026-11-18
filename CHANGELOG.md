@@ -3,6 +3,21 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.25.3 (2026-11-18)
+
+- **Encrypted environment variables.** The values TET keeps are encrypted by the OS, those already
+  stored at the next start. Untick Encrypt stored values in the Settings' Environment tab to keep
+  them in the clear, for a file shared between machines.
+- **Confidential issues.** A new issue can be made confidential where the tracker allows it.
+- **Issue attachments.** A link to a file uploaded to an issue saves it with your account's access,
+  so attachments of private repositories download too.
+- **Restarting after a variable request.** Saving the variables an agent asked for no longer
+  restarts its tab: the agent tells you when to.
+- **Livelier issue rows.** Rows animate as the tracker adds and removes issues, and a newly added
+  row scrolls into view.
+- **Fixes.** Issue rows stay within their column with their marker aligned to the text, corner radii
+  are consistent, and row sections keep their padding at the scroll edges.
+
 ## 0.25.2 (2026-11-15)
 
 - **One session per issue.** An issue has one session and a session one issue: once linked, the
