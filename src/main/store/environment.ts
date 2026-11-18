@@ -70,7 +70,7 @@ interface Contents {
  * every project: encrypted or in the clear as the Environment tab says (`encryptValues`), and set over
  * what the machine sets itself, said in a notice. A value leaves this class only into a tab's
  * environment; the renderer and `tet-ctl` never see one. A running tab takes them up only when
- * restarted: the dialog's Save restarts the asking one. None in a sandbox, whose side neither admits
+ * restarted, the asking one too (`restartRequired`). None in a sandbox, whose side neither admits
  * the verbs nor mentions them (`ControlSide.admits`).
  *
  * Read from the file on every call, never held: the file is small, and what changed it from outside
