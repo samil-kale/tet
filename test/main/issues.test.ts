@@ -49,9 +49,9 @@ describe("the issues of a project", () => {
     t.mock.method(PROVIDERS.github, "listIssues", async (_tracker: Tracker, filter: unknown) => {
       asked.push(filter);
       return [
-        { number: 1, updatedAt: "2026-11-02T00:00:00Z" },
-        { number: 2, updatedAt: "2026-11-02T00:00:00Z" },
-        { number: 3, updatedAt: "2026-10-01T00:00:00Z" },
+        { number: 1, open: true, updatedAt: "2026-11-02T00:00:00Z" },
+        { number: 2, open: true, updatedAt: "2026-11-02T00:00:00Z" },
+        { number: 3, open: true, updatedAt: "2026-10-01T00:00:00Z" },
       ];
     });
     const dataRoot = tempDir("tet-issues-data-");
