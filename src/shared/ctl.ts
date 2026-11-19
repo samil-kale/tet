@@ -260,7 +260,7 @@ const VERBS = [
     group: "Settings",
     usage: `settings-set-git <${GIT_SETTING_IDS.join("|")}> <on|off>`,
     summary:
-      'Set how git\'s checkboxes start: new changes checked, "Also push" on commit, and deleting a branch, tag or worktree on the remote too.',
+      'Set how git\'s checkboxes start: new changes checked, "Also push" on commit, and renaming or deleting a branch, or deleting a tag or worktree, on the remote too.',
     positionals: ["id", "value"],
   },
   {

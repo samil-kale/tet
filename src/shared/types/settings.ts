@@ -45,6 +45,8 @@ export interface GitSettings {
   checkNewChanges: boolean;
   /** The commit question's "Also push". */
   pushOnCommit: boolean;
+  /** The rename question's "Also rename on the remote". */
+  renameBranchOnRemote: boolean;
   /** "Also delete on the remote", when deleting a branch, a tag or a worktree. */
   deleteBranchOnRemote: boolean;
   deleteTagOnRemote: boolean;
@@ -54,6 +56,7 @@ export interface GitSettings {
 export const GIT_SETTING_IDS = [
   "checkNewChanges",
   "pushOnCommit",
+  "renameBranchOnRemote",
   "deleteBranchOnRemote",
   "deleteTagOnRemote",
   "deleteWorktreeOnRemote",

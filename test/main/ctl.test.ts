@@ -685,6 +685,7 @@ describe("tet-ctl against the control server", () => {
       git: {
         checkNewChanges: false,
         pushOnCommit: false,
+        renameBranchOnRemote: false,
         deleteBranchOnRemote: false,
         deleteTagOnRemote: false,
         deleteWorktreeOnRemote: false,

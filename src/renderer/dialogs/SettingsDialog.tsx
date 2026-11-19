@@ -129,6 +129,7 @@ const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[
 const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
   { key: "checkNewChanges", label: "Check new changes for the next commit" },
   { key: "pushOnCommit", label: "Also push when committing" },
+  { key: "renameBranchOnRemote", label: "Also rename branch on the remote" },
   { key: "deleteBranchOnRemote", label: "Also delete branch on the remote" },
   { key: "deleteTagOnRemote", label: "Also delete tag on the remote" },
   { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" },

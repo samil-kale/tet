@@ -34,6 +34,7 @@ const DEFAULTS: AppSettings = {
   git: {
     checkNewChanges: false,
     pushOnCommit: false,
+    renameBranchOnRemote: false,
     deleteBranchOnRemote: false,
     deleteTagOnRemote: false,
     deleteWorktreeOnRemote: false,

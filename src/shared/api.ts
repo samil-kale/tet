@@ -255,6 +255,9 @@ export interface TETApi {
     /** Creates the branch off `startPoint` and switches to it. */
     createBranch: (ref: ProjectRef, name: string, startPoint: CheckoutTarget) => Promise<GitCommandResult>;
     renameBranch: (ref: ProjectRef, from: string, to: string) => Promise<GitCommandResult>;
+    /** After `renameBranch`, for its upstream: publishes `name` on `remote`, as the branch's upstream,
+     *  and deletes `previous` there. The caller confirms first. */
+    renameRemoteBranch: (ref: ProjectRef, remote: string, name: string, previous: string, login?: GitLogin) => Promise<GitCommandResult>;
     /** The caller confirms first. The checked-out branch gives way to the default branch; `onRemote`
      *  deletes its upstream. */
     deleteBranch: (ref: ProjectRef, name: string, onRemote: boolean) => Promise<GitCommandResult>;

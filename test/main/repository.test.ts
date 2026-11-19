@@ -223,6 +223,29 @@ describe("a repository with a remote, as GitHub Desktop drives it", () => {
     assert.equal(git(bare, "branch", "--list", "feature"), "", "gone from the remote too");
   });
 
+  it("renames a branch on the remote: publishes the new name as its upstream, then deletes the old one", async () => {
+    git(dir, "switch", "-q", "--create", "before");
+    git(dir, "push", "-q", "--set-upstream", "origin", "before");
+    assert.deepEqual(await repository.renameBranch("before", "after"), { ok: true });
+    assert.deepEqual(await repository.renameRemoteBranch("origin", "after", "before"), { ok: true });
+    assert.equal(git(bare, "branch", "--list", "before"), "");
+    assert.match(git(bare, "branch", "--list", "after"), /after/);
+    assert.equal(git(dir, "config", "branch.after.merge"), "refs/heads/after");
+    git(dir, "switch", "-q", "main");
+    await repository.refresh();
+  });
+
+  it("keeps the remote branch when its name already is the new one", async () => {
+    git(dir, "switch", "-q", "--create", "tracking");
+    git(dir, "push", "-q", "origin", "tracking:target");
+    git(dir, "branch", "--set-upstream-to=origin/target");
+    assert.deepEqual(await repository.renameBranch("tracking", "target"), { ok: true });
+    assert.deepEqual(await repository.renameRemoteBranch("origin", "target", "target"), { ok: true });
+    assert.match(git(bare, "branch", "--list", "target"), /target/);
+    git(dir, "switch", "-q", "main");
+    await repository.refresh();
+  });
+
   it("refuses to delete the checked-out branch with no default branch to switch to", async () => {
     git(dir, "remote", "set-head", "origin", "--delete");
     git(dir, "branch", "-m", "main", "trunk");

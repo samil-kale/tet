@@ -558,6 +558,19 @@ export class Repository {
     return this.configAction(() => git.renameBranch(this.at.path, from, to));
   }
 
+  /** The second half of a rename on the remote, after `renameBranch`: publishes `name` there, which
+   *  makes it the upstream, then deletes `previous` unless it is the same branch. Tried again with a
+   *  login for the same two steps. */
+  renameRemoteBranch(remote: string, name: string, previous: string, login?: GitLogin): Promise<GitCommandResult> {
+    return this.configAction(async () => {
+      const published = await this.network(remote, login, (networkLogin) => git.push(this.at.path, remote, name, undefined, networkLogin));
+      if (!published.ok || previous === name) {
+        return published;
+      }
+      return this.network(remote, login, (networkLogin) => git.deleteRemoteBranch(this.at.path, remote, previous, networkLogin));
+    });
+  }
+
   /** Locally and, if asked, its upstream on the remote. Local first: it can't fail for reasons off the
    *  machine. The checked-out branch gives way to the default branch first, as in GitHub Desktop. */
   deleteBranch(name: string, onRemote: boolean): Promise<GitCommandResult> {

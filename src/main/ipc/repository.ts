@@ -101,6 +101,12 @@ export function registerRepositoryIpc({
     inRepository((repository, from: string, to: string) => repository.renameBranch(from, to)),
   );
   handle(
+    "repository:rename-remote-branch",
+    inRepository((repository, remote: string, name: string, previous: string, login?: GitLogin) =>
+      repository.renameRemoteBranch(remote, name, previous, login),
+    ),
+  );
+  handle(
     "repository:delete-branch",
     inRepository((repository, name: string, onRemote: boolean) => repository.deleteBranch(name, onRemote)),
   );

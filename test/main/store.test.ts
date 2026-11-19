@@ -583,6 +583,7 @@ describe("the stores", () => {
     assert.deepEqual(settings.git, {
       checkNewChanges: false,
       pushOnCommit: true,
+      renameBranchOnRemote: false,
       deleteBranchOnRemote: false,
       deleteTagOnRemote: false,
       deleteWorktreeOnRemote: false,

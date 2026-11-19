@@ -86,6 +86,7 @@ export interface InvokeChannels {
   "repository:set-remote-url": TETApi["repository"]["setRemoteUrl"];
   "repository:create-branch": TETApi["repository"]["createBranch"];
   "repository:rename-branch": TETApi["repository"]["renameBranch"];
+  "repository:rename-remote-branch": TETApi["repository"]["renameRemoteBranch"];
   "repository:delete-branch": TETApi["repository"]["deleteBranch"];
   "repository:delete-remote-branch": TETApi["repository"]["deleteRemoteBranch"];
   "repository:merge": TETApi["repository"]["merge"];

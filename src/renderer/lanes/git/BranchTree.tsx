@@ -9,7 +9,7 @@ import { runWithFollowUp, type BranchActions } from "../../git/run-action";
 import { COLUMN_STEP, INDENT_BASE, TreeRow } from "../../ui/tree-row";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirm, confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
-import { TextField } from "../../ui/Field";
+import { Checkbox, TextField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
 import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
@@ -147,13 +147,48 @@ export const BranchTree = memo(function BranchTree({
     });
   };
 
+  /** Renames locally; where the branch has an upstream, a checkbox renames it on the remote too, run
+   *  once the question is gone so that a login can be asked (as the delete's second half). */
   const askRenameBranch = async (name: string): Promise<void> => {
-    await askName({
+    const upstream = upstreamOf(state, name);
+    const answer = await prompt({
       title: "Rename branch",
-      current: name,
+      value: { name, onRemote: upstream !== undefined && (await window.tet.settings.get()).git.renameBranchOnRemote },
       confirmLabel: "Rename",
-      submit: (typed) => branch.ask(`Renaming ${name}...`, () => repository.renameBranch(at, name, typed)),
+      ready: (value) => filled(value.name),
+      render: ({ value, onChange, error, busy, field }) => (
+        <>
+          <TextField
+            label="Name"
+            value={value.name}
+            onChange={(typed) => onChange((current) => ({ ...current, name: typed }))}
+            disabled={busy}
+            ref={field}
+            error={error}
+          />
+          {upstream && (
+            <Checkbox
+              label="Also rename on remote"
+              checked={value.onRemote}
+              disabled={busy}
+              onChange={(onRemote) => onChange((current) => ({ ...current, onRemote }))}
+            />
+          )}
+        </>
+      ),
+      submit: (value) => {
+        const typed = value.name.trim();
+        return typed === name
+          ? Promise.resolve(undefined)
+          : branch.ask(`Renaming ${name}...`, () => repository.renameBranch(at, name, typed));
+      },
     });
+    const typed = answer?.name.trim();
+    if (upstream && answer?.onRemote && typed !== undefined && typed !== name) {
+      branch.run(`Renaming ${upstream.remote}/${upstream.branch}...`, (login) =>
+        repository.renameRemoteBranch(at, upstream.remote, typed, upstream.branch, login),
+      );
+    }
   };
 
   /** `git branch -D`: unmerged work goes too, as the question says. The checked-out branch gives way

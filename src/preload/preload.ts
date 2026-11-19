@@ -117,6 +117,8 @@ const api: TETApi = {
     setRemoteUrl: (ref, remote, url) => invoke("repository:set-remote-url", ref, remote, url),
     createBranch: (ref, name, startPoint) => invoke("repository:create-branch", ref, name, startPoint),
     renameBranch: (ref, from, to) => invoke("repository:rename-branch", ref, from, to),
+    renameRemoteBranch: (ref, remote, name, previous, login) =>
+      invoke("repository:rename-remote-branch", ref, remote, name, previous, login),
     deleteBranch: (ref, name, onRemote) => invoke("repository:delete-branch", ref, name, onRemote),
     deleteRemoteBranch: (ref, remote, name, login) => invoke("repository:delete-remote-branch", ref, remote, name, login),
     merge: (ref, target) => invoke("repository:merge", ref, target),
