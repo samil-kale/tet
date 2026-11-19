@@ -17,7 +17,6 @@ import { useCollapsedGroups } from "../../ui/layout-storage";
 import { ArrowDownIcon, ArrowUpIcon, BranchIcon, RemoteIcon, StashIcon, TagIcon, ChevronIcon, WorktreeIcon } from "../../ui/icons";
 import { checkout as checkoutTarget, inLinkedWorktree, openWorktree as openWorktreeRef, WORKTREE_KEEPS_BRANCH } from "../../git/checkout";
 import { askDeleteWorktree, askRenameWorktree, MADE_ELSEWHERE, worktreeEntry } from "../../git/worktree-questions";
-import { CHANGE_REQUEST_TITLE } from "./ChangeRequest";
 
 interface BranchTreeProps {
   resolved: ResolvedRef;
@@ -29,6 +28,8 @@ interface BranchTreeProps {
   /** The section's pull or merge request (`askChangeRequest`), offered on the checked-out branch's
    *  row too; undefined while it cannot be opened, as its button is off. */
   onChangeRequest: (() => void) | undefined;
+  /** The entry's label (`changeRequestTitle`). */
+  changeRequestTitle: string;
 }
 
 /** The row the menu was opened on. */
@@ -78,7 +79,14 @@ function TreeGroup({
   );
 }
 
-export const BranchTree = memo(function BranchTree({ resolved, state, branch, onActivateRef, onChangeRequest }: BranchTreeProps) {
+export const BranchTree = memo(function BranchTree({
+  resolved,
+  state,
+  branch,
+  onActivateRef,
+  onChangeRequest,
+  changeRequestTitle,
+}: BranchTreeProps) {
   const at = resolved.ref;
   const projectId = resolved.ref.projectId;
   const [filter, setFilter] = useState("");
@@ -293,7 +301,7 @@ export const BranchTree = memo(function BranchTree({ resolved, state, branch, on
   });
 
   /** The checked-out branch's group, on its row and on its worktree's. */
-  const changeRequestEntries = (): ContextMenuEntry[] => [SEPARATOR, { label: `${CHANGE_REQUEST_TITLE}...`, run: onChangeRequest }];
+  const changeRequestEntries = (): ContextMenuEntry[] => [SEPARATOR, { label: `${changeRequestTitle}...`, run: onChangeRequest }];
 
   const branchEntries = (target: Extract<MenuTarget, { kind: "branch" }>): ContextMenuEntry[] => {
     const { name, remote: from } = target;

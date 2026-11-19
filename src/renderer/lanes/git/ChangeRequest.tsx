@@ -14,6 +14,12 @@ function capitalized(noun: string): string {
   return noun.charAt(0).toUpperCase() + noun.slice(1);
 }
 
+/** The button's and the dialog's title, in the host's word: "Push and create Pull-Request". Until
+ *  the host is known, or where it is none, it says "Change Request" (the code's word for either). */
+export function changeRequestTitle(kind: ChangeRequestKind | undefined): string {
+  return `Push and create ${kind ? capitalized(kind.noun).replace(" ", "-") : "Change Request"}`;
+}
+
 /** One by its number as its host writes it, for a notice's link. */
 function linkOf(kind: ChangeRequestKind, { number, url }: ChangeRequest): NoticeLink {
   return { url, label: `${kind.prefix}${number}` };
@@ -26,11 +32,8 @@ function intoBranches(state: RepositoryState): string[] {
   return (state.remotes.find((entry) => entry.name === remote)?.branches ?? []).filter((name) => name !== head);
 }
 
-/** BRANCHES' button and its dialog, on either host, the button on or off. */
-export const CHANGE_REQUEST_TITLE = "Push and create Pull/Merge Request";
-
 /**
- * BRANCHES' button: the kind it opens, and its tooltip — `CHANGE_REQUEST_TITLE`, or why it is
+ * BRANCHES' button: the kind it opens, and its tooltip — `changeRequestTitle`, or why it is
  * off: what the host's side refused (`changeRequestKind`), a remote with no branch to open one
  * into, or a branch the default branch already holds whole (`mergedBranches`, read anyway), which
  * has nothing to merge. Off without a word while the kind is read (`result` undefined).
@@ -40,7 +43,7 @@ export function changeRequestAction(
   result: ChangeRequestKindResult | undefined,
 ): { title: string; kind?: ChangeRequestKind } {
   if (result === undefined) {
-    return { title: CHANGE_REQUEST_TITLE };
+    return { title: changeRequestTitle(undefined) };
   }
   if ("refusal" in result) {
     return { title: result.refusal };
@@ -51,7 +54,7 @@ export function changeRequestAction(
   if (state.defaultBranch && state.mergedBranches.includes(state.head)) {
     return { title: `No new commits on ${state.head} to merge into ${state.defaultBranch.name}` };
   }
-  return { title: CHANGE_REQUEST_TITLE, kind: result.kind };
+  return { title: changeRequestTitle(result.kind), kind: result.kind };
 }
 
 /** The suggestion's first line is the title, the rest the description (`CHANGE_REQUEST_PROMPT`). */
@@ -117,7 +120,7 @@ export async function askChangeRequest(
     return created;
   };
   await prompt<ChangeRequestInput>({
-    title: CHANGE_REQUEST_TITLE,
+    title: changeRequestTitle(kind),
     value: typed ?? { into, title: "", description: "" },
     confirmLabel: "Create",
     ready: (value) => filled(value.title),

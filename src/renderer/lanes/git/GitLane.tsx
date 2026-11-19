@@ -4,7 +4,7 @@ import type { RepositoryState } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { OpenEditor } from "../../editor/editor-tab";
 import { BranchTree } from "./BranchTree";
-import { askChangeRequest, CHANGE_REQUEST_TITLE, changeRequestAction } from "./ChangeRequest";
+import { askChangeRequest, changeRequestAction, changeRequestTitle } from "./ChangeRequest";
 import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHandle } from "./ChangesList";
 import type { ChangeRequestKindResult } from "../../../shared/types/providers";
 import { useFileAct, type BranchActions } from "../../git/run-action";
@@ -101,7 +101,7 @@ export const GitLane = memo(function GitLane({
   // Its push and request run as BRANCHES' commands do, one at a time with them (`branch.ask`).
   const opens = locked || !canSync ? undefined : changeRequestButton.kind;
   const openChangeRequest = useMemo(
-    () => opens && (() => void askChangeRequest(resolved.ref, state, opens, (action) => branch.ask(CHANGE_REQUEST_TITLE, action))),
+    () => opens && (() => void askChangeRequest(resolved.ref, state, opens, (action) => branch.ask(changeRequestTitle(opens), action))),
     [opens, resolved.ref, state, branch],
   );
 
@@ -171,6 +171,7 @@ export const GitLane = memo(function GitLane({
             branch={branch}
             onActivateRef={onActivateRef}
             onChangeRequest={openChangeRequest}
+            changeRequestTitle={changeRequestTitle(opens)}
           />
         )}
       </Section>
