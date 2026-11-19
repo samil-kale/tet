@@ -689,12 +689,12 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs): Promi
 
 /**
  * `init.defaultBranch`, else "main": GitHub Desktop's default branch where no remote names one. And
- * every `branch.<name>.base` TET recorded (worktreeAdd), by branch. One process for both, asked of
+ * every `branch.<name>.base` TET recorded (createBranch, worktreeAdd), by branch. One process for both, asked of
  * git, not parsed out of the config file: git owns that format. Off the refresh path — Repository
  * reads this on open, after a `.git/config` change, and after the actions that write a base.
  */
-export async function readBranchConfig(cwd: string): Promise<{ defaultBranchName: string; worktreeBases: Record<string, string> }> {
-  const worktreeBases: Record<string, string> = {};
+export async function readBranchConfig(cwd: string): Promise<{ defaultBranchName: string; branchBases: Record<string, string> }> {
+  const branchBases: Record<string, string> = {};
   let defaultBranchName = "";
   // Exit 1 where nothing matches, which `run` would turn into an error; the empty stdout is right,
   // as it is for a broken config. Keys come lowercased but for the branch name.
@@ -709,10 +709,10 @@ export async function readBranchConfig(cwd: string): Promise<{ defaultBranchName
     // Greedy, so a branch named "x.base" keeps its dot: the last `.base` is the key's.
     const entry = /^branch\.(.+)\.base (.*)$/.exec(line.trim());
     if (entry) {
-      worktreeBases[entry[1]] = entry[2];
+      branchBases[entry[1]] = entry[2];
     }
   }
-  return { defaultBranchName: defaultBranchName || "main", worktreeBases };
+  return { defaultBranchName: defaultBranchName || "main", branchBases };
 }
 
 /** Whether `git worktree remove` would refuse the worktree without `--force`: a change or an
@@ -1004,9 +1004,15 @@ export function setRemoteUrl(cwd: string, remote: string, url: string): Promise<
 }
 
 /** Creates the branch and switches to it, as GitHub Desktop does: tracking nothing, since git would
- *  track a remote start point and a push would then go to that branch — the first push publishes. */
-export function createBranch(cwd: string, name: string, startPoint: CheckoutTarget): Promise<GitCommandResult> {
-  return run(cwd, ["switch", "--create", name, "--no-track", fullRefName(startPoint)]);
+ *  track a remote start point and a push would then go to that branch — the first push publishes.
+ *  Its start point is recorded as its base, as a worktree's is (worktreeAdd): where its pull or
+ *  merge request goes. */
+export async function createBranch(cwd: string, name: string, startPoint: CheckoutTarget): Promise<GitCommandResult> {
+  const created = await run(cwd, ["switch", "--create", name, "--no-track", fullRefName(startPoint)]);
+  if (created.ok) {
+    await git(cwd, ["config", `branch.${name}.base`, startPoint.name]).catch(() => undefined);
+  }
+  return created;
 }
 
 /** A rename changing only case fails where refs are files on a case-insensitive filesystem: the old

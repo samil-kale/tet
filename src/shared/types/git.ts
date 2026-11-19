@@ -77,6 +77,9 @@ export interface RepositoryState {
   /** The checked-out branch's upstream, a local branch where it tracks one; absent without one,
    *  and where its ref is gone. */
   upstream?: CheckoutTarget;
+  /** The checked-out branch's base as TET recorded it when it made the branch (`branch.<name>.base`):
+   *  where its pull or merge request goes. Absent for one made elsewhere. */
+  headBase?: string;
   /** Relative to the upstream; both 0 without one. */
   ahead: number;
   behind: number;

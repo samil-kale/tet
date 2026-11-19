@@ -206,8 +206,8 @@ export class Repository {
   /** `init.defaultBranch`, or "main": the default branch where no remote names one (GitHub Desktop's
    *  fallback), handed to each read. Read with the urls, on open and after `.git/config` changes. */
   private defaultBranchName = "main";
-  /** Each worktree branch's `branch.<name>.base`, read with the urls. */
-  private worktreeBases: Record<string, string> = {};
+  /** Each branch's `branch.<name>.base` TET recorded, read with the urls. */
+  private branchBases: Record<string, string> = {};
   private configStale = false;
   /** The running `searchFiles`, aborted by the next one: the readers of one overtaken stop where they are. */
   private search?: AbortController;
@@ -285,11 +285,11 @@ export class Repository {
     this.configStale = false;
     const [urls, branchConfig] = await Promise.all([
       git.readRemoteUrls(this.at.path).catch(() => ({})),
-      git.readBranchConfig(this.at.path).catch(() => ({ defaultBranchName: "main", worktreeBases: {} })),
+      git.readBranchConfig(this.at.path).catch(() => ({ defaultBranchName: "main", branchBases: {} })),
     ]);
     this.remoteUrls = urls;
     this.defaultBranchName = branchConfig.defaultBranchName;
-    this.worktreeBases = branchConfig.worktreeBases;
+    this.branchBases = branchConfig.branchBases;
   }
 
   /** The periodic fetch. Silent on failure, or an offline machine gets a notice every ten minutes.
@@ -394,10 +394,11 @@ export class Repository {
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
       // Only a linked worktree carries a base and a key; the repository has neither.
-      base: worktree.isRepository || worktree.branch === undefined ? undefined : ownValue(this.worktreeBases, worktree.branch),
+      base: worktree.isRepository || worktree.branch === undefined ? undefined : ownValue(this.branchBases, worktree.branch),
       key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path),
     }));
-    const next: RepositoryState = { ...read, remotes, worktrees };
+    const headBase = read.detached ? undefined : ownValue(this.branchBases, read.head);
+    const next: RepositoryState = { ...read, remotes, worktrees, headBase };
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
     // emit re-renders the views.
@@ -534,8 +535,9 @@ export class Repository {
     });
   }
 
+  /** The refresh after reads the config again, which holds the new branch's base. */
   createBranch(name: string, startPoint: CheckoutTarget): Promise<GitCommandResult> {
-    return this.runAction(() => git.createBranch(this.at.path, name, startPoint));
+    return this.configAction(() => git.createBranch(this.at.path, name, startPoint));
   }
 
   /** A new branch at `base`, checked out at `target` (git.ts's worktreeAdd). The refresh after reads

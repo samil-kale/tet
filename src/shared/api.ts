@@ -20,7 +20,7 @@ import type {
   ChangeRequestCreateResult,
   ChangeRequestFindResult,
   ChangeRequestInput,
-  ChangeRequestKindResult,
+  ChangeRequestTargetResult,
   IssueChange,
   IssueCreateResult,
   IssueFieldOptionsResult,
@@ -290,15 +290,15 @@ export interface TETApi {
     /** Kills the agent a running suggestion waits on (`suggestCommitMessage`,
      *  `suggestChangeRequest`) — its prompt's Cancel; one is up at a time. */
     cancelSuggestion: () => void;
-    /** What the host the checked-out branch is pushed to (`headRemote`) calls a pull or merge
-     *  request, by its accounts, without asking it; why there is none without a remote on a host or
-     *  an account there. */
-    changeRequestKind: (ref: ProjectRef) => Promise<ChangeRequestKindResult>;
+    /** Where the checked-out branch's pull or merge request goes, read without asking the host;
+     *  why it has none — no remote on a host, no account there, no branch to merge into, nothing
+     *  new to merge. */
+    changeRequestTarget: (ref: ProjectRef) => Promise<ChangeRequestTargetResult>;
     /** The checked-out branch's open pull or merge request, asked of its host. */
     findChangeRequest: (ref: ProjectRef) => Promise<ChangeRequestFindResult>;
-    /** The settings' `prompts.commitSuggesters` suggest the title and description of a pull or
-     *  merge request into `into`, in the shape of a commit message: the first line is the title. */
-    suggestChangeRequest: (ref: ProjectRef, into: string) => Promise<SuggestionResult>;
+    /** The settings' `prompts.commitSuggesters` suggest the title and description of the checked-out
+     *  branch's pull or merge request, in the shape of a commit message: the first line is the title. */
+    suggestChangeRequest: (ref: ProjectRef) => Promise<SuggestionResult>;
     /** Opens one from the checked-out branch, pushed by then. */
     createChangeRequest: (ref: ProjectRef, input: ChangeRequestInput) => Promise<ChangeRequestCreateResult>;
     /** Everything the changes list shows, untracked included. */

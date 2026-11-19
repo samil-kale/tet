@@ -190,6 +190,7 @@ describe("a repository, from init on", () => {
     // Without a message too, as in GitHub Desktop.
     assert.equal(run("cat-file", "-t", "refs/tags/v1"), "tag");
     assert.deepEqual(await createBranch(cwd, "feature", { name: "main" }), { ok: true });
+    assert.equal(run("config", "branch.feature.base"), "main", "its base, where its pull request goes");
     const state = await readState(cwd);
     assert.equal(state.head, "feature");
     assert.deepEqual(state.localBranches, ["feature", "main"]);
@@ -268,6 +269,7 @@ describe("a repository, from init on", () => {
   it("creates a branch from a remote branch without tracking it", async () => {
     assert.deepEqual(await createBranch(cwd, "from-remote", { name: "main", remote: "origin" }), { ok: true });
     assert.equal((await readState(cwd)).upstream, undefined);
+    assert.equal(run("config", "branch.from-remote.base"), "main", "its base by the branch's name alone");
     run("switch", "-q", "main");
     run("branch", "-q", "-D", "from-remote");
   });

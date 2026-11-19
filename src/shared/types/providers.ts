@@ -271,8 +271,15 @@ export interface ChangeRequestKind {
   prefix: string;
 }
 
-/** The kind of the host the checked-out branch is pushed to, or why it has none. */
-export type ChangeRequestKindResult = { kind: ChangeRequestKind } | { refusal: string };
+/** Where the checked-out branch's pull or merge request goes: the host's kind and the branch it
+ *  merges into, derived as t3code derives it (`change-requests.ts`), never picked. */
+export interface ChangeRequestTarget {
+  kind: ChangeRequestKind;
+  into: string;
+}
+
+/** The target, or why the checked-out branch has none. */
+export type ChangeRequestTargetResult = ChangeRequestTarget | { refusal: string };
 
 /** A pull or merge request, by its number and its page. */
 export interface ChangeRequest {
@@ -283,9 +290,8 @@ export interface ChangeRequest {
 /** The checked-out branch's open pull or merge request, `open` absent where it has none. */
 export type ChangeRequestFindResult = (ActionDone & { open?: ChangeRequest }) | ActionRefused;
 
-/** What the dialog asks for: the branch it goes into, on the same remote, and its text. */
+/** What the dialog asks for: its text. */
 export interface ChangeRequestInput {
-  into: string;
   title: string;
   description: string;
 }
