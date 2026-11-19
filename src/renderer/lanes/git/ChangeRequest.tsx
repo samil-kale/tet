@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import type { NoticeLink } from "../../../shared/types/app";
 import type { RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
@@ -10,7 +11,7 @@ import type {
 } from "../../../shared/types/providers";
 import { askLogin } from "../../git/GitLogin";
 import type { FileAsk } from "../../git/run-action";
-import { filled, prompt } from "../../ui/Dialog";
+import { filled, prompt, type PromptFields } from "../../ui/Dialog";
 import { SuggestField, TextField } from "../../ui/Field";
 import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
@@ -48,6 +49,65 @@ export function changeRequestAction(result: ChangeRequestTargetResult | undefine
 function splitSuggestion(text: string): { title: string; description: string } {
   const [title, ...rest] = text.split("\n");
   return { title: title.trim(), description: rest.join("\n").trim() };
+}
+
+/** The dialog's title and description. A suggestion writes both, so the title is held like the
+ *  description while one is fetched. */
+function ChangeRequestFields({
+  at,
+  canSuggest,
+  value,
+  onChange,
+  error,
+  busy,
+  field,
+  hold,
+}: PromptFields<ChangeRequestInput> & { at: ProjectRef; canSuggest: boolean }) {
+  const [suggesting, setSuggesting] = useState(false);
+  const onSuggesting = useCallback(
+    (held: boolean) => {
+      setSuggesting(held);
+      hold(held);
+    },
+    [hold],
+  );
+  return (
+    <>
+      <TextField
+        label="Title"
+        value={value.title}
+        onChange={(title) => onChange((current) => ({ ...current, title }))}
+        disabled={busy || suggesting}
+        ref={field}
+        error={error}
+      />
+      <SuggestField
+        label="Description"
+        value={value.description}
+        onChange={(description) => onChange((current) => ({ ...current, description }))}
+        suggestion={
+          canSuggest
+            ? {
+                label: "Suggest title and description",
+                run: async () => {
+                  const result = await window.tet.repository.suggestChangeRequest(at);
+                  if (result.value === undefined) {
+                    return result;
+                  }
+                  const { title, description } = splitSuggestion(result.value);
+                  onChange((current) => ({ ...current, title }));
+                  return { value: description };
+                },
+              }
+            : undefined
+        }
+        disabled={busy}
+        multiline
+        sizeKey="change-request-height"
+        onSuggesting={onSuggesting}
+      />
+    </>
+  );
 }
 
 /**
@@ -110,43 +170,7 @@ export async function askChangeRequest(
     value: typed ?? { title: "", description: "" },
     confirmLabel: "Create",
     ready: (value) => filled(value.title),
-    render: ({ value, onChange, error, busy, field, hold }) => (
-      <>
-        <TextField
-          label="Title"
-          value={value.title}
-          onChange={(title) => onChange((current) => ({ ...current, title }))}
-          disabled={busy}
-          ref={field}
-          error={error}
-        />
-        <SuggestField
-          label="Description"
-          value={value.description}
-          onChange={(description) => onChange((current) => ({ ...current, description }))}
-          suggestion={
-            canSuggest
-              ? {
-                  label: "Suggest title and description",
-                  run: async () => {
-                    const result = await window.tet.repository.suggestChangeRequest(ref);
-                    if (result.value === undefined) {
-                      return result;
-                    }
-                    const { title, description } = splitSuggestion(result.value);
-                    onChange((current) => ({ ...current, title }));
-                    return { value: description };
-                  },
-                }
-              : undefined
-          }
-          disabled={busy}
-          multiline
-          sizeKey="change-request-height"
-          onSuggesting={hold}
-        />
-      </>
-    ),
+    render: (fields) => <ChangeRequestFields at={ref} canSuggest={canSuggest} {...fields} />,
     className: "change-request-dialog",
     abort: window.tet.repository.cancelSuggestion,
     submit: (value) => ask(() => create({ title: value.title.trim(), description: value.description.trim() })),
