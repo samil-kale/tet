@@ -1,5 +1,7 @@
 import { net } from "electron";
 import type {
+  ChangeRequest,
+  ChangeRequestKind,
   Issue,
   IssueChange,
   IssueDetail,
@@ -65,10 +67,25 @@ export interface GitProvider {
   /** Uploads a file for an issue's text and answers the Markdown that shows it. */
   uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
   updateIssue(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
+  /** What the host calls a request to merge a branch, and how it writes one's number. */
+  readonly changeRequest: ChangeRequestKind;
+  /** The open one from `head`, a branch of the repository itself, not of a fork; undefined where
+   *  there is none. */
+  findChangeRequest(tracker: Tracker, head: string): Promise<ChangeRequest | undefined>;
+  /** Opens one from `head` into `base`, both branches of the repository. */
+  createChangeRequest(tracker: Tracker, request: ChangeRequestDraft): Promise<ChangeRequest>;
   /** The variables the host's own CLI and scripts read the account's token from, which a host tab of
    *  a project on this host gets: the rest of the API, which this interface leaves out, is the
    *  agent's to call. */
   tokenEnv(host: string, token: string): Record<string, string>;
+}
+
+/** What `createChangeRequest` opens. */
+export interface ChangeRequestDraft {
+  head: string;
+  base: string;
+  title: string;
+  body: string;
 }
 
 /** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching

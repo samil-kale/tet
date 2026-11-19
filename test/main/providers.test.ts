@@ -9,6 +9,7 @@ import {
   contentTypeOf,
   github,
   carriesAll,
+  ownPullRequest,
   issuesVariables as gitHubIssuesVariables,
   readsWithToken,
   toEvents as toGitHubEvents,
@@ -25,6 +26,7 @@ import {
   FIELD_HANDLERS as GITLAB_FIELD_HANDLERS,
   gitlab,
   issuesVariables,
+  ownMergeRequest,
   iterationName,
   parentName,
   toEvents as toGitLabEvents,
@@ -36,14 +38,17 @@ import {
   uploadOf,
 } from "../../src/main/providers/gitlab";
 import {
+  hostProvider,
   issueMarkdown,
   NoAccountError,
+  onHost,
   onTracker,
   parseRemoteUrl,
   readIssueTracker,
   setIssueSource,
   trackerAccount,
   writeOnTracker,
+  WRITE_HANDS_OVER,
   type IssueAccounts,
   type IssueRepository,
 } from "../../src/main/providers/issues";
@@ -964,6 +969,75 @@ describe("the issues of a tracker", () => {
       events: [],
     });
     assert.ok(!bare.includes("Assignees") && !bare.includes("Weight") && !bare.includes("Confidential") && !bare.includes("Comments"));
+  });
+});
+
+describe("a pull or merge request", () => {
+  const account = (id: string, provider: ProviderAccount["provider"], host: string): ProviderAccount => ({ id, provider, host, user: id });
+  const accountsOf = (...accounts: ProviderAccount[]): IssueAccounts => ({
+    list: () => accounts,
+    token: async (id) => `token-${id}`,
+  });
+
+  it("is called by each host's own word and number", () => {
+    assert.deepEqual(github.changeRequest, { noun: "pull request", prefix: "#" });
+    assert.deepEqual(gitlab.changeRequest, { noun: "merge request", prefix: "!" });
+  });
+
+  it("is reached on the host the remote names, through that host's accounts alone", async () => {
+    const accounts = accountsOf(account("a", "github", "github.com"), account("b", "gitlab", "gitlab.example.com"));
+    const reached = await onHost(
+      accounts,
+      { host: "gitlab.example.com", path: "group/app" },
+      async (provider, tracker, user) => `${provider.changeRequest.noun} ${tracker.host} ${tracker.path} ${tracker.token} ${user}`,
+    );
+    assert.equal(reached, "merge request gitlab.example.com group/app token-b b");
+    assert.equal(hostProvider(accounts, "gitlab.example.com"), gitlab);
+    assert.equal(hostProvider(accounts, "bitbucket.org"), undefined, "no account, no word for it");
+    await assert.rejects(() => onHost(accounts, { host: "bitbucket.org", path: "o/r" }, async () => "opened"), NoAccountError);
+  });
+
+  it("is opened through the next account only where the first does not reach the repository", async () => {
+    const accounts = accountsOf(account("a", "github", "github.com"), account("b", "github", "github.com"));
+    const opening =
+      (status: number, seen: string[]) =>
+      async (_provider: unknown, { token }: Tracker) => {
+        seen.push(token);
+        if (token === "token-a") {
+          throw new ApiError(status, `${status} from the host`);
+        }
+        return "opened";
+      };
+    const reached: string[] = [];
+    assert.equal(await onHost(accounts, { host: "github.com", path: "o/r" }, opening(404, reached), WRITE_HANDS_OVER), "opened");
+    assert.deepEqual(reached, ["token-a", "token-b"]);
+    const refused: string[] = [];
+    await assert.rejects(() => onHost(accounts, { host: "github.com", path: "o/r" }, opening(403, refused), WRITE_HANDS_OVER), /403/);
+    assert.deepEqual(refused, ["token-a"], "another name is not used for what this one may not do");
+  });
+
+  it("found open is the repository's own, never a fork's branch of the same name", () => {
+    assert.deepEqual(
+      ownPullRequest(
+        [
+          { number: 7, url: "https://github.com/fork/r/pull/7", headRepository: { nameWithOwner: "fork/r" } },
+          { number: 8, url: "https://github.com/o/r/pull/8", headRepository: { nameWithOwner: "O/R" } },
+        ],
+        "o/r",
+      ),
+      { number: 8, url: "https://github.com/o/r/pull/8" },
+    );
+    assert.equal(ownPullRequest([{ number: 7, url: "https://github.com/o/r/pull/7", headRepository: null }], "o/r"), undefined);
+    assert.deepEqual(
+      ownMergeRequest(
+        [
+          { iid: "3", webUrl: "https://gitlab.example.com/group/app/-/merge_requests/3", sourceProject: { fullPath: "me/app" } },
+          { iid: "42", webUrl: "https://gitlab.example.com/group/app/-/merge_requests/42", sourceProject: { fullPath: "group/app" } },
+        ],
+        "group/app",
+      ),
+      { number: 42, url: "https://gitlab.example.com/group/app/-/merge_requests/42" },
+    );
   });
 });
 

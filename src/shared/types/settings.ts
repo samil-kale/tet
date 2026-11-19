@@ -60,7 +60,7 @@ export const GIT_SETTING_IDS = [
 ] as const satisfies readonly (keyof GitSettings)[];
 
 /** What TET asks of an agent (prompts.ts), in the Prompts tab's picker. */
-export const PROMPT_IDS = ["commitMessage", "handover", "issue"] as const;
+export const PROMPT_IDS = ["commitMessage", "handover", "issue", "changeRequest"] as const;
 
 export type PromptId = (typeof PROMPT_IDS)[number];
 
@@ -70,8 +70,8 @@ export type PromptTexts = Record<PromptId, string>;
 /** The Prompts tab. */
 export interface PromptSettings {
   texts: PromptTexts;
-  /** Who suggests a commit message, in the order they are asked; an agent not listed comes after,
-   *  switched on (`suggestersFor`). */
+  /** Who suggests a commit message and a pull or merge request's text, in the order they are asked;
+   *  an agent not listed comes after, switched on (`suggestersFor`). */
   commitSuggesters: SuggesterEntry[];
 }
 

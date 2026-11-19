@@ -100,6 +100,10 @@ export interface InvokeChannels {
   "repository:commit-all": TETApi["repository"]["commitAll"];
   "repository:commit-paths": TETApi["repository"]["commitPaths"];
   "repository:suggest-commit-message": TETApi["repository"]["suggestCommitMessage"];
+  "repository:change-request-kind": TETApi["repository"]["changeRequestKind"];
+  "repository:find-change-request": TETApi["repository"]["findChangeRequest"];
+  "repository:suggest-change-request": TETApi["repository"]["suggestChangeRequest"];
+  "repository:create-change-request": TETApi["repository"]["createChangeRequest"];
   "repository:stash-push": TETApi["repository"]["stashPush"];
   "repository:stash": TETApi["repository"]["stash"];
   "repository:discard": TETApi["repository"]["discard"];
@@ -160,7 +164,7 @@ export interface SendChannels {
   /** The window's `onNotice` listens: main releases the notices it held. */
   "app:notice-listening": () => void;
   "sbx:cancel-setup": TETApi["sbx"]["cancelSetup"];
-  "repository:cancel-commit-suggestion": TETApi["repository"]["cancelCommitSuggestion"];
+  "repository:cancel-suggestion": TETApi["repository"]["cancelSuggestion"];
   "editor:report": TETApi["repository"]["reportEditor"];
   "editor:active": TETApi["repository"]["reportActiveEditor"];
   "tabs:seen": TETApi["tabs"]["seen"];

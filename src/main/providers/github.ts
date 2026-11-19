@@ -1,5 +1,14 @@
 import { ownValue } from "../../shared/own-value";
-import type { Issue, IssueChange, IssueEvent, IssueField, IssueFilter, IssueNote, RemoteRepository } from "../../shared/types/providers";
+import type {
+  ChangeRequest,
+  Issue,
+  IssueChange,
+  IssueEvent,
+  IssueField,
+  IssueFilter,
+  IssueNote,
+  RemoteRepository,
+} from "../../shared/types/providers";
 import {
   allNodes,
   ApiError,
@@ -704,6 +713,19 @@ function toNote(entry: GitHubComment): IssueNote {
   };
 }
 
+/** An open pull request as `findChangeRequest` reads it; `headRepository` null for a deleted fork. */
+export interface GitHubPullRequest {
+  number: number;
+  url: string;
+  headRepository: { nameWithOwner: string } | null;
+}
+
+/** The one of `path`'s own branch among those of a branch of that name, a fork's left out. */
+export function ownPullRequest(found: GitHubPullRequest[], path: string): ChangeRequest | undefined {
+  const own = found.find((entry) => entry.headRepository?.nameWithOwner.toLowerCase() === path.toLowerCase());
+  return own && { number: own.number, url: own.url };
+}
+
 export const github: GitProvider = {
   /** The names most tools take, gh among them: for github.com its token, for GitHub Enterprise the
    *  token and which host it is. */
@@ -852,6 +874,41 @@ export const github: GitProvider = {
   },
 
   ...fieldMethods({ graphql: sender, handlerOf: fieldHandlerOf, readTarget, mutate }),
+
+  changeRequest: { noun: "pull request", prefix: "#" },
+
+  async findChangeRequest({ host, token, path }, head) {
+    // `headRefName` matches a fork's branch of that name too, so its repository is read alongside.
+    const query = `query($owner: String!, $name: String!, $head: String!) {
+      repository(owner: $owner, name: $name) {
+        pullRequests(headRefName: $head, states: OPEN, first: 20) {
+          nodes { number url headRepository { nameWithOwner } }
+        }
+      }
+    }`;
+    const data = (await sender(host, token)(query, { ...repositoryOf(path), head })) as {
+      repository: { pullRequests: { nodes: GitHubPullRequest[] } } | null;
+    };
+    if (!data.repository) {
+      throw new ApiError(404, `${path} was not found, or this account cannot read it`);
+    }
+    return ownPullRequest(data.repository.pullRequests.nodes, path);
+  },
+
+  async createChangeRequest({ host, token, path }, { head, base, title, body }) {
+    const send = sender(host, token);
+    const { id } = await repositoryIds(send, path);
+    const { pullRequest } = await mutate<{ pullRequest: { number: number; url: string } }>(
+      send,
+      {
+        mutation: "createPullRequest",
+        inputType: "CreatePullRequestInput",
+        input: { repositoryId: id, headRefName: head, baseRefName: base, title, body },
+      },
+      "pullRequest { number url }",
+    );
+    return { number: pullRequest.number, url: pullRequest.url };
+  },
 
   confidentialIssues: false,
 

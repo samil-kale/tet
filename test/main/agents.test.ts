@@ -31,7 +31,7 @@ import type { AgentDefinition, AgentPaths } from "../../src/main/agents/agent";
 import { askAgent } from "../../src/main/agents/ask";
 import { claudeAgent } from "../../src/main/agents/claude";
 import type { AskModel } from "../../src/shared/types/agents";
-import { commitMessageFrom } from "../../src/main/agents/commit-message";
+import { answerFrom } from "../../src/main/agents/suggest";
 import { piModelsFrom } from "../../src/main/agents/pi/models";
 
 /** The agents' own pieces: hooks, readiness, the version check, PATH, the system prompt, asking. */
@@ -414,6 +414,8 @@ describe("pi's model listing", () => {
 });
 
 describe("a suggested commit message", () => {
+  const commitMessageFrom = (reply: string): string => answerFrom(reply, "commit");
+
   it("takes the subject between the tags", () => {
     assert.equal(commitMessageFrom("<commit>fix terminal focus</commit>"), "fix terminal focus");
   });
@@ -437,6 +439,20 @@ describe("a suggested commit message", () => {
   it("rejects an answer without tags or with an empty one", () => {
     assert.equal(commitMessageFrom("fix terminal focus"), "");
     assert.equal(commitMessageFrom("<commit>\n</commit>"), "");
+  });
+});
+
+describe("a suggested pull or merge request", () => {
+  it("takes the title and description between their tags, which hold a hyphen", () => {
+    assert.equal(
+      answerFrom("<change-request>\nreload an issue's fields\n\nReads them on open.\n</change-request>", "change-request"),
+      "reload an issue's fields\n\nReads them on open.",
+    );
+  });
+
+  it("is no commit message, nor is a commit message one", () => {
+    assert.equal(answerFrom("<commit>fix terminal focus</commit>", "change-request"), "");
+    assert.equal(answerFrom("<change-request>fix terminal focus</change-request>", "commit"), "");
   });
 });
 

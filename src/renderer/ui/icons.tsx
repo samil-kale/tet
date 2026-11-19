@@ -15,6 +15,7 @@ import {
   CircleX,
   Code,
   Columns2,
+  Copy,
   File,
   FileCode,
   FilePlus,
@@ -24,6 +25,7 @@ import {
   GitGraph,
   GitCommitHorizontal,
   GitCompare,
+  GitPullRequest,
   Globe,
   GripVertical,
   Heading,
@@ -386,6 +388,16 @@ export function TagIcon(props: IconProps) {
 /** Lucide's `git-commit-horizontal`. */
 export function CommitIcon(props: IconProps) {
   return <Lucide {...props} icon={GitCommitHorizontal} />;
+}
+
+/** Lucide's `git-pull-request` — a pull or merge request, on either host. */
+export function ChangeRequestIcon(props: IconProps) {
+  return <Lucide {...props} icon={GitPullRequest} />;
+}
+
+/** Lucide's `copy` — copies a notice's link. */
+export function CopyIcon(props: IconProps) {
+  return <Lucide {...props} icon={Copy} />;
 }
 
 /** Lucide's `package` — a stash. */

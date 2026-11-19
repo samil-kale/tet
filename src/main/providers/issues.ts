@@ -107,22 +107,39 @@ export async function trackerAccount(accounts: IssueAccounts, repository: IssueR
     : undefined;
 }
 
+/** Which failures of an account hand over to the next of its host (`onHost`). */
+type HandsOver = (error: unknown) => boolean;
+
 /**
- * Runs `call` against the repository's tracker (`resolveTracker`), for `source` where given. An
- * account that fails hands over to the next of that host, where a second one may reach what the
- * first cannot; when all fail, the first's reason is the one told. `handsOver` narrows which
- * failures do.
+ * Runs `call` against the repository's tracker (`resolveTracker`), for `source` where given, through
+ * its host's accounts (`onHost`).
  */
 export async function onTracker<T>(
   accounts: IssueAccounts,
   repository: IssueRepository,
   call: TrackerCall<T>,
-  { source, handsOver }: { source?: string; handsOver?: (error: unknown) => boolean } = {},
+  { source, handsOver }: { source?: string; handsOver?: HandsOver } = {},
 ): Promise<T> {
-  const { host, path, candidates } = await resolveTracker(accounts, repository, source);
+  const { host, path } = await resolveTracker(accounts, repository, source);
   if (!isIssueSource(path)) {
     throw new Error(`Not a repository path on ${host}: ${path}`);
   }
+  return onHost(accounts, { host, path }, call, handsOver);
+}
+
+/**
+ * Runs `call` against the repository at `path` on `host`, through that host's accounts in the order
+ * they are tried. An account that fails hands over to the next, where a second one may reach what the
+ * first cannot; when all fail, the first's reason is the one told. `handsOver` narrows which failures
+ * do.
+ */
+export async function onHost<T>(
+  accounts: IssueAccounts,
+  { host, path }: { host: string; path: string },
+  call: TrackerCall<T>,
+  handsOver?: HandsOver,
+): Promise<T> {
+  const candidates = accountsOf(accounts, host);
   if (candidates.length === 0) {
     throw new NoAccountError(host);
   }
@@ -148,12 +165,19 @@ export async function onTracker<T>(
   throw new Error(failure ?? "The account's token could not be read: add the account again under Accounts in Settings");
 }
 
-/** `onTracker` for what writes: the next account takes over only from one that does not reach the
- *  tracker, or a comment refused for its rights would go up under another account's name. */
+/** What writes hands over only from an account that does not reach the repository, or a write refused
+ *  for its rights would go up under another account's name. */
+export const WRITE_HANDS_OVER: HandsOver = (error) => error instanceof ApiError && (error.status === 401 || error.status === 404);
+
+/** The provider of `host`'s first account, the one `onHost` tries first; undefined without one. */
+export function hostProvider(accounts: IssueAccounts, host: string): GitProvider | undefined {
+  const account = accountsOf(accounts, host)[0];
+  return account && PROVIDERS[account.provider];
+}
+
+/** `onTracker` for what writes (`WRITE_HANDS_OVER`). */
 export function writeOnTracker<T>(accounts: IssueAccounts, repository: IssueRepository, call: TrackerCall<T>): Promise<T> {
-  return onTracker(accounts, repository, call, {
-    handsOver: (error) => error instanceof ApiError && (error.status === 401 || error.status === 404),
-  });
+  return onTracker(accounts, repository, call, { handsOver: WRITE_HANDS_OVER });
 }
 
 /** Saves the repository's issue source once the tracker reads it and answers what was saved; empty

@@ -1,8 +1,6 @@
 import type { IpcMainInvokeEvent } from "electron";
 import { handle, on } from "./channels";
-import { listAskableAgents } from "../agents";
 import { effectivePrompt } from "../../shared/prompts";
-import { suggestersFor } from "../../shared/suggesters";
 import { failure } from "../../shared/errors";
 import type { ActionRefused, ActionResult } from "../../shared/types/action";
 import type { SuggestionResult } from "../../shared/types/agents";
@@ -26,15 +24,29 @@ import type {
   StashCommand,
 } from "../../shared/types/git";
 import type { ProjectRef } from "../../shared/types/project";
+import type { ChangeRequestInput } from "../../shared/types/providers";
 import { addExclude, addFolder, removeFolder } from "../store/tet-json";
-import { cancelCommitSuggestion, suggestCommitMessage } from "../agents/commit-message";
+import { cancelSuggestion, suggestCommitMessage } from "../agents/suggest";
+import {
+  changeRequestKind,
+  createChangeRequest,
+  findChangeRequest,
+  suggestChangeRequest,
+  type ChangeRequestDeps,
+} from "../change-requests";
 import { git } from "../git/git-client";
 import { MISSING_BLOB, type Repository } from "../git/repository";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";
 import type { IpcDeps } from "./deps";
 
 /** Everything the git lane and the editor ask of one repository. */
-export function registerRepositoryIpc({ settings, store, repositories }: Pick<IpcDeps, "settings" | "store" | "repositories">): void {
+export function registerRepositoryIpc({
+  settings,
+  store,
+  repositories,
+  accounts,
+}: Pick<IpcDeps, "settings" | "store" | "repositories" | "accounts">): void {
+  const changeRequests: ChangeRequestDeps = { accounts, repositories, settings, store };
   handle("repository:state", (_event, ref: ProjectRef): RepositoryState => {
     return repositories.get(ref)?.getState() ?? { ...EMPTY_REPOSITORY_STATE, error: notOpenMessage(store, ref) };
   });
@@ -146,16 +158,19 @@ export function registerRepositoryIpc({ settings, store, repositories }: Pick<Ip
       return {};
     }
     const cwd = repository.at.path;
-    // The list as the settings' dialog shows it: what is not installed here is left out, a new agent
-    // comes last, and the ones switched off are not asked.
-    const suggesters = suggestersFor(settings.get().prompts.commitSuggesters, await listAskableAgents(cwd)).filter(
-      (entry) => entry.enabled,
-    );
-    const prompt = effectivePrompt(settings.get().prompts.texts, "commitMessage");
+    const { commitSuggesters, texts } = settings.get().prompts;
     // The commit's own paths, a rename's old one included.
-    return suggestCommitMessage(suggesters, cwd, prompt, () => git.readCommitContext(cwd, paths && repository.pathspec(paths)));
+    return suggestCommitMessage(commitSuggesters, cwd, effectivePrompt(texts, "commitMessage"), () =>
+      git.readCommitContext(cwd, paths && repository.pathspec(paths)),
+    );
   });
-  on("repository:cancel-commit-suggestion", () => cancelCommitSuggestion());
+  on("repository:cancel-suggestion", () => cancelSuggestion());
+  handle("repository:change-request-kind", (_event, ref: ProjectRef) => changeRequestKind(changeRequests, ref));
+  handle("repository:find-change-request", (_event, ref: ProjectRef) => findChangeRequest(changeRequests, ref));
+  handle("repository:suggest-change-request", (_event, ref: ProjectRef, into: string) => suggestChangeRequest(changeRequests, ref, into));
+  handle("repository:create-change-request", (_event, ref: ProjectRef, input: ChangeRequestInput) =>
+    createChangeRequest(changeRequests, ref, input),
+  );
   handle(
     "repository:stash-push",
     inRepository((repository, message: string) => repository.stashPush(message)),

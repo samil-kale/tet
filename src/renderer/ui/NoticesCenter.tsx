@@ -8,6 +8,7 @@ import {
   enteredOpenCenter,
   leaveNotice,
   NoticeBody,
+  NoticeLinkButtons,
   noticeClass,
   removable,
   useCenterClosing,
@@ -73,6 +74,7 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
                 }
               >
                 <NoticeBody notice={notice} />
+                <NoticeLinkButtons notice={notice} />
                 {removable(notice) && (
                   <button
                     type="button"

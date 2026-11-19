@@ -108,12 +108,14 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   commitMessage: "Commit message",
   handover: "Session handover",
   issue: "Send issue to agent",
+  changeRequest: "Pull/merge request",
 };
 
 const PROMPT_DETAILS: Record<PromptId, string> = {
   commitMessage: "Asked in the background",
   handover: "Sent to the tab taking over",
   issue: "Sent to the tab opened on an issue",
+  changeRequest: "Asked in the background, of the commit message's agents",
 };
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [

@@ -29,6 +29,7 @@ import {
   readBlobAt,
   readCommitContext,
   readCommitFiles,
+  readRangeContext,
   readHeadPaths,
   readLog,
   readState,
@@ -328,6 +329,28 @@ describe("a repository, from init on", () => {
     // Not realpathSync(cwd): it leaves an 8.3 short %TEMP% on Windows unexpanded, git expands it.
     assert.equal(await resolveRoot(sub), await resolveRoot(cwd));
     assert.equal(await resolveRoot(os.tmpdir()), undefined);
+  });
+});
+
+describe("a branch's commits since its base, as a pull or merge request takes them", () => {
+  before(() => {
+    cwd = initRepository("tet-git-range-", { "a.txt": "a\n" });
+    run("checkout", "-q", "-b", "feature");
+    commitFiles(cwd, "reload the fields", { "b.txt": "fields\n" });
+    commitFiles(cwd, "test the reload", { "c.txt": "test\n" });
+    write("local.txt", "not committed\n");
+  });
+
+  it("reads the commits since the base, oldest first, and their diff, but no local change", async () => {
+    const context = await readRangeContext(cwd, "main");
+    assert.match(context, /=== commits since main ===\nreload the fields[\s\S]*test the reload/);
+    assert.match(context, /=== diff against main ===[\s\S]*\+fields[\s\S]*\+test/);
+    assert.doesNotMatch(context, /\bbase\b/, "the base's own commit is not the branch's");
+    assert.doesNotMatch(context, /not committed/);
+  });
+
+  it("refuses a base git does not know", async () => {
+    await assert.rejects(() => readRangeContext(cwd, "origin/missing"));
   });
 });
 

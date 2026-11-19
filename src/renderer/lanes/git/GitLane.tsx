@@ -1,10 +1,12 @@
-import { memo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { refName, syncRemote, upstreamOf } from "../../../shared/types/git";
 import type { RepositoryState } from "../../../shared/types/git";
 import type { ResolvedRef } from "../../resolved-ref";
 import type { OpenEditor } from "../../editor/editor-tab";
 import { BranchTree } from "./BranchTree";
+import { askChangeRequest, CHANGE_REQUEST_TITLE, changeRequestAction } from "./ChangeRequest";
 import { askCommit, canCommit, ChangesList, confirmDiscard, type ChangesListHandle } from "./ChangesList";
+import type { ChangeRequestKindResult } from "../../../shared/types/providers";
 import { useFileAct, type BranchActions } from "../../git/run-action";
 import { MIN_AREA_HEIGHT, Sash } from "../../ui/Sash";
 import { IconButton } from "../../ui/IconButton";
@@ -12,6 +14,7 @@ import {
   ArrowDownIcon,
   ArrowUpIcon,
   BranchIcon,
+  ChangeRequestIcon,
   CommitIcon,
   DiscardIcon,
   GraphIcon,
@@ -79,6 +82,28 @@ export const GitLane = memo(function GitLane({
   // Named as GitHub Desktop names them: by the remote, not the branch. A local upstream is pulled
   // from, named by its branch, but pushed to the remote like any other.
   const pullFrom = upstreamOf(state, state.head)?.remote ?? (state.upstream && refName(state.upstream));
+  // What the push remote's host calls a pull or merge request, by its accounts: read again with
+  // every state, as an account added meanwhile changes it, and it asks no host.
+  const [changeRequestKind, setChangeRequestKind] = useState<ChangeRequestKindResult>();
+  useEffect(() => {
+    let current = true;
+    void window.tet.repository.changeRequestKind(resolved.ref).then((result) => {
+      if (current) {
+        setChangeRequestKind(result);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [resolved.ref, state]);
+  const changeRequestButton = changeRequestAction(state, changeRequestKind);
+  // The button's action, which the checked-out branch's row offers too; none while the button is off.
+  // Its push and request run as BRANCHES' commands do, one at a time with them (`branch.ask`).
+  const opens = locked || !canSync ? undefined : changeRequestButton.kind;
+  const openChangeRequest = useMemo(
+    () => opens && (() => void askChangeRequest(resolved.ref, state, opens, (action) => branch.ask(CHANGE_REQUEST_TITLE, action))),
+    [opens, resolved.ref, state, branch],
+  );
 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>
@@ -117,6 +142,9 @@ export const GitLane = memo(function GitLane({
             >
               <ArrowUpIcon />
             </IconButton>
+            <IconButton title={changeRequestButton.title} disabled={openChangeRequest === undefined} onClick={() => openChangeRequest?.()}>
+              <ChangeRequestIcon />
+            </IconButton>
           </>
         }
       >
@@ -136,7 +164,14 @@ export const GitLane = memo(function GitLane({
             onOpenDiff={onOpenDiff}
           />
         ) : (
-          <BranchTree key={resolved.refKey} resolved={resolved} state={state} branch={branch} onActivateRef={onActivateRef} />
+          <BranchTree
+            key={resolved.refKey}
+            resolved={resolved}
+            state={state}
+            branch={branch}
+            onActivateRef={onActivateRef}
+            onChangeRequest={openChangeRequest}
+          />
         )}
       </Section>
       <Sash orientation="horizontal" size={treeHeight} min={MIN_AREA_HEIGHT} minOther={MIN_AREA_HEIGHT} onResize={onTreeHeight} />

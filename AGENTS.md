@@ -252,7 +252,9 @@ discard, `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ'
 staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and the default branch —
 read-only, a commit's files and their diffs against its first parent, searched by message, author
 or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
-clone (GitHub/GitLab via `GitProvider`), and a commit message suggested by an installed agent.
+clone (GitHub/GitLab via `GitProvider`), a commit message suggested by an installed agent, and a
+pull or merge request of the checked-out branch from BRANCHES (`change-requests.ts`: into a
+branch of the remote it is pushed to, pushing it first, its text typed or suggested alike).
 Where Desktop differs from git's defaults, follow Desktop. The project row's entries are
 repository-wide and never touch the working tree — a worktree's own row excepted, which is that
 tree, and its merge into the base, run where the base is checked out.

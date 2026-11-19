@@ -1,11 +1,12 @@
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AgentId } from "../../shared/types/agents";
-import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
+import type { Notice, NoticeLink, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { refKeyOf } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
 import { AgentIcon } from "./agent-icons";
-import { CloseIcon, SeverityIcon } from "./icons";
+import { CheckIcon, CloseIcon, CopyIcon, RemoteIcon, SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
 import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
@@ -144,11 +145,10 @@ function runAfterClose(): void {
   }
 }
 
-export function notify(
-  severity: NoticeSeverity,
-  message: string,
-  options: Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId"> = {},
-): void {
+/** What a notice may carry beside its words. */
+type NoticeOptions = Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId" | "link">;
+
+export function notify(severity: NoticeSeverity, message: string, options: NoticeOptions = {}): void {
   const wait = options.toast === false ? 0 : takeSlot("enter");
   if (wait > 0) {
     setTimeout(() => add(severity, message, options), wait);
@@ -157,8 +157,8 @@ export function notify(
   }
 }
 
-function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId">): void {
-  const { title, toast, target, mark, agentId } = options;
+function add(severity: NoticeSeverity, message: string, options: NoticeOptions): void {
+  const { title, toast, target, mark, agentId, link } = options;
   const same = shown
     .get()
     .find(
@@ -183,6 +183,7 @@ function add(severity: NoticeSeverity, message: string, options: Pick<Notice, "t
     target,
     mark,
     agentId,
+    link,
   };
   shown.set([...shown.get().filter((notice) => notice !== same), entry].slice(-CENTER_MAX));
   if (entry.toast) {
@@ -423,7 +424,9 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
       )}
       <span className="notice-text">
         {notice.title && !notice.agentId && <span className="notice-title">{notice.title}</span>}
-        <span className="notice-message">{notice.message}</span>
+        <span className="notice-message">
+          {notice.link ? <LinkedMessage message={notice.message} link={notice.link} /> : notice.message}
+        </span>
       </span>
       {notice.agentId && <AgentIcon agentId={notice.agentId} className="line-icon" />}
       {notice.progress && (
@@ -435,6 +438,77 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
           )}
         </span>
       )}
+    </>
+  );
+}
+
+/** `message` with its link's first `label` opening the link's page. */
+function LinkedMessage({ message, link }: { message: string; link: NoticeLink }) {
+  const at = message.indexOf(link.label);
+  if (at < 0) {
+    return message;
+  }
+  return (
+    <>
+      {message.slice(0, at)}
+      <a
+        className="notice-link"
+        href={link.url}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void window.tet.shell.openUrl(link.url);
+        }}
+      >
+        {link.label}
+      </a>
+      {message.slice(at + link.label.length)}
+    </>
+  );
+}
+
+/** How long the copy button shows its check once it copied. */
+const COPIED_MS = 1500;
+
+/** Beside a notice's X where it has a link: one copies it, a check standing in for its icon a moment
+ *  after, one opens it in the browser. */
+export function NoticeLinkButtons({ notice }: { notice: ShownNotice }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return;
+    }
+    const timer = setTimeout(() => setCopied(false), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const { link } = notice;
+  if (!link) {
+    return null;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        className="icon-button"
+        title="Copy link"
+        onClick={(event) => {
+          event.stopPropagation();
+          void navigator.clipboard.writeText(link.url).then(() => setCopied(true));
+        }}
+      >
+        {copied ? <CheckIcon /> : <CopyIcon />}
+      </button>
+      <button
+        type="button"
+        className="icon-button"
+        title="Open in Browser"
+        onClick={(event) => {
+          event.stopPropagation();
+          void window.tet.shell.openUrl(link.url);
+        }}
+      >
+        <RemoteIcon />
+      </button>
     </>
   );
 }
@@ -457,6 +531,7 @@ export function Notices() {
         <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
           <div className={noticeClass(notice)} onMouseEnter={() => (hovered = notice.id)} onMouseLeave={() => (hovered = undefined)}>
             <NoticeBody notice={notice} />
+            <NoticeLinkButtons notice={notice} />
             <button
               type="button"
               className="icon-button"

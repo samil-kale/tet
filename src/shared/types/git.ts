@@ -224,6 +224,11 @@ export function headRemote(state: RepositoryState): string | undefined {
   return upstreamOf(state, state.head)?.remote ?? defaultRemote(state);
 }
 
+/** The checked-out branch's name on `headRemote`: its upstream's, else its own, as a push publishes it. */
+export function headRemoteBranch(state: RepositoryState): string {
+  return upstreamOf(state, state.head)?.branch ?? state.head;
+}
+
 /** A local branch's upstream. */
 export function upstreamOf(state: RepositoryState, branch: string): BranchUpstream | undefined {
   return ownValue(state.branchUpstreams, branch);

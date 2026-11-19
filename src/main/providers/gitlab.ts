@@ -1,6 +1,7 @@
 import { ownValue } from "../../shared/own-value";
 import {
   isTimeRemoval,
+  type ChangeRequest,
   type Issue,
   type IssueChange,
   type IssueEvent,
@@ -762,6 +763,20 @@ export function toEvents(
   return events;
 }
 
+/** An open merge request as `findChangeRequest` reads it; `sourceProject` null for one the token
+ *  cannot read. */
+export interface GitLabMergeRequest {
+  iid: string;
+  webUrl: string;
+  sourceProject: { fullPath: string } | null;
+}
+
+/** The one from `path`'s own branch among those of a branch of that name, a fork's left out. */
+export function ownMergeRequest(found: GitLabMergeRequest[], path: string): ChangeRequest | undefined {
+  const own = found.find((entry) => entry.sourceProject?.fullPath.toLowerCase() === path.toLowerCase());
+  return own && { number: Number(own.iid), url: own.webUrl };
+}
+
 export const gitlab: GitProvider = {
   /** glab's names, which scripts for GitLab take too; glab takes the host as a url. */
   tokenEnv: (host, token) => ({ GITLAB_TOKEN: token, GITLAB_HOST: `https://${host}` }),
@@ -880,6 +895,37 @@ export const gitlab: GitProvider = {
   ...fieldMethods({ graphql: sender, handlerOf: (_send, _path, fieldId) => fieldHandlerOf(fieldId), readTarget, mutate }),
 
   confidentialIssues: true,
+
+  changeRequest: { noun: "merge request", prefix: "!" },
+
+  async findChangeRequest({ host, token, path }, head) {
+    // A project's merge requests are those into it; one from a fork names its own source project.
+    const query = `query($path: ID!, $head: [String!]) {
+      project(fullPath: $path) {
+        mergeRequests(sourceBranches: $head, state: opened, first: 20) {
+          nodes { iid webUrl sourceProject { fullPath } }
+        }
+      }
+    }`;
+    const data = (await sender(host, token)(query, { path, head: [head] })) as {
+      project: { mergeRequests: { nodes: GitLabMergeRequest[] } } | null;
+    };
+    return ownMergeRequest(reached(data.project, path).mergeRequests.nodes, path);
+  },
+
+  async createChangeRequest({ host, token, path }, { head, base, title, body }) {
+    const { mergeRequest } = await mutate<{ mergeRequest: { iid: string; webUrl: string } | null }>(
+      sender(host, token),
+      {
+        mutation: "mergeRequestCreate",
+        inputType: "MergeRequestCreateInput",
+        input: { projectPath: path, sourceBranch: head, targetBranch: base, title, description: body },
+      },
+      "mergeRequest { iid webUrl }",
+    );
+    const created = reached(mergeRequest, `The new merge request of ${path}`);
+    return { number: Number(created.iid), url: created.webUrl };
+  },
 
   async createIssue({ host, token, path }, title, body, confidential) {
     const { issue } = await mutate<{ issue: { iid: string } | null }>(

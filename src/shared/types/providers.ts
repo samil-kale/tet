@@ -264,6 +264,34 @@ export interface IssueChange {
 
 export type IssueCreateResult = (ActionDone & { number: number }) | ActionRefused;
 
+/** What a host calls a request to merge a branch, and how it writes one's number: GitHub's pull
+ *  request `#128`, GitLab's merge request `!42`. The code says "change request" for either. */
+export interface ChangeRequestKind {
+  noun: string;
+  prefix: string;
+}
+
+/** The kind of the host the checked-out branch is pushed to, or why it has none. */
+export type ChangeRequestKindResult = { kind: ChangeRequestKind } | { refusal: string };
+
+/** A pull or merge request, by its number and its page. */
+export interface ChangeRequest {
+  number: number;
+  url: string;
+}
+
+/** The checked-out branch's open pull or merge request, `open` absent where it has none. */
+export type ChangeRequestFindResult = (ActionDone & { open?: ChangeRequest }) | ActionRefused;
+
+/** What the dialog asks for: the branch it goes into, on the same remote, and its text. */
+export interface ChangeRequestInput {
+  into: string;
+  title: string;
+  description: string;
+}
+
+export type ChangeRequestCreateResult = (ActionDone & ChangeRequest) | ActionRefused;
+
 export interface IssueUploadResult {
   /** What shows the file in an issue's text. */
   markdown?: string;

@@ -17,6 +17,10 @@ import type {
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef, ProjectsChange } from "./types/project";
 import type {
   AddAccountResult,
+  ChangeRequestCreateResult,
+  ChangeRequestFindResult,
+  ChangeRequestInput,
+  ChangeRequestKindResult,
   IssueChange,
   IssueCreateResult,
   IssueFieldOptionsResult,
@@ -280,8 +284,20 @@ export interface TETApi {
     commitPaths: (ref: ProjectRef, message: string, paths: string[]) => Promise<GitCommandResult>;
     /** The settings' `prompts.commitSuggesters` suggest one subject for all changes, or only `paths`. */
     suggestCommitMessage: (ref: ProjectRef, paths?: string[]) => Promise<SuggestionResult>;
-    /** Kills the agent a running `suggestCommitMessage` waits on — the commit prompt's Cancel. */
-    cancelCommitSuggestion: () => void;
+    /** Kills the agent a running suggestion waits on (`suggestCommitMessage`,
+     *  `suggestChangeRequest`) — its prompt's Cancel; one is up at a time. */
+    cancelSuggestion: () => void;
+    /** What the host the checked-out branch is pushed to (`headRemote`) calls a pull or merge
+     *  request, by its accounts, without asking it; why there is none without a remote on a host or
+     *  an account there. */
+    changeRequestKind: (ref: ProjectRef) => Promise<ChangeRequestKindResult>;
+    /** The checked-out branch's open pull or merge request, asked of its host. */
+    findChangeRequest: (ref: ProjectRef) => Promise<ChangeRequestFindResult>;
+    /** The settings' `prompts.commitSuggesters` suggest the title and description of a pull or
+     *  merge request into `into`, in the shape of a commit message: the first line is the title. */
+    suggestChangeRequest: (ref: ProjectRef, into: string) => Promise<SuggestionResult>;
+    /** Opens one from the checked-out branch, pushed by then. */
+    createChangeRequest: (ref: ProjectRef, input: ChangeRequestInput) => Promise<ChangeRequestCreateResult>;
     /** Everything the changes list shows, untracked included. */
     stashPush: (ref: ProjectRef, message: string) => Promise<GitCommandResult>;
     /** By `StashEntry.sha`, looked up when it runs. */

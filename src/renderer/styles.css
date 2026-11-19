@@ -2844,7 +2844,8 @@ textarea:focus,
 }
 
 /* Room for the description's box to be read and written at length. */
-.dialog.new-issue-dialog {
+.dialog.new-issue-dialog,
+.dialog.change-request-dialog {
   width: 700px;
 }
 
@@ -3550,4 +3551,21 @@ textarea:focus,
 
 .notice .icon-button {
   margin-left: auto;
+}
+
+/* The link's buttons sit right before the X (`NoticeLinkButtons`): the first takes the room, the
+   rest follow it without a gap of their own. */
+.notice .icon-button + .icon-button {
+  margin-left: 0;
+}
+
+/* A notice's link (`Notice.link`), as VS Code's notification links: the theme's link colour,
+   underlined on hover. */
+.notice-link {
+  color: var(--tet-textLink-foreground);
+  text-decoration: none;
+}
+
+.notice-link:hover {
+  text-decoration: underline;
 }

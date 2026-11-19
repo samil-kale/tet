@@ -1280,6 +1280,28 @@ export async function readCommitContext(cwd: string, selection?: string[]): Prom
   return sections.join("\n\n");
 }
 
+/**
+ * Everything an agent needs for a pull or merge request's text up front, as `readCommitContext` for a
+ * commit: the subjects and bodies of the commits since `base` (a remote branch, "origin/main") and
+ * their diff, from where the branch left it. Committed alone: the request takes no local change.
+ */
+export async function readRangeContext(cwd: string, base: string): Promise<string> {
+  const range = `${base}...HEAD`;
+  const [commits, diff] = await Promise.all([git(cwd, ["log", "--reverse", "--format=%s%n%n%b%n---", range]), git(cwd, ["diff", range])]);
+  if (commits.code !== 0) {
+    throw new Error(commits.stderr.trim() || `git log ${range} failed`);
+  }
+  const sections: string[] = [];
+  if (commits.stdout.trim() !== "") {
+    sections.push(`=== commits since ${base} ===\n${capped(commits.stdout.trim(), MAX_COMMIT_CONTEXT / 4)}`);
+  }
+  const changes = diff.code === 0 ? capped(diff.stdout, MAX_COMMIT_CONTEXT) : "";
+  if (changes.trim() !== "") {
+    sections.push(`=== diff against ${base} ===\n${changes.trimEnd()}`);
+  }
+  return sections.join("\n\n");
+}
+
 /** `--include-untracked`, so "stash all changes" covers the files the list shows. All only, as in
  *  GitHub Desktop: `stash push -- <paths>` mishandles a staged rename. */
 export function stashPush(cwd: string, message: string): Promise<GitCommandResult> {
