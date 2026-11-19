@@ -41,7 +41,7 @@ interface PushTarget {
 /**
  * The repository or worktree and its push target, or why it has none. The branch it merges into is
  * derived as t3code derives it, never picked: the base TET recorded when it made the branch
- * (`headBase`), else the default branch, else "main". t3code's other two sources stay out: a
+ * (`WorktreeInfo.base`), else the default branch, else "main". t3code's other two sources stay out: a
  * configured merge ref TET never writes, and an upstream of another name, which a branch TET made
  * never has (`createBranch`'s `--no-track`).
  */
@@ -67,7 +67,7 @@ function targetOf(
     return { refusal: `The remote ${remote} is on no host` };
   }
   const head = headRemoteBranch(state);
-  const into = state.headBase ?? state.defaultBranch?.name ?? "main";
+  const into = state.worktrees.find((worktree) => worktree.current)?.base ?? state.defaultBranch?.name ?? "main";
   if (into === head) {
     return { refusal: `${state.head} is the base branch` };
   }

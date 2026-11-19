@@ -689,8 +689,8 @@ async function readWorktrees(cwd: string, { gitDir, commonDir }: GitDirs): Promi
 
 /**
  * `init.defaultBranch`, else "main": GitHub Desktop's default branch where no remote names one. And
- * every `branch.<name>.base` TET recorded (createBranch, worktreeAdd), by branch. One process for both, asked of
- * git, not parsed out of the config file: git owns that format. Off the refresh path — Repository
+ * every `branch.<name>.base` TET recorded (createBranch, worktreeAdd), by branch. One process for
+ * both, asked of git, not parsed out of the config file: git owns that format. Off the refresh path — Repository
  * reads this on open, after a `.git/config` change, and after the actions that write a base.
  */
 export async function readBranchConfig(cwd: string): Promise<{ defaultBranchName: string; branchBases: Record<string, string> }> {

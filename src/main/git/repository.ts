@@ -393,12 +393,11 @@ export class Repository {
       });
     const worktrees = read.worktrees.map((worktree) => ({
       ...worktree,
-      // Only a linked worktree carries a base and a key; the repository has neither.
-      base: worktree.isRepository || worktree.branch === undefined ? undefined : ownValue(this.branchBases, worktree.branch),
+      // Only a linked worktree carries a key; the repository's branch has a base where TET made it.
+      base: worktree.branch === undefined ? undefined : ownValue(this.branchBases, worktree.branch),
       key: worktree.isRepository ? undefined : this.worktreeKeyOf(worktree.path),
     }));
-    const headBase = read.detached ? undefined : ownValue(this.branchBases, read.head);
-    const next: RepositoryState = { ...read, remotes, worktrees, headBase };
+    const next: RepositoryState = { ...read, remotes, worktrees };
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
     // emit re-renders the views.

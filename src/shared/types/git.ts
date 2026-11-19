@@ -77,9 +77,6 @@ export interface RepositoryState {
   /** The checked-out branch's upstream, a local branch where it tracks one; absent without one,
    *  and where its ref is gone. */
   upstream?: CheckoutTarget;
-  /** The checked-out branch's base as TET recorded it when it made the branch (`branch.<name>.base`):
-   *  where its pull or merge request goes. Absent for one made elsewhere. */
-  headBase?: string;
   /** Relative to the upstream; both 0 without one. */
   ahead: number;
   behind: number;
@@ -116,9 +113,10 @@ export interface WorktreeInfo {
   path: string;
   /** Its checked-out branch; absent while detached. */
   branch?: string;
-  /** The branch a linked worktree's branch was made from, as TET records it (`branch.<name>.base`
-   *  in the repository's config, git.ts's worktreeAdd); absent for one made elsewhere. Laid over
-   *  the read by `Repository.emit`, with the remote urls, not read per refresh. */
+  /** The branch its checked-out branch was made from, as TET records it (`branch.<name>.base` in
+   *  the repository's config, git.ts's createBranch and worktreeAdd), where its pull or merge request
+   *  goes; absent for one made elsewhere. Laid over the read by `Repository.emit`, with the remote
+   *  urls, not read per refresh. */
   base?: string;
   /** The one holding the repository's `.git`, which is never renamed or deleted. */
   isRepository: boolean;

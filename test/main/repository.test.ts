@@ -417,6 +417,14 @@ describe("worktrees, each with a branch of its own", () => {
     git(at("fresh"), "switch", "-q", "fresh");
   });
 
+  it("gives the repository's row the base of a branch TET made there", async () => {
+    assert.deepEqual(await repository.createBranch("topic", { name: "main" }), { ok: true });
+    assert.equal(repository.getState().worktrees[0]?.base, "main", "where its pull or merge request goes");
+    git(dir, "switch", "-q", "main");
+    git(dir, "branch", "-q", "-D", "topic");
+    await repository.refresh();
+  });
+
   it("is the current one when read in a linked worktree", async () => {
     const linked = await open(at("second"));
     const current = linked.getState().worktrees.filter((worktree) => worktree.current);

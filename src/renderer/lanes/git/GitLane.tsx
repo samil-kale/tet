@@ -172,7 +172,7 @@ export const GitLane = memo(function GitLane({
             branch={branch}
             onActivateRef={onActivateRef}
             onChangeRequest={openChangeRequest}
-            changeRequestTitle={changeRequestTitle(opens?.kind)}
+            changeRequestTitle={changeRequestTitle(changeRequestButton.target?.kind)}
           />
         )}
       </Section>

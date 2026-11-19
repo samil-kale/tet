@@ -243,7 +243,8 @@ in a comment at that site.
   or deleted by TET. A worktree and its branch are one: made together at the default branch
   (`worktreeBase`), named by the branch, deleted together, and never switched; renaming it renames
   the branch alone, its folder and tabs stay. Its base is TET's own `branch.<name>.base` (`git.ts`'s
-  `worktreeAdd`, as `createBranch` records any branch's). Removing a project deletes the worktrees TET made, with their branches.
+  `worktreeAdd`, as `createBranch` records any branch's). Removing a project deletes the worktrees
+  TET made, with their branches.
 
 **Scope.** Everything the git lane does fits in a context menu, an icon button or a question. Of
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, branch
@@ -254,7 +255,8 @@ read-only, a commit's files and their diffs against its first parent, searched b
 or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), a commit message suggested by an installed agent, and a
 pull or merge request of the checked-out branch from BRANCHES (`change-requests.ts`: into its base,
-else the default branch, derived and never picked, pushing it first, its text typed or suggested alike).
+else the default branch, derived and never picked, pushing it first, its text typed or suggested
+alike).
 Where Desktop differs from git's defaults, follow Desktop. The project row's entries are
 repository-wide and never touch the working tree — a worktree's own row excepted, which is that
 tree, and its merge into the base, run where the base is checked out.
