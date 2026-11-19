@@ -566,7 +566,8 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     }
     // A restored tab's file gone since says so in the tab alone (`notFound`), as VS Code's does.
     if (file.error && !(how.restored && file.notFound)) {
-      notify("error", `${file.path}: ${file.error}`);
+      // An issue's error names the issue and its project already.
+      notify("error", issue === undefined ? `${file.path}: ${file.error}` : file.error);
     }
     // An issue draws its own view, no editor.
     const text = editorKind(file) === "text" && issue === undefined;

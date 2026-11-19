@@ -108,7 +108,9 @@ export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "
       const issue = await readIssue(issueDeps, projectId, number);
       return { issue, markdown: issueMarkdown(issue) };
     } catch (error) {
-      return { error: errorMessage(error) };
+      // Names what was read and where: the notice may come up in another project's tab.
+      const named = issueDeps.store.get(projectId)?.name;
+      return { error: `${named ? `${named}: ` : ""}issue #${number}: ${errorMessage(error)}` };
     }
   });
 
