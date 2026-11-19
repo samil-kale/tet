@@ -2849,6 +2849,10 @@ textarea:focus,
   width: 700px;
 }
 
+.dialog.change-request-dialog .dialog-textarea {
+  height: 180px;
+}
+
 /* The hint set off from the row of the push checkbox and the suggest button above it. */
 .dialog.commit-dialog .dialog-detail {
   margin: 8px 0;
