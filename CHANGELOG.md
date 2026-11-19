@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.26.0 (2026-11-19)
+
+- **Pull and merge requests.** The checked-out branch opens a pull or merge request from BRANCHES,
+  into its base or else the default branch. TET pushes the branch first, and the text is typed or
+  suggested by an installed agent.
+- **Renaming a branch renames its upstream.** A branch's rename can also rename it on the remote.
+- **Fixes.** Issue errors name the issue and its project.
+
 ## 0.25.3 (2026-11-18)
 
 - **Encrypted environment variables.** The values TET keeps are encrypted by the OS, those already
