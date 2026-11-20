@@ -991,7 +991,7 @@ describe("a remote's url", () => {
   });
 });
 
-describe("the GRAPH's commits and their files", () => {
+describe("the Graph's commits and their files", () => {
   let dir: string;
   let repository: Repository;
   let first: string;

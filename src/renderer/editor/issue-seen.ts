@@ -11,7 +11,7 @@ export function setIssuesSeen(projectId: string, seen: IssuesSeen): void {
   seenByProject.set({ ...seenByProject.get(), [projectId]: seen });
 }
 
-/** An issue's tab shows it as last changed at `updatedAt`: kept, and the ISSUES section stops marking
+/** An issue's tab shows it as last changed at `updatedAt`: kept, and the Issues section stops marking
  *  it. What is already kept is not sent again. */
 export function keepIssueSeen(projectId: string, number: number, updatedAt: string): void {
   const seen = seenByProject.get()[projectId];

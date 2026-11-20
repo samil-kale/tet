@@ -5,7 +5,7 @@ import type { ResolvedRef } from "../../resolved-ref";
 /** Commits asked for at first, and added by each "load more". */
 const GRAPH_PAGE = 300;
 
-/** Typing runs the search, as SEARCH's does — but only once the typing stops. */
+/** Typing runs the search, as Search's does — but only once the typing stops. */
 const SEARCH_DELAY_MS = 300;
 
 const NO_COMMITS: GraphCommit[] = [];
@@ -20,7 +20,7 @@ function graphVersion(state: RepositoryState): string {
 }
 
 /**
- * The GRAPH's commits of the repository or worktree, read again when `graphVersion` changes or a
+ * The Graph's commits of the repository or worktree, read again when `graphVersion` changes or a
  * git action (`busy`) ends — a fetch moves refs the state does not name — and only while the lane
  * is `enabled` (shown, graph on screen): the log is a git process of its own. `more` asks for
  * another page.

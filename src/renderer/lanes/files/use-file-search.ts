@@ -6,7 +6,7 @@ import type { ResolvedRef } from "../../resolved-ref";
 const SEARCH_DELAY_MS = 300;
 
 /**
- * The SEARCH section's matches. Held by the files lane, which shows them and the search running
+ * The Search section's matches. Held by the files lane, which shows them and the search running
  * (`useFileAct` is held the same way); the field itself lives in the section and asks for a query
  * here, or for null where it is empty.
  *

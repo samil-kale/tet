@@ -11,7 +11,7 @@ interface FilterFieldProps {
   autoFocus?: boolean;
   /** Enter in the field, e.g. to take the first match. */
   onEnter?: () => void;
-  /** Toggles standing inside the field, before the clear button (the SEARCH section's three). */
+  /** Toggles standing inside the field, before the clear button (the Search section's three). */
   children?: ReactNode;
 }
 

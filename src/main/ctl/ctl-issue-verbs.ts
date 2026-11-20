@@ -30,7 +30,7 @@ function withoutAvatars<T extends object>(issue: T): Record<string, unknown> {
   return Object.fromEntries(Object.entries(issue).filter(([key]) => key !== "avatars"));
 }
 
-/** The ISSUES section's filter as `issues-list` words it: the open issues, until `--state` says more. */
+/** The Issues section's filter as `issues-list` words it: the open issues, until `--state` says more. */
 function issueFilter(args: Record<string, unknown>): IssueFilter {
   const state = args.state === undefined ? "open" : oneOf(args, "state", "state", ISSUE_STATE_FILTERS);
   const author = optionalText(args, "author");

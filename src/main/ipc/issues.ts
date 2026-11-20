@@ -47,7 +47,7 @@ import { readIssueSource } from "../store/tet-json";
 import { logFailure } from "../util/json-file";
 import type { IpcDeps } from "./deps";
 
-/** The ISSUES section: read from the project's tracker, by project, since the repository and its
+/** The Issues section: read from the project's tracker, by project, since the repository and its
  *  worktrees share one. Each answers its failure for the section to notify; `setSource` for the
  *  question still up to show it at its field. */
 export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "issueDeps" | "noticeProgress">): void {

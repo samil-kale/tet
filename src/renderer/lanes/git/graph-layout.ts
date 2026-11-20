@@ -14,7 +14,7 @@ export interface Swimlane {
   color: GraphColor;
 }
 
-/** A commit's row of the GRAPH: the lanes entering it from the row above, and leaving it below. */
+/** A commit's row of the Graph: the lanes entering it from the row above, and leaving it below. */
 export interface GraphRow {
   commit: GraphCommit;
   input: Swimlane[];

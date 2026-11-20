@@ -325,10 +325,10 @@ export interface TETApi {
     /** tet.json's `exclude` — "Exclude from Explorer". */
     excludePath: (projectId: string, path: string) => Promise<ActionResult>;
     listExplorer: (ref: ProjectRef) => Promise<ExplorerListing>;
-    /** The SEARCH section's matches, in the files the tree lists minus what git ignores. */
+    /** The Search section's matches, in the files the tree lists minus what git ignores. */
     searchFiles: (ref: ProjectRef, query: FileSearchQuery) => Promise<FileSearchResult>;
     readFile: (ref: ProjectRef, path: string) => Promise<FileContent>;
-    /** The GRAPH's `limit` newest commits of HEAD, its upstream and the default branch, topologically
+    /** The Graph's `limit` newest commits of HEAD, its upstream and the default branch, topologically
      *  ordered; with `search`, only those it finds. */
     log: (ref: ProjectRef, limit: number, search?: CommitSearch) => Promise<GraphCommit[]>;
     /** The files a commit changed against its first parent (`parent` absent for a root commit). */
@@ -433,7 +433,7 @@ export interface TETApi {
     rename: (ref: ProjectRef, tabId: string, title: string) => Promise<ActionResult>;
     /** Deletes the session behind an archived tab. */
     delete: (ref: ProjectRef, tabId: string) => Promise<ActionResult>;
-    /** A drag in the ARCHIVE lane: the tabs take `tabIds`' order, written down so it persists. */
+    /** A drag in the Archive lane: the tabs take `tabIds`' order, written down so it persists. */
     reorder: (ref: ProjectRef, tabIds: string[]) => Promise<ActionResult>;
     /** The repository's or worktree's full list of archived tabs on every change. */
     onChanged: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;

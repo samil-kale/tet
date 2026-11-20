@@ -43,7 +43,7 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
       (await tabManagers.get(ref)?.renameTab(tabId, title)) ?? { ok: true },
   );
 
-  // A tab dropped on an ISSUES row.
+  // A tab dropped on an Issues row.
   handle(
     "tabs:link-issue",
     (_event, ref: ProjectRef, tabId: string, number: number): LinkIssueResult =>

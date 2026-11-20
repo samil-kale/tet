@@ -38,7 +38,7 @@ import type { SessionManagerRegistry } from "./terminals/session-registry";
 import { imageDataUrl } from "./util/image-response";
 
 /**
- * What the ISSUES section and `tet-ctl`'s issue verbs share, built once in main.ts like
+ * What the Issues section and `tet-ctl`'s issue verbs share, built once in main.ts like
  * `ProjectDeps`. A project's tracker is read through its repository, never a worktree's: the
  * repository and its worktrees share one.
  */
@@ -86,7 +86,7 @@ export async function changeIssueSource(
 }
 
 /** The project's issues the tracker created or changed since their tab last showed them (`isUnread`),
- *  among those the ISSUES section lists until its filter is changed. */
+ *  among those the Issues section lists until its filter is changed. */
 export async function unreadIssues(deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">, projectId: string): Promise<Issue[]> {
   const issues = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
     provider.listIssues(tracker, DEFAULT_ISSUE_FILTER),
@@ -120,7 +120,7 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
 
 /**
- * What the ISSUES section and `tet-ctl` do on the project's tracker beyond the above, each throwing
+ * What the Issues section and `tet-ctl` do on the project's tracker beyond the above, each throwing
  * what the tracker or the account refused: the callers tell it as their transport does.
  */
 

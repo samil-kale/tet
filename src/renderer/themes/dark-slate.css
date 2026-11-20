@@ -26,21 +26,23 @@
   --tet-terminal-background: #1b1f27;
   --tet-terminal-foreground: #dde2e9;
 
-  --tet-lane-background: #14171c;
   --tet-sectionHeader-foreground: #dde2e9;
-  --tet-titleBar-activeBackground: #14171c;
+  /* Not the theme's #14171c: the ground's, below. */
+  --tet-titleBar-activeBackground: #2a2d35;
   --tet-titleBar-activeForeground: #dde2e9;
 
-  --tet-app-background: #14171c;
-  --tet-app-border: #24272c;
+  /* Not the theme's #14171c, darker than the editor: the islands' ground stands lighter than them
+     (THEMES.md) — the theme's widget border grey. */
+  --tet-app-background: #2a2d35;
+  /* Not the theme's #24272c, a shade off the ground, which would hide every line on it: the theme's
+     editor group border. */
+  --tet-app-border: #30363d;
 
   --tet-tab-activeBackground: #1b1f27;
-  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #58a6f0;
   --tet-tab-activeForeground: #dde2e9;
-  --tet-tab-inactiveBackground: #14171c;
   --tet-tab-inactiveForeground: #7b8391;
-  --tet-tab-border: #24272c;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
@@ -78,7 +80,7 @@
   /* Dark Modern's. */
   --tet-popup-shadow: #0000005c;
 
-  --tet-menu-background: #1b1f27;
+  --tet-menu-background: #2a2d35;
   --tet-menu-foreground: #dde2e9;
   --tet-menu-border: #2a2d35;
   --tet-menu-selectionBackground: #273a50;

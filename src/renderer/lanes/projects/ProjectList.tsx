@@ -339,7 +339,7 @@ export const ProjectList = memo(function ProjectList({
 
   return (
     <Section
-      title="PROJECTS"
+      title="Projects"
       count={projects.length}
       busy={busy}
       actions={

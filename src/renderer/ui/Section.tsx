@@ -5,7 +5,7 @@ interface SectionProps {
   title: string;
   /** Beside the title in parentheses, dimmed; left out while there is nothing to count yet. */
   count?: ReactNode;
-  /** The count says something went wrong instead (a SEARCH regex that will not parse). */
+  /** The count says something went wrong instead (a Search regex that will not parse). */
   countError?: boolean;
   /** Draws the section's one progress bar along the header's bottom edge. */
   busy?: boolean;

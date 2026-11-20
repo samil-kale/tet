@@ -117,7 +117,7 @@ export const ArchiveList = memo(function ArchiveList({ resolved, shown, onOpenTa
 
   return (
     <div className={`lane-content${shown ? "" : " hidden"}${archiveDrop.over ? " drag-over" : ""}`} {...archiveDrop.dropPropsOf(true)}>
-      <Section title="ARCHIVE" count={tabs.length}>
+      <Section title="Archive" count={tabs.length}>
         <div className="filter-list">
           <FilterField placeholder="Filter archive..." value={filter} onChange={setFilter} />
           <div className="tree" {...(reorderable ? listProps : {})}>

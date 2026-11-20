@@ -32,7 +32,7 @@ export interface ListRepositoriesResult {
   error?: string;
 }
 
-/** A row of the ISSUES section. */
+/** A row of the Issues section. */
 export interface Issue {
   /** GitHub's `number`, GitLab's `iid`: what the host's pages call it. */
   number: number;
@@ -55,7 +55,7 @@ export interface Issue {
 export const ISSUE_STATES = ["open", "closed"] as const;
 export const ISSUE_STATE_FILTERS = [...ISSUE_STATES, "all"] as const;
 
-/** What the host narrows the ISSUES section to; a field left out narrows nothing. */
+/** What the host narrows the Issues section to; a field left out narrows nothing. */
 export interface IssueFilter {
   state?: "open" | "closed";
   author?: string;
@@ -64,7 +64,7 @@ export interface IssueFilter {
   labels: string[];
 }
 
-/** What the ISSUES section shows until its filter is changed. */
+/** What the Issues section shows until its filter is changed. */
 export const DEFAULT_ISSUE_FILTER: IssueFilter = { state: "open", labels: [] };
 
 /** What an issue's text is called as a file: in its tab, and in a tab opened on it. */
@@ -124,7 +124,7 @@ export interface IssueLatestResult {
   error?: string;
 }
 
-/** What the ISSUES section's filters offer. */
+/** What the Issues section's filters offer. */
 export interface IssueFilterOptions {
   labels?: string[];
   /** Offered for both author and assignee. */

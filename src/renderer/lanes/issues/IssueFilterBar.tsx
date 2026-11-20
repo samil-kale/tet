@@ -53,7 +53,7 @@ function stateName(state: IssueFilter["state"]): string | undefined {
   return (Object.keys(STATES) as StateName[]).find((name) => STATES[name] === state);
 }
 
-/** The filter's row under the ISSUES section's field: what the host narrows the list to. */
+/** The filter's row under the Issues section's field: what the host narrows the list to. */
 export function IssueFilterBar({
   filter,
   options,

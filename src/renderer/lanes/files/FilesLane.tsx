@@ -71,7 +71,7 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       {/* This section's bar — the listing and the tree's edits. */}
       <Section
-        title="EXPLORER"
+        title="Explorer"
         count={explorerListing?.files.length}
         busy={explorerBusy}
         actions={
@@ -112,7 +112,7 @@ export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, on
       />
       {/* This section's bar — the search the field below asked for. */}
       <Section
-        title="SEARCH"
+        title="Search"
         count={searchResult && searchSummary(searchResult)}
         countError={Boolean(searchResult?.error)}
         busy={searchBusy}

@@ -16,7 +16,7 @@ const CHEVRON_GAP = 4;
 /** A match row starts a pixel past its file row's label (`INDENT_BASE` plus the chevron and its
  *  gap): the line it found gets the width the rest of the nesting would have eaten. */
 export const MATCH_INDENT = INDENT_BASE + CHEVRON_WIDTH + CHEVRON_GAP + 1;
-/** A level of every other tree TET lays out itself (BRANCHES, the GRAPH's finds): one column, the
+/** A level of every other tree TET lays out itself (Branches, the Graph's finds): one column, the
  *  width a chevron, an icon or a status letter takes with its gap, so a child starts under its
  *  parent's label. */
 export const COLUMN_STEP = CHEVRON_WIDTH + CHEVRON_GAP;
@@ -25,7 +25,7 @@ export const COLUMN_STEP = CHEVRON_WIDTH + CHEVRON_GAP;
 export const CHECK_INDENT_STEP = 17;
 
 /**
- * A row of a tree or list (`.tree-row`), in the branch tree, the Explorer, SEARCH and LOCAL
+ * A row of a tree or list (`.tree-row`), in the branch tree, the Explorer, Search and LOCAL
  * CHANGES alike: what leads it (`icon`: an icon, a chevron, a checkbox), its label, then what
  * trails it (`children`: counts, a folder, a branch's base). `indent` is its left padding.
  */

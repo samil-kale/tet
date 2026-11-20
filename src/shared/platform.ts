@@ -70,6 +70,9 @@ export interface Platform {
   readonly windowIcon: "icon.ico" | "icon.png";
   /** Window controls drawn over TET's own title bar (titleBarOverlay); macOS keeps its inset lights. */
   readonly titleBarOverlay: boolean;
+  /** How the window's ground shows what is behind it: the system's backdrop material (Windows 11),
+   *  vibrancy (macOS), or a transparent window (Linux, drawn only where a compositor runs). */
+  readonly groundShowsThrough: "backgroundMaterial" | "vibrancy" | "transparentWindow";
   /** The app name stands in the middle of the title bar. */
   readonly centersTitle: boolean;
   /** The app quits with its last window; macOS keeps it running. */
@@ -175,6 +178,7 @@ export const WINDOWS: Platform = {
   installCommand: "irm https://raw.githubusercontent.com/samil-kale/tet/development/scripts/install.ps1 | iex",
   windowIcon: "icon.ico",
   titleBarOverlay: true,
+  groundShowsThrough: "backgroundMaterial",
   centersTitle: false,
   quitsWithLastWindow: true,
   windowsNotifications: true,
@@ -228,6 +232,7 @@ export const MAC: Platform = {
   installCommand: POSIX_INSTALL,
   windowIcon: "icon.png",
   titleBarOverlay: false,
+  groundShowsThrough: "vibrancy",
   centersTitle: true,
   quitsWithLastWindow: false,
   windowsNotifications: false,
@@ -273,6 +278,7 @@ export const LINUX: Platform = {
   installCommand: POSIX_INSTALL,
   windowIcon: "icon.png",
   titleBarOverlay: true,
+  groundShowsThrough: "transparentWindow",
   centersTitle: false,
   quitsWithLastWindow: true,
   windowsNotifications: false,

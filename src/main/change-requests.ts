@@ -20,8 +20,8 @@ import type { SettingsAccess } from "./store/settings";
 
 /**
  * A pull or merge request from the checked-out branch, into a branch of the repository it is pushed
- * to (`headRemote`), on that remote's host, through the host's accounts as the ISSUES section reaches
- * its tracker (`onHost`): what BRANCHES' button and the checked-out branch's menu ask.
+ * to (`headRemote`), on that remote's host, through the host's accounts as the Issues section reaches
+ * its tracker (`onHost`): what Branches' button and the checked-out branch's menu ask.
  */
 export interface ChangeRequestDeps {
   accounts: IssueAccounts;

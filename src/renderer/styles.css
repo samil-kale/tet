@@ -45,13 +45,15 @@ body,
   margin: 0;
 }
 
-/* The panel colour, not the editor's: it fills the window before the views draw, matching
-   BrowserWindow's backgroundColor in main.ts. */
+/* The window's ground, which the islands stand on: it fills the window before the views draw, and
+   lets the platform's backdrop show through (window.ts). Only the ground is translucent: the
+   islands and every use of --tet-app-background as a line or card fill stay opaque. */
 body {
+  --tet-app-ground: color-mix(in srgb, var(--tet-app-background) 70%, transparent);
   font-family: var(--tet-font-family);
   font-size: var(--tet-font-size);
   color: var(--tet-foreground);
-  background: var(--tet-app-background);
+  background: var(--tet-app-ground);
   overflow: hidden;
   user-select: none;
 }
@@ -276,7 +278,11 @@ textarea:focus,
   color: var(--tet-input-foreground);
 }
 
-/* Scrollbars: no arrows, no track, a translucent slider. A view wanting none hides them itself. */
+/* Scrollbars: no arrows, no track, a translucent pill standing in from the bar's edges, as IntelliJ
+   Islands' on every platform. The inset is a transparent border the thumb's colour stops at
+   (`--scrollbar-inset`), so its grip keeps the bar's whole width: the 7px bar shows a 3px pill,
+   IntelliJ's thin one, a tab's 11px bar (`.pane-body`) a 7px one, its regular one at rest. A view
+   wanting none hides them itself. */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
@@ -288,15 +294,18 @@ textarea:focus,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--tet-scrollbarSlider-background);
+  border: var(--scrollbar-inset) solid transparent;
+  border-radius: 999px;
+  background-color: var(--tet-scrollbarSlider-background);
+  background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--tet-scrollbarSlider-hoverBackground);
+  background-color: var(--tet-scrollbarSlider-hoverBackground);
 }
 
 ::-webkit-scrollbar-thumb:active {
-  background: var(--tet-scrollbarSlider-activeBackground);
+  background-color: var(--tet-scrollbarSlider-activeBackground);
 }
 
 .app {
@@ -305,10 +314,15 @@ textarea:focus,
   flex-direction: column;
   height: 100%;
   /* Shared measurements, checked against the neighbouring view before inventing one: a bar along
-     an edge is --bar-height (tab strip, title bar, `.section-header`, the editor tab's bar); the
-     border between panes is 1px --tet-app-border; anything that marks or points at something
-     is 1px --tet-focusBorder. */
-  --bar-height: 35px;
+     an edge is --bar-height (tab strip, title bar, `.section-header`, the editor tab's bar); a line
+     inside an island is a card's 1px --tet-app-border or the tab strip's and the editor tab's bar's
+     2px in the ground's colour, and none draws an island; anything that marks or points at something is 1px
+     --tet-focusBorder. */
+  --bar-height: 40px;
+  /* The islands — a lane's sections, the panes — stand this far apart on the window's ground (a
+     sash is the gap between two), and their rows and fields this far in from their edges. */
+  --island-gap: 6px;
+  --island-radius: 10px;
   /* Pane floors, as MIN_AREA_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
   --area-min-width: 230px;
@@ -323,12 +337,16 @@ textarea:focus,
      issue's description in its dialog too. */
   --issue-card-padding: 10px;
   --popup-row-height: 30px;
-  --border-radius: 3px;
+  --border-radius: 6px;
+  /* A checkbox's, IntelliJ's: its 16px box would read round at the other controls' radius. */
+  --checkbox-radius: 3px;
+  /* How far a scrollbar's pill stands in from the bar's edges, a thin bar's and a thick one's alike. */
+  --scrollbar-inset: 2px;
   --menu-padding: 3px;
   --popup-width: min(450px, 100vw);
   /* As `CLOSE_MS` (use-closing.ts). */
   --popup-fade: 0.1s;
-  /* The rows of the trees that nest deep or draw: the Explorer, SEARCH and the GRAPH, whose lanes
+  /* The rows of the trees that nest deep or draw: the Explorer, Search and the Graph, whose lanes
      are drawn to it (ROW_HEIGHT in CommitGraph.tsx). */
   --tree-row-height: 24px;
   /* One height for every single-line field, and for a button beside one: input,
@@ -377,14 +395,13 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 8px;
-  /* VS Code's title bar height with the window controls overlay. */
+  /* The window controls overlay's height (window.ts). */
   height: var(--bar-height);
   flex: none;
   padding-left: 12px;
   /* Stops short of the platform's window controls, whose geometry the overlay publishes as
      env() variables. No overlay (macOS, controls on the left): the fallback gives 0. */
   padding-right: calc(100% - env(titlebar-area-width, 100%));
-  background: var(--tet-titleBar-activeBackground);
   -webkit-app-region: drag;
 }
 
@@ -446,7 +463,7 @@ textarea:focus,
 }
 
 /* Never the list hover colour: invisible on a hovered row, a patch on a selected one. The same for
-   what a toolbar holds besides its icon buttons: the status bar's entries, the ISSUES filters. */
+   what a toolbar holds besides its icon buttons: the status bar's entries, the Issues filters. */
 .icon-button:hover:not(:disabled),
 .status-bar-item:hover,
 .issue-filter-trigger:hover,
@@ -468,29 +485,34 @@ textarea:focus,
 
 /* Body ----------------------------------------------------------------------------------- */
 
-/* Carries the line under the title bar: on `.titlebar` (border-box) it would sit inside the 35px
-   the window controls overlay paints over. */
+/* The ground the islands stand on, a gap off the window's right edge; the Navigation Bar keeps them
+   off its left. */
 .body {
   display: flex;
   flex: 1;
   min-height: 0;
-  border-top: 1px solid var(--tet-app-border);
+  padding-right: var(--island-gap);
 }
 
-/* The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar),
-   its own fixed width, its icons 1.2x the rest of the app's (`--icon-size`, `--action-size`). */
+/* The lane toggles and settings, full height at the window's left edge on the ground (VS Code's
+   Activity Bar), its own fixed width, its icons 1.2x the rest of the app's (`--icon-size`) in
+   IntelliJ's tool window stripe's boxes (`--action-size`). */
 .navigation-bar {
   display: flex;
   flex-direction: column;
   align-items: center;
   flex: none;
-  width: 41px;
-  gap: 10px;
-  padding: 8px 0;
-  border-right: 1px solid var(--tet-app-border);
-  background: var(--tet-lane-background);
+  width: 44px;
+  gap: 6px;
   --icon-size: 17px;
-  --action-size: 26px;
+  --action-size: 32px;
+}
+
+/* The shown lane's toggle, as IntelliJ's stripe marks it: a filled box, the icon at full strength.
+   Not the accent, which the editor bar's and the filters' toggles keep. */
+.navigation-bar .icon-button.active:not(:disabled) {
+  color: var(--tet-foreground);
+  background: var(--tet-toolbar-hoverBackground);
 }
 
 .content {
@@ -498,12 +520,11 @@ textarea:focus,
   display: flex;
   flex: 1;
   min-width: var(--content-min-width);
-  background: var(--tet-editor-background);
 }
 
 /* The window's bottom edge (VS Code's status bar), after `.body`: the active repository or worktree,
-   and its branch. Its icons read smaller than the rest of the app's. The Navigation Bar's own
-   background: both sit on the window's edge. */
+   and its branch. Its icons read smaller than the rest of the app's. Painted in the ground's colour:
+   its lists rise from behind it. */
 .status-bar {
   /* Above its lists and the notification center, which rise from behind it; below the menus, which
      may reach over it. */
@@ -512,11 +533,9 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 27px;
+  height: 29px;
   flex: none;
   padding: 0 8px 1px;
-  background: var(--tet-lane-background);
-  border-top: 1px solid var(--tet-app-border);
   font-size: var(--small-font-size);
   --icon-size: 13px;
 }
@@ -527,6 +546,7 @@ textarea:focus,
   gap: 4px;
   height: 100%;
   padding: 0 6px;
+  border-radius: var(--border-radius);
 }
 
 .status-bar-tab {
@@ -546,20 +566,23 @@ textarea:focus,
 
 /* Project list --------------------------------------------------------------------------- */
 
-/* A titled section of a lane. One of a pair is sized by the sash and may still shrink to the
-   floor; the other (`.grows`) takes the rest. */
+/* A titled section of a lane, an island. One of a pair is sized by the sash and may still shrink to
+   the floor; the other (`.grows`) takes the rest. */
 .section {
   display: flex;
   flex-direction: column;
   flex: 0 1 auto;
   min-height: var(--area-min-height);
+  overflow: hidden;
+  background: var(--tet-editor-background);
+  border-radius: var(--island-radius);
 }
 
 .section.grows {
   flex: 1;
 }
 
-/* The GRAPH: a row's lanes, then its subject and author, as VS Code's graph rows. */
+/* The Graph: a row's lanes, then its subject and author, as VS Code's graph rows. */
 .graph-tree .tree-row {
   height: var(--tree-row-height);
 }
@@ -596,12 +619,12 @@ textarea:focus,
 /* A node's circles are stroked in what lies behind them, which cuts a gap round each from the lines
    it crosses; the row's own background while it has one. HEAD's inner circle is a hole in its ring. */
 .graph-lanes circle {
-  stroke: var(--tet-lane-background);
+  stroke: var(--tet-editor-background);
   transition: fill 0.3s;
 }
 
 .graph-lanes.head circle:last-child {
-  fill: var(--tet-lane-background);
+  fill: var(--tet-editor-background);
 }
 
 .graph-tree .tree-row:hover .graph-lanes circle:first-of-type {
@@ -628,30 +651,19 @@ textarea:focus,
   fill: var(--tet-list-activeSelectionBackground);
 }
 
-.section ~ .section {
-  border-top: 1px solid var(--tet-app-border);
-}
-
-.command-list {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 .command-label {
   font-family: var(--tet-editor-font-family);
 }
 
-/* The titles of a lane's sections and of a tree's groups: one type. */
+/* The titles of a lane's sections and of a tree's groups share their colour and weight. */
 .section-header,
 .tree-header {
-  font-size: var(--small-font-size);
-  letter-spacing: 0.3px;
   color: var(--tet-sectionHeader-foreground);
+  font-weight: 600;
 }
 
-/* The tab strip's 35px, border included, so titles and tabs line up. The line above is drawn by
-   whatever the section sits under, so no header draws two. */
+/* The tab strip's height, so titles and tabs line up. Its title and buttons stand as far in as the
+   rows' labels and buttons below, which the section's scroller insets. */
 .section-header {
   /* Anchors its `.progress-bar` to the bottom edge. */
   position: relative;
@@ -661,23 +673,18 @@ textarea:focus,
   gap: 6px;
   height: var(--bar-height);
   flex: none;
-  padding: 0 6px 0 10px;
-  border-bottom: 1px solid var(--tet-app-border);
-  font-weight: 600;
-}
-
-.project-list {
-  flex: 1;
-  overflow-y: auto;
+  padding: 0 calc(var(--island-gap) + 6px) 0 calc(var(--island-gap) + 10px);
 }
 
 /* Every list row is one height. Stated rather than padded, so a row with a 22px action button
-   stands no taller than one holding only text. */
+   stands no taller than one holding only text. Rounded, its hover and selection inside the island's
+   inset. */
 .list-row,
 .tree-header,
 .tree-row {
   height: var(--list-row-height);
   flex: none;
+  border-radius: var(--border-radius);
 }
 
 /* One row shape for the projects, the commands and the archived tabs. The icon buttons ending a row stand
@@ -780,8 +787,8 @@ textarea:focus,
   bottom: 0;
 }
 
-/* A tab's line stands between tabs, drawn over the active tab's own line (a shadow); 2px, as VS
-   Code draws its tabs' drop target. */
+/* A tab's line stands in the middle of the gap beside it, past its border; 2px, as VS Code draws its
+   tabs' drop target. */
 .tab.drop-before::before,
 .tab.drop-after::after {
   content: "";
@@ -795,11 +802,11 @@ textarea:focus,
 }
 
 .tab.drop-before::before {
-  left: 0;
+  left: -4px;
 }
 
 .tab.drop-after::after {
-  right: 0;
+  right: -4px;
 }
 
 /* Takes the leftover width, so the row's buttons stay at its right edge. */
@@ -871,12 +878,18 @@ textarea:focus,
 /* The box every filter and search is typed into (FilterField). */
 .filter-field {
   position: relative;
-  padding: 7px;
+  padding: var(--island-gap);
+}
+
+/* Under a section's header, whose height spaces it: drawn up into it rather than losing its top
+   padding, which would set the icon and toggles (`top: 50%`) off the input's middle. */
+.section .filter-field {
+  margin-top: calc(-1 * var(--island-gap));
 }
 
 /* Room for the search icon on the left. On the right, room for what stands inside the field
    (`.filter-toggles`: 20px each, --action-gap apart, 4px off the edge), and 4px before the text:
-   the clear button, and before it the SEARCH and GRAPH sections' three toggles, VS Code's. */
+   the clear button, and before it the Search and Graph sections' three toggles, VS Code's. */
 .filter-field input {
   width: 100%;
   padding-left: 28px;
@@ -889,7 +902,7 @@ textarea:focus,
 
 .filter-icon {
   position: absolute;
-  left: 13px;
+  left: calc(var(--island-gap) + 6px);
   top: 50%;
   transform: translateY(-50%);
   opacity: 0.6;
@@ -922,18 +935,21 @@ textarea:focus,
 .filter-toggles {
   position: absolute;
   /* 4px off the input's edge, inside the field's right padding. */
-  right: 10px;
+  right: calc(var(--island-gap) + 3px);
   top: 50%;
   transform: translateY(-50%);
 }
 
+/* A section's scroller of rows, inset from the island's edges. */
+.project-list,
+.command-list,
 .tree {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding-bottom: 8px;
-  /* 1px narrower than the lane: at a fractional scale the lane's edge can take the last device
-     pixel, and with it the right side of a focused row's outline. */
-  margin-left: 1px;
+  padding: 0 var(--island-gap);
+  /* A margin, not padding: rows scrolling past the bottom are cut off 8px above the island's edge. */
+  margin-bottom: 8px;
 }
 
 .tree-header {
@@ -941,9 +957,9 @@ textarea:focus,
   align-items: center;
   gap: 4px;
   width: 100%;
-  /* The chevron's centre at 15px, as LOCAL CHANGES' status letter and the Explorer's file icons. */
+  /* The chevron's centre at 15px, as Local Changes' status letter and the Explorer's file icons. */
   padding: 0 6px 0 9px;
-  font-weight: 400;
+  font-size: var(--tet-font-size);
 }
 
 /* What leads a row stands in columns, each carrying its own gap (ui/tree-row.tsx); a row sets its
@@ -994,8 +1010,8 @@ textarea:focus,
   color: var(--tet-list-activeSelectionForeground);
 }
 
-/* Rows shaped the same across lanes: the files lane's EXPLORER tree and the SEARCH section under
-   it, and the git lane's LOCAL CHANGES and BRANCHES. It nests arbitrarily deep, so rows set
+/* Rows shaped the same across lanes: the files lane's Explorer tree and the Search section under
+   it, and the git lane's Local Changes and Branches. It nests arbitrarily deep, so rows set
    `padding-left` inline. */
 .dense-tree .tree-header,
 .dense-tree .tree-row {
@@ -1059,13 +1075,13 @@ textarea:focus,
 /* What the search found in the files (lanes/files/FileSearch.tsx). The rows are the tree's, so
    only what they carry beyond a file row is stated here. */
 
-/* A section header's title with its count beside it — SEARCH's summary long enough to be cut off
+/* A section header's title with its count beside it — Search's summary long enough to be cut off
    before the header's buttons. */
 .section-title {
   min-width: 0;
 }
 
-/* A regex that will not parse takes the SEARCH summary's place. */
+/* A regex that will not parse takes the Search summary's place. */
 .count-badge.error {
   color: var(--tet-errorForeground);
 }
@@ -1132,7 +1148,7 @@ textarea:focus,
   height: calc(var(--icon-size) - 2px);
 }
 
-/* The ISSUES section (lanes/issues/) and an issue's tab (editor/IssueView.tsx) declare once what
+/* The Issues section (lanes/issues/) and an issue's tab (editor/IssueView.tsx) declare once what
    they share: a row of items centered on its line, entries one under the next, the secondary text
    and the bold names. */
 .issue-filter-bar,
@@ -1179,8 +1195,7 @@ textarea:focus,
   flex-wrap: wrap;
   flex: none;
   gap: 2px 5px;
-  padding: 0 7px 7px 7px;
-  border-bottom: 1px solid var(--tet-app-border);
+  padding: 0 var(--island-gap) var(--island-gap);
   font-size: var(--small-font-size);
   color: var(--tet-descriptionForeground);
 }
@@ -1353,7 +1368,7 @@ textarea:focus,
   padding: 0 var(--issue-card-padding);
   border-bottom: 1px solid var(--tet-app-border);
   border-radius: var(--border-radius) var(--border-radius) 0 0;
-  background: var(--tet-lane-background);
+  background: var(--tet-app-background);
   font-size: var(--small-font-size);
 }
 
@@ -1380,11 +1395,13 @@ textarea:focus,
    dialog's tab header is, by cancelling `.issue-card-edit`'s padding. */
 .issue-box-tabs {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: var(--action-gap);
   height: var(--bar-height);
   margin: calc(-1 * var(--issue-card-padding)) calc(-1 * var(--issue-card-padding)) var(--issue-card-padding);
+  padding: 0 var(--island-gap);
   border-bottom: 1px solid var(--tet-app-border);
-  background: var(--tet-tab-inactiveBackground);
+  background: var(--tet-app-background);
 }
 
 /* At the card's top, as the comment box's, it takes the card's corners. */
@@ -1494,7 +1511,7 @@ textarea:focus,
   margin: 2px 4.5px 0;
   border: 2px solid var(--tet-menu-border);
   border-radius: 50%;
-  background: var(--tet-lane-background);
+  background: var(--tet-app-background);
 }
 
 .issue-event-message {
@@ -1605,7 +1622,7 @@ textarea:focus,
   padding: 2px 7px;
   border: 1px solid var(--tet-menu-border);
   border-radius: var(--border-radius);
-  background: var(--tet-lane-background);
+  background: var(--tet-app-background);
   font-size: var(--tiny-font-size);
 }
 
@@ -1639,9 +1656,13 @@ textarea:focus,
   min-height: 0;
 }
 
-/* One pane: tab strip and body. Relative for `.drag-over`'s overlay. */
+/* One pane, an island: tab strip and body. Relative for `.drag-over`'s overlay; its corners clip what
+   it holds. */
 .pane {
   position: relative;
+  overflow: hidden;
+  background: var(--tet-editor-background);
+  border-radius: var(--island-radius);
 }
 
 .pane.fill,
@@ -1650,8 +1671,8 @@ textarea:focus,
 }
 
 /* The frames of a drag: the pane a dragged tab would land in or whose terminal a file or a lane's
-   row is held over, the pane it would add (at even shares, `PANE_BOXES`), the ARCHIVE lane a tab
-   is held over and the ISSUES row it would be linked to.
+   row is held over, the pane it would add (at even shares, `PANE_BOXES`), the Archive lane a tab
+   is held over and the Issues row it would be linked to.
    Overlays all: a border would shrink the box its children measure, an inset box-shadow's top edge
    paints behind the opaque tab strip, and panes keep their sizes until the drop, or every pty under
    them refits mid-drag. Above the layers beneath them, which xterm's decorations reach 7 of. The
@@ -1663,25 +1684,28 @@ textarea:focus,
   position: absolute;
   border: 1px solid var(--tet-focusBorder);
   background: color-mix(in srgb, var(--tet-focusBorder) 15%, transparent);
+  border-radius: var(--island-radius);
   z-index: 10;
   pointer-events: none;
 }
 
 .pane.drag-over::after {
   content: "";
-  /* Right is 1px short: the window's own edge, where no line is drawn. */
-  inset: 0 1px 0 0;
+  inset: 0;
 }
 
+/* Painted in its island's colour: a pane's new-tab menu slides down from behind it. Its line off the
+   tab's content is the ground's colour, as if the island parted there. */
 .tab-strip {
   position: relative;
   display: flex;
-  align-items: stretch;
-  /* VS Code's editor tab height. */
+  align-items: center;
+  gap: var(--action-gap);
   height: var(--bar-height);
   flex: none;
-  background: var(--tet-tab-inactiveBackground);
-  border-bottom: 1px solid var(--tet-app-border);
+  padding: 0 var(--island-gap);
+  background: var(--tet-editor-background);
+  border-bottom: 2px solid var(--tet-app-background);
 }
 
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
@@ -1717,10 +1741,15 @@ textarea:focus,
 /* Only the tabs scroll: an overflow container would clip the new-tab menu below it. */
 .tabs {
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: var(--action-gap);
   /* Only as wide as its tabs, so the + button sits right behind the last one. */
   flex: 0 1 auto;
   min-width: 0;
+  margin: 0 4px;
+  /* Room inside the scroller for the drop line before the first tab and after the last, which stand
+     in the gap beside a tab (`.tab.drop-before`). */
+  padding: 0 4px;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1730,14 +1759,17 @@ textarea:focus,
   display: none;
 }
 
-/* A tab of the strip, and a switching one (`.switch-tab`, `ui/SwitchTabs.tsx`). */
+/* A tab of the strip, and a switching one (`.switch-tab`, `ui/SwitchTabs.tsx`): a pill on its
+   island, the active one outlined. */
 .tab,
 .switch-tab {
   display: flex;
   align-items: center;
+  height: var(--field-height);
   font-size: var(--tet-font-size);
   color: var(--tet-tab-inactiveForeground);
-  border-right: 1px solid var(--tet-tab-border);
+  border: 1px solid transparent;
+  border-radius: var(--border-radius);
 }
 
 .tab {
@@ -1745,9 +1777,8 @@ textarea:focus,
   position: relative;
   gap: 8px;
   /* Less on the right: the close button carries 4px of its own around the glyph. */
-  padding: 0 6px 0 12px;
+  padding: 0 3px 0 10px;
   max-width: 300px;
-  background: var(--tet-tab-inactiveBackground);
   cursor: pointer;
 }
 
@@ -1756,16 +1787,20 @@ textarea:focus,
 .switch-tab.active {
   color: var(--tet-tab-activeForeground);
   background: var(--tet-tab-activeBackground);
-  box-shadow: inset 0 -1px 0 var(--tet-tab-activeBorder);
+  border-color: var(--tet-tab-activeBorder);
 }
 
-/* The editor tab's bar boxes its actions (a `.toolbar`) at the strip's start, at the bar's full
-   height, none tab-shaped; boxed like `.new-tab` at the other end. The panel's border, not the
-   tabs': a theme may hide the line between tabs (Dark IntelliJ), but this one marks the chrome off. */
+/* A pane the keyboard is not in outlines its active tab without the accent. */
+.pane:not(.focused) .tab.active {
+  border-color: var(--tet-app-border);
+}
+
+/* The editor tab's bar boxes its actions (a `.toolbar`) at its start, at the bar's full height, set
+   off from the path by a line in the ground's colour, as the bar's own (`.editor-bar`). */
 .editor-bar-actions {
   align-self: stretch;
   flex: none;
-  border-right: 1px solid var(--tet-app-border);
+  border-right: 2px solid var(--tet-app-background);
   padding: 0 6px;
 }
 
@@ -1830,11 +1865,11 @@ textarea:focus,
   width: 11.4px;
   height: 11.4px;
   overflow: visible;
-  fill: var(--tet-tab-inactiveBackground);
+  fill: var(--tet-editor-background);
 }
 
 .tab-badge-ring {
-  stroke: var(--tet-tab-inactiveBackground);
+  stroke: var(--tet-editor-background);
   stroke-width: 9.1;
 }
 
@@ -1857,9 +1892,6 @@ textarea:focus,
   display: flex;
   align-items: center;
   flex: none;
-  padding: 0 6px;
-  border-left: 1px solid var(--tet-tab-border);
-  margin-left: -1px;
 }
 
 /* What floats over the window reads alike: the menus, the status bar's lists, the notification
@@ -1908,7 +1940,7 @@ textarea:focus,
   align-items: center;
   gap: 6px;
   height: var(--popup-row-height);
-  padding: 0 10px;
+  padding: 0 15px;
 }
 
 .context-menu-item,
@@ -2092,8 +2124,8 @@ textarea:focus,
 
 /* Lanes ---------------------------------------------------------------------------------- */
 
-/* A lane, left of the tab area; its width comes from its sash (default and limits
-   in use-lanes.ts). */
+/* A lane, left of the tab area, its sections islands on the ground; its width comes from its sash
+   (default and limits in use-lanes.ts). */
 .lane {
   display: flex;
   flex: none;
@@ -2101,7 +2133,6 @@ textarea:focus,
      laid out under the clip. */
   min-width: 0;
   overflow: hidden;
-  background: var(--tet-lane-background);
 }
 
 /* Only while sliding: left on, it would animate sash drags too. */
@@ -2141,6 +2172,7 @@ textarea:focus,
 .issue-row.drop-target::after {
   content: "";
   inset: 0;
+  border-radius: var(--border-radius);
 }
 
 /* git's letter for the change, in the theme's SCM colour, in a file icon's place and gap
@@ -2247,6 +2279,16 @@ textarea:focus,
   color: var(--tet-gitDecoration-modifiedResourceForeground);
 }
 
+/* Monaco's own scrollbars take the page's pill (`::-webkit-scrollbar-thumb`), at their 11px
+   (`editor.ts`). `!important` on the clip: monaco's slider rules set the `background` shorthand,
+   which resets it, and its stylesheet is bundled after this file and wins on order. */
+.editor-host .monaco-scrollable-element > .scrollbar > .slider {
+  box-sizing: border-box;
+  border: var(--scrollbar-inset) solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box !important;
+}
+
 /* Monaco's tooltips off. The container holds both `.monaco-hover` and its arrow
    (`.workbench-hover-pointer`), so hiding it catches both. */
 .editor-host .workbench-hover-container {
@@ -2273,7 +2315,9 @@ textarea:focus,
   opacity: 1;
 }
 
-/* No progress bar of its own: that shows in the pane's tab strip, like a starting agent's. */
+/* No progress bar of its own: that shows in the pane's tab strip, like a starting agent's. Painted
+   in its island's colour: an issue tab's new-tab menu slides down from behind it. Its line off the
+   editor is the ground's colour, as the tab strip's above it (`.tab-strip`). */
 .editor-bar {
   display: flex;
   align-items: center;
@@ -2281,8 +2325,8 @@ textarea:focus,
   flex: none;
   height: var(--bar-height);
   padding: 0 2px 0 0;
-  background: var(--tet-editorGroupHeader-noTabsBackground, var(--tet-app-background));
-  border-bottom: 1px solid var(--tet-app-border);
+  background: var(--tet-editor-background);
+  border-bottom: 2px solid var(--tet-app-background);
 }
 
 .editor-bar-title {
@@ -2292,8 +2336,9 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-/* A toggle whose lane is out (the Navigation Bar's lane toggles). focusBorder, as everything that
-   points: `--tet-button-background` is near white in Dark Slate. A disabled one marks nothing. */
+/* A toggle that is on (the editor bar's, a filter field's; the Navigation Bar's have their own).
+   focusBorder, as everything that points: `--tet-button-background` is near white in Dark Slate. A
+   disabled one marks nothing. */
 .icon-button.active:not(:disabled) {
   opacity: 1;
   color: var(--tet-focusBorder);
@@ -2376,7 +2421,7 @@ textarea:focus,
 
 /* Sashes --------------------------------------------------------------------------------- */
 
-/* A 4px hit area straddling a pane border, negative margins so it costs the panes no space. */
+/* Between two islands the sash is the gap itself, its whole width to drag in. */
 .sash {
   position: relative;
   /* Above both neighbours, so they don't take the pointer. */
@@ -2384,40 +2429,33 @@ textarea:focus,
   flex: none;
 }
 
-/* Always drawn: the 1px `--tet-app-border` of every pane boundary, not the 4px hit area.
-   A border, not a 1px background: at a fractional scale Chromium snaps a box's edges, so 1px
-   paints one or two device pixels depending on where the sash sits, but rounds a border's width
-   to whole device pixels. */
-.sash::before {
-  content: "";
-  position: absolute;
-  border: 0 solid var(--tet-app-border);
-}
-
 .sash.vertical {
-  width: 4px;
-  margin: 0 -2px;
+  width: var(--island-gap);
   cursor: col-resize;
 }
 
-.sash.vertical::before {
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  border-left-width: 1px;
-}
-
 .sash.horizontal {
-  height: 4px;
-  margin: -2px 0;
+  height: var(--island-gap);
   cursor: row-resize;
 }
 
-.sash.horizontal::before {
-  left: 0;
-  right: 0;
-  top: 50%;
-  border-top-width: 1px;
+/* Inside an island — the editor beside its Markdown preview — a 4px hit area straddling a 1px line,
+   negative margins so it costs the two no space. */
+.editor-split > .sash.vertical {
+  width: 4px;
+  margin: 0 -2px;
+}
+
+/* A border, not a 1px background: at a fractional scale Chromium snaps a box's edges, so 1px paints
+   one or two device pixels depending on where the sash sits, but rounds a border's width to whole
+   device pixels. */
+.editor-split > .sash::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  border-left: 1px solid var(--tet-app-border);
 }
 
 /* The 2px highlight over the border: while dragged, and once the pointer has rested on the sash
@@ -2549,10 +2587,9 @@ textarea:focus,
   max-width: calc(100vw - 32px);
   padding: 16px;
   font-size: var(--tet-font-size);
-  /* The terminal's ground, a step off the header's tab-strip color as the terminal is off the
-     tab strip; not the editor widget's. A theme overrides it only where its terminal's own ground
-     reads too dark for a dialog (Dark IntelliJ's). */
-  background: var(--tet-dialog-background, var(--tet-terminal-background));
+  /* As the window: the body in the islands' ground, its header (`.dialog-header`) in the window's;
+     not the editor widget's. */
+  background: var(--tet-terminal-background);
   border: 1px solid var(--tet-menu-border);
   border-radius: var(--border-radius);
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
@@ -2567,14 +2604,15 @@ textarea:focus,
   height: var(--bar-height);
   margin: -16px -16px 0;
   border-radius: var(--border-radius) var(--border-radius) 0 0;
-  /* A theme overrides it only where its own inactive tab color reads wrong on a dialog (Dark
-     IntelliJ's, equal to its own dialog background). */
-  background: var(--tet-dialogHeader-background, var(--tet-tab-inactiveBackground));
+  background: var(--tet-app-background);
   border-bottom: 1px solid var(--tet-app-border);
 }
 
+/* Its tabs stand as a pane's in its strip (`.tab-strip`). */
 .dialog-tabs {
-  align-items: stretch;
+  align-items: center;
+  gap: var(--action-gap);
+  padding: 0 var(--island-gap);
   overflow: hidden;
 }
 
@@ -2593,8 +2631,7 @@ textarea:focus,
 
 .dialog-tabs-close {
   flex: none;
-  align-self: center;
-  margin: 0 6px 0 auto;
+  margin-left: auto;
 }
 
 .dialog-bar {
@@ -2620,15 +2657,14 @@ textarea:focus,
   padding: 1px 0;
 }
 
-/* 2px between the rows and the scrollbar, there only while the scrollbar is: a transparent strip
-   on the bar's left, the thumb keeping the usual 7px. */
+/* 2px between the rows and the scrollbar, there only while the scrollbar is: the thumb's inset 2px
+   wider on its left, the pill keeping the thin bar's width. */
 .row-section-rows::-webkit-scrollbar {
   width: 9px;
 }
 
 .row-section-rows::-webkit-scrollbar-thumb {
-  border-left: 2px solid transparent;
-  background-clip: padding-box;
+  border-left-width: calc(var(--scrollbar-inset) + 2px);
 }
 
 /* The three skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
@@ -3039,7 +3075,7 @@ textarea:focus,
   padding: 0;
   background: var(--tet-settings-checkboxBackground, var(--tet-input-background));
   border: 1px solid var(--tet-settings-checkboxBorder, var(--tet-input-border));
-  border-radius: var(--border-radius);
+  border-radius: var(--checkbox-radius);
   cursor: pointer;
 }
 
@@ -3531,9 +3567,9 @@ textarea:focus,
   max-width: var(--popup-width);
 }
 
-/* A `.section-header` in every respect but its line, which is the box's own. */
-.popup-header {
-  border-bottom-color: var(--tet-menu-border);
+.status-list > .section-header,
+.notices-center > .section-header {
+  border-bottom: 1px solid var(--tet-menu-border);
 }
 
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
@@ -3548,10 +3584,6 @@ textarea:focus,
   line-height: 22px;
 }
 
-.status-list-item + .status-list-item {
-  border-top: 1px solid var(--tet-menu-border);
-}
-
 .notices-center .notice {
   width: auto;
   padding: 4px 6px 4px 10px;
@@ -3562,10 +3594,6 @@ textarea:focus,
 /* What was listed when the center opened comes with the center itself. */
 .notices-center .notice-item:not(.entering) {
   animation: none;
-}
-
-.notices-center .notice-item + .notice-item > .notice {
-  border-top: 1px solid var(--tet-menu-border);
 }
 
 .notices-center .notice.clickable {

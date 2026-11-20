@@ -283,7 +283,7 @@ export function BranchIcon(props: IconProps) {
   return <Lucide {...props} icon={GitBranch} />;
 }
 
-/** Lucide's `git-graph` — BRANCHES' switch to the commit graph. */
+/** Lucide's `git-graph` — Branches' switch to the commit graph. */
 export function GraphIcon(props: IconProps) {
   return <Lucide {...props} icon={GitGraph} />;
 }
@@ -339,22 +339,22 @@ export function RegexIcon(props: IconProps) {
   return <Lucide {...props} icon={Regex} />;
 }
 
-/** Lucide's `message-square-text` — the GRAPH's search in commit messages. */
+/** Lucide's `message-square-text` — the Graph's search in commit messages. */
 export function MessageIcon(props: IconProps) {
   return <Lucide {...props} icon={MessageSquareText} />;
 }
 
-/** Lucide's `user` — the GRAPH's search in authors. */
+/** Lucide's `user` — the Graph's search in authors. */
 export function UserIcon(props: IconProps) {
   return <Lucide {...props} icon={User} />;
 }
 
-/** Lucide's `user-plus` — the ISSUES section's account to add. */
+/** Lucide's `user-plus` — the Issues section's account to add. */
 export function UserPlusIcon(props: IconProps) {
   return <Lucide {...props} icon={UserPlus} />;
 }
 
-/** Lucide's `file` — the GRAPH's search in paths. */
+/** Lucide's `file` — the Graph's search in paths. */
 export function PathIcon(props: IconProps) {
   return <Lucide {...props} icon={File} />;
 }
@@ -493,7 +493,7 @@ export function TrashIcon(props: IconProps) {
   return <Lucide {...props} icon={Trash2} />;
 }
 
-/** Lucide's `link` — the ISSUES section's source and a text box's link, drawn a little smaller: its diagonal reads large beside the bar's other buttons. */
+/** Lucide's `link` — the Issues section's source and a text box's link, drawn a little smaller: its diagonal reads large beside the bar's other buttons. */
 export function LinkIcon(props: IconProps) {
   return <Lucide {...props} icon={Link} extent={22} />;
 }
@@ -503,12 +503,12 @@ export function ArchiveIcon(props: IconProps) {
   return <Lucide {...props} icon={Package2} />;
 }
 
-/** The EXPLORER header's "New File...": Lucide's `file-plus`. */
+/** The Explorer header's "New File...": Lucide's `file-plus`. */
 export function NewFileIcon(props: IconProps) {
   return <Lucide {...props} icon={FilePlus} />;
 }
 
-/** The EXPLORER header's "New Folder...": Lucide's `folder-plus`. */
+/** The Explorer header's "New Folder...": Lucide's `folder-plus`. */
 export function NewFolderIcon(props: IconProps) {
   return <Lucide {...props} icon={FolderPlus} />;
 }
@@ -529,12 +529,12 @@ export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} />;
 }
 
-/** LOCAL CHANGES' "View as List", and a text box's bullet list: Lucide's `list`. */
+/** Local Changes' "View as List", and a text box's bullet list: Lucide's `list`. */
 export function ListIcon(props: IconProps) {
   return <Lucide {...props} icon={List} extent={17.5} />;
 }
 
-/** LOCAL CHANGES' "View as Tree": Lucide's `list-tree`. */
+/** Local Changes' "View as Tree": Lucide's `list-tree`. */
 export function ListTreeIcon(props: IconProps) {
   return <Lucide {...props} icon={ListTree} extent={17.5} />;
 }

@@ -72,7 +72,7 @@ function settle(timer: ReturnType<typeof setTimeout> | undefined, lastAt: number
  *  option. */
 const isObjectId = (value: string): boolean => /^[0-9a-f]{4,64}$/i.test(value);
 
-/** The most commits the GRAPH reads at once. */
+/** The most commits the Graph reads at once. */
 const MAX_GRAPH_COMMITS = 5000;
 
 /** The most files a refused commit names, the rest counted: a merge may leave dozens. */
@@ -82,7 +82,7 @@ const MAX_NAMED_CONFLICTS = 5;
 export const MISSING_BLOB: HeadBlob = { content: "", binary: false, missing: true };
 
 /**
- * What the GRAPH reads, as VS Code's "Auto": HEAD, the current branch's upstream and the default
+ * What the Graph reads, as VS Code's "Auto": HEAD, the current branch's upstream and the default
  * branch. Only refs the state lists: git fails the whole log for one it lacks, as a remote branch
  * deleted since the last fetch.
  */
@@ -818,7 +818,7 @@ export class Repository {
     return listExplorer(this.at.path, settings);
   }
 
-  /** The SEARCH section's matches (explorer.ts); a search is given up once the next one is asked for. */
+  /** The Search section's matches (explorer.ts); a search is given up once the next one is asked for. */
   searchFiles(query: FileSearchQuery): Promise<FileSearchResult> {
     this.search?.abort();
     this.search = new AbortController();
@@ -904,7 +904,7 @@ export class Repository {
     return git.readBlobAt(this.at.path, "HEAD", filePath, { origPath: change.origPath, maxBytes: MAX_EDIT_BYTES }).catch(() => undefined);
   }
 
-  /** The GRAPH's commits, only those `search` finds if given. A read beside `runAction`: it touches
+  /** The Graph's commits, only those `search` finds if given. A read beside `runAction`: it touches
    *  neither index nor working tree. */
   log(limit: number, search?: CommitSearch): Promise<GraphCommit[]> {
     return git
@@ -912,7 +912,7 @@ export class Repository {
       .catch(() => []);
   }
 
-  /** What a GRAPH commit changed against its first parent (`parent` absent for a root commit). */
+  /** What a Graph commit changed against its first parent (`parent` absent for a root commit). */
   commitFiles(sha: string, parent: string | undefined): Promise<FileChange[]> {
     if (!isObjectId(sha) || (parent !== undefined && !isObjectId(parent))) {
       return Promise.resolve([]);

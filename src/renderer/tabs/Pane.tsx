@@ -243,7 +243,7 @@ export const Pane = memo(function Pane({
     [at],
   );
 
-  /** The tab menu's Archive: keeps the session, to the ARCHIVE lane. */
+  /** The tab menu's Archive: keeps the session, to the Archive lane. */
   const archiveTab = useCallback((tabId: string) => void window.tet.tabs.archive(at, [tabId]), [at]);
 
   /** The tab stops for it, so a turn still running is asked about first. */
@@ -484,7 +484,7 @@ export const Pane = memo(function Pane({
 
   return (
     <div
-      className={`pane${width === undefined && height === undefined ? " fill" : ""}${dragOver ? " drag-over" : ""}`}
+      className={`pane${width === undefined && height === undefined ? " fill" : ""}${focused ? " focused" : ""}${dragOver ? " drag-over" : ""}`}
       style={width !== undefined ? { width } : height !== undefined ? { height } : undefined}
       // Capture: xterm's mousedown calls stopPropagation() once a TUI turns on mouse tracking.
       onMouseDownCapture={focusHere}

@@ -21,7 +21,7 @@ no answer or the git lane's tree is concerned — the commit view's checkboxes, 
 toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor), how an issue's text
 is rendered, from its Markdown (`issue-text.ts`); **Monaco** for
 the editor tab; VS Code's **GitHub Pull Requests and Issues** (`microsoft/vscode-pull-request-github`)
-for the rest of the ISSUES lane and its issue tab, which writes an issue's title, text, comments, state and
+for the rest of the Issues lane and its issue tab, which writes an issue's title, text, comments, state and
 fields, uploads what the tracker takes from a token (`uploads`), and makes and deletes issues, and nothing
 else until asked. A field is whatever the tracker lists for the issue (`IssueField`: labels, assignees,
 milestone, and where the tracker has them GitLab's status, parent, weight, iteration, dates, health, time,
@@ -76,9 +76,9 @@ project's tabs.
   4. `git/`: running a git action from the views above it (`run-action.ts`), and the questions and
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
-     (the projects and the COMMANDS), `git/` (the branch tree and the changes), `files/` (the
-     Explorer tree, the SEARCH section, Seti's file icons), `issues/` (the ISSUES), `archive/` (the
-     ARCHIVE) — and imports no other lane; beside them, their state (`use-lanes.ts`) and the Navigation Bar that toggles
+     (the projects and the Commands), `git/` (the branch tree and the changes), `files/` (the
+     Explorer tree, the Search section, Seti's file icons), `issues/` (the Issues), `archive/` (the
+     Archive) — and imports no other lane; beside them, their state (`use-lanes.ts`) and the Navigation Bar that toggles
      them (`NavigationBar.tsx`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
      (`use-ref-feeds.ts`). `assets/` holds the app icon, for the window and the packages, and the
@@ -104,7 +104,7 @@ project's tabs.
 - A project needs git — a folder without it is refused. Its id is `tet.id` in the repository's own
   git config (`projects.ts`'s `resolveProjectId`), shared by its worktrees.
 - `tet.json` in a repository's root describes the project and travels with it: saved `commands`,
-  the Explorer's `folders` and excludes, `sbx` and the ISSUES section's `issues`, a repository on
+  the Explorer's `folders` and excludes, `sbx` and the Issues section's `issues`, a repository on
   the remote's host to read them from (`PROJECT_FILE`, `src/main/store/tet-json.ts`).
   Missing means nothing configured, broken never does; nothing writes over a broken file. A worktree
   has none of its own: it takes its project's (`configRoot`) and changes nothing of it.
@@ -162,7 +162,7 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   joins its tab's object, never the top level.
 - **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
   worktree (`SessionProvider`), and keeps only which are archived (`archive.json`, ids alone): such a
-  session shows in the ARCHIVE lane instead of as a tab, until reopened or deleted. Which are linked to
+  session shows in the Archive lane instead of as a tab, until reopened or deleted. Which are linked to
   an issue is kept the same way (`issue-sessions.json`), shown by what their tabs say of them.
 - **An agent that cannot fit is not added**: one needing project data on the host, session records
   kept by TET, or a running process to list its sessions. Bending the model for one agent is the
@@ -238,7 +238,7 @@ in a comment at that site.
   behaves like one in places (its own row, tabs and git lane): never design from "a worktree is a
   project". TET makes its worktrees at `~/.tet/projects/<id>/worktrees/<key>`; the key is given once
   and never changes, and each opens with its project, listed under its row (`Project.worktrees`) and
-  in the branch tree's WORKTREES (`RepositoryState.worktrees`, `WorktreeInfo.key`), both read off the
+  in the branch tree's Worktrees (`RepositoryState.worktrees`, `WorktreeInfo.key`), both read off the
   disk. One made elsewhere (plain `git worktree add`) has no key: shown greyed, never opened, renamed
   or deleted by TET. A worktree and its branch are one: made together at the default branch
   (`worktreeBase`), named by the branch, deleted together, and never switched; renaming it renames
@@ -250,11 +250,11 @@ in a comment at that site.
 that, GitHub Desktop's set: the branch tree (branches, remotes, tags, stashes), checkout, branch
 create/rename/delete, tag create/delete, merge and rebase onto a branch, abort, per-file diff,
 discard, `.gitignore`, fetch/pull/push, commit of the checked changes (IntelliJ's checkboxes, no
-staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and the default branch —
+staging), the commit graph (Graph: VS Code's "Auto" — HEAD, its upstream and the default branch —
 read-only, a commit's files and their diffs against its first parent, searched by message, author
 or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), a commit message suggested by an installed agent, and a
-pull or merge request of the checked-out branch from BRANCHES (`change-requests.ts`: into a branch
+pull or merge request of the checked-out branch from Branches (`change-requests.ts`: into a branch
 of its remote picked in the dialog, its base offered first, else the default branch, pushing it
 first, its text typed or suggested alike, then, as its checkboxes say, a draft, approved where the
 host lets its author, set to auto-merge and squashed, its branch deleted once merged).
@@ -271,23 +271,23 @@ per-line decision is for an agent.
 
 - **Layout**: the Navigation Bar at the window's left edge (`NavigationBar.tsx`), full height,
   settings right after the lane toggles; beside it the lanes: the projects (each with its worktrees,
-  and the COMMANDS), git, files, the project's issues (read from its tracker, written to from an
+  and the Commands), git, files, the project's issues (read from its tracker, written to from an
   issue's tab and the section's new issue, rename and delete) and the archived tabs (taken off the
   strip, their sessions kept) — none of them a tab.
   Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `issues`, `archive`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
   no reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
   the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
   preview tab each (`editor-tab.ts`).
-- **Section titles are the screen's, code names the code's**: PROJECTS `ProjectList`, COMMANDS
-  `CommandList`, BRANCHES `BranchTree` (its header's button swaps it for GRAPH `CommitGraph`),
-  LOCAL CHANGES `ChangesList`, SEARCH `FileSearch`, EXPLORER `Explorer`, ISSUES `IssueList`, ARCHIVE
+- **Section titles are the screen's, code names the code's**: Projects `ProjectList`, Commands
+  `CommandList`, Branches `BranchTree` (its header's button swaps it for Graph `CommitGraph`),
+  Local Changes `ChangesList`, Search `FileSearch`, Explorer `Explorer`, Issues `IssueList`, Archive
   `ArchiveList`; each title heads a `Section`, drawn by `ProjectList`, `CommandList`, `IssueList` and
   `ArchiveList` themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
 - **A section's rows drag onto a terminal**, which types what was dropped: a file's or folder's
   path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
-  new kind of row in one, comes with an *offer* to add its drag — the user decides. An ISSUES or
-  ARCHIVE row opens instead: the pane or snap zone it drops on takes its tab. An issue reaches an
+  new kind of row in one, comes with an *offer* to add its drag — the user decides. An Issues or
+  Archive row opens instead: the pane or snap zone it drops on takes its tab. An issue reaches an
   agent through "Send to Agent", in its row's menu, its tab's menu and bar: a new tab of the agent
   picked, the issue its first prompt. An issue has one session, a session one issue: once it has
   one, those places offer "Open Session", and the session's tab "Open Issue".
@@ -296,7 +296,7 @@ per-line decision is for an agent.
   `use-project-layouts.ts`, called from `App`.
 - **Everything the user is told is a notice** — `notify()` (`src/renderer/ui/Notices.tsx`; main
   sends `app:notice`) — **unless a dialog on screen says it** (below). No other view keeps a message
-  of its own but the SEARCH section, whose failure stands in its header as VS Code's does. A status
+  of its own but the Search section, whose failure stands in its header as VS Code's does. A status
   (marks, progress bar) is not a notice. A tab's process that ended unasked says so in its own
   terminal, as a `[TET]` line with how to go on (`terminal-session.ts`).
 - **Every question is `confirm`/`prompt` from `Dialog.tsx`**, asked by the view offering the
@@ -331,12 +331,18 @@ per-line decision is for an agent.
 
 - Colors only from the themes' `--tet-*` variables, named by VS Code's color ids. The layer, its
   rules and exceptions, and how a VS Code theme becomes a TET theme: `src/renderer/themes/THEMES.md`.
+- **Islands on a ground**, IntelliJ's: each section of a lane and each pane is an island
+  (`--tet-editor-background`, `--island-radius`), standing `--island-gap` apart on the window's
+  ground (`--tet-app-background`), which the title bar row, the Navigation Bar and the status bar
+  sit on. No line draws an island or parts two: its fill sets it off the ground, the gap parts
+  them, and a sash is that gap.
 - Shared sizes are stated once, in `styles.css`'s `.app`; check the neighbouring view before
   inventing one.
 - Icons come from Lucide first (`icons.tsx`). The file icons are generated by `scripts/file-icons.js`:
   re-run, never edit.
 - Icons and marks are monochrome. The one accent is `--tet-focusBorder`, for anything that marks or
-  points. Exceptions: git status letters, the error mark, a notice's severity icon, an editor tab's
+  points — but the Navigation Bar's shown lane, a filled box as IntelliJ's stripe draws it.
+  Exceptions: git status letters, the error mark, a notice's severity icon, an editor tab's
   unsaved dot, the file icons, an issue's avatars. A theme whose own mark colour differs sets it in place of the accent
   (`THEMES.md`).
 - **A git name or a file's path in a sentence is set apart from the words around it** — a

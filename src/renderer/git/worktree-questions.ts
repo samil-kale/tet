@@ -8,7 +8,7 @@ import { named } from "../ui/named";
 
 /**
  * The worktree questions, asked alike from a projects lane row and from the branch tree's
- * WORKTREES: each view hands in how it runs a command (`GitRun`: its progress bar, and the failure
+ * Worktrees: each view hands in how it runs a command (`GitRun`: its progress bar, and the failure
  * either notified or handed back to the field it was typed in).
  *
  * A worktree and its branch are one (projects.ts): made together, named by the branch, deleted

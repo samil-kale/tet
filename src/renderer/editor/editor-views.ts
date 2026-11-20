@@ -88,7 +88,7 @@ export interface EditorSnapshot {
   sideBySide: boolean;
   /** The diff's unchanged regions collapsed (`setDiffOption`), as the user last left it. */
   unchangedCollapsed: boolean;
-  /** A GRAPH diff: the file at this commit, which nothing outside the tab changes. */
+  /** A Graph diff: the file at this commit, which nothing outside the tab changes. */
   commit?: CommitSide;
   /** An issue, which no change of the repository touches. */
   issue?: number;
@@ -755,7 +755,7 @@ export function reloadChangedIssueTabs(projectId: string, issues: Issue[]): void
 }
 
 /** A write to the tab's issue under its bar, the tab reading the issue again once it went through;
- *  false, with a notice, when refused. Nothing the ISSUES section's rows show changes by it. */
+ *  false, with a notice, when refused. Nothing the Issues section's rows show changes by it. */
 async function writeIssue(tabId: string, write: (projectId: string, number: number) => Promise<ActionResult>): Promise<boolean> {
   const tab = issueTab(tabId);
   if (!tab) {
@@ -928,7 +928,7 @@ export function setIssueField(tabId: string, fieldId: string, value: IssueFieldV
   notifying(editIssueField)(tabId, fieldId, value);
 }
 
-/** What the ISSUES section is filtered by, off its tracker. */
+/** What the Issues section is filtered by, off its tracker. */
 export interface IssueOptions {
   labels: string[];
   /** Offered for both author and assignee. */

@@ -524,7 +524,7 @@ const VERBS = [
     group: "Tabs",
     usage: "issues-send-to-agent <number> --agent <id> [--background] [TARGET]",
     summary:
-      "Open a tab of an agent (see agents-list) on the project's issue, read from the tracker as the ISSUES section's Send to Agent does, and bring it to the front. Refused for an issue that has a session (issues-session): an issue has one.",
+      "Open a tab of an agent (see agents-list) on the project's issue, read from the tracker as the Issues section's Send to Agent does, and bring it to the front. Refused for an issue that has a session (issues-session): an issue has one.",
     positionals: ["number"],
     sandbox: "ownProject",
   },
@@ -592,7 +592,7 @@ const VERBS = [
     group: "Projects",
     usage: "issues-mark-seen [<number>] [--project <id>]",
     summary:
-      "Count the issue as shown at its current update, so issues-unread leaves it out; without a number every issue created or changed until now. The ISSUES section shows it at its next refresh.",
+      "Count the issue as shown at its current update, so issues-unread leaves it out; without a number every issue created or changed until now. The Issues section shows it at its next refresh.",
     positionals: ["number"],
     sandbox: "ownProject",
   },
@@ -601,7 +601,7 @@ const VERBS = [
     group: "Projects",
     usage: `issues-list [--state <${ISSUE_STATE_FILTERS.join("|")}>] [--author <login>] [--assignee <login>] [--label <name>[,<name>...]] [--project <id>]`,
     summary:
-      "The project's issues read from the tracker as the ISSUES section lists them (number, title, url, open, author, assignee, createdAt, updatedAt, labels): the open ones, or those the filter narrows to; --label needs an issue to carry all of them.",
+      "The project's issues read from the tracker as the Issues section lists them (number, title, url, open, author, assignee, createdAt, updatedAt, labels): the open ones, or those the filter narrows to; --label needs an issue to carry all of them.",
     positionals: [],
     sandbox: "ownProject",
   },
@@ -618,7 +618,7 @@ const VERBS = [
     verb: "issues-filter-options",
     group: "Projects",
     usage: "issues-filter-options [--project <id>]",
-    summary: "What the ISSUES section's filters offer: the labels, and the people for --author and --assignee.",
+    summary: "What the Issues section's filters offer: the labels, and the people for --author and --assignee.",
     positionals: [],
     sandbox: "ownProject",
   },

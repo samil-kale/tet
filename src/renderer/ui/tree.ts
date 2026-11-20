@@ -1,6 +1,6 @@
 import { ownValue } from "../../shared/own-value";
 
-/** A tree of repository paths, for the Explorer and LOCAL CHANGES alike. */
+/** A tree of repository paths, for the Explorer and Local Changes alike. */
 export interface TreeNode {
   /** Key for `expanded`, the row map and React. The path; in the Explorer with `folders`, prefixed
    *  by the root's index ("1:src/a.ts"), so a file under two roots expands and scrolls independently. */

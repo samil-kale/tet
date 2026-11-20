@@ -1011,7 +1011,7 @@ describe("a login for an http remote", () => {
   });
 });
 
-describe("the commits the GRAPH shows", () => {
+describe("the commits the Graph shows", () => {
   let repo: string;
   let base: string;
   let feature: string;

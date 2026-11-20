@@ -41,7 +41,7 @@ export interface FilesSettings extends ExplorerSettings {
 
 /** The Git tab: how git's checkboxes start out, each until the user ticks it otherwise. */
 export interface GitSettings {
-  /** A file LOCAL CHANGES has not listed before shows up checked, to be committed. */
+  /** A file Local Changes has not listed before shows up checked, to be committed. */
   checkNewChanges: boolean;
   /** The commit question's "Also push". */
   pushOnCommit: boolean;

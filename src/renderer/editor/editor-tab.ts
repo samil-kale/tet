@@ -35,7 +35,7 @@ export interface EditorReveal {
   length: number;
 }
 
-/** A file as a commit left it, against the commit's first parent: the GRAPH's diff. */
+/** A file as a commit left it, against the commit's first parent: the Graph's diff. */
 export interface CommitSide {
   sha: string;
   /** The first parent; absent for a root commit. */
@@ -103,7 +103,7 @@ export interface EditorTab {
   ref: ProjectRef;
   /** Repository-relative path of the file shown. */
   path: string;
-  /** Set for a GRAPH diff: a path is then open once per commit. */
+  /** Set for a Graph diff: a path is then open once per commit. */
   commit?: CommitSide;
   /** Set for an issue, whose `path` is only its `issueFileName`. */
   issue?: number;
@@ -172,7 +172,7 @@ export async function unlinkIssueSession({ ref, tabId }: IssueSession, number: n
 
 const issueListeners = new Set<(projectId: string) => void>();
 
-/** A project's issue changed through its tab, for the ISSUES section to read again. */
+/** A project's issue changed through its tab, for the Issues section to read again. */
 export function issuesChanged(projectId: string): void {
   for (const listener of issueListeners) {
     listener(projectId);
@@ -204,7 +204,7 @@ export function workingTreePathOf(tabs: EditorTab[] | undefined, tabId: string |
   return tab && inWorkingTree(tab) ? tab.path : null;
 }
 
-/** The number of the issue tab `tabId` shows, the one the ISSUES section marks open. */
+/** The number of the issue tab `tabId` shows, the one the Issues section marks open. */
 export function issueOf(tabs: EditorTab[] | undefined, tabId: string | undefined): number | null {
   return tabs?.find((candidate) => candidate.tabId === tabId)?.issue ?? null;
 }

@@ -110,7 +110,7 @@ interface ExplorerProps {
   ref?: React.Ref<ExplorerHandle>;
 }
 
-/** For the EXPLORER header's title-bar buttons. */
+/** For the Explorer header's title-bar buttons. */
 export interface ExplorerHandle extends CollapseExpandAll {
   newFile(): void;
   newFolder(): void;

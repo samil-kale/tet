@@ -35,7 +35,7 @@ import { PLATFORM } from "../util/host-platform";
  *  over. The watcher reports every write of it as `commands:changed`.
  *
  *  A linked worktree has none of its own: it takes its project's (configRoot) and its SBX settings,
- *  forwards none of the ports, and changes nothing of it. Its row, Explorer and COMMANDS offer no
+ *  forwards none of the ports, and changes nothing of it. Its row, Explorer and Commands offer no
  *  settings, and `tet-ctl` refuses them. */
 export const PROJECT_FILE = "tet.json";
 
@@ -51,7 +51,7 @@ interface ProjectFile {
   exclude?: unknown;
   /** The sbx-settings dialog's state (readSbxSettings/writeSbxSettings). Never a credential. */
   sbx?: unknown;
-  /** The ISSUES section's settings: `source`, where it reads from in place of the repository's own
+  /** The Issues section's settings: `source`, where it reads from in place of the repository's own
    *  (readIssueSource/writeIssueSource). */
   issues?: unknown;
 }

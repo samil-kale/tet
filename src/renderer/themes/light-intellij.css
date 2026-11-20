@@ -26,7 +26,6 @@
   --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #000000;
 
-  --tet-lane-background: #f7f8fa;
   --tet-sectionHeader-foreground: #000000;
   --tet-titleBar-activeBackground: #27282e;
   --tet-titleBar-activeForeground: #e7ebed;
@@ -35,12 +34,10 @@
   --tet-app-border: #ebecf0;
 
   --tet-tab-activeBackground: #f9fef9;
-  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #aeb3c2;
   --tet-tab-activeForeground: #000000;
-  --tet-tab-inactiveBackground: #f7f8fa;
   --tet-tab-inactiveForeground: #777777;
-  --tet-tab-border: #ebecf0;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
@@ -73,7 +70,7 @@
   --tet-popup-background: #f7f8fa;
   --tet-popup-shadow: #00000029;
 
-  --tet-menu-background: #ffffff;
+  --tet-menu-background: #f7f8fa;
   --tet-menu-foreground: #616161;
   --tet-menu-border: #ebecf0;
   --tet-menu-selectionBackground: #cfdefc;

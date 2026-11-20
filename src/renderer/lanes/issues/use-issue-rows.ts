@@ -37,7 +37,7 @@ export function mergeIssueRows(previous: readonly IssueRowItem[], issues: readon
 }
 
 /**
- * The rows of the ISSUES section: what the tracker added or removed enters or leaves, in `ROW_MS`.
+ * The rows of the Issues section: what the tracker added or removed enters or leaves, in `ROW_MS`.
  * The first list and the first under a changed filter come as they are, as they change nothing on
  * the tracker. Worked out in render, so a row gone never paints without its leaving.
  */

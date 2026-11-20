@@ -151,7 +151,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   };
 
   // An issue on screen counts as seen with what the tab has read of it: a later change on the tracker
-  // marks it in the ISSUES section, one made from this tab, once read back, does not.
+  // marks it in the Issues section, one made from this tab, once read back, does not.
   const updatedAt = issueDetail?.updatedAt;
   useEffect(() => {
     if (issue !== undefined && updatedAt !== undefined && visible && active) {

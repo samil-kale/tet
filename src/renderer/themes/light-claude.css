@@ -29,14 +29,11 @@
   --tet-terminal-background: #fcfcfb;
   --tet-terminal-foreground: #2a2a28;
 
-  /* Not the theme's #f0f0ec: claude.ai's sidebar, a shade darker than its content — as the title
-     bar and the inactive tabs. */
-  --tet-lane-background: #fbfbf9;
   --tet-sectionHeader-foreground: #2a2a28;
-  --tet-titleBar-activeBackground: #fbfbf9;
+  --tet-titleBar-activeBackground: #f0f0ec;
   --tet-titleBar-activeForeground: #2a2a28;
 
-  --tet-app-background: #fcfcfb;
+  --tet-app-background: #f0f0ec;
   /* Not the theme's #d8d8d2: claude.ai's border, its text color at 0.1 alpha — as every border
      below. */
   --tet-app-border: #0b0b0b1a;
@@ -44,10 +41,8 @@
   --tet-tab-activeBackground: #fcfcfb;
   --tet-tab-activeBorder: #c2613a;
   --tet-tab-activeForeground: #2a2a28;
-  --tet-tab-inactiveBackground: #fbfbf9;
   /* Not the theme's #8a8a82: claude.ai's dimmed text. */
   --tet-tab-inactiveForeground: #898781;
-  --tet-tab-border: #fbfbf9;
 
   /* TET's own, the same as Dark Modern's — see the note there; not the theme's #e8e8e2, the one
      hover grey every TET theme shares. */
@@ -83,7 +78,7 @@
   --tet-popup-background: #ffffff;
   --tet-popup-shadow: #00000018;
 
-  --tet-menu-background: #ffffff;
+  --tet-menu-background: #f0f0ec;
   --tet-menu-foreground: #2a2a28;
   --tet-menu-border: #0b0b0b1a;
   --tet-menu-selectionBackground: #edece8;

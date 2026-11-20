@@ -96,7 +96,7 @@ export interface ExplorerSettings {
 }
 
 /**
- * What the SEARCH section's field asks for: VS Code's search box with its three toggles, over the
+ * What the Search section's field asks for: VS Code's search box with its three toggles, over the
  * files' lines (`Repository.searchFiles`). The Explorer's own field filters the tree by name and
  * asks for nothing here.
  */

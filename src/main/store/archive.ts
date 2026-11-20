@@ -31,7 +31,7 @@ function write(dataRoot: string, projectId: string, stored: Record<string, strin
   writeJson(file, kept);
 }
 
-/** The sessions kept archived in the repository or worktree, in the ARCHIVE lane's own order
+/** The sessions kept archived in the repository or worktree, in the Archive lane's own order
  *  (newest archived, or dragged, first): kept by the agent, shown by TET as an archived tab until
  *  reopened or deleted. */
 export function archivedIds(dataRoot: string, ref: ProjectRef): string[] {
@@ -51,7 +51,7 @@ export function setArchived(dataRoot: string, ref: ProjectRef, sessionId: string
   write(dataRoot, ref.projectId, { ...stored, [key]: next });
 }
 
-/** A drag in the ARCHIVE lane: `order` becomes the stored order, any id no longer archived
+/** A drag in the Archive lane: `order` becomes the stored order, any id no longer archived
  *  dropped. Throws when the file cannot be written, nothing changed. */
 export function setArchivedOrder(dataRoot: string, ref: ProjectRef, order: string[]): void {
   const stored = read(dataRoot, ref.projectId);

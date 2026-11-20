@@ -26,7 +26,6 @@
   --tet-terminal-background: #c0d297;
   --tet-terminal-foreground: #0f380f;
 
-  --tet-lane-background: #c4bebb;
   --tet-sectionHeader-foreground: #494786;
   --tet-titleBar-activeBackground: #c4bebb;
   --tet-titleBar-activeForeground: #494786;
@@ -40,11 +39,7 @@
   --tet-tab-activeBorder: #494786;
   /* TET's own: a tab mark on the active tab or row takes its text color, not the accent. */
   --tet-tabMark-activeForeground: #c4bebb;
-  --tet-tab-inactiveBackground: #c4bebb;
   --tet-tab-inactiveForeground: #494786;
-  /* Not the theme's #c4bebb, the inactive tab's own background, which hides the line between
-     tabs: the theme's border color. */
-  --tet-tab-border: #494786;
 
   /* TET's own, the same as Dark Modern's — see the note there; not the theme's #49478640, the one
      hover grey every TET theme shares. */

@@ -12,6 +12,13 @@ a TET theme. A rule that fits one value is a comment at that value, not an entry
   `:root[data-theme="<id>"]`, plus its entry in `THEMES` (`src/shared/themes.ts`). `main.tsx`
   imports every stylesheet and sets `data-theme` from the id, at start and on `app:theme`.
 - `dark-modern.css` is also the bare `:root`, so an unknown id still gets a whole theme.
+- Two surfaces carry the window: `app.background` is its ground (title bar row, Navigation Bar,
+  status bar, the gaps), `editor.background` the islands on it (a lane's sections, the panes). The
+  ground is a step lighter than the islands in a dark theme and a step darker in a light one, as
+  IntelliJ's Islands; a theme whose `sideBar.background` is not deviates (step 5) to a neutral of its
+  own palette, and its title bar follows. No line draws an island: its fill alone sets it off.
+  `app.border` stands apart from both surfaces, as IntelliJ's: it draws the lines on the ground
+  and inside an island (a card and its header, a dialog's header).
 - The fonts are no theme's: `--tet-font-family`, `--tet-font-size` and `--tet-editor-font-family`
   are declared once, in `styles.css`.
 
@@ -25,9 +32,9 @@ name:
 | TET name                                                        | VS Code color id                                                   |
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `navigationBar.*`, `navigationBarBadge.*`, `navigationBarTop.*` | `activityBar.*`, `activityBarBadge.*`, `activityBarTop.*`          |
-| `lane.background`                                               | `sideBar.background`                                               |
+| `app.background`                                                | `sideBar.background`                                               |
+| `app.border`                                                    | `panel.border`                                                     |
 | `sectionHeader.foreground`                                      | `sideBarSectionHeader.foreground`                                  |
-| `app.background`, `app.border`                                  | `panel.background`, `panel.border`                                 |
 | `popup.background`                                              | `editorWidget.background`                                          |
 | `popup.shadow`                                                  | `widget.shadow`                                                    |
 | `notice{Error,Warning,Info}Icon.foreground`                     | `notifications{Error,Warning,Info}Icon.foreground`                 |
@@ -55,9 +62,6 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
 | `--tet-settings-checkboxBackground`        | `--tet-input-background`                             | Dark IntelliJ     |
 | `--tet-settings-checkboxBorder`            | `--tet-input-border`                                 | Dark IntelliJ     |
 | `--tet-settings-checkboxForeground`        | `--tet-input-foreground`                             | Dark IntelliJ     |
-| `--tet-dialog-background`                  | `--tet-terminal-background`                          | Dark IntelliJ     |
-| `--tet-dialogHeader-background`            | `--tet-tab-inactiveBackground`                       | Dark IntelliJ     |
-| `--tet-editorGroupHeader-noTabsBackground` | `--tet-app-background`                               | Dark IntelliJ     |
 
 ## From a VS Code theme to a TET theme
 

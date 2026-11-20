@@ -24,21 +24,21 @@
   --tet-terminal-background: #0d1117;
   --tet-terminal-foreground: #e6edf3;
 
-  --tet-lane-background: #010409;
   --tet-sectionHeader-foreground: #e6edf3;
-  --tet-titleBar-activeBackground: #0d1117;
+  /* Not the theme's #0d1117: the ground's, below. */
+  --tet-titleBar-activeBackground: #161b22;
   --tet-titleBar-activeForeground: #7d8590;
 
-  --tet-app-background: #010409;
+  /* Not the theme's #010409, darker than the editor: the islands' ground stands lighter than them
+     (THEMES.md) — the theme's widget ground. */
+  --tet-app-background: #161b22;
   --tet-app-border: #30363d;
 
   --tet-tab-activeBackground: #0d1117;
-  /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
+  /* TET outlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
   --tet-tab-activeBorder: #f78166;
   --tet-tab-activeForeground: #e6edf3;
-  --tet-tab-inactiveBackground: #010409;
   --tet-tab-inactiveForeground: #7d8590;
-  --tet-tab-border: #30363d;
   /* TET's own: the working, waiting and finished marks in the progress bar's blue. */
   --tet-tabMark-foreground: #1f6feb;
 

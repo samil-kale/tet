@@ -24,21 +24,23 @@
   --tet-terminal-background: #1f1f1f;
   --tet-terminal-foreground: #cccccc;
 
-  --tet-lane-background: #181818;
   --tet-sectionHeader-foreground: #cccccc;
-  --tet-titleBar-activeBackground: #181818;
+  /* Not the theme's #181818: the ground's, below. */
+  --tet-titleBar-activeBackground: #2b2b2b;
   --tet-titleBar-activeForeground: #cccccc;
 
-  --tet-app-background: #181818;
-  --tet-app-border: #2b2b2b;
+  /* Not the theme's #181818, darker than the editor: the islands' ground stands lighter than them
+     (THEMES.md) — the theme's border grey. */
+  --tet-app-background: #2b2b2b;
+  /* Not the theme's #2b2b2b, the ground's own here, which would hide every line on it: the theme's
+     field border. */
+  --tet-app-border: #3c3c3c;
 
   --tet-tab-activeBackground: #1f1f1f;
-  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #0078d4;
   --tet-tab-activeForeground: #ffffff;
-  --tet-tab-inactiveBackground: #181818;
   --tet-tab-inactiveForeground: #9d9d9d;
-  --tet-tab-border: #2b2b2b;
 
   /* Translucent on purpose: an action button sits on rows, on a selected row's blue and on
      plain bars, and only a translucent hover reads on all of them. */
@@ -70,7 +72,7 @@
   --tet-popup-background: #202020;
   --tet-popup-shadow: #0000005c;
 
-  --tet-menu-background: #1f1f1f;
+  --tet-menu-background: #2b2b2b;
   --tet-menu-foreground: #cccccc;
   --tet-menu-border: #454545;
   --tet-menu-selectionBackground: #0078d4;

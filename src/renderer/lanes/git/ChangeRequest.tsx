@@ -34,7 +34,7 @@ function linkOf(kind: ChangeRequestKind, { number, url }: ChangeRequest): Notice
   return { url, label: `${kind.prefix}${number}` };
 }
 
-/** BRANCHES' button: where it opens one, and its tooltip — `changeRequestTitle`, or why it is off
+/** Branches' button: where it opens one, and its tooltip — `changeRequestTitle`, or why it is off
  *  (`changeRequestTarget`'s refusal). Off without a word while the target is read (`result`
  *  undefined). */
 export function changeRequestAction(result: ChangeRequestTargetResult | undefined): { title: string; target?: ChangeRequestTarget } {
@@ -156,7 +156,7 @@ function ChangeRequestFields({
 }
 
 /**
- * BRANCHES' pull or merge request: from the checked-out branch into a branch its `target` lists,
+ * Branches' pull or merge request: from the checked-out branch into a branch its `target` lists,
  * picked in the dialog, its title and description typed or suggested. The branch is pushed
  * first where the remote lacks what it has; what refuses either stands in the dialog, but a push
  * wanting a login, which is asked once the dialog is gone (one question at a time), and the dialog

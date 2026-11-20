@@ -58,7 +58,7 @@ export const GitLane = memo(function GitLane({
 }: GitLaneProps) {
   const { acting, act, ask } = useFileAct(resolved.refKey);
   const changesRef = useRef<ChangesListHandle>(null);
-  /** What the LOCAL CHANGES header's buttons stand for, reported by the list that holds the state. */
+  /** What the Local Changes header's buttons stand for, reported by the list that holds the state. */
   const [checked, setChecked] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
   /** One view for every project, as the lanes' toggles. */
@@ -71,7 +71,7 @@ export const GitLane = memo(function GitLane({
     held.current = { refKey: resolved.refKey, state: latestState };
   }
   const state = held.current.state;
-  /** What the top section holds, BRANCHES or their GRAPH: one for every project, as the lanes' toggles. */
+  /** What the top section holds, Branches or their Graph: one for every project, as the lanes' toggles. */
   const [showGraph, setShowGraph] = useStoredToggle("branches-graph", false);
   // Read only while the graph is on screen: the log is a git process of its own.
   const graph = useCommitGraph(resolved, state, shown && showGraph, branch.busy);
@@ -98,7 +98,7 @@ export const GitLane = memo(function GitLane({
   }, [resolved.ref, state]);
   const changeRequestButton = changeRequestAction(changeRequestTarget);
   // The button's action, which the checked-out branch's row offers too; none while the button is off.
-  // Its push and request run as BRANCHES' commands do, one at a time with them (`branch.ask`).
+  // Its push and request run as Branches' commands do, one at a time with them (`branch.ask`).
   const opens = locked || !canSync ? undefined : changeRequestButton.target;
   const openChangeRequest = useMemo(
     () =>
@@ -110,7 +110,7 @@ export const GitLane = memo(function GitLane({
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       {/* This section's bar — everything `branch.run` covers. */}
       <Section
-        title={showGraph ? "GRAPH" : "BRANCHES"}
+        title={showGraph ? "Graph" : "Branches"}
         busy={branch.busy || graph.loading}
         height={treeHeight}
         actions={
@@ -181,7 +181,7 @@ export const GitLane = memo(function GitLane({
           safely. A row's own actions are in the context menu, then the view.
           This section's bar — everything `act` covers. */}
       <Section
-        title="LOCAL CHANGES"
+        title="Local Changes"
         count={state.changes.length}
         busy={acting}
         actions={

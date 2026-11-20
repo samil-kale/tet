@@ -23,22 +23,22 @@
   --tet-terminal-background: #282a36;
   --tet-terminal-foreground: #f8f8f2;
 
-  --tet-lane-background: #21222c;
   --tet-sectionHeader-foreground: #f8f8f2;
-  --tet-titleBar-activeBackground: #21222c;
+  /* Not the theme's #21222c: the ground's, below. */
+  --tet-titleBar-activeBackground: #343746;
   --tet-titleBar-activeForeground: #f8f8f2;
 
-  --tet-app-background: #282a36;
+  /* Not the theme's #21222c, darker than the editor: the islands' ground stands lighter than them
+     (THEMES.md) — the theme's activity bar. */
+  --tet-app-background: #343746;
   /* The theme's is #bd93f9, which TET would draw along every edge; the theme's other border. */
   --tet-app-border: #191a21;
 
   --tet-tab-activeBackground: #282a36;
-  /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
+  /* TET outlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
   --tet-tab-activeBorder: #ff79c680;
   --tet-tab-activeForeground: #f8f8f2;
-  --tet-tab-inactiveBackground: #21222c;
   --tet-tab-inactiveForeground: #6272a4;
-  --tet-tab-border: #191a21;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;

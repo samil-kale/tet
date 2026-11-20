@@ -41,7 +41,7 @@ export interface FileChange {
   origPath?: string;
 }
 
-/** A ref standing at a commit of the GRAPH. */
+/** A ref standing at a commit of the Graph. */
 export interface GraphRef {
   /** Without `refs/heads/`, `refs/remotes/` or `refs/tags/`. */
   name: string;
@@ -61,7 +61,7 @@ export interface GraphCommit {
   head?: true;
 }
 
-/** What the GRAPH searches for: `text` in one `field`, as a fixed string, case ignored. */
+/** What the Graph searches for: `text` in one `field`, as a fixed string, case ignored. */
 export interface CommitSearch {
   text: string;
   field: "message" | "author" | "path";

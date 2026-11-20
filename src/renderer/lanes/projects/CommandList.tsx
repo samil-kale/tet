@@ -327,7 +327,7 @@ export const CommandList = memo(function CommandList({ resolved, height, onOpenT
 
   return (
     <Section
-      title="COMMANDS"
+      title="Commands"
       count={commands.length}
       height={height}
       actions={

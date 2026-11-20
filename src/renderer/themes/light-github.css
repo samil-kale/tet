@@ -25,7 +25,6 @@
   --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #1f2328;
 
-  --tet-lane-background: #f6f8fa;
   --tet-sectionHeader-foreground: #1f2328;
   --tet-titleBar-activeBackground: #ffffff;
   --tet-titleBar-activeForeground: #656d76;
@@ -34,12 +33,10 @@
   --tet-app-border: #d0d7de;
 
   --tet-tab-activeBackground: #ffffff;
-  /* TET underlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
+  /* TET outlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
   --tet-tab-activeBorder: #fd8c73;
   --tet-tab-activeForeground: #1f2328;
-  --tet-tab-inactiveBackground: #f6f8fa;
   --tet-tab-inactiveForeground: #656d76;
-  --tet-tab-border: #d0d7de;
   /* TET's own: the working, waiting and finished marks in the progress bar's blue. */
   --tet-tabMark-foreground: #0969da;
 
@@ -76,7 +73,7 @@
   /* Light Modern's. */
   --tet-popup-shadow: #00000029;
 
-  --tet-menu-background: #ffffff;
+  --tet-menu-background: #f6f8fa;
   --tet-menu-foreground: #1f2328;
   --tet-menu-border: #d0d7de;
   --tet-menu-selectionBackground: #afb8c133;

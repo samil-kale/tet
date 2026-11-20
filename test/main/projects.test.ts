@@ -348,7 +348,7 @@ describe("a worktree TET makes", () => {
 });
 
 describe("a project removed", () => {
-  it("leaves PROJECTS when its repository is deleted outside TET, with one notice and its data cleaned up", async () => {
+  it("leaves Projects when its repository is deleted outside TET, with one notice and its data cleaned up", async () => {
     const repo = repository();
     const closed: ProjectRef[] = [];
     const { deps, store, repositories, changes, notices, dataRoot, add } = open((ref) => closed.push(ref));

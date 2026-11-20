@@ -32,7 +32,7 @@ export interface ArchiveTarget {
 
 /**
  * The tabs of a repository or worktree kept archived: their sessions the agent's own, archive.json
- * (store/archive.ts) naming which, shown in the ARCHIVE lane with no process until reopened or
+ * (store/archive.ts) naming which, shown in the Archive lane with no process until reopened or
  * deleted.
  */
 export class ArchivedTabs {
@@ -146,7 +146,7 @@ export class ArchivedTabs {
     return { ok: true };
   }
 
-  /** A drag in the ARCHIVE lane: the tabs named by `tabIds`, in that order, become the stored
+  /** A drag in the Archive lane: the tabs named by `tabIds`, in that order, become the stored
    *  order. Answers what refused it; the list stays as it was. */
   reorder(tabIds: string[]): ActionResult {
     const order = tabIds.map((tabId) => this.tabOf(tabId)?.sessionId).filter((id): id is string => id !== undefined);

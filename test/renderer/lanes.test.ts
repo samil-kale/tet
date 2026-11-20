@@ -52,7 +52,7 @@ describe("the active repository or worktree at startup", () => {
   });
 });
 
-describe("the GRAPH's lanes", () => {
+describe("the Graph's lanes", () => {
   const commit = (sha: string, parents: string[] = [], refs: GraphCommit["refs"] = []): GraphCommit => ({
     sha,
     parents,

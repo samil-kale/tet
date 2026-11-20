@@ -100,7 +100,7 @@ export const BranchTree = memo(function BranchTree({
   // Plain computations, not memos: `state` is a new object on every push and `query` changes per
   // keystroke, so a memo would miss whenever it matters, to filter a few hundred strings.
   // The linked ones alone: the repository itself is not a worktree made from it. A linked
-  // worktree and its branch are one (projects.ts), listed under WORKTREES only.
+  // worktree and its branch are one (projects.ts), listed under Worktrees only.
   const linkedWorktrees = state.worktrees.filter((worktree) => !worktree.isRepository);
   const ownBranches = state.localBranches.filter((name) => !linkedWorktrees.some((worktree) => worktree.branch === name));
   const localBranches = ownBranches.filter(matches);
@@ -462,7 +462,7 @@ export const BranchTree = memo(function BranchTree({
 
       <div className="tree">
         <TreeGroup
-          label="LOCAL BRANCHES"
+          label="Local Branches"
           count={ownBranches.length}
           collapsed={isCollapsed("local")}
           onToggle={() => toggle("local")}
@@ -504,7 +504,7 @@ export const BranchTree = memo(function BranchTree({
         />
 
         <TreeGroup
-          label="WORKTREES"
+          label="Worktrees"
           count={linkedWorktrees.length}
           collapsed={isCollapsed("worktrees")}
           onToggle={() => toggle("worktrees")}
@@ -530,7 +530,7 @@ export const BranchTree = memo(function BranchTree({
         />
 
         <TreeGroup
-          label="REMOTES"
+          label="Remotes"
           count={state.remotes.length}
           collapsed={isCollapsed("remotes")}
           onToggle={() => toggle("remotes")}
@@ -571,7 +571,7 @@ export const BranchTree = memo(function BranchTree({
         />
 
         <TreeGroup
-          label="TAGS"
+          label="Tags"
           count={state.tags.length}
           collapsed={isCollapsed("tags")}
           onToggle={() => toggle("tags")}
@@ -592,7 +592,7 @@ export const BranchTree = memo(function BranchTree({
         />
 
         <TreeGroup
-          label="STASHES"
+          label="Stashes"
           count={state.stashes.length}
           collapsed={isCollapsed("stashes")}
           onToggle={() => toggle("stashes")}

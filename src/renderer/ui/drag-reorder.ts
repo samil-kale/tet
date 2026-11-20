@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type DragEvent, type HTMLAttributes } from "react";
 import { useLatest } from "./use-latest";
 
-/** Drag-reordering, shared by the projects lane's lists, the ARCHIVE, a dialog's `RowSection` and the
+/** Drag-reordering, shared by the projects lane's lists, the Archive, a dialog's `RowSection` and the
  *  panes' tab strips. Each supplies its own drag type (nothing else may take the drop: no other list,
  *  no terminal), its payload (an id, or the position where an entry can appear twice), and the move
  *  itself. */
@@ -30,7 +30,7 @@ type RowElement = HTMLElement;
 interface DragReorder {
   /** Spread onto each row, with its index: `handleProps` and `targetProps` on one element. */
   rowProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
-  /** What starts the row's drag alone, where it takes no drop (the ARCHIVE's rows while filtering):
+  /** What starts the row's drag alone, where it takes no drop (the Archive's rows while filtering):
    *  the same object per index across renders. */
   handleProps: (index: number) => HTMLAttributes<RowElement> & { draggable: true };
   /** What takes the drop: the row's whole box. */

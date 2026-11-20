@@ -227,7 +227,7 @@ const CommitEntry = memo(function CommitEntry({ commit, row, isOpen, files, togg
 });
 
 /**
- * The GRAPH section's commits, newest first, laid out and drawn as VS Code's graph is, under the
+ * The Graph section's commits, newest first, laid out and drawn as VS Code's graph is, under the
  * field searching them. A commit opens to the files it changed, and a file to its diff against the
  * commit's first parent. The log is read by `useCommitGraph`, which the section's header and bar
  * belong to.

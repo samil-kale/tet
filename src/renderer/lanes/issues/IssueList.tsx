@@ -278,7 +278,7 @@ export const IssueList = memo(function IssueList({
   return (
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       <Section
-        title="ISSUES"
+        title="Issues"
         count={issues?.length}
         busy={busy}
         actions={

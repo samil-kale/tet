@@ -24,7 +24,6 @@
   --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #3b3b3b;
 
-  --tet-lane-background: #f8f8f8;
   --tet-sectionHeader-foreground: #3b3b3b;
   --tet-titleBar-activeBackground: #f8f8f8;
   --tet-titleBar-activeForeground: #1e1e1e;
@@ -33,12 +32,10 @@
   --tet-app-border: #e5e5e5;
 
   --tet-tab-activeBackground: #ffffff;
-  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
   --tet-tab-activeBorder: #005fb8;
   --tet-tab-activeForeground: #3b3b3b;
-  --tet-tab-inactiveBackground: #f8f8f8;
   --tet-tab-inactiveForeground: #868686;
-  --tet-tab-border: #e5e5e5;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
@@ -71,7 +68,7 @@
   --tet-popup-shadow: #00000029;
 
   /* The registry points menu.background/foreground at dropdown.background/foreground. */
-  --tet-menu-background: #ffffff;
+  --tet-menu-background: #f8f8f8;
   --tet-menu-foreground: #3b3b3b;
   --tet-menu-border: #cecece;
   --tet-menu-selectionBackground: #005fb8;

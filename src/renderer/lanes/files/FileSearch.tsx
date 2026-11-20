@@ -35,7 +35,7 @@ export function searchSummary(result: FileSearchResult): string {
   return result.truncated ? `${found}, more left out` : found;
 }
 
-/** For the SEARCH header's title-bar buttons. */
+/** For the Search header's title-bar buttons. */
 export type FileSearchHandle = CollapseExpandAll;
 
 interface FileSearchProps {
@@ -53,7 +53,7 @@ interface FileSearchProps {
 }
 
 /**
- * The SEARCH section: VS Code's search box, its own query, over what that query finds in the files'
+ * The Search section: VS Code's search box, its own query, over what that query finds in the files'
  * lines. Listed as VS Code's search view does: a row per file, collapsed until it is expanded, and
  * under it a row per match with the match marked; the summary is the section's header. Rows of the
  * Explorer's shape, so its class carries the styles they share.

@@ -49,7 +49,7 @@ interface ChangesListProps {
   ref?: React.Ref<ChangesListHandle>;
 }
 
-/** For the LOCAL CHANGES header's collapse/expand button. */
+/** For the Local Changes header's collapse/expand button. */
 export type ChangesListHandle = CollapseExpandAll;
 
 export const STATUS_LETTER: Record<ChangeStatus, string> = {
@@ -182,7 +182,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
 }
 
 /**
- * LOCAL CHANGES: the changed files under one "Changes" row, grouped by folder or flat, each with a
+ * Local Changes: the changed files under one "Changes" row, grouped by folder or flat, each with a
  * checkbox — IntelliJ's commit view. The checked files are what the header's Commit and Discard
  * take, and nothing else does: a row's menu holds what they don't cover. Shaped as the Explorer,
  * so its class carries the styles they share.
