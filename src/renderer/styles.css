@@ -1771,7 +1771,7 @@ textarea:focus,
 .tab.active,
 .switch-tab.active {
   color: var(--tet-tab-activeForeground);
-  background: var(--tet-tab-activeBackground);
+  background: transparent;
   border-color: var(--tet-tab-activeBorder);
 }
 
