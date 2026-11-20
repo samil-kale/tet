@@ -86,7 +86,7 @@ const EDITOR_CSS_VARS: Record<string, string> = {
   // to the shiki theme's own foreground, which is the one color in the widget not from TET's
   // stylesheet.
   "editorWidget.foreground": "--tet-foreground",
-  "editorWidget.border": "--tet-menu-border",
+  "editorWidget.border": "--tet-app-border",
   "widget.shadow": "--tet-popup-shadow",
 };
 
@@ -117,7 +117,7 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "scrollbarSlider.activeBackground": "--tet-scrollbarSlider-activeBackground",
   "menu.background": "--tet-menu-background",
   "menu.foreground": "--tet-menu-foreground",
-  "menu.border": "--tet-menu-border",
+  "menu.border": "--tet-app-border",
   "menu.separatorBackground": "--tet-menu-separatorBackground",
   "list.hoverBackground": "--tet-list-hoverBackground",
   "list.activeSelectionBackground": "--tet-list-activeSelectionBackground",

@@ -1233,7 +1233,7 @@ textarea:focus,
   flex: none;
   width: 22px;
   height: 22px;
-  border: 1px solid var(--tet-menu-border);
+  border: 1px solid var(--tet-app-border);
   border-radius: 50%;
   font-size: 9px;
 }
@@ -1508,7 +1508,7 @@ textarea:focus,
   width: 10px;
   height: 10px;
   margin: 2px 4.5px 0;
-  border: 2px solid var(--tet-menu-border);
+  border: 2px solid var(--tet-app-border);
   border-radius: 50%;
   background: var(--tet-app-background);
 }
@@ -1619,7 +1619,7 @@ textarea:focus,
 
 .issue-label {
   padding: 2px 7px;
-  border: 1px solid var(--tet-menu-border);
+  border: 1px solid var(--tet-app-border);
   border-radius: var(--border-radius);
   background: var(--tet-app-background);
   font-size: var(--tiny-font-size);
@@ -1906,7 +1906,7 @@ textarea:focus,
 .notice {
   color: var(--tet-menu-foreground);
   background: var(--tet-menu-background);
-  border: 1px solid var(--tet-menu-border);
+  border: 1px solid var(--tet-app-border);
   border-radius: var(--border-radius);
 }
 
@@ -2596,7 +2596,7 @@ textarea:focus,
   /* As the window: the body in the islands' ground, its header (`.dialog-header`) in the window's;
      not the editor widget's. */
   background: var(--tet-editor-background);
-  border: 1px solid var(--tet-menu-border);
+  border: 1px solid var(--tet-app-border);
   border-radius: var(--border-radius);
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
@@ -3571,11 +3571,6 @@ textarea:focus,
   width: fit-content;
   min-width: min(360px, 100vw);
   max-width: var(--popup-width);
-}
-
-.notices-center,
-.status-list {
-  border-color: var(--tet-app-border);
 }
 
 .status-list > .section-header,
