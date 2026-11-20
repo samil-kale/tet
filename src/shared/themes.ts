@@ -36,12 +36,12 @@ export interface ThemeDefinition {
 export const THEMES: ThemeDefinition[] = [
   {
     id: "dark-modern",
-    label: "Modern",
+    label: "VS Code",
     shikiTheme: "dark-plus",
     kind: "dark",
-    windowBackground: "#2b2b2b",
-    titleBarSymbolColor: "#cccccc",
-    terminalBackground: "#1f1f1f",
+    windowBackground: "#191a1b",
+    titleBarSymbolColor: "#8c8c8c",
+    terminalBackground: "#121314",
     terminalForeground: "#cccccc",
   },
   {
@@ -96,11 +96,11 @@ export const THEMES: ThemeDefinition[] = [
   },
   {
     id: "light-modern",
-    label: "Modern",
+    label: "VS Code",
     shikiTheme: "light-plus",
     kind: "light",
-    windowBackground: "#f8f8f8",
-    titleBarSymbolColor: "#1e1e1e",
+    windowBackground: "#fafafd",
+    titleBarSymbolColor: "#606060",
     terminalBackground: "#ffffff",
     terminalForeground: "#3b3b3b",
   },

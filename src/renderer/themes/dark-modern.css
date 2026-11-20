@@ -6,54 +6,50 @@
 :root[data-theme="dark-modern"] {
   color-scheme: dark;
 
-  --tet-foreground: #cccccc;
-  --tet-descriptionForeground: #9d9d9d;
-  --tet-errorForeground: #f85149;
-  --tet-textLink-foreground: #4daafc;
-  --tet-textLink-activeForeground: #4daafc;
-  --tet-textPreformat-foreground: #d0d0d0;
-  --tet-textPreformat-background: #3c3c3c;
-  --tet-textBlockQuote-background: #2b2b2b;
-  --tet-textBlockQuote-border: #616161;
-  --tet-textCodeBlock-background: #2b2b2b;
-  --tet-focusBorder: #0078d4;
-  --tet-sash-hoverBorder: #0078d4;
+  --tet-foreground: #bfbfbf;
+  --tet-descriptionForeground: #8c8c8c;
+  --tet-errorForeground: #f48771;
+  --tet-textLink-foreground: #48a0c7;
+  --tet-textLink-activeForeground: #53a5ca;
+  --tet-textPreformat-foreground: #8c8c8c;
+  --tet-textPreformat-background: #262626;
+  --tet-textBlockQuote-background: #242526;
+  --tet-textBlockQuote-border: #2a2b2c;
+  --tet-textCodeBlock-background: #242526;
+  --tet-focusBorder: #3994bcb3;
+  --tet-sash-hoverBorder: #3994bcb3;
 
-  --tet-editor-background: #1f1f1f;
-  --tet-editor-foreground: #cccccc;
-  --tet-terminal-background: #1f1f1f;
+  --tet-editor-background: #121314;
+  --tet-editor-foreground: #bbbebf;
+  /* Not the theme's #191a1b: a pane's body, which paints this, stands in its section's color. */
+  --tet-terminal-background: #121314;
   --tet-terminal-foreground: #cccccc;
 
-  --tet-sectionHeader-foreground: #cccccc;
-  /* Not the theme's #181818: the ground's, below. */
-  --tet-titleBar-activeBackground: #2b2b2b;
-  --tet-titleBar-activeForeground: #cccccc;
+  --tet-sectionHeader-foreground: #bfbfbf;
+  --tet-titleBar-activeBackground: #191a1b;
+  --tet-titleBar-activeForeground: #8c8c8c;
 
-  /* Not the theme's #181818, darker than the editor: the islands' ground stands lighter than them
-     (THEMES.md) — the theme's border grey. */
-  --tet-app-background: #2b2b2b;
-  /* Not the theme's #2b2b2b, the ground's own here, which would hide every line on it: the theme's
-     field border. */
-  --tet-app-border: #3c3c3c;
+  --tet-app-background: #191a1b;
+  --tet-app-border: #2a2b2c;
 
-  --tet-tab-activeBackground: #1f1f1f;
+  --tet-tab-activeBackground: #121314;
   /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
-  --tet-tab-activeBorder: #0078d4;
-  --tet-tab-activeForeground: #ffffff;
-  --tet-tab-inactiveForeground: #9d9d9d;
+  --tet-tab-activeBorder: #3994bcb3;
+  --tet-tab-activeForeground: #bfbfbf;
+  --tet-tab-inactiveForeground: #8c8c8c;
 
   /* Translucent on purpose: an action button sits on rows, on a selected row's blue and on
      plain bars, and only a translucent hover reads on all of them. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #04395e;
-  --tet-list-activeSelectionForeground: #ffffff;
-  --tet-list-hoverBackground: #2a2d2e;
+  --tet-list-activeSelectionBackground: #ffffff22;
+  --tet-list-activeSelectionForeground: #ededed;
+  --tet-list-hoverBackground: #ffffff14;
 
-  --tet-input-background: #313131;
-  --tet-input-foreground: #cccccc;
-  --tet-input-border: #3c3c3c;
-  --tet-input-placeholderForeground: #989898;
+  --tet-input-background: #191a1b;
+  --tet-input-foreground: #bfbfbf;
+  --tet-input-border: #333536;
+  --tet-input-placeholderForeground: #555555;
 
   --tet-radio-activeForeground: #ffffff;
   --tet-radio-activeBackground: #2489db82;
@@ -61,37 +57,37 @@
   --tet-radio-inactiveForeground: #cccccc;
   --tet-radio-inactiveHoverBackground: #5a5d5e80;
 
-  --tet-button-background: #0078d4;
+  --tet-button-background: #297aa0;
   --tet-button-foreground: #ffffff;
-  --tet-button-border: #ffffff1a;
-  --tet-button-hoverBackground: #026ec1;
-  --tet-button-secondaryBackground: #313131;
+  --tet-button-border: #297aa0;
+  --tet-button-hoverBackground: #2b7da3;
+  --tet-button-secondaryBackground: #00000000;
   --tet-button-secondaryForeground: #cccccc;
-  --tet-button-secondaryHoverBackground: #3c3c3c;
+  --tet-button-secondaryHoverBackground: #ffffff10;
 
-  --tet-popup-background: #202020;
+  --tet-popup-background: #202122;
   --tet-popup-shadow: #0000005c;
 
-  --tet-menu-background: #2b2b2b;
-  --tet-menu-foreground: #cccccc;
-  --tet-menu-border: #454545;
-  --tet-menu-separatorBackground: #454545;
+  --tet-menu-background: #202122;
+  --tet-menu-foreground: #bfbfbf;
+  --tet-menu-border: #2a2b2c;
+  --tet-menu-separatorBackground: #2a2b2c;
 
-  --tet-progressBar-background: #0078d4;
+  --tet-progressBar-background: #878889;
 
   --tet-noticeErrorIcon-foreground: #f85149;
   --tet-noticeWarningIcon-foreground: #cca700;
   --tet-noticeInfoIcon-foreground: #3794ff;
 
-  --tet-scrollbarSlider-background: #79797966;
-  --tet-scrollbarSlider-hoverBackground: #646464b3;
-  --tet-scrollbarSlider-activeBackground: #bfbfbf66;
+  --tet-scrollbarSlider-background: #a8a9aa85;
+  --tet-scrollbarSlider-hoverBackground: #a8a9aa90;
+  --tet-scrollbarSlider-activeBackground: #a8a9aa9c;
 
-  --tet-gitDecoration-modifiedResourceForeground: #e2c08d;
-  --tet-gitDecoration-deletedResourceForeground: #c74e39;
+  --tet-gitDecoration-modifiedResourceForeground: #e5ba7d;
+  --tet-gitDecoration-deletedResourceForeground: #f48771;
   --tet-gitDecoration-untrackedResourceForeground: #73c991;
-  --tet-gitDecoration-addedResourceForeground: #81b88b;
-  --tet-gitDecoration-conflictingResourceForeground: #e4676b;
+  --tet-gitDecoration-addedResourceForeground: #73c991;
+  --tet-gitDecoration-conflictingResourceForeground: #f48771;
   --tet-graph-foreground1: #ffb000;
   --tet-graph-foreground2: #dc267f;
   --tet-graph-foreground3: #994f00;
@@ -103,28 +99,28 @@
 
   /* Three weights of two hues: a changed line's ground, the changed words on it, and the 15px
      overview ruler, which disappears against the editor background at anything lighter. */
-  --tet-diffEditor-insertedLineBackground: #2ea04326;
-  --tet-diffEditor-removedLineBackground: #f8514926;
-  --tet-diffEditor-insertedTextBackground: #2ea04340;
-  --tet-diffEditor-removedTextBackground: #f8514940;
+  --tet-diffEditor-insertedLineBackground: #347d3926;
+  --tet-diffEditor-removedLineBackground: #c93c3726;
+  --tet-diffEditor-insertedTextBackground: #57ab5a4d;
+  --tet-diffEditor-removedTextBackground: #f470674d;
   --tet-diffEditorOverview-insertedForeground: #2ea04380;
   --tet-diffEditorOverview-removedForeground: #f8514980;
-  --tet-editorLineNumber-foreground: #6e7681;
-  --tet-editorLineNumber-activeForeground: #cccccc;
-  --tet-editorCursor-foreground: #aeafad;
-  --tet-editor-selectionBackground: #264f78;
-  --tet-editor-inactiveSelectionBackground: #3a3d41;
+  --tet-editorLineNumber-foreground: #858889;
+  --tet-editorLineNumber-activeForeground: #bbbebf;
+  --tet-editorCursor-foreground: #bbbebf;
+  --tet-editor-selectionBackground: #276782dd;
+  --tet-editor-inactiveSelectionBackground: #27678260;
   --tet-editor-lineHighlightBorder: #282828;
-  --tet-editor-findMatchBackground: #9e6a03;
-  --tet-editor-findMatchHighlightBackground: #ea5c0055;
-  --tet-editorIndentGuide-background1: #404040;
-  --tet-editorIndentGuide-activeBackground1: #707070;
+  --tet-editor-findMatchBackground: #27678290;
+  --tet-editor-findMatchHighlightBackground: #27678280;
+  --tet-editorIndentGuide-background1: #8384854d;
+  --tet-editorIndentGuide-activeBackground1: #838485;
 
   /* xterm defaults these to white, invisible on a light ground (buildXtermTheme). Dark Modern
      leaves the cursor unset, which means its foreground. */
-  --tet-terminalCursor-foreground: #cccccc;
-  --tet-terminal-selectionBackground: #264f78;
-  --tet-terminal-inactiveSelectionBackground: #3a3d41;
+  --tet-terminalCursor-foreground: #bfbfbf;
+  --tet-terminal-selectionBackground: #3994bc33;
+  --tet-terminal-inactiveSelectionBackground: #3994bc1a;
 
   --tet-terminal-ansiBlack: #000000;
   --tet-terminal-ansiRed: #cd3131;

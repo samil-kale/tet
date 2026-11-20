@@ -64,8 +64,10 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
 
 ## From a VS Code theme to a TET theme
 
-1. **Take the theme file as VS Code reads it.** Follow its `include` chain (Light Modern:
-   `light_modern.json` over `light_plus.json` over `light_vs.json`). A theme shiki ships is taken
+1. **Take the theme file as VS Code reads it.** Follow its `include` chain (Light Modern is
+   VS Code's Light 2026, its Islands theme: `2026-light.json` over `light_modern.json` over
+   `light_plus.json` over `light_vs.json`; likewise Dark Modern). Where VS Code has an Islands
+   variant of a theme, that variant is the reference, never the older one. A theme shiki ships is taken
    as shiki ships it (`@shikijs/themes/<name>`); any other is the extension's theme file as it
    ships, put beside the stylesheet as `<id>.json` (comments stripped, if it has any, and
    `semanticHighlighting` and `semanticTokenColors`, which neither shiki nor monaco reads).

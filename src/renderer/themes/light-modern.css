@@ -6,74 +6,74 @@
 :root[data-theme="light-modern"] {
   color-scheme: light;
 
-  --tet-foreground: #3b3b3b;
-  --tet-descriptionForeground: #3b3b3b;
-  --tet-errorForeground: #f85149;
-  --tet-textLink-foreground: #005fb8;
-  --tet-textLink-activeForeground: #005fb8;
+  --tet-foreground: #202020;
+  --tet-descriptionForeground: #606060;
+  --tet-errorForeground: #ad0707;
+  --tet-textLink-foreground: #0069cc;
+  --tet-textLink-activeForeground: #0069cc;
   --tet-textPreformat-foreground: #3b3b3b;
   --tet-textPreformat-background: #0000001f;
-  --tet-textBlockQuote-background: #f8f8f8;
-  --tet-textBlockQuote-border: #e5e5e5;
-  --tet-textCodeBlock-background: #f8f8f8;
-  --tet-focusBorder: #005fb8;
-  --tet-sash-hoverBorder: #005fb8;
+  --tet-textBlockQuote-background: #eaeaea;
+  --tet-textBlockQuote-border: #f0f1f2;
+  --tet-textCodeBlock-background: #ececec;
+  --tet-focusBorder: #0069cc;
+  --tet-sash-hoverBorder: #0069cc;
 
   --tet-editor-background: #ffffff;
-  --tet-editor-foreground: #3b3b3b;
+  --tet-editor-foreground: #202020;
   --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #3b3b3b;
 
-  --tet-sectionHeader-foreground: #3b3b3b;
-  --tet-titleBar-activeBackground: #f8f8f8;
-  --tet-titleBar-activeForeground: #1e1e1e;
+  --tet-sectionHeader-foreground: #202020;
+  --tet-titleBar-activeBackground: #fafafd;
+  --tet-titleBar-activeForeground: #606060;
 
-  --tet-app-background: #f8f8f8;
-  --tet-app-border: #e5e5e5;
+  --tet-app-background: #fafafd;
+  --tet-app-border: #f0f1f2;
 
   --tet-tab-activeBackground: #ffffff;
   /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
-  --tet-tab-activeBorder: #005fb8;
-  --tet-tab-activeForeground: #3b3b3b;
-  --tet-tab-inactiveForeground: #868686;
+  --tet-tab-activeBorder: #0069cc;
+  --tet-tab-activeForeground: #202020;
+  --tet-tab-inactiveForeground: #606060;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #c6d9eb;
-  --tet-list-activeSelectionForeground: #000000;
-  --tet-list-hoverBackground: #f2f2f2;
+  --tet-list-activeSelectionBackground: #00000025;
+  --tet-list-activeSelectionForeground: #202020;
+  --tet-list-hoverBackground: #00000014;
 
   --tet-input-background: #ffffff;
-  --tet-input-foreground: #3b3b3b;
-  --tet-input-border: #cecece;
-  --tet-input-placeholderForeground: #767676;
+  --tet-input-foreground: #202020;
+  --tet-input-border: #d8d8d866;
+  --tet-input-placeholderForeground: #999999;
 
   --tet-radio-activeForeground: #000000;
   --tet-radio-activeBackground: #bed6ed;
-  --tet-radio-activeBorder: #005fb8;
+  --tet-radio-activeBorder: #0069cc;
   --tet-radio-inactiveForeground: #3b3b3b;
   --tet-radio-inactiveHoverBackground: #b8b8b850;
 
-  --tet-button-background: #005fb8;
+  --tet-button-background: #0069cc;
   --tet-button-foreground: #ffffff;
-  --tet-button-border: #0000001a;
-  --tet-button-hoverBackground: #0258a8;
-  --tet-button-secondaryBackground: #e5e5e5;
-  --tet-button-secondaryForeground: #3b3b3b;
-  --tet-button-secondaryHoverBackground: #cccccc;
+  --tet-button-border: #0069cc;
+  --tet-button-hoverBackground: #0063c1;
+  --tet-button-secondaryBackground: #eaeaea;
+  --tet-button-secondaryForeground: #202020;
+  --tet-button-secondaryHoverBackground: #f2f3f4;
 
-  --tet-popup-background: #f8f8f8;
+  --tet-popup-background: #fafafd;
   /* The registry's transparent(foreground, 0.2), as is the menu separator below. */
   --tet-popup-shadow: #00000029;
 
   /* The registry points menu.background/foreground at dropdown.background/foreground. */
-  --tet-menu-background: #f8f8f8;
-  --tet-menu-foreground: #3b3b3b;
-  --tet-menu-border: #cecece;
-  --tet-menu-separatorBackground: #3b3b3b33;
+  --tet-menu-background: #fafafd;
+  --tet-menu-foreground: #202020;
+  --tet-menu-border: #e4e5e6;
+  --tet-menu-separatorBackground: #eeeef1;
 
-  --tet-progressBar-background: #005fb8;
+  --tet-progressBar-background: #0069cc;
 
   /* The error icon is errorForeground rather than the registry's editorError.foreground, as in
      Dark Modern; the other two are editorWarning.foreground and editorInfo.foreground, which the
@@ -82,14 +82,14 @@
   --tet-noticeWarningIcon-foreground: #bf8803;
   --tet-noticeInfoIcon-foreground: #0063d3;
 
-  --tet-scrollbarSlider-background: #64646466;
-  --tet-scrollbarSlider-hoverBackground: #646464b3;
-  --tet-scrollbarSlider-activeBackground: #00000099;
+  --tet-scrollbarSlider-background: #646464c0;
+  --tet-scrollbarSlider-hoverBackground: #646464d0;
+  --tet-scrollbarSlider-activeBackground: #646464e0;
 
   /* The git extension's own contributes.colors, light branch. */
-  --tet-gitDecoration-modifiedResourceForeground: #895503;
+  --tet-gitDecoration-modifiedResourceForeground: #667309;
   --tet-gitDecoration-deletedResourceForeground: #ad0707;
-  --tet-gitDecoration-untrackedResourceForeground: #007100;
+  --tet-gitDecoration-untrackedResourceForeground: #587c0c;
   --tet-gitDecoration-addedResourceForeground: #587c0c;
   --tet-gitDecoration-conflictingResourceForeground: #ad0707;
   --tet-graph-foreground1: #ffb000;
@@ -104,24 +104,24 @@
   /* The registry's defaultInsertColor/defaultRemoveColor serve both grounds. */
   --tet-diffEditor-insertedLineBackground: #2ea04326;
   --tet-diffEditor-removedLineBackground: #f8514926;
-  --tet-diffEditor-insertedTextBackground: #2ea04340;
-  --tet-diffEditor-removedTextBackground: #f8514940;
+  --tet-diffEditor-insertedTextBackground: #587c0c26;
+  --tet-diffEditor-removedTextBackground: #ad070726;
   --tet-diffEditorOverview-insertedForeground: #2ea04380;
   --tet-diffEditorOverview-removedForeground: #f8514980;
-  --tet-editorLineNumber-foreground: #6e7681;
-  --tet-editorLineNumber-activeForeground: #171184;
-  --tet-editorCursor-foreground: #000000;
-  --tet-editor-selectionBackground: #add6ff;
-  --tet-editor-inactiveSelectionBackground: #e5ebf1;
+  --tet-editorLineNumber-foreground: #606060;
+  --tet-editorLineNumber-activeForeground: #202020;
+  --tet-editorCursor-foreground: #202020;
+  --tet-editor-selectionBackground: #0069cc40;
+  --tet-editor-inactiveSelectionBackground: #0069cc1a;
   --tet-editor-lineHighlightBorder: #eeeeee;
-  --tet-editor-findMatchBackground: #a8ac94;
-  --tet-editor-findMatchHighlightBackground: #ea5c0055;
-  --tet-editorIndentGuide-background1: #d3d3d3;
-  --tet-editorIndentGuide-activeBackground1: #939393;
+  --tet-editor-findMatchBackground: #0069cc40;
+  --tet-editor-findMatchHighlightBackground: #0069cc1a;
+  --tet-editorIndentGuide-background1: #f7f7f740;
+  --tet-editorIndentGuide-activeBackground1: #eeeeee;
 
-  --tet-terminalCursor-foreground: #005fb8;
-  --tet-terminal-selectionBackground: #add6ff;
-  --tet-terminal-inactiveSelectionBackground: #e5ebf1;
+  --tet-terminalCursor-foreground: #202020;
+  --tet-terminal-selectionBackground: #0069cc26;
+  --tet-terminal-inactiveSelectionBackground: #0069cc13;
 
   /* terminalColorRegistry.ts's `light:` branch — the palette is not theme-independent. */
   --tet-terminal-ansiBlack: #000000;
