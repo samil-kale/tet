@@ -17,16 +17,12 @@
   --tet-textBlockQuote-border: #2a2b2c;
   --tet-textCodeBlock-background: #242526;
   --tet-focusBorder: #3994bcb3;
-  --tet-sash-hoverBorder: #3994bcb3;
 
   --tet-editor-background: #121314;
   --tet-editor-foreground: #bbbebf;
-  /* Not the theme's #191a1b: a pane's body, which paints this, stands in its section's color. */
-  --tet-terminal-background: #121314;
   --tet-terminal-foreground: #cccccc;
 
   --tet-sectionHeader-foreground: #bfbfbf;
-  --tet-titleBar-activeBackground: #191a1b;
   --tet-titleBar-activeForeground: #8c8c8c;
 
   --tet-app-background: #191a1b;
@@ -42,7 +38,9 @@
      plain bars, and only a translucent hover reads on all of them. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #ffffff22;
+  /* Not the theme's #ffffff22, a grey: the accent, #3994bc, at 30% on the editor — as the other
+     themes tint their selection. */
+  --tet-list-activeSelectionBackground: #1e3a46;
   --tet-list-activeSelectionForeground: #ededed;
   --tet-list-hoverBackground: #ffffff14;
 
@@ -120,7 +118,7 @@
      leaves the cursor unset, which means its foreground. */
   --tet-terminalCursor-foreground: #bfbfbf;
   --tet-terminal-selectionBackground: #3994bc33;
-  --tet-terminal-inactiveSelectionBackground: #3994bc1a;
+  --tet-terminal-inactiveSelectionBackground: #3a3d41;
 
   --tet-terminal-ansiBlack: #000000;
   --tet-terminal-ansiRed: #cd3131;

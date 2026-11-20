@@ -2,7 +2,7 @@ import type { ITheme } from "@xterm/xterm";
 
 /** xterm's theme keys → --tet-* variable; every one is required of each theme (THEMES.md). */
 const XTERM_CSS_VARS: Record<string, string> = {
-  background: "--tet-terminal-background",
+  background: "--tet-editor-background",
   foreground: "--tet-terminal-foreground",
   // xterm's default cursor and selection are white — invisible on a light background. xterm
   // thins an opaque selection to 30% itself.

@@ -17,16 +17,12 @@
   --tet-textBlockQuote-border: #30363d;
   --tet-textCodeBlock-background: #6e768166;
   --tet-focusBorder: #1f6feb;
-  --tet-sash-hoverBorder: #1f6feb;
 
   --tet-editor-background: #0d1117;
   --tet-editor-foreground: #e6edf3;
-  --tet-terminal-background: #0d1117;
   --tet-terminal-foreground: #e6edf3;
 
   --tet-sectionHeader-foreground: #e6edf3;
-  /* Not the theme's #0d1117: the ground's, below. */
-  --tet-titleBar-activeBackground: #161b22;
   --tet-titleBar-activeForeground: #7d8590;
 
   /* Not the theme's #010409, darker than the editor: the islands' ground stands lighter than them
@@ -45,7 +41,8 @@
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #19345e;
+  /* Not the theme's #6e768166, translucent: github.com's selected sidebar row, made opaque. */
+  --tet-list-activeSelectionBackground: #1e242a;
   --tet-list-activeSelectionForeground: #e6edf3;
   --tet-list-hoverBackground: #6e76811a;
 

@@ -18,16 +18,12 @@
   --tet-textBlockQuote-border: #d0d7de;
   --tet-textCodeBlock-background: #afb8c133;
   --tet-focusBorder: #0969da;
-  --tet-sash-hoverBorder: #0969da;
 
   --tet-editor-background: #ffffff;
   --tet-editor-foreground: #1f2328;
-  --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #1f2328;
 
   --tet-sectionHeader-foreground: #1f2328;
-  /* Not the theme's #ffffff: the title bar sits on the ground, app.background. */
-  --tet-titleBar-activeBackground: #f6f8fa;
   --tet-titleBar-activeForeground: #656d76;
 
   --tet-app-background: #f6f8fa;
@@ -44,7 +40,8 @@
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #c7dbf4;
+  /* Not the theme's #afb8c133, translucent: github.com's selected sidebar row, made opaque. */
+  --tet-list-activeSelectionBackground: #eceef0;
   --tet-list-activeSelectionForeground: #1f2328;
   /* The theme's #eaeef280 made opaque: at half alpha it is invisible on the #f6f8fa side bar. */
   --tet-list-hoverBackground: #eaeef2;

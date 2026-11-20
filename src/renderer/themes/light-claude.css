@@ -21,16 +21,13 @@
   --tet-textBlockQuote-border: #c2613a;
   --tet-textCodeBlock-background: #dcdcdc66;
   --tet-focusBorder: #c2613a;
-  --tet-sash-hoverBorder: #c2613a;
 
   /* Not the theme's #fafaf8: claude.ai's content surface, for the panel and the active tab too. */
   --tet-editor-background: #fcfcfb;
   --tet-editor-foreground: #2a2a28;
-  --tet-terminal-background: #fcfcfb;
   --tet-terminal-foreground: #2a2a28;
 
   --tet-sectionHeader-foreground: #2a2a28;
-  --tet-titleBar-activeBackground: #f0f0ec;
   --tet-titleBar-activeForeground: #2a2a28;
 
   --tet-app-background: #f0f0ec;

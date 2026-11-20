@@ -2074,7 +2074,7 @@ textarea:focus,
   position: relative;
   flex: 1;
   min-height: 0;
-  background: var(--tet-terminal-background);
+  background: var(--tet-editor-background);
 }
 
 /* A tab's own content (the editor, its Markdown preview) keeps the wider 10px scrollbar; the
@@ -2093,7 +2093,7 @@ textarea:focus,
   position: absolute;
   /* Right inset is narrower than left: no scrollbar sits there to leave room for. */
   inset: 6px 6px 6px 12px;
-  background: var(--tet-terminal-background);
+  background: var(--tet-editor-background);
   /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. */
   contain: size layout style;
 }
@@ -2482,12 +2482,12 @@ textarea:focus,
 }
 
 .sash:hover::after {
-  border-color: var(--tet-sash-hoverBorder);
+  border-color: var(--tet-focusBorder);
   transition-delay: 0.2s;
 }
 
 .sash.dragging::after {
-  border-color: var(--tet-sash-hoverBorder);
+  border-color: var(--tet-focusBorder);
 }
 
 /* Shared bits ---------------------------------------------------------------------------- */
@@ -2589,7 +2589,7 @@ textarea:focus,
   font-size: var(--tet-font-size);
   /* As the window: the body in the islands' ground, its header (`.dialog-header`) in the window's;
      not the editor widget's. */
-  background: var(--tet-terminal-background);
+  background: var(--tet-editor-background);
   border: 1px solid var(--tet-menu-border);
   border-radius: var(--border-radius);
   box-shadow: 0 4px 12px var(--tet-popup-shadow);

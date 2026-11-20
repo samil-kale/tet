@@ -17,15 +17,12 @@
   --tet-textBlockQuote-border: #f0f1f2;
   --tet-textCodeBlock-background: #ececec;
   --tet-focusBorder: #0069cc;
-  --tet-sash-hoverBorder: #0069cc;
 
   --tet-editor-background: #ffffff;
   --tet-editor-foreground: #202020;
-  --tet-terminal-background: #ffffff;
   --tet-terminal-foreground: #3b3b3b;
 
   --tet-sectionHeader-foreground: #202020;
-  --tet-titleBar-activeBackground: #fafafd;
   --tet-titleBar-activeForeground: #606060;
 
   --tet-app-background: #fafafd;
@@ -40,7 +37,9 @@
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #00000025;
+  /* Not the theme's #00000025, a grey: the accent at 20% on the editor — as the other themes tint
+     their selection. */
+  --tet-list-activeSelectionBackground: #cce1f5;
   --tet-list-activeSelectionForeground: #202020;
   --tet-list-hoverBackground: #00000014;
 
@@ -121,7 +120,7 @@
 
   --tet-terminalCursor-foreground: #202020;
   --tet-terminal-selectionBackground: #0069cc26;
-  --tet-terminal-inactiveSelectionBackground: #0069cc13;
+  --tet-terminal-inactiveSelectionBackground: #e5ebf1;
 
   /* terminalColorRegistry.ts's `light:` branch — the palette is not theme-independent. */
   --tet-terminal-ansiBlack: #000000;

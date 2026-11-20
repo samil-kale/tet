@@ -19,15 +19,12 @@
   --tet-textBlockQuote-border: #007acc80;
   --tet-textCodeBlock-background: #0a0a0a66;
   --tet-focusBorder: #3574f0;
-  --tet-sash-hoverBorder: #3574f0;
 
   --tet-editor-background: #1e1f22;
   --tet-editor-foreground: #bcbec3;
-  --tet-terminal-background: #1e1f22;
   --tet-terminal-foreground: #bcbec3;
 
   --tet-sectionHeader-foreground: #dfe1e5;
-  --tet-titleBar-activeBackground: #2b2d30;
   --tet-titleBar-activeForeground: #cccccc;
 
   --tet-app-background: #2b2d30;

@@ -16,16 +16,12 @@
   --tet-textBlockQuote-border: #007acc80;
   --tet-textCodeBlock-background: #0a0a0a66;
   --tet-focusBorder: #6272a4;
-  --tet-sash-hoverBorder: #6272a4;
 
   --tet-editor-background: #282a36;
   --tet-editor-foreground: #f8f8f2;
-  --tet-terminal-background: #282a36;
   --tet-terminal-foreground: #f8f8f2;
 
   --tet-sectionHeader-foreground: #f8f8f2;
-  /* Not the theme's #21222c: the ground's, below. */
-  --tet-titleBar-activeBackground: #343746;
   --tet-titleBar-activeForeground: #f8f8f2;
 
   /* Not the theme's #21222c, darker than the editor: the islands' ground stands lighter than them
@@ -47,11 +43,11 @@
   --tet-list-activeSelectionForeground: #f8f8f2;
   --tet-list-hoverBackground: #44475a75;
 
-  /* Not the theme's #282a36, same as the dialog's ground (the terminal's), which leaves the input
-     unseen but for its border: the theme's own BGLight, its dropdown and menu background. */
-  --tet-input-background: #343746;
+  --tet-input-background: #282a36;
   --tet-input-foreground: #f8f8f2;
-  --tet-input-border: #191a21;
+  /* Not the theme's #191a21, which vanishes on the same-colored ground the input stands on: the
+     theme's own selection grey. */
+  --tet-input-border: #44475a;
   /* Not the theme's #6272a4, Dracula's own comment tint: it reads as a different color from the
      filter icon beside it, drawn from foreground at the same opacity. */
   --tet-input-placeholderForeground: #f8f8f299;

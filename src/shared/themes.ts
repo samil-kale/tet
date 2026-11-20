@@ -24,11 +24,11 @@ export interface ThemeDefinition {
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
   /** BrowserWindow paint and Windows title-bar overlay, set before the CSS exists — kept in step
-   *  with --tet-titleBar-active{Background,Foreground} by hand. */
+   *  with --tet-app-background and --tet-titleBar-activeForeground by hand. */
   windowBackground: string;
   titleBarSymbolColor: string;
   /** For an agent reading colors off the console (Codex on win32). Kept in step with
-   *  --tet-terminal-background / -foreground by hand. */
+   *  --tet-editor-background and --tet-terminal-foreground by hand. */
   terminalBackground: string;
   terminalForeground: string;
 }

@@ -19,6 +19,8 @@ a TET theme. A rule that fits one value is a comment at that value, not an entry
   own palette, and its title bar follows. No line draws an island: its fill alone sets it off.
   `app.border` stands apart from both surfaces, as IntelliJ's: it draws the lines on the ground
   and inside an island (a card and its header, a dialog's header).
+- A pane's terminal stands in its island's color: there is no `terminal.background`, a theme's value
+  of it is dropped and `editor.background` paints the terminal.
 - The fonts are no theme's: `--tet-font-family`, `--tet-font-size` and `--tet-editor-font-family`
   are declared once, in `styles.css`.
 
@@ -81,6 +83,16 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
      selected row and on plain bars, and only this translucent grey reads on all of them.
    - `tab.activeBorder` is the accent, `focusBorder`, unless the theme has a mark color of its own
      (`tab.activeBorderTop`).
+   - There is no `titleBar.activeBackground`: the title bar row is part of the ground, so
+     `app.background` paints it (`titleBar.activeForeground` is the theme's).
+   - `app.background` and `app.border` are `sideBar.background` and `panel.border`; a theme whose
+     values don't fit (the layer above) deviates by step 5.
+   - There is no `terminal.background` (the layer above), no `menu.selection*` (a menu's selected
+     row is drawn in `list.activeSelection*`) and no `sash.hoverBorder` (a sash hovers in
+     `focusBorder`): a theme's values for them are dropped.
+   - What step 3 reads from the registry as another id follows that id as the theme sets it, so
+     after taking over a theme's `focusBorder` or `errorForeground`, look at every variable the
+     registry derives from it.
 5. **Deviate from the theme where its value doesn't fit alongside TET's other themes** —
    unreadable, invisible on its ground, drawing a line TET does not want, or reading differently
    from how the same thing looks in the themes already here — and comment it at the value, saying
@@ -89,9 +101,9 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
    header comment, since the JSON holds none.
 6. **Wire it up**:
    - Its entry in `THEMES`: `id`, `label` (without Dark/Light), `kind` (the theme's `type`), and
-     `shikiTheme`. `windowBackground` and `titleBarSymbolColor` copy `--tet-titleBar-activeBackground`
-     and `-activeForeground`, `terminalBackground` and `terminalForeground` copy
-     `--tet-terminal-background` and `-foreground`: they are needed before the stylesheet loads,
+     `shikiTheme`. `windowBackground` and `titleBarSymbolColor` copy `--tet-app-background`
+     and `--tet-titleBar-activeForeground`, `terminalBackground` and `terminalForeground` copy
+     `--tet-editor-background` and `--tet-terminal-foreground`: they are needed before the stylesheet loads,
      and `themes.test.ts` holds them equal.
    - Its import in `main.tsx`.
    - Token colors: a `shikiTheme` member and its line in `diff-highlight.ts`'s `THEME_MODULES`

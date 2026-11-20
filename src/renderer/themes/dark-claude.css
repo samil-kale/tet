@@ -24,17 +24,14 @@
   --tet-textBlockQuote-border: #d87757;
   --tet-textCodeBlock-background: #0a0a0a66;
   --tet-focusBorder: #d87757;
-  --tet-sash-hoverBorder: #d87757;
 
   /* Not the theme's #1f1f1e (editor) and #1e1f22 (terminal, panel, active tab): claude.ai's
      content surface, one for all four. */
   --tet-editor-background: #151515;
   --tet-editor-foreground: #c3c1ba;
-  --tet-terminal-background: #151515;
   --tet-terminal-foreground: #c3c1ba;
 
   --tet-sectionHeader-foreground: #c3c1ba;
-  --tet-titleBar-activeBackground: #2a2a2a;
   --tet-titleBar-activeForeground: #c3c1ba;
 
   --tet-app-background: #2a2a2a;

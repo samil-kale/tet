@@ -40,9 +40,9 @@ describe("the color themes", () => {
   it("keeps each definition's window and terminal colors in step with its stylesheet", () => {
     for (const theme of THEMES) {
       const css = sheets.get(theme.id)!;
-      assert.equal(valueOf(css, "--tet-titleBar-activeBackground"), theme.windowBackground, theme.id);
+      assert.equal(valueOf(css, "--tet-app-background"), theme.windowBackground, theme.id);
       assert.equal(valueOf(css, "--tet-titleBar-activeForeground"), theme.titleBarSymbolColor, theme.id);
-      assert.equal(valueOf(css, "--tet-terminal-background"), theme.terminalBackground, theme.id);
+      assert.equal(valueOf(css, "--tet-editor-background"), theme.terminalBackground, theme.id);
       assert.equal(valueOf(css, "--tet-terminal-foreground"), theme.terminalForeground, theme.id);
     }
   });

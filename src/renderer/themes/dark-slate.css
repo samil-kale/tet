@@ -19,16 +19,12 @@
   --tet-textBlockQuote-border: #30363d;
   --tet-textCodeBlock-background: #6e768166;
   --tet-focusBorder: #58a6f0;
-  --tet-sash-hoverBorder: #58a6f0;
 
   --tet-editor-background: #1b1f27;
   --tet-editor-foreground: #dde2e9;
-  --tet-terminal-background: #1b1f27;
   --tet-terminal-foreground: #dde2e9;
 
   --tet-sectionHeader-foreground: #dde2e9;
-  /* Not the theme's #14171c: the ground's, below. */
-  --tet-titleBar-activeBackground: #2a2d35;
   --tet-titleBar-activeForeground: #dde2e9;
 
   /* Not the theme's #14171c, darker than the editor: the islands' ground stands lighter than them
