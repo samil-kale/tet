@@ -308,6 +308,10 @@ textarea:focus,
      an edge is --bar-height (tab strip, title bar, `.section-header`, the editor tab's bar); the
      border between panes is 1px --tet-app-border; anything that marks or points at something
      is 1px --tet-focusBorder. */
+  /* Islands-only layout: floating panels with gaps and rounded corners. Default is the current
+     flat, edge-to-edge layout; the Islands themes override these. */
+  --island-gap: 0px;
+  --island-radius: 0px;
   --bar-height: 35px;
   /* Pane floors, as MIN_AREA_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
@@ -472,6 +476,73 @@ textarea:focus,
   flex: 1;
   min-height: 0;
   border-top: 1px solid var(--tet-app-border);
+}
+
+/* IntelliJ Islands: the Navigation Bar, the visible lane and the editor area float as rounded
+   panels with gaps between them. The body background (--tet-app-background) shows through the
+   gaps, so the theme sets it a step off the lane/editor background. */
+[data-theme="dark-islands"] .app,
+[data-theme="light-islands"] .app {
+  --island-gap: 6px;
+  --island-radius: 10px;
+}
+
+[data-theme="dark-islands"] .body,
+[data-theme="light-islands"] .body {
+  padding: 0 0 var(--island-gap);
+  border-top-color: transparent;
+}
+
+[data-theme="dark-islands"] .navigation-bar,
+[data-theme="light-islands"] .navigation-bar {
+  margin: var(--island-gap) var(--island-gap) 0 var(--island-gap);
+  border-radius: var(--island-radius);
+  border-right: none;
+}
+
+[data-theme="dark-islands"] .lane:has(.lane-content:not(.hidden)),
+[data-theme="light-islands"] .lane:has(.lane-content:not(.hidden)) {
+  margin: var(--island-gap) var(--island-gap) 0 0;
+  border-radius: var(--island-radius);
+}
+
+[data-theme="dark-islands"] .lane-content,
+[data-theme="light-islands"] .lane-content {
+  padding: 6px;
+}
+
+[data-theme="dark-islands"] .content,
+[data-theme="light-islands"] .content {
+  margin: var(--island-gap) var(--island-gap) 0 0;
+  border-radius: var(--island-radius);
+  overflow: hidden;
+}
+
+/* The gap between lane and editor already separates the panels; the sash's drawn line is redundant
+   in the Islands layout. The 4px hit area and hover highlight stay. */
+[data-theme="dark-islands"] .sash::before,
+[data-theme="light-islands"] .sash::before {
+  border-color: transparent;
+}
+
+/* Section headers and the border between two sections are redundant inside a rounded island panel;
+   the header text and the section's own background already group the content. */
+[data-theme="dark-islands"] .section-header,
+[data-theme="light-islands"] .section-header {
+  border-bottom-color: transparent;
+}
+
+[data-theme="dark-islands"] .section ~ .section,
+[data-theme="light-islands"] .section ~ .section {
+  border-top-color: transparent;
+}
+
+/* The status bar is also a rounded island at the bottom; the body already leaves a gap above it. */
+[data-theme="dark-islands"] .status-bar,
+[data-theme="light-islands"] .status-bar {
+  margin: 0 var(--island-gap) var(--island-gap);
+  border-radius: var(--island-radius);
+  border-top: none;
 }
 
 /* The lane toggles and settings, full height at the window's left edge (VS Code's Activity Bar),

@@ -20,6 +20,7 @@ export interface ThemeDefinition {
     | "dracula"
     | "dark-claude"
     | "light-intellij"
+    | "light-islands"
     | "light-gameboy"
     | "light-claude";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
@@ -76,6 +77,16 @@ export const THEMES: ThemeDefinition[] = [
     terminalForeground: "#bcbec3",
   },
   {
+    id: "dark-islands",
+    label: "Islands",
+    shikiTheme: "dracula",
+    kind: "dark",
+    windowBackground: "#1a1b23",
+    titleBarSymbolColor: "#f8f8f2",
+    terminalBackground: "#282a36",
+    terminalForeground: "#f8f8f2",
+  },
+  {
     id: "dark-dracula",
     label: "Dracula",
     shikiTheme: "dracula",
@@ -124,6 +135,16 @@ export const THEMES: ThemeDefinition[] = [
     titleBarSymbolColor: "#e7ebed",
     terminalBackground: "#ffffff",
     terminalForeground: "#000000",
+  },
+  {
+    id: "light-islands",
+    label: "Islands",
+    shikiTheme: "light-islands",
+    kind: "light",
+    windowBackground: "#f2f4f7",
+    titleBarSymbolColor: "#080808",
+    terminalBackground: "#ffffff",
+    terminalForeground: "#080808",
   },
   {
     id: "light-gameboy",
