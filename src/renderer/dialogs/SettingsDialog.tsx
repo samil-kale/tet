@@ -133,6 +133,8 @@ const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
   { key: "deleteBranchOnRemote", label: "Also delete branch on the remote" },
   { key: "deleteTagOnRemote", label: "Also delete tag on the remote" },
   { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" },
+  { key: "approveChangeRequest", label: "Also approve when creating a merge request" },
+  { key: "autoMergeChangeRequest", label: "Also set to auto-merge when creating a pull or merge request" },
 ];
 
 /**

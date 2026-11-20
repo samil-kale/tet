@@ -74,6 +74,11 @@ export interface GitProvider {
   findChangeRequest(tracker: Tracker, head: string): Promise<ChangeRequest | undefined>;
   /** Opens one from `head` into `base`, both branches of the repository. */
   createChangeRequest(tracker: Tracker, request: ChangeRequestDraft): Promise<ChangeRequest>;
+  /** Approves one as the account's user, its author; refused where `changeRequest.selfApproval` is not. */
+  approveChangeRequest(tracker: Tracker, number: number): Promise<void>;
+  /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
+   *  wait for, the host refuses it. */
+  autoMergeChangeRequest(tracker: Tracker, number: number): Promise<void>;
   /** The variables the host's own CLI and scripts read the account's token from, which a host tab of
    *  a project on this host gets: the rest of the API, which this interface leaves out, is the
    *  agent's to call. */

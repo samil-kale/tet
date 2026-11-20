@@ -51,6 +51,10 @@ export interface GitSettings {
   deleteBranchOnRemote: boolean;
   deleteTagOnRemote: boolean;
   deleteWorktreeOnRemote: boolean;
+  /** The pull or merge request question's "Also approve", where the host lets its author. */
+  approveChangeRequest: boolean;
+  /** Its "Also set to auto-merge". */
+  autoMergeChangeRequest: boolean;
 }
 
 export const GIT_SETTING_IDS = [
@@ -60,6 +64,8 @@ export const GIT_SETTING_IDS = [
   "deleteBranchOnRemote",
   "deleteTagOnRemote",
   "deleteWorktreeOnRemote",
+  "approveChangeRequest",
+  "autoMergeChangeRequest",
 ] as const satisfies readonly (keyof GitSettings)[];
 
 /** What TET asks of an agent (prompts.ts), in the Prompts tab's picker. */

@@ -1,4 +1,4 @@
-import { failure } from "../shared/errors";
+import { errorMessage, failure } from "../shared/errors";
 import { effectivePrompt } from "../shared/prompts";
 import type { SuggestionResult } from "../shared/types/agents";
 import { headRemote, headRemoteBranch, type RepositoryState } from "../shared/types/git";
@@ -6,12 +6,14 @@ import type { ProjectRef } from "../shared/types/project";
 import type {
   ChangeRequestCreateResult,
   ChangeRequestFindResult,
+  ChangeRequestFollowUps,
   ChangeRequestInput,
   ChangeRequestTargetResult,
 } from "../shared/types/providers";
 import { suggestChangeRequest as suggestText } from "./agents/suggest";
 import { git } from "./git/git-client";
 import { hostProvider, NoAccountError, onHost, parseRemoteUrl, WRITE_HANDS_OVER, type IssueAccounts } from "./providers/issues";
+import type { GitProvider, Tracker } from "./providers/provider";
 import { notOpenMessage } from "./store/resolved-ref";
 import type { ProjectStore } from "./store/project-store";
 import type { SettingsAccess } from "./store/settings";
@@ -139,23 +141,56 @@ export async function suggestChangeRequest(
   );
 }
 
-/** Opens one from the checked-out branch, pushed by then. A write: another account takes over only
- *  from one that does not reach the repository (`WRITE_HANDS_OVER`). */
+/** Opens one from the checked-out branch, pushed by then, and approves it and sets it to auto-merge
+ *  as asked, through the account that opened it. A write: another account takes over only from one
+ *  that does not reach the repository (`WRITE_HANDS_OVER`). */
 export async function createChangeRequest(
   deps: Pick<ChangeRequestDeps, "accounts" | "repositories" | "store">,
   ref: ProjectRef,
-  { title, description }: ChangeRequestInput,
+  { title, description, ...asked }: ChangeRequestInput,
 ): Promise<ChangeRequestCreateResult> {
   try {
     const { target } = requireTarget(deps, ref);
     const created = await onHost(
       deps.accounts,
       target,
-      (provider, tracker) => provider.createChangeRequest(tracker, { head: target.head, base: target.into, title, body: description }),
+      async (provider, tracker) => {
+        const opened = await provider.createChangeRequest(tracker, { head: target.head, base: target.into, title, body: description });
+        return { ...opened, ...(await approveAndAutoMerge(provider, tracker, opened.number, asked)) };
+      },
       WRITE_HANDS_OVER,
     );
     return { ok: true, ...created };
   } catch (error) {
     return failure(error);
   }
+}
+
+/**
+ * Approves an open one and sets it to auto-merge, as asked, approving first: the approval may be what
+ * the merge waits on. Never throws, as the request stands either way: thrown inside `onHost`'s call,
+ * a failure would hand over to the next account, which would open a second one.
+ */
+export async function approveAndAutoMerge(
+  provider: GitProvider,
+  tracker: Tracker,
+  number: number,
+  { approve, autoMerge }: Pick<ChangeRequestInput, "approve" | "autoMerge">,
+): Promise<ChangeRequestFollowUps> {
+  const told: ChangeRequestFollowUps = {};
+  if (approve) {
+    try {
+      await provider.approveChangeRequest(tracker, number);
+    } catch (error) {
+      told.approveError = errorMessage(error);
+    }
+  }
+  if (autoMerge) {
+    try {
+      await provider.autoMergeChangeRequest(tracker, number);
+    } catch (error) {
+      told.autoMergeError = errorMessage(error);
+    }
+  }
+  return told;
 }

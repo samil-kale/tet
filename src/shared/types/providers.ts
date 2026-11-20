@@ -269,6 +269,8 @@ export type IssueCreateResult = (ActionDone & { number: number }) | ActionRefuse
 export interface ChangeRequestKind {
   noun: string;
   prefix: string;
+  /** Whether its author may approve one: GitHub refuses that, GitLab lets the project decide. */
+  selfApproval: boolean;
 }
 
 /** Where the checked-out branch's pull or merge request goes: the host's kind and the branch it
@@ -290,13 +292,24 @@ export interface ChangeRequest {
 /** The checked-out branch's open pull or merge request, `open` absent where it has none. */
 export type ChangeRequestFindResult = (ActionDone & { open?: ChangeRequest }) | ActionRefused;
 
-/** What the dialog asks for: its text. */
+/** What the dialog asks for: its text, and what is done with it once it is open. */
 export interface ChangeRequestInput {
   title: string;
   description: string;
+  /** Approved by its author, offered where the host lets one (`ChangeRequestKind.selfApproval`). */
+  approve: boolean;
+  /** Merged by the host once nothing is outstanding; never at once. */
+  autoMerge: boolean;
 }
 
-export type ChangeRequestCreateResult = (ActionDone & ChangeRequest) | ActionRefused;
+/** Opened, with why what was to follow did not: the request stands either way. */
+export type ChangeRequestCreateResult = (ActionDone & ChangeRequest & ChangeRequestFollowUps) | ActionRefused;
+
+/** Why an approval or auto-merge asked for did not happen; absent where it did or was not asked. */
+export interface ChangeRequestFollowUps {
+  approveError?: string;
+  autoMergeError?: string;
+}
 
 export interface IssueUploadResult {
   /** What shows the file in an issue's text. */

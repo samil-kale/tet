@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
+import { approveAndAutoMerge } from "../../src/main/change-requests";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
 import {
@@ -62,6 +63,7 @@ import {
   sendMutation,
   valueHandler,
   writeOf,
+  type GitProvider,
   type Tracker,
 } from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
@@ -979,9 +981,35 @@ describe("a pull or merge request", () => {
     token: async (id) => `token-${id}`,
   });
 
-  it("is called by each host's own word and number", () => {
-    assert.deepEqual(github.changeRequest, { noun: "pull request", prefix: "#" });
-    assert.deepEqual(gitlab.changeRequest, { noun: "merge request", prefix: "!" });
+  it("is called by each host's own word and number, and approved by its author where the host lets one", () => {
+    assert.deepEqual(github.changeRequest, { noun: "pull request", prefix: "#", selfApproval: false });
+    assert.deepEqual(gitlab.changeRequest, { noun: "merge request", prefix: "!", selfApproval: true });
+  });
+
+  it("is approved before it is set to auto-merge, each failure told and none undoing it", async () => {
+    const tracker: Tracker = { host: "gitlab.example.com", token: "token-a", path: "group/app" };
+    const calls: string[] = [];
+    const providerOf = (approveFails: boolean): GitProvider =>
+      ({
+        approveChangeRequest: async (on: Tracker, number: number) => {
+          calls.push(`approve ${on.token} ${number}`);
+          if (approveFails) {
+            throw new ApiError(401, "401 Unauthorized");
+          }
+        },
+        autoMergeChangeRequest: async (on: Tracker, number: number) => {
+          calls.push(`auto-merge ${on.token} ${number}`);
+          throw new Error("The merge failed");
+        },
+      }) as unknown as GitProvider;
+    assert.deepEqual(await approveAndAutoMerge(providerOf(true), tracker, 42, { approve: true, autoMerge: true }), {
+      approveError: "401 Unauthorized",
+      autoMergeError: "The merge failed",
+    });
+    assert.deepEqual(calls, ["approve token-a 42", "auto-merge token-a 42"], "in order, through the account that opened it");
+    calls.length = 0;
+    assert.deepEqual(await approveAndAutoMerge(providerOf(false), tracker, 7, { approve: true, autoMerge: false }), {});
+    assert.deepEqual(calls, ["approve token-a 7"], "nothing not asked for");
   });
 
   it("is reached on the host the remote names, through that host's accounts alone", async () => {

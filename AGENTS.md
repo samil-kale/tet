@@ -256,7 +256,7 @@ or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, d
 clone (GitHub/GitLab via `GitProvider`), a commit message suggested by an installed agent, and a
 pull or merge request of the checked-out branch from BRANCHES (`change-requests.ts`: into its base,
 else the default branch, derived and never picked, pushing it first, its text typed or suggested
-alike).
+alike, then approved where the host lets its author and set to auto-merge, as its checkboxes say).
 Where Desktop differs from git's defaults, follow Desktop. The project row's entries are
 repository-wide and never touch the working tree — a worktree's own row excepted, which is that
 tree, and its merge into the base, run where the base is checked out.

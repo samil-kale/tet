@@ -38,7 +38,8 @@ import {
 
 // GraphQL for all that it answers in structure and out of experiment. REST for the rest: an issue's
 // label, state and milestone events, which GraphQL words only as text; deleting an issue and uploading
-// a file, whose mutations are experiments; and reading an upload's bytes, which GraphQL cannot carry.
+// a file, whose mutations are experiments; reading an upload's bytes, which GraphQL cannot carry; and
+// approving a merge request, which it has no mutation for.
 
 function apiBase(host: string): string {
   return `https://${host}/api/v4`;
@@ -777,6 +778,13 @@ export function ownMergeRequest(found: GitLabMergeRequest[], path: string): Chan
   return own && { number: Number(own.iid), url: own.webUrl };
 }
 
+/** A merge request by its number, as far as `selection` reads it (`readWorkItem`'s for one). */
+async function readMergeRequest<T>(send: GraphqlSend, path: string, number: number, selection: string): Promise<T> {
+  const query = `query($path: ID!, $iid: String!) { project(fullPath: $path) { mergeRequest(iid: $iid) { ${selection} } } }`;
+  const { project } = (await send(query, { path, iid: String(number) })) as { project: { mergeRequest: T | null } | null };
+  return reached(reached(project, path).mergeRequest, `Merge request !${number}`);
+}
+
 export const gitlab: GitProvider = {
   /** glab's names, which scripts for GitLab take too; glab takes the host as a url. */
   tokenEnv: (host, token) => ({ GITLAB_TOKEN: token, GITLAB_HOST: `https://${host}` }),
@@ -896,7 +904,7 @@ export const gitlab: GitProvider = {
 
   confidentialIssues: true,
 
-  changeRequest: { noun: "merge request", prefix: "!" },
+  changeRequest: { noun: "merge request", prefix: "!", selfApproval: true },
 
   async findChangeRequest({ host, token, path }, head) {
     // A project's merge requests are those into it; one from a fork names its own source project.
@@ -925,6 +933,33 @@ export const gitlab: GitProvider = {
     );
     const created = reached(mergeRequest, `The new merge request of ${path}`);
     return { number: Number(created.iid), url: created.webUrl };
+  },
+
+  async approveChangeRequest({ host, token, path }, number) {
+    // Asked first: REST refuses an author the project or its policies keep from approving with a bare
+    // 401, which says nothing of why.
+    const { userPermissions } = await readMergeRequest<{ userPermissions: { canApprove: boolean } }>(
+      sender(host, token),
+      path,
+      number,
+      "userPermissions { canApprove }",
+    );
+    if (!userPermissions.canApprove) {
+      throw new Error("GitLab does not let this account approve it");
+    }
+    const response = await fetchOk(`${projectUrl(host, path)}/merge_requests/${number}/approve`, headers(token), { method: "POST" });
+    void response.body?.cancel();
+  },
+
+  async autoMergeChangeRequest({ host, token, path }, number) {
+    const send = sender(host, token);
+    // The commit it merges, which the mutation takes to refuse a branch pushed meanwhile.
+    const { diffHeadSha } = await readMergeRequest<{ diffHeadSha: string | null }>(send, path, number, "diffHeadSha");
+    await mutate(send, {
+      mutation: "mergeRequestAccept",
+      inputType: "MergeRequestAcceptInput",
+      input: { projectPath: path, iid: String(number), sha: diffHeadSha, strategy: "MERGE_WHEN_CHECKS_PASS" },
+    });
   },
 
   async createIssue({ host, token, path }, title, body, confidential) {

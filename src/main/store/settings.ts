@@ -38,6 +38,8 @@ const DEFAULTS: AppSettings = {
     deleteBranchOnRemote: false,
     deleteTagOnRemote: false,
     deleteWorktreeOnRemote: false,
+    approveChangeRequest: false,
+    autoMergeChangeRequest: false,
   },
   prompts: {
     texts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptTexts,

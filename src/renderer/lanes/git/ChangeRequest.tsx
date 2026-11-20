@@ -4,6 +4,7 @@ import type { RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
 import type {
   ChangeRequest,
+  ChangeRequestFollowUps,
   ChangeRequestInput,
   ChangeRequestKind,
   ChangeRequestTarget,
@@ -12,7 +13,7 @@ import type {
 import { askLogin } from "../../git/GitLogin";
 import type { FileAsk } from "../../git/run-action";
 import { filled, prompt, type PromptFields } from "../../ui/Dialog";
-import { SuggestField, TextField } from "../../ui/Field";
+import { Checkbox, SuggestField, TextField } from "../../ui/Field";
 import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
 
@@ -51,18 +52,20 @@ function splitSuggestion(text: string): { title: string; description: string } {
   return { title: title.trim(), description: rest.join("\n").trim() };
 }
 
-/** The dialog's title and description. A suggestion writes both, so the title is held like the
- *  description while one is fetched. */
+/** The dialog's title and description, and what follows the opening. A suggestion writes both texts,
+ *  so the title is held like the description while one is fetched. Approving is offered where the
+ *  host lets the author. */
 function ChangeRequestFields({
   at,
   canSuggest,
+  selfApproval,
   value,
   onChange,
   error,
   busy,
   field,
   hold,
-}: PromptFields<ChangeRequestInput> & { at: ProjectRef; canSuggest: boolean }) {
+}: PromptFields<ChangeRequestInput> & { at: ProjectRef; canSuggest: boolean; selfApproval: boolean }) {
   const [suggesting, setSuggesting] = useState(false);
   const onSuggesting = useCallback(
     (held: boolean) => {
@@ -106,6 +109,20 @@ function ChangeRequestFields({
         sizeKey="change-request-height"
         onSuggesting={onSuggesting}
       />
+      {selfApproval && (
+        <Checkbox
+          label="Also approve"
+          checked={value.approve}
+          onChange={(approve) => onChange((current) => ({ ...current, approve }))}
+          disabled={busy}
+        />
+      )}
+      <Checkbox
+        label="Also set to auto-merge"
+        checked={value.autoMerge}
+        onChange={(autoMerge) => onChange((current) => ({ ...current, autoMerge }))}
+        disabled={busy}
+      />
     </>
   );
 }
@@ -115,7 +132,9 @@ function ChangeRequestFields({
  * names, said in the dialog, its title and description typed or suggested. The branch is pushed
  * first where the remote lacks what it has; what refuses either stands in the dialog, but a push
  * wanting a login, which is asked once the dialog is gone (one question at a time), and the dialog
- * comes back with what was typed (`typed`).
+ * comes back with what was typed (`typed`). Once open, it is approved and set to auto-merge as the
+ * checkboxes say; what of that failed goes in the notice that it opened, not the dialog, as it stands
+ * either way and another Create would open a second one.
  */
 export async function askChangeRequest(
   ref: ProjectRef,
@@ -140,8 +159,12 @@ export async function askChangeRequest(
   // Where the remote lacks what the branch has, or has no branch of it yet.
   const push = !pushed && (state.upstream === undefined || state.ahead > 0);
   const canSuggest = (await window.tet.agents.askable()).length > 0;
+  const { git } = await window.tet.settings.get();
   /** What Create ran into or opened, held for once the dialog is gone. */
-  const outcome: { login?: { url: string; error: string; input: ChangeRequestInput }; created?: ChangeRequest } = {};
+  const outcome: {
+    login?: { url: string; error: string; input: ChangeRequestInput };
+    created?: ChangeRequest & ChangeRequestFollowUps;
+  } = {};
   const create = async (input: ChangeRequestInput) => {
     if (push) {
       const result = await window.tet.repository.push(ref);
@@ -167,13 +190,18 @@ export async function askChangeRequest(
         {capitalized(kind.noun)} {named`from ${state.head} into ${into}`}
       </>
     ),
-    value: typed ?? { title: "", description: "" },
+    value: typed ?? {
+      title: "",
+      description: "",
+      approve: kind.selfApproval && git.approveChangeRequest,
+      autoMerge: git.autoMergeChangeRequest,
+    },
     confirmLabel: "Create",
     ready: (value) => filled(value.title),
-    render: (fields) => <ChangeRequestFields at={ref} canSuggest={canSuggest} {...fields} />,
+    render: (fields) => <ChangeRequestFields at={ref} canSuggest={canSuggest} selfApproval={kind.selfApproval} {...fields} />,
     className: "change-request-dialog",
     abort: window.tet.repository.cancelSuggestion,
-    submit: (value) => ask(() => create({ title: value.title.trim(), description: value.description.trim() })),
+    submit: (value) => ask(() => create({ ...value, title: value.title.trim(), description: value.description.trim() })),
   });
   const { login, created } = outcome;
   if (login) {
@@ -190,6 +218,11 @@ export async function askChangeRequest(
   }
   if (created) {
     const link = linkOf(kind, created);
-    notify("info", `Created ${kind.noun} ${link.label} into ${into}.`, { link });
+    // It stands either way, so what did not follow is told beside it.
+    const missed = [
+      created.approveError === undefined ? undefined : `Could not approve it: ${created.approveError}.`,
+      created.autoMergeError === undefined ? undefined : `Could not set it to auto-merge: ${created.autoMergeError}.`,
+    ].filter((sentence) => sentence !== undefined);
+    notify(missed.length > 0 ? "warning" : "info", [`Created ${kind.noun} ${link.label} into ${into}.`, ...missed].join(" "), { link });
   }
 }

@@ -875,7 +875,7 @@ export const github: GitProvider = {
 
   ...fieldMethods({ graphql: sender, handlerOf: fieldHandlerOf, readTarget, mutate }),
 
-  changeRequest: { noun: "pull request", prefix: "#" },
+  changeRequest: { noun: "pull request", prefix: "#", selfApproval: false },
 
   async findChangeRequest({ host, token, path }, head) {
     // `headRefName` matches a fork's branch of that name too, so its repository is read alongside.
@@ -908,6 +908,27 @@ export const github: GitProvider = {
       "pullRequest { number url }",
     );
     return { number: pullRequest.number, url: pullRequest.url };
+  },
+
+  approveChangeRequest() {
+    return Promise.reject(new Error("GitHub does not let a pull request's author approve it"));
+  },
+
+  async autoMergeChangeRequest({ host, token, path }, number) {
+    const send = sender(host, token);
+    const query =
+      "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }";
+    const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { pullRequest: { id: string } | null } | null };
+    const pullRequest = data.repository?.pullRequest;
+    if (!pullRequest) {
+      throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
+    }
+    // No merge method: GitHub's default merges, never squashes.
+    await mutate(send, {
+      mutation: "enablePullRequestAutoMerge",
+      inputType: "EnablePullRequestAutoMergeInput",
+      input: { pullRequestId: pullRequest.id },
+    });
   },
 
   confidentialIssues: false,

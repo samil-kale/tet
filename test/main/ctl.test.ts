@@ -689,6 +689,8 @@ describe("tet-ctl against the control server", () => {
         deleteBranchOnRemote: false,
         deleteTagOnRemote: false,
         deleteWorktreeOnRemote: false,
+        approveChangeRequest: false,
+        autoMergeChangeRequest: false,
       },
       prompts: { texts: { commitMessage: "", handover: "", issue: "", changeRequest: "" }, commitSuggesters: [] },
       environment: { encryptValues: true },
