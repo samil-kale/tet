@@ -122,7 +122,7 @@ export const THEMES: ThemeDefinition[] = [
     windowBackground: "#e9eaee",
     titleBarSymbolColor: "#000000",
     terminalBackground: "#ffffff",
-    terminalForeground: "#000000",
+    terminalForeground: "#080808",
   },
   {
     id: "light-claude",
