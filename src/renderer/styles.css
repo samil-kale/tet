@@ -1944,7 +1944,8 @@ textarea:focus,
   align-items: center;
   gap: 6px;
   height: var(--popup-row-height);
-  padding: 0 12px;
+  margin: 0 4px;
+  padding: 0 8px;
   /* As a section's rows (`.tree-row`): its hover and selection are rounded, inside the box's inset. */
   border-radius: var(--border-radius);
 }
@@ -3581,7 +3582,7 @@ textarea:focus,
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
 .popup-items {
   overflow-y: auto;
-  padding: var(--menu-padding);
+  margin: 6px 4px;
   border-radius: 0 0 calc(var(--border-radius) - 1px) calc(var(--border-radius) - 1px);
 }
 
