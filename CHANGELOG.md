@@ -3,13 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
-## 0.26.2 (2026-11-20)
+## 0.26.3 (2026-11-20)
 
 - **Change request options.** The change request dialog picks its target branch among the remote's
   and offers draft, squash and deleting the branch once merged.
 - **Updates on Windows.** An update no longer fails with "resource busy" because a program still runs
   from TET's folder: the updater ends it first, and names what is left when it still cannot replace
   the folder.
+- **Fixes.** The Windows install script unpacks the archive on every PowerShell version.
 
 ## 0.26.1 (2026-11-20)
 
