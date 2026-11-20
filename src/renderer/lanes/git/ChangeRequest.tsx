@@ -130,12 +130,25 @@ function ChangeRequestFields({
         onSuggesting={onSuggesting}
       />
       <div className="change-request-options">
-        {kind.selfApproval && <Checkbox label="Approve on creation" checked={value.approve} onChange={tick("approve")} disabled={busy} />}
-        <Checkbox label="Open as draft" checked={value.draft} onChange={tick("draft")} disabled={busy} />
-        <Checkbox label="Set to auto-merge" checked={value.autoMerge} onChange={tick("autoMerge")} disabled={busy || value.draft} />
-        <Checkbox label="Squash on auto-merge" checked={value.squash} onChange={tick("squash")} disabled={busy || !value.autoMerge} />
-        {kind.deletesSourceBranch && (
-          <Checkbox label="Delete source branch" checked={value.deleteSourceBranch} onChange={tick("deleteSourceBranch")} disabled={busy} />
+        <div>
+          <Checkbox label="Open as draft" checked={value.draft} onChange={tick("draft")} disabled={busy} />
+          <Checkbox label="Set to auto-merge" checked={value.autoMerge} onChange={tick("autoMerge")} disabled={busy || value.draft} />
+          <Checkbox label="Squash on auto-merge" checked={value.squash} onChange={tick("squash")} disabled={busy || !value.autoMerge} />
+        </div>
+        {(kind.selfApproval || kind.deletesSourceBranch) && (
+          <div>
+            {kind.selfApproval && (
+              <Checkbox label="Approve on creation" checked={value.approve} onChange={tick("approve")} disabled={busy} />
+            )}
+            {kind.deletesSourceBranch && (
+              <Checkbox
+                label="Delete source branch"
+                checked={value.deleteSourceBranch}
+                onChange={tick("deleteSourceBranch")}
+                disabled={busy}
+              />
+            )}
+          </div>
         )}
       </div>
     </>

@@ -2856,15 +2856,18 @@ textarea:focus,
   height: 92px;
 }
 
-/* The options in two columns; a last one alone in its row takes both. */
+/* The options in two columns: draft, auto-merge and squash, each ruling out the next, one below the
+   other in the first; the host's own beside them. */
 .change-request-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px 16px;
+  gap: 16px;
 }
 
-.change-request-options > :last-child:nth-child(odd) {
-  grid-column: 1 / -1;
+.change-request-options > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
