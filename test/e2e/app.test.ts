@@ -117,6 +117,10 @@ describe("TET, driven through tet-ctl", { timeout: 4 * STARTUP_MS }, () => {
       tetCtl(["hook", event], started().asTab(project.id, tab), "{}");
     const state = async (): Promise<TabDescriptor | undefined> => (await tabsOf(project.id)).find((entry) => entry.tabId === tab);
 
+    // A turn reported while the tab is still starting is cleared by its start, as an agent's hook
+    // never is: it runs only once its tab does.
+    await tabWaited(project.id, tab, "--status", "running");
+
     const start = await hook("prompt-submit");
     assert.equal(start.status, 0);
     assert.equal(start.stdout, "", "nothing for the prompt: TET's system prompt went in at spawn");
