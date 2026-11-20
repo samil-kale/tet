@@ -501,6 +501,7 @@ textarea:focus,
   align-items: center;
   flex: none;
   width: 44px;
+  padding-top: 2px;
   gap: 6px;
   --icon-size: 17px;
   --action-size: 32px;
