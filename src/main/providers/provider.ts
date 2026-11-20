@@ -78,7 +78,7 @@ export interface GitProvider {
   approveChangeRequest(tracker: Tracker, number: number): Promise<void>;
   /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
    *  wait for, the host refuses it. */
-  autoMergeChangeRequest(tracker: Tracker, number: number): Promise<void>;
+  autoMergeChangeRequest(tracker: Tracker, number: number, squash: boolean): Promise<void>;
   /** The variables the host's own CLI and scripts read the account's token from, which a host tab of
    *  a project on this host gets: the rest of the API, which this interface leaves out, is the
    *  agent's to call. */
@@ -91,6 +91,9 @@ export interface ChangeRequestDraft {
   base: string;
   title: string;
   body: string;
+  draft: boolean;
+  /** Ignored where `changeRequest.deletesSourceBranch` is not. */
+  deleteSourceBranch: boolean;
 }
 
 /** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ReactN
 import { errorMessage } from "../../shared/errors";
 import type { SuggestionResult } from "../../shared/types/agents";
 import { isModifierHeld } from "../platform";
+import { ActionLink } from "./ActionLink";
+import { SquareSparklesIcon } from "./icons";
 import { useBusy } from "./use-busy";
 import { useStoredHeight } from "./layout-storage";
 import { useTextContextMenu } from "./use-text-context-menu";
@@ -31,29 +33,45 @@ interface FieldProps {
   children: ReactNode;
   /** What refused this field's value, on its own line under the control (`DialogError`). */
   error?: string;
+  /** An action on the label's row, on the right (`ActionLink`). */
+  action?: ReactNode;
 }
 
 /**
  * A dialog row: its label above one control. A `<label>`, so clicking the text reaches the control
  * — a row holding a set of them (buttons, a radio group) is a `FieldGroup`, which no single label
- * can point at.
+ * can point at. With an `action` a div too: a label would hand a click on its text to the action's
+ * button, the first control in it.
  */
-export function Field({ label, children, error }: FieldProps) {
-  return (
-    <label className="dialog-field">
-      <span>{label}</span>
+export function Field({ label, children, error, action }: FieldProps) {
+  const content = (
+    <>
+      <FieldLabel label={label} action={action} />
       {children}
       <DialogError message={error} />
-    </label>
+    </>
+  );
+  return action ? <div className="dialog-field">{content}</div> : <label className="dialog-field">{content}</label>;
+}
+
+/** A field's or a group's label, with its `action` on the right where it has one. */
+function FieldLabel({ label, action }: { label: ReactNode; action?: ReactNode }) {
+  return action ? (
+    <div className="dialog-field-head">
+      <span>{label}</span>
+      {action}
+    </div>
+  ) : (
+    <span>{label}</span>
   );
 }
 
 /** `Field`'s row for a set of controls: a div, as a label wrapping buttons would forward its
- *  clicks to the first. */
-export function FieldGroup({ label, children }: { label: string; children: ReactNode }) {
+ *  clicks to the first. `action` as `Field`'s. */
+export function FieldGroup({ label, action, children }: { label: string; action?: ReactNode; children: ReactNode }) {
   return (
     <div className="dialog-field">
-      <span>{label}</span>
+      <FieldLabel label={label} action={action} />
       {children}
     </div>
   );
@@ -65,7 +83,7 @@ export function FieldRow({ className, children }: { className?: string; children
   return <div className={className ? `dialog-field-row ${className}` : "dialog-field-row"}>{children}</div>;
 }
 
-/** Fields stacked in a dialog, spaced as a `Field`'s label and control. `fill` takes the room its
+/** Fields stacked in a dialog, spaced as the dialog's body spaces them. `fill` takes the room its
  *  parent leaves, so a scrollbox inside can shrink into it; `className` adds what only one needs. */
 export function FieldColumn({ className, fill, children }: { className?: string; fill?: boolean; children: ReactNode }) {
   const classes = ["dialog-column", ...(fill ? ["fill"] : []), ...(className ? [className] : [])];
@@ -203,15 +221,13 @@ interface SuggestFieldProps {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  /** An async way to fill the field, shown as a button under it, on the right. Why it had none is
-   *  said under the field, in `error`'s place, until the next suggestion or keystroke. Without one,
-   *  no button. */
+  /** An async way to fill the field, shown as a link on its label's row, on the right. Why it had
+   *  none is said under the field, in `error`'s place, until the next suggestion or keystroke.
+   *  Without one, no link. */
   suggestion?: {
     label: string;
     run: () => Promise<SuggestionResult>;
   };
-  /** What shares the button's row, on its left, e.g. a checkbox. */
-  beside?: ReactNode;
   disabled?: boolean;
   /** A box of several lines (`dialog-textarea`) in place of one: Enter breaks the line, Ctrl+Enter
    *  (Cmd on the Mac) answers the dialog. */
@@ -228,13 +244,12 @@ interface SuggestFieldProps {
   onSuggesting?: (suggesting: boolean) => void;
 }
 
-/** A text field with a button under it that fills it, e.g. a model's commit message. */
+/** A text field with a link on its label's row that fills it, e.g. a model's commit message. */
 export function SuggestField({
   label,
   value,
   onChange,
   suggestion,
-  beside,
   disabled,
   multiline,
   sizeKey,
@@ -291,44 +306,35 @@ export function SuggestField({
     onContextMenu: textMenu.onContextMenu,
     ref: boxRef,
   };
+  // While suggesting, the dialog's bar runs (`onSuggesting`).
   return (
-    <>
-      <Field label={label} error={refused ?? error}>
-        {multiline ? (
-          <textarea
-            className="dialog-textarea"
-            {...typed}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && isModifierHeld(event)) {
-                event.preventDefault();
-                event.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
-        ) : (
-          <input type="text" {...typed} />
-        )}
-        {textMenu.menu}
-      </Field>
-      {/* Outside the field's label, which would forward a click on `beside` to the box; while
-          suggesting, the dialog's bar runs (`onSuggesting`). */}
-      {(beside || suggestion) && (
-        <FieldRow className="dialog-suggest-row">
-          {beside}
-          {suggestion && (
-            <button
-              type="button"
-              className="button secondary dialog-suggest"
-              disabled={disabled || suggesting}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => void suggest()}
-            >
-              {suggestion.label}
-            </button>
-          )}
-        </FieldRow>
+    <Field
+      label={label}
+      error={refused ?? error}
+      action={
+        suggestion && (
+          <ActionLink disabled={disabled || suggesting} onClick={() => void suggest()}>
+            <SquareSparklesIcon /> {suggestion.label}
+          </ActionLink>
+        )
+      }
+    >
+      {multiline ? (
+        <textarea
+          className="dialog-textarea"
+          {...typed}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && isModifierHeld(event)) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+      ) : (
+        <input type="text" {...typed} />
       )}
-    </>
+      {textMenu.menu}
+    </Field>
   );
 }
 

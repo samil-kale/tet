@@ -982,8 +982,8 @@ describe("a pull or merge request", () => {
   });
 
   it("is called by each host's own word and number, and approved by its author where the host lets one", () => {
-    assert.deepEqual(github.changeRequest, { noun: "pull request", prefix: "#", selfApproval: false });
-    assert.deepEqual(gitlab.changeRequest, { noun: "merge request", prefix: "!", selfApproval: true });
+    assert.deepEqual(github.changeRequest, { noun: "pull request", prefix: "#", selfApproval: false, deletesSourceBranch: false });
+    assert.deepEqual(gitlab.changeRequest, { noun: "merge request", prefix: "!", selfApproval: true, deletesSourceBranch: true });
   });
 
   it("is approved before it is set to auto-merge, each failure told and none undoing it", async () => {
@@ -1002,13 +1002,13 @@ describe("a pull or merge request", () => {
           throw new Error("The merge failed");
         },
       }) as unknown as GitProvider;
-    assert.deepEqual(await approveAndAutoMerge(providerOf(true), tracker, 42, { approve: true, autoMerge: true }), {
+    assert.deepEqual(await approveAndAutoMerge(providerOf(true), tracker, 42, { approve: true, autoMerge: true, squash: false }), {
       approveError: "401 Unauthorized",
       autoMergeError: "The merge failed",
     });
     assert.deepEqual(calls, ["approve token-a 42", "auto-merge token-a 42"], "in order, through the account that opened it");
     calls.length = 0;
-    assert.deepEqual(await approveAndAutoMerge(providerOf(false), tracker, 7, { approve: true, autoMerge: false }), {});
+    assert.deepEqual(await approveAndAutoMerge(providerOf(false), tracker, 7, { approve: true, autoMerge: false, squash: false }), {});
     assert.deepEqual(calls, ["approve token-a 7"], "nothing not asked for");
   });
 

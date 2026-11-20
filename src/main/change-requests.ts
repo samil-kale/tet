@@ -41,16 +41,16 @@ interface PushTarget {
 }
 
 /**
- * The repository or worktree and its push target, or why it has none. The branch it merges into is
- * derived as t3code derives it, never picked: the base TET recorded when it made the branch
- * (`WorktreeInfo.base`), else the default branch, else "main". t3code's other two sources stay out: a
- * configured merge ref TET never writes, and an upstream of another name, which a branch TET made
- * never has (`createBranch`'s `--no-track`).
+ * The repository or worktree, its push target and the branches of the remote but its own, or why it
+ * has none. It merges into `into`, one of those; asked for none, into the one offered first: the base
+ * TET recorded when it made the branch (`WorktreeInfo.base`), else the default branch, each where the
+ * remote has it, else the remote's first.
  */
 function targetOf(
   deps: Pick<ChangeRequestDeps, "repositories" | "store">,
   ref: ProjectRef,
-): { cwd: string; target: PushTarget } | { refusal: string } {
+  into?: string,
+): { cwd: string; target: PushTarget; branches: string[] } | { refusal: string } {
   const repository = deps.repositories.get(ref);
   if (!repository) {
     return { refusal: notOpenMessage(deps.store, ref) };
@@ -69,23 +69,25 @@ function targetOf(
     return { refusal: `The remote ${remote} is on no host` };
   }
   const head = headRemoteBranch(state);
-  const into = state.worktrees.find((worktree) => worktree.current)?.base ?? state.defaultBranch?.name ?? "main";
-  if (into === head) {
-    return { refusal: `${state.head} is the base branch` };
+  const branches = (known?.branches ?? []).filter((name) => name !== head);
+  if (branches.length === 0) {
+    return { refusal: `${remote} has no other branch to merge ${state.head} into` };
   }
-  if (!known?.branches.includes(into)) {
+  if (into !== undefined && !branches.includes(into)) {
     return { refusal: `${remote} has no branch ${into} to merge ${state.head} into` };
   }
-  // The default branch's merged ones are read anyway; another target's would take a process.
-  if (into === state.defaultBranch?.name && state.mergedBranches.includes(state.head)) {
-    return { refusal: `No new commits on ${state.head} to merge into ${into}` };
-  }
-  return { cwd: repository.at.path, target: { remote, ...parsed, head, into } };
+  const base = state.worktrees.find((worktree) => worktree.current)?.base;
+  const offered = [base, state.defaultBranch?.name].find((name) => name !== undefined && branches.includes(name)) ?? branches[0];
+  return { cwd: repository.at.path, target: { remote, ...parsed, head, into: into ?? offered }, branches };
 }
 
 /** `targetOf`, its refusal thrown. */
-function requireTarget(deps: Pick<ChangeRequestDeps, "repositories" | "store">, ref: ProjectRef): { cwd: string; target: PushTarget } {
-  const found = targetOf(deps, ref);
+function requireTarget(
+  deps: Pick<ChangeRequestDeps, "repositories" | "store">,
+  ref: ProjectRef,
+  into?: string,
+): { cwd: string; target: PushTarget } {
+  const found = targetOf(deps, ref, into);
   if ("refusal" in found) {
     throw new Error(found.refusal);
   }
@@ -104,7 +106,7 @@ export function changeRequestTarget(
   }
   const { host, into } = found.target;
   const provider = hostProvider(deps.accounts, host);
-  return provider ? { kind: provider.changeRequest, into } : { refusal: new NoAccountError(host).message };
+  return provider ? { kind: provider.changeRequest, into, branches: found.branches } : { refusal: new NoAccountError(host).message };
 }
 
 /** The checked-out branch's open one, asked of its host. */
@@ -121,12 +123,13 @@ export async function findChangeRequest(
   }
 }
 
-/** Its title and description, suggested from the commits the branch it merges into lacks. */
+/** Its title and description, suggested from the commits `into`, the branch it merges into, lacks. */
 export async function suggestChangeRequest(
   deps: Pick<ChangeRequestDeps, "repositories" | "settings" | "store">,
   ref: ProjectRef,
+  into: string,
 ): Promise<SuggestionResult> {
-  const found = targetOf(deps, ref);
+  const found = targetOf(deps, ref, into);
   if ("refusal" in found) {
     return { error: found.refusal };
   }
@@ -147,15 +150,22 @@ export async function suggestChangeRequest(
 export async function createChangeRequest(
   deps: Pick<ChangeRequestDeps, "accounts" | "repositories" | "store">,
   ref: ProjectRef,
-  { title, description, ...asked }: ChangeRequestInput,
+  { into, title, description, draft, deleteSourceBranch, ...asked }: ChangeRequestInput,
 ): Promise<ChangeRequestCreateResult> {
   try {
-    const { target } = requireTarget(deps, ref);
+    const { target } = requireTarget(deps, ref, into);
     const created = await onHost(
       deps.accounts,
       target,
       async (provider, tracker) => {
-        const opened = await provider.createChangeRequest(tracker, { head: target.head, base: target.into, title, body: description });
+        const opened = await provider.createChangeRequest(tracker, {
+          head: target.head,
+          base: target.into,
+          title,
+          body: description,
+          draft,
+          deleteSourceBranch,
+        });
         return { ...opened, ...(await approveAndAutoMerge(provider, tracker, opened.number, asked)) };
       },
       WRITE_HANDS_OVER,
@@ -175,7 +185,7 @@ export async function approveAndAutoMerge(
   provider: GitProvider,
   tracker: Tracker,
   number: number,
-  { approve, autoMerge }: Pick<ChangeRequestInput, "approve" | "autoMerge">,
+  { approve, autoMerge, squash }: Pick<ChangeRequestInput, "approve" | "autoMerge" | "squash">,
 ): Promise<ChangeRequestFollowUps> {
   const told: ChangeRequestFollowUps = {};
   if (approve) {
@@ -187,7 +197,7 @@ export async function approveAndAutoMerge(
   }
   if (autoMerge) {
     try {
-      await provider.autoMergeChangeRequest(tracker, number);
+      await provider.autoMergeChangeRequest(tracker, number, squash);
     } catch (error) {
       told.autoMergeError = errorMessage(error);
     }

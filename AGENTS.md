@@ -254,9 +254,10 @@ staging), the commit graph (GRAPH: VS Code's "Auto" — HEAD, its upstream and t
 read-only, a commit's files and their diffs against its first parent, searched by message, author
 or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), a commit message suggested by an installed agent, and a
-pull or merge request of the checked-out branch from BRANCHES (`change-requests.ts`: into its base,
-else the default branch, derived and never picked, pushing it first, its text typed or suggested
-alike, then approved where the host lets its author and set to auto-merge, as its checkboxes say).
+pull or merge request of the checked-out branch from BRANCHES (`change-requests.ts`: into a branch
+of its remote picked in the dialog, its base offered first, else the default branch, pushing it
+first, its text typed or suggested alike, then, as its checkboxes say, a draft, approved where the
+host lets its author, set to auto-merge and squashed, its branch deleted once merged).
 Where Desktop differs from git's defaults, follow Desktop. The project row's entries are
 repository-wide and never touch the working tree — a worktree's own row excepted, which is that
 tree, and its merge into the base, run where the base is checked out.

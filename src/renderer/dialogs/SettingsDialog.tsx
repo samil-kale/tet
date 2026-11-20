@@ -135,6 +135,9 @@ const GIT_SWITCHES: { key: keyof GitSettings; label: string }[] = [
   { key: "deleteWorktreeOnRemote", label: "Also delete worktree on the remote" },
   { key: "approveChangeRequest", label: "Also approve when creating a merge request" },
   { key: "autoMergeChangeRequest", label: "Also set to auto-merge when creating a pull or merge request" },
+  { key: "squashChangeRequest", label: "Also squash when merged, when creating a pull or merge request" },
+  { key: "draftChangeRequest", label: "Open a pull or merge request as draft" },
+  { key: "deleteSourceBranchChangeRequest", label: "Also delete the source branch when merged, when creating a merge request" },
 ];
 
 /**
@@ -433,7 +436,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
               />
             )}
             <div className="dialog-field prompt-text">
-              <div className="prompt-text-head">
+              <div className="dialog-field-head">
                 <span>Prompt text</span>
                 <ActionLink disabled={settings.prompts.texts[promptId] === ""} onClick={() => applyPrompt(promptId, "")}>
                   Reset to default

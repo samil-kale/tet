@@ -271,13 +271,18 @@ export interface ChangeRequestKind {
   prefix: string;
   /** Whether its author may approve one: GitHub refuses that, GitLab lets the project decide. */
   selfApproval: boolean;
+  /** Whether it can be set to delete its source branch once merged: GitHub has that only as a
+   *  repository setting, GitLab per merge request. */
+  deletesSourceBranch: boolean;
 }
 
-/** Where the checked-out branch's pull or merge request goes: the host's kind and the branch it
- *  merges into, derived as t3code derives it (`change-requests.ts`), never picked. */
+/** Where the checked-out branch's pull or merge request can go: the host's kind, the branches of
+ *  its remote it can merge into, and the one offered first (`change-requests.ts`: the base TET
+ *  recorded, else the default branch). */
 export interface ChangeRequestTarget {
   kind: ChangeRequestKind;
   into: string;
+  branches: string[];
 }
 
 /** The target, or why the checked-out branch has none. */
@@ -294,12 +299,21 @@ export type ChangeRequestFindResult = (ActionDone & { open?: ChangeRequest }) | 
 
 /** What the dialog asks for: its text, and what is done with it once it is open. */
 export interface ChangeRequestInput {
+  /** The branch it merges into, one of `ChangeRequestTarget.branches`. */
+  into: string;
   title: string;
   description: string;
   /** Approved by its author, offered where the host lets one (`ChangeRequestKind.selfApproval`). */
   approve: boolean;
   /** Merged by the host once nothing is outstanding; never at once. */
   autoMerge: boolean;
+  /** Squashed when the host merges it; only with `autoMerge`, which is where the host takes the method. */
+  squash: boolean;
+  /** Opened as a draft, which the host does not merge: never with `autoMerge`. */
+  draft: boolean;
+  /** Its source branch deleted by the host once merged, offered where the host can
+   *  (`ChangeRequestKind.deletesSourceBranch`). */
+  deleteSourceBranch: boolean;
 }
 
 /** Opened, with why what was to follow did not: the request stands either way. */

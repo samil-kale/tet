@@ -334,6 +334,9 @@ textarea:focus,
   /* One height for every single-line field, and for a button beside one: input,
      .dropdown-trigger, .radio-option, .button, and the rows built to sit level with them. */
   --field-height: 28px;
+  /* A dialog's two spacings: a field's label over its control, and one field below another. */
+  --dialog-label-gap: 6px;
+  --dialog-field-gap: 12px;
   /* The one knob sizing every icon; `extent` in icons.tsx sets how much of it each covers. */
   --icon-size: 14px;
   /* An action button's box (.icon-button), and what sits in its place or level with it; the gap
@@ -2850,12 +2853,18 @@ textarea:focus,
 }
 
 .dialog.change-request-dialog .dialog-textarea {
-  height: 180px;
+  height: 92px;
 }
 
-/* The hint set off from the row of the push checkbox and the suggest button above it. */
-.dialog.commit-dialog .dialog-detail {
-  margin: 8px 0;
+/* The options in two columns; a last one alone in its row takes both. */
+.change-request-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+}
+
+.change-request-options > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 /* A fixed-height dialog's body takes what the header and buttons leave, so a scrollbox in it can
@@ -2873,9 +2882,6 @@ textarea:focus,
 /* A fieldset, so a held run disables every field at once (`DialogFrame`'s `locked`): none of its
    own border, padding or min-content width. */
 .dialog-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -2889,7 +2895,7 @@ textarea:focus,
 }
 
 .dialog-detail {
-  margin: 0;
+  margin: 8px 0 0 0;
   color: var(--tet-descriptionForeground);
 }
 
@@ -2898,13 +2904,26 @@ textarea:focus,
   font-weight: 800;
 }
 
-/* A field's label over its control, and every column of fields in a dialog (`FieldColumn`), spaced
-   alike. */
-.dialog-field,
+/* A field's label over its control. */
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--dialog-label-gap);
+}
+
+/* Fields one above the other, in the dialog's body or a column of them (`FieldColumn`). */
+.dialog-body,
 .dialog-column {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--dialog-field-gap);
+}
+
+/* A field in a group (`FieldGroup`), e.g. a dropdown below its checkboxes, stands as far from what
+   is beside it as one field from another. */
+.dialog-field > .dialog-field,
+.dialog-field > .dialog-field + * {
+  margin-top: calc(var(--dialog-field-gap) - var(--dialog-label-gap));
 }
 
 /* Takes the room its parent leaves, across or down, so a scrollbox inside can shrink into it. */
@@ -2957,14 +2976,21 @@ textarea:focus,
   padding-right: 46px;
 }
 
-/* Under the field (`SuggestField`): what shares the row on the left, at its top, right under the
-   box; the button on the right. */
-.dialog-suggest-row {
-  align-items: flex-start;
+/* A field's label with its action on the right (`Field`'s `action`, the prompt text's "Reset to
+   default"), its icon before its words. The link sits level with the label, not at the top as a
+   link beside a form does. */
+.dialog-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.dialog-suggest {
-  margin-left: auto;
+.dialog-field-head .action-link {
+  align-self: auto;
+  margin-top: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Aligned to the top: a label that wraps would leave a centred box between its lines. The SBX
@@ -3060,8 +3086,9 @@ textarea:focus,
 
 /* The Environment tab fills the body (`FieldColumn`'s `fill`), and only its rows scroll: the text
    above them stays put, and the body never needs a bar of its own besides theirs. The rows' box is
-   as tall as its rows, so "+ Add" follows the last one, and shrinks to scroll once they outgrow it.
-   The same for the SBX Settings' rows: a tab's one section, and the Docker account's tokens. */
+   as tall as its rows, so what comes after the section follows the last one, and shrinks to scroll
+   once they outgrow it. The same for the SBX Settings' rows: a tab's one section, and the Docker
+   account's tokens. */
 .settings-environment .dialog-field,
 .sbx-settings-tab > .dialog-field,
 .sbx-account .dialog-field {
@@ -3098,17 +3125,6 @@ textarea:focus,
 .prompt-text {
   flex: 1;
   min-height: 0;
-}
-
-.prompt-text-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-}
-
-.prompt-text-head .action-link {
-  align-self: auto;
-  margin-top: 0;
 }
 /* The box scrolls, its textarea and colored text grow together inside it (`CodeField`), filling
    it so a click below the last line still lands in the textarea. */

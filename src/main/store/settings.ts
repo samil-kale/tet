@@ -40,6 +40,9 @@ const DEFAULTS: AppSettings = {
     deleteWorktreeOnRemote: false,
     approveChangeRequest: false,
     autoMergeChangeRequest: false,
+    squashChangeRequest: false,
+    draftChangeRequest: false,
+    deleteSourceBranchChangeRequest: false,
   },
   prompts: {
     texts: Object.fromEntries(PROMPT_IDS.map((id) => [id, ""])) as PromptTexts,

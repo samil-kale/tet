@@ -13,7 +13,8 @@ import type {
 import { askLogin } from "../../git/GitLogin";
 import type { FileAsk } from "../../git/run-action";
 import { filled, prompt, type PromptFields } from "../../ui/Dialog";
-import { Checkbox, SuggestField, TextField } from "../../ui/Field";
+import { Dropdown } from "../../ui/Dropdown";
+import { Checkbox, Field, SuggestField, TextField } from "../../ui/Field";
 import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
 
@@ -52,20 +53,30 @@ function splitSuggestion(text: string): { title: string; description: string } {
   return { title: title.trim(), description: rest.join("\n").trim() };
 }
 
-/** The dialog's title and description, and what follows the opening. A suggestion writes both texts,
- *  so the title is held like the description while one is fetched. Approving is offered where the
- *  host lets the author. */
+/** The dialog's checkboxes. */
+type ChangeRequestOption = Exclude<keyof ChangeRequestInput, "into" | "title" | "description">;
+
+/** `value` with what cannot apply unchecked: a draft is never set to auto-merge, and only one set to
+ *  auto-merge is squashed. */
+function applicable(value: ChangeRequestInput): ChangeRequestInput {
+  const autoMerge = value.autoMerge && !value.draft;
+  return { ...value, autoMerge, squash: value.squash && autoMerge };
+}
+
+/** The dialog's branch to merge into, title and description, and what follows the opening. A
+ *  suggestion reads the branch and writes both texts, so they are held like the description while one
+ *  is fetched. Approving and deleting the source branch are offered where the host can. */
 function ChangeRequestFields({
   at,
+  target: { kind, branches },
   canSuggest,
-  selfApproval,
   value,
   onChange,
   error,
   busy,
   field,
   hold,
-}: PromptFields<ChangeRequestInput> & { at: ProjectRef; canSuggest: boolean; selfApproval: boolean }) {
+}: PromptFields<ChangeRequestInput> & { at: ProjectRef; target: ChangeRequestTarget; canSuggest: boolean }) {
   const [suggesting, setSuggesting] = useState(false);
   const onSuggesting = useCallback(
     (held: boolean) => {
@@ -74,8 +85,17 @@ function ChangeRequestFields({
     },
     [hold],
   );
+  const tick = (option: ChangeRequestOption) => (checked: boolean) => onChange((current) => applicable({ ...current, [option]: checked }));
   return (
     <>
+      <Field label="Into">
+        <Dropdown
+          value={value.into}
+          options={branches.map((name) => ({ value: name, label: name }))}
+          onChange={(into) => onChange((current) => ({ ...current, into }))}
+          disabled={busy || suggesting}
+        />
+      </Field>
       <TextField
         label="Title"
         value={value.title}
@@ -93,7 +113,7 @@ function ChangeRequestFields({
             ? {
                 label: "Suggest title and description",
                 run: async () => {
-                  const result = await window.tet.repository.suggestChangeRequest(at);
+                  const result = await window.tet.repository.suggestChangeRequest(at, value.into);
                   if (result.value === undefined) {
                     return result;
                   }
@@ -109,27 +129,22 @@ function ChangeRequestFields({
         sizeKey="change-request-height"
         onSuggesting={onSuggesting}
       />
-      {selfApproval && (
-        <Checkbox
-          label="Also approve"
-          checked={value.approve}
-          onChange={(approve) => onChange((current) => ({ ...current, approve }))}
-          disabled={busy}
-        />
-      )}
-      <Checkbox
-        label="Also set to auto-merge"
-        checked={value.autoMerge}
-        onChange={(autoMerge) => onChange((current) => ({ ...current, autoMerge }))}
-        disabled={busy}
-      />
+      <div className="change-request-options">
+        {kind.selfApproval && <Checkbox label="Approve on creation" checked={value.approve} onChange={tick("approve")} disabled={busy} />}
+        <Checkbox label="Open as draft" checked={value.draft} onChange={tick("draft")} disabled={busy} />
+        <Checkbox label="Set to auto-merge" checked={value.autoMerge} onChange={tick("autoMerge")} disabled={busy || value.draft} />
+        <Checkbox label="Squash on auto-merge" checked={value.squash} onChange={tick("squash")} disabled={busy || !value.autoMerge} />
+        {kind.deletesSourceBranch && (
+          <Checkbox label="Delete source branch" checked={value.deleteSourceBranch} onChange={tick("deleteSourceBranch")} disabled={busy} />
+        )}
+      </div>
     </>
   );
 }
 
 /**
- * BRANCHES' pull or merge request: from the checked-out branch into the branch its `target`
- * names, said in the dialog, its title and description typed or suggested. The branch is pushed
+ * BRANCHES' pull or merge request: from the checked-out branch into a branch its `target` lists,
+ * picked in the dialog, its title and description typed or suggested. The branch is pushed
  * first where the remote lacks what it has; what refuses either stands in the dialog, but a push
  * wanting a login, which is asked once the dialog is gone (one question at a time), and the dialog
  * comes back with what was typed (`typed`). Once open, it is approved and set to auto-merge as the
@@ -144,7 +159,7 @@ export async function askChangeRequest(
   typed?: ChangeRequestInput,
   pushed = false,
 ): Promise<void> {
-  const { kind, into } = target;
+  const { kind } = target;
   // Told before the question: a text typed for one that is open already is typed for nothing.
   const found = await window.tet.repository.findChangeRequest(ref);
   if (!found.ok) {
@@ -163,7 +178,7 @@ export async function askChangeRequest(
   /** What Create ran into or opened, held for once the dialog is gone. */
   const outcome: {
     login?: { url: string; error: string; input: ChangeRequestInput };
-    created?: ChangeRequest & ChangeRequestFollowUps;
+    created?: ChangeRequest & ChangeRequestFollowUps & { into: string };
   } = {};
   const create = async (input: ChangeRequestInput) => {
     if (push) {
@@ -178,27 +193,33 @@ export async function askChangeRequest(
     }
     const created = await window.tet.repository.createChangeRequest(ref, input);
     if (created.ok) {
-      outcome.created = created;
+      outcome.created = { ...created, into: input.into };
     }
     return created;
   };
   await prompt<ChangeRequestInput>({
     title: changeRequestTitle(kind),
-    // The host's word is no name: only the branches are set apart.
+    // The host's word is no name: only the branch is set apart.
     detail: (
       <>
-        {capitalized(kind.noun)} {named`from ${state.head} into ${into}`}
+        {capitalized(kind.noun)} {named`from ${state.head}`}
       </>
     ),
-    value: typed ?? {
-      title: "",
-      description: "",
-      approve: kind.selfApproval && git.approveChangeRequest,
-      autoMerge: git.autoMergeChangeRequest,
-    },
+    value:
+      typed ??
+      applicable({
+        into: target.into,
+        title: "",
+        description: "",
+        approve: kind.selfApproval && git.approveChangeRequest,
+        draft: git.draftChangeRequest,
+        autoMerge: git.autoMergeChangeRequest,
+        squash: git.squashChangeRequest,
+        deleteSourceBranch: kind.deletesSourceBranch && git.deleteSourceBranchChangeRequest,
+      }),
     confirmLabel: "Create",
     ready: (value) => filled(value.title),
-    render: (fields) => <ChangeRequestFields at={ref} canSuggest={canSuggest} selfApproval={kind.selfApproval} {...fields} />,
+    render: (fields) => <ChangeRequestFields at={ref} target={target} canSuggest={canSuggest} {...fields} />,
     className: "change-request-dialog",
     abort: window.tet.repository.cancelSuggestion,
     submit: (value) => ask(() => create({ ...value, title: value.title.trim(), description: value.description.trim() })),
@@ -223,6 +244,8 @@ export async function askChangeRequest(
       created.approveError === undefined ? undefined : `Could not approve it: ${created.approveError}.`,
       created.autoMergeError === undefined ? undefined : `Could not set it to auto-merge: ${created.autoMergeError}.`,
     ].filter((sentence) => sentence !== undefined);
-    notify(missed.length > 0 ? "warning" : "info", [`Created ${kind.noun} ${link.label} into ${into}.`, ...missed].join(" "), { link });
+    notify(missed.length > 0 ? "warning" : "info", [`Created ${kind.noun} ${link.label} into ${created.into}.`, ...missed].join(" "), {
+      link,
+    });
   }
 }

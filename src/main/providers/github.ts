@@ -875,7 +875,7 @@ export const github: GitProvider = {
 
   ...fieldMethods({ graphql: sender, handlerOf: fieldHandlerOf, readTarget, mutate }),
 
-  changeRequest: { noun: "pull request", prefix: "#", selfApproval: false },
+  changeRequest: { noun: "pull request", prefix: "#", selfApproval: false, deletesSourceBranch: false },
 
   async findChangeRequest({ host, token, path }, head) {
     // `headRefName` matches a fork's branch of that name too, so its repository is read alongside.
@@ -895,7 +895,7 @@ export const github: GitProvider = {
     return ownPullRequest(data.repository.pullRequests.nodes, path);
   },
 
-  async createChangeRequest({ host, token, path }, { head, base, title, body }) {
+  async createChangeRequest({ host, token, path }, { head, base, title, body, draft }) {
     const send = sender(host, token);
     const { id } = await repositoryIds(send, path);
     const { pullRequest } = await mutate<{ pullRequest: { number: number; url: string } }>(
@@ -903,7 +903,7 @@ export const github: GitProvider = {
       {
         mutation: "createPullRequest",
         inputType: "CreatePullRequestInput",
-        input: { repositoryId: id, headRefName: head, baseRefName: base, title, body },
+        input: { repositoryId: id, headRefName: head, baseRefName: base, title, body, draft },
       },
       "pullRequest { number url }",
     );
@@ -914,7 +914,7 @@ export const github: GitProvider = {
     return Promise.reject(new Error("GitHub does not let a pull request's author approve it"));
   },
 
-  async autoMergeChangeRequest({ host, token, path }, number) {
+  async autoMergeChangeRequest({ host, token, path }, number, squash) {
     const send = sender(host, token);
     const query =
       "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }";
@@ -923,11 +923,10 @@ export const github: GitProvider = {
     if (!pullRequest) {
       throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
     }
-    // No merge method: GitHub's default merges, never squashes.
     await mutate(send, {
       mutation: "enablePullRequestAutoMerge",
       inputType: "EnablePullRequestAutoMergeInput",
-      input: { pullRequestId: pullRequest.id },
+      input: { pullRequestId: pullRequest.id, mergeMethod: squash ? "SQUASH" : "MERGE" },
     });
   },
 

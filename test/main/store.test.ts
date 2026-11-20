@@ -589,6 +589,9 @@ describe("the stores", () => {
       deleteWorktreeOnRemote: false,
       approveChangeRequest: false,
       autoMergeChangeRequest: false,
+      squashChangeRequest: false,
+      draftChangeRequest: false,
+      deleteSourceBranchChangeRequest: false,
     });
     assert.deepEqual(settings.environment, { encryptValues: true }, "encrypted unless unticked");
     fs.writeFileSync(file, JSON.stringify({ environment: { encryptValues: false } }));

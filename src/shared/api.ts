@@ -291,14 +291,14 @@ export interface TETApi {
      *  `suggestChangeRequest`) — its prompt's Cancel; one is up at a time. */
     cancelSuggestion: () => void;
     /** Where the checked-out branch's pull or merge request goes, read without asking the host;
-     *  why it has none — no remote on a host, no account there, no branch to merge into, nothing
-     *  new to merge. */
+     *  why it has none — no remote on a host, no account there, no branch to merge into. */
     changeRequestTarget: (ref: ProjectRef) => Promise<ChangeRequestTargetResult>;
     /** The checked-out branch's open pull or merge request, asked of its host. */
     findChangeRequest: (ref: ProjectRef) => Promise<ChangeRequestFindResult>;
     /** The settings' `prompts.commitSuggesters` suggest the title and description of the checked-out
-     *  branch's pull or merge request, in the shape of a commit message: the first line is the title. */
-    suggestChangeRequest: (ref: ProjectRef) => Promise<SuggestionResult>;
+     *  branch's pull or merge request into `into`, in the shape of a commit message: the first line is
+     *  the title. */
+    suggestChangeRequest: (ref: ProjectRef, into: string) => Promise<SuggestionResult>;
     /** Opens one from the checked-out branch, pushed by then. */
     createChangeRequest: (ref: ProjectRef, input: ChangeRequestInput) => Promise<ChangeRequestCreateResult>;
     /** Everything the changes list shows, untracked included. */

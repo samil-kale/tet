@@ -200,8 +200,8 @@ export function firstMark(marks: Iterable<string | undefined>): string | undefin
 }
 
 /**
- * The box a section's rows sit in: its label, the rows, and what adds one underneath — nothing for
- * rows that come from elsewhere. A section has rows to type into or none (`atLeastOne`); only one
+ * The box a section's rows sit in: its label with what adds one on its right — nothing for rows that
+ * come from elsewhere — and the rows. A section has rows to type into or none (`atLeastOne`); only one
  * whose rows a picker adds says when there are none. With `reorder`, its rows are dragged into
  * another order: `renderRow` hands each to its `EditRow`.
  */
@@ -241,12 +241,11 @@ export function RowSection<T extends { id: string }>({
     shownCount.current = rows.length;
   }, [rows.length]);
   return (
-    <FieldGroup label={label}>
+    <FieldGroup label={label} action={add}>
       <div ref={list} className="row-section-rows" {...(reorder ? drag.listProps : {})}>
         {rows.length === 0 && empty !== undefined && <p className="dialog-detail">{empty}</p>}
         {rows.map((row, index) => renderRow(row, reorder && { props: drag.rowProps(index), classes: drag.rowClasses(index) }))}
       </div>
-      {add}
     </FieldGroup>
   );
 }

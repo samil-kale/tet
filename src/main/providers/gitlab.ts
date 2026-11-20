@@ -904,7 +904,7 @@ export const gitlab: GitProvider = {
 
   confidentialIssues: true,
 
-  changeRequest: { noun: "merge request", prefix: "!", selfApproval: true },
+  changeRequest: { noun: "merge request", prefix: "!", selfApproval: true, deletesSourceBranch: true },
 
   async findChangeRequest({ host, token, path }, head) {
     // A project's merge requests are those into it; one from a fork names its own source project.
@@ -921,13 +921,20 @@ export const gitlab: GitProvider = {
     return ownMergeRequest(reached(data.project, path).mergeRequests.nodes, path);
   },
 
-  async createChangeRequest({ host, token, path }, { head, base, title, body }) {
+  async createChangeRequest({ host, token, path }, { head, base, title, body, draft, deleteSourceBranch }) {
     const { mergeRequest } = await mutate<{ mergeRequest: { iid: string; webUrl: string } | null }>(
       sender(host, token),
       {
         mutation: "mergeRequestCreate",
         inputType: "MergeRequestCreateInput",
-        input: { projectPath: path, sourceBranch: head, targetBranch: base, title, description: body },
+        input: {
+          projectPath: path,
+          sourceBranch: head,
+          targetBranch: base,
+          title: draft ? `Draft: ${title}` : title,
+          description: body,
+          removeSourceBranch: deleteSourceBranch,
+        },
       },
       "mergeRequest { iid webUrl }",
     );
@@ -951,14 +958,14 @@ export const gitlab: GitProvider = {
     void response.body?.cancel();
   },
 
-  async autoMergeChangeRequest({ host, token, path }, number) {
+  async autoMergeChangeRequest({ host, token, path }, number, squash) {
     const send = sender(host, token);
     // The commit it merges, which the mutation takes to refuse a branch pushed meanwhile.
     const { diffHeadSha } = await readMergeRequest<{ diffHeadSha: string | null }>(send, path, number, "diffHeadSha");
     await mutate(send, {
       mutation: "mergeRequestAccept",
       inputType: "MergeRequestAcceptInput",
-      input: { projectPath: path, iid: String(number), sha: diffHeadSha, strategy: "MERGE_WHEN_CHECKS_PASS" },
+      input: { projectPath: path, iid: String(number), sha: diffHeadSha, strategy: "MERGE_WHEN_CHECKS_PASS", squash },
     });
   },
 

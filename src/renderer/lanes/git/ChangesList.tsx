@@ -153,11 +153,6 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
           suggestion={
             canSuggest ? { label: "Suggest message", run: () => window.tet.repository.suggestCommitMessage(ref, paths) } : undefined
           }
-          beside={
-            pushLabel && (
-              <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />
-            )
-          }
           disabled={busy}
           multiline
           sizeKey="commit-message-height"
@@ -165,9 +160,9 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
           error={error}
           onSuggesting={hold}
         />
+        {pushLabel && <Checkbox label={pushLabel} checked={value.push} disabled={busy} onChange={(push) => onChange({ ...value, push })} />}
       </>
     ),
-    className: "commit-dialog",
     abort: window.tet.repository.cancelSuggestion,
     // What git refused — an empty commit, a hook's veto — at the message it was typed for. Not the
     // push: the commit stands, so the question is done, and a Commit again would commit twice.
