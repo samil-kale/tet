@@ -122,20 +122,20 @@
   --tet-terminal-selectionBackground: #a6d2ff;
   --tet-terminal-inactiveSelectionBackground: #a6d2ff80;
 
-  --tet-terminal-ansiBlack: #6e6e6e;
-  --tet-terminal-ansiRed: #d70000;
-  --tet-terminal-ansiGreen: #5f8700;
-  --tet-terminal-ansiYellow: #af8700;
-  --tet-terminal-ansiBlue: #0087ff;
-  --tet-terminal-ansiMagenta: #af005f;
-  --tet-terminal-ansiCyan: #00afaf;
-  --tet-terminal-ansiWhite: #e4e4e4;
-  --tet-terminal-ansiBrightBlack: #1c1c1c;
-  --tet-terminal-ansiBrightRed: #d75f00;
-  --tet-terminal-ansiBrightGreen: #585858;
-  --tet-terminal-ansiBrightYellow: #626262;
-  --tet-terminal-ansiBrightBlue: #808080;
-  --tet-terminal-ansiBrightMagenta: #5f5faf;
-  --tet-terminal-ansiBrightCyan: #8a8a8a;
-  --tet-terminal-ansiBrightWhite: #ffffd7;
+  --tet-terminal-ansiBlack: #000000;
+  --tet-terminal-ansiRed: #ce0505;
+  --tet-terminal-ansiGreen: #067d17;
+  --tet-terminal-ansiYellow: #b28c00;
+  --tet-terminal-ansiBlue: #063fdb;
+  --tet-terminal-ansiMagenta: #b309b3;
+  --tet-terminal-ansiCyan: #028e8e;
+  --tet-terminal-ansiWhite: #929292;
+  --tet-terminal-ansiBrightBlack: #656565;
+  --tet-terminal-ansiBrightRed: #ff1616;
+  --tet-terminal-ansiBrightGreen: #16b42c;
+  --tet-terminal-ansiBrightYellow: #ecc32c;
+  --tet-terminal-ansiBrightBlue: #2d61f0;
+  --tet-terminal-ansiBrightMagenta: #e617e6;
+  --tet-terminal-ansiBrightCyan: #15c1c1;
+  --tet-terminal-ansiBrightWhite: #c9c9c9;
 }
