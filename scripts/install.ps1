@@ -55,7 +55,9 @@
     # Invoke-WebRequest marks nothing as downloaded from the internet; a proxy or a policy might.
     Unblock-File -Path $zip
     $unpacked = Join-Path $tmp 'unpacked'
-    Expand-Archive -Path $zip -DestinationPath $unpacked
+    # Not Expand-Archive: its module differs between PowerShell versions in the .NET calls it makes.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::ExtractToDirectory($zip, $unpacked)
     $found = Get-ChildItem -Path $unpacked -Filter TET.exe -Recurse -Depth 1 | Select-Object -First 1
     if (-not $found) {
       throw "tet: no TET.exe in $asset"
