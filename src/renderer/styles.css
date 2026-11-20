@@ -1789,6 +1789,11 @@ textarea:focus,
   border-color: var(--tet-tab-activeBorder);
 }
 
+.tab:not(.active):hover,
+.switch-tab:not(.active):hover {
+  background: var(--tet-list-hoverBackground);
+}
+
 /* A pane the keyboard is not in outlines its active tab without the accent. */
 .pane:not(.focused) .tab.active {
   border-color: var(--tet-app-border);
@@ -3568,9 +3573,14 @@ textarea:focus,
   max-width: var(--popup-width);
 }
 
+.notices-center,
+.status-list {
+  border-color: var(--tet-app-border);
+}
+
 .status-list > .section-header,
 .notices-center > .section-header {
-  border-bottom: 1px solid var(--tet-menu-border);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
