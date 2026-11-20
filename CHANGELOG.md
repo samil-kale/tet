@@ -3,11 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
-## 0.26.0 (2026-11-19)
+## 0.26.1 (2026-11-20)
 
 - **Pull and merge requests.** The checked-out branch opens a pull or merge request from BRANCHES,
   into its base or else the default branch. TET pushes the branch first, and the text is typed or
-  suggested by an installed agent.
+  suggested by an installed agent. It can also approve the request, where the host lets its author,
+  and set it to auto-merge; the two checkboxes' defaults are in the Settings' Git tab.
 - **Renaming a branch renames its upstream.** A branch's rename can also rename it on the remote.
 - **Fixes.** Issue errors name the issue and its project.
 
