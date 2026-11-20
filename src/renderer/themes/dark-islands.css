@@ -1,0 +1,141 @@
+/*
+ * "Dark Islands": the Islands layout with Dracula's color palette (dracula-theme.theme-dracula,
+ * MIT). Values come from dark-dracula.css; the app/title-bar background is darkened so the rounded
+ * panels stand out as islands. See THEMES.md for the layer.
+ */
+:root[data-theme="dark-islands"] {
+  color-scheme: dark;
+
+  --tet-foreground: #f8f8f2;
+  --tet-descriptionForeground: #f8f8f2b3;
+  --tet-errorForeground: #ff5555;
+  --tet-textLink-foreground: #3794ff;
+  --tet-textLink-activeForeground: #3794ff;
+  --tet-textPreformat-foreground: #d7ba7d;
+  --tet-textPreformat-background: #ffffff1a;
+  --tet-textBlockQuote-background: #222222;
+  --tet-textBlockQuote-border: #007acc80;
+  --tet-textCodeBlock-background: #0a0a0a66;
+  --tet-focusBorder: #bd93f9;
+  --tet-sash-hoverBorder: #6272a4;
+
+  --tet-editor-background: #282a36;
+  --tet-editor-foreground: #f8f8f2;
+  --tet-terminal-background: #282a36;
+  --tet-terminal-foreground: #f8f8f2;
+
+  /* Dracula's tool-window background; the app frame is one step darker so the panels float. */
+  --tet-lane-background: #21222c;
+  --tet-sectionHeader-foreground: #f8f8f2;
+  --tet-titleBar-activeBackground: #1a1b23;
+  --tet-titleBar-activeForeground: #f8f8f2;
+
+  --tet-app-background: #1a1b23;
+  --tet-app-border: #191a21;
+
+  --tet-tab-activeBackground: #282a36;
+  /* TET underlines the active tab in Dracula's own mark colour. */
+  --tet-tab-activeBorder: #ff79c680;
+  --tet-tab-activeForeground: #f8f8f2;
+  --tet-tab-inactiveBackground: #21222c;
+  --tet-tab-inactiveForeground: #6272a4;
+  --tet-tab-border: #191a21;
+
+  /* TET's own, the same as Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #5a5d5e50;
+
+  --tet-list-activeSelectionBackground: #44475a;
+  --tet-list-activeSelectionForeground: #f8f8f2;
+  --tet-list-hoverBackground: #44475a75;
+
+  --tet-input-background: #343746;
+  --tet-input-foreground: #f8f8f2;
+  --tet-input-border: #191a21;
+  --tet-input-placeholderForeground: #f8f8f299;
+
+  --tet-radio-activeForeground: #ffffff;
+  --tet-radio-activeBackground: #6272a466;
+  --tet-radio-activeBorder: #bd93f9;
+  --tet-radio-inactiveForeground: #f8f8f2;
+  --tet-radio-inactiveHoverBackground: #6272a44d;
+
+  --tet-button-background: #44475a;
+  --tet-button-foreground: #f8f8f2;
+  --tet-button-border: #00000000;
+  --tet-button-hoverBackground: #52556c;
+  --tet-button-secondaryBackground: #343746;
+  --tet-button-secondaryForeground: #f8f8f2;
+  --tet-button-secondaryHoverBackground: #3e4254;
+
+  --tet-popup-background: #343746;
+  --tet-popup-shadow: #0000005c;
+
+  --tet-menu-background: #343746;
+  --tet-menu-foreground: #f8f8f2;
+  --tet-menu-border: #191a21;
+  --tet-menu-selectionBackground: #44475a;
+  --tet-menu-selectionForeground: #f8f8f2;
+  --tet-menu-separatorBackground: #191a21;
+
+  --tet-progressBar-background: #ff79c6;
+
+  --tet-noticeErrorIcon-foreground: #ff5555;
+  --tet-noticeWarningIcon-foreground: #8be9fd;
+  --tet-noticeInfoIcon-foreground: #3794ff;
+
+  --tet-scrollbarSlider-background: #79797966;
+  --tet-scrollbarSlider-hoverBackground: #646464b3;
+  --tet-scrollbarSlider-activeBackground: #bfbfbf66;
+
+  --tet-gitDecoration-modifiedResourceForeground: #8be9fd;
+  --tet-gitDecoration-deletedResourceForeground: #ff5555;
+  --tet-gitDecoration-untrackedResourceForeground: #50fa7b;
+  --tet-gitDecoration-addedResourceForeground: #81b88b;
+  --tet-gitDecoration-conflictingResourceForeground: #ffb86c;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #3794ff;
+  --tet-graph-remoteRefColor: #b180d7;
+  --tet-graph-baseRefColor: #ea5c00;
+
+  --tet-diffEditor-insertedLineBackground: #9bb95533;
+  --tet-diffEditor-removedLineBackground: #ff000033;
+  --tet-diffEditor-insertedTextBackground: #50fa7b20;
+  --tet-diffEditor-removedTextBackground: #ff555550;
+  --tet-diffEditorOverview-insertedForeground: #50fa7b80;
+  --tet-diffEditorOverview-removedForeground: #ff555580;
+  --tet-editorLineNumber-foreground: #6272a4;
+  --tet-editorLineNumber-activeForeground: #c6c6c6;
+  --tet-editorCursor-foreground: #aeafad;
+  --tet-editor-selectionBackground: #44475a;
+  --tet-editor-inactiveSelectionBackground: #44475a80;
+  --tet-editor-lineHighlightBorder: #44475a;
+  --tet-editor-findMatchBackground: #ffb86c80;
+  --tet-editor-findMatchHighlightBackground: #ffffff40;
+  --tet-editorIndentGuide-background1: #ffffff1a;
+  --tet-editorIndentGuide-activeBackground1: #ffffff45;
+
+  --tet-terminalCursor-foreground: #f8f8f2;
+  --tet-terminal-selectionBackground: #44475a;
+  --tet-terminal-inactiveSelectionBackground: #44475a80;
+
+  --tet-terminal-ansiBlack: #21222c;
+  --tet-terminal-ansiRed: #ff5555;
+  --tet-terminal-ansiGreen: #50fa7b;
+  --tet-terminal-ansiYellow: #f1fa8c;
+  --tet-terminal-ansiBlue: #bd93f9;
+  --tet-terminal-ansiMagenta: #ff79c6;
+  --tet-terminal-ansiCyan: #8be9fd;
+  --tet-terminal-ansiWhite: #f8f8f2;
+  --tet-terminal-ansiBrightBlack: #6272a4;
+  --tet-terminal-ansiBrightRed: #ff6e6e;
+  --tet-terminal-ansiBrightGreen: #69ff94;
+  --tet-terminal-ansiBrightYellow: #ffffa5;
+  --tet-terminal-ansiBrightBlue: #d6acff;
+  --tet-terminal-ansiBrightMagenta: #ff92df;
+  --tet-terminal-ansiBrightCyan: #a4ffff;
+  --tet-terminal-ansiBrightWhite: #ffffff;
+}

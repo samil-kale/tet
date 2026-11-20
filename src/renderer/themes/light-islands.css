@@ -1,0 +1,141 @@
+/*
+ * "Light Islands": the Light variant of kern0x1b's vscode-intellij-theme (MIT), itself inspired
+ * by IntelliJ IDEA's Islands color scheme. Values come from light-islands.json beside this file:
+ * the theme file with its semantic* keys removed. See THEMES.md for the layer.
+ */
+:root[data-theme="light-islands"] {
+  color-scheme: light;
+
+  --tet-foreground: #080808;
+  --tet-descriptionForeground: #6c707e;
+  --tet-errorForeground: #de1b2e;
+  --tet-textLink-foreground: #006dcc;
+  --tet-textLink-activeForeground: #006dcc;
+  --tet-textPreformat-foreground: #0033b3;
+  --tet-textPreformat-background: #f3f3f4;
+  --tet-textBlockQuote-background: #ffffff;
+  --tet-textBlockQuote-border: #0033b3;
+  --tet-textCodeBlock-background: #f3f3f4;
+  --tet-focusBorder: #0033b3;
+  --tet-sash-hoverBorder: #0033b3;
+
+  --tet-editor-background: #ffffff;
+  --tet-editor-foreground: #080808;
+  --tet-terminal-background: #ffffff;
+  --tet-terminal-foreground: #080808;
+
+  /* The lane and editor sit as rounded islands over this slightly greyer frame. */
+  --tet-lane-background: #ffffff;
+  --tet-sectionHeader-foreground: #6c707e;
+  --tet-titleBar-activeBackground: #f2f4f7;
+  --tet-titleBar-activeForeground: #080808;
+
+  --tet-app-background: #f2f4f7;
+  --tet-app-border: #ebecf0;
+
+  --tet-tab-activeBackground: #e1eaff;
+  /* TET underlines the active tab in the accent, not in the theme's tab.activeBorder. */
+  --tet-tab-activeBorder: #0033b3;
+  --tet-tab-activeForeground: #080808;
+  --tet-tab-inactiveBackground: #ffffff;
+  --tet-tab-inactiveForeground: #6c707e;
+  --tet-tab-border: #ebecf0;
+
+  /* TET's own, the same as Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #5a5d5e50;
+
+  --tet-list-activeSelectionBackground: #d5e1ff;
+  --tet-list-activeSelectionForeground: #080808;
+  --tet-list-hoverBackground: #ebecf0;
+
+  --tet-input-background: #ffffff;
+  --tet-input-foreground: #080808;
+  --tet-input-border: #ebecf0;
+  --tet-input-placeholderForeground: #aeb3c2;
+
+  --tet-radio-activeForeground: #080808;
+  --tet-radio-activeBackground: #d5e1ff;
+  --tet-radio-activeBorder: #0033b3;
+  --tet-radio-inactiveForeground: #080808;
+  --tet-radio-inactiveHoverBackground: #b8b8b850;
+
+  --tet-button-background: #0033b3;
+  --tet-button-foreground: #ffffff;
+  --tet-button-border: #00000000;
+  --tet-button-hoverBackground: #0043d3;
+  --tet-button-secondaryBackground: #d5e1ff;
+  --tet-button-secondaryForeground: #0033b3;
+  --tet-button-secondaryHoverBackground: #c9dafb;
+
+  --tet-popup-background: #ffffff;
+  --tet-popup-shadow: #00000029;
+
+  --tet-menu-background: #ffffff;
+  --tet-menu-foreground: #080808;
+  --tet-menu-border: #00000000;
+  --tet-menu-selectionBackground: #d5e1ff;
+  --tet-menu-selectionForeground: #080808;
+  --tet-menu-separatorBackground: #dfe1e5;
+
+  --tet-progressBar-background: #0033b3;
+
+  --tet-noticeErrorIcon-foreground: #de1b2e;
+  --tet-noticeWarningIcon-foreground: #8c4f00;
+  --tet-noticeInfoIcon-foreground: #0033b3;
+
+  --tet-scrollbarSlider-background: #aeb3c240;
+  --tet-scrollbarSlider-hoverBackground: #aeb3c280;
+  --tet-scrollbarSlider-activeBackground: #767a8a80;
+
+  --tet-gitDecoration-modifiedResourceForeground: #0033b3;
+  --tet-gitDecoration-deletedResourceForeground: #6c707e;
+  --tet-gitDecoration-untrackedResourceForeground: #b23247;
+  --tet-gitDecoration-addedResourceForeground: #067d17;
+  --tet-gitDecoration-conflictingResourceForeground: #de1b2e;
+  --tet-graph-foreground1: #ffb000;
+  --tet-graph-foreground2: #dc267f;
+  --tet-graph-foreground3: #994f00;
+  --tet-graph-foreground4: #40b0a6;
+  --tet-graph-foreground5: #b66dff;
+  --tet-graph-refColor: #1a85ff;
+  --tet-graph-remoteRefColor: #652d90;
+  --tet-graph-baseRefColor: #ea5c00;
+
+  --tet-diffEditor-insertedLineBackground: #7fc78422;
+  --tet-diffEditor-removedLineBackground: #de1b2e22;
+  --tet-diffEditor-insertedTextBackground: #7fc78433;
+  --tet-diffEditor-removedTextBackground: #de1b2e33;
+  --tet-diffEditorOverview-insertedForeground: #7fc784;
+  --tet-diffEditorOverview-removedForeground: #de1b2e;
+  --tet-editorLineNumber-foreground: #aeb3c2;
+  --tet-editorLineNumber-activeForeground: #767a8a;
+  --tet-editorCursor-foreground: #080808;
+  --tet-editor-selectionBackground: #a6d2ff;
+  --tet-editor-inactiveSelectionBackground: #a6d2ff80;
+  --tet-editor-lineHighlightBorder: #f5f8fe;
+  --tet-editor-findMatchBackground: #fcd47e;
+  --tet-editor-findMatchHighlightBackground: #fcd47eaa;
+  --tet-editorIndentGuide-background1: #ebecf0;
+  --tet-editorIndentGuide-activeBackground1: #aeb3c2;
+
+  --tet-terminalCursor-foreground: #080808;
+  --tet-terminal-selectionBackground: #a6d2ff;
+  --tet-terminal-inactiveSelectionBackground: #a6d2ff80;
+
+  --tet-terminal-ansiBlack: #080808;
+  --tet-terminal-ansiRed: #de1b2e;
+  --tet-terminal-ansiGreen: #067d17;
+  --tet-terminal-ansiYellow: #9e880d;
+  --tet-terminal-ansiBlue: #0033b3;
+  --tet-terminal-ansiMagenta: #871094;
+  --tet-terminal-ansiCyan: #007e8a;
+  --tet-terminal-ansiWhite: #ffffff;
+  --tet-terminal-ansiBrightBlack: #6c707e;
+  --tet-terminal-ansiBrightRed: #f05661;
+  --tet-terminal-ansiBrightGreen: #7fc784;
+  --tet-terminal-ansiBrightYellow: #f2bf57;
+  --tet-terminal-ansiBrightBlue: #88adf7;
+  --tet-terminal-ansiBrightMagenta: #a678f2;
+  --tet-terminal-ansiBrightCyan: #00b5bc;
+  --tet-terminal-ansiBrightWhite: #ffffff;
+}

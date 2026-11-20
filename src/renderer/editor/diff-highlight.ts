@@ -27,6 +27,7 @@ const THEME_MODULES: Record<ThemeDefinition["shikiTheme"], () => Promise<{ defau
   "dark-slate": jsonTheme(() => import("../themes/dark-slate.json")),
   "dark-intellij": jsonTheme(() => import("../themes/dark-intellij.json")),
   "light-intellij": jsonTheme(() => import("../themes/light-intellij.json")),
+  "light-islands": jsonTheme(() => import("../themes/light-islands.json")),
   "light-gameboy": jsonTheme(() => import("../themes/light-gameboy.json")),
   "dark-claude": jsonTheme(() => import("../themes/dark-claude.json")),
   "light-claude": jsonTheme(() => import("../themes/light-claude.json")),
