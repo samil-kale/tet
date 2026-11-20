@@ -45,7 +45,7 @@
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #6e768166;
+  --tet-list-activeSelectionBackground: #19345e;
   --tet-list-activeSelectionForeground: #e6edf3;
   --tet-list-hoverBackground: #6e76811a;
 
@@ -77,8 +77,6 @@
   --tet-menu-background: #161b22;
   --tet-menu-foreground: #e6edf3;
   --tet-menu-border: #30363d;
-  --tet-menu-selectionBackground: #6e768166;
-  --tet-menu-selectionForeground: #e6edf3;
   --tet-menu-separatorBackground: #30363d;
 
   --tet-progressBar-background: #1f6feb;

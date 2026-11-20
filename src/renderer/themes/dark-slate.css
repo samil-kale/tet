@@ -49,7 +49,7 @@
 
   /* A selected row takes a neutral lift, not a blue; the blue-tinted #273a50 is the badge
      background and serves as the text selection below. */
-  --tet-list-activeSelectionBackground: #232830;
+  --tet-list-activeSelectionBackground: #38516d;
   --tet-list-activeSelectionForeground: #dde2e9;
   --tet-list-hoverBackground: #1f232b;
 
@@ -83,8 +83,6 @@
   --tet-menu-background: #2a2d35;
   --tet-menu-foreground: #dde2e9;
   --tet-menu-border: #2a2d35;
-  --tet-menu-selectionBackground: #273a50;
-  --tet-menu-selectionForeground: #dde2e9;
   --tet-menu-separatorBackground: #2a2d35;
 
   --tet-progressBar-background: #58a6f0;

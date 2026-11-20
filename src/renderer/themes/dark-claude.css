@@ -52,7 +52,7 @@
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
   /* Not the theme's #3e3e38 and #c3c1ba: claude.ai's selected sidebar row — as the menu's. */
-  --tet-list-activeSelectionBackground: #343434;
+  --tet-list-activeSelectionBackground: #3e3e38;
   --tet-list-activeSelectionForeground: #f0efec;
   --tet-list-hoverBackground: #303030;
 
@@ -84,8 +84,6 @@
   --tet-menu-background: #2a2a2a;
   --tet-menu-foreground: #c3c1ba;
   --tet-menu-border: #ffffff1a;
-  --tet-menu-selectionBackground: #343434;
-  --tet-menu-selectionForeground: #f0efec;
   --tet-menu-separatorBackground: #ffffff1a;
 
   --tet-progressBar-background: #d87757;

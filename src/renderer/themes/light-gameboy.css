@@ -78,8 +78,6 @@
   --tet-menu-background: #c4bebb;
   --tet-menu-foreground: #272929;
   --tet-menu-border: #494786;
-  --tet-menu-selectionBackground: #494786;
-  --tet-menu-selectionForeground: #c4bebb;
   --tet-menu-separatorBackground: #49478633;
 
   /* Not the registry's blue, which the theme leaves unset: the theme's accent, as Dark Modern's

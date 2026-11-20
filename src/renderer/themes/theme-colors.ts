@@ -118,8 +118,6 @@ const MONACO_CSS_VARS: Record<string, string> = {
   "menu.background": "--tet-menu-background",
   "menu.foreground": "--tet-menu-foreground",
   "menu.border": "--tet-menu-border",
-  "menu.selectionBackground": "--tet-menu-selectionBackground",
-  "menu.selectionForeground": "--tet-menu-selectionForeground",
   "menu.separatorBackground": "--tet-menu-separatorBackground",
   "list.hoverBackground": "--tet-list-hoverBackground",
   "list.activeSelectionBackground": "--tet-list-activeSelectionBackground",

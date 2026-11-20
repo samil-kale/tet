@@ -1924,7 +1924,7 @@ textarea:focus,
   width: max-content;
   /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
   overflow: hidden;
-  padding: var(--menu-padding) 0;
+  padding: var(--menu-padding);
   font-size: var(--tet-font-size);
   /* Drawn inside its button's parent, a bold title for one. */
   font-weight: normal;
@@ -1940,7 +1940,9 @@ textarea:focus,
   align-items: center;
   gap: 6px;
   height: var(--popup-row-height);
-  padding: 0 15px;
+  padding: 0 12px;
+  /* As a section's rows (`.tree-row`): its hover and selection are rounded, inside the box's inset. */
+  border-radius: var(--border-radius);
 }
 
 .context-menu-item,
@@ -1954,8 +1956,8 @@ textarea:focus,
 
 .context-menu-item:not(.disabled):hover,
 .context-menu-item.open {
-  background: var(--tet-menu-selectionBackground);
-  color: var(--tet-menu-selectionForeground);
+  background: var(--tet-list-activeSelectionBackground);
+  color: var(--tet-list-activeSelectionForeground);
 }
 
 /* A name inside a sentence (`named`), in a menu entry and in a question alike: set apart by the
@@ -2047,8 +2049,8 @@ textarea:focus,
 .context-menu-header {
   position: sticky;
   top: calc(-1 * var(--menu-padding));
-  margin-top: calc(-1 * var(--menu-padding));
-  padding-top: var(--menu-padding);
+  margin: calc(-1 * var(--menu-padding)) calc(-1 * var(--menu-padding)) 0;
+  padding: var(--menu-padding) var(--menu-padding) 0;
   z-index: 1;
   background: var(--tet-menu-background);
 }
@@ -3575,6 +3577,7 @@ textarea:focus,
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
 .popup-items {
   overflow-y: auto;
+  padding: var(--menu-padding);
   border-radius: 0 0 calc(var(--border-radius) - 1px) calc(var(--border-radius) - 1px);
 }
 
@@ -3588,7 +3591,7 @@ textarea:focus,
   width: auto;
   padding: 4px 6px 4px 10px;
   border: none;
-  border-radius: 0;
+  border-radius: var(--border-radius);
 }
 
 /* What was listed when the center opened comes with the center itself. */
