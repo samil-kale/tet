@@ -3,6 +3,14 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.26.4 (2026-11-20)
+
+- **Islands look.** Sections and panes are rounded islands on a common ground, and section titles are
+  capitalized. Fields are drawn in the app border and the terminal shares the editor's background in
+  every theme.
+- **Themes.** The Modern themes are restyled to the Islands look and renamed after VS Code, the
+  IntelliJ and Modern light themes have updated terminal colors, and the GameBoy theme is replaced.
+
 ## 0.26.3 (2026-11-20)
 
 - **Change request options.** The change request dialog picks its target branch among the remote's
