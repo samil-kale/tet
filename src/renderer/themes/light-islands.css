@@ -102,11 +102,12 @@
   --tet-graph-baseRefColor: #ea5c00;
 
   --tet-diffEditor-insertedLineBackground: #7fc78422;
-  --tet-diffEditor-removedLineBackground: #de1b2e22;
+  /* IntelliJ removes rows in the diff with pale blue, not red. */
+  --tet-diffEditor-removedLineBackground: #3b82f622;
   --tet-diffEditor-insertedTextBackground: #7fc78433;
-  --tet-diffEditor-removedTextBackground: #de1b2e33;
+  --tet-diffEditor-removedTextBackground: #3b82f633;
   --tet-diffEditorOverview-insertedForeground: #7fc784;
-  --tet-diffEditorOverview-removedForeground: #de1b2e;
+  --tet-diffEditorOverview-removedForeground: #3b82f6;
   --tet-editorLineNumber-foreground: #aeb3c2;
   --tet-editorLineNumber-activeForeground: #767a8a;
   --tet-editorCursor-foreground: #080808;

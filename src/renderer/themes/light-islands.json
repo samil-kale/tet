@@ -633,7 +633,7 @@
         "meta.method.identifier entity.name.function"
       ],
       "settings": {
-        "foreground": "#00627A"
+        "foreground": "#080808"
       }
     },
     {
@@ -643,7 +643,7 @@
         "meta.method.declaration entity.name.function"
       ],
       "settings": {
-        "foreground": "#00627A"
+        "foreground": "#080808"
       }
     },
     {
@@ -1425,7 +1425,7 @@
         "entity.name.package.go"
       ],
       "settings": {
-        "foreground": "#805900"
+        "foreground": "#080808"
       }
     },
     {
@@ -1444,7 +1444,7 @@
         "support.function.go"
       ],
       "settings": {
-        "foreground": "#286D73"
+        "foreground": "#080808"
       }
     },
     {
@@ -1455,7 +1455,7 @@
         "storage.type.go"
       ],
       "settings": {
-        "foreground": "#336ECC"
+        "foreground": "#080808"
       }
     },
     {
