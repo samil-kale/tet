@@ -8,7 +8,7 @@ export interface ThemeDefinition {
   /** Without "Dark"/"Light": the dialog lists a kind's themes under that kind. */
   label: string;
   /** Token colors: Dark/Light Modern `include` Dark+/Light+; Dark Slate's is TET's own
-   *  (src/renderer/themes/dark-slate.json), the IntelliJ, GameBoy and Claude themes' their
+   *  (src/renderer/themes/dark-slate.json), the IntelliJ and Claude themes' their
    *  extensions', beside it. */
   shikiTheme:
     | "dark-plus"
@@ -20,7 +20,6 @@ export interface ThemeDefinition {
     | "dracula"
     | "dark-claude"
     | "light-intellij"
-    | "light-gameboy"
     | "light-claude";
   /** VS Code's theme `type`; also Claude Code's `theme` and pi's `--use-theme` value. */
   kind: "dark" | "light";
@@ -110,7 +109,7 @@ export const THEMES: ThemeDefinition[] = [
     label: "GitHub",
     shikiTheme: "github-light-default",
     kind: "light",
-    windowBackground: "#ffffff",
+    windowBackground: "#f6f8fa",
     titleBarSymbolColor: "#656d76",
     terminalBackground: "#ffffff",
     terminalForeground: "#1f2328",
@@ -120,20 +119,10 @@ export const THEMES: ThemeDefinition[] = [
     label: "IntelliJ",
     shikiTheme: "light-intellij",
     kind: "light",
-    windowBackground: "#27282e",
-    titleBarSymbolColor: "#e7ebed",
+    windowBackground: "#e9eaee",
+    titleBarSymbolColor: "#000000",
     terminalBackground: "#ffffff",
     terminalForeground: "#000000",
-  },
-  {
-    id: "light-gameboy",
-    label: "GameBoy",
-    shikiTheme: "light-gameboy",
-    kind: "light",
-    windowBackground: "#c4bebb",
-    titleBarSymbolColor: "#494786",
-    terminalBackground: "#c0d297",
-    terminalForeground: "#0f380f",
   },
   {
     id: "light-claude",

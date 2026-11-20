@@ -1,85 +1,84 @@
 /*
- * "Light IntelliJ": the Light variant of compassak.intellij-idea-new-ui (MIT, Ananda Bibek Ray),
- * with its dark title bar. Values, token colors included, come from light-intellij.json beside this
- * file: the extension's theme file as it ships, renamed and stripped of its comments and its
- * semantic* keys. See THEMES.md for the layer. The theme sets few colors. Exception: the secondary
- * button's hover, marked where it stands.
+ * "Light IntelliJ": IntelliJ's own Islands Light (`ManyIslandsLight.theme.json`, Apache-2.0,
+ * JetBrains): its layers, accents and selections. Token colors come from light-intellij.json beside
+ * this file, the Light variant of compassak.intellij-idea-new-ui (MIT, Ananda Bibek Ray) as it
+ * ships, renamed and stripped of its comments and its semantic* keys. See THEMES.md for the layer.
  */
 :root[data-theme="light-intellij"] {
   color-scheme: light;
 
-  --tet-foreground: #616161;
-  --tet-descriptionForeground: #717171;
-  --tet-errorForeground: #a1260d;
-  --tet-textLink-foreground: #006ab1;
-  --tet-textLink-activeForeground: #006ab1;
+  --tet-foreground: #000000;
+  --tet-descriptionForeground: #73767c;
+  --tet-errorForeground: #c54e58;
+  --tet-textLink-foreground: #2f5eb9;
+  --tet-textLink-activeForeground: #2f5eb9;
   --tet-textPreformat-foreground: #a31515;
   --tet-textPreformat-background: #0000001a;
   --tet-textBlockQuote-background: #f2f2f2;
   --tet-textBlockQuote-border: #007acc80;
   --tet-textCodeBlock-background: #dcdcdc66;
-  --tet-focusBorder: #aeb3c2;
-  --tet-sash-hoverBorder: #aeb3c2;
+  --tet-focusBorder: #3871e1;
+  --tet-sash-hoverBorder: #3871e1;
 
   --tet-editor-background: #ffffff;
-  --tet-editor-foreground: #000000;
+  --tet-editor-foreground: #080808;
   --tet-terminal-background: #ffffff;
-  --tet-terminal-foreground: #000000;
+  --tet-terminal-foreground: #080808;
 
   --tet-sectionHeader-foreground: #000000;
-  --tet-titleBar-activeBackground: #27282e;
-  --tet-titleBar-activeForeground: #e7ebed;
+  --tet-titleBar-activeBackground: #e9eaee;
+  --tet-titleBar-activeForeground: #000000;
 
-  --tet-app-background: #f7f8fa;
-  --tet-app-border: #ebecf0;
+  --tet-app-background: #e9eaee;
+  --tet-app-border: #dddfe4;
 
-  --tet-tab-activeBackground: #f9fef9;
-  /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
-  --tet-tab-activeBorder: #aeb3c2;
+  --tet-tab-activeBackground: #e3ebfe;
+  /* TET outlines the active tab in the accent, not in the theme's tab.selected.border.active. */
+  --tet-tab-activeBorder: #3871e1;
   --tet-tab-activeForeground: #000000;
-  --tet-tab-inactiveForeground: #777777;
+  --tet-tab-inactiveForeground: #5f6269;
 
   /* TET's own, the same as Dark Modern's — see the note there. */
   --tet-toolbar-hoverBackground: #5a5d5e50;
 
-  --tet-list-activeSelectionBackground: #cfdefc;
+  --tet-list-activeSelectionBackground: #d0dffe;
   --tet-list-activeSelectionForeground: #000000;
-  --tet-list-hoverBackground: #dfdfdf;
+  --tet-list-hoverBackground: #00000008;
 
   --tet-input-background: #ffffff;
-  --tet-input-foreground: #616161;
-  --tet-input-border: #ebecf0;
-  --tet-input-placeholderForeground: #61616180;
+  --tet-input-foreground: #000000;
+  --tet-input-border: #d1d3d9;
+  --tet-input-placeholderForeground: #9fa2a8;
 
   --tet-radio-activeForeground: #000000;
-  --tet-radio-activeBackground: #aeb3c233;
-  --tet-radio-activeBorder: #007acc;
-  --tet-radio-inactiveForeground: #616161;
-  --tet-radio-inactiveHoverBackground: #b8b8b850;
+  --tet-radio-activeBackground: #d0dffe;
+  --tet-radio-activeBorder: #3871e1;
+  --tet-radio-inactiveForeground: #5f6269;
+  --tet-radio-inactiveHoverBackground: #00000012;
 
-  --tet-button-background: #007acc;
+  --tet-button-background: #3871e1;
   --tet-button-foreground: #ffffff;
   --tet-button-border: #00000000;
-  --tet-button-hoverBackground: #0062a3;
-  --tet-button-secondaryBackground: #dfdfdf;
-  --tet-button-secondaryForeground: #616161;
-  /* Not the registry's lighten(0.2), which is white and lightens the button into the dialog
-     behind it: the list hover darkened by the step Light Modern's secondary button takes. */
-  --tet-button-secondaryHoverBackground: #c6c6c6;
+  --tet-button-hoverBackground: #2f5eb9;
+  --tet-button-secondaryBackground: #e9eaee;
+  --tet-button-secondaryForeground: #000000;
+  /* Not the theme's white with a border: TET's secondary button has no border, so it takes the
+     ground's color, its hover the step beyond. */
+  --tet-button-secondaryHoverBackground: #dddfe4;
 
-  --tet-popup-background: #f7f8fa;
+  --tet-popup-background: #f7f8f9;
   --tet-popup-shadow: #00000029;
 
-  --tet-menu-background: #f7f8fa;
-  --tet-menu-foreground: #616161;
-  --tet-menu-border: #ebecf0;
-  --tet-menu-separatorBackground: #61616133;
+  --tet-menu-background: #ffffff;
+  --tet-menu-foreground: #000000;
+  --tet-menu-border: #d1d3d9;
+  --tet-menu-separatorBackground: #e9eaee;
 
-  --tet-progressBar-background: #0e70c0;
+  --tet-progressBar-background: #3871e1;
 
-  --tet-noticeErrorIcon-foreground: #e51400;
-  --tet-noticeWarningIcon-foreground: #bf8803;
-  --tet-noticeInfoIcon-foreground: #0063d3;
+  --tet-noticeErrorIcon-foreground: #e4656e;
+  --tet-noticeWarningIcon-foreground: #c28013;
+  --tet-noticeInfoIcon-foreground: #3871e1;
 
   --tet-scrollbarSlider-background: #3a3a3a33;
   --tet-scrollbarSlider-hoverBackground: #646464b3;

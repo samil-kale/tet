@@ -26,7 +26,8 @@
   --tet-terminal-foreground: #1f2328;
 
   --tet-sectionHeader-foreground: #1f2328;
-  --tet-titleBar-activeBackground: #ffffff;
+  /* Not the theme's #ffffff: the title bar sits on the ground, app.background. */
+  --tet-titleBar-activeBackground: #f6f8fa;
   --tet-titleBar-activeForeground: #656d76;
 
   --tet-app-background: #f6f8fa;

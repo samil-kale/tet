@@ -846,7 +846,6 @@ describe("tet-ctl against the control server", () => {
       "light-modern:light",
       "light-github:light",
       "light-intellij:light",
-      "light-gameboy:light",
       "light-claude:light",
     ]);
   });

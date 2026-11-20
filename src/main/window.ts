@@ -18,8 +18,6 @@ const OUTPUT_FLUSH_MS = 8;
 const RENDERER_REBUILD_GAP_MS = 60_000;
 /** A question's wait for the window: one in its requirements check or reloading never answers. */
 const WINDOW_ANSWER_TIMEOUT_MS = 2000;
-/** Written `#00000000`, not `transparent`: Electron's color parser. */
-const TRANSPARENT = "#00000000";
 
 export interface AppWindowDeps {
   /** For tests run locally (test/helpers/): the window is drawn but never shown. */
@@ -208,8 +206,9 @@ export class AppWindow {
       return;
     }
     this.theme = theme;
+    window.setBackgroundColor(theme.windowBackground);
     if (PLATFORM.titleBarOverlay) {
-      window.setTitleBarOverlay({ color: TRANSPARENT, symbolColor: theme.titleBarSymbolColor });
+      window.setTitleBarOverlay({ color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor });
     }
     this.send("app:theme", theme.id);
   }
@@ -228,13 +227,9 @@ export class AppWindow {
       // title and branch bars); below this something clips.
       minWidth: 800,
       minHeight: 340,
-      // The ground (--tet-app-ground) is drawn by the page, translucent, so the window itself paints
-      // nothing before the first frame and nothing under the overlay: what shows through is the
-      // platform's (`groundShowsThrough`).
-      backgroundColor: TRANSPARENT,
-      ...(PLATFORM.groundShowsThrough === "backgroundMaterial" ? { backgroundMaterial: "acrylic" as const } : {}),
-      ...(PLATFORM.groundShowsThrough === "vibrancy" ? { vibrancy: "under-window" as const } : {}),
-      ...(PLATFORM.groundShowsThrough === "transparentWindow" ? { transparent: true } : {}),
+      // Painted before the first frame in the title bar's color, since the window controls overlay
+      // shows at once. Equals --tet-titleBar-activeBackground and --tet-app-background.
+      backgroundColor: theme.windowBackground,
       show: false,
       // Windows takes the .ico (generated from icon.png), Linux a plain image; macOS reads the app
       // bundle.
@@ -243,7 +238,7 @@ export class AppWindow {
       titleBarStyle: PLATFORM.titleBarOverlay ? "hidden" : "hiddenInset",
       titleBarOverlay:
         // Height must match the renderer's .titlebar rule, or controls and drag region disagree.
-        PLATFORM.titleBarOverlay ? { color: TRANSPARENT, symbolColor: theme.titleBarSymbolColor, height: 40 } : undefined,
+        PLATFORM.titleBarOverlay ? { color: theme.windowBackground, symbolColor: theme.titleBarSymbolColor, height: 40 } : undefined,
       webPreferences: {
         preload: path.join(__dirname, "preload.js"),
         contextIsolation: true,

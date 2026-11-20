@@ -45,15 +45,13 @@ body,
   margin: 0;
 }
 
-/* The window's ground, which the islands stand on: it fills the window before the views draw, and
-   lets the platform's backdrop show through (window.ts). Only the ground is translucent: the
-   islands and every use of --tet-app-background as a line or card fill stay opaque. */
+/* The window's ground, which the islands stand on: it fills the window before the views draw,
+   matching BrowserWindow's backgroundColor in window.ts. */
 body {
-  --tet-app-ground: color-mix(in srgb, var(--tet-app-background) 70%, transparent);
   font-family: var(--tet-font-family);
   font-size: var(--tet-font-size);
   color: var(--tet-foreground);
-  background: var(--tet-app-ground);
+  background: var(--tet-app-background);
   overflow: hidden;
   user-select: none;
 }
@@ -1838,7 +1836,7 @@ textarea:focus,
 /* On the active tab or row's selection background, else in the mark's own colour. */
 .tab.active .tab-mark:not(.tab-mark-error),
 .list-row.active .tab-mark:not(.tab-mark-error) {
-  color: var(--tet-tabMark-activeForeground, var(--tet-tabMark-foreground, var(--tet-focusBorder)));
+  color: var(--tet-tabMark-foreground, var(--tet-focusBorder));
 }
 
 /* Not a fourth turn state: red is the one colour Dark Modern names for this meaning. */
