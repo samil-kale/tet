@@ -26,7 +26,8 @@
   --tet-titleBar-activeForeground: #606060;
 
   --tet-app-background: #fafafd;
-  --tet-app-border: #f0f1f2;
+  /* Not the theme's #f0f1f2 (panel.border): its input.border, #d8d8d866, made opaque. */
+  --tet-app-border: #d8d8d8;
 
   --tet-tab-activeBackground: #ffffff;
   /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
@@ -34,8 +35,8 @@
   --tet-tab-activeForeground: #202020;
   --tet-tab-inactiveForeground: #606060;
 
-  /* TET's own, the same as Dark Modern's — see the note there. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #0000001f;
 
   /* Not the theme's #00000025, a grey: the accent at 20% on the editor — as the other themes tint
      their selection. */
@@ -45,7 +46,6 @@
 
   --tet-input-background: #ffffff;
   --tet-input-foreground: #202020;
-  --tet-input-border: #d8d8d866;
   --tet-input-placeholderForeground: #999999;
 
   --tet-radio-activeForeground: #000000;

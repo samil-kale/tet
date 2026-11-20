@@ -27,8 +27,9 @@
   /* Not the theme's #21222c, darker than the editor: the islands' ground stands lighter than them
      (THEMES.md) — the theme's activity bar. */
   --tet-app-background: #343746;
-  /* The theme's is #bd93f9, which TET would draw along every edge; the theme's other border. */
-  --tet-app-border: #191a21;
+  /* Not the theme's #bd93f9, which TET would draw along every edge: the theme's selection grey, its
+     input's border here. */
+  --tet-app-border: #44475a;
 
   --tet-tab-activeBackground: #282a36;
   /* TET outlines the active tab in the theme's own mark colour, its tab.activeBorderTop. */
@@ -36,18 +37,17 @@
   --tet-tab-activeForeground: #f8f8f2;
   --tet-tab-inactiveForeground: #6272a4;
 
-  /* TET's own, the same as Dark Modern's — see the note there. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #f8f8f233;
 
   --tet-list-activeSelectionBackground: #424962;
   --tet-list-activeSelectionForeground: #f8f8f2;
   --tet-list-hoverBackground: #44475a75;
 
-  --tet-input-background: #282a36;
+  /* Not the theme's #282a36, same as the dialog's ground (the terminal's), which leaves the input
+     unseen but for its border: the theme's own BGLight, its dropdown and menu background. */
+  --tet-input-background: #343746;
   --tet-input-foreground: #f8f8f2;
-  /* Not the theme's #191a21, which vanishes on the same-colored ground the input stands on: the
-     theme's own selection grey. */
-  --tet-input-border: #44475a;
   /* Not the theme's #6272a4, Dracula's own comment tint: it reads as a different color from the
      filter icon beside it, drawn from foreground at the same opacity. */
   --tet-input-placeholderForeground: #f8f8f299;

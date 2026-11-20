@@ -76,7 +76,7 @@ button:focus-visible {
 }
 
 /* One box for fields and dropdowns: a dropdown looks like a field but for its chevron. One
-   variable for every field's background and border alike, input.background and input.border. */
+   variable for every field's background, `--tet-app-border` for its border. */
 input,
 textarea,
 .code-field,
@@ -87,7 +87,7 @@ textarea,
   padding: 3px 6px;
   color: var(--tet-input-foreground);
   background: var(--tet-input-background);
-  border: 1px solid var(--tet-input-border);
+  border: 1px solid var(--tet-app-border);
 }
 
 input[type="text"],
@@ -208,7 +208,7 @@ textarea:focus,
   /* The fields' own background and border, so the group reads as one of them: VS Code's registry
      has no `radio.inactiveBackground`/`radio.inactiveBorder` of its own. */
   background: var(--tet-input-background);
-  border: 1px solid var(--tet-input-border);
+  border: 1px solid var(--tet-app-border);
 }
 
 .radio-option:first-child {
@@ -533,7 +533,7 @@ textarea:focus,
   gap: 8px;
   height: 29px;
   flex: none;
-  padding: 0 8px 1px;
+  padding: 3px 8px 3px;
   font-size: var(--small-font-size);
   --icon-size: 13px;
 }
@@ -1426,7 +1426,7 @@ textarea:focus,
 .issue-box-preview {
   min-height: var(--text-box-height);
   overflow-y: auto;
-  border: 1px solid var(--tet-input-border);
+  border: 1px solid var(--tet-app-border);
   border-radius: var(--border-radius);
   background: var(--tet-input-background);
 }
@@ -2711,13 +2711,13 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid var(--tet-input-border);
+  border: 1px solid var(--tet-app-border);
   border-top: none;
   padding: 4px;
 }
 
 .edit-row:first-child {
-  border-top: 1px solid var(--tet-input-border);
+  border-top: 1px solid var(--tet-app-border);
   border-top-left-radius: var(--border-radius);
   border-top-right-radius: var(--border-radius);
 }
@@ -3074,14 +3074,14 @@ textarea:focus,
   appearance: none;
   padding: 0;
   background: var(--tet-settings-checkboxBackground, var(--tet-input-background));
-  border: 1px solid var(--tet-settings-checkboxBorder, var(--tet-input-border));
+  border: 1px solid var(--tet-settings-checkboxBorder, var(--tet-app-border));
   border-radius: var(--checkbox-radius);
   cursor: pointer;
 }
 
 /* Not the fields' focus border on a click: only the keyboard's, as a button's. */
 .dialog-checkbox input:focus {
-  border-color: var(--tet-settings-checkboxBorder, var(--tet-input-border));
+  border-color: var(--tet-settings-checkboxBorder, var(--tet-app-border));
 }
 
 .dialog-checkbox input:focus-visible {

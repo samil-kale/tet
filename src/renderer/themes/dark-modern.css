@@ -26,7 +26,8 @@
   --tet-titleBar-activeForeground: #8c8c8c;
 
   --tet-app-background: #191a1b;
-  --tet-app-border: #2a2b2c;
+  /* Not the theme's #2a2b2c (panel.border): its input.border. */
+  --tet-app-border: #333536;
 
   --tet-tab-activeBackground: #121314;
   /* TET outlines the active tab in the accent, not in the theme's tab.activeBorder. */
@@ -35,8 +36,9 @@
   --tet-tab-inactiveForeground: #8c8c8c;
 
   /* Translucent on purpose: an action button sits on rows, on a selected row's blue and on
-     plain bars, and only a translucent hover reads on all of them. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+     plain bars, and only a translucent hover reads on all of them. The theme's foreground at 20%
+     (12% in a light theme), or its own translucent value where it sets one. */
+  --tet-toolbar-hoverBackground: #bfbfbf33;
 
   /* Not the theme's #ffffff22, a grey: the accent, #3994bc, at 30% on the editor — as the other
      themes tint their selection. */
@@ -46,7 +48,6 @@
 
   --tet-input-background: #191a1b;
   --tet-input-foreground: #bfbfbf;
-  --tet-input-border: #333536;
   --tet-input-placeholderForeground: #555555;
 
   --tet-radio-activeForeground: #ffffff;

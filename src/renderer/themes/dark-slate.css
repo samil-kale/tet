@@ -40,8 +40,8 @@
   --tet-tab-activeForeground: #dde2e9;
   --tet-tab-inactiveForeground: #7b8391;
 
-  /* TET's own, the same as Dark Modern's — see the note there. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #dde2e933;
 
   /* A selected row takes a neutral lift, not a blue; the blue-tinted #273a50 is the badge
      background and serves as the text selection below. */
@@ -53,7 +53,6 @@
      background (#1b1f27) to read as a field. The list's active selection instead. */
   --tet-input-background: #232830;
   --tet-input-foreground: #dde2e9;
-  --tet-input-border: #2a2d35;
   --tet-input-placeholderForeground: #7b8391;
 
   --tet-radio-activeForeground: #ffffff;

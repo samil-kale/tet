@@ -37,18 +37,17 @@
   /* TET's own: the working, waiting and finished marks in the progress bar's blue. */
   --tet-tabMark-foreground: #0969da;
 
-  /* TET's own, the same as Dark Modern's — see the note there. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #1f23281f;
 
-  /* Not the theme's #afb8c133, translucent: github.com's selected sidebar row, made opaque. */
-  --tet-list-activeSelectionBackground: #eceef0;
+  /* Not the theme's #afb8c133: github.com's own, Primer's control.transparent.bgColor.selected. */
+  --tet-list-activeSelectionBackground: #818b9826;
   --tet-list-activeSelectionForeground: #1f2328;
-  /* The theme's #eaeef280 made opaque: at half alpha it is invisible on the #f6f8fa side bar. */
-  --tet-list-hoverBackground: #eaeef2;
+  /* Not the theme's #eaeef280: Primer's control.transparent.bgColor.hover. */
+  --tet-list-hoverBackground: #818b981a;
 
   --tet-input-background: #ffffff;
   --tet-input-foreground: #1f2328;
-  --tet-input-border: #d0d7de;
   --tet-input-placeholderForeground: #6e7781;
 
   --tet-radio-activeForeground: #000000;

@@ -35,7 +35,7 @@ name:
 | --------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `navigationBar.*`, `navigationBarBadge.*`, `navigationBarTop.*` | `activityBar.*`, `activityBarBadge.*`, `activityBarTop.*`          |
 | `app.background`                                                | `sideBar.background`                                               |
-| `app.border`                                                    | `panel.border`                                                     |
+| `app.border`                                                    | `input.border` (`panel.border` where that shows on the ground)     |
 | `sectionHeader.foreground`                                      | `sideBarSectionHeader.foreground`                                  |
 | `popup.background`                                              | `editorWidget.background`                                          |
 | `popup.shadow`                                                  | `widget.shadow`                                                    |
@@ -61,7 +61,7 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
 | ------------------------------------------ | ---------------------------------------------------- | ----------------- |
 | `--tet-tabMark-foreground`                 | `--tet-focusBorder`                                  | Dark/Light GitHub |
 | `--tet-settings-checkboxBackground`        | `--tet-input-background`                             | Dark IntelliJ     |
-| `--tet-settings-checkboxBorder`            | `--tet-input-border`                                 | Dark IntelliJ     |
+| `--tet-settings-checkboxBorder`            | `--tet-app-border`                                   | Dark IntelliJ     |
 | `--tet-settings-checkboxForeground`        | `--tet-input-foreground`                             | Dark IntelliJ     |
 
 ## From a VS Code theme to a TET theme
@@ -78,17 +78,20 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
    registry under the theme's kind (its `dark:` or `light:` branch), never eyeballed: a default
    naming another id is that id's value in the same theme, a transform (`transparent`, `lighten`,
    `darken`) is applied to it, and a border it leaves to `contrastBorder` is `#00000000`.
-4. **Set TET's own values**, alike in every theme:
-   - `toolbar.hoverBackground` is `#5a5d5e50`, Dark Modern's: an action button sits on rows, on a
-     selected row and on plain bars, and only this translucent grey reads on all of them.
+4. **Set TET's own values**:
+   - `toolbar.hoverBackground` is the theme's `foreground` at 20% (12% in a light theme), or the
+     theme's own translucent value where it sets one: an action button sits on rows, on a selected
+     row and on plain bars, and only a translucent hover reads on all of them.
    - `tab.activeBorder` is the accent, `focusBorder`, unless the theme has a mark color of its own
      (`tab.activeBorderTop`).
    - There is no `titleBar.activeBackground`: the title bar row is part of the ground, so
      `app.background` paints it (`titleBar.activeForeground` is the theme's).
-   - `app.background` and `app.border` are `sideBar.background` and `panel.border`; a theme whose
-     values don't fit (the layer above) deviates by step 5.
+   - `app.background` and `app.border` are `sideBar.background` and `input.border`, the one border
+     that shows on the ground, in an island and around a field alike (there is no `--tet-input-border`:
+     a field's border is `app.border`); a theme whose values don't fit (the layer above) deviates by
+     step 5.
    - There is no `terminal.background` (the layer above), no `menu.selection*` (a menu's selected
-     row is drawn in `list.activeSelection*`) and no `sash.hoverBorder` (a sash hovers in
+     row is drawn in `list.activeSelection*`), no `sash.hoverBorder` (a sash hovers in
      `focusBorder`): a theme's values for them are dropped.
    - What step 3 reads from the registry as another id follows that id as the theme sets it, so
      after taking over a theme's `focusBorder` or `errorForeground`, look at every variable the

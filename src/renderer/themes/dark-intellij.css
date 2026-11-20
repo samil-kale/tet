@@ -39,8 +39,8 @@
   --tet-tab-activeForeground: #dfe1e5;
   --tet-tab-inactiveForeground: #bbbdc0;
 
-  /* TET's own, the same as Dark Modern's — see the note there. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #cccccc33;
 
   --tet-list-activeSelectionBackground: #2e436e;
   --tet-list-activeSelectionForeground: #dfe1e5;
@@ -48,7 +48,6 @@
 
   --tet-input-background: #1e1f22;
   --tet-input-foreground: #dfe1e5;
-  --tet-input-border: #393b40;
   --tet-input-placeholderForeground: #cccccc80;
 
   /* Its own filled, accent checkbox (checkbox.background/Border), not a plain field's. */

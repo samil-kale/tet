@@ -106,7 +106,7 @@ export function buildShikiColors(): Record<string, string> {
 const MONACO_CSS_VARS: Record<string, string> = {
   "input.background": "--tet-input-background",
   "input.foreground": "--tet-input-foreground",
-  "input.border": "--tet-input-border",
+  "input.border": "--tet-app-border",
   "input.placeholderForeground": "--tet-input-placeholderForeground",
   focusBorder: "--tet-focusBorder",
   // The find widget's Aa/ab/.* toggles: an action button's hover grey, not monaco's `#007ACC`.

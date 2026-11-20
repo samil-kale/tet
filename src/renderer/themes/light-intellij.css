@@ -35,8 +35,8 @@
   --tet-tab-activeForeground: #000000;
   --tet-tab-inactiveForeground: #5f6269;
 
-  /* TET's own, the same as Dark Modern's — see the note there. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #0000001f;
 
   --tet-list-activeSelectionBackground: #d0dffe;
   --tet-list-activeSelectionForeground: #000000;
@@ -44,7 +44,6 @@
 
   --tet-input-background: #ffffff;
   --tet-input-foreground: #000000;
-  --tet-input-border: #d1d3d9;
   --tet-input-placeholderForeground: #9fa2a8;
 
   --tet-radio-activeForeground: #000000;

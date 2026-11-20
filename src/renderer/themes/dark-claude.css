@@ -44,9 +44,8 @@
   /* Not the theme's #51504a, unreadable on the darker sidebar surface: claude.ai's dimmed text. */
   --tet-tab-inactiveForeground: #898781;
 
-  /* TET's own, the same as Dark Modern's — see the note there; not the theme's #303030, the one
-     hover grey every TET theme shares. */
-  --tet-toolbar-hoverBackground: #5a5d5e50;
+  /* As Dark Modern's — see the note there. */
+  --tet-toolbar-hoverBackground: #c3c1ba33;
 
   /* Not the theme's #3e3e38 and #c3c1ba: claude.ai's selected sidebar row — as the menu's. */
   --tet-list-activeSelectionBackground: #3e3e38;
@@ -57,7 +56,6 @@
      the checkbox, the widgets, the menu and the notifications below. */
   --tet-input-background: #20201f;
   --tet-input-foreground: #c3c1ba;
-  --tet-input-border: #ffffff1a;
   /* Not the theme's #51504a: claude.ai's dimmed text. */
   --tet-input-placeholderForeground: #898781;
 
