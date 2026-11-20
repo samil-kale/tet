@@ -137,6 +137,8 @@ const SPAWN_SITES = [
   "src/main/agents/codex/app-server-client.ts",
   // The updater: the new binary by its absolute path, detached to outlive tet.
   "src/main/update/auto-update.ts",
+  // The updater's one read of the process table, by the shell's absolute name, once tet has quit.
+  "src/cli/tet-update.ts",
 ];
 
 /** The window runs in Chromium: node is main's, reached through TETApi. */
@@ -396,8 +398,10 @@ export default tseslint.config(
             // A regex, since glob negation does not take a `..` segment: anything one or two
             // levels up that is not `shared`, or one of the util/ files above.
             {
-              regex: "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/(linked-git-dir|host-platform|path-inside|utility-host)$)",
-              message: "Only src/shared, this folder and util/'s linked-git-dir, host-platform, path-inside and utility-host.",
+              regex:
+                "^\\.\\./(?!shared(/|$))(?!\\.\\./shared(/|$))(?!util/(linked-git-dir|host-platform|path-inside|utility-host)$)(?!main/util/host-platform$)",
+              message:
+                "Only src/shared, this folder and util/'s linked-git-dir, host-platform, path-inside and utility-host (the CLI: main/util/host-platform).",
             },
           ],
         },

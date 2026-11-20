@@ -1,6 +1,8 @@
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import writeFileAtomic from "write-file-atomic";
+import { PLATFORM } from "../main/util/host-platform";
 import { errorMessage } from "../shared/errors";
 import { processAlive, runningUpdater, updateLockPath } from "../shared/release";
 import type { UpdateResult } from "../shared/release";
@@ -43,6 +45,56 @@ function retried(action: () => void): void {
   }
 }
 
+interface RunningProgram {
+  pid: number;
+  executable: string;
+}
+
+const PROCESS_TABLE_TIMEOUT_MS = 20_000;
+
+/**
+ * The programs running from inside `root`, read from the process table as JSON; none where a
+ * running program does not lock its folder, or where the table cannot be read.
+ */
+function runningIn(root: string): RunningProgram[] {
+  if (!PLATFORM.locksRunningPrograms) {
+    return [];
+  }
+  const script =
+    "ConvertTo-Json -Compress -InputObject @(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath } | " +
+    "ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; executable = $_.ExecutablePath } })";
+  let rows: RunningProgram[];
+  try {
+    const output = execFileSync(PLATFORM.shellExecutable(process.env), PLATFORM.shellCommandArgs(script), {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: PROCESS_TABLE_TIMEOUT_MS,
+    });
+    rows = JSON.parse(output) as RunningProgram[];
+  } catch {
+    return [];
+  }
+  const inside = (file: string): boolean => {
+    const relative = path.relative(
+      PLATFORM.pathsIgnoreCase ? root.toLowerCase() : root,
+      PLATFORM.pathsIgnoreCase ? file.toLowerCase() : file,
+    );
+    return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+  };
+  return rows.filter((row) => row.pid !== process.pid && inside(row.executable));
+}
+
+/** Ends what runs from inside `root`, so nothing holds a file of the folder about to be renamed. */
+function endRunningIn(root: string): void {
+  for (const { pid } of runningIn(root)) {
+    try {
+      process.kill(pid);
+    } catch {
+      // Gone already, or not ours to end: the rename's own retries and its error say what is left.
+    }
+  }
+}
+
 /** Written beside and renamed into place: the app may be starting and reading it. */
 function writeResult(file: string, result: UpdateResult): void {
   writeFileAtomic.sync(file, JSON.stringify(result));
@@ -73,13 +125,19 @@ function install(pid: number, version: string, root: string, resultFile: string,
   const old = `${root}.old`;
   try {
     fs.rmSync(old, { recursive: true, force: true });
+    endRunningIn(root);
     retried(() => fs.renameSync(root, old));
   } catch (error) {
     fs.rmSync(fresh, { recursive: true, force: true });
+    const holders = runningIn(root)
+      .map(({ pid, executable }) => `${pid} ${executable}`)
+      .join("\n");
     writeResult(resultFile, {
       version,
       ok: false,
-      output: `could not move ${root} aside within ${RETRY_WINDOW_MS / 1000}s: ${errorMessage(error)}`,
+      output:
+        `could not move ${root} aside within ${RETRY_WINDOW_MS / 1000}s: ${errorMessage(error)}` +
+        (holders ? `\nstill running from it:\n${holders}` : ""),
     });
     return;
   }

@@ -26,6 +26,9 @@ export interface Platform {
   readonly spawnsThroughCmd: boolean;
   /** A started program is ended with its children through `taskkill /T` (killProcessTree). */
   readonly killsWithTaskkill: boolean;
+  /** A folder cannot be renamed while a program runs from inside it, as on win32: the updater ends
+   *  those programs first and names the ones left when the rename still fails (tet-update.ts). */
+  readonly locksRunningPrograms: boolean;
   /** The agents' install folders are known up front; elsewhere the login shell's PATH is read
    *  (agent-path.ts). */
   readonly agentDirsKnown: boolean;
@@ -147,6 +150,7 @@ export const WINDOWS: Platform = {
   executableByExtension: true,
   spawnsThroughCmd: true,
   killsWithTaskkill: true,
+  locksRunningPrograms: true,
   agentDirsKnown: true,
   cmdLauncher: true,
   posixShell: false,
@@ -197,6 +201,7 @@ export const MAC: Platform = {
   executableByExtension: false,
   spawnsThroughCmd: false,
   killsWithTaskkill: false,
+  locksRunningPrograms: false,
   agentDirsKnown: false,
   cmdLauncher: false,
   posixShell: true,
@@ -245,6 +250,7 @@ export const LINUX: Platform = {
   executableByExtension: false,
   spawnsThroughCmd: false,
   killsWithTaskkill: false,
+  locksRunningPrograms: false,
   agentDirsKnown: false,
   cmdLauncher: false,
   posixShell: true,
