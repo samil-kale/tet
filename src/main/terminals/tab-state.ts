@@ -155,7 +155,13 @@ export function answersQuestion(data: string): boolean {
 }
 
 /** `starting` comes from the caller's `indicators`, `sandboxed` from its `placeOf`. */
-export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolean, issue: number | undefined): TabDescriptor {
+export function toDescriptor(
+  tab: TabState,
+  starting: boolean,
+  sandboxed: boolean,
+  issue: number | undefined,
+  changeRequest?: number,
+): TabDescriptor {
   const { tabId, agentId, title, updatedAt, createdAt, status, sessionId, finishedAt, inTurn, waitingAt, command, openedInTerminal } = tab;
   return {
     tabId,
@@ -174,6 +180,7 @@ export function toDescriptor(tab: TabState, starting: boolean, sandboxed: boolea
     command,
     openedInTerminal,
     issue,
+    changeRequest,
   };
 }
 

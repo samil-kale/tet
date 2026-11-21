@@ -51,7 +51,7 @@ export function useEditorOpening(
   const openEditor = useCallback(
     (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
       const refKey = refKeyOf(ref);
-      const open = editorTabsRef.current[refKey]?.find((tab) => showsSame(tab, { path, commit: how.commit, issue: how.issue }));
+      const open = editorTabsRef.current[refKey]?.find((tab) => showsSame(tab, { path, commit: how.commit, issue: how.issue, changeRequest: how.changeRequest }));
       const preview = how.keep ? undefined : previewEditorTab(ref);
       let tabId: string;
       if (open) {
@@ -74,7 +74,7 @@ export function useEditorOpening(
         setEditorTabs((current) => ({
           ...current,
           [refKey]: (current[refKey] ?? []).map((tab) =>
-            tab.tabId === tabId ? { ...tab, path, commit: how.commit, issue: how.issue } : tab,
+            tab.tabId === tabId ? { ...tab, path, commit: how.commit, issue: how.issue, changeRequest: how.changeRequest } : tab,
           ),
         }));
       } else {
@@ -82,7 +82,7 @@ export function useEditorOpening(
         openEditorFile(ref, tabId, path, how.keep !== true, how);
         setEditorTabs((current) => ({
           ...current,
-          [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit, issue: how.issue }],
+          [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit, issue: how.issue, changeRequest: how.changeRequest }],
         }));
       }
       if (!how.background) {
@@ -96,11 +96,11 @@ export function useEditorOpening(
   // A file or issue the control channel asked for, brought to front unless in the background.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ ref, path, keep, background, issue }) => {
+      window.tet.repository.onOpenEditor(({ ref, path, keep, background, issue, changeRequest }) => {
         if (!background) {
           activateRef(refKeyOf(ref));
         }
-        openEditor(ref, path, { keep, background, issue });
+        openEditor(ref, path, { keep, background, issue, changeRequest });
       }),
     [openEditor, activateRef],
   );

@@ -8,7 +8,7 @@ import { CONTROL_ENV } from "../shared/ctl";
 import { RELEASES_URL } from "../shared/release";
 import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
-import { issueFileName } from "../shared/types/providers";
+import { changeRequestFileName, issueFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
@@ -70,6 +70,25 @@ import type { TerminalEnv } from "./terminals/pty";
 import { accountEnv, sandboxTetValues } from "./terminals/account-env";
 import { ensureAskpass } from "./git/askpass";
 import { trackerAccount, type TabAccount } from "./providers/issues";
+import { ChangeRequestWatch } from "./change-requests/watch";
+import {
+  approveChangeRequest,
+  changeRequestFieldOptions,
+  changeRequestFilterOptions,
+  changeRequestSessions,
+  commentChangeRequest,
+  deleteChangeRequestComment,
+  editChangeRequestComment,
+  latestChangeRequests,
+  listChangeRequests,
+  markChangeRequestsSeen,
+  mergeChangeRequest,
+  readChangeRequest,
+  sendChangeRequestToAgent,
+  setChangeRequestField,
+  unreadChangeRequests,
+  updateChangeRequest,
+} from "./change-requests/tracker";
 import { dropOuterKept } from "./store/env-names";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
@@ -370,6 +389,25 @@ async function startControl(): Promise<void> {
           send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
         sendIssueToAgent: (ref, number, agentId, sandboxOnly) => sendIssueToAgent(issueDeps, ref, number, agentId, sandboxOnly),
         issueSession: (projectId, number) => issueSessions(issueDeps, projectId)[number],
+        listChangeRequests: async (projectId, filter) => (await listChangeRequests(issueDeps, projectId, filter)).changeRequests,
+        latestChangeRequests: (projectId, filter) => latestChangeRequests(issueDeps, projectId, filter),
+        changeRequestFilterOptions: (projectId) => changeRequestFilterOptions(issueDeps, projectId),
+        readChangeRequest: (projectId, number) => readChangeRequest(issueDeps, projectId, number),
+        unreadChangeRequests: (projectId) => unreadChangeRequests(issueDeps, projectId),
+        markChangeRequestsSeen: (projectId, number) => markChangeRequestsSeen(issueDeps, projectId, number),
+        changeRequestFieldOptions: (projectId, number, fieldId) => changeRequestFieldOptions(issueDeps, projectId, number, fieldId),
+        setChangeRequestField: (projectId, number, fieldId, value) => setChangeRequestField(issueDeps, projectId, number, fieldId, value),
+        updateChangeRequest: (projectId, number, change) => updateChangeRequest(issueDeps, projectId, number, change),
+        commentChangeRequest: (projectId, number, body) => commentChangeRequest(issueDeps, projectId, number, body),
+        editChangeRequestComment: (projectId, id, body) => editChangeRequestComment(issueDeps, projectId, id, body),
+        deleteChangeRequestComment: (projectId, id) => deleteChangeRequestComment(issueDeps, projectId, id),
+        approveChangeRequest: (projectId, number) => approveChangeRequest(issueDeps, projectId, number),
+        mergeChangeRequest: (projectId, number, whenChecksPass) => mergeChangeRequest(issueDeps, projectId, number, whenChecksPass),
+        openChangeRequest: (ref, number, keep, background) =>
+          send("editor:open", { ref, path: changeRequestFileName(number), keep, background, changeRequest: number }),
+        sendChangeRequestToAgent: (ref, number, agentId, sandboxOnly) =>
+          sendChangeRequestToAgent(issueDeps, ref, number, agentId, sandboxOnly),
+        changeRequestSession: (projectId, number) => changeRequestSessions(issueDeps, projectId)[number],
         shutdown,
         records,
         projectRefPath: (ref) => {
@@ -398,6 +436,8 @@ async function startControl(): Promise<void> {
 const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
 
 const issueDeps: IssueDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
+/** Tells of new change requests and failed checks of the account's (watch.ts). */
+const changeRequestWatch = new ChangeRequestWatch(issueDeps, (found) => send("app:notice", found));
 
 function createWindow(): void {
   appWindow.create(currentTheme(settings));
@@ -472,6 +512,7 @@ if (!app.requestSingleInstanceLock()) {
     await pathReady;
     startGitProcess();
     startAutoUpdate(installed, releasesUrl, dataRoot, notice, appWindow.noticeProgress);
+    changeRequestWatch.start();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

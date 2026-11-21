@@ -55,8 +55,9 @@ function withPath(host: string, rawPath: string): { host: string; path: string }
   return path === "" ? undefined : { host: host.toLowerCase(), path };
 }
 
-/** The repository's first remote that has a url, which its tracker is reached through. */
-async function trackerRemote(repository: IssueRepository): Promise<{ host: string; path: string }> {
+/** The repository's first remote that has a url, which its tracker and its change requests are reached
+ *  through. */
+export async function trackerRemote(repository: IssueRepository): Promise<{ host: string; path: string }> {
   await repository.started();
   const url = repository.getState().remotes.find((remote) => remote.url !== undefined)?.url;
   const remote = url === undefined ? undefined : parseRemoteUrl(url);

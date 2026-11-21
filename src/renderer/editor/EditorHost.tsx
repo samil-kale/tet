@@ -1,9 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { ImageView } from "./ImageView";
-import { IssueView, type IssueActions } from "./IssueView";
+import { changeRequestOf, IssueView, trackedNoun, type IssueActions } from "./IssueView";
 import { isMarkdown } from "./diff-highlight";
 import {
+  approveChangeRequest,
   attachEditor,
   attachMarkdownPreview,
   commentOnIssue,
@@ -22,7 +23,9 @@ import {
   issueProjectOf,
   loadIssueImage,
   markIssueSeen,
+  mergeChangeRequest,
   openIssueFile,
+  openLinkedIssue,
   openIssueLink,
   sendTabIssueToAgent,
   previewWithheld,
@@ -38,8 +41,8 @@ import {
   uploadIssueFile,
   type EditorSnapshot,
 } from "./editor-views";
-import { isEditorTabId } from "./editor-tab";
-import { useIssueSessions } from "./use-issue-sessions";
+import { isEditorTabId, trackedOf } from "./editor-tab";
+import { useTrackedSessions } from "./use-tracked-sessions";
 import { IconButton } from "../ui/IconButton";
 import {
   BookOpenIcon,
@@ -67,6 +70,17 @@ const preview = (snapshot: EditorSnapshot): boolean => snapshot.preview;
 /** Whether the tab is the preview tab — the tab strip's italics. */
 export function useEditorPreview(tabId: string): boolean {
   return useEditorStore(tabId, preview);
+}
+
+/** A change request's tab's name once it read what its host calls one, "Pull Request #142"; undefined
+ *  for any other tab, and before. */
+function trackedLabel(snapshot: EditorSnapshot): string | undefined {
+  const detail = snapshot.issueDetail;
+  return detail && changeRequestOf(detail) ? `${trackedNoun(detail)} ${changeRequestOf(detail)?.kind.prefix ?? "#"}${detail.number}` : undefined;
+}
+
+export function useTrackedLabel(tabId: string): string | undefined {
+  return useEditorStore(tabId, trackedLabel);
 }
 
 /**
@@ -97,7 +111,9 @@ interface EditorHostProps {
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
   const snapshot = useEditorStore(tabId, whole);
-  const { path, issue, issueDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
+  const { path, issue, changeRequest, issueDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } =
+    snapshot;
+  const tracked = trackedOf({ issue, changeRequest });
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const markdownPreviewFrame = useRef<HTMLDivElement>(null);
@@ -150,17 +166,19 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     }
   };
 
-  // An issue on screen counts as seen with what the tab has read of it: a later change on the tracker
-  // marks it in the Issues section, one made from this tab, once read back, does not.
+  // An issue or change request on screen counts as seen with what the tab has read of it: a later
+  // change on the host marks it in its section, one made from this tab, once read back, does not. A
+  // change request's checks that changed are read as a change too.
   const updatedAt = issueDetail?.updatedAt;
+  const checks = issueDetail && "status" in issueDetail ? (issueDetail as { status: { checks?: string } }).status.checks : undefined;
   useEffect(() => {
-    if (issue !== undefined && updatedAt !== undefined && visible && active) {
+    if (tracked !== undefined && updatedAt !== undefined && visible && active) {
       markIssueSeen(tabId);
     }
-  }, [tabId, issue, updatedAt, visible, active]);
+  }, [tabId, tracked?.kind, tracked?.number, updatedAt, checks, visible, active]);
 
-  const issueSessions = useIssueSessions(issue === undefined ? undefined : issueProjectOf(tabId));
-  const issueSession = issue === undefined ? undefined : issueSessions[issue];
+  const trackedSessions = useTrackedSessions(tracked?.kind ?? "issue", tracked === undefined ? undefined : issueProjectOf(tabId));
+  const issueSession = tracked === undefined ? undefined : trackedSessions[tracked.number];
 
   const issueActions = useMemo<IssueActions>(
     () => ({
@@ -178,14 +196,19 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
       editField: (fieldId, value) => editIssueField(tabId, fieldId, value),
       upload: (file) => uploadIssueFile(tabId, file),
       sendToAgent: (agentId) => sendTabIssueToAgent(tabId, agentId),
+      approve: () => approveChangeRequest(tabId),
+      merge: (whenChecksPass) => mergeChangeRequest(tabId, whenChecksPass),
+      openIssue: (number) => openLinkedIssue(tabId, number),
     }),
     [tabId],
   );
 
-  if (issue !== undefined) {
+  if (tracked !== undefined) {
     return (
       <div className={`editor-tab${active ? "" : " hidden"}`}>
-        {kind === "error" && <div className="placeholder">Could not read the issue.</div>}
+        {kind === "error" && (
+          <div className="placeholder">Could not read the {tracked.kind === "issue" ? "issue" : "change request"}.</div>
+        )}
         {issueDetail && <IssueView issue={issueDetail} session={issueSession} actions={issueActions} />}
       </div>
     );

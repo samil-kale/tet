@@ -16,7 +16,7 @@ import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
 import { onDisk } from "./util/path-inside";
 import { forgetArchived } from "./store/archive";
-import { forgetIssueSessionsAt } from "./store/issue-sessions";
+import { forgetSessionLinksAt } from "./store/session-links";
 import { newWorktreeKey, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./store/project-dirs";
 import { removeRefSandboxes } from "./sbx/sbx";
 import { releaseDropped } from "./sbx/sbx-mounts";
@@ -223,7 +223,7 @@ async function deleteRefData(refs: ProjectRef[], folders: string[]): Promise<voi
 async function deleteWorktreeData(dataRoot: string, refs: ProjectRef[], projectId: string, key: string): Promise<void> {
   const folders = worktreeFolders(dataRoot, projectId, key);
   forgetArchived(dataRoot, projectRef(projectId, key));
-  forgetIssueSessionsAt(dataRoot, projectRef(projectId, key));
+  forgetSessionLinksAt(dataRoot, projectRef(projectId, key));
   await deleteRefData(refs, folders);
   for (const folder of folders) {
     await fs.promises.rmdir(path.dirname(folder)).catch(() => undefined);

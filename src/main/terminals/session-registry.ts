@@ -5,25 +5,25 @@ import type { SbxLocalStore } from "../sbx/sbx-local";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { SettingsStore } from "../store/settings";
 import { HostSetups } from "./host-setup";
-import { IssueLinks } from "./issue-links";
+import { TrackedLinks } from "./tracked-links";
 import type { TerminalEnv } from "./pty";
 import { TabSessionManager, type SessionManagerCallbacks } from "./session-manager";
 
 export interface SessionRegistryCallbacks extends SessionManagerCallbacks {
-  /** What the project's issues show of their sessions changed (`issues.ts`'s issueSessions): a link,
-   *  a linked tab, the archive, a repository or worktree opened or closed. */
+  /** What the project's issues and change requests show of their sessions changed (`issues.ts`'s
+   *  issueSessions): a link, a linked tab, the archive, a repository or worktree opened or closed. */
   onIssueSessions: (projectId: string) => void;
 }
 
 /** A session manager per open repository and worktree, by `refKey`, and the project's links of
- *  issues and sessions they share. */
+ *  issues and change requests and sessions they share. */
 export class SessionManagerRegistry {
   private readonly managers = new Map<string, TabSessionManager>();
-  private readonly issueLinks: IssueLinks;
+  private readonly trackedLinks: TrackedLinks;
   /** The callbacks the managers get: the window's, and what tells of the issues' sessions. */
   private readonly managerCallbacks: SessionManagerCallbacks;
-  /** What each repository's or worktree's tabs linked to an issue last showed, by `refKey`: the
-   *  issues' sessions change with it alone, not with every turn. */
+  /** What each repository's or worktree's tabs linked to an issue or change request last showed, by
+   *  `refKey`: their sessions change with it alone, not with every turn. */
   private readonly linkedShown = new Map<string, string>();
 
   /** The renderer's last report, sent only on change — for a repository or worktree opened after
@@ -39,7 +39,7 @@ export class SessionManagerRegistry {
     private readonly callbacks: SessionRegistryCallbacks,
   ) {
     this.hostSetups = new HostSetups(dataRoot, settings, callbacks.onNotice);
-    this.issueLinks = new IssueLinks(
+    this.trackedLinks = new TrackedLinks(
       dataRoot,
       ({ ref, tabId }) => this.get(ref)?.hasTab(tabId) === true,
       (projectId) => {
@@ -65,7 +65,9 @@ export class SessionManagerRegistry {
   private linkedTabsShown(ref: ProjectRef, tabs: TabDescriptor[]): void {
     const refKey = refKeyOf(ref);
     const shown = JSON.stringify(
-      tabs.flatMap(({ tabId, issue, agentId, title }) => (issue === undefined ? [] : [[tabId, issue, agentId, title]])),
+      tabs.flatMap(({ tabId, issue, changeRequest, agentId, title }) =>
+        issue === undefined && changeRequest === undefined ? [] : [[tabId, issue, changeRequest, agentId, title]],
+      ),
     );
     if (shown !== (this.linkedShown.get(refKey) ?? "[]")) {
       this.linkedShown.set(refKey, shown);
@@ -85,7 +87,7 @@ export class SessionManagerRegistry {
       this.settings,
       this.sbxLocal,
       this.hostSetups,
-      this.issueLinks,
+      this.trackedLinks,
       this.terminalEnv,
       this.managerCallbacks,
     );

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
 import type { AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import { openIssueTab, type OpenEditor } from "../editor/editor-tab";
+import { openChangeRequestTab, openIssueTab, type OpenEditor } from "../editor/editor-tab";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import { disposeTerminal } from "./terminal-views";
@@ -291,6 +291,24 @@ export const TabArea = memo(function TabArea({
     [onOpenEditor, resolved.ref],
   );
 
+  /** A change request's row dropped on a pane, as `onDropIssue`. */
+  const onDropChangeRequest = useCallback(
+    (paneId: PaneId, number: number) => {
+      const transition = dragTargetRef.current?.transition ?? null;
+      onDragEnd();
+      showIn(paneId, openChangeRequestTab(onOpenEditor, resolved.ref, number, { keep: true, background: true }), transition);
+    },
+    [onDragEnd, onOpenEditor, resolved.ref, showIn],
+  );
+
+  /** A tab's "Open Pull/Merge Request", as `onOpenIssue`. */
+  const onOpenChangeRequest = useCallback(
+    (number: number) => {
+      openChangeRequestTab(onOpenEditor, resolved.ref, number);
+    },
+    [onOpenEditor, resolved.ref],
+  );
+
   // Each pane's tabs in the strip's order, identity kept when unchanged. Keyed on the fields
   // `paneOf` and `inOrder` read, not the layout: a selection change must not hand every pane a
   // fresh list.
@@ -360,6 +378,8 @@ export const TabArea = memo(function TabArea({
       onDropArchived={onDropArchived}
       onDropIssue={onDropIssue}
       onOpenIssue={onOpenIssue}
+      onDropChangeRequest={onDropChangeRequest}
+      onOpenChangeRequest={onOpenChangeRequest}
     />
   );
 

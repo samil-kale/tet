@@ -20,16 +20,19 @@ import { usePressOutside } from "./use-press-outside";
 interface NoticesCenterProps {
   /** Shows the tab a notice is about. */
   onShowTab: (ref: ProjectRef, tabId: string) => void;
+  /** Opens the change request a notice is about in its tab (`Notice.opens`). */
+  onOpenChangeRequest: (projectId: string, number: number) => void;
 }
 
 /**
  * VS Code's notification center, opened by the status bar's button: every notice since it was last
  * cleared, toasts and desktop notifications alike, those that follow their tab's state first
- * (`centerOrder`), else newest first. A click on one with a tab shows the tab; the X removes it,
+ * (`centerOrder`), else newest first. A click on one with a tab shows the tab, on one about a change
+ * request opens its tab; the X removes it,
  * except one that follows its tab (`removable`). Closed by that button, its own X or a press
  * outside it.
  */
-export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesCenterProps) {
+export const NoticesCenter = memo(function NoticesCenter({ onShowTab, onOpenChangeRequest }: NoticesCenterProps) {
   const open = useCenterOpen();
   const closing = useCenterClosing();
   const notices = useNoticeList();
@@ -56,19 +59,24 @@ export const NoticesCenter = memo(function NoticesCenter({ onShowTab }: NoticesC
       <div className="popup-items">
         {notices.length === 0 && <div className="popup-empty">No new notifications</div>}
         {centerOrder(notices).map((notice) => {
-          const { target } = notice;
+          const { target, opens } = notice;
+          const open = target
+            ? () => onShowTab(target.ref, target.tabId)
+            : opens
+              ? () => onOpenChangeRequest(opens.projectId, opens.changeRequest)
+              : undefined;
           return (
             <div
               key={notice.id}
               className={`notice-item${notice.leaving === "item" ? " leaving" : ""}${enteredOpenCenter(notice) ? " entering" : ""}`}
             >
               <div
-                className={`${noticeClass(notice)}${target ? " clickable" : ""}`}
+                className={`${noticeClass(notice)}${open ? " clickable" : ""}`}
                 onClick={
-                  target
+                  open
                     ? () => {
                         closeCenter();
-                        onShowTab(target.ref, target.tabId);
+                        open();
                       }
                     : undefined
                 }

@@ -62,6 +62,10 @@ function shown(event: IssueEvent): ThreadEvent {
     case "demilestoned":
     case "renamed":
     case "linked":
+    case "review-requested":
+    case "reviewed":
+    case "pushed":
+    case "merged":
     case "text":
       return event;
   }

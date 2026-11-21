@@ -2,7 +2,15 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
-import { ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE, PANE_LABELS, PRESET_PANES, SESSION_TAB_DRAG_TYPE, TAB_DRAG_TYPE } from "./pane-layout";
+import {
+  ARCHIVED_TAB_DRAG_TYPE,
+  CHANGE_REQUEST_DRAG_TYPE,
+  ISSUE_DRAG_TYPE,
+  PANE_LABELS,
+  PRESET_PANES,
+  SESSION_TAB_DRAG_TYPE,
+  TAB_DRAG_TYPE,
+} from "./pane-layout";
 import type { PaneId, SplitPreset } from "./pane-layout";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { agentInfo, agentName } from "../ui/use-agents";
@@ -12,10 +20,11 @@ import { notify } from "../ui/Notices";
 import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput, resetMouseModes } from "./terminal-views";
 import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
-import { EditorHost, useEditorBusy, useEditorPreview } from "../editor/EditorHost";
+import { EditorHost, useEditorBusy, useEditorPreview, useTrackedLabel } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor, sendTabIssueToAgent } from "../editor/editor-views";
+import { trackedOf } from "../editor/editor-tab";
 import { issueSessionEntry } from "../editor/IssueView";
-import { issueSessionsOf, useWatchedIssueSessions } from "../editor/use-issue-sessions";
+import { trackedSessionsOf, useWatchedSessions } from "../editor/use-tracked-sessions";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon, FilesIcon, IssuesIcon, PlusIcon, ShieldIcon } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
@@ -79,6 +88,10 @@ interface PaneProps {
   onDropIssue: (paneId: PaneId, number: number) => void;
   /** The issue a tab's session is linked to, opened (`TabArea`). */
   onOpenIssue: (number: number) => void;
+  /** A change request's row dropped on a pane, as `onDropIssue`. */
+  onDropChangeRequest: (paneId: PaneId, number: number) => void;
+  /** The change request a tab's session is linked to, opened (`TabArea`). */
+  onOpenChangeRequest: (number: number) => void;
 }
 
 /** A drag's pointer over a pane. `noZone`: it frames the pane alone, whatever snap zone lies under
@@ -104,7 +117,8 @@ interface TabFace {
 /** An editor tab's label, in italics while it is the preview — the editor's own state. */
 const EditorTabLabel = memo(function EditorTabLabel({ tabId, label }: { tabId: string; label: string }) {
   const preview = useEditorPreview(tabId);
-  return <span className={`tab-label${preview ? " preview" : ""}`}>{label}</span>;
+  const tracked = useTrackedLabel(tabId);
+  return <span className={`tab-label${preview ? " preview" : ""}`}>{tracked ?? label}</span>;
 });
 
 export const Pane = memo(function Pane({
@@ -132,10 +146,13 @@ export const Pane = memo(function Pane({
   onDropArchived,
   onDropIssue,
   onOpenIssue,
+  onDropChangeRequest,
+  onOpenChangeRequest,
 }: PaneProps) {
   const newTab = useRef<HTMLDivElement>(null);
   // Read by a tab's menu alone, when it opens.
-  useWatchedIssueSessions(at.projectId);
+  useWatchedSessions("issue", at.projectId);
+  useWatchedSessions("change-request", at.projectId);
   // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
   const plusMenu = useAnchoredMenu(
     (rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + BAR_MENU_DROP }),
@@ -398,13 +415,15 @@ export const Pane = memo(function Pane({
     const kinded = menuTab && kindOf(menuTab);
     const linkEntries = (entry: ContextMenuEntry | undefined): ContextMenuEntry[] => (entry ? [entry, SEPARATOR] : []);
     if (kinded?.kind !== "terminal") {
-      const issue = kinded?.kind === "editor" ? kinded.tab.issue : undefined;
+      const tracked = kinded?.kind === "editor" ? trackedOf(kinded.tab) : undefined;
       return kinded?.kind === "editor"
         ? [
             ...linkEntries(
-              issue === undefined
+              tracked === undefined
                 ? undefined
-                : issueSessionEntry(issueSessionsOf(at.projectId)[issue], agents, (agentId) => sendTabIssueToAgent(tabId, agentId)),
+                : issueSessionEntry(trackedSessionsOf(tracked.kind, at.projectId)[tracked.number], agents, (agentId) =>
+                    sendTabIssueToAgent(tabId, agentId),
+                  ),
             ),
             // VS Code's wording; a kept tab has nothing to keep.
             { label: "Keep Open", run: getEditorSnapshot(tabId).preview ? () => keepEditor(tabId) : undefined },
@@ -446,8 +465,16 @@ export const Pane = memo(function Pane({
           ]
         : [];
     const linkedIssue = terminal.issue;
+    const linkedChangeRequest = terminal.changeRequest;
+    const openLinked: ContextMenuEntry[] = [
+      ...(linkedIssue === undefined ? [] : [{ label: "Open Issue", run: () => onOpenIssue(linkedIssue) }]),
+      ...(linkedChangeRequest === undefined
+        ? []
+        : [{ label: "Open Pull/Merge Request", run: () => onOpenChangeRequest(linkedChangeRequest) }]),
+    ];
+    const linked: ContextMenuEntry[] = openLinked.length > 0 ? [...openLinked, SEPARATOR] : [];
     return [
-      ...linkEntries(linkedIssue === undefined ? undefined : { label: "Open Issue", run: () => onOpenIssue(linkedIssue) }),
+      ...linked,
       {
         label: "Restart",
         run: restartable ? () => restartTab(tabId) : undefined,
@@ -489,7 +516,11 @@ export const Pane = memo(function Pane({
       // Capture: xterm's mousedown calls stopPropagation() once a TUI turns on mouse tracking.
       onMouseDownCapture={focusHere}
       onDragOver={(event) => {
-        if (![TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE].some((type) => event.dataTransfer.types.includes(type))) {
+        if (
+          ![TAB_DRAG_TYPE, ARCHIVED_TAB_DRAG_TYPE, ISSUE_DRAG_TYPE, CHANGE_REQUEST_DRAG_TYPE].some((type) =>
+            event.dataTransfer.types.includes(type),
+          )
+        ) {
           // A terminal prevents what it takes (terminal-views.ts), before this runs.
           const taken = event.defaultPrevented && (event.target as Element).closest(".terminal-host") !== null;
           onDragOverChange(paneId, taken ? { x: event.clientX, y: event.clientY, noZone: true } : null);
@@ -518,6 +549,11 @@ export const Pane = memo(function Pane({
         if (event.dataTransfer.types.includes(ISSUE_DRAG_TYPE)) {
           event.preventDefault();
           onDropIssue(paneId, Number(event.dataTransfer.getData(ISSUE_DRAG_TYPE)));
+          return;
+        }
+        if (event.dataTransfer.types.includes(CHANGE_REQUEST_DRAG_TYPE)) {
+          event.preventDefault();
+          onDropChangeRequest(paneId, Number(event.dataTransfer.getData(CHANGE_REQUEST_DRAG_TYPE)));
           return;
         }
         if (!event.dataTransfer.types.includes(TAB_DRAG_TYPE)) {

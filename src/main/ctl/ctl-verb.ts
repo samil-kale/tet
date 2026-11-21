@@ -6,7 +6,18 @@ import type { EditorListing, EditorReport, NoticeMark, NoticeReport, NoticeSever
 import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files";
 import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { Issue, IssueChange, IssueDetail, IssueFieldValue, IssueFilter, IssuesLatest } from "../../shared/types/providers";
+import type {
+  ChangeRequestDetail,
+  ChangeRequestFilter,
+  ChangeRequestRow,
+  ChangeRequestsLatest,
+  Issue,
+  IssueChange,
+  IssueDetail,
+  IssueFieldValue,
+  IssueFilter,
+  IssuesLatest,
+} from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, IssueSession, LinkIssueResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
@@ -202,6 +213,26 @@ export interface ControlDeps {
   sendIssueToAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
   /** issues.ts's: the session linked to the project's issue, as its tab shows it. */
   issueSession(projectId: string, number: number): IssueSession | undefined;
+  /** change-requests/tracker.ts's, by project, with the deps of main.ts; what the host refused is
+   *  thrown (`refusable`). */
+  listChangeRequests(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]>;
+  latestChangeRequests(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
+  changeRequestFilterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
+  readChangeRequest(projectId: string, number: number): Promise<ChangeRequestDetail>;
+  unreadChangeRequests(projectId: string): Promise<ChangeRequestRow[]>;
+  markChangeRequestsSeen(projectId: string, number?: number): Promise<void>;
+  changeRequestFieldOptions(projectId: string, number: number, fieldId: string): Promise<string[]>;
+  setChangeRequestField(projectId: string, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  updateChangeRequest(projectId: string, number: number, change: IssueChange): Promise<void>;
+  commentChangeRequest(projectId: string, number: number, body: string): Promise<void>;
+  editChangeRequestComment(projectId: string, id: string, body: string): Promise<void>;
+  deleteChangeRequestComment(projectId: string, id: string): Promise<void>;
+  approveChangeRequest(projectId: string, number: number): Promise<void>;
+  mergeChangeRequest(projectId: string, number: number, whenChecksPass: boolean): Promise<void>;
+  /** As `openIssue`, the project's change request. */
+  openChangeRequest(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
+  sendChangeRequestToAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
+  changeRequestSession(projectId: string, number: number): IssueSession | undefined;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
@@ -244,6 +275,9 @@ export interface ControlTerminals {
   linkIssue(tabId: string, number: number): LinkIssueResult;
   /** Takes the tab's session off the project's issue; answers what refused it. */
   unlinkIssue(tabId: string, number: number): ActionResult;
+  /** As `linkIssue` and `unlinkIssue`, the project's change request. */
+  linkChangeRequest(tabId: string, number: number): LinkIssueResult;
+  unlinkChangeRequest(tabId: string, number: number): ActionResult;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
    *  may have closed while its CLI ended the turn. */
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined, side: CallerSide): HookOutcome;

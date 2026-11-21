@@ -109,14 +109,22 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   handover: "Session handover",
   issue: "Send issue to agent",
   changeRequest: "Pull/merge request",
+  changeRequestTab: "Send pull/merge request to agent",
 };
 
 const PROMPT_DETAILS: Record<PromptId, string> = {
   commitMessage: "Asked in the background",
   handover: "Sent to the tab taking over",
   issue: "Sent to the tab opened on an issue",
+  changeRequestTab: "Sent to the tab opened on a pull or merge request",
   changeRequest: "Asked in the background, of the commit message's agents",
 };
+
+/** The notices in the window of the project's pull and merge requests (change-requests/watch.ts). */
+const CHANGE_REQUEST_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
+  { key: "changeRequestOpened", label: "New - someone opened one, or marked one ready" },
+  { key: "changeRequestFailed", label: "Failed - the checks or pipeline of one of yours failed" },
+];
 
 const NOTIFICATION_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "finished", label: "Finished - the turn ended" },
@@ -368,6 +376,17 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
           </FieldGroup>
           {/* No restart caveat: hooks report every turn, and the notification reads the settings as they
               stand on arrival (session-manager's `notification`). */}
+          <FieldGroup label="Notices for pull and merge requests">
+            {settings &&
+              CHANGE_REQUEST_SWITCHES.map(({ key, label }) => (
+                <Checkbox
+                  key={key}
+                  label={label}
+                  checked={settings.notifications[key]}
+                  onChange={(next) => edit({ notifications: { [key]: next } })}
+                />
+              ))}
+          </FieldGroup>
         </>
       )}
       {shown === "files" && (

@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { approveAndAutoMerge } from "../../src/main/change-requests";
+import { approveAndAutoMerge } from "../../src/main/change-requests/create";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
 import {

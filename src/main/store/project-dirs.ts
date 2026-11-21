@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentId } from "../../shared/types/agents";
 import { projectRef, type Project, type ProjectRef } from "../../shared/types/project";
+import type { TrackedKind } from "../../shared/types/providers";
 import { onDisk, relativeInside } from "../util/path-inside";
 
 /**
@@ -12,8 +13,10 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * ```
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   archive.json                   the sessions kept archived, per repository and worktree (archive.ts)
- *   issues-seen.json               what the issue tabs showed, and since when others count unread (issues-seen.ts)
+ *   issues-seen.json               what the issue tabs showed, and since when others count unread (tracked-seen.ts)
  *   issue-sessions.json            the session linked to each issue, in the repository or a worktree (issue-sessions.ts)
+ *   change-requests-seen.json      the same of the change request tabs, and whose checks they showed failed
+ *   change-request-sessions.json   the session linked to each change request
  *   drops/                     pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
@@ -29,9 +32,9 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * copy here.
  *
  * Never anything a sandbox must not see (settings, tokens, SBX settings): an organization governing
- * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `archive.json`,
- * `issues-seen.json` and `issue-sessions.json` are the three files, session ids and issue numbers
- * with timestamps alone.
+ * sbx allows the whole folder with one rule (sbx-status.ts's readSbxBlockers). `archive.json` and the
+ * seen and session files of issues and change requests are its files, session ids and issue and
+ * change request numbers with timestamps alone.
  */
 export function projectsDir(dataRoot: string): string {
   return path.join(dataRoot, "projects");
@@ -46,14 +49,20 @@ export function archiveFile(dataRoot: string, projectId: string): string {
   return path.join(projectDir(dataRoot, projectId), "archive.json");
 }
 
-/** The project's issues as their tabs last showed them (issues-seen.ts). */
-export function issuesSeenFile(dataRoot: string, projectId: string): string {
-  return path.join(projectDir(dataRoot, projectId), "issues-seen.json");
+/** What the files of one kind are named after. */
+const KIND_FILE_NAMES: Record<TrackedKind, { seen: string; sessions: string }> = {
+  issue: { seen: "issues-seen.json", sessions: "issue-sessions.json" },
+  "change-request": { seen: "change-requests-seen.json", sessions: "change-request-sessions.json" },
+};
+
+/** The project's issues or change requests as their tabs last showed them (tracked-seen.ts). */
+export function seenFile(dataRoot: string, projectId: string, kind: TrackedKind): string {
+  return path.join(projectDir(dataRoot, projectId), KIND_FILE_NAMES[kind].seen);
 }
 
-/** The session linked to each of the project's issues (issue-sessions.ts). */
-export function issueSessionsFile(dataRoot: string, projectId: string): string {
-  return path.join(projectDir(dataRoot, projectId), "issue-sessions.json");
+/** The session linked to each of the project's issues or change requests (issue-sessions.ts). */
+export function sessionLinksFile(dataRoot: string, projectId: string, kind: TrackedKind): string {
+  return path.join(projectDir(dataRoot, projectId), KIND_FILE_NAMES[kind].sessions);
 }
 
 /** Where the project's host tabs keep pasted or dropped content without a path; its sandboxed tabs

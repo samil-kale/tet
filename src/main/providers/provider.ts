@@ -1,7 +1,12 @@
 import { net } from "electron";
 import type {
   ChangeRequest,
+  ChangeRequestDetail,
+  ChangeRequestFilter,
   ChangeRequestKind,
+  ChangeRequestRow,
+  ChangeRequestsLatest,
+  ChecksState,
   Issue,
   IssueChange,
   IssueDetail,
@@ -79,6 +84,21 @@ export interface GitProvider {
   /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
    *  wait for, the host refuses it. */
   autoMergeChangeRequest(tracker: Tracker, number: number, squash: boolean): Promise<void>;
+  /** The change requests the filter leaves, of the repository's own branches alone, newest first. */
+  listChangeRequests(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]>;
+  /** What the host says of the filtered list without sending it whole (`ChangeRequestsLatest`): one
+   *  request. */
+  readChangeRequestsLatest(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
+  readChangeRequest(tracker: Tracker, number: number): Promise<ChangeRequestDetail>;
+  /** `listOptions` and `setField` of a change request. */
+  listChangeRequestOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
+  setChangeRequestField(tracker: Tracker, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  /** Its title, text or state; merged it is set by `mergeChangeRequest` alone. */
+  updateChangeRequest(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
+  commentChangeRequest(tracker: Tracker, number: number, body: string): Promise<void>;
+  /** Merges one by the repository's own method, at once, or with `whenChecksPass` once its checks
+   *  passed, as `autoMergeChangeRequest` has the host do. */
+  mergeChangeRequest(tracker: Tracker, number: number, whenChecksPass: boolean): Promise<void>;
   /** The variables the host's own CLI and scripts read the account's token from, which a host tab of
    *  a project on this host gets: the rest of the API, which this interface leaves out, is the
    *  agent's to call. */
@@ -228,7 +248,7 @@ export function pickField(
     several = false,
     shown = "text",
     editable = true,
-  }: { several?: boolean; shown?: "text" | "people" | "labels"; editable?: boolean } = {},
+  }: { several?: boolean; shown?: "text" | "people" | "labels" | "issues"; editable?: boolean } = {},
 ): IssueField {
   return { id, name, editable, kind: "pick", value, several, shown };
 }
@@ -369,6 +389,14 @@ export function fieldMethods<Target>(tracker: {
       );
     },
   };
+}
+
+/** `ChangeRequestsLatest.checks` of a list: each one's number and checks, by number. */
+export function checksText(rows: { number: number; checks?: ChecksState }[]): string {
+  return rows
+    .map((row) => `${row.number}:${row.checks ?? ""}`)
+    .sort()
+    .join(",");
 }
 
 /** One GET as JSON — see fetchOk. */

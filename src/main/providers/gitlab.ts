@@ -1,7 +1,12 @@
 import { ownValue } from "../../shared/own-value";
 import {
   isTimeRemoval,
+  linkedIssueName,
   type ChangeRequest,
+  type ChangeRequestFilter,
+  type ChangeRequestRow,
+  type ChangeRequestState,
+  type ChecksState,
   type Issue,
   type IssueChange,
   type IssueEvent,
@@ -14,6 +19,7 @@ import {
 import {
   allNodes,
   ApiError,
+  checksText,
   fetchImageOk,
   fetchOk,
   fetchUploadOk,
@@ -754,7 +760,7 @@ export function toEvents(
     }
   }
   for (const entry of states) {
-    events.push({ ...base(entry), kind: entry.state === "closed" ? "closed" : "reopened" });
+    events.push({ ...base(entry), kind: entry.state === "merged" ? "merged" : entry.state === "closed" ? "closed" : "reopened" });
   }
   for (const entry of milestones) {
     if (entry.milestone) {
@@ -776,6 +782,206 @@ export interface GitLabMergeRequest {
 export function ownMergeRequest(found: GitLabMergeRequest[], path: string): ChangeRequest | undefined {
   const own = found.find((entry) => entry.sourceProject?.fullPath.toLowerCase() === path.toLowerCase());
   return own && { number: Number(own.iid), url: own.webUrl };
+}
+
+/** A merge request as a row reads it (`MERGE_REQUEST_ROW`); `sourceProject` null for one the token
+ *  cannot read. */
+export interface GitLabMergeRequestRow extends GitLabIssue {
+  draft: boolean;
+  sourceProject: { fullPath: string } | null;
+  diffHeadSha: string | null;
+  headPipeline: { status: string } | null;
+}
+
+/** A merge request as its tab reads it (`MERGE_REQUEST_QUERY`). */
+export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
+  description: string | null;
+  sourceBranch: string;
+  targetBranch: string;
+  conflicts: boolean;
+  mergedAt: string | null;
+  mergeUser: GitLabUser | null;
+  autoMergeEnabled: boolean;
+  commitCount: number | null;
+  diffStatsSummary: { additions: number; deletions: number } | null;
+  headPipeline: { status: string; path: string | null; jobs: { nodes: { name: string }[] } | null } | null;
+  reviewers: { nodes: GitLabUser[] };
+  participants: { nodes: GitLabUser[] } | null;
+  notes: GraphqlPage<GitLabNote>;
+}
+
+const MERGE_REQUEST_ROW = `${ISSUE_ROW} draft sourceProject { fullPath } diffHeadSha headPipeline { status }`;
+
+/** What a filter asks for (`mergeRequestsVariables`), as the queries of a list and of its latest change take it. */
+const MERGE_REQUEST_FILTER_VARIABLES =
+  "$state: MergeRequestState, $authorUsername: String, $assigneeUsername: String, $reviewerUsername: String, $labels: [String!]";
+const MERGE_REQUEST_FILTER_ARGUMENTS =
+  "state: $state, authorUsername: $authorUsername, assigneeUsername: $assigneeUsername, reviewerUsername: $reviewerUsername, labels: $labels";
+
+const MERGE_REQUESTS_QUERY = `query($path: ID!, $cursor: String, ${MERGE_REQUEST_FILTER_VARIABLES}) {
+  project(fullPath: $path) {
+    mergeRequests(first: 100, after: $cursor, sort: CREATED_DESC, ${MERGE_REQUEST_FILTER_ARGUMENTS}) {
+      pageInfo { hasNextPage endCursor }
+      nodes { ${MERGE_REQUEST_ROW} }
+    }
+  }
+}`;
+
+const MERGE_REQUESTS_LATEST_QUERY = `query($path: ID!, ${MERGE_REQUEST_FILTER_VARIABLES}) {
+  project(fullPath: $path) {
+    mergeRequests(first: 100, sort: UPDATED_DESC, ${MERGE_REQUEST_FILTER_ARGUMENTS}) {
+      count
+      nodes { iid updatedAt sourceProject { fullPath } headPipeline { status } }
+    }
+  }
+}`;
+
+const MERGE_REQUEST_QUERY = `query($path: ID!, $iid: String!) {
+  project(fullPath: $path) {
+    mergeRequest(iid: $iid) {
+      ${MERGE_REQUEST_ROW}
+      description sourceBranch targetBranch conflicts mergedAt autoMergeEnabled commitCount
+      mergeUser { username }
+      diffStatsSummary { additions deletions }
+      headPipeline { status path jobs(statuses: [FAILED], first: 50) { nodes { name } } }
+      reviewers { nodes { username } }
+      participants { nodes { username } }
+      notes(first: 100) { ${NOTE_PAGE} }
+    }
+  }
+}`;
+
+const MERGE_REQUEST_NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
+  project(fullPath: $path) { mergeRequest(iid: $iid) { notes(first: 100, after: $cursor) { ${NOTE_PAGE} } } }
+}`;
+
+/** What a filter asks for, in the words of `MERGE_REQUEST_FILTER_VARIABLES`. */
+export function mergeRequestsVariables(path: string, filter: ChangeRequestFilter): Record<string, unknown> {
+  return {
+    path,
+    state: filter.state && (filter.state === "open" ? "opened" : filter.state),
+    authorUsername: filter.author,
+    assigneeUsername: filter.assignee,
+    reviewerUsername: filter.reviewer,
+    labels: filter.labels.length > 0 ? filter.labels : undefined,
+  };
+}
+
+/** How a pipeline stands, in TET's words; undefined for one that neither runs nor ended passed or failed. */
+export function pipelineChecks(pipeline: { status: string } | null | undefined): ChecksState | undefined {
+  switch (pipeline?.status) {
+    case "SUCCESS":
+      return "passed";
+    case "FAILED":
+      return "failed";
+    case "CREATED":
+    case "WAITING_FOR_RESOURCE":
+    case "PREPARING":
+    case "PENDING":
+    case "RUNNING":
+    case "SCHEDULED":
+    case "WAITING_FOR_CALLBACK":
+    case "CANCELING":
+      return "running";
+    default:
+      return undefined;
+  }
+}
+
+/** Whether a merge request is from a branch of `path` itself, not of a fork. */
+function fromOwnProject(entry: { sourceProject: { fullPath: string } | null }, path: string): boolean {
+  return entry.sourceProject?.fullPath.toLowerCase() === path.toLowerCase();
+}
+
+const MERGE_REQUEST_STATES: Record<string, ChangeRequestState | undefined> = { opened: "open", merged: "merged", closed: "closed" };
+
+export function toChangeRequestRow(entry: GitLabMergeRequestRow): ChangeRequestRow {
+  return {
+    ...toIssue(entry),
+    state: MERGE_REQUEST_STATES[entry.state] ?? "closed",
+    draft: entry.draft,
+    checks: pipelineChecks(entry.headPipeline),
+    headSha: entry.diffHeadSha ?? undefined,
+  };
+}
+
+/** What a change of a merge request's field needs of it: where it is, as its mutations name it. */
+interface MergeRequestTarget {
+  projectPath: string;
+  iid: string;
+}
+
+/** People by login alone: a merge request's mutations name them so. */
+async function peopleByLogin(send: GraphqlSend, path: string): Promise<NamedId[]> {
+  return (await allPeople(send, path)).map((person) => ({ id: person.name, name: person.name }));
+}
+
+/** The fields of a merge request, by the id `toMergeRequestFields` gives them. */
+export const MERGE_REQUEST_FIELD_HANDLERS: Record<string, FieldHandler<MergeRequestTarget>> = {
+  reviewers: pickHandler({ what: "reviewer", choices: ({ send, path }) => peopleByLogin(send, path) }, (target, reviewerUsernames) => ({
+    mutation: "mergeRequestSetReviewers",
+    inputType: "MergeRequestSetReviewersInput",
+    input: { ...target, reviewerUsernames, operationMode: "REPLACE" },
+  })),
+  assignees: pickHandler({ what: "person to assign", choices: ({ send, path }) => peopleByLogin(send, path) }, (target, assigneeUsernames) => ({
+    mutation: "mergeRequestSetAssignees",
+    inputType: "MergeRequestSetAssigneesInput",
+    input: { ...target, assigneeUsernames, operationMode: "REPLACE" },
+  })),
+  labels: pickHandler({ what: "label", choices: ({ send, path }) => allLabels(send, path) }, (target, labelIds) => ({
+    mutation: "mergeRequestSetLabels",
+    inputType: "MergeRequestSetLabelsInput",
+    input: { ...target, labelIds, operationMode: "REPLACE" },
+  })),
+};
+
+const mergeRequestFields = fieldMethods<MergeRequestTarget>({
+  graphql: sender,
+  handlerOf: (_send, _path, fieldId) => {
+    const handler = ownValue(MERGE_REQUEST_FIELD_HANDLERS, fieldId);
+    if (!handler) {
+      throw new Error(`A merge request of GitLab has no field ${fieldId}`);
+    }
+    return handler;
+  },
+  readTarget: (_send, path, number) => Promise.resolve({ projectPath: path, iid: String(number) }),
+  mutate,
+});
+
+/** The fields a merge request has, as the tab lists them, in the order of GitLab's own sidebar. */
+export function toMergeRequestFields(found: GitLabMergeRequestDetail, closes: { iid: number; title: string }[]): IssueField[] {
+  return [
+    pickField(
+      "reviewers",
+      "Reviewers",
+      found.reviewers.nodes.map((user) => user.username),
+      { several: true, shown: "people" },
+    ),
+    pickField(
+      "assignees",
+      "Assignees",
+      found.assignees.nodes.map((user) => user.username),
+      { several: true, shown: "people" },
+    ),
+    pickField(
+      "labels",
+      "Labels",
+      found.labels.nodes.map((label) => label.title),
+      { several: true, shown: "labels" },
+    ),
+    pickField(
+      "linkedIssues",
+      "Linked Issues",
+      closes.map((issue) => linkedIssueName(issue.iid, issue.title)),
+      { several: true, shown: "issues", editable: false },
+    ),
+    pickField(
+      "participants",
+      "Participants",
+      (found.participants?.nodes ?? []).map((user) => user.username),
+      { several: true, shown: "people", editable: false },
+    ),
+  ];
 }
 
 /** A merge request by its number, as far as `selection` reads it (`readWorkItem`'s for one). */
@@ -904,7 +1110,7 @@ export const gitlab: GitProvider = {
 
   confidentialIssues: true,
 
-  changeRequest: { noun: "merge request", prefix: "!", selfApproval: true, deletesSourceBranch: true },
+  changeRequest: { noun: "merge request", prefix: "!", checks: "pipeline", selfApproval: true, deletesSourceBranch: true },
 
   async findChangeRequest({ host, token, path }, head) {
     // A project's merge requests are those into it; one from a fork names its own source project.
@@ -966,6 +1172,116 @@ export const gitlab: GitProvider = {
       mutation: "mergeRequestAccept",
       inputType: "MergeRequestAcceptInput",
       input: { projectPath: path, iid: String(number), sha: diffHeadSha, strategy: "MERGE_WHEN_CHECKS_PASS", squash },
+    });
+  },
+
+  async listChangeRequests({ host, token, path }, filter) {
+    const entries = await allNodes<GitLabMergeRequestRow>(sender(host, token), MERGE_REQUESTS_QUERY, mergeRequestsVariables(path, filter), (data) => {
+      const { project } = data as { project: { mergeRequests: GraphqlPage<GitLabMergeRequestRow> } | null };
+      return reached(project, path).mergeRequests;
+    });
+    return entries.filter((entry) => fromOwnProject(entry, path)).map(toChangeRequestRow);
+  },
+
+  async readChangeRequestsLatest({ host, token, path }, filter) {
+    type Latest = Pick<GitLabMergeRequestRow, "iid" | "updatedAt" | "sourceProject" | "headPipeline">;
+    const data = await sender(host, token)(MERGE_REQUESTS_LATEST_QUERY, mergeRequestsVariables(path, filter));
+    const { project } = data as { project: { mergeRequests: { count: number; nodes: Latest[] } } | null };
+    const { count, nodes } = reached(project, path).mergeRequests;
+    const own = nodes.filter((entry) => fromOwnProject(entry, path));
+    return {
+      total: count,
+      updatedAt: own[0]?.updatedAt,
+      checks: checksText(own.map((entry) => ({ number: Number(entry.iid), checks: pipelineChecks(entry.headPipeline) }))),
+    };
+  },
+
+  async readChangeRequest({ host, token, path }, number) {
+    const send = sender(host, token);
+    const url = `${projectUrl(host, path)}/merge_requests/${number}`;
+    const iid = String(number);
+    const [answer, labels, states, milestones, closes] = await Promise.all([
+      send(MERGE_REQUEST_QUERY, { path, iid }),
+      getPaged(`${url}/resource_label_events?per_page=100`, headers(token)),
+      getPaged(`${url}/resource_state_events?per_page=100`, headers(token)),
+      getPaged(`${url}/resource_milestone_events?per_page=100`, headers(token)),
+      getPaged(`${url}/closes_issues?per_page=100`, headers(token)),
+    ]);
+    const { project } = answer as { project: { mergeRequest: GitLabMergeRequestDetail | null } | null };
+    const found = reached(reached(project, path).mergeRequest, `Merge request !${number}`);
+    const later = found.notes.pageInfo.hasNextPage
+      ? await allNodes<GitLabNote>(send, MERGE_REQUEST_NOTES_QUERY, { path, iid, cursor: found.notes.pageInfo.endCursor }, (data) => {
+          const { project: again } = data as { project: { mergeRequest: { notes: GraphqlPage<GitLabNote> } | null } | null };
+          return reached(reached(again, path).mergeRequest, `Merge request !${number}`).notes;
+        })
+      : [];
+    const notes = [...found.notes.nodes, ...later];
+    const row = toChangeRequestRow(found);
+    return {
+      ...row,
+      provider: "gitlab",
+      kind: gitlab.changeRequest,
+      events: toEvents(notes, labels as GitLabLabelEvent[], states as GitLabStateEvent[], milestones as GitLabMilestoneEvent[]),
+      fields: toMergeRequestFields(found, closes as { iid: number; title: string }[]),
+      body: found.description ?? "",
+      notes: toNotes(notes),
+      status: {
+        state: row.state,
+        draft: row.draft,
+        checks: row.checks,
+        failedChecks: (found.headPipeline?.jobs?.nodes ?? []).map((job) => job.name),
+        checksUrl: found.headPipeline?.path ? `https://${host}${found.headPipeline.path}` : undefined,
+        conflicts: found.conflicts,
+        autoMerge: found.autoMergeEnabled,
+        head: found.sourceBranch,
+        base: found.targetBranch,
+        commits: found.commitCount ?? 0,
+        additions: found.diffStatsSummary?.additions,
+        deletions: found.diffStatsSummary?.deletions,
+        mergedBy: found.mergeUser?.username,
+        mergedAt: found.mergedAt ?? undefined,
+      },
+    };
+  },
+
+  listChangeRequestOptions: mergeRequestFields.listOptions,
+
+  setChangeRequestField: mergeRequestFields.setField,
+
+  async updateChangeRequest({ host, token, path }, number, { title, body, state }) {
+    await mutate(sender(host, token), {
+      mutation: "mergeRequestUpdate",
+      inputType: "MergeRequestUpdateInput",
+      input: { projectPath: path, iid: String(number), title, description: body, state: state && (state === "open" ? "OPENED" : "CLOSED") },
+    });
+  },
+
+  async commentChangeRequest({ host, token, path }, number, body) {
+    const send = sender(host, token);
+    const { id } = await readMergeRequest<{ id: string }>(send, path, number, "id");
+    await mutate(send, { mutation: "createNote", inputType: "CreateNoteInput", input: { noteableId: id, body } });
+  },
+
+  async mergeChangeRequest({ host, token, path }, number, whenChecksPass) {
+    const send = sender(host, token);
+    // What the merge request is set to do itself: GraphQL takes the squash as off where left out.
+    const found = await readMergeRequest<{ diffHeadSha: string | null; squashOnMerge: boolean; forceRemoveSourceBranch: boolean | null }>(
+      send,
+      path,
+      number,
+      "diffHeadSha squashOnMerge forceRemoveSourceBranch",
+    );
+    await mutate(send, {
+      mutation: "mergeRequestAccept",
+      inputType: "MergeRequestAcceptInput",
+      input: {
+        projectPath: path,
+        iid: String(number),
+        sha: found.diffHeadSha,
+        squash: found.squashOnMerge,
+        shouldRemoveSourceBranch: found.forceRemoveSourceBranch ?? undefined,
+        ...(whenChecksPass && { strategy: "MERGE_WHEN_CHECKS_PASS" }),
+      },
     });
   },
 

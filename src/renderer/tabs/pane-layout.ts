@@ -42,6 +42,9 @@ export const ARCHIVED_TAB_DRAG_TYPE = "application/x-tet-tab-archived";
 /** The drag of an issue's row, carrying its number: a pane takes it to open the issue's tab there. */
 export const ISSUE_DRAG_TYPE = "application/x-tet-issue";
 
+/** The drag of a change request's row, as `ISSUE_DRAG_TYPE`'s. */
+export const CHANGE_REQUEST_DRAG_TYPE = "application/x-tet-change-request";
+
 /** Which panes exist for a preset, in reading order — also the "move to" menu's order. */
 export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
   single: ["a"],

@@ -1259,6 +1259,11 @@ textarea:focus,
   background: var(--tet-focusBorder);
 }
 
+/* A change request's failed checks: the unread dot's shape in the error colour, beside it. */
+.issue-mark.failed {
+  background: var(--tet-errorForeground);
+}
+
 /* An issue row without an assignee holds the avatar's place, so its texts are cut where the other
    rows' are. */
 .issue-person.vacant {
@@ -1331,6 +1336,49 @@ textarea:focus,
 .issue-bar > .issue-bar-number {
   padding: 0 10px;
   font-size: var(--tet-font-size);
+}
+
+/* A change request's head above its columns: its branches, then its status line, a box as a card's. */
+.change-request-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.change-request-branches {
+  color: var(--tet-descriptionForeground);
+}
+
+.change-request-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  min-height: var(--bar-height);
+  padding: 6px var(--issue-card-padding);
+  border: 1px solid var(--tet-app-border);
+  border-radius: var(--border-radius);
+}
+
+.change-request-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.change-request-spacer {
+  flex: 1;
+}
+
+/* Failed checks and conflicts: the error mark. */
+.change-request-failed {
+  color: var(--tet-errorForeground);
+}
+
+/* A change request's linked issue, one per line in its field. */
+.issue-linked {
+  display: block;
 }
 
 .issue-columns {

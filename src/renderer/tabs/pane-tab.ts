@@ -25,9 +25,13 @@ export function kindOf(tab: PaneTab): KindedTab {
   return { kind: paneTabKind(tab.tabId), tab } as KindedTab;
 }
 
-/** An editor tab's name: its file, with the short commit id for a commit's file; an issue's number. */
-export function editorLabel({ path, commit, issue }: EditorTab): string {
-  return issue === undefined ? baseName(path) + (commit ? ` (${commit.sha.slice(0, 7)})` : "") : `Issue #${issue}`;
+/** An editor tab's name: its file, with the short commit id for a commit's file; an issue's number; a
+ *  change request's until its tab has read what its host calls it (`useTrackedLabel`). */
+export function editorLabel({ path, commit, issue, changeRequest }: EditorTab): string {
+  if (issue !== undefined) {
+    return `Issue #${issue}`;
+  }
+  return changeRequest === undefined ? baseName(path) + (commit ? ` (${commit.sha.slice(0, 7)})` : "") : `Request ${changeRequest}`;
 }
 
 /** A terminal's name: the session title; a session-less agent's name, else a placeholder. */

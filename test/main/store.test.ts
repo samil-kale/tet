@@ -13,21 +13,21 @@ import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root"
 import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
 import {
-  forgetAllIssueSessions,
-  forgetIssueSession,
-  forgetIssueSessionsAt,
-  forgetSessionIssue,
-  issueOfSession,
-  issueSessionLinks,
-  linkIssueSession,
-  pruneIssueSessions,
-  unlinkIssueSession,
-} from "../../src/main/store/issue-sessions";
-import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../../src/main/store/issues-seen";
+  forgetAllSessionLinks,
+  forgetLinkedSession,
+  forgetSessionLinksAt,
+  forgetSessionLinks,
+  linkedOfSession,
+  sessionLinks,
+  linkSession,
+  pruneSessionLinks,
+  unlinkSession,
+} from "../../src/main/store/session-links";
+import { forgetAllSeen, forgetSeen, markAllSeen, readSeen, setSeen } from "../../src/main/store/tracked-seen";
 import {
   archiveFile,
-  issueSessionsFile,
-  issuesSeenFile,
+  sessionLinksFile,
+  seenFile,
   newWorktreeKey,
   ownedWorktreeKeys,
   sandboxDir,
@@ -150,23 +150,23 @@ describe("the archived sessions", () => {
 });
 
 describe("the issues read", () => {
-  const stored = (root: string): unknown => JSON.parse(fs.readFileSync(issuesSeenFile(root, "p"), "utf8"));
+  const stored = (root: string): unknown => JSON.parse(fs.readFileSync(seenFile(root, "p", "issue"), "utf8"));
 
   it("start counting at the first read of a project, kept in its folder, and keep each issue's update by number", () => {
     const root = tempDir("tet-issues-seen-");
     const before = Date.now();
-    const { since, issues } = readIssuesSeen(root, "p");
+    const { since, shown: issues } = readSeen(root, "p", "issue");
     assert.ok(Date.parse(since) >= before && Date.parse(since) <= Date.now(), "from now");
     assert.deepEqual(issues, {});
-    assert.equal(readIssuesSeen(root, "p").since, since, "once, not at every read");
+    assert.equal(readSeen(root, "p", "issue").since, since, "once, not at every read");
 
-    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
-    setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
-    setIssueSeen(root, "p", 3, "2026-11-09T09:00:00Z");
-    assert.deepEqual(readIssuesSeen(root, "p"), { since, issues: { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" } });
-    assert.deepEqual(readIssuesSeen(root, "q").issues, {}, "another project's own");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
+    setSeen(root, "p", "issue", 7, "2026-11-08T11:00:00Z");
+    setSeen(root, "p", "issue", 3, "2026-11-09T09:00:00Z");
+    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" } });
+    assert.deepEqual(readSeen(root, "q", "issue").shown, {}, "another project's own");
     assert.deepEqual(
-      fs.readdirSync(path.dirname(issuesSeenFile(root, "p"))),
+      fs.readdirSync(path.dirname(seenFile(root, "p", "issue"))),
       ["issues-seen.json"],
       "renamed into place, no temporary file left",
     );
@@ -174,49 +174,49 @@ describe("the issues read", () => {
 
   it("forget a deleted issue's entry alone", () => {
     const root = tempDir("tet-issues-seen-");
-    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
-    setIssueSeen(root, "p", 7, "2026-11-08T11:00:00Z");
-    const { since } = readIssuesSeen(root, "p");
-    forgetIssueSeen(root, "p", 3);
-    assert.deepEqual(readIssuesSeen(root, "p"), { since, issues: { 7: "2026-11-08T11:00:00Z" } });
-    forgetIssueSeen(root, "p", 3);
-    assert.deepEqual(readIssuesSeen(root, "p"), { since, issues: { 7: "2026-11-08T11:00:00Z" } }, "none to forget");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
+    setSeen(root, "p", "issue", 7, "2026-11-08T11:00:00Z");
+    const { since } = readSeen(root, "p", "issue");
+    forgetSeen(root, "p", "issue", 3);
+    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 7: "2026-11-08T11:00:00Z" } });
+    forgetSeen(root, "p", "issue", 3);
+    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 7: "2026-11-08T11:00:00Z" } }, "none to forget");
   });
 
   it("count from now on once all are read, the entries before dropped", () => {
     const root = tempDir("tet-issues-seen-");
-    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
-    const first = readIssuesSeen(root, "p").since;
-    const all = markAllIssuesSeen(root, "p");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
+    const first = readSeen(root, "p", "issue").since;
+    const all = markAllSeen(root, "p", "issue");
     assert.ok(Date.parse(all.since) >= Date.parse(first));
-    assert.deepEqual(all.issues, {});
-    assert.deepEqual(readIssuesSeen(root, "p"), all, "what was answered is what is kept");
+    assert.deepEqual(all.shown, {});
+    assert.deepEqual(readSeen(root, "p", "issue"), all, "what was answered is what is kept");
   });
 
   it("start afresh when forgotten whole, as when the tracker changes", () => {
     const root = tempDir("tet-issues-seen-");
-    setIssueSeen(root, "p", 3, "2026-11-08T10:00:00Z");
-    forgetAllIssuesSeen(root, "p");
-    assert.equal(fs.existsSync(issuesSeenFile(root, "p")), false);
-    assert.deepEqual(readIssuesSeen(root, "p").issues, {}, "the old numbers name other issues now");
-    forgetAllIssuesSeen(root, "q");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
+    forgetAllSeen(root, "p", "issue");
+    assert.equal(fs.existsSync(seenFile(root, "p", "issue")), false);
+    assert.deepEqual(readSeen(root, "p", "issue").shown, {}, "the old numbers name other issues now");
+    forgetAllSeen(root, "q", "issue");
   });
 
   it("read a file that cannot be read as a new start, and drop what is not a number with a timestamp", () => {
     const root = tempDir("tet-issues-seen-");
-    fs.mkdirSync(path.dirname(issuesSeenFile(root, "p")), { recursive: true });
-    fs.writeFileSync(issuesSeenFile(root, "p"), "{ nope");
-    assert.deepEqual(readIssuesSeen(root, "p").issues, {});
+    fs.mkdirSync(path.dirname(seenFile(root, "p", "issue")), { recursive: true });
+    fs.writeFileSync(seenFile(root, "p", "issue"), "{ nope");
+    assert.deepEqual(readSeen(root, "p", "issue").shown, {});
     assert.equal(typeof (stored(root) as { since: unknown }).since, "string", "started over it");
     fs.writeFileSync(
-      issuesSeenFile(root, "p"),
+      seenFile(root, "p", "issue"),
       JSON.stringify({ since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-08T10:00:00Z", x: "junk", 5: 5, 6: null } }),
     );
-    assert.deepEqual(readIssuesSeen(root, "p"), { since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-08T10:00:00Z" } });
-    setIssueSeen(root, "p", 8, "2026-11-08T12:00:00Z");
-    assert.deepEqual(readIssuesSeen(root, "p"), {
+    assert.deepEqual(readSeen(root, "p", "issue"), { since: "2026-11-01T00:00:00Z", shown: { 3: "2026-11-08T10:00:00Z" } });
+    setSeen(root, "p", "issue", 8, "2026-11-08T12:00:00Z");
+    assert.deepEqual(readSeen(root, "p", "issue"), {
       since: "2026-11-01T00:00:00Z",
-      issues: { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" },
+      shown: { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" },
     });
   });
 });
@@ -225,76 +225,76 @@ describe("the session linked to an issue", () => {
   const repository = { projectId: "p" };
   const worktree = { projectId: "p", worktree: "k1" };
   const sessionOf = (root: string, number: number): string | undefined => {
-    const link = issueSessionLinks(root, "p")[number];
+    const link = sessionLinks(root, "p", "issue")[number];
     return link && `${link.ref.worktree ?? "repository"}:${link.sessionId}`;
   };
 
   it("is kept per issue in the project's folder, one session on one issue", () => {
     const root = tempDir("tet-issue-sessions-");
     assert.equal(sessionOf(root, 3), undefined, "none before the first");
-    assert.deepEqual(linkIssueSession(root, repository, 3, "s1"), {});
-    assert.deepEqual(linkIssueSession(root, repository, 3, "s1"), {}, "a second link of the same changes nothing");
-    assert.deepEqual(linkIssueSession(root, worktree, 3, "s2"), { replacedSession: true }, "another session takes the issue's place");
+    assert.deepEqual(linkSession(root, repository, "issue", 3, "s1"), {});
+    assert.deepEqual(linkSession(root, repository, "issue", 3, "s1"), {}, "a second link of the same changes nothing");
+    assert.deepEqual(linkSession(root, worktree, "issue", 3, "s2"), { replacedSession: true }, "another session takes the issue's place");
     assert.equal(sessionOf(root, 3), "k1:s2");
-    assert.equal(issueOfSession(root, repository, "s1"), undefined, "the one replaced is on no issue");
-    assert.deepEqual(linkIssueSession(root, worktree, 7, "s2"), { movedFrom: 3 }, "linking to another issue takes it off the first");
+    assert.equal(linkedOfSession(root, repository, "issue", "s1"), undefined, "the one replaced is on no issue");
+    assert.deepEqual(linkSession(root, worktree, "issue", 7, "s2"), { movedFrom: 3 }, "linking to another issue takes it off the first");
     assert.equal(sessionOf(root, 3), undefined);
-    assert.equal(issueOfSession(root, worktree, "s2"), 7);
-    assert.equal(issueOfSession(root, repository, "s2"), undefined, "the same id in another place is another session");
-    linkIssueSession(root, repository, 3, "s1");
-    assert.deepEqual(linkIssueSession(root, repository, 7, "s1"), { movedFrom: 3, replacedSession: true }, "both at once");
-    assert.deepEqual(issueSessionLinks(root, "q"), {}, "another project's");
+    assert.equal(linkedOfSession(root, worktree, "issue", "s2"), 7);
+    assert.equal(linkedOfSession(root, repository, "issue", "s2"), undefined, "the same id in another place is another session");
+    linkSession(root, repository, "issue", 3, "s1");
+    assert.deepEqual(linkSession(root, repository, "issue", 7, "s1"), { movedFrom: 3, replacedSession: true }, "both at once");
+    assert.deepEqual(sessionLinks(root, "q", "issue"), {}, "another project's");
     assert.deepEqual(
-      fs.readdirSync(path.dirname(issueSessionsFile(root, "p"))),
+      fs.readdirSync(path.dirname(sessionLinksFile(root, "p", "issue"))),
       ["issue-sessions.json"],
       "renamed into place, no temporary file left",
     );
 
-    unlinkIssueSession(root, worktree, 7, "s1");
+    unlinkSession(root, worktree, "issue", 7, "s1");
     assert.equal(sessionOf(root, 7), "repository:s1", "another session's unlink changes nothing");
-    unlinkIssueSession(root, repository, 7, "s1");
+    unlinkSession(root, repository, "issue", 7, "s1");
     assert.equal(sessionOf(root, 7), undefined);
-    assert.equal(fs.existsSync(issueSessionsFile(root, "p")), false, "no file once the last is gone");
+    assert.equal(fs.existsSync(sessionLinksFile(root, "p", "issue")), false, "no file once the last is gone");
   });
 
   it("goes with a deleted session, worktree or issue, and leaves no file once the last is gone", () => {
     const root = tempDir("tet-issue-sessions-");
-    linkIssueSession(root, repository, 7, "s1");
-    linkIssueSession(root, repository, 8, "s3");
-    linkIssueSession(root, worktree, 3, "s2");
-    forgetSessionIssue(root, repository, "s1");
+    linkSession(root, repository, "issue", 7, "s1");
+    linkSession(root, repository, "issue", 8, "s3");
+    linkSession(root, worktree, "issue", 3, "s2");
+    forgetSessionLinks(root, repository, "s1");
     assert.deepEqual([sessionOf(root, 3), sessionOf(root, 7), sessionOf(root, 8)], ["k1:s2", undefined, "repository:s3"]);
-    forgetIssueSessionsAt(root, worktree);
+    forgetSessionLinksAt(root, worktree);
     assert.equal(sessionOf(root, 3), undefined);
-    forgetIssueSession(root, "p", 8);
-    assert.equal(fs.existsSync(issueSessionsFile(root, "p")), false);
-    forgetIssueSession(root, "p", 8);
+    forgetLinkedSession(root, "p", "issue", 8);
+    assert.equal(fs.existsSync(sessionLinksFile(root, "p", "issue")), false);
+    forgetLinkedSession(root, "p", "issue", 8);
   });
 
   it("drops a session no agent recognizes anymore, and keeps the rest", () => {
     const root = tempDir("tet-issue-sessions-");
-    linkIssueSession(root, repository, 3, "s1");
-    linkIssueSession(root, repository, 4, "s2");
-    linkIssueSession(root, worktree, 5, "s3");
-    pruneIssueSessions(root, repository, new Set(["s1"]));
+    linkSession(root, repository, "issue", 3, "s1");
+    linkSession(root, repository, "issue", 4, "s2");
+    linkSession(root, worktree, "issue", 5, "s3");
+    pruneSessionLinks(root, repository, new Set(["s1"]));
     assert.deepEqual([sessionOf(root, 3), sessionOf(root, 4), sessionOf(root, 5)], ["repository:s1", undefined, "k1:s3"]);
   });
 
   it("is forgotten whole, as when the tracker changes", () => {
     const root = tempDir("tet-issue-sessions-");
-    linkIssueSession(root, repository, 3, "s1");
-    forgetAllIssueSessions(root, "p");
-    assert.equal(fs.existsSync(issueSessionsFile(root, "p")), false);
-    forgetAllIssueSessions(root, "q");
+    linkSession(root, repository, "issue", 3, "s1");
+    forgetAllSessionLinks(root, "p", "issue");
+    assert.equal(fs.existsSync(sessionLinksFile(root, "p", "issue")), false);
+    forgetAllSessionLinks(root, "q", "issue");
   });
 
   it("is read field by field from a hand-edited file, a list per issue by its latest link", () => {
     const root = tempDir("tet-issue-sessions-");
-    fs.mkdirSync(path.dirname(issueSessionsFile(root, "p")), { recursive: true });
-    fs.writeFileSync(issueSessionsFile(root, "p"), "{ nope");
+    fs.mkdirSync(path.dirname(sessionLinksFile(root, "p", "issue")), { recursive: true });
+    fs.writeFileSync(sessionLinksFile(root, "p", "issue"), "{ nope");
     assert.equal(sessionOf(root, 3), undefined);
     fs.writeFileSync(
-      issueSessionsFile(root, "p"),
+      sessionLinksFile(root, "p", "issue"),
       JSON.stringify({
         3: [{ at: "repository", sessionId: "s1" }, { at: "k1", sessionId: "s2" }, { at: 4 }, "junk"],
         4: { at: "repository", sessionId: "s4" },
@@ -307,8 +307,8 @@ describe("the session linked to an issue", () => {
       [sessionOf(root, 3), sessionOf(root, 4), sessionOf(root, 5), sessionOf(root, 6)],
       ["k1:s2", "repository:s4", undefined, undefined],
     );
-    linkIssueSession(root, worktree, 5, "s5");
-    assert.deepEqual(JSON.parse(fs.readFileSync(issueSessionsFile(root, "p"), "utf8")), {
+    linkSession(root, worktree, "issue", 5, "s5");
+    assert.deepEqual(JSON.parse(fs.readFileSync(sessionLinksFile(root, "p", "issue"), "utf8")), {
       3: { at: "k1", sessionId: "s2" },
       4: { at: "repository", sessionId: "s4" },
       5: { at: "k1", sessionId: "s5" },
@@ -620,7 +620,7 @@ describe("the stores", () => {
     );
     assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
     assert.equal(
-      effectivePrompt({ commitMessage: "write a subject", handover: "", issue: "", changeRequest: "" }, "commitMessage"),
+      effectivePrompt({ commitMessage: "write a subject", handover: "", issue: "", changeRequest: "", changeRequestTab: "" }, "commitMessage"),
       "write a subject",
     );
     const store = new SettingsStore(dir);

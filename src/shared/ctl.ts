@@ -1,7 +1,7 @@
 import { SBX_SKILLS_KINDS } from "./sbx-rules";
 import { NOTICE_SEVERITIES } from "./types/app";
 import { EXPLORER_SORT_ORDERS } from "./types/files";
-import { ISSUE_STATE_FILTERS, ISSUE_STATES } from "./types/providers";
+import { CHANGE_REQUEST_STATE_FILTERS, ISSUE_STATE_FILTERS, ISSUE_STATES } from "./types/providers";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
 import { TERMINAL_STATUSES } from "./types/terminals";
 
@@ -145,6 +145,8 @@ export const CONTROL_FLAGS: Readonly<Record<string, "switch" | "value">> = {
   date: "value",
   summary: "value",
   remove: "value",
+  reviewer: "value",
+  auto: "switch",
 };
 
 /** The size `tabs-start` and `tabs-restart` give a tab no window has fitted yet: what its output is
@@ -244,7 +246,7 @@ const VERBS = [
     group: "Settings",
     usage: `settings-set-notification <${NOTIFICATION_IDS.join("|")}> <on|off>`,
     summary:
-      "Switch a desktop notification: a finished turn, an agent waiting for an answer, or an idle reminder (Claude Code only; applies to tabs started afterwards).",
+      "Switch a notification: the desktop's of a finished turn, an agent waiting for an answer, or an idle reminder (Claude Code only; applies to tabs started afterwards); the window's notice of a new pull or merge request, or of failed checks of one of the account's.",
     positionals: ["id", "value"],
   },
   {
@@ -555,6 +557,40 @@ const VERBS = [
     sandbox: "ownProject",
   },
   {
+    verb: "change-requests-send-to-agent",
+    group: "Tabs",
+    usage: "change-requests-send-to-agent <number> --agent <id> [--background] [TARGET]",
+    summary:
+      "Open a tab of an agent (see agents-list) on the project's pull or merge request, read from its host as the section's Send to Agent does, and bring it to the front. Refused for one that has a session (change-requests-session).",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-link-session",
+    group: "Tabs",
+    usage: "change-requests-link-session <number> <tab-id> [TARGET]",
+    summary:
+      "Link a tab's session to the project's pull or merge request, as issues-link-session links one to an issue. A session has at most one of each: an issue and a pull or merge request.",
+    positionals: ["number", "tabId"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-unlink-session",
+    group: "Tabs",
+    usage: "change-requests-unlink-session <number> <tab-id> [TARGET]",
+    summary: "Take a tab's session off the project's pull or merge request.",
+    positionals: ["number", "tabId"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-session",
+    group: "Tabs",
+    usage: "change-requests-session <number> [--project <id>]",
+    summary: "The session linked to the project's pull or merge request, as issues-session answers an issue's.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
     verb: "commands-list",
     group: "Tabs",
     usage: "commands-list [--project <id>]",
@@ -716,6 +752,125 @@ const VERBS = [
     sandbox: "ownRef",
   },
   {
+    verb: "change-requests-list",
+    group: "Projects",
+    usage: `change-requests-list [--state <${CHANGE_REQUEST_STATE_FILTERS.join("|")}>] [--author <login>] [--assignee <login>] [--reviewer <login>] [--label <name>[,<name>...]] [--project <id>]`,
+    summary:
+      "The pull or merge requests of the project's repository, read from its own remote as their section lists them (number, title, url, state, draft, checks, author, assignee, createdAt, updatedAt, labels): the open ones, or those the filter narrows to; a fork's are left out.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-latest",
+    group: "Projects",
+    usage: `change-requests-latest [--state <${CHANGE_REQUEST_STATE_FILTERS.join("|")}>] [--author <login>] [--assignee <login>] [--reviewer <login>] [--label <name>[,<name>...]] [--project <id>]`,
+    summary:
+      "What the host says of the same list without sending it: total, updatedAt and each one's checks. Two answers that agree found nothing new.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-filter-options",
+    group: "Projects",
+    usage: "change-requests-filter-options [--project <id>]",
+    summary: "What the section's filters offer: the labels, and the people for --author, --assignee and --reviewer.",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-read",
+    group: "Projects",
+    usage: "change-requests-read <number> [--project <id>]",
+    summary:
+      "One pull or merge request as its tab shows it: its status (state, draft, checks and the names of those failed, conflicts, branches), text, comments, events and fields, as issues-read answers an issue.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-unread",
+    group: "Projects",
+    usage: "change-requests-unread [--project <id>]",
+    summary:
+      "The project's open pull or merge requests the host created or changed, or whose checks failed, since their tab last showed them (number, title, url, updatedAt, checks).",
+    positionals: [],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-mark-seen",
+    group: "Projects",
+    usage: "change-requests-mark-seen [<number>] [--project <id>]",
+    summary:
+      "Count it as shown at its current update and checks, so change-requests-unread leaves it out; without a number every one created or changed until now.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-field-options",
+    group: "Projects",
+    usage: "change-requests-field-options <number> <field> [--project <id>]",
+    summary: "What a pick field of the pull or merge request (its id from change-requests-read) can be set to.",
+    positionals: ["number", "field"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-set-field",
+    group: "Projects",
+    usage: "change-requests-set-field <number> <field> [<value>...] [--project <id>]",
+    summary: "Set a pick field of the pull or merge request (reviewers, assignees, labels) to the values given; none empties it.",
+    positionals: ["number", "field", "value"],
+    variadic: true,
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-update",
+    group: "Projects",
+    usage: `change-requests-update <number> [--title <text>] [--body <text>] [--state <${ISSUE_STATES.join("|")}>] [--project <id>]`,
+    summary: "Change its title, text or state (close or reopen it); what is left out stays. It is merged by change-requests-merge alone.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-comment",
+    group: "Projects",
+    usage: "change-requests-comment <number> <body> [--project <id>]",
+    summary: "Comment on the pull or merge request as the account of the project's host.",
+    positionals: ["number", "body"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-edit-comment",
+    group: "Projects",
+    usage: "change-requests-edit-comment <comment-id> <body> [--project <id>]",
+    summary: "Replace the text of a comment (its id from change-requests-read).",
+    positionals: ["commentId", "body"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-delete-comment",
+    group: "Projects",
+    usage: "change-requests-delete-comment <comment-id> --confirm [--project <id>]",
+    summary: "Delete a comment (its id from change-requests-read), for good. Ask the user, then pass --confirm.",
+    positionals: ["commentId"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-approve",
+    group: "Projects",
+    usage: "change-requests-approve <number> [--project <id>]",
+    summary: "Approve the pull or merge request as the account of the project's host, where the host lets it.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-merge",
+    group: "Projects",
+    usage: "change-requests-merge <number> [--auto] --confirm [--project <id>]",
+    summary:
+      "Merge the pull or merge request by the repository's own method; --auto has the host merge it once its checks passed. Not taken back: ask the user, then pass --confirm.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
     verb: "tabs-run-command",
     group: "Tabs",
     usage: "tabs-run-command <name> [--background] [TARGET]",
@@ -770,6 +925,15 @@ const VERBS = [
     usage: "issues-open <number> [--keep] [--background] [TARGET]",
     summary:
       "Open the project's issue in the preview tab of the repository or a worktree and bring it to the front, for the user to read; the next file or issue replaces it, --keep gives it a tab of its own.",
+    positionals: ["number"],
+    sandbox: "ownProject",
+  },
+  {
+    verb: "change-requests-open",
+    group: "Editor",
+    usage: "change-requests-open <number> [--keep] [--background] [TARGET]",
+    summary:
+      "Open the project's pull or merge request in the preview tab of the repository or a worktree and bring it to the front, as issues-open opens an issue.",
     positionals: ["number"],
     sandbox: "ownProject",
   },

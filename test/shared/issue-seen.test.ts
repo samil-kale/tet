@@ -1,11 +1,11 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isUnread, type Issue, type IssuesSeen } from "../../src/shared/types/providers";
+import { isUnread, type Issue, type TrackedSeen } from "../../src/shared/types/providers";
 
 const issue = (number: number, updatedAt: string, open = true): Issue =>
   ({ number, title: "t", open, updatedAt, createdAt: "2026-10-01T00:00:00Z", author: "mira", labels: [], avatars: {} }) as unknown as Issue;
 
-const seen: IssuesSeen = { since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-05T10:00:00Z" } };
+const seen: TrackedSeen = { since: "2026-11-01T00:00:00Z", shown: { 3: "2026-11-05T10:00:00Z" } };
 
 describe("an unread issue", () => {
   it("is one the tracker changed after its tab last showed it", () => {

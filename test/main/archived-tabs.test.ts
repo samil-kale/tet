@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import type { SessionProvider } from "../../src/main/agents/agent";
 import { claudeAgent } from "../../src/main/agents/claude";
 import { archivedIds } from "../../src/main/store/archive";
-import { issueSessionLinks, linkIssueSession } from "../../src/main/store/issue-sessions";
+import { sessionLinks, linkSession } from "../../src/main/store/session-links";
 import { archiveFile } from "../../src/main/store/project-dirs";
 import { ArchivedTabs } from "../../src/main/terminals/archived-tabs";
 import { HostPlace } from "../../src/main/terminals/tab-place";
@@ -239,12 +239,12 @@ describe("an archived tab", () => {
 
   it("takes its session off the issue it was linked to when deleted", async () => {
     const { archived, dataRoot, strip } = archive();
-    linkIssueSession(dataRoot, REF, 3, "s1");
-    linkIssueSession(dataRoot, REF, 4, "s2");
+    linkSession(dataRoot, REF, "issue", 3, "s1");
+    linkSession(dataRoot, REF, "issue", 4, "s2");
     archived.keep(running(strip), "s1");
     assert.equal(refused(await archived.delete("t1")), undefined);
     assert.deepEqual(
-      Object.values(issueSessionLinks(dataRoot, REF.projectId)).map((link) => link.sessionId),
+      Object.values(sessionLinks(dataRoot, REF.projectId, "issue")).map((link) => link.sessionId),
       ["s2"],
     );
   });

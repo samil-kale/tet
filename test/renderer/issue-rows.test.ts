@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mergeIssueRows, type IssueRowItem } from "../../src/renderer/lanes/issues/use-issue-rows";
+import { mergeIssueRows, type IssueRowItem } from "../../src/renderer/ui/use-issue-rows";
 import type { Issue } from "../../src/shared/types/providers";
 
 /** lanes/issues/use-issue-rows.ts: what the tracker adds or removes enters or leaves in place. */

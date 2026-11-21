@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Issue, IssueFilter, IssueListResult, IssuesLatest } from "../../../shared/types/providers";
 import { subscribeIssues } from "../../editor/editor-tab";
 import { reloadChangedIssueTabs, type IssueOptions } from "../../editor/editor-views";
-import { setIssuesSeen } from "../../editor/issue-seen";
+import { setSeen } from "../../editor/tracked-seen";
 import { subscribeAccounts } from "../../git/ProviderAccount";
 import { notify } from "../../ui/Notices";
 import { useWindowFocused } from "../../ui/use-window-focused";
@@ -147,7 +147,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       setNoAccount(result.noAccount === true);
       setIssues(result.issues ?? []);
       if (result.seen !== undefined) {
-        setIssuesSeen(projectId, result.seen);
+        setSeen("issue", projectId, result.seen);
       }
       if (result.error !== undefined) {
         notify("error", result.error);

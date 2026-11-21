@@ -63,6 +63,8 @@ export interface Notice {
   toast?: false;
   /** The tab a click on its entry shows. */
   target?: TabRef;
+  /** The change request a click on its entry opens in its tab, in the project's repository. */
+  opens?: { projectId: string; changeRequest: number };
   mark?: NoticeMark;
   /** A turn's notice: the notification center shows this agent's icon and `message` alone, without `title`. */
   agentId?: AgentId;

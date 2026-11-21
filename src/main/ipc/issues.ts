@@ -15,7 +15,7 @@ import type {
   IssueLatestResult,
   IssueListResult,
   IssueReadResult,
-  IssuesSeenResult,
+  TrackedSeenResult,
   IssueUploadResult,
   IssueUploadSaveResult,
 } from "../../shared/types/providers";
@@ -42,7 +42,7 @@ import {
   uploadIssueFile,
 } from "../issues";
 import { issueMarkdown, NoAccountError, onTracker, readIssueTracker } from "../providers/issues";
-import { markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "../store/issues-seen";
+import { markAllSeen, readSeen, setSeen } from "../store/tracked-seen";
 import { readIssueSource } from "../store/tet-json";
 import { logFailure } from "../util/json-file";
 import type { IpcDeps } from "./deps";
@@ -80,7 +80,7 @@ export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "
         latest,
         source,
         tracker: provider === null ? undefined : { provider, url: `https://${host}/${path}`, confidentialIssues },
-        seen: readIssuesSeen(dataRoot, projectId),
+        seen: readSeen(dataRoot, projectId, "issue"),
       };
     } catch (error) {
       return { source, error: errorMessage(error), noAccount: error instanceof NoAccountError };
@@ -168,12 +168,12 @@ export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "
   handle("issues:delete", (_event, projectId: string, number: number) => written(() => deleteIssue(issueDeps, projectId, number)));
 
   handle("issues:mark-seen", (_event, projectId: string, number: number, updatedAt: string) => {
-    logFailure("keep an issue's last seen update", () => setIssueSeen(dataRoot, projectId, number, updatedAt));
+    logFailure("keep an issue's last seen update", () => setSeen(dataRoot, projectId, "issue", number, updatedAt));
   });
 
-  handle("issues:mark-all-seen", (_event, projectId: string): IssuesSeenResult => {
+  handle("issues:mark-all-seen", (_event, projectId: string): TrackedSeenResult => {
     try {
-      return { ok: true, seen: markAllIssuesSeen(dataRoot, projectId) };
+      return { ok: true, seen: markAllSeen(dataRoot, projectId, "issue") };
     } catch (error) {
       return failure(error);
     }

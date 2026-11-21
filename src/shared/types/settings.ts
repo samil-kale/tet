@@ -6,7 +6,7 @@ export const COLOR_SCHEMES = ["system", "light", "dark"] as const;
 export type ColorScheme = (typeof COLOR_SCHEMES)[number];
 
 /** The lanes left of the tab area, in their fixed order. */
-export const LANES = ["projects", "git", "files", "issues", "archive"] as const;
+export const LANES = ["projects", "git", "files", "issues", "change-requests", "archive"] as const;
 
 export type Lane = (typeof LANES)[number];
 
@@ -28,9 +28,19 @@ export interface NotificationSettings {
   waiting: boolean;
   /** Idle waiting for the next prompt; only Claude Code raises this event. */
   idleReminder: boolean;
+  /** A notice in the window: a change request opened, or made ready, by someone else. */
+  changeRequestOpened: boolean;
+  /** A notice in the window: the checks of a change request of the account failed. */
+  changeRequestFailed: boolean;
 }
 
-export const NOTIFICATION_IDS = ["finished", "waiting", "idleReminder"] as const satisfies readonly (keyof NotificationSettings)[];
+export const NOTIFICATION_IDS = [
+  "finished",
+  "waiting",
+  "idleReminder",
+  "changeRequestOpened",
+  "changeRequestFailed",
+] as const satisfies readonly (keyof NotificationSettings)[];
 
 /** The Files tab: how the Explorer lists every project (its folders and excludes are the project's,
  *  in tet.json) and the file editor. */
@@ -78,7 +88,7 @@ export const GIT_SETTING_IDS = [
 ] as const satisfies readonly (keyof GitSettings)[];
 
 /** What TET asks of an agent (prompts.ts), in the Prompts tab's picker. */
-export const PROMPT_IDS = ["commitMessage", "handover", "issue", "changeRequest"] as const;
+export const PROMPT_IDS = ["commitMessage", "handover", "issue", "changeRequest", "changeRequestTab"] as const;
 
 export type PromptId = (typeof PROMPT_IDS)[number];
 

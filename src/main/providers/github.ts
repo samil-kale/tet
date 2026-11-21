@@ -1,17 +1,23 @@
 import { ownValue } from "../../shared/own-value";
-import type {
-  ChangeRequest,
-  Issue,
-  IssueChange,
-  IssueEvent,
-  IssueField,
-  IssueFilter,
-  IssueNote,
-  RemoteRepository,
+import {
+  linkedIssueName,
+  type ChangeRequest,
+  type ChangeRequestFilter,
+  type ChangeRequestRow,
+  type ChangeRequestState,
+  type ChecksState,
+  type Issue,
+  type IssueChange,
+  type IssueEvent,
+  type IssueField,
+  type IssueFilter,
+  type IssueNote,
+  type RemoteRepository,
 } from "../../shared/types/providers";
 import {
   allNodes,
   ApiError,
+  checksText,
   fetchImageOk,
   fetchOk,
   fetchUploadOk,
@@ -141,6 +147,45 @@ export interface GitHubEvent {
   previousTitle?: string;
   currentTitle?: string;
   source?: { number?: number; title?: string; url?: string };
+  /** A pull request's items: whose review was asked for, a review's own, a commit's. */
+  requestedReviewer?: { login?: string; name?: string } | null;
+  id?: string;
+  state?: string;
+  body?: string;
+  commit?: { committedDate: string; author: { user: GitHubUser | null } | null };
+}
+
+/** How a commit's checks stand, as GraphQL rolls them up; `contexts` read for a pull request's tab alone. */
+interface GitHubCheckRollup {
+  state: string;
+  contexts?: { nodes: { __typename: string; name?: string; conclusion?: string | null; context?: string; state?: string }[] };
+}
+
+/** A pull request as a row reads it (`PULL_REQUEST_ROW`); `headRepository` null for a deleted fork. */
+export interface GitHubPullRequestRow extends GitHubIssue {
+  isDraft: boolean;
+  headRepository: { nameWithOwner: string } | null;
+  head: { nodes: { commit: { oid: string; statusCheckRollup: GitHubCheckRollup | null } }[] };
+}
+
+/** A pull request as its tab reads it (`PULL_REQUEST_QUERY`). */
+export interface GitHubPullRequestDetail extends GitHubPullRequestRow {
+  body: string;
+  baseRefName: string;
+  headRefName: string;
+  additions: number;
+  deletions: number;
+  mergeable: string;
+  mergedAt: string | null;
+  mergedBy: { login: string } | null;
+  autoMergeRequest: { enabledAt: string | null } | null;
+  commitCount: { totalCount: number };
+  reviewRequests: { nodes: { requestedReviewer: GitHubUser | null }[] };
+  latestReviews: { nodes: { author: GitHubUser | null }[] };
+  closingIssuesReferences: { nodes: { number: number; title: string }[] } | null;
+  participants: { nodes: (GitHubUser | null)[] };
+  commentPage: GraphqlPage<GitHubComment>;
+  timelineItems: GraphqlPage<GitHubEvent>;
 }
 
 const ISSUE_ROW = `number title url state createdAt updatedAt
@@ -170,9 +215,8 @@ const EVENT_KINDS: Record<string, Exclude<IssueEvent["kind"], "text"> | undefine
 const TIMELINE_ARGUMENTS = `itemTypes: [CLOSED_EVENT, REOPENED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, LABELED_EVENT, UNLABELED_EVENT,
   MILESTONED_EVENT, DEMILESTONED_EVENT, RENAMED_TITLE_EVENT, CROSS_REFERENCED_EVENT]`;
 
-const TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
-  nodes {
-    __typename
+/** The timeline items an issue and a pull request both have, as `toEvent` reads them. */
+const EVENT_SELECTION = `__typename
     ... on ClosedEvent { ${ACTOR} }
     ... on ReopenedEvent { ${ACTOR} }
     ... on AssignedEvent { ${ACTOR} assignee { ... on Actor { login } } }
@@ -185,8 +229,10 @@ const TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
     ... on CrossReferencedEvent {
       ${ACTOR}
       source { ... on Issue { number title url } ... on PullRequest { number title url } }
-    }
-  }`;
+    }`;
+
+const TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes { ${EVENT_SELECTION} }`;
 
 const ISSUES_QUERY = `query($owner: String!, $name: String!, $cursor: String, $filter: IssueFilters) {
   repository(owner: $owner, name: $name) {
@@ -272,6 +318,82 @@ const TIMELINE_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
   }
 }`;
 
+/** A pull request as a row reads it: an issue's, its draft state, where its branch is, and how its head
+ *  commit's checks stand. */
+const PULL_REQUEST_ROW = `${ISSUE_ROW} isDraft headRepository { nameWithOwner }
+  head: commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }`;
+
+/** GraphQL's `pullRequests` narrows by no person, so a list is GitHub's search (`pullRequestSearch`). */
+const PULL_REQUESTS_QUERY = `query($query: String!, $cursor: String) {
+  search(query: $query, type: ISSUE, first: 100, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on PullRequest { ${PULL_REQUEST_ROW} } }
+  }
+}`;
+
+const PULL_REQUESTS_LATEST_QUERY = `query($query: String!) {
+  search(query: $query, type: ISSUE, first: 100) {
+    issueCount
+    nodes {
+      ... on PullRequest { number updatedAt headRepository { nameWithOwner } head: commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
+    }
+  }
+}`;
+
+const PULL_REQUEST_TIMELINE_ARGUMENTS = `itemTypes: [CLOSED_EVENT, REOPENED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, LABELED_EVENT,
+  UNLABELED_EVENT, MILESTONED_EVENT, DEMILESTONED_EVENT, RENAMED_TITLE_EVENT, CROSS_REFERENCED_EVENT, REVIEW_REQUESTED_EVENT,
+  PULL_REQUEST_REVIEW, MERGED_EVENT, PULL_REQUEST_COMMIT]`;
+
+const PULL_REQUEST_TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes {
+    ${EVENT_SELECTION}
+    ... on ReviewRequestedEvent { ${ACTOR} requestedReviewer { ... on User { login } ... on Bot { login } ... on Team { name } } }
+    ... on PullRequestReview { id createdAt actor: author { login avatarUrl } state body }
+    ... on MergedEvent { ${ACTOR} }
+    ... on PullRequestCommit { commit { committedDate author { user { login avatarUrl } } } }
+  }`;
+
+const PULL_REQUEST_QUERY = `query(${ISSUE_VARIABLES}) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      ${ISSUE_ROW}
+      isDraft body baseRefName headRefName additions deletions mergeable mergedAt
+      mergedBy { login }
+      autoMergeRequest { enabledAt }
+      commitCount: commits { totalCount }
+      head: commits(last: 1) {
+        nodes {
+          commit {
+            oid
+            statusCheckRollup {
+              state
+              contexts(first: 100) { nodes { __typename ... on CheckRun { name conclusion } ... on StatusContext { context state } } }
+            }
+          }
+        }
+      }
+      reviewRequests(first: 50) { nodes { requestedReviewer { ... on User { login avatarUrl } ... on Bot { login avatarUrl } } } }
+      latestReviews(first: 50) { nodes { author { login avatarUrl } } }
+      closingIssuesReferences(first: 25) { nodes { number title } }
+      participants(first: 100) { nodes { login avatarUrl } }
+      commentPage: comments(first: 100) { ${COMMENT_PAGE} }
+      timelineItems(first: 100, ${PULL_REQUEST_TIMELINE_ARGUMENTS}) { ${PULL_REQUEST_TIMELINE_PAGE} }
+    }
+  }
+}`;
+
+const PULL_REQUEST_COMMENTS_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { comments(first: 100, after: $cursor) { ${COMMENT_PAGE} } } }
+}`;
+
+const PULL_REQUEST_TIMELINE_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      timelineItems(first: 100, after: $cursor, ${PULL_REQUEST_TIMELINE_ARGUMENTS}) { ${PULL_REQUEST_TIMELINE_PAGE} }
+    }
+  }
+}`;
+
 /** What a timeline item shows, for those the tab draws; a comment is read on its own. */
 function toEvent(item: GitHubEvent): IssueEvent | undefined {
   const base = { actor: item.actor?.login ?? "ghost", createdAt: item.createdAt };
@@ -302,6 +424,176 @@ function toEvent(item: GitHubEvent): IssueEvent | undefined {
 
 export function toEvents(items: GitHubEvent[]): IssueEvent[] {
   return items.map(toEvent).filter((event) => event !== undefined);
+}
+
+/** What a review's verdict shows as an event; one that only comments shows as its text alone. */
+const REVIEW_VERDICTS: Record<string, "approved" | "changes-requested" | undefined> = {
+  APPROVED: "approved",
+  CHANGES_REQUESTED: "changes-requested",
+};
+
+/** A pull request's timeline as the tab draws it: an issue's events, and its own. A run of commits by
+ *  one author is one push, at its first. */
+export function toPullRequestEvents(items: GitHubEvent[]): IssueEvent[] {
+  const events: IssueEvent[] = [];
+  for (const item of items) {
+    const base = { actor: item.actor?.login ?? "ghost", createdAt: item.createdAt };
+    switch (item.__typename) {
+      case "PullRequestCommit": {
+        if (!item.commit) {
+          break;
+        }
+        const actor = item.commit.author?.user?.login ?? "ghost";
+        const last = events.at(-1);
+        if (last?.kind === "pushed" && last.actor === actor) {
+          events[events.length - 1] = { ...last, commits: last.commits + 1 };
+        } else {
+          events.push({ actor, createdAt: item.commit.committedDate, kind: "pushed", commits: 1 });
+        }
+        break;
+      }
+      case "ReviewRequestedEvent": {
+        const login = item.requestedReviewer?.login ?? item.requestedReviewer?.name;
+        if (login !== undefined) {
+          events.push({ ...base, kind: "review-requested", login });
+        }
+        break;
+      }
+      case "PullRequestReview": {
+        const review = REVIEW_VERDICTS[item.state ?? ""];
+        if (review) {
+          events.push({ ...base, kind: "reviewed", review });
+        }
+        break;
+      }
+      case "MergedEvent":
+        events.push({ ...base, kind: "merged" });
+        break;
+      default: {
+        const event = toEvent(item);
+        if (event) {
+          events.push(event);
+        }
+      }
+    }
+  }
+  return events;
+}
+
+/** The texts of a pull request's reviews, which show beside its comments but are none of them. */
+export function reviewNotes(items: GitHubEvent[]): IssueNote[] {
+  return items.flatMap((item) =>
+    item.__typename === "PullRequestReview" && item.id !== undefined && item.body?.trim()
+      ? [{ id: item.id, author: item.actor?.login ?? "ghost", createdAt: item.createdAt, body: item.body, fixed: true as const }]
+      : [],
+  );
+}
+
+/** How GitHub's rollup of a commit's checks stands, in TET's words; undefined for a commit without any. */
+export function checksOf(rollup: { state: string } | null | undefined): ChecksState | undefined {
+  switch (rollup?.state) {
+    case "SUCCESS":
+      return "passed";
+    case "FAILURE":
+    case "ERROR":
+      return "failed";
+    case "PENDING":
+    case "EXPECTED":
+      return "running";
+    default:
+      return undefined;
+  }
+}
+
+/** What a check run ended as that fails the rollup. */
+const FAILED_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ACTION_REQUIRED"]);
+
+/** The names of the checks that failed, check runs and commit statuses alike. */
+export function failedChecksOf(rollup: GitHubCheckRollup | null | undefined): string[] {
+  return (rollup?.contexts?.nodes ?? []).flatMap((entry) => {
+    if (entry.__typename === "CheckRun") {
+      return FAILED_CONCLUSIONS.has(entry.conclusion ?? "") && entry.name !== undefined ? [entry.name] : [];
+    }
+    return (entry.state === "FAILURE" || entry.state === "ERROR") && entry.context !== undefined ? [entry.context] : [];
+  });
+}
+
+/** A filter in the words of GitHub's search, newest first by `sort`; its labels are all required. */
+export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sort: "created" | "updated"): string {
+  const states: Record<NonNullable<ChangeRequestFilter["state"]>, string[]> = {
+    open: ["is:open"],
+    merged: ["is:merged"],
+    closed: ["is:closed", "is:unmerged"],
+  };
+  return [
+    `repo:${path}`,
+    "is:pr",
+    ...(filter.state ? states[filter.state] : []),
+    ...(filter.author ? [`author:${filter.author}`] : []),
+    ...(filter.assignee ? [`assignee:${filter.assignee}`] : []),
+    ...(filter.reviewer ? [`review-requested:${filter.reviewer}`] : []),
+    ...filter.labels.map((label) => `label:"${label.replaceAll('"', "")}"`),
+    `sort:${sort}-desc`,
+  ].join(" ");
+}
+
+/** Whether a pull request is from a branch of `path` itself; a search answers other kinds as empty nodes. */
+function fromOwnBranch(entry: { headRepository?: { nameWithOwner: string } | null }, path: string): boolean {
+  return entry.headRepository?.nameWithOwner.toLowerCase() === path.toLowerCase();
+}
+
+const PULL_REQUEST_STATES: Record<string, ChangeRequestState | undefined> = { OPEN: "open", MERGED: "merged", CLOSED: "closed" };
+
+export function toChangeRequestRow(entry: GitHubPullRequestRow): ChangeRequestRow {
+  const commit = entry.head.nodes[0]?.commit;
+  return {
+    ...toIssue(entry),
+    state: PULL_REQUEST_STATES[entry.state] ?? "open",
+    draft: entry.isDraft,
+    checks: checksOf(commit?.statusCheckRollup),
+    headSha: commit?.oid,
+  };
+}
+
+/** The fields a pull request has, as the tab lists them: who reviews it (has or is asked to), its
+ *  assignees and labels, the issues it closes and who took part. */
+export function toPullRequestFields(found: GitHubPullRequestDetail): IssueField[] {
+  const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
+  const reviewers = [
+    ...people(found.latestReviews.nodes.map((review) => review.author)),
+    ...people(found.reviewRequests.nodes.map((request) => request.requestedReviewer)),
+  ];
+  return [
+    pickField("reviewers", "Reviewers", [...new Set(reviewers)], { several: true, shown: "people" }),
+    pickField("assignees", "Assignees", people(found.assignees.nodes), { several: true, shown: "people" }),
+    pickField(
+      "labels",
+      "Labels",
+      found.labels.nodes.map((label) => label.name),
+      { several: true, shown: "labels" },
+    ),
+    pickField(
+      "linkedIssues",
+      "Linked Issues",
+      (found.closingIssuesReferences?.nodes ?? []).map((issue) => linkedIssueName(issue.number, issue.title)),
+      { several: true, shown: "issues", editable: false },
+    ),
+    pickField("participants", "Participants", people(found.participants.nodes), { several: true, shown: "people", editable: false }),
+  ];
+}
+
+/** The method a merge of the repository takes: its first allowed, in the order GitHub offers them. */
+export function defaultMergeMethod(allowed: { mergeCommitAllowed: boolean; squashMergeAllowed: boolean; rebaseMergeAllowed: boolean }): string {
+  if (allowed.mergeCommitAllowed) {
+    return "MERGE";
+  }
+  if (allowed.squashMergeAllowed) {
+    return "SQUASH";
+  }
+  if (allowed.rebaseMergeAllowed) {
+    return "REBASE";
+  }
+  throw new Error("This repository allows no way to merge a pull request");
 }
 
 /** What of a change `updateIssue` sets, in GitHub's words. */
@@ -579,6 +871,71 @@ async function readTarget(send: GraphqlSend, path: string, number: number): Prom
   );
   return { id: issue.id, parentId: issue.parent?.id };
 }
+
+/** A pull request of a repository by its number, as far as `selection` reads it beside its node id. */
+async function readPullRequestNode<T extends object = object>(
+  send: GraphqlSend,
+  path: string,
+  number: number,
+  selection = "",
+): Promise<{ id: string } & T> {
+  const query = `query(${ISSUE_VARIABLES}) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id ${selection} } } }`;
+  const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { pullRequest: ({ id: string } & T) | null } | null };
+  const pullRequest = data.repository?.pullRequest;
+  if (!pullRequest) {
+    throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
+  }
+  return pullRequest;
+}
+
+/** What a change of a pull request's field needs of it: its id, and the ids of who reviewed it, whose
+ *  review stays and is not asked for again. */
+interface PullRequestTarget {
+  id: string;
+  reviewedIds: string[];
+}
+
+function updatePullRequestWrite(input: object): Write {
+  return { mutation: "updatePullRequest", inputType: "UpdatePullRequestInput", input };
+}
+
+/** The fields of a pull request, by the id `toPullRequestFields` gives them. */
+export const PULL_REQUEST_FIELD_HANDLERS: Record<string, FieldHandler<PullRequestTarget>> = {
+  reviewers: pickHandler({ what: "reviewer", choices: ({ send, path }) => allAssignable(send, path) }, (target, ids) => ({
+    mutation: "requestReviews",
+    inputType: "RequestReviewsInput",
+    input: { pullRequestId: target.id, userIds: ids.filter((id) => !target.reviewedIds.includes(id)), union: false },
+  })),
+  assignees: pickHandler({ what: "person to assign", choices: ({ send, path }) => allAssignable(send, path) }, (target, ids) =>
+    updatePullRequestWrite({ pullRequestId: target.id, assigneeIds: ids }),
+  ),
+  labels: pickHandler({ what: "label", choices: ({ send, path }) => allLabels(send, path) }, (target, ids) =>
+    updatePullRequestWrite({ pullRequestId: target.id, labelIds: ids }),
+  ),
+};
+
+async function readPullRequestTarget(send: GraphqlSend, path: string, number: number): Promise<PullRequestTarget> {
+  const found = await readPullRequestNode<{ latestReviews: { nodes: { author: { id?: string } | null }[] } }>(
+    send,
+    path,
+    number,
+    "latestReviews(first: 50) { nodes { author { ... on User { id } } } }",
+  );
+  return { id: found.id, reviewedIds: found.latestReviews.nodes.flatMap((review) => review.author?.id ?? []) };
+}
+
+const pullRequestFields = fieldMethods<PullRequestTarget>({
+  graphql: sender,
+  handlerOf: (_send, _path, fieldId) => {
+    const handler = ownValue(PULL_REQUEST_FIELD_HANDLERS, fieldId);
+    if (!handler) {
+      throw new Error(`A pull request of GitHub has no field ${fieldId}`);
+    }
+    return handler;
+  },
+  readTarget: readPullRequestTarget,
+  mutate,
+});
 
 /** The fields only some hosts have, each asked on its own: a host that lacks one refuses its query
  *  whole, and the issue then shows without it. */
@@ -875,7 +1232,7 @@ export const github: GitProvider = {
 
   ...fieldMethods({ graphql: sender, handlerOf: fieldHandlerOf, readTarget, mutate }),
 
-  changeRequest: { noun: "pull request", prefix: "#", selfApproval: false, deletesSourceBranch: false },
+  changeRequest: { noun: "pull request", prefix: "#", checks: "checks", selfApproval: false, deletesSourceBranch: false },
 
   async findChangeRequest({ host, token, path }, head) {
     // `headRefName` matches a fork's branch of that name too, so its repository is read alongside.
@@ -910,8 +1267,11 @@ export const github: GitProvider = {
     return { number: pullRequest.number, url: pullRequest.url };
   },
 
-  approveChangeRequest() {
-    return Promise.reject(new Error("GitHub does not let a pull request's author approve it"));
+  // GitHub refuses its author (`selfApproval`), in its own words.
+  async approveChangeRequest({ host, token, path }, number) {
+    const send = sender(host, token);
+    const { id } = await readPullRequestNode(send, path, number);
+    await mutate(send, { mutation: "addPullRequestReview", inputType: "AddPullRequestReviewInput", input: { pullRequestId: id, event: "APPROVE" } });
   },
 
   async autoMergeChangeRequest({ host, token, path }, number, squash) {
@@ -928,6 +1288,135 @@ export const github: GitProvider = {
       inputType: "EnablePullRequestAutoMergeInput",
       input: { pullRequestId: pullRequest.id, mergeMethod: squash ? "SQUASH" : "MERGE" },
     });
+  },
+
+  async listChangeRequests({ host, token, path }, filter) {
+    const entries = await allNodes<GitHubPullRequestRow>(
+      sender(host, token),
+      PULL_REQUESTS_QUERY,
+      { query: pullRequestSearch(path, filter, "created") },
+      (data) => (data as { search: GraphqlPage<GitHubPullRequestRow> }).search,
+    );
+    return entries.filter((entry) => fromOwnBranch(entry, path)).map(toChangeRequestRow);
+  },
+
+  async readChangeRequestsLatest({ host, token, path }, filter) {
+    type Latest = Pick<GitHubPullRequestRow, "number" | "updatedAt" | "headRepository"> & {
+      head: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
+    };
+    const data = (await sender(host, token)(PULL_REQUESTS_LATEST_QUERY, { query: pullRequestSearch(path, filter, "updated") })) as {
+      search: { issueCount: number; nodes: Latest[] };
+    };
+    const own = data.search.nodes.filter((entry) => fromOwnBranch(entry, path));
+    return {
+      total: data.search.issueCount,
+      updatedAt: own[0]?.updatedAt,
+      checks: checksText(own.map((entry) => ({ number: entry.number, checks: checksOf(entry.head.nodes[0]?.commit.statusCheckRollup) }))),
+    };
+  },
+
+  async readChangeRequest({ host, token, path }, number) {
+    const send = sender(host, token);
+    const variables = { ...repositoryOf(path), number };
+    const data = (await send(PULL_REQUEST_QUERY, variables)) as { repository: { pullRequest: GitHubPullRequestDetail | null } | null };
+    const found = data.repository?.pullRequest;
+    if (!found) {
+      throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
+    }
+    type Answer = { repository: { pullRequest: { comments: GraphqlPage<GitHubComment>; timelineItems: GraphqlPage<GitHubEvent> } } };
+    const [laterComments, laterItems] = await Promise.all([
+      found.commentPage.pageInfo.hasNextPage
+        ? allNodes<GitHubComment>(
+            send,
+            PULL_REQUEST_COMMENTS_QUERY,
+            { ...variables, cursor: found.commentPage.pageInfo.endCursor },
+            (answer) => (answer as Answer).repository.pullRequest.comments,
+          )
+        : [],
+      found.timelineItems.pageInfo.hasNextPage
+        ? allNodes<GitHubEvent>(
+            send,
+            PULL_REQUEST_TIMELINE_QUERY,
+            { ...variables, cursor: found.timelineItems.pageInfo.endCursor },
+            (answer) => (answer as Answer).repository.pullRequest.timelineItems,
+          )
+        : [],
+    ]);
+    const comments = [...found.commentPage.nodes, ...laterComments];
+    const items = [...found.timelineItems.nodes, ...laterItems];
+    const row = toChangeRequestRow(found);
+    const rollup = found.head.nodes[0]?.commit.statusCheckRollup;
+    return {
+      ...row,
+      provider: "github",
+      kind: github.changeRequest,
+      avatars: avatarsOf([
+        found.author,
+        ...assigneesOf(found),
+        ...found.participants.nodes,
+        ...found.reviewRequests.nodes.map((request) => request.requestedReviewer),
+        ...found.latestReviews.nodes.map((review) => review.author),
+        ...comments.map((comment) => comment.author),
+        ...items.map((item) => item.actor),
+      ]),
+      events: toPullRequestEvents(items),
+      fields: toPullRequestFields(found),
+      body: found.body,
+      notes: [...comments.map(toNote), ...reviewNotes(items)],
+      status: {
+        state: row.state,
+        draft: row.draft,
+        checks: row.checks,
+        failedChecks: failedChecksOf(rollup),
+        checksUrl: rollup ? `${found.url}/checks` : undefined,
+        conflicts: found.mergeable === "CONFLICTING",
+        autoMerge: found.autoMergeRequest !== null,
+        head: found.headRefName,
+        base: found.baseRefName,
+        commits: found.commitCount.totalCount,
+        additions: found.additions,
+        deletions: found.deletions,
+        mergedBy: found.mergedBy?.login,
+        mergedAt: found.mergedAt ?? undefined,
+      },
+    };
+  },
+
+  listChangeRequestOptions: pullRequestFields.listOptions,
+
+  setChangeRequestField: pullRequestFields.setField,
+
+  async updateChangeRequest({ host, token, path }, number, { title, body, state }) {
+    const send = sender(host, token);
+    const { id } = await readPullRequestNode(send, path, number);
+    await mutate(send, updatePullRequestWrite({ pullRequestId: id, title, body, state: state && (state === "open" ? "OPEN" : "CLOSED") }));
+  },
+
+  async commentChangeRequest({ host, token, path }, number, body) {
+    const send = sender(host, token);
+    const { id } = await readPullRequestNode(send, path, number);
+    await mutate(send, { mutation: "addComment", inputType: "AddCommentInput", input: { subjectId: id, body } });
+  },
+
+  async mergeChangeRequest({ host, token, path }, number, whenChecksPass) {
+    const send = sender(host, token);
+    const query = `query(${ISSUE_VARIABLES}) {
+      repository(owner: $owner, name: $name) { mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed pullRequest(number: $number) { id } }
+    }`;
+    type Answer = {
+      repository: { mergeCommitAllowed: boolean; squashMergeAllowed: boolean; rebaseMergeAllowed: boolean; pullRequest: { id: string } | null } | null;
+    };
+    const { repository } = (await send(query, { ...repositoryOf(path), number })) as Answer;
+    if (!repository?.pullRequest) {
+      throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
+    }
+    const input = { pullRequestId: repository.pullRequest.id, mergeMethod: defaultMergeMethod(repository) };
+    await mutate(
+      send,
+      whenChecksPass
+        ? { mutation: "enablePullRequestAutoMerge", inputType: "EnablePullRequestAutoMergeInput", input }
+        : { mutation: "mergePullRequest", inputType: "MergePullRequestInput", input },
+    );
   },
 
   confidentialIssues: false,

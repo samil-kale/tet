@@ -3,9 +3,9 @@ import type { ProjectRef } from "../../../shared/types/project";
 import { DEFAULT_ISSUE_FILTER, isUnread, type Issue } from "../../../shared/types/providers";
 import { issueGone, openIssueTab, sendIssueToAgent, type OpenEditor } from "../../editor/editor-tab";
 import { loadProjectIssueImage, openProjectIssueLink, reloadIssueTabs } from "../../editor/editor-views";
-import { keepAllIssuesSeen, keepIssueSeen, keepIssueUnread, useIssuesSeen } from "../../editor/issue-seen";
+import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked-seen";
 import { newIssueUrl } from "../../editor/issue-text";
-import { issueSessionsOf, useWatchedIssueSessions } from "../../editor/use-issue-sessions";
+import { trackedSessionsOf, useWatchedSessions } from "../../editor/use-tracked-sessions";
 import { askIssueTitle, confirmDeleteIssue, dayOf, issueSessionEntry, Person, TextBox, type TextRendering } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
@@ -21,7 +21,7 @@ import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { IssueFilterBar } from "./IssueFilterBar";
-import { useIssueRows } from "./use-issue-rows";
+import { useIssueRows } from "../../ui/use-issue-rows";
 import { useIssues } from "./use-issues";
 
 /** The description's box in the new issue's dialog, in px: taller than the tab's, as it is the
@@ -157,7 +157,7 @@ export const IssueList = memo(function IssueList({
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, DEFAULT_ISSUE_FILTER);
   const { issues, source, tracker, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
-  const seen = useIssuesSeen(projectId);
+  const seen = useSeen("issue", projectId);
   const unread = (issue: Issue): boolean => isUnread(issue, seen);
   const [title, setTitle] = useState("");
   const needle = title.trim().toLowerCase();
@@ -165,7 +165,7 @@ export const IssueList = memo(function IssueList({
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
-  useWatchedIssueSessions(projectId);
+  useWatchedSessions("issue", projectId);
   const issueDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId, number: number) => {
     void window.tet.tabs.linkIssue(resolved.ref, tabId, number).then((result) => {
       if (result.ok) {
@@ -256,15 +256,15 @@ export const IssueList = memo(function IssueList({
       ? [
           SEPARATOR,
           unread(issue)
-            ? { label: "Mark as Read", run: () => keepIssueSeen(projectId, issue.number, issue.updatedAt) }
-            : { label: "Mark as Unread", run: () => keepIssueUnread(projectId, issue.number, issue.updatedAt) },
+            ? { label: "Mark as Read", run: () => keepSeen("issue", projectId, issue.number, issue.updatedAt) }
+            : { label: "Mark as Unread", run: () => keepUnread("issue", projectId, issue.number, issue.updatedAt) },
         ]
       : [];
     return [
       { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
       SEPARATOR,
       issueSessionEntry(
-        issueSessionsOf(projectId)[issue.number],
+        trackedSessionsOf("issue", projectId)[issue.number],
         agents,
         (agentId) => void sendIssueToAgent(resolved.ref, issue.number, agentId),
       ),
@@ -289,7 +289,7 @@ export const IssueList = memo(function IssueList({
             <IconButton
               title="Mark All as Read"
               disabled={busy || !(issues ?? []).some(unread)}
-              onClick={() => void keepAllIssuesSeen(projectId)}
+              onClick={() => void keepAllSeen("issue", projectId)}
             >
               <ListCheckIcon />
             </IconButton>

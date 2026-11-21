@@ -61,7 +61,7 @@ export function useTabRestore(
           openEditorFile(ref, id, editor.path, editor.preview && previewEditorTab(ref) === undefined, {
             restored: editor,
           });
-          editors.push({ tabId: id, ref, path: editor.path, commit: editor.commit, issue: editor.issue });
+          editors.push({ tabId: id, ref, path: editor.path, commit: editor.commit, issue: editor.issue, changeRequest: editor.changeRequest });
         } else if (kind === "shell") {
           const shown = history[id];
           if (typeof shown === "string") {

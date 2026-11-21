@@ -14,8 +14,8 @@ import { TerminalSession } from "../../src/main/terminals/terminal-session";
 import { accountEnv, sandboxTetValues } from "../../src/main/terminals/account-env";
 import { PROVIDERS } from "../../src/main/providers";
 import type { TabAccount } from "../../src/main/providers/issues";
-import { issueSessionLinks, linkIssueSession } from "../../src/main/store/issue-sessions";
-import { IssueLinks } from "../../src/main/terminals/issue-links";
+import { sessionLinks, linkSession } from "../../src/main/store/session-links";
+import { TrackedLinks } from "../../src/main/terminals/tracked-links";
 import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
@@ -38,7 +38,7 @@ describe("a turn's notification", () => {
   it("is left out for a tab on screen, and only while it is", async () => {
     const root = tempDir("tet-notification-");
     const settings = new SettingsStore(root);
-    settings.patch({ notifications: { finished: true, waiting: true, idleReminder: true } });
+    settings.patch({ notifications: { finished: true, waiting: true, idleReminder: true, changeRequestOpened: true, changeRequestFailed: true } });
     let pushed: TabDescriptor[] = [];
     const manager = new TabSessionManager(
       { ref: { projectId: "p" }, path: root, name: () => "repo" },
@@ -117,7 +117,7 @@ describe("a tab linked to an issue", () => {
         assert.equal(manager.snapshot()[0].issue, 3, "its descriptor shows the issue meanwhile");
         assert.deepEqual(manager.unlinkIssue(tabId, 3), { ok: true });
         assert.equal(manager.snapshot()[0].issue, undefined);
-        assert.deepEqual(issueSessionLinks(path.dirname(project), "p"), {}, "nothing written without a session");
+        assert.deepEqual(sessionLinks(path.dirname(project), "p", "issue"), {}, "nothing written without a session");
         assert.deepEqual(changed, ["p", "p"]);
         assert.deepEqual(pushed, [undefined, 3, undefined], "each change sent the tabs again");
       },
@@ -164,26 +164,26 @@ describe("the links of a project's issues", () => {
     const root = tempDir("tet-issue-links-");
     const open = new Set(["repository:a", "k1:b"]);
     const changed: string[] = [];
-    const links = new IssueLinks(
+    const links = new TrackedLinks(
       root,
       ({ ref, tabId }) => open.has(`${ref.worktree ?? "repository"}:${tabId}`),
       (projectId) => changed.push(projectId),
     );
-    links.link(repository, "a", undefined, 3);
-    assert.deepEqual(links.link(worktree, "b", undefined, 3), { replacedSession: true }, "the repository's tab gives the issue up");
-    assert.deepEqual([...links.issuesOf(repository, [tab("a")])], []);
-    assert.deepEqual([...links.issuesOf(worktree, [tab("b")])], [["b", 3]]);
+    links.link(repository, "a", undefined, "issue", 3);
+    assert.deepEqual(links.link(worktree, "b", undefined, "issue", 3), { replacedSession: true }, "the repository's tab gives the issue up");
+    assert.deepEqual([...links.linksOf(repository, [tab("a")], "issue")], []);
+    assert.deepEqual([...links.linksOf(worktree, [tab("b")], "issue")], [["b", 3]]);
 
-    linkIssueSession(root, repository, 5, "s1");
-    assert.deepEqual(links.link(worktree, "b", undefined, 5), { movedFrom: 3, replacedSession: true });
-    assert.deepEqual([...links.issuesOf(repository, [tab("c", "s1")])], [], "the waiting tab stands in for the issue's session");
+    linkSession(root, repository, "issue", 5, "s1");
+    assert.deepEqual(links.link(worktree, "b", undefined, "issue", 5), { movedFrom: 3, replacedSession: true });
+    assert.deepEqual([...links.linksOf(repository, [tab("c", "s1")], "issue")], [], "the waiting tab stands in for the issue's session");
     links.claimed(worktree, "b", "s2");
-    assert.equal(issueSessionLinks(root, "p")[5]?.sessionId, "s2", "the claimed session takes the issue's place");
-    assert.deepEqual([...links.issuesOf(worktree, [tab("b", "s2")])], [["b", 5]]);
+    assert.equal(sessionLinks(root, "p", "issue")[5]?.sessionId, "s2", "the claimed session takes the issue's place");
+    assert.deepEqual([...links.linksOf(worktree, [tab("b", "s2")], "issue")], [["b", 5]]);
 
-    links.link(worktree, "b", undefined, 8);
+    links.link(worktree, "b", undefined, "issue", 8);
     open.delete("k1:b");
-    assert.deepEqual([...links.issuesOf(worktree, [])], [], "a closed tab waits no more");
+    assert.deepEqual([...links.linksOf(worktree, [], "issue")], [], "a closed tab waits no more");
     assert.deepEqual(changed, ["p", "p", "p", "p", "p"]);
   });
 });
@@ -336,7 +336,7 @@ describe("a permission reported answered", () => {
 
 describe("a turn's notification", () => {
   const tab = (title: string): TabState => ({ tabId: "t", agentId: "claude", title, status: "running" });
-  const all = { finished: true, waiting: true, idleReminder: true };
+  const all = { finished: true, waiting: true, idleReminder: true, changeRequestOpened: true, changeRequestFailed: true };
 
   it("names the project and the session alone, and the mark it stands for", () => {
     assert.deepEqual(notificationFor(tab("Fix the bug"), "finished", "tet", all), {

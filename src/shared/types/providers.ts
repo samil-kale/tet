@@ -72,6 +72,92 @@ export function issueFileName(number: number): string {
   return `issue-${number}.md`;
 }
 
+/** What TET reads off a host and shows in a tab of its own, beside the repository's files: an issue, or a
+ *  pull or merge request. A number names one only together with its kind: GitLab counts each apart. */
+export type TrackedKind = "issue" | "change-request";
+
+/** The states a change request has; `tet-ctl` also filters by `all`. */
+export const CHANGE_REQUEST_STATES = ["open", "merged", "closed"] as const;
+export const CHANGE_REQUEST_STATE_FILTERS = [...CHANGE_REQUEST_STATES, "all"] as const;
+export type ChangeRequestState = (typeof CHANGE_REQUEST_STATES)[number];
+
+/** What the host narrows the change requests section to; a field left out narrows nothing. */
+export interface ChangeRequestFilter {
+  state?: ChangeRequestState;
+  author?: string;
+  assignee?: string;
+  /** Whose review it asks for. */
+  reviewer?: string;
+  /** A change request has to carry all of them. */
+  labels: string[];
+}
+
+/** What the change requests section shows until its filter is changed. */
+export const DEFAULT_CHANGE_REQUEST_FILTER: ChangeRequestFilter = { state: "open", labels: [] };
+
+/** How the checks of a change request's head commit stand: GitHub's checks, GitLab's pipeline. */
+export type ChecksState = "passed" | "running" | "failed";
+
+/** A row of the change requests section: an issue's, and where the request stands. */
+export interface ChangeRequestRow extends Issue {
+  state: ChangeRequestState;
+  draft: boolean;
+  /** Absent where its head commit has no checks. */
+  checks?: ChecksState;
+  /** Its head commit's id: a pipeline that fails is told of once for each. */
+  headSha?: string;
+}
+
+/** What a change request's tab says of it above its text. */
+export interface ChangeRequestStatus {
+  state: ChangeRequestState;
+  draft: boolean;
+  checks?: ChecksState;
+  /** The names of the checks or jobs that failed. */
+  failedChecks: string[];
+  /** The host's page of its checks or pipeline. */
+  checksUrl?: string;
+  /** It cannot merge into its base before they are resolved. */
+  conflicts: boolean;
+  /** The host merges it once nothing is outstanding. */
+  autoMerge: boolean;
+  /** Its source branch and the branch it merges into. */
+  head: string;
+  base: string;
+  commits: number;
+  additions?: number;
+  deletions?: number;
+  mergedBy?: string;
+  /** ISO 8601. */
+  mergedAt?: string;
+}
+
+/** One change request with what its row leaves out, for its tab: an issue's, its status, and what its
+ *  host calls it. */
+export interface ChangeRequestDetail extends IssueDetail {
+  status: ChangeRequestStatus;
+  kind: ChangeRequestKind;
+  /** Whether the project's issues are read from this same repository, so a linked issue opens in its
+   *  tab rather than the browser. */
+  ownIssues?: boolean;
+}
+
+/** What a change request's text is called as a file, as `issueFileName`. */
+export function changeRequestFileName(number: number): string {
+  return `change-request-${number}.md`;
+}
+
+/** A linked issue as its field names it: its number, then its title. */
+export function linkedIssueName(number: number, title: string): string {
+  return `#${number} ${title}`;
+}
+
+/** The number of a linked issue, as `linkedIssueName` named it; undefined for any other text. */
+export function linkedIssueNumber(name: string): number | undefined {
+  const match = /^#(\d+) /.exec(name);
+  return match ? Number(match[1]) : undefined;
+}
+
 /** What the tracker says of a list of issues without sending it: how many it holds and when the most
  *  recently changed one changed. Two reads that agree found nothing new in it. */
 export interface IssuesLatest {
@@ -80,28 +166,43 @@ export interface IssuesLatest {
   updatedAt?: string;
 }
 
-/** What the project's issue tabs showed, against what the tracker says now. An issue is unread once its
- *  `updatedAt` is past its entry in `issues` or, with none, past `since`: one created or changed
- *  since then counts without ever having been shown, an older one does not. */
-export interface IssuesSeen {
-  /** ISO 8601. From when an issue without an entry counts as unread. */
+/** What the project's tabs of one kind showed, against what the host says now. One is unread once its
+ *  `updatedAt` is past its entry in `shown` or, with none, past `since`: one created or changed since
+ *  then counts without ever having been shown, an older one does not. */
+export interface TrackedSeen {
+  /** ISO 8601. From when one without an entry counts as unread. */
   since: string;
-  /** Each issue's `updatedAt` as its tab last showed it, by number. */
-  issues: Record<number, string>;
+  /** Each one's `updatedAt` as its tab last showed it, by number. */
+  shown: Record<number, string>;
+  /** Change requests alone: those whose tab last showed their checks failed. */
+  failed?: number[];
 }
 
-/** Whether the tracker created or changed the open issue after its tab last showed it or, if none
- *  did, after `seen.since`; a closed one needs no attention, closing it being a change too. Dates are
- *  compared as times: the trackers spell them differently. */
-export function isUnread(issue: Issue, seen: IssuesSeen | undefined): boolean {
-  return seen !== undefined && issue.open && Date.parse(issue.updatedAt) > Date.parse(seen.issues[issue.number] ?? seen.since);
+/** Whether the host created or changed the open issue or change request after its tab last showed it
+ *  or, if none did, after `seen.since`; a closed one needs no attention, closing it being a change too.
+ *  Dates are compared as times: the hosts spell them differently. */
+export function isUnread(issue: Issue, seen: TrackedSeen | undefined): boolean {
+  return seen !== undefined && issue.open && Date.parse(issue.updatedAt) > Date.parse(seen.shown[issue.number] ?? seen.since);
 }
 
-export type IssuesSeenResult = (ActionDone & { seen: IssuesSeen }) | ActionRefused;
+/** `isUnread`, or its checks failed since its tab last showed it with them not failed: a check that ends
+ *  changes no `updatedAt`. One its tab never showed is unread by `isUnread` alone. */
+export function isChangeRequestUnread(row: ChangeRequestRow, seen: TrackedSeen | undefined): boolean {
+  return (
+    isUnread(row, seen) ||
+    (seen !== undefined &&
+      row.open &&
+      row.checks === "failed" &&
+      seen.shown[row.number] !== undefined &&
+      !(seen.failed ?? []).includes(row.number))
+  );
+}
+
+export type TrackedSeenResult = (ActionDone & { seen: TrackedSeen }) | ActionRefused;
 
 export interface IssueListResult {
   issues?: Issue[];
-  seen?: IssuesSeen;
+  seen?: TrackedSeen;
   /** Read just before `issues`, so that a change made while the list came is found by the next read. */
   latest?: IssuesLatest;
   /** The `issues` of the project's tet.json, where it has one. */
@@ -142,6 +243,8 @@ export interface IssueNote {
   body: string;
   /** Visible to the project's members alone; absent where the tracker has no such comments. */
   internal?: boolean;
+  /** The text of a review, which is no comment the tab edits or deletes. */
+  fixed?: true;
 }
 
 /** What happened to an issue, shown between its comments. */
@@ -152,6 +255,11 @@ export type IssueEvent = { actor: string; /** ISO 8601. */ createdAt: string } &
   | { kind: "milestoned" | "demilestoned"; milestone: string }
   | { kind: "renamed"; from: string; to: string }
   | { kind: "linked"; number: number; title: string; url: string }
+  /** A change request's alone. */
+  | { kind: "review-requested"; login: string }
+  | { kind: "reviewed"; review: "approved" | "changes-requested" | "commented" }
+  | { kind: "pushed"; commits: number }
+  | { kind: "merged" }
   /** As the tracker worded it, where it says no more than that. */
   | { kind: "text"; text: string }
 );
@@ -177,8 +285,8 @@ export type IssueField = {
       value: string[];
       several: boolean;
       /** How its values are drawn: as labels, as labels of people, whose field offers the viewer to add
-       *  themselves, or as plain text. */
-      shown: "text" | "people" | "labels";
+       *  themselves, as issues named by `linkedIssueName`, each opening its tab, or as plain text. */
+      shown: "text" | "people" | "labels" | "issues";
     }
   | { kind: "text"; value?: string }
   | { kind: "number"; value?: number }
@@ -269,6 +377,8 @@ export type IssueCreateResult = (ActionDone & { number: number }) | ActionRefuse
 export interface ChangeRequestKind {
   noun: string;
   prefix: string;
+  /** What it calls what runs on its commits: GitHub's "checks", GitLab's "pipeline". */
+  checks: string;
   /** Whether its author may approve one: GitHub refuses that, GitLab lets the project decide. */
   selfApproval: boolean;
   /** Whether it can be set to delete its source branch once merged: GitHub has that only as a
@@ -343,6 +453,40 @@ export interface IssueUploadSaveResult {
 export interface IssueReadResult {
   issue?: IssueDetail;
   /** The issue as its tab's text, what an agent reading the tab is answered (`editorContent`). */
+  markdown?: string;
+  error?: string;
+}
+
+/** What the host says of a list of change requests without sending it whole: `IssuesLatest`, and how
+ *  each one's checks stand, as a check that ends changes no `updatedAt`. Two reads that agree found
+ *  nothing new in it. */
+export interface ChangeRequestsLatest extends IssuesLatest {
+  /** Each one's number and checks, in one text. */
+  checks: string;
+}
+
+export interface ChangeRequestListResult {
+  changeRequests?: ChangeRequestRow[];
+  seen?: TrackedSeen;
+  /** Read just before `changeRequests`, as `IssueListResult.latest`. */
+  latest?: ChangeRequestsLatest;
+  /** What the host calls a change request, for the section's title. */
+  kind?: ChangeRequestKind;
+  /** Where they are read from, as `IssueListResult.tracker`. */
+  tracker?: { provider: ProviderId; url: string };
+  error?: string;
+  /** `error` is that no account is added for the repository's host. */
+  noAccount?: boolean;
+}
+
+export interface ChangeRequestLatestResult {
+  latest?: ChangeRequestsLatest;
+  error?: string;
+}
+
+export interface ChangeRequestReadResult {
+  changeRequest?: ChangeRequestDetail;
+  /** As `IssueReadResult.markdown`. */
   markdown?: string;
   error?: string;
 }

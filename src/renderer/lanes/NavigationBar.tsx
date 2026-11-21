@@ -2,7 +2,7 @@ import { memo } from "react";
 import { LANES, type Lane } from "../../shared/types/settings";
 import { shortcutLabel, type ShortcutId } from "../shortcuts";
 import { IconButton } from "../ui/IconButton";
-import { ArchiveIcon, FilesIcon, GearIcon, GitIcon, IssuesIcon, ProjectsIcon, type IconProps } from "../ui/icons";
+import { ArchiveIcon, ChangeRequestIcon, FilesIcon, GearIcon, GitIcon, IssuesIcon, ProjectsIcon, type IconProps } from "../ui/icons";
 
 /** The lane toggles' icons and labels, drawn in `LANES`' fixed order. */
 const LANE_TOGGLES: Record<Lane, { title: string; shortcut?: ShortcutId; Icon: (props: IconProps) => React.ReactNode }> = {
@@ -10,6 +10,7 @@ const LANE_TOGGLES: Record<Lane, { title: string; shortcut?: ShortcutId; Icon: (
   git: { title: "Git", shortcut: "toggleGit", Icon: GitIcon },
   files: { title: "Files", shortcut: "toggleFiles", Icon: FilesIcon },
   issues: { title: "Issues", shortcut: "toggleIssues", Icon: IssuesIcon },
+  "change-requests": { title: "Pull and Merge Requests", shortcut: "toggleChangeRequests", Icon: ChangeRequestIcon },
   archive: { title: "Archive", shortcut: "toggleArchive", Icon: ArchiveIcon },
 };
 

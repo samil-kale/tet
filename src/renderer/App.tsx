@@ -17,6 +17,7 @@ import { SbxSettingsDialog } from "./dialogs/SbxSettingsDialog";
 import { FilesLane } from "./lanes/files/FilesLane";
 import { GitLane } from "./lanes/git/GitLane";
 import { IssueList } from "./lanes/issues/IssueList";
+import { ChangeRequestList } from "./lanes/change-requests/ChangeRequestList";
 import { Notices, notify, showProgress, toggleCenter } from "./ui/Notices";
 import { NoticesCenter } from "./ui/NoticesCenter";
 import { ProjectList } from "./lanes/projects/ProjectList";
@@ -44,7 +45,7 @@ import { PLATFORM } from "./platform";
 import { DEFAULT_LAYOUT, inOrder, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS } from "./tabs/layout-state";
 import { useProjectLayouts } from "./tabs/use-project-layouts";
-import { issueOf, workingTreePathOf, type EditorTab } from "./editor/editor-tab";
+import { changeRequestOf, issueOf, openChangeRequestTab, workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import { editorLabel, kindOf, terminalLabel, type PaneTab } from "./tabs/pane-tab";
 import { canDiscardRefEdits } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
@@ -133,8 +134,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   useEffect(() => window.tet.onNoticeProgress(showProgress), []);
   useEffect(
     () =>
-      window.tet.onNotice(({ severity, title, message, toast, target, mark, agentId }) =>
-        notify(severity, message, { title, toast, target, mark, agentId }),
+      window.tet.onNotice(({ severity, title, message, toast, target, mark, agentId, opens }) =>
+        notify(severity, message, { title, toast, target, mark, agentId, opens }),
       ),
     [],
   );
@@ -364,6 +365,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
     toggleIssues: () => toggleLane("issues"),
+    toggleChangeRequests: () => toggleLane("change-requests"),
     toggleArchive: () => toggleLane("archive"),
     toggleNotices: toggleCenter,
     jumpToWaiting,
@@ -405,6 +407,14 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   /** Opening and closing editor tabs (use-editor-opening.ts). */
   const { openEditor, openActiveDiff, closeEditors } = useEditorOpening(editorTabsRef, setEditorTabs, activateTab, activateRef, activeRef);
+  /** A notice's change request, in its tab in the project's repository. */
+  const openNoticeChangeRequest = useCallback(
+    (projectId: string, number: number) => {
+      activateRef(refKeyOf({ projectId }));
+      openChangeRequestTab(openEditor, { projectId }, number);
+    },
+    [openEditor, activateRef],
+  );
   useEffect(() => {
     const offRequest = window.tet.env.onRequest(setEnvRequest);
     const offWithdrawn = window.tet.env.onWithdrawn((id) => setEnvRequest((current) => (current?.id === id ? null : current)));
@@ -495,6 +505,17 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     onOpenAccounts={openAccounts}
                   />
                 )}
+                {lane === "change-requests" && activeResolved && (
+                  // Keyed by project: the repository and its worktrees read one remote.
+                  <ChangeRequestList
+                    key={activeResolved.ref.projectId}
+                    resolved={activeResolved}
+                    shown={shown}
+                    openChangeRequest={changeRequestOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
+                    onOpenFile={openEditor}
+                    onOpenAccounts={openAccounts}
+                  />
+                )}
                 {lane === "archive" && activeResolved && (
                   // Keyed by repository or worktree: each has its own archived tabs.
                   <ArchiveList key={activeResolved.refKey} resolved={activeResolved} shown={shown} onOpenTab={showTab} />
@@ -578,7 +599,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 
       <Notices />
-      <NoticesCenter onShowTab={showNoticeTab} />
+      <NoticesCenter onShowTab={showNoticeTab} onOpenChangeRequest={openNoticeChangeRequest} />
       <Dialogs />
     </div>
   );

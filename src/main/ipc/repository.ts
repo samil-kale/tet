@@ -33,7 +33,7 @@ import {
   findChangeRequest,
   suggestChangeRequest,
   type ChangeRequestDeps,
-} from "../change-requests";
+} from "../change-requests/create";
 import { git } from "../git/git-client";
 import { MISSING_BLOB, type Repository } from "../git/repository";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "../store/resolved-ref";

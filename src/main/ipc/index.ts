@@ -1,4 +1,5 @@
 import { registerAppIpc } from "./app";
+import { registerChangeRequestsIpc } from "./change-requests";
 import { registerCommandsIpc } from "./commands";
 import { registerEnvironmentIpc } from "./environment";
 import type { IpcDeps } from "./deps";
@@ -20,6 +21,7 @@ export function registerIpc(deps: IpcDeps): void {
   registerEnvironmentIpc(deps);
   registerProjectsIpc(deps);
   registerIssuesIpc(deps);
+  registerChangeRequestsIpc(deps);
   registerRepositoryIpc(deps);
   registerCommandsIpc(deps);
   registerTerminalsIpc(deps);

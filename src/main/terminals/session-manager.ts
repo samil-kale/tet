@@ -8,12 +8,13 @@ import type { ControlSide } from "../../shared/ctl-side";
 import { hasSandbox } from "../agents/agent";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
+import type { TrackedKind } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, LinkIssueResult, TabDescriptor } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
-import type { IssueLinks } from "./issue-links";
-import { forgetSessionIssue, issueOfSession, pruneIssueSessions } from "../store/issue-sessions";
+import type { TrackedLinks } from "./tracked-links";
+import { forgetSessionLinks, linkedOfSession, pruneSessionLinks } from "../store/session-links";
 import { dropsDir } from "../store/project-dirs";
 import { readSbxSettings } from "../store/tet-json";
 import type { SbxLocalStore } from "../sbx/sbx-local";
@@ -118,9 +119,9 @@ export class TabSessionManager {
     private readonly settings: SettingsStore,
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
-    /** The project's links of issues and sessions, the registry's, shared by its repository and
-     *  worktrees. */
-    private readonly issueLinks: IssueLinks,
+    /** The project's links of issues and change requests and sessions, the registry's, shared by its
+     *  repository and worktrees. */
+    private readonly trackedLinks: TrackedLinks,
     terminalEnv: TerminalEnv,
     private readonly callbacks: SessionManagerCallbacks,
     /** What starts a tab's process (TabRuns); a test's stands in for the pty. */
@@ -171,11 +172,18 @@ export class TabSessionManager {
     return this.descriptorsOf(this.tabs);
   }
 
-  /** The tabs' descriptors, the links of their issues read once for them all. */
+  /** The tabs' descriptors, the links of their issues and change requests read once for them all. */
   private descriptorsOf(tabs: readonly TabState[]): TabDescriptor[] {
-    const issues = this.issueLinks.issuesOf(this.at.ref, tabs);
+    const issues = this.trackedLinks.linksOf(this.at.ref, tabs, "issue");
+    const changeRequests = this.trackedLinks.linksOf(this.at.ref, tabs, "change-request");
     return tabs.map((tab) =>
-      toDescriptor(tab, this.indicators.has(tab.tabId), this.placeOf(tab).sandbox !== undefined, issues.get(tab.tabId)),
+      toDescriptor(
+        tab,
+        this.indicators.has(tab.tabId),
+        this.placeOf(tab).sandbox !== undefined,
+        issues.get(tab.tabId),
+        changeRequests.get(tab.tabId),
+      ),
     );
   }
 
@@ -201,7 +209,7 @@ export class TabSessionManager {
     this.recorded.splice(0, this.recorded.length - MAX_RECORDED_EVENTS);
   }
 
-  /** The tabs sent again, as an issue's link of one of them changed (IssueLinks). */
+  /** The tabs sent again, as an issue's or change request's link of one of them changed (TrackedLinks). */
   repostTabs(): void {
     this.postTabs();
   }
@@ -273,7 +281,7 @@ export class TabSessionManager {
       [...this.tabs, ...this.archived.all()].map((tab) => tab.sessionId).filter((id): id is string => id !== undefined),
     );
     this.archived.prune(present);
-    pruneIssueSessions(this.dataRoot, this.at.ref, present);
+    pruneSessionLinks(this.dataRoot, this.at.ref, present);
   }
 
   /**
@@ -512,20 +520,43 @@ export class TabSessionManager {
     }
     const handover = { from: tab.agentId, sessionId, files, within: actions?.root };
     const taking = this.addTab(agentId, { handover, ...(sandboxOnly && { sandboxOnly }) });
-    // The new session takes over this one's issue once it has one: an issue has one session.
-    const issue = issueOfSession(this.dataRoot, this.at.ref, sessionId);
-    if (issue !== undefined) {
-      this.linkIssue(taking.tabId, issue);
+    // The new session takes over this one's issue and change request once it has one: each has one
+    // session.
+    for (const kind of ["issue", "change-request"] as const) {
+      const linked = linkedOfSession(this.dataRoot, this.at.ref, kind, sessionId);
+      if (linked !== undefined) {
+        this.linkTo(taking.tabId, kind, linked);
+      }
     }
     return { ok: true, tab: taking };
   }
 
+  /** Links the tab's session to the project's issue (`linkTo`). */
+  linkIssue(tabId: string, number: number): LinkIssueResult {
+    return this.linkTo(tabId, "issue", number);
+  }
+
+  /** Links the tab's session to the project's change request (`linkTo`). */
+  linkChangeRequest(tabId: string, number: number): LinkIssueResult {
+    return this.linkTo(tabId, "change-request", number);
+  }
+
+  /** Takes the tab's session off the project's issue (`unlinkFrom`). */
+  unlinkIssue(tabId: string, number: number): ActionResult {
+    return this.unlinkFrom(tabId, "issue", number);
+  }
+
+  /** Takes the tab's session off the project's change request (`unlinkFrom`). */
+  unlinkChangeRequest(tabId: string, number: number): ActionResult {
+    return this.unlinkFrom(tabId, "change-request", number);
+  }
+
   /**
-   * Links the tab's session to the project's issue in place of the issue's own, taking it off any
-   * other: at once where it has one, else once it is claimed (reconcile; IssueLinks.link). Answers
+   * Links the tab's session to one of the kind in place of its own, taking it off any other of the
+   * kind: at once where it has one, else once it is claimed (reconcile; TrackedLinks.link). Answers
    * what that changed, or what refused it, as renameTab does.
    */
-  linkIssue(tabId: string, number: number): LinkIssueResult {
+  private linkTo(tabId: string, kind: TrackedKind, number: number): LinkIssueResult {
     const tab = this.tabOf(tabId);
     if (!tab) {
       return { ok: false, error: "The tab is closed" };
@@ -536,21 +567,21 @@ export class TabSessionManager {
     }
     const sessionId = awaitsClaim(tab) ? undefined : tab.sessionId;
     try {
-      return { ok: true, ...this.issueLinks.link(this.at.ref, tabId, sessionId, number) };
+      return { ok: true, ...this.trackedLinks.link(this.at.ref, tabId, sessionId, kind, number) };
     } catch (error) {
       return { ok: false, error: `Could not link the ${agent.displayName} session: ${errorMessage(error)}` };
     }
   }
 
-  /** Takes the session of the tab, on the strip or archived, off the project's issue, and the link it
+  /** Takes the session of the tab, on the strip or archived, off one of the kind, and the link it
    *  waits to make. Answers what refused it. */
-  unlinkIssue(tabId: string, number: number): ActionResult {
+  private unlinkFrom(tabId: string, kind: TrackedKind, number: number): ActionResult {
     const tab = this.tabOf(tabId) ?? this.archived.all().find((candidate) => candidate.tabId === tabId);
     if (!tab) {
       return { ok: false, error: "The tab is closed" };
     }
     try {
-      this.issueLinks.unlink(this.at.ref, tabId, tab.sessionId, number);
+      this.trackedLinks.unlink(this.at.ref, tabId, tab.sessionId, kind, number);
     } catch (error) {
       return {
         ok: false,
@@ -683,7 +714,7 @@ export class TabSessionManager {
         await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
       }
       await this.placeOf(tab).sessionActions()?.remove(sessionId);
-      forgetSessionIssue(this.dataRoot, this.at.ref, sessionId);
+      forgetSessionLinks(this.dataRoot, this.at.ref, sessionId);
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
       settleWithoutProcess(tab);
@@ -916,7 +947,7 @@ export class TabSessionManager {
       Object.assign(tab, sessionFieldsOf(match));
       // A detached tab is gone from the UI; claiming its id is all that's needed.
       if (this.tabs.includes(tab)) {
-        this.issueLinks.claimed(this.at.ref, tab.tabId, match.id);
+        this.trackedLinks.claimed(this.at.ref, tab.tabId, match.id);
         changed = true;
       }
     }

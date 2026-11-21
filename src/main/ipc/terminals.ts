@@ -57,6 +57,20 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
       tabManagers.get(ref)?.unlinkIssue(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
   );
 
+  // A tab dropped on a change request's row.
+  handle(
+    "tabs:link-change-request",
+    (_event, ref: ProjectRef, tabId: string, number: number): LinkIssueResult =>
+      tabManagers.get(ref)?.linkChangeRequest(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
+  );
+
+  // A session's row in its change request's tab.
+  handle(
+    "tabs:unlink-change-request",
+    (_event, ref: ProjectRef, tabId: string, number: number): ActionResult =>
+      tabManagers.get(ref)?.unlinkChangeRequest(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
+  );
+
   handle(
     "tabs:handover",
     async (_event, ref: ProjectRef, tabId: string, agentId: AgentId): Promise<HandoverResult> =>

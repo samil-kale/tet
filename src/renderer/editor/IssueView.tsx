@@ -1,15 +1,27 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
-import type { IssueChange, IssueDetail, IssueField, IssueFieldValue, ProviderId } from "../../shared/types/providers";
+import {
+  linkedIssueNumber,
+  type ChangeRequestDetail,
+  type IssueChange,
+  type IssueDetail,
+  type IssueField,
+  type IssueFieldValue,
+  type ProviderId,
+  type TrackedKind,
+} from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
 import type { IssueSession } from "../../shared/types/terminals";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed, filled, prompt, singleField } from "../ui/Dialog";
+import { named } from "../ui/named";
 import { Checkbox, FieldRow, TextAreaField, TextField } from "../ui/Field";
 import { IconButton } from "../ui/IconButton";
 import {
   BoldIcon,
+  CheckIcon,
+  CircleAlertIcon,
   CloseIcon,
   CodeIcon,
   GearIcon,
@@ -24,6 +36,7 @@ import {
   PlusIcon,
   QuoteIcon,
   RemoteIcon,
+  SpinnerIcon,
   SquareSparklesIcon,
   TrashIcon,
   type IconProps,
@@ -142,6 +155,33 @@ export interface IssueActions {
   /** The Markdown that shows the file, once it is up. */
   upload: (file: File) => Promise<string | undefined>;
   sendToAgent: (agentId: AgentId) => void;
+  /** A change request's alone: approved as the account's user. */
+  approve: () => Promise<void>;
+  /** A change request's alone: merged by the repository's own method, or once its checks passed. */
+  merge: (whenChecksPass: boolean) => Promise<void>;
+  /** A linked issue of a change request opened in its tab. */
+  openIssue: (number: number) => void;
+}
+
+/** The change request a tab shows, where it shows one rather than an issue. */
+export function changeRequestOf(issue: IssueDetail): ChangeRequestDetail | undefined {
+  return "status" in issue ? (issue as ChangeRequestDetail) : undefined;
+}
+
+/** What the tab calls what it shows, in a title's case: "Issue", or the host's own word for a change
+ *  request, "Pull Request" or "Merge Request". */
+export function trackedNoun(issue: IssueDetail): string {
+  const request = changeRequestOf(issue);
+  return request ? request.kind.noun.replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Issue";
+}
+
+function kindOf(issue: IssueDetail): TrackedKind {
+  return changeRequestOf(issue) ? "change-request" : "issue";
+}
+
+/** How the tab names it: `#142`, `!42`. */
+function numberOf(issue: IssueDetail): string {
+  return `${changeRequestOf(issue)?.kind.prefix ?? "#"}${issue.number}`;
 }
 
 /** What an issue's text is rendered with. */
@@ -357,19 +397,28 @@ export function TextBox({
 }
 
 interface CommentBoxProps {
-  open: boolean;
+  issue: IssueDetail;
   /** Offered where the tracker has internal comments. */
   internalNotes: boolean;
   actions: IssueActions;
   writing: TextWriting;
 }
 
-function CommentBox({ open, internalNotes, actions, writing }: CommentBoxProps) {
+/** A change request is approved from here where its host lets the viewer: GitHub never its author. */
+function approvable(issue: IssueDetail): boolean {
+  const request = changeRequestOf(issue);
+  return request !== undefined && request.status.state === "open" && (request.kind.selfApproval || request.author !== issue.viewer);
+}
+
+function CommentBox({ issue, internalNotes, actions, writing }: CommentBoxProps) {
+  const { open } = issue;
+  const request = changeRequestOf(issue);
+  const noun = trackedNoun(issue);
   const [text, setText] = useState("");
   const [internal, setInternal] = useState(false);
   const [busy, setBusy] = useState(false);
   const typed = text.trim() !== "";
-  const noun = internal ? "Internal Note" : "Comment";
+  const written = internal ? "Internal Note" : "Comment";
   const reset = (): void => {
     setText("");
     setInternal(false);
@@ -390,6 +439,11 @@ function CommentBox({ open, internalNotes, actions, writing }: CommentBoxProps) 
     }
     setBusy(false);
   };
+  const approve = async (): Promise<void> => {
+    setBusy(true);
+    await actions.approve();
+    setBusy(false);
+  };
   return (
     <div className="issue-comment">
       <div className="issue-card">
@@ -399,10 +453,18 @@ function CommentBox({ open, internalNotes, actions, writing }: CommentBoxProps) 
       </div>
       <div className="issue-line">
         {internalNotes && <Checkbox label="Make this an internal note" checked={internal} onChange={setInternal} disabled={busy} />}
-        <button type="button" className="button secondary" disabled={busy} onClick={() => void changeState()}>
-          {open ? "Close Issue" : "Reopen Issue"}
-          {typed && ` with ${noun}`}
-        </button>
+        {/* A merged change request has no state left to change. */}
+        {request?.status.state !== "merged" && (
+          <button type="button" className="button secondary" disabled={busy} onClick={() => void changeState()}>
+            {open ? `Close ${noun}` : `Reopen ${noun}`}
+            {typed && ` with ${written}`}
+          </button>
+        )}
+        {approvable(issue) && (
+          <button type="button" className="button secondary" disabled={busy} onClick={() => void approve()}>
+            Approve
+          </button>
+        )}
         <button type="button" className="button" disabled={busy || !typed} onClick={() => void submit()}>
           {internal ? "Add Internal Note" : "Comment"}
         </button>
@@ -532,12 +594,20 @@ function labelsMessage(added: string[], removed: string[]): React.ReactNode {
   );
 }
 
-function eventMessage(event: ThreadEvent): React.ReactNode {
+function eventMessage(event: ThreadEvent, noun: string): React.ReactNode {
   switch (event.kind) {
     case "closed":
-      return "closed this issue";
+      return `closed this ${noun}`;
     case "reopened":
-      return "reopened this issue";
+      return `reopened this ${noun}`;
+    case "merged":
+      return `merged this ${noun}`;
+    case "review-requested":
+      return <>requested a review from {login(event.login)}</>;
+    case "reviewed":
+      return event.review === "approved" ? "approved these changes" : "requested changes";
+    case "pushed":
+      return `pushed ${event.commits === 1 ? "a commit" : `${event.commits} commits`}`;
     case "assignees":
       return assigneesMessage(event.actor, event.assigned, event.unassigned);
     case "labels":
@@ -564,20 +634,25 @@ function eventMessage(event: ThreadEvent): React.ReactNode {
 }
 
 /** A line of the thread saying what happened, as the plugin's timeline draws one. */
-function IssueEventLine({ event }: { event: ThreadEvent }) {
+function IssueEventLine({ event, noun }: { event: ThreadEvent; noun: string }) {
   return (
     <div className="issue-event">
       <span className="issue-event-dot" />
       <span className="issue-event-message">
-        {login(event.actor)} {eventMessage(event)} <span className="issue-event-time">{agoOf(event.createdAt)}</span>
+        {login(event.actor)} {eventMessage(event, noun)} <span className="issue-event-time">{agoOf(event.createdAt)}</span>
       </span>
     </div>
   );
 }
 
 /** The question renaming an issue asks, wherever it is offered. */
-export function askIssueTitle(current: string, submit: (title: string) => Promise<string | undefined>): Promise<void> {
-  return askName({ title: "Rename issue", label: "Title", current, confirmLabel: "Rename", submit });
+export function askIssueTitle(
+  current: string,
+  submit: (title: string) => Promise<string | undefined>,
+  issue?: IssueDetail,
+): Promise<void> {
+  const noun = issue ? trackedNoun(issue).toLowerCase() : "issue";
+  return askName({ title: `Rename ${noun}`, label: "Title", current, confirmLabel: "Rename", submit });
 }
 
 /** The question deleting an issue asks, wherever it is offered. */
@@ -619,8 +694,21 @@ export function issueSessionEntry(
 
 /** The tab's bar, as a file's: what can be done to the issue, its state, then what names it. An issue
  *  with a session offers to open it, by its agent's icon, in place of sending it to an agent. */
+/** Where it stands, as the bar says it: open or closed, a change request also draft or merged. */
+function stateOf(issue: IssueDetail): string {
+  const status = changeRequestOf(issue)?.status;
+  if (status?.state === "merged") {
+    return "Merged";
+  }
+  if (!issue.open) {
+    return "Closed";
+  }
+  return status?.draft ? "Draft" : "Open";
+}
+
 function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: IssueSession | undefined; actions: IssueActions }) {
   const agents = useAgents();
+  const request = changeRequestOf(issue);
   // As a pane's new-tab menu: a button's padding off it, and beside the bar, whose stacking it slides
   // out from behind.
   const agentMenu = useAnchoredMenu((rect) => ({ x: rect.left - 6, y: rect.bottom + BAR_MENU_DROP }), true);
@@ -644,18 +732,21 @@ function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: Is
               <SquareSparklesIcon />
             </button>
           )}
-          <IconButton title="Rename Issue..." onClick={() => void askIssueTitle(issue.title, actions.rename)}>
+          <IconButton title={`Rename ${trackedNoun(issue)}...`} onClick={() => void askIssueTitle(issue.title, actions.rename, issue)}>
             <PencilIcon />
           </IconButton>
-          <IconButton
-            title="Delete Issue..."
-            onClick={() => void confirmDeleteIssue(issue.number).then((answer) => (answer ? actions.deleteIssue() : undefined))}
-          >
-            <TrashIcon />
-          </IconButton>
+          {/* A change request is closed, never deleted. */}
+          {!request && (
+            <IconButton
+              title="Delete Issue..."
+              onClick={() => void confirmDeleteIssue(issue.number).then((answer) => (answer ? actions.deleteIssue() : undefined))}
+            >
+              <TrashIcon />
+            </IconButton>
+          )}
         </div>
-        <div className="toolbar editor-bar-actions issue-state">{issue.open ? "Open" : "Closed"}</div>
-        <div className="toolbar editor-bar-actions issue-bar-number">#{issue.number}</div>
+        <div className="toolbar editor-bar-actions issue-state">{stateOf(issue)}</div>
+        <div className="toolbar editor-bar-actions issue-bar-number">{numberOf(issue)}</div>
         <span className="editor-bar-title" title={issue.title}>
           {issue.title}
         </span>
@@ -681,7 +772,7 @@ function SideSection({ title, action, children }: { title: string; action?: Reac
  *  agent's icon and title, over the repository or worktree it is in and whether it is archived. A
  *  click brings it to the front, reopening an archived one; its button on hover takes it off the
  *  issue. */
-function SessionSection({ number, session }: { number: number; session: IssueSession | undefined }) {
+function SessionSection({ issue, session }: { issue: IssueDetail; session: IssueSession | undefined }) {
   return (
     <SideSection title="Session">
       {session === undefined ? (
@@ -695,7 +786,11 @@ function SessionSection({ number, session }: { number: number; session: IssueSes
               {session.worktree ?? "repository"} · {session.archived ? "archived" : "open"}
             </span>
           </span>
-          <IconButton title="Unlink from Issue" isolated onClick={() => void unlinkIssueSession(session, number)}>
+          <IconButton
+            title={`Unlink from ${trackedNoun(issue)}`}
+            isolated
+            onClick={() => void unlinkIssueSession(session, issue.number, kindOf(issue))}
+          >
             <CloseIcon />
           </IconButton>
         </div>
@@ -962,17 +1057,29 @@ function GroupSection({
 /** What a field's pick holds, as its values are drawn: as labels, people too, or plain text. */
 function PickValue({
   field,
-  viewer,
+  issue,
   actions,
 }: {
   field: Extract<IssueField, { kind: "pick" }>;
-  viewer: string | undefined;
+  issue: IssueDetail;
   actions: IssueActions;
 }) {
+  const { viewer } = issue;
+  // A linked issue opens in its tab where the project's issues are read from this same repository.
+  const opensIssues = changeRequestOf(issue)?.ownIssues === true;
   return (
     <>
       {field.value.length === 0 && <span className="issue-none">None</span>}
-      {field.shown !== "text" && (
+      {field.shown === "issues" &&
+        field.value.map((name) => {
+          const number = linkedIssueNumber(name);
+          return (
+            <span key={name} className="issue-linked">
+              {opensIssues && number !== undefined ? <ActionLink onClick={() => actions.openIssue(number)}>{name}</ActionLink> : name}
+            </span>
+          );
+        })}
+      {field.shown !== "text" && field.shown !== "issues" && (
         <div className="issue-labels">
           {field.value.map((label) => (
             <span key={label} className="issue-label">
@@ -1005,7 +1112,7 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
           load={() => actions.fieldOptions(field.id)}
           onChange={(value) => actions.setField(field.id, value)}
         >
-          <PickValue field={field} viewer={issue.viewer} actions={actions} />
+          <PickValue field={field} issue={issue} actions={actions} />
         </PickSection>
       );
     case "flag":
@@ -1056,6 +1163,106 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
   }
 }
 
+function capitalized(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The question merging a change request asks: it is not taken back. */
+function confirmMerge(request: ChangeRequestDetail, whenChecksPass: boolean): Promise<boolean> {
+  const { kind, status } = request;
+  return confirmed({
+    title: whenChecksPass ? `Set ${kind.noun} to auto-merge` : `Merge ${kind.noun}`,
+    message: whenChecksPass
+      ? named`Merge ${kind.prefix + String(request.number)} into ${status.base} once its ${kind.checks} passed?`
+      : named`Merge ${kind.prefix + String(request.number)} into ${status.base}?`,
+    detail: "It is merged by the repository's own method.",
+    confirmLabel: whenChecksPass ? "Auto-Merge" : "Merge",
+  });
+}
+
+/**
+ * A change request's line above its text: its branches, how its checks stand and whether it can merge,
+ * a link to the host's page of its checks, and the merge itself. Merge takes the repository's own
+ * method; while the checks run it has the host merge once they passed, and stands disabled where it
+ * cannot go through.
+ */
+function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestDetail; actions: IssueActions }) {
+  const { status, kind } = request;
+  const [busy, setBusy] = useState(false);
+  const checksWord = capitalized(kind.checks);
+  const running = status.checks === "running";
+  const mergeable = status.state === "open" && !status.draft && !status.conflicts && status.checks !== "failed";
+  const merge = async (): Promise<void> => {
+    if (!(await confirmMerge(request, running))) {
+      return;
+    }
+    setBusy(true);
+    await actions.merge(running);
+    setBusy(false);
+  };
+  return (
+    <div className="change-request-head">
+      <div className="change-request-branches">
+        {named`${status.head} into ${status.base}`}
+        <span>
+          {" "}
+          · {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
+          {status.additions !== undefined && status.deletions !== undefined && ` · +${status.additions} −${status.deletions}`}
+        </span>
+      </div>
+      <div className="change-request-status">
+        {status.state === "merged" ? (
+          <span className="change-request-fact">
+            <CheckIcon />
+            {named`Merged into ${status.base}`}
+            {status.mergedBy && ` by ${status.mergedBy}`}
+          </span>
+        ) : (
+          <>
+            {status.checks === "passed" && (
+              <span className="change-request-fact">
+                <CheckIcon />
+                {checksWord} passed
+              </span>
+            )}
+            {running && (
+              <span className="change-request-fact">
+                <SpinnerIcon />
+                {checksWord} running
+              </span>
+            )}
+            {status.checks === "failed" && (
+              <span className="change-request-fact">
+                <CircleAlertIcon className="change-request-failed" />
+                {checksWord} failed
+                {status.failedChecks.length > 0 && <span className="issue-none">{status.failedChecks.join(", ")}</span>}
+              </span>
+            )}
+            {status.state === "open" && (
+              <span className="change-request-fact">
+                {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
+                {status.conflicts ? named`Conflicts with ${status.base}` : status.draft ? "Draft" : named`No conflicts with ${status.base}`}
+              </span>
+            )}
+          </>
+        )}
+        <span className="change-request-spacer" />
+        {status.checksUrl !== undefined && (
+          <ActionLink onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>{checksWord}</ActionLink>
+        )}
+        {status.state === "open" &&
+          (status.autoMerge ? (
+            <span className="issue-none">Auto-merge set</span>
+          ) : (
+            <button type="button" className="button" disabled={busy || !mergeable} onClick={() => void merge()}>
+              {running ? "Auto-Merge" : "Merge"}
+            </button>
+          ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * An issue's tab: a bar as a file's, with its actions, title and state, then, as VS Code's GitHub Pull
  * Requests and Issues draws them, the description and comments with a box for one more, and beside
@@ -1076,10 +1283,13 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
     accept: issue.uploads?.extensions?.map((extension) => `.${extension}`).join(","),
   };
   const { viewer } = issue;
+  const request = changeRequestOf(issue);
+  const noun = trackedNoun(issue).toLowerCase();
   return (
     <>
       <IssueBar issue={issue} session={session} actions={actions} />
       <div className="issue-view">
+        {request && <ChangeRequestStatusLine request={request} actions={actions} />}
         <div className="issue-columns">
           <div className="issue-thread">
             <IssueCard
@@ -1096,7 +1306,7 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
             />
             {issueThread(issue.notes, issue.events).map((entry, index) => {
               if ("event" in entry) {
-                return <IssueEventLine key={`event${index}`} event={entry.event} />;
+                return <IssueEventLine key={`event${index}`} event={entry.event} noun={noun} />;
               }
               const { note } = entry;
               return (
@@ -1108,19 +1318,19 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
                   text={note.body}
                   writing={writing}
                   internal={note.internal}
-                  onEdit={note.author === viewer ? (body) => actions.editComment(note.id, body) : undefined}
+                  onEdit={note.author === viewer && !note.fixed ? (body) => actions.editComment(note.id, body) : undefined}
                   onDelete={
-                    note.author === viewer
+                    note.author === viewer && !note.fixed
                       ? () => void confirmDeleteOnTracker("comment").then((answer) => (answer ? actions.deleteComment(note.id) : undefined))
                       : undefined
                   }
                 />
               );
             })}
-            <CommentBox open={issue.open} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
+            <CommentBox issue={issue} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
           </div>
           <div className="issue-side">
-            <SessionSection number={issue.number} session={session} />
+            <SessionSection issue={issue} session={session} />
             {sectionsOf(issue.fields).map((section) =>
               "group" in section ? (
                 <GroupSection key={section.group} title={section.group} fields={section.fields} avatars={issue.avatars} actions={actions} />

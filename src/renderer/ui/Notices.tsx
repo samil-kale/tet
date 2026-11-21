@@ -146,7 +146,7 @@ function runAfterClose(): void {
 }
 
 /** What a notice may carry beside its words. */
-type NoticeOptions = Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId" | "link">;
+type NoticeOptions = Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId" | "link" | "opens">;
 
 export function notify(severity: NoticeSeverity, message: string, options: NoticeOptions = {}): void {
   const wait = options.toast === false ? 0 : takeSlot("enter");
@@ -158,7 +158,7 @@ export function notify(severity: NoticeSeverity, message: string, options: Notic
 }
 
 function add(severity: NoticeSeverity, message: string, options: NoticeOptions): void {
-  const { title, toast, target, mark, agentId, link } = options;
+  const { title, toast, target, mark, agentId, link, opens } = options;
   const same = shown
     .get()
     .find(
@@ -184,6 +184,7 @@ function add(severity: NoticeSeverity, message: string, options: NoticeOptions):
     mark,
     agentId,
     link,
+    opens,
   };
   shown.set([...shown.get().filter((notice) => notice !== same), entry].slice(-CENTER_MAX));
   if (entry.toast) {

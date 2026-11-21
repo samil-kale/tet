@@ -6,7 +6,7 @@ import { changeIssueSource, issueRepository, unreadIssues, type IssueDeps } from
 import { PROVIDERS } from "../../src/main/providers";
 import type { IssueRepository } from "../../src/main/providers/issues";
 import type { Tracker } from "../../src/main/providers/provider";
-import { issuesSeenFile } from "../../src/main/store/project-dirs";
+import { seenFile } from "../../src/main/store/project-dirs";
 import { PROJECT_NOT_FOUND } from "../../src/main/store/resolved-ref";
 import type { ProviderAccount } from "../../src/shared/types/providers";
 import { tempDir } from "../helpers";
@@ -30,9 +30,9 @@ function depsAt(dataRoot: string, root: string, accounts: ProviderAccount[] = [A
   };
 }
 
-/** What the project's issue tabs showed: the file `readIssuesSeen` reads. */
+/** What the project's issue tabs showed: the file `readSeen` reads. */
 function keepSeen(dataRoot: string, seen: object): void {
-  const file = issuesSeenFile(dataRoot, "p1");
+  const file = seenFile(dataRoot, "p1", "issue");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(seen));
 }
@@ -68,7 +68,7 @@ describe("the issues of a project", () => {
   it("start no count of unread ones while the tracker cannot be reached", async () => {
     const dataRoot = tempDir("tet-issues-data-");
     await assert.rejects(() => unreadIssues(depsAt(dataRoot, tempDir("tet-issues-"), []), "p1"), /No account for github\.com/);
-    assert.equal(fs.existsSync(issuesSeenFile(dataRoot, "p1")), false);
+    assert.equal(fs.existsSync(seenFile(dataRoot, "p1", "issue")), false);
   });
 
   it("forget what their tabs showed once their source changed, and not before", async (t) => {
@@ -80,13 +80,13 @@ describe("the issues of a project", () => {
 
     keepSeen(dataRoot, seen);
     assert.equal(await changeIssueSource(deps, "p1", "g/tracker"), "g/tracker");
-    assert.equal(fs.existsSync(issuesSeenFile(dataRoot, "p1")), false, "another tracker's numbers");
+    assert.equal(fs.existsSync(seenFile(dataRoot, "p1", "issue")), false, "another tracker's numbers");
 
     keepSeen(dataRoot, seen);
     assert.equal(await changeIssueSource(deps, "p1", "g/tracker"), "g/tracker");
-    assert.deepEqual(JSON.parse(fs.readFileSync(issuesSeenFile(dataRoot, "p1"), "utf8")), seen, "the same one");
+    assert.deepEqual(JSON.parse(fs.readFileSync(seenFile(dataRoot, "p1", "issue"), "utf8")), seen, "the same one");
 
     assert.equal(await changeIssueSource(deps, "p1", ""), undefined);
-    assert.equal(fs.existsSync(issuesSeenFile(dataRoot, "p1")), false, "back to the repository's own");
+    assert.equal(fs.existsSync(seenFile(dataRoot, "p1", "issue")), false, "back to the repository's own");
   });
 });

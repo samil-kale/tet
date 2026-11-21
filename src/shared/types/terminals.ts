@@ -67,12 +67,14 @@ export interface TabDescriptor {
   /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
    *  run lands where the last lay. The line, since `name` may be missing. */
   command?: string;
-  /** The project's issue its session is linked to, or that it links once it has one (issue-links.ts). */
+  /** The project's issue its session is linked to, or that it links once it has one (tracked-links.ts). */
   issue?: number;
+  /** The project's change request, the same way. */
+  changeRequest?: number;
 }
 
-/** The session linked to an issue, as the issue's tab shows it: its tab in the repository or a
- *  worktree, on the strip or archived. */
+/** The session linked to an issue or change request, as its tab shows it: its tab in the repository
+ *  or a worktree, on the strip or archived. */
 export interface IssueSession {
   ref: ProjectRef;
   /** The worktree's name; absent for the repository. */

@@ -30,7 +30,11 @@ import type {
   IssueLatestResult,
   IssueListResult,
   IssueReadResult,
-  IssuesSeenResult,
+  TrackedSeenResult,
+  ChangeRequestFilter,
+  ChangeRequestLatestResult,
+  ChangeRequestListResult,
+  ChangeRequestReadResult,
   IssueUploadResult,
   IssueUploadSaveResult,
   ListRepositoriesResult,
@@ -197,10 +201,10 @@ export interface TETApi {
     read: (projectId: string, number: number) => Promise<IssueReadResult>;
     /** An image of an issue's text that takes the account's token, as a data URL; null for any other. */
     image: (projectId: string, source: string) => Promise<string | null>;
-    /** Keeps the issue's `updatedAt` as its tab showed it (`IssuesSeen`); a failure is logged. */
+    /** Keeps the issue's `updatedAt` as its tab showed it (`TrackedSeen`); a failure is logged. */
     markSeen: (projectId: string, number: number, updatedAt: string) => Promise<void>;
-    /** Every issue of the project read, from now on: `IssuesSeen` starts afresh. */
-    markAllSeen: (projectId: string) => Promise<IssuesSeenResult>;
+    /** Every issue of the project read, from now on: `TrackedSeen` starts afresh. */
+    markAllSeen: (projectId: string) => Promise<TrackedSeenResult>;
     comment: (projectId: string, number: number, body: string, internal: boolean) => Promise<ActionResult>;
     update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
     /** What a pick field of the issue can be set to. */
@@ -226,6 +230,36 @@ export interface TETApi {
     /** A session of the project was linked to an issue or taken off one by hand; the tabs' own changes
      *  come as `tabs.onTabs` and `archive.onChanged`. */
     onSessionsChanged: (listener: (projectId: string) => void) => Unsubscribe;
+  };
+  /** The change requests section and a change request's tab: the pull or merge requests of the
+   *  project's repository's own remote, as `issues` reads its issues. */
+  changeRequests: {
+    /** Newest first, of the repository's own branches. */
+    list: (projectId: string, filter: ChangeRequestFilter) => Promise<ChangeRequestListResult>;
+    /** As `issues.latest`, with each one's checks. */
+    latest: (projectId: string, filter: ChangeRequestFilter) => Promise<ChangeRequestLatestResult>;
+    filterOptions: (projectId: string) => Promise<IssueFilterOptions>;
+    read: (projectId: string, number: number) => Promise<ChangeRequestReadResult>;
+    image: (projectId: string, source: string) => Promise<string | null>;
+    /** Keeps its `updatedAt` as its tab showed it, and whether its checks had failed; a failure is logged. */
+    markSeen: (projectId: string, number: number, updatedAt: string, failed: boolean) => Promise<void>;
+    markAllSeen: (projectId: string) => Promise<TrackedSeenResult>;
+    comment: (projectId: string, number: number, body: string) => Promise<ActionResult>;
+    /** Its title, text or state; merged by `merge` alone. */
+    update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
+    fieldOptions: (projectId: string, number: number, fieldId: string) => Promise<IssueFieldOptionsResult>;
+    setField: (projectId: string, number: number, fieldId: string, value: IssueFieldValue) => Promise<ActionResult>;
+    editComment: (projectId: string, id: string, body: string) => Promise<ActionResult>;
+    deleteComment: (projectId: string, id: string) => Promise<ActionResult>;
+    approve: (projectId: string, number: number) => Promise<ActionResult>;
+    /** By the repository's own method; `whenChecksPass` has the host merge it once they passed. The
+     *  caller confirms first. */
+    merge: (projectId: string, number: number, whenChecksPass: boolean) => Promise<ActionResult>;
+    /** As `issues.sendToAgent`. */
+    sendToAgent: (ref: ProjectRef, number: number, agentId: AgentId) => Promise<HandoverResult>;
+    /** The session linked to each of the project's change requests; a change of them comes as
+     *  `issues.onSessionsChanged`. */
+    sessions: (projectId: string) => Promise<IssueSessionsResult>;
   };
   env: {
     /** Never the values. */
@@ -359,9 +393,16 @@ export interface TETApi {
     onEditorContentRequest: (listener: (ref: ProjectRef) => string | undefined) => Unsubscribe;
     /** `tet-ctl editor-open`: in the preview tab, or kept with `--keep`; left behind the active tab
      *  with `--background`. `tet-ctl issues-open` the same, with the issue's number as `issue` and its
-     *  `issueFileName` as `path`. */
+     *  `issueFileName` as `path`; `change-requests-open` with `changeRequest`. */
     onOpenEditor: (
-      listener: (payload: { ref: ProjectRef; path: string; keep: boolean; background: boolean; issue?: number }) => void,
+      listener: (payload: {
+        ref: ProjectRef;
+        path: string;
+        keep: boolean;
+        background: boolean;
+        issue?: number;
+        changeRequest?: number;
+      }) => void,
     ) => Unsubscribe;
   };
   /** Saved shell commands, in the project root's tet.json so they travel with it. */
@@ -395,6 +436,9 @@ export interface TETApi {
     /** Takes the session of the tab, on the strip or archived, off the project's issue; answers what
      *  refused it. */
     unlinkIssue: (ref: ProjectRef, tabId: string, number: number) => Promise<ActionResult>;
+    /** `linkIssue` of the project's change request. */
+    linkChangeRequest: (ref: ProjectRef, tabId: string, number: number) => Promise<LinkIssueResult>;
+    unlinkChangeRequest: (ref: ProjectRef, tabId: string, number: number) => Promise<ActionResult>;
     /** A tab of `agentId` taking over this tab's session; this tab stays. */
     handOver: (ref: ProjectRef, tabId: string, agentId: AgentId) => Promise<HandoverResult>;
     /** Respawns a saved command in the same tab. */

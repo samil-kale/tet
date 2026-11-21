@@ -28,8 +28,8 @@ import {
   type IssueTrackerInfo,
 } from "./providers/issues";
 import { PROVIDERS } from "./providers/index";
-import { forgetAllIssueSessions, forgetIssueSession } from "./store/issue-sessions";
-import { forgetAllIssuesSeen, forgetIssueSeen, markAllIssuesSeen, readIssuesSeen, setIssueSeen } from "./store/issues-seen";
+import { forgetAllSessionLinks, forgetLinkedSession } from "./store/session-links";
+import { forgetAllSeen, forgetSeen, markAllSeen, readSeen, setSeen } from "./store/tracked-seen";
 import type { ProjectStore } from "./store/project-store";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
 import type { SettingsAccess } from "./store/settings";
@@ -66,7 +66,7 @@ export async function issueTrackerOf(deps: Pick<IssueDeps, "accounts" | "reposit
 }
 
 /**
- * Saves the project's issue source (`setIssueSource`). What its issue tabs showed (`IssuesSeen`) and
+ * Saves the project's issue source (`setIssueSource`). What its issue tabs showed (`TrackedSeen`) and
  * the sessions linked to its issues are forgotten once the source changed: their entries are the
  * old source's issue numbers.
  */
@@ -79,8 +79,8 @@ export async function changeIssueSource(
   const before = await readIssueSource(repository.at.path);
   const saved = await setIssueSource(deps.accounts, repository, source);
   if (saved !== before) {
-    forgetAllIssuesSeen(deps.dataRoot, projectId);
-    forgetAllIssueSessions(deps.dataRoot, projectId);
+    forgetAllSeen(deps.dataRoot, projectId, "issue");
+    forgetAllSessionLinks(deps.dataRoot, projectId, "issue");
   }
   return saved;
 }
@@ -91,7 +91,7 @@ export async function unreadIssues(deps: Pick<IssueDeps, "accounts" | "dataRoot"
   const issues = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
     provider.listIssues(tracker, DEFAULT_ISSUE_FILTER),
   );
-  const seen = readIssuesSeen(deps.dataRoot, projectId);
+  const seen = readSeen(deps.dataRoot, projectId, "issue");
   return issues.filter((issue) => isUnread(issue, seen));
 }
 
@@ -105,13 +105,13 @@ export async function markIssuesSeen(
   number?: number,
 ): Promise<void> {
   if (number === undefined) {
-    markAllIssuesSeen(deps.dataRoot, projectId);
+    markAllSeen(deps.dataRoot, projectId, "issue");
     return;
   }
   const { updatedAt } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
     provider.readIssue(tracker, number),
   );
-  setIssueSeen(deps.dataRoot, projectId, number, updatedAt);
+  setSeen(deps.dataRoot, projectId, "issue", number, updatedAt);
 }
 
 /** More than either tracker takes of one file: past this it does not cross to main's memory, either way. */
@@ -255,8 +255,8 @@ export async function deleteIssue(
   number: number,
 ): Promise<void> {
   await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
-  forgetIssueSeen(deps.dataRoot, projectId, number);
-  forgetIssueSession(deps.dataRoot, projectId, number);
+  forgetSeen(deps.dataRoot, projectId, "issue", number);
+  forgetLinkedSession(deps.dataRoot, projectId, "issue", number);
 }
 
 /** Uploads a file to the tracker, answered by what shows it in an issue's text. */
@@ -319,7 +319,7 @@ export async function sendIssueToAgent(
 /**
  * The session linked to each of the project's issues, as its repository or worktrees show it, on the
  * strip or archived: read off its tab's descriptor (`TabDescriptor.issue`), so a rename or archive
- * shows at once, and a tab waiting to link its session stands in for it (issue-links.ts). One no tab
+ * shows at once, and a tab waiting to link its session stands in for it (tracked-links.ts). One no tab
  * shows (a worktree closed, a session gone) is left out.
  */
 export function issueSessions(deps: Pick<IssueDeps, "store" | "tabManagers">, projectId: string): Record<number, IssueSession> {

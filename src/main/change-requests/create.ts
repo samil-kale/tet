@@ -1,22 +1,22 @@
-import { errorMessage, failure } from "../shared/errors";
-import { effectivePrompt } from "../shared/prompts";
-import type { SuggestionResult } from "../shared/types/agents";
-import { headRemote, headRemoteBranch, type RepositoryState } from "../shared/types/git";
-import type { ProjectRef } from "../shared/types/project";
+import { errorMessage, failure } from "../../shared/errors";
+import { effectivePrompt } from "../../shared/prompts";
+import type { SuggestionResult } from "../../shared/types/agents";
+import { headRemote, headRemoteBranch, type RepositoryState } from "../../shared/types/git";
+import type { ProjectRef } from "../../shared/types/project";
 import type {
   ChangeRequestCreateResult,
   ChangeRequestFindResult,
   ChangeRequestFollowUps,
   ChangeRequestInput,
   ChangeRequestTargetResult,
-} from "../shared/types/providers";
-import { suggestChangeRequest as suggestText } from "./agents/suggest";
-import { git } from "./git/git-client";
-import { hostProvider, NoAccountError, onHost, parseRemoteUrl, WRITE_HANDS_OVER, type IssueAccounts } from "./providers/issues";
-import type { GitProvider, Tracker } from "./providers/provider";
-import { notOpenMessage } from "./store/resolved-ref";
-import type { ProjectStore } from "./store/project-store";
-import type { SettingsAccess } from "./store/settings";
+} from "../../shared/types/providers";
+import { suggestChangeRequest as suggestText } from "../agents/suggest";
+import { git } from "../git/git-client";
+import { hostProvider, NoAccountError, onHost, parseRemoteUrl, WRITE_HANDS_OVER, type IssueAccounts } from "../providers/issues";
+import type { GitProvider, Tracker } from "../providers/provider";
+import { notOpenMessage } from "../store/resolved-ref";
+import type { ProjectStore } from "../store/project-store";
+import type { SettingsAccess } from "../store/settings";
 
 /**
  * A pull or merge request from the checked-out branch, into a branch of the repository it is pushed

@@ -4,7 +4,7 @@ import type { ActionResult } from "../../shared/types/action";
 import type { ProjectRef } from "../../shared/types/project";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { archivedIds, pruneArchived, setArchived, setArchivedOrder } from "../store/archive";
-import { forgetSessionIssue } from "../store/issue-sessions";
+import { forgetSessionLinks } from "../store/session-links";
 import { logError } from "../util/error-log";
 import type { TabPlace } from "./tab-place";
 import { awaitsClaim, settleWithoutProcess, type TabState } from "./tab-state";
@@ -198,7 +198,7 @@ export class ArchivedTabs {
       }
       await this.target.placeOf(tab).sessionActions()?.remove(sessionId);
       setArchived(this.dataRoot, this.ref, sessionId, false);
-      forgetSessionIssue(this.dataRoot, this.ref, sessionId);
+      forgetSessionLinks(this.dataRoot, this.ref, sessionId);
     } catch (error) {
       return { ok: false, error: `Could not delete the ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}` };
     } finally {

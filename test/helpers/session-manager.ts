@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { SettingsStore } from "../../src/main/store/settings";
 import { HostSetups } from "../../src/main/terminals/host-setup";
-import { IssueLinks } from "../../src/main/terminals/issue-links";
+import { TrackedLinks } from "../../src/main/terminals/tracked-links";
 import type { spawnAgentProcess, TerminalEnv } from "../../src/main/terminals/pty";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import type { SessionRegistryCallbacks } from "../../src/main/terminals/session-registry";
@@ -69,8 +69,8 @@ export const NO_CALLBACKS: SessionManagerCallbacks = {
 };
 
 /** Links for a manager whose tabs no test links. */
-export function noIssueLinks(dataRoot: string): IssueLinks {
-  return new IssueLinks(
+export function noIssueLinks(dataRoot: string): TrackedLinks {
+  return new TrackedLinks(
     dataRoot,
     () => false,
     () => undefined,
@@ -92,7 +92,7 @@ export async function withEmptyPath(
   const settings = new SettingsStore(root);
   await withEnvAsync({ PATH: path.join(root, "empty") }, async () => {
     // The one repository's links, as the registry keeps them.
-    const issueLinks = new IssueLinks(
+    const issueLinks = new TrackedLinks(
       root,
       ({ tabId }) => manager.hasTab(tabId),
       (projectId) => {

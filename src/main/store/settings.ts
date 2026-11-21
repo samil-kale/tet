@@ -24,6 +24,8 @@ const DEFAULTS: AppSettings = {
     finished: true,
     waiting: true,
     idleReminder: false,
+    changeRequestOpened: true,
+    changeRequestFailed: true,
   },
   files: {
     editorKeybindingPreset: DEFAULT_KEYBINDING_PRESET_ID,

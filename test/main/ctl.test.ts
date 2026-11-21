@@ -275,6 +275,8 @@ function terminalsOf(key: string): ControlTerminals {
       calls.issueLinks.push(`unlink:${tabId}:${number}`);
       return { ok: true };
     },
+    linkChangeRequest: () => ({ ok: true }),
+    unlinkChangeRequest: () => ({ ok: true }),
     hookEvent: (tabId, event, payload, at, side) => {
       calls.hooks.push([tabId, event, payload]);
       calls.hookTimes.push(at);
@@ -525,6 +527,25 @@ function deps(): ControlDeps {
           : number === 8
             ? { ref: WORKTREE, worktree: "four", tabId: "s-old", agentId: "claude", title: "", archived: true }
             : undefined,
+    listChangeRequests: async () => [],
+    latestChangeRequests: async () => ({ total: 0, checks: "" }),
+    changeRequestFilterOptions: async () => ({ labels: [], people: [] }),
+    readChangeRequest: async () => {
+      throw new Error("404 Not Found");
+    },
+    unreadChangeRequests: async () => [],
+    markChangeRequestsSeen: async () => undefined,
+    changeRequestFieldOptions: async () => [],
+    setChangeRequestField: async () => undefined,
+    updateChangeRequest: async () => undefined,
+    commentChangeRequest: async () => undefined,
+    editChangeRequestComment: async () => undefined,
+    deleteChangeRequestComment: async () => undefined,
+    approveChangeRequest: async () => undefined,
+    mergeChangeRequest: async () => undefined,
+    openChangeRequest: () => undefined,
+    sendChangeRequestToAgent: async () => ({ ok: false, error: "404 Not Found" }),
+    changeRequestSession: () => undefined,
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
     },
@@ -680,7 +701,7 @@ describe("tet-ctl against the control server", () => {
         darkTheme: "dark-modern",
         lightTheme: "light-modern",
       },
-      notifications: { finished: true, waiting: true, idleReminder: false },
+      notifications: { finished: true, waiting: true, idleReminder: false, changeRequestOpened: true, changeRequestFailed: true },
       files: { editorKeybindingPreset: "tet", excludeGitIgnore: false, compactFolders: true, sortOrder: "default" },
       git: {
         checkNewChanges: false,
@@ -695,7 +716,7 @@ describe("tet-ctl against the control server", () => {
         draftChangeRequest: false,
         deleteSourceBranchChangeRequest: false,
       },
-      prompts: { texts: { commitMessage: "", handover: "", issue: "", changeRequest: "" }, commitSuggesters: [] },
+      prompts: { texts: { commitMessage: "", handover: "", issue: "", changeRequest: "", changeRequestTab: "" }, commitSuggesters: [] },
       environment: { encryptValues: true },
     };
     for (const list of Object.values(calls) as unknown[][]) {
