@@ -347,6 +347,12 @@ describe("a turn's notification", () => {
     });
     assert.equal(notificationFor(tab(""), "finished", "tet", all)?.message, "tet", "no title yet");
     assert.equal(notificationFor(tab("x"), "idle", "tet", all)?.mark, "finished");
+    assert.deepEqual(notificationFor(tab("x"), "failed", "tet", all), {
+      title: "Failed [claude]",
+      message: "tet - x",
+      mark: "finished",
+      agentId: "claude",
+    });
     for (const kind of ["permission", "question"] as const) {
       assert.equal(notificationFor(tab("x"), kind, "tet", all)?.mark, "waiting", kind);
     }
@@ -354,7 +360,23 @@ describe("a turn's notification", () => {
 
   it("is none for a kind the settings switch off", () => {
     assert.equal(notificationFor(tab("x"), "finished", "tet", { ...all, finished: false }), undefined);
+    assert.equal(notificationFor(tab("x"), "failed", "tet", { ...all, finished: false }), undefined, "a failed turn ended too");
     assert.equal(notificationFor(tab("x"), "question", "tet", { ...all, waiting: false }), undefined);
+  });
+});
+
+describe("a Claude Code turn an API error ended", () => {
+  it("ends the turn with the finished mark and a notification of its own", async () => {
+    await withEmptyPath({}, (manager) => {
+      const { tabId } = manager.createTab("claude");
+      const inspected = () => manager.inspect().find((tab) => tab.tabId === tabId);
+      const at = Date.now();
+      manager.hookEvent(tabId, "prompt-submit", '{"session_id":"s1"}', at, HOST_CALLER);
+      const outcome = manager.hookEvent(tabId, "stop-failure", '{"session_id":"s1","error":"rate_limit"}', at + 1000, HOST_CALLER);
+      assert.equal(outcome.notification?.title, "Failed [claude]");
+      assert.equal(inspected()?.inTurn, false, "the turn ends");
+      assert.notEqual(inspected()?.finishedAt, undefined, "the bubble, as for a finished turn");
+    });
   });
 });
 

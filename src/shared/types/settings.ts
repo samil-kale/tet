@@ -22,7 +22,7 @@ export interface AppearanceSettings {
 
 /** The Notifications tab: what every agent notifies the OS about. */
 export interface NotificationSettings {
-  /** The agent finished responding, with nothing it started still running. */
+  /** The agent finished responding, with nothing it started still running, or an error ended its turn. */
   finished: boolean;
   /** Blocked mid-turn on a permission prompt, an elicitation, or a question. */
   waiting: boolean;

@@ -21,6 +21,8 @@ export function setupClaudeHooks(paths: AgentPaths, target: HookTarget = HOST_TA
   const hooks = {
     UserPromptSubmit: [{ hooks: command("prompt-submit") }],
     Stop: [{ hooks: command("stop") }],
+    // A turn an API error ended (a usage limit, an outage), for which `Stop` never fires.
+    StopFailure: [{ hooks: command("stop-failure") }],
     // Blocked on the user: `PermissionRequest` fires as the dialog opens, with the tool in its
     // payload (the `permission_prompt` notification comes later and names none);
     // `elicitation_dialog` is an MCP server's question. `idle_prompt` fires after a turn ended (the

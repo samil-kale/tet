@@ -96,6 +96,14 @@ describe("Claude Code's hooks", () => {
     );
   });
 
+  it("report a turn's end, and a turn an API error ended, for which Stop never fires", () => {
+    const hooks = hooksOf(false);
+    assert.deepEqual(
+      [hooks.Stop, hooks.StopFailure].map((groups) => groups.map((group) => [group.matcher, group.hooks[0].command])),
+      [[[undefined, "tet-ctl hook stop"]], [[undefined, "tet-ctl hook stop-failure"]]],
+    );
+  });
+
   it("register the idle reminder only when it is wanted", () => {
     const matchers = (idleReminder: boolean): (string | undefined)[] => hooksOf(idleReminder).Notification.map((group) => group.matcher);
     assert.deepEqual(matchers(false), ["elicitation_dialog"]);
