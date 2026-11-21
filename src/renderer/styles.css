@@ -1817,9 +1817,6 @@ textarea:focus,
   /* Only as wide as its tabs, so the + button sits right behind the last one. */
   flex: 0 1 auto;
   min-width: 0;
-  /* Room inside the scroller for the drop line before the first tab and the separator after the
-     last, which stand in the gap beside a tab (`.tab::before`). */
-  padding: 0 4px;
   overflow-x: auto;
   scrollbar-width: none;
   scroll-timeline: --tabs inline;
@@ -1879,8 +1876,7 @@ textarea:focus,
   border-color: var(--tet-app-border);
 }
 
-/* Chrome's line between two tabs and after the last, drawn as `.issue-box-separator`, in the middle
-   of the gap beside a tab; before the + while the tabs overflow (`.new-tab::before`). */
+/* Tab separators match `.issue-box-separator` and double as drop marks. */
 .tab::before,
 .tab::after,
 .new-tab::before {
@@ -1902,8 +1898,7 @@ textarea:focus,
 }
 
 /* None beside the active or the hovered tab, whose outline or fill parts it already. */
-.tab:not(.active, :hover) + .tab:not(.active, :hover)::before,
-.tab:last-child:not(.active, :hover)::after {
+.tab:not(.active, :hover) + .tab:not(.active, :hover)::before {
   content: "";
 }
 
@@ -2014,14 +2009,18 @@ textarea:focus,
   display: flex;
   align-items: center;
   flex: none;
+  padding-left: 5px;
 }
 
-/* The line after the last tab stays before the + while more tabs lie past the strip's end, where the
-   last one's (`.tab::after`) stands once scrolled there. */
+/* The separator sits outside the scroller so its edge cannot clip it. */
 .new-tab::before {
   content: "";
-  left: calc(-2px - var(--action-gap));
+  left: calc(var(--action-gap) / -2);
   opacity: var(--tabs-overflow);
+}
+
+.tabs:has(> .tab:last-child:not(.active, :hover)) ~ .new-tab::before {
+  opacity: 1;
 }
 
 /* What floats over the window reads alike: the menus, the status bar's lists, the notification
