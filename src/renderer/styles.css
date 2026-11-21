@@ -464,8 +464,8 @@ textarea:focus,
    what a toolbar holds besides its icon buttons: the status bar's entries, the Issues filters. */
 .icon-button:hover:not(:disabled),
 .status-bar-item:hover,
-.issue-filter-trigger:hover,
-.issue-filter-trigger.open {
+.issue-filter:hover,
+.issue-filter:has(.issue-filter-trigger.open) {
   background: var(--tet-toolbar-hoverBackground);
 }
 
@@ -532,7 +532,7 @@ textarea:focus,
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 29px;
+  height: 32px;
   flex: none;
   padding: 3px 8px 3px;
   font-size: var(--small-font-size);
@@ -654,11 +654,10 @@ textarea:focus,
   font-family: var(--tet-editor-font-family);
 }
 
-/* The titles of a lane's sections and of a tree's groups share their colour and weight. */
+/* The titles of a lane's sections and of a tree's groups share their colour. */
 .section-header,
 .tree-header {
   color: var(--tet-sectionHeader-foreground);
-  font-weight: 600;
 }
 
 /* The tab strip's height, so titles and tabs line up. Its title and buttons stand as far in as the
@@ -1179,7 +1178,7 @@ textarea:focus,
 .issue-filter-bar {
   flex-wrap: wrap;
   flex: none;
-  gap: 2px 5px;
+  gap: 5px;
   padding: 0 var(--island-gap) var(--island-gap);
   font-size: var(--small-font-size);
   color: var(--tet-descriptionForeground);
@@ -1190,6 +1189,10 @@ textarea:focus,
   align-items: center;
   min-width: 0;
   max-width: 100%;
+  padding: 0 2px;
+  background: var(--tet-input-background);
+  border: 1px solid var(--tet-app-border);
+  border-radius: var(--border-radius);
 }
 
 .issue-filter.set {
@@ -3568,7 +3571,7 @@ textarea:focus,
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
 .popup-items {
   overflow-y: auto;
-  margin: 6px 4px;
+  margin: 6px 2px;
   border-radius: 0 0 calc(var(--border-radius) - 1px) calc(var(--border-radius) - 1px);
 }
 
