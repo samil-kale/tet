@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import type { NoticeLink } from "../../../shared/types/app";
 import type { RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
 import type {
@@ -27,11 +26,6 @@ function capitalized(noun: string): string {
  *  the host is known, or where it is none, it says "Change Request" (the code's word for either). */
 export function changeRequestTitle(kind: ChangeRequestKind | undefined): string {
   return `Push and create ${kind ? capitalized(kind.noun).replace(" ", "-") : "Change Request"}`;
-}
-
-/** One by its number as its host writes it, for a notice's link. */
-function linkOf(kind: ChangeRequestKind, { number, url }: ChangeRequest): NoticeLink {
-  return { url, label: `${kind.prefix}${number}` };
 }
 
 /** Branches' button: where it opens one, and its tooltip — `changeRequestTitle`, or why it is off
@@ -180,8 +174,8 @@ export async function askChangeRequest(
     return;
   }
   if (found.open) {
-    const link = linkOf(kind, found.open);
-    notify("info", `${capitalized(kind.noun)} ${link.label} is open already.`, { link });
+    const { number, url } = found.open;
+    notify("info", `${capitalized(kind.noun)} ${kind.prefix}${number} is open already.\n${url}`, { link: url });
     return;
   }
   // Where the remote lacks what the branch has, or has no branch of it yet.
@@ -251,14 +245,16 @@ export async function askChangeRequest(
     return;
   }
   if (created) {
-    const link = linkOf(kind, created);
+    const { number, url } = created;
     // It stands either way, so what did not follow is told beside it.
     const missed = [
       created.approveError === undefined ? undefined : `Could not approve it: ${created.approveError}.`,
       created.autoMergeError === undefined ? undefined : `Could not set it to auto-merge: ${created.autoMergeError}.`,
     ].filter((sentence) => sentence !== undefined);
-    notify(missed.length > 0 ? "warning" : "info", [`Created ${kind.noun} ${link.label} into ${created.into}.`, ...missed].join(" "), {
-      link,
-    });
+    notify(
+      missed.length > 0 ? "warning" : "info",
+      `${[`Created ${kind.noun} ${kind.prefix}${number} into ${created.into}.`, ...missed].join(" ")}\n${url}`,
+      { link: url },
+    );
   }
 }

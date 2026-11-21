@@ -407,7 +407,7 @@ interface CommentBoxProps {
 /** A change request is approved from here where its host lets the viewer: GitHub never its author. */
 function approvable(issue: IssueDetail): boolean {
   const request = changeRequestOf(issue);
-  return request !== undefined && request.status.state === "open" && (request.kind.selfApproval || request.author !== issue.viewer);
+  return request?.status.state === "open" && (request.kind.selfApproval || request.author !== issue.viewer);
 }
 
 function CommentBox({ issue, internalNotes, actions, writing }: CommentBoxProps) {
@@ -646,11 +646,7 @@ function IssueEventLine({ event, noun }: { event: ThreadEvent; noun: string }) {
 }
 
 /** The question renaming an issue asks, wherever it is offered. */
-export function askIssueTitle(
-  current: string,
-  submit: (title: string) => Promise<string | undefined>,
-  issue?: IssueDetail,
-): Promise<void> {
+export function askIssueTitle(current: string, submit: (title: string) => Promise<string | undefined>, issue?: IssueDetail): Promise<void> {
   const noun = issue ? trackedNoun(issue).toLowerCase() : "issue";
   return askName({ title: `Rename ${noun}`, label: "Title", current, confirmLabel: "Rename", submit });
 }
@@ -1055,15 +1051,7 @@ function GroupSection({
 }
 
 /** What a field's pick holds, as its values are drawn: as labels, people too, or plain text. */
-function PickValue({
-  field,
-  issue,
-  actions,
-}: {
-  field: Extract<IssueField, { kind: "pick" }>;
-  issue: IssueDetail;
-  actions: IssueActions;
-}) {
+function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kind: "pick" }>; issue: IssueDetail; actions: IssueActions }) {
   const { viewer } = issue;
   // A linked issue opens in its tab where the project's issues are read from this same repository.
   const opensIssues = changeRequestOf(issue)?.ownIssues === true;
@@ -1180,11 +1168,24 @@ function confirmMerge(request: ChangeRequestDetail, whenChecksPass: boolean): Pr
   });
 }
 
+/** A change request's branches, above its columns: what merges into what, its commits and lines. */
+function ChangeRequestBranches({ request: { status } }: { request: ChangeRequestDetail }) {
+  return (
+    <div className="change-request-branches">
+      {named`${status.head} into ${status.base}`}
+      <span>
+        {" "}
+        · {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
+        {status.additions !== undefined && status.deletions !== undefined && ` · +${status.additions} −${status.deletions}`}
+      </span>
+    </div>
+  );
+}
+
 /**
- * A change request's line above its text: its branches, how its checks stand and whether it can merge,
- * a link to the host's page of its checks, and the merge itself. Merge takes the repository's own
- * method; while the checks run it has the host merge once they passed, and stands disabled where it
- * cannot go through.
+ * A change request's line atop its thread: how its checks stand and whether it can merge, a link to the
+ * host's page of its checks, and the merge itself. Merge takes the repository's own method; while the
+ * checks run it has the host merge once they passed, and stands disabled where it cannot go through.
  */
 function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestDetail; actions: IssueActions }) {
   const { status, kind } = request;
@@ -1201,64 +1202,54 @@ function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestD
     setBusy(false);
   };
   return (
-    <div className="change-request-head">
-      <div className="change-request-branches">
-        {named`${status.head} into ${status.base}`}
-        <span>
-          {" "}
-          · {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
-          {status.additions !== undefined && status.deletions !== undefined && ` · +${status.additions} −${status.deletions}`}
+    <div className="change-request-status">
+      {status.state === "merged" ? (
+        <span className="change-request-fact">
+          <CheckIcon />
+          {named`Merged into ${status.base}`}
+          {status.mergedBy && ` by ${status.mergedBy}`}
         </span>
-      </div>
-      <div className="change-request-status">
-        {status.state === "merged" ? (
-          <span className="change-request-fact">
-            <CheckIcon />
-            {named`Merged into ${status.base}`}
-            {status.mergedBy && ` by ${status.mergedBy}`}
-          </span>
+      ) : (
+        <>
+          {status.checks === "passed" && (
+            <span className="change-request-fact">
+              <CheckIcon />
+              {checksWord} passed
+            </span>
+          )}
+          {running && (
+            <span className="change-request-fact">
+              <SpinnerIcon />
+              {checksWord} running
+            </span>
+          )}
+          {status.checks === "failed" && (
+            <span className="change-request-fact">
+              <CircleAlertIcon className="change-request-failed" />
+              {checksWord} failed
+              {status.failedChecks.length > 0 && <span className="issue-none">{status.failedChecks.join(", ")}</span>}
+            </span>
+          )}
+          {status.state === "open" && (
+            <span className="change-request-fact">
+              {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
+              {status.conflicts ? named`Conflicts with ${status.base}` : status.draft ? "Draft" : named`No conflicts with ${status.base}`}
+            </span>
+          )}
+        </>
+      )}
+      <span className="change-request-spacer" />
+      {status.checksUrl !== undefined && (
+        <ActionLink onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>{checksWord}</ActionLink>
+      )}
+      {status.state === "open" &&
+        (status.autoMerge ? (
+          <span className="issue-none">Auto-merge set</span>
         ) : (
-          <>
-            {status.checks === "passed" && (
-              <span className="change-request-fact">
-                <CheckIcon />
-                {checksWord} passed
-              </span>
-            )}
-            {running && (
-              <span className="change-request-fact">
-                <SpinnerIcon />
-                {checksWord} running
-              </span>
-            )}
-            {status.checks === "failed" && (
-              <span className="change-request-fact">
-                <CircleAlertIcon className="change-request-failed" />
-                {checksWord} failed
-                {status.failedChecks.length > 0 && <span className="issue-none">{status.failedChecks.join(", ")}</span>}
-              </span>
-            )}
-            {status.state === "open" && (
-              <span className="change-request-fact">
-                {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
-                {status.conflicts ? named`Conflicts with ${status.base}` : status.draft ? "Draft" : named`No conflicts with ${status.base}`}
-              </span>
-            )}
-          </>
-        )}
-        <span className="change-request-spacer" />
-        {status.checksUrl !== undefined && (
-          <ActionLink onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>{checksWord}</ActionLink>
-        )}
-        {status.state === "open" &&
-          (status.autoMerge ? (
-            <span className="issue-none">Auto-merge set</span>
-          ) : (
-            <button type="button" className="button" disabled={busy || !mergeable} onClick={() => void merge()}>
-              {running ? "Auto-Merge" : "Merge"}
-            </button>
-          ))}
-      </div>
+          <button type="button" className="button" disabled={busy || !mergeable} onClick={() => void merge()}>
+            {running ? "Auto-Merge" : "Merge"}
+          </button>
+        ))}
     </div>
   );
 }
@@ -1289,9 +1280,10 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
     <>
       <IssueBar issue={issue} session={session} actions={actions} />
       <div className="issue-view">
-        {request && <ChangeRequestStatusLine request={request} actions={actions} />}
+        {request && <ChangeRequestBranches request={request} />}
         <div className="issue-columns">
           <div className="issue-thread">
+            {request && <ChangeRequestStatusLine request={request} actions={actions} />}
             <IssueCard
               author={issue.author}
               avatar={issue.avatars[issue.author]}

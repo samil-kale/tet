@@ -68,14 +68,9 @@ export interface Notice {
   mark?: NoticeMark;
   /** A turn's notice: the notification center shows this agent's icon and `message` alone, without `title`. */
   agentId?: AgentId;
-  /** A page the notice is about: `label`, where `message` says it first, opens it, and buttons
-   *  beside the close copy `url` and open it in the browser. */
-  link?: NoticeLink;
-}
-
-export interface NoticeLink {
-  url: string;
-  label: string;
+  /** The url of a page the notice is about, written in `message` as every url there is a link: a
+   *  button beside the close copies it. */
+  link?: string;
 }
 
 /** A download's notice, updated in place by its `key` (Notices.tsx's `showProgress`). */

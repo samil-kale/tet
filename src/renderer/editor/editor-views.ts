@@ -778,7 +778,8 @@ async function reloadIssue(tabId: string): Promise<void> {
   publish(view, {
     loading: false,
     issueDetail: detail ?? view.snapshot.issueDetail,
-    file: file && markdown !== undefined ? { ...file, content: markdown } : file,
+    // A read that came takes back what an earlier one failed with: the tab shows it again.
+    file: file && detail ? { ...file, content: markdown ?? file.content, error: undefined } : file,
   });
   if (!detail) {
     notify("error", error ?? `Could not read ${kind} ${number}`);

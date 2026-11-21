@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { LinkifyIt } from "linkify-it";
+import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AgentId } from "../../shared/types/agents";
-import type { Notice, NoticeLink, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
+import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import { refKeyOf } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
 import { AgentIcon } from "./agent-icons";
-import { CheckIcon, CloseIcon, CopyIcon, RemoteIcon, SeverityIcon } from "./icons";
+import { CheckIcon, CloseIcon, CopyIcon, SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
 import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
@@ -426,7 +427,7 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
       <span className="notice-text">
         {notice.title && !notice.agentId && <span className="notice-title">{notice.title}</span>}
         <span className="notice-message">
-          {notice.link ? <LinkedMessage message={notice.message} link={notice.link} /> : notice.message}
+          <LinkedMessage message={notice.message} />
         </span>
       </span>
       {notice.agentId && <AgentIcon agentId={notice.agentId} className="line-icon" />}
@@ -443,37 +444,41 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
   );
 }
 
-/** `message` with its link's first `label` opening the link's page. */
-function LinkedMessage({ message, link }: { message: string; link: NoticeLink }) {
-  const at = message.indexOf(link.label);
-  if (at < 0) {
+/** The urls a notice's message links: only those written out with what `shell:open-url` opens, http,
+ *  https and mailto, so a file name or `git@host` stays words. */
+const urls = new LinkifyIt({ fuzzyLink: false, fuzzyEmail: false }).add("ftp:", null).add("//", null);
+
+/** `message` with each url in it opening its page in the browser. */
+function LinkedMessage({ message }: { message: string }) {
+  const matches = urls.match(message);
+  if (!matches) {
     return message;
   }
-  return (
-    <>
-      {message.slice(0, at)}
+  return matches.map((match, index) => (
+    <Fragment key={match.index}>
+      {message.slice(index === 0 ? 0 : matches[index - 1].lastIndex, match.index)}
       <a
         className="notice-link"
-        href={link.url}
+        href={match.url}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          void window.tet.shell.openUrl(link.url);
+          void window.tet.shell.openUrl(match.url);
         }}
       >
-        {link.label}
+        {match.text}
       </a>
-      {message.slice(at + link.label.length)}
-    </>
-  );
+      {index === matches.length - 1 && message.slice(match.lastIndex)}
+    </Fragment>
+  ));
 }
 
 /** How long the copy button shows its check once it copied. */
 const COPIED_MS = 1500;
 
-/** Beside a notice's X where it has a link: one copies it, a check standing in for its icon a moment
- *  after, one opens it in the browser. */
-export function NoticeLinkButtons({ notice }: { notice: ShownNotice }) {
+/** Beside a notice's X where it has a link: copies it, a check standing in for its icon a moment
+ *  after. */
+export function NoticeCopyButton({ notice }: { notice: ShownNotice }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) {
@@ -487,30 +492,17 @@ export function NoticeLinkButtons({ notice }: { notice: ShownNotice }) {
     return null;
   }
   return (
-    <>
-      <button
-        type="button"
-        className="icon-button"
-        title="Copy link"
-        onClick={(event) => {
-          event.stopPropagation();
-          void navigator.clipboard.writeText(link.url).then(() => setCopied(true));
-        }}
-      >
-        {copied ? <CheckIcon /> : <CopyIcon />}
-      </button>
-      <button
-        type="button"
-        className="icon-button"
-        title="Open in Browser"
-        onClick={(event) => {
-          event.stopPropagation();
-          void window.tet.shell.openUrl(link.url);
-        }}
-      >
-        <RemoteIcon />
-      </button>
-    </>
+    <button
+      type="button"
+      className="icon-button"
+      title="Copy link"
+      onClick={(event) => {
+        event.stopPropagation();
+        void navigator.clipboard.writeText(link).then(() => setCopied(true));
+      }}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
   );
 }
 
@@ -532,7 +524,7 @@ export function Notices() {
         <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
           <div className={noticeClass(notice)} onMouseEnter={() => (hovered = notice.id)} onMouseLeave={() => (hovered = undefined)}>
             <NoticeBody notice={notice} />
-            <NoticeLinkButtons notice={notice} />
+            <NoticeCopyButton notice={notice} />
             <button
               type="button"
               className="icon-button"

@@ -1338,18 +1338,14 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-/* A change request's head above its columns: its branches, then its status line, a box as a card's. */
-.change-request-head {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
+/* A change request's branches, above its columns. */
 .change-request-branches {
+  margin-bottom: 20px;
   color: var(--tet-descriptionForeground);
 }
 
+/* Its status line atop the thread, a box as a card's: no line of the thread runs up to it, the text's
+   card below stands first as it does without one. */
 .change-request-status {
   display: flex;
   flex-wrap: wrap;
@@ -1369,6 +1365,10 @@ textarea:focus,
 
 .change-request-spacer {
   flex: 1;
+}
+
+.issue-thread > .change-request-status + .issue-card::before {
+  display: none;
 }
 
 /* Failed checks and conflicts: the error mark. */
@@ -3652,14 +3652,14 @@ textarea:focus,
   margin-left: auto;
 }
 
-/* The link's buttons sit right before the X (`NoticeLinkButtons`): the first takes the room, the
+/* The copy button sits right before the X (`NoticeCopyButton`): the first takes the room, the
    rest follow it without a gap of their own. */
 .notice .icon-button + .icon-button {
   margin-left: 0;
 }
 
-/* A notice's link (`Notice.link`), as VS Code's notification links: the theme's link colour,
-   underlined on hover. */
+/* A url in a notice's message (`LinkedMessage`), as VS Code's notification links: the theme's link
+   colour, underlined on hover. */
 .notice-link {
   color: var(--tet-textLink-foreground);
   text-decoration: none;
