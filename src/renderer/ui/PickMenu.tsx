@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, type ReactNode, type RefObject } from "react";
 import { SEPARATOR, type ContextMenuEntry } from "./ContextMenu";
 import { CheckIcon } from "./icons";
 import { MenuButton, type MenuButtonHandle } from "./MenuButton";
@@ -19,12 +19,14 @@ interface PickMenuProps {
   maxWidth?: number;
   /** A press on the button, which may fetch the options. */
   onOpen?: () => void;
+  /** The box drawn around the button, which the list lines up with instead of the button. */
+  alignTo?: RefObject<HTMLElement | null>;
   /** What the button shows. */
   children: ReactNode;
 }
 
 /** A button of the caller's own look and the list it opens, marking what is picked: `Dropdown`'s list. */
-export function PickMenu({ options, isPicked, onPick, several, className, title, maxWidth, onOpen, children }: PickMenuProps) {
+export function PickMenu({ options, isPicked, onPick, several, className, title, maxWidth, onOpen, alignTo, children }: PickMenuProps) {
   const menu = useRef<MenuButtonHandle>(null);
   const filter = useOptionFilter(
     options ?? [],
@@ -65,6 +67,7 @@ export function PickMenu({ options, isPicked, onPick, several, className, title,
       entries={entries}
       menuClassName="pick-menu"
       maxWidth={maxWidth}
+      alignTo={alignTo}
       header={filter.field}
       onOpen={() => {
         filter.reset();

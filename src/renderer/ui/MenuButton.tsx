@@ -1,4 +1,4 @@
-import { useImperativeHandle, type ReactNode, type Ref } from "react";
+import { useImperativeHandle, type ReactNode, type Ref, type RefObject } from "react";
 import { useAnchoredMenu, type ContextMenuEntry } from "./ContextMenu";
 import { listMaxHeight } from "./Dropdown";
 
@@ -20,6 +20,8 @@ interface MenuButtonProps {
   header?: ReactNode;
   /** A press on the button, as the list opens. */
   onOpen?: () => void;
+  /** The box drawn around the button, which the list lines up with instead of the button. */
+  alignTo?: RefObject<HTMLElement | null>;
   ref?: Ref<MenuButtonHandle>;
   /** What the button shows. */
   children: ReactNode;
@@ -27,14 +29,28 @@ interface MenuButtonProps {
 
 /** A button of the caller's own look and the list it opens below it, ending at the button's right
  *  edge where the window has no room to its right: every list opened from a section's icon. */
-export function MenuButton({ className, title, entries, menuClassName, maxWidth, header, onOpen, ref, children }: MenuButtonProps) {
-  const menu = useAnchoredMenu((rect) => ({
-    maxWidth,
-    x: rect.left,
-    y: rect.bottom,
-    flipX: rect.right,
-    maxHeight: listMaxHeight(rect),
-  }));
+export function MenuButton({
+  className,
+  title,
+  entries,
+  menuClassName,
+  maxWidth,
+  header,
+  onOpen,
+  alignTo,
+  ref,
+  children,
+}: MenuButtonProps) {
+  const menu = useAnchoredMenu((rect) => {
+    const box = alignTo?.current?.getBoundingClientRect() ?? rect;
+    return {
+      maxWidth,
+      x: box.left,
+      y: box.bottom,
+      flipX: box.right,
+      maxHeight: listMaxHeight(box),
+    };
+  });
   useImperativeHandle(ref, () => ({ close: menu.close }));
   return (
     <>

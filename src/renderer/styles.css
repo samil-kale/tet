@@ -340,7 +340,10 @@ textarea:focus,
   --checkbox-radius: 3px;
   /* How far a scrollbar's pill stands in from the bar's edges, a thin bar's and a thick one's alike. */
   --scrollbar-inset: 2px;
-  --menu-padding: 3px;
+  /* How far a menu's rows, a dropdown's among them, and a status bar list's stand in from the box's
+     edge, before their own inset (`.context-menu-item`). */
+  --menu-padding-block: 6px;
+  --menu-padding-inline: 2px;
   --popup-width: min(450px, 100vw);
   /* As `CLOSE_MS` (use-closing.ts). */
   --popup-fade: 0.1s;
@@ -1917,7 +1920,7 @@ textarea:focus,
   width: max-content;
   /* Its rows reach the rounded corners; a submenu is fixed, so it is not clipped. */
   overflow: hidden;
-  padding: var(--menu-padding);
+  padding: var(--menu-padding-block) var(--menu-padding-inline);
   font-size: var(--tet-font-size);
   /* Drawn inside its button's parent, a bold title for one. */
   font-weight: normal;
@@ -2042,9 +2045,9 @@ textarea:focus,
    menu's padding above it, which they would show through. */
 .context-menu-header {
   position: sticky;
-  top: calc(-1 * var(--menu-padding));
-  margin: calc(-1 * var(--menu-padding)) calc(-1 * var(--menu-padding)) 0;
-  padding: var(--menu-padding) var(--menu-padding) 0;
+  top: calc(-1 * var(--menu-padding-block));
+  margin: calc(-1 * var(--menu-padding-block)) calc(-1 * var(--menu-padding-inline)) 0;
+  padding: var(--menu-padding-block) var(--menu-padding-inline) 0;
   z-index: 1;
   background: var(--tet-menu-background);
 }
@@ -3571,7 +3574,7 @@ textarea:focus,
 /* Inside the box's rounded corners, or a hovered or active last row would cover them. */
 .popup-items {
   overflow-y: auto;
-  margin: 6px 2px;
+  margin: var(--menu-padding-block) var(--menu-padding-inline);
   border-radius: 0 0 calc(var(--border-radius) - 1px) calc(var(--border-radius) - 1px);
 }
 

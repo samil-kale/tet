@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { IssueFilter } from "../../../shared/types/providers";
 import { IconButton } from "../../ui/IconButton";
 import { ChevronIcon, CloseIcon } from "../../ui/icons";
@@ -23,11 +24,13 @@ interface FilterControlProps {
 /** One filter: its title and value, a list to pick from, and a button clearing it once set
  *  (IntelliJ's). */
 function FilterControl({ title, value, options, isPicked, onPick, onClear, several }: FilterControlProps) {
+  const box = useRef<HTMLSpanElement>(null);
   return (
-    <span className={value === undefined ? "issue-filter" : "issue-filter set"}>
+    <span ref={box} className={value === undefined ? "issue-filter" : "issue-filter set"}>
       <PickMenu
         className="issue-filter-trigger"
         maxWidth={FILTER_MENU_MAX_WIDTH}
+        alignTo={box}
         options={options}
         isPicked={isPicked}
         onPick={onPick}
