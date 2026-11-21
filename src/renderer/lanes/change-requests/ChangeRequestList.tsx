@@ -23,6 +23,7 @@ import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { useIssueRows } from "../../ui/use-issue-rows";
+import { useScrollMore } from "../../ui/use-scroll-more";
 import { ChangeRequestFilterBar } from "./ChangeRequestFilterBar";
 import { useChangeRequests } from "./use-change-requests";
 
@@ -44,7 +45,7 @@ function ChangeRequestRow({
 }: {
   row: Row;
   kind: ChangeRequestKind | undefined;
-  /** Its tab is the active editor tab. */
+  /** Its tab is the focused pane's active tab. */
   active: boolean;
   /** The host created or changed it, or its checks failed, since its tab last showed it. */
   unread: boolean;
@@ -107,19 +108,20 @@ export const ChangeRequestList = memo(function ChangeRequestList({
 }: {
   resolved: ResolvedRef;
   shown: boolean;
-  /** The active editor tab's change request — its row is marked. */
+  /** The change request of the focused pane's active tab — its row is marked. */
   openChangeRequest: number | null;
   onOpenFile: (ref: ProjectRef, path: string, how?: OpenEditor) => void;
   onOpenAccounts: () => void;
 }) {
   const { projectId } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`change-requests-filter.${projectId}`, DEFAULT_CHANGE_REQUEST_FILTER);
-  const { changeRequests, kind, noAccount, options, busy, reload } = useChangeRequests(projectId, filter, shown);
+  const [title, setTitle] = useState("");
+  const { changeRequests, total, read, more, kind, noAccount, options, busy, reload } = useChangeRequests(projectId, filter, title, shown);
   const seen = useSeen("change-request", projectId);
   const unread = (row: Row): boolean => isChangeRequestUnread(row, seen);
-  const [title, setTitle] = useState("");
-  const needle = title.trim().toLowerCase();
-  const shownRows = useIssueRows(changeRequests, filter).filter(({ issue }) => issue.title.toLowerCase().includes(needle));
+  // Keyed by the page count too, as the Issues section's rows.
+  const shownRows = useIssueRows(changeRequests, read ?? {});
+  const scroller = useScrollMore(more);
   const menu = useContextMenu<Row>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
@@ -151,7 +153,10 @@ export const ChangeRequestList = memo(function ChangeRequestList({
       ? [
           SEPARATOR,
           unread(row)
-            ? { label: "Mark as Read", run: () => keepSeen("change-request", projectId, row.number, row.updatedAt, row.checks === "failed") }
+            ? {
+                label: "Mark as Read",
+                run: () => keepSeen("change-request", projectId, row.number, row.updatedAt, row.checks === "failed"),
+              }
             : { label: "Mark as Unread", run: () => keepUnread("change-request", projectId, row.number, row.updatedAt) },
         ]
       : [];
@@ -171,7 +176,7 @@ export const ChangeRequestList = memo(function ChangeRequestList({
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       <Section
         title={titleOf(kind)}
-        count={changeRequests?.length}
+        count={total}
         busy={busy}
         actions={
           <>
@@ -196,7 +201,7 @@ export const ChangeRequestList = memo(function ChangeRequestList({
         <div className="filter-list">
           <FilterField placeholder={`Filter ${titleOf(kind).toLowerCase()}...`} value={title} onChange={setTitle} />
           <ChangeRequestFilterBar filter={filter} options={options} onChange={setFilter} />
-          <div className="tree">
+          <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
             {shownRows.map(({ issue: row, entering, leaving }) => (
               <div key={row.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <ChangeRequestRow

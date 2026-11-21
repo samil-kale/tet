@@ -17,7 +17,7 @@ interface FilesLaneProps {
   resolved: ResolvedRef;
   /** False while the git lane stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
-  /** The active editor tab's file — the tree reveals it. */
+  /** The file of the focused pane's active tab — the tree reveals it. */
   openPath: string | null;
   /** Opens in the repository's or worktree's preview tab, or as `how` asks (`editor-tab.ts`) — a
    *  search result at its match. */

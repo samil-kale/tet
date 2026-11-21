@@ -25,6 +25,13 @@ export class NoAccountError extends Error {
   }
 }
 
+/** The repository has no remote on a host: it has no tracker to read. */
+export class NoRemoteError extends Error {
+  constructor() {
+    super("This repository has no remote on a host to read issues from");
+  }
+}
+
 /** One call to the tracker, through one account, whose login is `user`. */
 export type TrackerCall<T> = (provider: GitProvider, tracker: Tracker, user: string) => Promise<T>;
 
@@ -62,7 +69,7 @@ export async function trackerRemote(repository: IssueRepository): Promise<{ host
   const url = repository.getState().remotes.find((remote) => remote.url !== undefined)?.url;
   const remote = url === undefined ? undefined : parseRemoteUrl(url);
   if (!remote) {
-    throw new Error("This repository has no remote on a host to read issues from");
+    throw new NoRemoteError();
   }
   return remote;
 }

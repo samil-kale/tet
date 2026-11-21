@@ -24,6 +24,7 @@ import {
   fetchOk,
   fetchUploadOk,
   fieldMethods,
+  firstNodes,
   getPaged,
   numberOf,
   pickField,
@@ -177,12 +178,14 @@ const NOTE_PAGE = `pageInfo { hasNextPage endCursor }
   nodes { id system internal body createdAt author { username } }`;
 
 /** What a filter asks for (`issuesVariables`), as the queries of a list and of its latest change take it. */
-const FILTER_VARIABLES = "$state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String]";
-const FILTER_ARGUMENTS = "state: $state, authorUsername: $authorUsername, assigneeUsernames: $assigneeUsernames, labelName: $labelName";
+const FILTER_VARIABLES =
+  "$state: IssuableState, $authorUsername: String, $assigneeUsernames: [String!], $labelName: [String], $search: String, $in: [IssuableSearchableField!]";
+const FILTER_ARGUMENTS =
+  "state: $state, authorUsername: $authorUsername, assigneeUsernames: $assigneeUsernames, labelName: $labelName, search: $search, in: $in";
 
-const ISSUES_QUERY = `query($path: ID!, $cursor: String, ${FILTER_VARIABLES}) {
+const ISSUES_QUERY = `query($path: ID!, $first: Int!, $cursor: String, ${FILTER_VARIABLES}) {
   project(fullPath: $path) {
-    issues(first: 100, after: $cursor, sort: created_desc, ${FILTER_ARGUMENTS}) {
+    issues(first: $first, after: $cursor, sort: created_desc, ${FILTER_ARGUMENTS}) {
       pageInfo { hasNextPage endCursor }
       nodes { ${ISSUE_ROW} }
     }
@@ -681,7 +684,14 @@ export function issuesVariables(path: string, filter: IssueFilter): Record<strin
     authorUsername: filter.author,
     assigneeUsernames: filter.assignee ? [filter.assignee] : undefined,
     labelName: filter.labels.length > 0 ? filter.labels : undefined,
+    ...titleSearch(filter.text),
   };
+}
+
+/** A filter's text in the words of `FILTER_VARIABLES` and `MERGE_REQUEST_FILTER_VARIABLES`, searched in
+ *  titles alone; neither is sent without text, as `in` is refused without a `search`. */
+function titleSearch(text: string | undefined): Record<string, unknown> {
+  return text ? { search: text, in: ["TITLE"] } : {};
 }
 
 /** `avatars` stays empty: a private instance serves a user's uploaded picture only to a signed-in
@@ -802,6 +812,7 @@ export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
   mergedAt: string | null;
   mergeUser: GitLabUser | null;
   autoMergeEnabled: boolean;
+  availableAutoMergeStrategies: string[] | null;
   commitCount: number | null;
   diffStatsSummary: { additions: number; deletions: number } | null;
   headPipeline: { status: string; path: string | null; jobs: { nodes: { name: string }[] } | null } | null;
@@ -814,13 +825,13 @@ const MERGE_REQUEST_ROW = `${ISSUE_ROW} draft sourceProject { fullPath } diffHea
 
 /** What a filter asks for (`mergeRequestsVariables`), as the queries of a list and of its latest change take it. */
 const MERGE_REQUEST_FILTER_VARIABLES =
-  "$state: MergeRequestState, $authorUsername: String, $assigneeUsername: String, $reviewerUsername: String, $labels: [String!]";
+  "$state: MergeRequestState, $authorUsername: String, $assigneeUsername: String, $reviewerUsername: String, $labels: [String!], $search: String, $in: [IssuableSearchableField!]";
 const MERGE_REQUEST_FILTER_ARGUMENTS =
-  "state: $state, authorUsername: $authorUsername, assigneeUsername: $assigneeUsername, reviewerUsername: $reviewerUsername, labels: $labels";
+  "state: $state, authorUsername: $authorUsername, assigneeUsername: $assigneeUsername, reviewerUsername: $reviewerUsername, labels: $labels, search: $search, in: $in";
 
-const MERGE_REQUESTS_QUERY = `query($path: ID!, $cursor: String, ${MERGE_REQUEST_FILTER_VARIABLES}) {
+const MERGE_REQUESTS_QUERY = `query($path: ID!, $first: Int!, $cursor: String, ${MERGE_REQUEST_FILTER_VARIABLES}) {
   project(fullPath: $path) {
-    mergeRequests(first: 100, after: $cursor, sort: CREATED_DESC, ${MERGE_REQUEST_FILTER_ARGUMENTS}) {
+    mergeRequests(first: $first, after: $cursor, sort: CREATED_DESC, ${MERGE_REQUEST_FILTER_ARGUMENTS}) {
       pageInfo { hasNextPage endCursor }
       nodes { ${MERGE_REQUEST_ROW} }
     }
@@ -840,7 +851,7 @@ const MERGE_REQUEST_QUERY = `query($path: ID!, $iid: String!) {
   project(fullPath: $path) {
     mergeRequest(iid: $iid) {
       ${MERGE_REQUEST_ROW}
-      description sourceBranch targetBranch conflicts mergedAt autoMergeEnabled commitCount
+      description sourceBranch targetBranch conflicts mergedAt autoMergeEnabled availableAutoMergeStrategies commitCount
       mergeUser { username }
       diffStatsSummary { additions deletions }
       headPipeline { status path jobs(statuses: [FAILED], first: 50) { nodes { name } } }
@@ -864,6 +875,7 @@ export function mergeRequestsVariables(path: string, filter: ChangeRequestFilter
     assigneeUsername: filter.assignee,
     reviewerUsername: filter.reviewer,
     labels: filter.labels.length > 0 ? filter.labels : undefined,
+    ...titleSearch(filter.text),
   };
 }
 
@@ -923,11 +935,14 @@ export const MERGE_REQUEST_FIELD_HANDLERS: Record<string, FieldHandler<MergeRequ
     inputType: "MergeRequestSetReviewersInput",
     input: { ...target, reviewerUsernames, operationMode: "REPLACE" },
   })),
-  assignees: pickHandler({ what: "person to assign", choices: ({ send, path }) => peopleByLogin(send, path) }, (target, assigneeUsernames) => ({
-    mutation: "mergeRequestSetAssignees",
-    inputType: "MergeRequestSetAssigneesInput",
-    input: { ...target, assigneeUsernames, operationMode: "REPLACE" },
-  })),
+  assignees: pickHandler(
+    { what: "person to assign", choices: ({ send, path }) => peopleByLogin(send, path) },
+    (target, assigneeUsernames) => ({
+      mutation: "mergeRequestSetAssignees",
+      inputType: "MergeRequestSetAssigneesInput",
+      input: { ...target, assigneeUsernames, operationMode: "REPLACE" },
+    }),
+  ),
   labels: pickHandler({ what: "label", choices: ({ send, path }) => allLabels(send, path) }, (target, labelIds) => ({
     mutation: "mergeRequestSetLabels",
     inputType: "MergeRequestSetLabelsInput",
@@ -1025,11 +1040,17 @@ export const gitlab: GitProvider = {
     }));
   },
 
-  async listIssues({ host, token, path }, filter) {
-    const entries = await allNodes<GitLabIssue>(sender(host, token), ISSUES_QUERY, issuesVariables(path, filter), (data) => {
-      const { project } = data as { project: { issues: GraphqlPage<GitLabIssue> } | null };
-      return reached(project, path).issues;
-    });
+  async listIssues({ host, token, path }, filter, limit) {
+    const entries = await firstNodes<GitLabIssue>(
+      sender(host, token),
+      ISSUES_QUERY,
+      issuesVariables(path, filter),
+      (data) => {
+        const { project } = data as { project: { issues: GraphqlPage<GitLabIssue> } | null };
+        return reached(project, path).issues;
+      },
+      limit,
+    );
     return entries.map(toIssue);
   },
 
@@ -1175,12 +1196,19 @@ export const gitlab: GitProvider = {
     });
   },
 
-  async listChangeRequests({ host, token, path }, filter) {
-    const entries = await allNodes<GitLabMergeRequestRow>(sender(host, token), MERGE_REQUESTS_QUERY, mergeRequestsVariables(path, filter), (data) => {
-      const { project } = data as { project: { mergeRequests: GraphqlPage<GitLabMergeRequestRow> } | null };
-      return reached(project, path).mergeRequests;
-    });
-    return entries.filter((entry) => fromOwnProject(entry, path)).map(toChangeRequestRow);
+  async listChangeRequests({ host, token, path }, filter, limit) {
+    const entries = await firstNodes<GitLabMergeRequestRow>(
+      sender(host, token),
+      MERGE_REQUESTS_QUERY,
+      mergeRequestsVariables(path, filter),
+      (data) => {
+        const { project } = data as { project: { mergeRequests: GraphqlPage<GitLabMergeRequestRow> } | null };
+        return reached(project, path).mergeRequests;
+      },
+      limit,
+      (entry) => fromOwnProject(entry, path),
+    );
+    return entries.map(toChangeRequestRow);
   },
 
   async readChangeRequestsLatest({ host, token, path }, filter) {
@@ -1233,6 +1261,8 @@ export const gitlab: GitProvider = {
         checksUrl: found.headPipeline?.path ? `https://${host}${found.headPipeline.path}` : undefined,
         conflicts: found.conflicts,
         autoMerge: found.autoMergeEnabled,
+        // The strategy `mergeChangeRequest` sets: GitLab offers it only while the merge request cannot merge at once.
+        autoMergeable: found.availableAutoMergeStrategies?.includes("merge_when_checks_pass") ?? false,
         head: found.sourceBranch,
         base: found.targetBranch,
         commits: found.commitCount ?? 0,

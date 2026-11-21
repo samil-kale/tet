@@ -63,7 +63,7 @@ export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "
     }
   };
 
-  handle("issues:list", async (_event, projectId: string, filter: IssueFilter): Promise<IssueListResult> => {
+  handle("issues:list", async (_event, projectId: string, filter: IssueFilter, limit: number): Promise<IssueListResult> => {
     let source: string | undefined;
     try {
       const repository = issueRepository(issueDeps, projectId);
@@ -71,7 +71,7 @@ export function registerIssuesIpc({ issueDeps, noticeProgress }: Pick<IpcDeps, "
       const { issues, latest, confidentialIssues } = await onTracker(accounts, repository, async (provider, tracker) => ({
         // First: a change made while the list comes then differs from it at the next read.
         latest: await provider.readLatest(tracker, filter),
-        issues: await provider.listIssues(tracker, filter),
+        issues: await provider.listIssues(tracker, filter, limit),
         confidentialIssues: provider.confidentialIssues,
       }));
       const { provider, host, path } = await readIssueTracker(accounts, repository);

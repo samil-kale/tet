@@ -103,7 +103,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
    */
   const { layouts, activateTab, snapTab, dropOnStrip, focusPane, placeTab } = useProjectLayouts(stripTabs, starting);
   /** The editors kept in step with the tabs, the layout and the states (use-editor-sync.ts). */
-  const { activeEditors } = useEditorSync(editorTabs, layouts, states);
+  useEditorSync(editorTabs, layouts, states);
   /** The branch commands' gate, and the git lane's and project list's ways in (run-action.ts). */
   const { activeBranch, projectListBusy, runIn } = useBranchActions(activeRefKey);
   // Section defaults and limits.
@@ -488,7 +488,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                   <FilesLane
                     resolved={activeResolved}
                     shown={shown}
-                    openPath={workingTreePathOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
+                    openPath={workingTreePathOf(editorTabs[activeResolved.refKey], activeTabId)}
                     onOpenFile={openEditor}
                     searchHeight={fileSearchHeight}
                     onSearchHeight={setFileSearchHeight}
@@ -500,7 +500,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     key={activeResolved.ref.projectId}
                     resolved={activeResolved}
                     shown={shown}
-                    openIssue={issueOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
+                    openIssue={issueOf(editorTabs[activeResolved.refKey], activeTabId)}
                     onOpenFile={openEditor}
                     onOpenAccounts={openAccounts}
                   />
@@ -511,7 +511,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     key={activeResolved.ref.projectId}
                     resolved={activeResolved}
                     shown={shown}
-                    openChangeRequest={changeRequestOf(editorTabs[activeResolved.refKey], activeEditors[activeResolved.refKey])}
+                    openChangeRequest={changeRequestOf(editorTabs[activeResolved.refKey], activeTabId)}
                     onOpenFile={openEditor}
                     onOpenAccounts={openAccounts}
                   />

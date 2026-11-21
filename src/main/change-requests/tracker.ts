@@ -51,16 +51,18 @@ export async function changeRequestHost(
   return { ...remote, provider: account?.provider, kind: provider?.changeRequest };
 }
 
-/** The project's change requests the filter narrows to, with what the host said of the list just
- *  before, so a change made while the list comes differs from it at the next read. */
+/** The project's first `limit` change requests the filter narrows to, every one without a `limit`,
+ *  with what the host said of the list just before, so a change made while the list comes differs
+ *  from it at the next read. */
 export function listChangeRequests(
   deps: TrackerDeps,
   projectId: string,
   filter: ChangeRequestFilter,
+  limit?: number,
 ): Promise<{ changeRequests: ChangeRequestRow[]; latest: ChangeRequestsLatest }> {
   return onRemote(deps, projectId, async (provider, tracker) => {
     const latest = await provider.readChangeRequestsLatest(tracker, filter);
-    return { latest, changeRequests: await provider.listChangeRequests(tracker, filter) };
+    return { latest, changeRequests: await provider.listChangeRequests(tracker, filter, limit) };
   });
 }
 

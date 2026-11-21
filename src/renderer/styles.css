@@ -782,7 +782,7 @@ textarea:focus,
   flex: 1;
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
 }
 
@@ -856,21 +856,21 @@ textarea:focus,
 }
 
 /* Room for the search icon on the left. On the right, room for what stands inside the field
-   (`.filter-toggles`: 20px each, --action-gap apart, 4px off the edge), and 4px before the text:
+   (`.filter-toggles`: 20px each, --action-gap apart, 6px off the edge), and 6px before the text:
    the clear button, and before it the Search and Graph sections' three toggles, VS Code's. */
 .filter-field input {
   width: 100%;
   padding-left: 28px;
-  padding-right: calc(20px + 8px);
+  padding-right: calc(20px + 11px);
 }
 
 .filter-field.with-toggles input {
-  padding-right: calc(4 * 20px + 3 * var(--action-gap) + 8px);
+  padding-right: calc(4 * 20px + 3 * var(--action-gap) + 11px);
 }
 
 .filter-icon {
   position: absolute;
-  left: calc(var(--island-gap) + 6px);
+  left: calc(var(--island-gap) + 8px);
   top: 50%;
   transform: translateY(-50%);
   opacity: 0.6;
@@ -884,12 +884,12 @@ textarea:focus,
 
 /* Here the field lacks the 6px the branch tree's icon is placed against. */
 .remote-main > .filter-field .filter-icon {
-  left: 7px;
+  left: 9px;
 }
 
-/* The clear button likewise, 4px off the input's edge. */
+/* The clear button likewise, 7px off the input's edge. */
 .remote-main > .filter-field .filter-toggles {
-  right: 4px;
+  right: 7px;
 }
 
 /* `.icon-button` in every other respect, `active` included: only the box shrinks, since VS Code's
@@ -902,8 +902,8 @@ textarea:focus,
 /* The field's `.toolbar`, over its right end. */
 .filter-toggles {
   position: absolute;
-  /* 4px off the input's edge, inside the field's right padding. */
-  right: calc(var(--island-gap) + 3px);
+  /* 6px off the input's edge, inside the field's right padding. */
+  right: calc(var(--island-gap) + 6px);
   top: 50%;
   transform: translateY(-50%);
 }
@@ -1224,7 +1224,6 @@ textarea:focus,
   align-items: center;
   gap: 6px;
   min-width: 0;
-  margin-bottom: 4px;
 }
 
 .issue-detail-line > .list-detail {
@@ -1344,8 +1343,12 @@ textarea:focus,
   gap: 6px;
 }
 
-.change-request-spacer {
-  flex: 1;
+/* Its buttons at the end, as close together as the comment box's. */
+.change-request-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .issue-thread > .change-request-status + .issue-card::before {

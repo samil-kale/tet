@@ -28,14 +28,14 @@ export function useEditorSync(
   editorTabs: Record<string, EditorTab[]>,
   layouts: Record<string, ProjectLayout>,
   states: Record<string, RepositoryState>,
-): { activeEditors: Record<string, string> } {
+): void {
   /** Per repository or worktree, per watched path: writes on disk — see diffVersion. */
   const [fileWrites, setFileWrites] = useState<Record<string, Record<string, number>>>({});
   useEffect(() => onRefClosed((ref) => setFileWrites((current) => forget(current, refKeyOf(ref)))), []);
 
   /**
-   * Each repository's or worktree's active editor tab (`activeEditorTab`) — the file the Explorer
-   * reveals and `tet-ctl editor-get` answers. Derived, not tracked: a tab is activated from many
+   * Each repository's or worktree's active editor tab (`activeEditorTab`) — the file
+   * `tet-ctl editor-get` answers. Derived, not tracked: a tab is activated from many
    * places (a click, next/previous, a drop, a snap). Identity-stable where unchanged.
    */
   const activeEditorsRef = useRef<Record<string, string>>({});
@@ -128,5 +128,4 @@ export function useEditorSync(
       }
     }
   }, [editorTabs, states, fileWrites]);
-  return { activeEditors };
 }

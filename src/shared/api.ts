@@ -191,8 +191,8 @@ export interface TETApi {
     cachedRepos: (accountId: string) => Promise<RemoteRepository[] | undefined>;
   };
   issues: {
-    /** Newest first, from the project's tracker. */
-    list: (projectId: string, filter: IssueFilter) => Promise<IssueListResult>;
+    /** The first `limit`, newest first, from the project's tracker. */
+    list: (projectId: string, filter: IssueFilter, limit: number) => Promise<IssueListResult>;
     /** How many issues the filter leaves and when the latest changed: the list is read again once this
      *  differs from the `latest` of the list shown. */
     latest: (projectId: string, filter: IssueFilter) => Promise<IssueLatestResult>;
@@ -234,8 +234,8 @@ export interface TETApi {
   /** The change requests section and a change request's tab: the pull or merge requests of the
    *  project's repository's own remote, as `issues` reads its issues. */
   changeRequests: {
-    /** Newest first, of the repository's own branches. */
-    list: (projectId: string, filter: ChangeRequestFilter) => Promise<ChangeRequestListResult>;
+    /** The first `limit`, newest first, of the repository's own branches. */
+    list: (projectId: string, filter: ChangeRequestFilter, limit: number) => Promise<ChangeRequestListResult>;
     /** As `issues.latest`, with each one's checks. */
     latest: (projectId: string, filter: ChangeRequestFilter) => Promise<ChangeRequestLatestResult>;
     filterOptions: (projectId: string) => Promise<IssueFilterOptions>;

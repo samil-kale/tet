@@ -676,7 +676,12 @@ describe("what is persisted", () => {
     );
     assert.deepEqual(loadPersisted("e").tabs, [
       { id: "s1", pane: "a", kind: "session" },
-      { id: editorTab.tabId, pane: "b", kind: "editor", editor: { ...entry, commit: undefined, issue: undefined } },
+      {
+        id: editorTab.tabId,
+        pane: "b",
+        kind: "editor",
+        editor: { ...entry, commit: undefined, issue: undefined, changeRequest: undefined },
+      },
       { id: "sh", pane: "b", kind: "shell" },
     ]);
   });
@@ -690,6 +695,18 @@ describe("what is persisted", () => {
       serializeLayout(layout, [editorTab], () => entry),
     );
     assert.equal(loadPersisted("i").tabs[0].editor?.issue, 412);
+    assert.equal(workingTreePathOf([editorTab], editorTab.tabId), null);
+  });
+
+  it("brings back a change request's tab by its number, as no file of the tree", () => {
+    const entry: EditorEntry = { path: "change-request-746.md", changeRequest: 746, preview: false, diff: false, markdownPreview: "only" };
+    const editorTab: EditorTab = { tabId: "tet:editor:x-3", ref: { projectId: "p" }, path: entry.path, changeRequest: 746 };
+    const layout = layoutOf("single", "a", { [editorTab.tabId]: "a" }, [editorTab]);
+    storage.set(
+      "tet.layout.terminals.c.layout",
+      serializeLayout(layout, [editorTab], () => entry),
+    );
+    assert.equal(loadPersisted("c").tabs[0].editor?.changeRequest, 746);
     assert.equal(workingTreePathOf([editorTab], editorTab.tabId), null);
   });
 });

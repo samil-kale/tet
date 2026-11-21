@@ -78,7 +78,7 @@ const api: TETApi = {
     cachedRepos: (accountId) => invoke("providers:cached-repos", accountId),
   },
   issues: {
-    list: (projectId, filter) => invoke("issues:list", projectId, filter),
+    list: (projectId, filter, limit) => invoke("issues:list", projectId, filter, limit),
     latest: (projectId, filter) => invoke("issues:latest", projectId, filter),
     filterOptions: (projectId) => invoke("issues:filter-options", projectId),
     read: (projectId, number) => invoke("issues:read", projectId, number),
@@ -101,7 +101,7 @@ const api: TETApi = {
     onSessionsChanged: (listener) => subscribe("issues:sessions-changed", listener),
   },
   changeRequests: {
-    list: (projectId, filter) => invoke("change-requests:list", projectId, filter),
+    list: (projectId, filter, limit) => invoke("change-requests:list", projectId, filter, limit),
     latest: (projectId, filter) => invoke("change-requests:latest", projectId, filter),
     filterOptions: (projectId) => invoke("change-requests:filter-options", projectId),
     read: (projectId, number) => invoke("change-requests:read", projectId, number),

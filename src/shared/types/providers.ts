@@ -62,6 +62,8 @@ export interface IssueFilter {
   assignee?: string;
   /** An issue has to carry all of them. */
   labels: string[];
+  /** Words its title has to hold, as the tracker's search matches them; absent for none. */
+  text?: string;
 }
 
 /** What the Issues section shows until its filter is changed. */
@@ -90,6 +92,8 @@ export interface ChangeRequestFilter {
   reviewer?: string;
   /** A change request has to carry all of them. */
   labels: string[];
+  /** As `IssueFilter.text`. */
+  text?: string;
 }
 
 /** What the change requests section shows until its filter is changed. */
@@ -121,6 +125,8 @@ export interface ChangeRequestStatus {
   conflicts: boolean;
   /** The host merges it once nothing is outstanding. */
   autoMerge: boolean;
+  /** The host would set it to auto-merge now: something is outstanding, and the account may. */
+  autoMergeable: boolean;
   /** Its source branch and the branch it merges into. */
   head: string;
   base: string;

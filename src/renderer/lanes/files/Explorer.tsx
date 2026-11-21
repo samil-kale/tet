@@ -91,7 +91,7 @@ interface ExplorerProps {
   files: ExplorerListing | undefined;
   /** False while hidden behind the git lane, where a row can't be scrolled to. */
   shown: boolean;
-  /** The active editor tab's file — revealed and highlighted. */
+  /** The file of the focused pane's active tab — revealed and highlighted. */
   selected: string | null;
   /** In the preview tab, or kept (`editor-tab.ts`); a Markdown file with its preview if asked.
    *  The repository or worktree is named: the same handler serves every view that opens a file. */
@@ -152,7 +152,7 @@ export const Explorer = memo(function Explorer({
     return files?.compactFolders ? compactTree(filtered) : filtered;
   }, [tree, query, files?.compactFolders]);
 
-  // Reveals the active editor tab's file in the innermost root containing it.
+  // Reveals the selected file in the innermost root containing it.
   const roots = files?.roots;
   const pendingReveal = useRef<string | null>(null);
   useEffect(() => {

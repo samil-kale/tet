@@ -35,8 +35,8 @@ export interface GitProvider {
   validate(host: string, token: string): Promise<string>;
   /** Every repository the token's user can reach, most recently active first. */
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
-  /** The issues the filter leaves, newest first. */
-  listIssues(tracker: Tracker, filter: IssueFilter): Promise<Issue[]>;
+  /** The first `limit` issues the filter leaves, newest first; every one without a `limit`. */
+  listIssues(tracker: Tracker, filter: IssueFilter, limit?: number): Promise<Issue[]>;
   /** How many issues the host counts for the filter and when the latest changed one changed: one
    *  request however long the list. */
   readLatest(tracker: Tracker, filter: IssueFilter): Promise<IssuesLatest>;
@@ -84,8 +84,9 @@ export interface GitProvider {
   /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
    *  wait for, the host refuses it. */
   autoMergeChangeRequest(tracker: Tracker, number: number, squash: boolean): Promise<void>;
-  /** The change requests the filter leaves, of the repository's own branches alone, newest first. */
-  listChangeRequests(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]>;
+  /** The first `limit` change requests the filter leaves, of the repository's own branches alone,
+   *  newest first; every one without a `limit`. */
+  listChangeRequests(tracker: Tracker, filter: ChangeRequestFilter, limit?: number): Promise<ChangeRequestRow[]>;
   /** What the host says of the filtered list without sending it whole (`ChangeRequestsLatest`): one
    *  request. */
   readChangeRequestsLatest(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
@@ -219,6 +220,36 @@ export async function allNodes<T>(
     cursor = answer.pageInfo.endCursor;
   }
   return nodes;
+}
+
+/** The most nodes either host sends in one page of a GraphQL listing. */
+const GRAPHQL_PAGE = 100;
+
+/**
+ * The first `limit` nodes of a GraphQL listing that `keep` keeps, every one up to the cap without a
+ * `limit`: `allNodes` for a query that takes its page's size as `$first`. Each page asks for `limit` at
+ * most, so a short list costs no more than it shows, and for as many again where `keep` dropped some.
+ */
+export async function firstNodes<T>(
+  send: GraphqlSend,
+  query: string,
+  variables: Record<string, unknown>,
+  pageOf: (data: unknown) => GraphqlPage<T>,
+  limit?: number,
+  keep: (node: T) => boolean = () => true,
+): Promise<T[]> {
+  const first = Math.min(limit ?? GRAPHQL_PAGE, GRAPHQL_PAGE);
+  const nodes: T[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < PAGE_CAP; page++) {
+    const answer = pageOf(await send(query, { ...variables, first, cursor }));
+    nodes.push(...answer.nodes.filter(keep));
+    if (!answer.pageInfo.hasNextPage || (limit !== undefined && nodes.length >= limit)) {
+      break;
+    }
+    cursor = answer.pageInfo.endCursor;
+  }
+  return nodes.slice(0, limit);
 }
 
 /** What a pick field lists: a name as `IssueField.value` shows it, with the id the tracker addresses it by. */

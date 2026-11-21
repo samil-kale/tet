@@ -1161,7 +1161,7 @@ function confirmMerge(request: ChangeRequestDetail, whenChecksPass: boolean): Pr
   return confirmed({
     title: whenChecksPass ? `Set ${kind.noun} to auto-merge` : `Merge ${kind.noun}`,
     message: whenChecksPass
-      ? named`Merge ${kind.prefix + String(request.number)} into ${status.base} once its ${kind.checks} passed?`
+      ? named`Merge ${kind.prefix + String(request.number)} into ${status.base} once nothing is outstanding?`
       : named`Merge ${kind.prefix + String(request.number)} into ${status.base}?`,
     detail: "It is merged by the repository's own method.",
     confirmLabel: whenChecksPass ? "Auto-Merge" : "Merge",
@@ -1184,8 +1184,9 @@ function ChangeRequestBranches({ request: { status } }: { request: ChangeRequest
 
 /**
  * A change request's line atop its thread: how its checks stand and whether it can merge, a link to the
- * host's page of its checks, and the merge itself. Merge takes the repository's own method; while the
- * checks run it has the host merge once they passed, and stands disabled where it cannot go through.
+ * host's page of its checks, and the merge itself. Merge takes the repository's own method; where the
+ * host would set it to auto-merge, it has the host merge once nothing is outstanding, and stands
+ * disabled where it cannot go through.
  */
 function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestDetail; actions: IssueActions }) {
   const { status, kind } = request;
@@ -1194,11 +1195,11 @@ function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestD
   const running = status.checks === "running";
   const mergeable = status.state === "open" && !status.draft && !status.conflicts && status.checks !== "failed";
   const merge = async (): Promise<void> => {
-    if (!(await confirmMerge(request, running))) {
+    if (!(await confirmMerge(request, status.autoMergeable))) {
       return;
     }
     setBusy(true);
-    await actions.merge(running);
+    await actions.merge(status.autoMergeable);
     setBusy(false);
   };
   return (
@@ -1238,18 +1239,21 @@ function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestD
           )}
         </>
       )}
-      <span className="change-request-spacer" />
-      {status.checksUrl !== undefined && (
-        <ActionLink onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>{checksWord}</ActionLink>
-      )}
-      {status.state === "open" &&
-        (status.autoMerge ? (
-          <span className="issue-none">Auto-merge set</span>
-        ) : (
-          <button type="button" className="button" disabled={busy || !mergeable} onClick={() => void merge()}>
-            {running ? "Auto-Merge" : "Merge"}
+      <span className="change-request-actions">
+        {status.checksUrl !== undefined && (
+          <button type="button" className="button secondary" onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>
+            {checksWord}
           </button>
-        ))}
+        )}
+        {status.state === "open" &&
+          (status.autoMerge ? (
+            <span className="issue-none">Auto-merge set</span>
+          ) : (
+            <button type="button" className="button" disabled={busy || !mergeable} onClick={() => void merge()}>
+              {status.autoMergeable ? "Auto-Merge" : "Merge"}
+            </button>
+          ))}
+      </span>
     </div>
   );
 }

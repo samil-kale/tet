@@ -11,7 +11,9 @@ import {
   github,
   carriesAll,
   ownPullRequest,
+  issueSearch,
   issuesVariables as gitHubIssuesVariables,
+  pullRequestSearch,
   readsWithToken,
   toEvents as toGitHubEvents,
   FIELD_HANDLERS as GITHUB_FIELD_HANDLERS,
@@ -27,6 +29,7 @@ import {
   FIELD_HANDLERS as GITLAB_FIELD_HANDLERS,
   gitlab,
   issuesVariables,
+  mergeRequestsVariables,
   ownMergeRequest,
   iterationName,
   parentName,
@@ -42,6 +45,7 @@ import {
   hostProvider,
   issueMarkdown,
   NoAccountError,
+  NoRemoteError,
   onHost,
   onTracker,
   parseRemoteUrl,
@@ -56,6 +60,7 @@ import {
 import {
   ApiError,
   fieldContext,
+  firstNodes,
   graphqlError,
   idsByName,
   optionsOf,
@@ -64,6 +69,8 @@ import {
   valueHandler,
   writeOf,
   type GitProvider,
+  type GraphqlPage,
+  type GraphqlSend,
   type Tracker,
 } from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
@@ -231,6 +238,47 @@ describe("the issues of a tracker", () => {
     });
     assert.deepEqual(sent("g/t", { state: "open", labels: [] }), { path: "g/t", state: "opened" });
     assert.deepEqual(sent("g/t", { labels: [] }), { path: "g/t" });
+  });
+
+  it("searches a filter's text in titles alone, each word quoted in GitHub's search so none is a qualifier", () => {
+    assert.equal(
+      issueSearch("o/r", { state: "open", author: "mira", labels: ["bug"], text: 'tab "repo:x/y" crash' }, "created"),
+      'repo:o/r is:issue is:open author:mira label:"bug" in:title "tab" "repo:x/y" "crash" sort:created-desc',
+    );
+    assert.equal(issueSearch("o/r", { labels: [] }, "updated"), "repo:o/r is:issue sort:updated-desc");
+    assert.equal(
+      pullRequestSearch("o/r", { state: "open", labels: [], text: " fix  login " }, "created"),
+      'repo:o/r is:pr is:open in:title "fix" "login" sort:created-desc',
+    );
+    const sent = (variables: Record<string, unknown>): unknown => JSON.parse(JSON.stringify(variables));
+    assert.deepEqual(sent(issuesVariables("g/t", { labels: [], text: "crash" })), { path: "g/t", search: "crash", in: ["TITLE"] });
+    assert.deepEqual(sent(mergeRequestsVariables("g/t", { labels: [], text: "crash" })), { path: "g/t", search: "crash", in: ["TITLE"] });
+    assert.deepEqual(sent(mergeRequestsVariables("g/t", { labels: [] })), { path: "g/t" }, "`in` is never sent without a search");
+  });
+
+  it("reads the first nodes of a listing a page at a time, as many again where some are dropped", async () => {
+    const nodes = Array.from({ length: 250 }, (_, index) => index);
+    const asked: number[] = [];
+    const send: GraphqlSend = async (_query, variables) => {
+      const { first, cursor } = variables as { first: number; cursor: string | null };
+      asked.push(first);
+      const start = cursor === null ? 0 : Number(cursor);
+      return {
+        pageInfo: { hasNextPage: start + first < nodes.length, endCursor: String(start + first) },
+        nodes: nodes.slice(start, start + first),
+      };
+    };
+    const read = (limit?: number, keep?: (node: number) => boolean): Promise<number[]> =>
+      firstNodes<number>(send, "query", {}, (data) => data as GraphqlPage<number>, limit, keep);
+
+    assert.deepEqual(await read(20), nodes.slice(0, 20));
+    assert.deepEqual(asked.splice(0), [20], "one page of as many as asked");
+    assert.deepEqual(await read(10, (node) => node % 2 === 0), nodes.filter((node) => node % 2 === 0).slice(0, 10));
+    assert.deepEqual(asked.splice(0), [10, 10]);
+    assert.deepEqual(await read(150), nodes.slice(0, 150));
+    assert.deepEqual(asked.splice(0), [100, 100], "no page larger than the host sends");
+    assert.deepEqual(await read(), nodes);
+    assert.deepEqual(asked.splice(0), [100, 100, 100]);
   });
 
   it("finds an upload to read with the token, on the account's host alone", () => {
@@ -906,7 +954,7 @@ describe("the issues of a tracker", () => {
         source: "g/tracker",
         accounts: [],
       });
-      await assert.rejects(() => readIssueTracker(accountsOf(), repositoryAt(root)), /no remote/);
+      await assert.rejects(() => readIssueTracker(accountsOf(), repositoryAt(root)), NoRemoteError);
     });
 
     it("gives a host tab the host's first account with its token, and nothing it cannot have", async () => {

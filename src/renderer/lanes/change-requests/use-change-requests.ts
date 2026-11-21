@@ -19,6 +19,12 @@ const NO_OPTIONS: IssueOptions = { labels: [], people: [] };
  *  the window focused, as the Issues section asks. */
 const CHECK_MS = 15_000;
 
+/** Change requests asked for at first, and added by each `more`, as `useIssues` pages its issues. */
+const CHANGE_REQUEST_PAGE = 20;
+
+/** Typing searches the host once the typing stops, as `useIssues` waits. */
+const SEARCH_DELAY_MS = 300;
+
 /** Whether two answers of the host differ: the list they stand for, or its checks, changed. */
 function differ(shown: ChangeRequestsLatest | undefined, found: ChangeRequestsLatest): boolean {
   return shown?.total !== found.total || shown.updatedAt !== found.updatedAt || shown.checks !== found.checks;
@@ -27,6 +33,12 @@ function differ(shown: ChangeRequestsLatest | undefined, found: ChangeRequestsLa
 interface ChangeRequests {
   /** Undefined until the first answer. */
   changeRequests: ChangeRequestRow[] | undefined;
+  /** How many the host counts under the filter, those not read yet among them. */
+  total: number | undefined;
+  /** What `changeRequests` were read under: their filter with its text, and how many were asked for. */
+  read: { filterKey: string; limit: number } | undefined;
+  /** Asks for another page; undefined while the host has no more, or one is on its way. */
+  more: (() => void) | undefined;
   /** What the host calls one; undefined until it is known. */
   kind: ChangeRequestKind | undefined;
   /** No account is added for the host. */
@@ -37,14 +49,17 @@ interface ChangeRequests {
 }
 
 /**
- * The project's change requests under `filter`, read from its repository's remote while the lane is
- * shown, as `useIssues` reads its issues: nothing is read before, and nothing again until the filter
- * or one changes through its tab, `reload` is called, or the host says the list or its checks are out
- * of date. A list that came has the tabs read again whose change request it shows changed. Held per
- * project by the caller's `key`.
+ * The project's change requests under `filter` whose titles hold `text`, read from its repository's
+ * remote while the lane is shown, as `useIssues` reads its issues: nothing is read before, and nothing
+ * again until the filter, the text or one changes through its tab, `reload` is called, or the host
+ * says the list or its checks are out of date; a page at a time, as many again on every read after. A
+ * list that came has the tabs read again whose change request it shows changed. Held per project by
+ * the caller's `key`.
  */
-export function useChangeRequests(projectId: string, filter: ChangeRequestFilter, shown: boolean): ChangeRequests {
+export function useChangeRequests(projectId: string, filter: ChangeRequestFilter, text: string, shown: boolean): ChangeRequests {
   const [changeRequests, setChangeRequests] = useState<ChangeRequestRow[]>();
+  const [total, setTotal] = useState<number>();
+  const [read, setRead] = useState<ChangeRequests["read"]>();
   const [kind, setKind] = useState<ChangeRequestKind>();
   const [noAccount, setNoAccount] = useState(false);
   const [options, setOptions] = useState(NO_OPTIONS);
@@ -67,7 +82,21 @@ export function useChangeRequests(projectId: string, filter: ChangeRequestFilter
     [projectId, reload],
   );
 
-  const filterKey = JSON.stringify(filter);
+  const [sent, setSent] = useState(text.trim());
+  useEffect(() => {
+    const typed = text.trim();
+    if (typed === "") {
+      setSent("");
+      return;
+    }
+    const timer = setTimeout(() => setSent(typed), SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  const filterKey = JSON.stringify(sent === "" ? filter : { ...filter, text: sent });
+  /** How many are asked for under the filter: one page under one not asked for before. */
+  const [paged, setPaged] = useState({ filterKey, limit: CHANGE_REQUEST_PAGE });
+  const limit = paged.filterKey === filterKey ? paged.limit : CHANGE_REQUEST_PAGE;
   const loaded = useRef<string | undefined>(undefined);
   /** What the host said of the list shown when it was read. */
   const latest = useRef<ChangeRequestsLatest | undefined>(undefined);
@@ -85,7 +114,7 @@ export function useChangeRequests(projectId: string, filter: ChangeRequestFilter
   );
 
   useEffect(() => {
-    const key = `${generation}|${filterKey}`;
+    const key = `${generation}|${filterKey}|${limit}`;
     if (!shown || loaded.current === key) {
       return;
     }
@@ -97,42 +126,46 @@ export function useChangeRequests(projectId: string, filter: ChangeRequestFilter
     if (how === "asked") {
       setBusy(true);
     }
-    void window.tet.changeRequests.list(projectId, JSON.parse(filterKey) as ChangeRequestFilter).then((result: ChangeRequestListResult) => {
-      if (!mounted.current || asked !== request.current) {
-        return;
-      }
-      reading.current = false;
-      setBusy(false);
-      if (how === "unasked" && result.error !== undefined) {
-        return;
-      }
-      latest.current = result.latest;
-      setKind(result.kind);
-      setNoAccount(result.noAccount === true);
-      setChangeRequests(result.changeRequests ?? []);
-      if (result.seen !== undefined) {
-        setSeen("change-request", projectId, result.seen);
-      }
-      if (result.error !== undefined) {
-        notify("error", result.error);
-        return;
-      }
-      reloadChangedChangeRequestTabs(projectId, result.changeRequests ?? []);
-      if (optionsLoaded.current !== generation) {
-        optionsLoaded.current = generation;
-        void window.tet.changeRequests.filterOptions(projectId).then((answer) => {
-          if (!mounted.current) {
-            return;
-          }
-          if (answer.error !== undefined) {
-            notify("error", answer.error);
-          } else {
-            setOptions({ labels: answer.labels ?? [], people: answer.people ?? [] });
-          }
-        });
-      }
-    });
-  }, [projectId, filterKey, shown, generation]);
+    void window.tet.changeRequests
+      .list(projectId, JSON.parse(filterKey) as ChangeRequestFilter, limit)
+      .then((result: ChangeRequestListResult) => {
+        if (!mounted.current || asked !== request.current) {
+          return;
+        }
+        reading.current = false;
+        setBusy(false);
+        if (how === "unasked" && result.error !== undefined) {
+          return;
+        }
+        latest.current = result.latest;
+        setKind(result.kind);
+        setNoAccount(result.noAccount === true);
+        setChangeRequests(result.changeRequests ?? []);
+        setTotal(result.latest?.total);
+        setRead({ filterKey, limit });
+        if (result.seen !== undefined) {
+          setSeen("change-request", projectId, result.seen);
+        }
+        if (result.error !== undefined) {
+          notify("error", result.error);
+          return;
+        }
+        reloadChangedChangeRequestTabs(projectId, result.changeRequests ?? []);
+        if (optionsLoaded.current !== generation) {
+          optionsLoaded.current = generation;
+          void window.tet.changeRequests.filterOptions(projectId).then((answer) => {
+            if (!mounted.current) {
+              return;
+            }
+            if (answer.error !== undefined) {
+              notify("error", answer.error);
+            } else {
+              setOptions({ labels: answer.labels ?? [], people: answer.people ?? [] });
+            }
+          });
+        }
+      });
+  }, [projectId, filterKey, limit, shown, generation]);
 
   /** Asks the host about the list shown, and reads it again where the answer differs. Nothing is told
    *  of a failure: the next check asks again. */
@@ -162,5 +195,9 @@ export function useChangeRequests(projectId: string, filter: ChangeRequestFilter
     return () => window.clearInterval(timer);
   }, [shown, focused, check]);
 
-  return { changeRequests, kind, noAccount, options, busy, reload };
+  // Only for the list last asked for: while a page is on its way, nothing more is asked.
+  const hasMore = read?.filterKey === filterKey && read.limit === limit && (changeRequests?.length ?? 0) >= limit;
+  const more = useCallback(() => setPaged({ filterKey, limit: limit + CHANGE_REQUEST_PAGE }), [filterKey, limit]);
+
+  return { changeRequests, total, read, more: hasMore ? more : undefined, kind, noAccount, options, busy, reload };
 }

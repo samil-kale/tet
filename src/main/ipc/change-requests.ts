@@ -54,25 +54,28 @@ export function registerChangeRequestsIpc({ issueDeps }: Pick<IpcDeps, "issueDep
     }
   };
 
-  handle("change-requests:list", async (_event, projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestListResult> => {
-    try {
-      const { changeRequests, latest } = await listChangeRequests(issueDeps, projectId, filter);
-      const { host, path, provider, kind } = await changeRequestHost(issueDeps, projectId);
-      return {
-        changeRequests,
-        latest,
-        kind,
-        tracker: provider === undefined ? undefined : { provider, url: `https://${host}/${path}` },
-        seen: readSeen(dataRoot, projectId, "change-request"),
-      };
-    } catch (error) {
-      const kind = await changeRequestHost(issueDeps, projectId).then(
-        (found) => found.kind,
-        () => undefined,
-      );
-      return { kind, error: errorMessage(error), noAccount: error instanceof NoAccountError };
-    }
-  });
+  handle(
+    "change-requests:list",
+    async (_event, projectId: string, filter: ChangeRequestFilter, limit: number): Promise<ChangeRequestListResult> => {
+      try {
+        const { changeRequests, latest } = await listChangeRequests(issueDeps, projectId, filter, limit);
+        const { host, path, provider, kind } = await changeRequestHost(issueDeps, projectId);
+        return {
+          changeRequests,
+          latest,
+          kind,
+          tracker: provider === undefined ? undefined : { provider, url: `https://${host}/${path}` },
+          seen: readSeen(dataRoot, projectId, "change-request"),
+        };
+      } catch (error) {
+        const kind = await changeRequestHost(issueDeps, projectId).then(
+          (found) => found.kind,
+          () => undefined,
+        );
+        return { kind, error: errorMessage(error), noAccount: error instanceof NoAccountError };
+      }
+    },
+  );
 
   handle("change-requests:latest", async (_event, projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestLatestResult> => {
     try {

@@ -1,7 +1,7 @@
 import type { Notice } from "../../shared/types/app";
 import type { ChangeRequestKind, ChangeRequestRow } from "../../shared/types/providers";
 import type { IssueDeps } from "../issues";
-import { NoAccountError } from "../providers/issues";
+import { NoAccountError, NoRemoteError } from "../providers/issues";
 import { logError } from "../util/error-log";
 import { openChangeRequests } from "./tracker";
 
@@ -84,7 +84,9 @@ export class ChangeRequestWatch {
       return;
     }
     await Promise.all(
-      this.deps.store.list().map((project) => this.watch(project.id, project.name, { opened: changeRequestOpened, failed: changeRequestFailed })),
+      this.deps.store
+        .list()
+        .map((project) => this.watch(project.id, project.name, { opened: changeRequestOpened, failed: changeRequestFailed })),
     );
   }
 
@@ -97,7 +99,7 @@ export class ChangeRequestWatch {
       read = await openChangeRequests(this.deps, projectId);
       this.failing.delete(projectId);
     } catch (error) {
-      if (!(error instanceof NoAccountError) && !this.failing.has(projectId)) {
+      if (!(error instanceof NoAccountError) && !(error instanceof NoRemoteError) && !this.failing.has(projectId)) {
         this.failing.add(projectId);
         logError(`Could not read the change requests of ${name}`, error);
       }

@@ -13,6 +13,12 @@ const NO_OPTIONS: IssueOptions = { labels: [], people: [] };
  *  the window focused. */
 const CHECK_MS = 15_000;
 
+/** Issues asked for at first, and added by each `more`. */
+const ISSUE_PAGE = 20;
+
+/** Typing searches the tracker, as the Graph's search runs — but only once the typing stops. */
+const SEARCH_DELAY_MS = 300;
+
 /** Whether two answers of the tracker differ: the list they stand for has changed. */
 function differ(shown: IssuesLatest | undefined, found: IssuesLatest): boolean {
   return shown?.total !== found.total || shown.updatedAt !== found.updatedAt;
@@ -21,6 +27,12 @@ function differ(shown: IssuesLatest | undefined, found: IssuesLatest): boolean {
 interface Issues {
   /** Undefined until the first answer. */
   issues: Issue[] | undefined;
+  /** How many the tracker counts under the filter, those not read yet among them. */
+  total: number | undefined;
+  /** What `issues` were read under: their filter with its text, and how many were asked for. */
+  read: { filterKey: string; limit: number } | undefined;
+  /** Asks for another page; undefined while the tracker has no more, or one is on its way. */
+  more: (() => void) | undefined;
   /** tet.json's `issues`, where it has one. */
   source: string | undefined;
   /** Where the list was read from; undefined until a list came, and after one that failed. */
@@ -36,15 +48,20 @@ interface Issues {
 }
 
 /**
- * The project's issues under `filter`, read from its tracker while the lane is shown: nothing is
- * read before, and nothing again until the filter, tet.json or an issue changes through its tab,
- * `reload` is called, or the tracker says the list is out of date. It is asked on every return of
- * the lane or the window and then every `CHECK_MS`, in one request however long the list. A list
- * that came has the tabs read again whose issue it shows changed. What the filters offer comes once
- * a list came, so one failure is told once. Held per project by the caller's `key`.
+ * The project's issues under `filter` whose titles hold `text`, read from its tracker while the lane
+ * is shown: nothing is read before, and nothing again until the filter, the text, tet.json or an
+ * issue changes through its tab, `reload` is called, or the tracker says the list is out of date. It
+ * is asked on every return of the lane or the window and then every `CHECK_MS`, in one request
+ * however long the list. The first `ISSUE_PAGE` are read, a page more on each `more`, and as many
+ * again on every read after, so the rows scrolled to stay; another filter or text starts over at one
+ * page. The text is sent once the typing stops. A list that came has the tabs read again whose issue
+ * it shows changed. What the filters offer comes once a list came, so one failure is told once. Held
+ * per project by the caller's `key`.
  */
-export function useIssues(projectId: string, filter: IssueFilter, shown: boolean): Issues {
+export function useIssues(projectId: string, filter: IssueFilter, text: string, shown: boolean): Issues {
   const [issues, setIssues] = useState<Issue[]>();
+  const [total, setTotal] = useState<number>();
+  const [read, setRead] = useState<Issues["read"]>();
   const [source, setSource] = useState<string>();
   const [tracker, setTracker] = useState<IssueListResult["tracker"]>();
   const [noAccount, setNoAccount] = useState(false);
@@ -97,7 +114,21 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     [projectId, reload],
   );
 
-  const filterKey = JSON.stringify(filter);
+  const [sent, setSent] = useState(text.trim());
+  useEffect(() => {
+    const typed = text.trim();
+    if (typed === "") {
+      setSent("");
+      return;
+    }
+    const timer = setTimeout(() => setSent(typed), SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+
+  const filterKey = JSON.stringify(sent === "" ? filter : { ...filter, text: sent });
+  /** How many are asked for under the filter: one page under one not asked for before. */
+  const [paged, setPaged] = useState({ filterKey, limit: ISSUE_PAGE });
+  const limit = paged.filterKey === filterKey ? paged.limit : ISSUE_PAGE;
   const loaded = useRef<string | undefined>(undefined);
   /** What the tracker said of the list shown when it was read. */
   const latest = useRef<IssuesLatest | undefined>(undefined);
@@ -116,7 +147,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
   );
 
   useEffect(() => {
-    const key = `${generation}|${filterKey}`;
+    const key = `${generation}|${filterKey}|${limit}`;
     if (!shown || loaded.current === key) {
       return;
     }
@@ -128,7 +159,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     if (how === "asked") {
       setBusy(true);
     }
-    void window.tet.issues.list(projectId, JSON.parse(filterKey) as IssueFilter).then((result) => {
+    void window.tet.issues.list(projectId, JSON.parse(filterKey) as IssueFilter, limit).then((result) => {
       if (!mounted.current || asked !== request.current) {
         return;
       }
@@ -146,6 +177,8 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
       setTracker(result.tracker);
       setNoAccount(result.noAccount === true);
       setIssues(result.issues ?? []);
+      setTotal(result.latest?.total);
+      setRead({ filterKey, limit });
       if (result.seen !== undefined) {
         setSeen("issue", projectId, result.seen);
       }
@@ -168,7 +201,7 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
         });
       }
     });
-  }, [projectId, filterKey, shown, generation]);
+  }, [projectId, filterKey, limit, shown, generation]);
 
   /** Asks the tracker about the list shown, and reads it again where the answer differs. Nothing is
    *  told of a failure: the next check asks again. */
@@ -199,5 +232,9 @@ export function useIssues(projectId: string, filter: IssueFilter, shown: boolean
     return () => window.clearInterval(timer);
   }, [shown, focused, check]);
 
-  return { issues, source, tracker, noAccount, options, busy: busy || held, reload, write };
+  // Only for the list last asked for: while a page is on its way, nothing more is asked.
+  const hasMore = read?.filterKey === filterKey && read.limit === limit && (issues?.length ?? 0) >= limit;
+  const more = useCallback(() => setPaged({ filterKey, limit: limit + ISSUE_PAGE }), [filterKey, limit]);
+
+  return { issues, total, read, more: hasMore ? more : undefined, source, tracker, noAccount, options, busy: busy || held, reload, write };
 }

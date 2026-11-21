@@ -22,6 +22,7 @@ import {
   fetchOk,
   fetchUploadOk,
   fieldMethods,
+  firstNodes,
   numberOf,
   pickField,
   pickHandler,
@@ -176,9 +177,11 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestRow {
   additions: number;
   deletions: number;
   mergeable: string;
+  mergeStateStatus: string;
   mergedAt: string | null;
   mergedBy: { login: string } | null;
   autoMergeRequest: { enabledAt: string | null } | null;
+  viewerCanEnableAutoMerge: boolean;
   commitCount: { totalCount: number };
   reviewRequests: { nodes: { requestedReviewer: GitHubUser | null }[] };
   latestReviews: { nodes: { author: GitHubUser | null }[] };
@@ -234,9 +237,9 @@ const EVENT_SELECTION = `__typename
 const TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
   nodes { ${EVENT_SELECTION} }`;
 
-const ISSUES_QUERY = `query($owner: String!, $name: String!, $cursor: String, $filter: IssueFilters) {
+const ISSUES_QUERY = `query($owner: String!, $name: String!, $first: Int!, $cursor: String, $filter: IssueFilters) {
   repository(owner: $owner, name: $name) {
-    issues(first: 100, after: $cursor, orderBy: { field: CREATED_AT, direction: DESC }, filterBy: $filter) {
+    issues(first: $first, after: $cursor, orderBy: { field: CREATED_AT, direction: DESC }, filterBy: $filter) {
       pageInfo { hasNextPage endCursor }
       nodes { ${ISSUE_ROW} }
     }
@@ -249,6 +252,22 @@ const LATEST_QUERY = `query($owner: String!, $name: String!, $filter: IssueFilte
       totalCount
       nodes { updatedAt }
     }
+  }
+}`;
+
+/** `ISSUES_QUERY` and `LATEST_QUERY` for a filter with text, which `issues` cannot search
+ *  (`issueSearch`). */
+const ISSUE_SEARCH_QUERY = `query($query: String!, $first: Int!, $cursor: String) {
+  search(query: $query, type: ISSUE, first: $first, after: $cursor) {
+    pageInfo { hasNextPage endCursor }
+    nodes { ... on Issue { ${ISSUE_ROW} } }
+  }
+}`;
+
+const ISSUE_SEARCH_LATEST_QUERY = `query($query: String!) {
+  search(query: $query, type: ISSUE, first: 1) {
+    issueCount
+    nodes { ... on Issue { updatedAt } }
   }
 }`;
 
@@ -324,8 +343,8 @@ const PULL_REQUEST_ROW = `${ISSUE_ROW} isDraft headRepository { nameWithOwner }
   head: commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }`;
 
 /** GraphQL's `pullRequests` narrows by no person, so a list is GitHub's search (`pullRequestSearch`). */
-const PULL_REQUESTS_QUERY = `query($query: String!, $cursor: String) {
-  search(query: $query, type: ISSUE, first: 100, after: $cursor) {
+const PULL_REQUESTS_QUERY = `query($query: String!, $first: Int!, $cursor: String) {
+  search(query: $query, type: ISSUE, first: $first, after: $cursor) {
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest { ${PULL_REQUEST_ROW} } }
   }
@@ -357,9 +376,9 @@ const PULL_REQUEST_QUERY = `query(${ISSUE_VARIABLES}) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ${ISSUE_ROW}
-      isDraft body baseRefName headRefName additions deletions mergeable mergedAt
+      isDraft body baseRefName headRefName additions deletions mergeable mergeStateStatus mergedAt
       mergedBy { login }
-      autoMergeRequest { enabledAt }
+      autoMergeRequest { enabledAt } viewerCanEnableAutoMerge
       commitCount: commits { totalCount }
       head: commits(last: 1) {
         nodes {
@@ -518,6 +537,15 @@ export function failedChecksOf(rollup: GitHubCheckRollup | null | undefined): st
   });
 }
 
+/** A filter's text in the words of GitHub's search: each word quoted, so none is read as a qualifier. */
+function titleTerms(text: string | undefined): string[] {
+  const words = (text ?? "")
+    .replaceAll('"', "")
+    .split(/\s+/)
+    .filter((word) => word !== "");
+  return words.length === 0 ? [] : ["in:title", ...words.map((word) => `"${word}"`)];
+}
+
 /** A filter in the words of GitHub's search, newest first by `sort`; its labels are all required. */
 export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sort: "created" | "updated"): string {
   const states: Record<NonNullable<ChangeRequestFilter["state"]>, string[]> = {
@@ -533,6 +561,22 @@ export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sor
     ...(filter.assignee ? [`assignee:${filter.assignee}`] : []),
     ...(filter.reviewer ? [`review-requested:${filter.reviewer}`] : []),
     ...filter.labels.map((label) => `label:"${label.replaceAll('"', "")}"`),
+    ...titleTerms(filter.text),
+    `sort:${sort}-desc`,
+  ].join(" ");
+}
+
+/** An issue filter in the words of GitHub's search, as `pullRequestSearch` writes one. Taken only for a
+ *  filter with text: the search's index follows a change late, `issues` at once. */
+export function issueSearch(path: string, filter: IssueFilter, sort: "created" | "updated"): string {
+  return [
+    `repo:${path}`,
+    "is:issue",
+    ...(filter.state ? [`is:${filter.state}`] : []),
+    ...(filter.author ? [`author:${filter.author}`] : []),
+    ...(filter.assignee ? [`assignee:${filter.assignee}`] : []),
+    ...filter.labels.map((label) => `label:"${label.replaceAll('"', "")}"`),
+    ...titleTerms(filter.text),
     `sort:${sort}-desc`,
   ].join(" ");
 }
@@ -583,7 +627,11 @@ export function toPullRequestFields(found: GitHubPullRequestDetail): IssueField[
 }
 
 /** The method a merge of the repository takes: its first allowed, in the order GitHub offers them. */
-export function defaultMergeMethod(allowed: { mergeCommitAllowed: boolean; squashMergeAllowed: boolean; rebaseMergeAllowed: boolean }): string {
+export function defaultMergeMethod(allowed: {
+  mergeCommitAllowed: boolean;
+  squashMergeAllowed: boolean;
+  rebaseMergeAllowed: boolean;
+}): string {
   if (allowed.mergeCommitAllowed) {
     return "MERGE";
   }
@@ -880,7 +928,9 @@ async function readPullRequestNode<T extends object = object>(
   selection = "",
 ): Promise<{ id: string } & T> {
   const query = `query(${ISSUE_VARIABLES}) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id ${selection} } } }`;
-  const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { pullRequest: ({ id: string } & T) | null } | null };
+  const data = (await send(query, { ...repositoryOf(path), number })) as {
+    repository: { pullRequest: ({ id: string } & T) | null } | null;
+  };
   const pullRequest = data.repository?.pullRequest;
   if (!pullRequest) {
     throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
@@ -1128,17 +1178,35 @@ export const github: GitProvider = {
     }));
   },
 
-  async listIssues({ host, token, path }, filter) {
-    const entries = await allNodes<GitHubIssue>(
+  async listIssues({ host, token, path }, filter, limit) {
+    if (filter.text) {
+      const found = await firstNodes<GitHubIssue>(
+        sender(host, token),
+        ISSUE_SEARCH_QUERY,
+        { query: issueSearch(path, filter, "created") },
+        (data) => (data as { search: GraphqlPage<GitHubIssue> }).search,
+        limit,
+      );
+      return found.map(toIssue);
+    }
+    const entries = await firstNodes<GitHubIssue>(
       sender(host, token),
       ISSUES_QUERY,
       issuesVariables(path, filter),
       (data) => (data as { repository: { issues: GraphqlPage<GitHubIssue> } }).repository.issues,
+      limit,
+      (entry) => carriesAll(entry, filter.labels),
     );
-    return entries.filter((entry) => carriesAll(entry, filter.labels)).map(toIssue);
+    return entries.map(toIssue);
   },
 
   async readLatest({ host, token, path }, filter) {
+    if (filter.text) {
+      const found = (await sender(host, token)(ISSUE_SEARCH_LATEST_QUERY, { query: issueSearch(path, filter, "updated") })) as {
+        search: { issueCount: number; nodes: { updatedAt: string }[] };
+      };
+      return { total: found.search.issueCount, updatedAt: found.search.nodes[0]?.updatedAt };
+    }
     const data = (await sender(host, token)(LATEST_QUERY, issuesVariables(path, filter))) as {
       repository: { issues: { totalCount: number; nodes: { updatedAt: string }[] } };
     };
@@ -1271,7 +1339,11 @@ export const github: GitProvider = {
   async approveChangeRequest({ host, token, path }, number) {
     const send = sender(host, token);
     const { id } = await readPullRequestNode(send, path, number);
-    await mutate(send, { mutation: "addPullRequestReview", inputType: "AddPullRequestReviewInput", input: { pullRequestId: id, event: "APPROVE" } });
+    await mutate(send, {
+      mutation: "addPullRequestReview",
+      inputType: "AddPullRequestReviewInput",
+      input: { pullRequestId: id, event: "APPROVE" },
+    });
   },
 
   async autoMergeChangeRequest({ host, token, path }, number, squash) {
@@ -1290,14 +1362,16 @@ export const github: GitProvider = {
     });
   },
 
-  async listChangeRequests({ host, token, path }, filter) {
-    const entries = await allNodes<GitHubPullRequestRow>(
+  async listChangeRequests({ host, token, path }, filter, limit) {
+    const entries = await firstNodes<GitHubPullRequestRow>(
       sender(host, token),
       PULL_REQUESTS_QUERY,
       { query: pullRequestSearch(path, filter, "created") },
       (data) => (data as { search: GraphqlPage<GitHubPullRequestRow> }).search,
+      limit,
+      (entry) => fromOwnBranch(entry, path),
     );
-    return entries.filter((entry) => fromOwnBranch(entry, path)).map(toChangeRequestRow);
+    return entries.map(toChangeRequestRow);
   },
 
   async readChangeRequestsLatest({ host, token, path }, filter) {
@@ -1371,6 +1445,11 @@ export const github: GitProvider = {
         checksUrl: rollup ? `${found.url}/checks` : undefined,
         conflicts: found.mergeable === "CONFLICTING",
         autoMerge: found.autoMergeRequest !== null,
+        // GitHub refuses auto-merge for one that can merge at once, which `viewerCanEnableAutoMerge`
+        // leaves out: that is `MERGEABLE` and neither blocked nor behind its base.
+        autoMergeable:
+          found.viewerCanEnableAutoMerge &&
+          (found.mergeable !== "MERGEABLE" || found.mergeStateStatus === "BLOCKED" || found.mergeStateStatus === "BEHIND"),
         head: found.headRefName,
         base: found.baseRefName,
         commits: found.commitCount.totalCount,
@@ -1404,7 +1483,12 @@ export const github: GitProvider = {
       repository(owner: $owner, name: $name) { mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed pullRequest(number: $number) { id } }
     }`;
     type Answer = {
-      repository: { mergeCommitAllowed: boolean; squashMergeAllowed: boolean; rebaseMergeAllowed: boolean; pullRequest: { id: string } | null } | null;
+      repository: {
+        mergeCommitAllowed: boolean;
+        squashMergeAllowed: boolean;
+        rebaseMergeAllowed: boolean;
+        pullRequest: { id: string } | null;
+      } | null;
     };
     const { repository } = (await send(query, { ...repositoryOf(path), number })) as Answer;
     if (!repository?.pullRequest) {

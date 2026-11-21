@@ -22,6 +22,7 @@ import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useIssueRows } from "../../ui/use-issue-rows";
+import { useScrollMore } from "../../ui/use-scroll-more";
 import { useIssues } from "./use-issues";
 
 /** The description's box in the new issue's dialog, in px: taller than the tab's, as it is the
@@ -93,7 +94,7 @@ function IssueRow({
   onMenu,
 }: {
   issue: Issue;
-  /** Its tab is the active editor tab. */
+  /** Its tab is the focused pane's active tab. */
   active: boolean;
   /** The tracker created or changed it since its tab last showed it (`isUnread`). */
   unread: boolean;
@@ -149,19 +150,25 @@ export const IssueList = memo(function IssueList({
 }: {
   resolved: ResolvedRef;
   shown: boolean;
-  /** The active editor tab's issue — its row is marked. */
+  /** The issue of the focused pane's active tab — its row is marked. */
   openIssue: number | null;
   onOpenFile: (ref: ProjectRef, path: string, how?: OpenEditor) => void;
   onOpenAccounts: () => void;
 }) {
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, DEFAULT_ISSUE_FILTER);
-  const { issues, source, tracker, noAccount, options, busy, reload, write } = useIssues(projectId, filter, shown);
+  const [title, setTitle] = useState("");
+  const { issues, total, read, more, source, tracker, noAccount, options, busy, reload, write } = useIssues(
+    projectId,
+    filter,
+    title,
+    shown,
+  );
   const seen = useSeen("issue", projectId);
   const unread = (issue: Issue): boolean => isUnread(issue, seen);
-  const [title, setTitle] = useState("");
-  const needle = title.trim().toLowerCase();
-  const shownRows = useIssueRows(issues, filter).filter(({ issue }) => issue.title.toLowerCase().includes(needle));
+  // Keyed by the page count too: the rows a page more brings come as they are, the tracker added none.
+  const shownRows = useIssueRows(issues, read ?? {});
+  const scroller = useScrollMore(more);
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
@@ -279,7 +286,7 @@ export const IssueList = memo(function IssueList({
     <div className={`lane-content${shown ? "" : " hidden"}`}>
       <Section
         title="Issues"
-        count={issues?.length}
+        count={total}
         busy={busy}
         actions={
           <>
@@ -312,7 +319,7 @@ export const IssueList = memo(function IssueList({
         <div className="filter-list">
           <FilterField placeholder="Filter issues..." value={title} onChange={setTitle} />
           <IssueFilterBar filter={filter} options={options} onChange={setFilter} />
-          <div className="tree">
+          <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
             {shownRows.map(({ issue, entering, leaving }) => (
               <div key={issue.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <IssueRow
