@@ -1,4 +1,5 @@
 import { getAgent } from "../agents";
+import type { AgentDefinition } from "../agents/agent";
 import type { HookEvent } from "../../shared/ctl";
 import type { AgentId } from "../../shared/types/agents";
 import { noticePlace } from "../../shared/types/app";
@@ -15,7 +16,7 @@ export interface HookNotification {
   agentId: AgentId;
 }
 
-export type NotificationKind = "finished" | "permission" | "question" | "idle";
+export type NotificationKind = "finished" | "failed" | "permission" | "question" | "idle";
 
 /** What a report did to its tab: whether the marks changed, and what the user is to be told. */
 export interface TurnReportOutcome {
@@ -63,12 +64,11 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
         tab.turnReportAt = at;
         return { changed: true };
       }
-      // Read before setTurn, which may clear it.
-      const asked = endLeavesQuestion(tab, agent);
-      setTurn(tab, false, at, asked);
-      // The question already notified this moment (see setTurn).
-      return asked ? { changed: true } : { changed: true, notify: "finished" };
+      return endTurn(tab, agent, at, "finished");
     }
+    case "stop-failure":
+      // An error ended the turn, in place of `stop`: marked as finished, told apart.
+      return fresh ? endTurn(tab, agent, at, "failed") : UNCHANGED;
     case "permission":
     case "question":
       if (!fresh || exited) {
@@ -104,6 +104,15 @@ export function applyTurnReport(tab: TabState, event: HookEvent, payload: string
   }
 }
 
+/** A turn's end, told as `kind`. */
+function endTurn(tab: TabState, agent: AgentDefinition, at: number, kind: NotificationKind): TurnReportOutcome {
+  // Read before setTurn, which may clear it.
+  const asked = endLeavesQuestion(tab, agent);
+  setTurn(tab, false, at, asked);
+  // The question already notified this moment (see setTurn).
+  return asked ? { changed: true } : { changed: true, notify: kind };
+}
+
 /**
  * Records the session a report names, for a tab with none or one that moved on (`/clear`, `/new`,
  * `/resume`). Whatever the turn marks' age (`turnReportAt`), but ordered against the reports naming
@@ -123,6 +132,15 @@ export function bindReportedSession(tab: TabState, reported: string, at: number)
   return true;
 }
 
+/** Each kind's title, the mark it stands for and the setting that switches it. */
+const NOTIFICATIONS: Record<NotificationKind, { title: string; mark: NoticeMark; setting: keyof NotificationSettings }> = {
+  finished: { title: "Finished", mark: "finished", setting: "finished" },
+  failed: { title: "Failed", mark: "finished", setting: "finished" },
+  permission: { title: "Permission", mark: "waiting", setting: "waiting" },
+  question: { title: "Question", mark: "waiting", setting: "waiting" },
+  idle: { title: "Idle", mark: "finished", setting: "idleReminder" },
+};
+
 /** The settings read at the event, so a switch applies to the next turn of every open project. */
 export function notificationFor(
   tab: TabState,
@@ -130,20 +148,10 @@ export function notificationFor(
   placeName: string,
   notifications: NotificationSettings,
 ): HookNotification | undefined {
-  const wanted = kind === "finished" ? notifications.finished : kind === "idle" ? notifications.idleReminder : notifications.waiting;
-  if (!wanted) {
+  const { title, mark, setting } = NOTIFICATIONS[kind];
+  if (!notifications[setting]) {
     return undefined;
   }
   const name = getAgent(tab.agentId).displayName;
-  const where = noticePlace(placeName, tab.title);
-  switch (kind) {
-    case "finished":
-      return { title: `Finished [${name}]`, message: where, mark: "finished", agentId: tab.agentId };
-    case "permission":
-      return { title: `Permission [${name}]`, message: where, mark: "waiting", agentId: tab.agentId };
-    case "question":
-      return { title: `Question [${name}]`, message: where, mark: "waiting", agentId: tab.agentId };
-    case "idle":
-      return { title: `Idle [${name}]`, message: where, mark: "finished", agentId: tab.agentId };
-  }
+  return { title: `${title} [${name}]`, message: noticePlace(placeName, tab.title), mark, agentId: tab.agentId };
 }

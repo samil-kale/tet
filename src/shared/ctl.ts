@@ -108,9 +108,19 @@ export interface ControlVerb {
 /**
  * Hook events in TET's own vocabulary; each agent's hooks (pi: its extension) map its events onto
  * these. `permission` and `question` are one mark with two notification wordings, `answered` clears
- * it; `session-start` marks nothing.
+ * it; `stop` and `stop-failure` (a turn an error ended) are one end with two wordings;
+ * `session-start` marks nothing.
  */
-export const HOOK_EVENTS = ["session-start", "prompt-submit", "stop", "permission", "question", "answered", "idle"] as const;
+export const HOOK_EVENTS = [
+  "session-start",
+  "prompt-submit",
+  "stop",
+  "stop-failure",
+  "permission",
+  "question",
+  "answered",
+  "idle",
+] as const;
 
 export type HookEvent = (typeof HOOK_EVENTS)[number];
 
