@@ -127,6 +127,8 @@ export interface ChangeRequestStatus {
   autoMerge: boolean;
   /** The host would set it to auto-merge now: something is outstanding, and the account may. */
   autoMergeable: boolean;
+  /** Whose approval stands, by login. */
+  approvedBy: string[];
   /** Its source branch and the branch it merges into. */
   head: string;
   base: string;
@@ -138,10 +140,27 @@ export interface ChangeRequestStatus {
   mergedAt?: string;
 }
 
-/** One change request with what its row leaves out, for its tab: an issue's, its status, and what its
- *  host calls it. */
+/** A thread of comments on a file of a change request's changes: GitHub's review thread, GitLab's
+ *  discussion on its diff. Its comments are none the tab edits or deletes. */
+export interface ReviewThread {
+  /** What the host addresses it by. */
+  id: string;
+  /** The file, as the changes name it. */
+  path: string;
+  /** In the file's new text, else in its old; absent for one on the whole file. */
+  line?: number;
+  resolved: boolean;
+  /** The lines it was written on have changed since; only GitHub tells. */
+  outdated?: boolean;
+  /** Oldest first, never empty. */
+  comments: IssueNote[];
+}
+
+/** One change request with what its row leaves out, for its tab: an issue's, its status, its review
+ *  threads, and what its host calls it. */
 export interface ChangeRequestDetail extends IssueDetail {
   status: ChangeRequestStatus;
+  reviewThreads: ReviewThread[];
   kind: ChangeRequestKind;
   /** Whether the project's issues are read from this same repository, so a linked issue opens in its
    *  tab rather than the browser. */

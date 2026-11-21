@@ -15,6 +15,7 @@ import {
   type IssueNote,
   type IssueTimeLog,
   type RemoteRepository,
+  type ReviewThread,
 } from "../../shared/types/providers";
 import {
   allNodes,
@@ -167,6 +168,10 @@ export interface GitLabNote {
   body: string;
   createdAt: string;
   author: GitLabUser | null;
+  /** A merge request's alone (`MERGE_REQUEST_NOTE_PAGE`): where on its changes it was written, null
+   *  for one that was not, and the discussion it is in. */
+  position?: { filePath: string; newLine: number | null; oldLine: number | null } | null;
+  discussion?: { id: string; resolved: boolean } | null;
 }
 
 const ISSUE_ROW = `iid title webUrl state createdAt updatedAt
@@ -174,8 +179,13 @@ const ISSUE_ROW = `iid title webUrl state createdAt updatedAt
   assignees(first: 100) { nodes { username } }
   labels(first: 100) { nodes { title } }`;
 
+const NOTE_FIELDS = "id system internal body createdAt author { username }";
+
 const NOTE_PAGE = `pageInfo { hasNextPage endCursor }
-  nodes { id system internal body createdAt author { username } }`;
+  nodes { ${NOTE_FIELDS} }`;
+
+const MERGE_REQUEST_NOTE_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes { ${NOTE_FIELDS} position { filePath newLine oldLine } discussion { id resolved } }`;
 
 /** What a filter asks for (`issuesVariables`), as the queries of a list and of its latest change take it. */
 const FILTER_VARIABLES =
@@ -723,6 +733,25 @@ export function toNotes(entries: GitLabNote[]): IssueNote[] {
     .map((entry) => ({ id: entry.id, author: authorOf(entry), createdAt: entry.createdAt, body: entry.body, internal: entry.internal }));
 }
 
+/** A merge request's discussions on its changes, from its notes: every comment of a discussion one of
+ *  whose notes was written on them, what GitLab noted itself left out. */
+export function toReviewThreads(entries: GitLabNote[]): ReviewThread[] {
+  const threads = new Map<string, ReviewThread>();
+  for (const { position, discussion } of entries) {
+    if (position && discussion && !threads.has(discussion.id)) {
+      const line = position.newLine ?? position.oldLine ?? undefined;
+      threads.set(discussion.id, { id: discussion.id, path: position.filePath, line, resolved: discussion.resolved, comments: [] });
+    }
+  }
+  for (const entry of entries) {
+    const thread = entry.discussion ? threads.get(entry.discussion.id) : undefined;
+    if (thread && !entry.system) {
+      thread.comments.push(...toNotes([entry]));
+    }
+  }
+  return [...threads.values()].filter((thread) => thread.comments.length > 0);
+}
+
 const ESCAPED: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
 
 /** A title change has no record of its own and no field saying so, so its system note's words are
@@ -817,6 +846,7 @@ export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
   diffStatsSummary: { additions: number; deletions: number } | null;
   headPipeline: { status: string; path: string | null; jobs: { nodes: { name: string }[] } | null } | null;
   reviewers: { nodes: GitLabUser[] };
+  approvedBy: { nodes: GitLabUser[] } | null;
   participants: { nodes: GitLabUser[] } | null;
   notes: GraphqlPage<GitLabNote>;
 }
@@ -856,14 +886,15 @@ const MERGE_REQUEST_QUERY = `query($path: ID!, $iid: String!) {
       diffStatsSummary { additions deletions }
       headPipeline { status path jobs(statuses: [FAILED], first: 50) { nodes { name } } }
       reviewers { nodes { username } }
+      approvedBy { nodes { username } }
       participants { nodes { username } }
-      notes(first: 100) { ${NOTE_PAGE} }
+      notes(first: 100) { ${MERGE_REQUEST_NOTE_PAGE} }
     }
   }
 }`;
 
 const MERGE_REQUEST_NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
-  project(fullPath: $path) { mergeRequest(iid: $iid) { notes(first: 100, after: $cursor) { ${NOTE_PAGE} } } }
+  project(fullPath: $path) { mergeRequest(iid: $iid) { notes(first: 100, after: $cursor) { ${MERGE_REQUEST_NOTE_PAGE} } } }
 }`;
 
 /** What a filter asks for, in the words of `MERGE_REQUEST_FILTER_VARIABLES`. */
@@ -1245,6 +1276,8 @@ export const gitlab: GitProvider = {
       : [];
     const notes = [...found.notes.nodes, ...later];
     const row = toChangeRequestRow(found);
+    const reviewThreads = toReviewThreads(notes);
+    const onChanges = new Set(reviewThreads.flatMap((thread) => thread.comments.map((comment) => comment.id)));
     return {
       ...row,
       provider: "gitlab",
@@ -1252,7 +1285,8 @@ export const gitlab: GitProvider = {
       events: toEvents(notes, labels as GitLabLabelEvent[], states as GitLabStateEvent[], milestones as GitLabMilestoneEvent[]),
       fields: toMergeRequestFields(found, closes as { iid: number; title: string }[]),
       body: found.description ?? "",
-      notes: toNotes(notes),
+      notes: toNotes(notes).filter((note) => !onChanges.has(note.id)),
+      reviewThreads,
       status: {
         state: row.state,
         draft: row.draft,
@@ -1263,6 +1297,7 @@ export const gitlab: GitProvider = {
         autoMerge: found.autoMergeEnabled,
         // The strategy `mergeChangeRequest` sets: GitLab offers it only while the merge request cannot merge at once.
         autoMergeable: found.availableAutoMergeStrategies?.includes("merge_when_checks_pass") ?? false,
+        approvedBy: (found.approvedBy?.nodes ?? []).map((user) => user.username),
         head: found.sourceBranch,
         base: found.targetBranch,
         commits: found.commitCount ?? 0,

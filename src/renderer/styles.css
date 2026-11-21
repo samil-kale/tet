@@ -1318,9 +1318,8 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-/* A change request's branches, above its columns. */
+/* A change request's branches, first in its thread, the thread's gap below them. */
 .change-request-branches {
-  margin-bottom: 20px;
   color: var(--tet-descriptionForeground);
 }
 
@@ -1402,6 +1401,25 @@ textarea:focus,
 
 .issue-card-author {
   color: var(--tet-foreground);
+}
+
+/* A review thread folded: its head is all of it, and takes the card's corners. */
+.review-thread-folded > .issue-card-header {
+  border-bottom: 0;
+  border-radius: var(--border-radius);
+}
+
+/* A review thread's comments, one below the other in its card, each under who wrote it and when. */
+.review-thread-comment + .review-thread-comment {
+  border-top: 1px solid var(--tet-app-border);
+}
+
+.review-thread-comment-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px var(--issue-card-padding) 0;
+  font-size: var(--small-font-size);
 }
 
 /* Grows with its text in the card, which scrolls with the view. */
@@ -1641,8 +1659,11 @@ textarea:focus,
   gap: var(--action-gap);
 }
 
-.issue-label {
-  padding: 2px 7px;
+/* A label, and in an issue's tab a name in a sentence (`named`) as GitLab draws a branch: a pill, in
+   the editor's font the name keeps. */
+.issue-label,
+.issue-view .inline-name {
+  padding: 3px 7px;
   border: 1px solid var(--tet-app-border);
   border-radius: var(--border-radius);
   background: var(--tet-app-background);
@@ -1717,9 +1738,31 @@ textarea:focus,
   inset: 0;
 }
 
+/* 1 while tabs lie past the strip's end, down to 0 over the last of its scroll the fade takes up; 0
+   while nothing overflows, its scroll timeline being inactive then. */
+@property --tabs-overflow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes tabs-overflow {
+  from {
+    --tabs-overflow: 1;
+  }
+  to {
+    --tabs-overflow: 0;
+  }
+}
+
 /* Painted in its island's colour: a pane's new-tab menu slides down from behind it. Its line off the
    tab's content is the ground's colour, as if the island parted there. */
 .tab-strip {
+  /* While more tabs lie past the strip's end they fade out over `--tabs-fade`, gone
+     `--tabs-fade-clear` before their scroller's end: the line before the + has as much room on its
+     left as on its right, to the + glyph, as Chrome's. */
+  --tabs-fade: 24px;
+  --tabs-fade-clear: 11px;
   position: relative;
   display: flex;
   align-items: center;
@@ -1729,6 +1772,11 @@ textarea:focus,
   padding: 0 var(--island-gap);
   background: var(--tet-editor-background);
   border-bottom: 2px solid var(--tet-app-background);
+  /* `--tabs-overflow` follows the tabs' scroll (`.tabs`). */
+  timeline-scope: --tabs;
+  animation: tabs-overflow linear both;
+  animation-timeline: --tabs;
+  animation-range: calc(100% - var(--tabs-fade-clear) - var(--tabs-fade)) 100%;
 }
 
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
@@ -1769,12 +1817,20 @@ textarea:focus,
   /* Only as wide as its tabs, so the + button sits right behind the last one. */
   flex: 0 1 auto;
   min-width: 0;
-  margin: 0 4px;
   /* Room inside the scroller for the drop line before the first tab and the separator after the
      last, which stand in the gap beside a tab (`.tab::before`). */
   padding: 0 4px;
   overflow-x: auto;
   scrollbar-width: none;
+  scroll-timeline: --tabs inline;
+  /* Fades out under the line before the + (`.new-tab::before`), and keeps a tab scrolled into view
+     clear of the fade. */
+  mask-image: linear-gradient(
+    to left,
+    transparent calc(var(--tabs-overflow) * var(--tabs-fade-clear)),
+    #000 calc(var(--tabs-overflow) * (var(--tabs-fade-clear) + var(--tabs-fade)))
+  );
+  scroll-padding-inline-end: calc(var(--tabs-fade-clear) + var(--tabs-fade));
 }
 
 /* Needed too: the ::-webkit-scrollbar rule above outweighs scrollbar-width. */
@@ -1824,9 +1880,10 @@ textarea:focus,
 }
 
 /* Chrome's line between two tabs and after the last, drawn as `.issue-box-separator`, in the middle
-   of the gap beside a tab. */
+   of the gap beside a tab; before the + while the tabs overflow (`.new-tab::before`). */
 .tab::before,
-.tab::after {
+.tab::after,
+.new-tab::before {
   position: absolute;
   pointer-events: none;
   top: 50%;
@@ -1952,9 +2009,19 @@ textarea:focus,
 }
 
 .new-tab {
+  /* For the line before it (`.new-tab::before`). */
+  position: relative;
   display: flex;
   align-items: center;
   flex: none;
+}
+
+/* The line after the last tab stays before the + while more tabs lie past the strip's end, where the
+   last one's (`.tab::after`) stands once scrolled there. */
+.new-tab::before {
+  content: "";
+  left: calc(-2px - var(--action-gap));
+  opacity: var(--tabs-overflow);
 }
 
 /* What floats over the window reads alike: the menus, the status bar's lists, the notification

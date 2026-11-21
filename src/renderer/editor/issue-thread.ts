@@ -1,4 +1,4 @@
-import type { IssueEvent, IssueNote } from "../../shared/types/providers";
+import type { IssueEvent, IssueNote, ReviewThread } from "../../shared/types/providers";
 
 /** One actor's changes of assignees or labels this close together read as one line. */
 const CONSOLIDATION_WINDOW_MS = 10 * 60 * 1000;
@@ -14,7 +14,7 @@ export type ThreadEvent =
   | (Happened & { kind: "assignees"; assigned: string[]; unassigned: string[] })
   | (Happened & { kind: "labels"; added: string[]; removed: string[] });
 
-export type ThreadEntry = { note: IssueNote } | { event: ThreadEvent };
+export type ThreadEntry = { note: IssueNote } | { event: ThreadEvent } | { review: ReviewThread };
 
 function withName(names: string[], name: string): string[] {
   return names.includes(name) ? names : [...names, name];
@@ -71,17 +71,22 @@ function shown(event: IssueEvent): ThreadEvent {
   }
 }
 
-/** An issue's comments and events in the order they happened; a comment made with a change, at the
- *  same moment, comes first. */
-export function issueThread(notes: IssueNote[], events: IssueEvent[]): ThreadEntry[] {
+/** An issue's comments and events, and a change request's review threads at their first comment, in
+ *  the order they happened; a comment made with a change, at the same moment, comes first. */
+export function issueThread(notes: IssueNote[], events: IssueEvent[], reviews: ReviewThread[] = []): ThreadEntry[] {
   const happened = [
     ...notes.map((note) => ({ at: note.createdAt, note })),
+    ...reviews.map((review) => ({ at: review.comments[0].createdAt, review })),
     ...events.map((event) => ({ at: event.createdAt, event })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   const thread: ThreadEntry[] = [];
   for (const entry of happened) {
     if ("note" in entry) {
       thread.push({ note: entry.note });
+      continue;
+    }
+    if ("review" in entry) {
+      thread.push({ review: entry.review });
       continue;
     }
     const merged = gathered(thread.at(-1), entry.event);

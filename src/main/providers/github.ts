@@ -13,6 +13,7 @@ import {
   type IssueFilter,
   type IssueNote,
   type RemoteRepository,
+  type ReviewThread,
 } from "../../shared/types/providers";
 import {
   allNodes,
@@ -185,10 +186,24 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestRow {
   commitCount: { totalCount: number };
   reviewRequests: { nodes: { requestedReviewer: GitHubUser | null }[] };
   latestReviews: { nodes: { author: GitHubUser | null }[] };
+  latestOpinionatedReviews: { nodes: { author: { login: string } | null; state: string }[] };
   closingIssuesReferences: { nodes: { number: number; title: string }[] } | null;
   participants: { nodes: (GitHubUser | null)[] };
   commentPage: GraphqlPage<GitHubComment>;
   timelineItems: GraphqlPage<GitHubEvent>;
+  reviewThreads: GraphqlPage<GitHubReviewThread>;
+}
+
+/** A review thread as GraphQL says it (`REVIEW_THREAD_PAGE`); `line` is null once its lines changed,
+ *  `originalLine` where it was written. */
+export interface GitHubReviewThread {
+  id: string;
+  path: string;
+  line: number | null;
+  originalLine: number | null;
+  isResolved: boolean;
+  isOutdated: boolean;
+  comments: GraphqlPage<GitHubComment>;
 }
 
 const ISSUE_ROW = `number title url state createdAt updatedAt
@@ -372,6 +387,10 @@ const PULL_REQUEST_TIMELINE_PAGE = `pageInfo { hasNextPage endCursor }
     ... on PullRequestCommit { commit { committedDate author { user { login avatarUrl } } } }
   }`;
 
+/** A pull request's review threads, each with its first 100 comments, which no thread outgrows. */
+const REVIEW_THREAD_PAGE = `pageInfo { hasNextPage endCursor }
+  nodes { id path line originalLine isResolved isOutdated comments(first: 100) { ${COMMENT_PAGE} } }`;
+
 const PULL_REQUEST_QUERY = `query(${ISSUE_VARIABLES}) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
@@ -393,12 +412,18 @@ const PULL_REQUEST_QUERY = `query(${ISSUE_VARIABLES}) {
       }
       reviewRequests(first: 50) { nodes { requestedReviewer { ... on User { login avatarUrl } ... on Bot { login avatarUrl } } } }
       latestReviews(first: 50) { nodes { author { login avatarUrl } } }
+      latestOpinionatedReviews(first: 100) { nodes { author { login } state } }
       closingIssuesReferences(first: 25) { nodes { number title } }
       participants(first: 100) { nodes { login avatarUrl } }
       commentPage: comments(first: 100) { ${COMMENT_PAGE} }
       timelineItems(first: 100, ${PULL_REQUEST_TIMELINE_ARGUMENTS}) { ${PULL_REQUEST_TIMELINE_PAGE} }
+      reviewThreads(first: 100) { ${REVIEW_THREAD_PAGE} }
     }
   }
+}`;
+
+const PULL_REQUEST_REVIEW_THREADS_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) { reviewThreads(first: 100, after: $cursor) { ${REVIEW_THREAD_PAGE} } } }
 }`;
 
 const PULL_REQUEST_COMMENTS_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) {
@@ -505,6 +530,24 @@ export function reviewNotes(items: GitHubEvent[]): IssueNote[] {
     item.__typename === "PullRequestReview" && item.id !== undefined && item.body?.trim()
       ? [{ id: item.id, author: item.actor?.login ?? "ghost", createdAt: item.createdAt, body: item.body, fixed: true as const }]
       : [],
+  );
+}
+
+/** A pull request's review threads as the tab shows them, one without comments left out. */
+export function toReviewThreads(threads: GitHubReviewThread[]): ReviewThread[] {
+  return threads.flatMap((thread) =>
+    thread.comments.nodes.length === 0
+      ? []
+      : [
+          {
+            id: thread.id,
+            path: thread.path,
+            line: thread.line ?? thread.originalLine ?? undefined,
+            resolved: thread.isResolved,
+            outdated: thread.isOutdated,
+            comments: thread.comments.nodes.map(toNote),
+          },
+        ],
   );
 }
 
@@ -1397,8 +1440,16 @@ export const github: GitProvider = {
     if (!found) {
       throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
     }
-    type Answer = { repository: { pullRequest: { comments: GraphqlPage<GitHubComment>; timelineItems: GraphqlPage<GitHubEvent> } } };
-    const [laterComments, laterItems] = await Promise.all([
+    type Answer = {
+      repository: {
+        pullRequest: {
+          comments: GraphqlPage<GitHubComment>;
+          timelineItems: GraphqlPage<GitHubEvent>;
+          reviewThreads: GraphqlPage<GitHubReviewThread>;
+        };
+      };
+    };
+    const [laterComments, laterItems, laterThreads] = await Promise.all([
       found.commentPage.pageInfo.hasNextPage
         ? allNodes<GitHubComment>(
             send,
@@ -1415,9 +1466,18 @@ export const github: GitProvider = {
             (answer) => (answer as Answer).repository.pullRequest.timelineItems,
           )
         : [],
+      found.reviewThreads.pageInfo.hasNextPage
+        ? allNodes<GitHubReviewThread>(
+            send,
+            PULL_REQUEST_REVIEW_THREADS_QUERY,
+            { ...variables, cursor: found.reviewThreads.pageInfo.endCursor },
+            (answer) => (answer as Answer).repository.pullRequest.reviewThreads,
+          )
+        : [],
     ]);
     const comments = [...found.commentPage.nodes, ...laterComments];
     const items = [...found.timelineItems.nodes, ...laterItems];
+    const threads = [...found.reviewThreads.nodes, ...laterThreads];
     const row = toChangeRequestRow(found);
     const rollup = found.head.nodes[0]?.commit.statusCheckRollup;
     return {
@@ -1432,11 +1492,13 @@ export const github: GitProvider = {
         ...found.latestReviews.nodes.map((review) => review.author),
         ...comments.map((comment) => comment.author),
         ...items.map((item) => item.actor),
+        ...threads.flatMap((thread) => thread.comments.nodes.map((comment) => comment.author)),
       ]),
       events: toPullRequestEvents(items),
       fields: toPullRequestFields(found),
       body: found.body,
       notes: [...comments.map(toNote), ...reviewNotes(items)],
+      reviewThreads: toReviewThreads(threads),
       status: {
         state: row.state,
         draft: row.draft,
@@ -1450,6 +1512,10 @@ export const github: GitProvider = {
         autoMergeable:
           found.viewerCanEnableAutoMerge &&
           (found.mergeable !== "MERGEABLE" || found.mergeStateStatus === "BLOCKED" || found.mergeStateStatus === "BEHIND"),
+        // Each reviewer's latest approval or request for changes: an approval since dismissed stands no more.
+        approvedBy: found.latestOpinionatedReviews.nodes.flatMap((review) =>
+          review.state === "APPROVED" && review.author ? [review.author.login] : [],
+        ),
         head: found.headRefName,
         base: found.baseRefName,
         commits: found.commitCount.totalCount,

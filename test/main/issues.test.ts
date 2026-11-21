@@ -21,7 +21,7 @@ function depsAt(dataRoot: string, root: string, accounts: ProviderAccount[] = [A
   const repository: IssueRepository = {
     at: { path: root },
     started: () => Promise.resolve(),
-    getState: () => ({ remotes: [{ name: "origin", branches: [], mergedBranches: [], url: "git@github.com:o/r.git" }] }),
+    getState: () => ({ remotes: [{ name: "origin", branches: [], mergedBranches: [], url: "git@github.com:o/r.git" }], worktrees: [] }),
   };
   return {
     accounts: { list: () => accounts, token: async (id) => `token-${id}` },

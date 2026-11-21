@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
 import { approveAndAutoMerge } from "../../src/main/change-requests/create";
+import { changeRequestMarkdown, checkoutSentence } from "../../src/main/change-requests/tracker";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
 import {
@@ -22,6 +23,7 @@ import {
   toFields as toGitHubFields,
   toIssue as toGitHubIssue,
   toIssueInput as toGitHubInput,
+  toReviewThreads as toGitHubReviewThreads,
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
@@ -38,6 +40,7 @@ import {
   toIssue as toGitLabIssue,
   toIssueInput,
   toNotes as toGitLabNotes,
+  toReviewThreads as toGitLabReviewThreads,
   toTimeLogs,
   uploadOf,
 } from "../../src/main/providers/gitlab";
@@ -75,7 +78,8 @@ import {
 } from "../../src/main/providers/provider";
 import { RepoCache } from "../../src/main/providers/repo-cache";
 import { readIssueSource } from "../../src/main/store/tet-json";
-import type { IssueFieldValue, ProviderAccount } from "../../src/shared/types/providers";
+import type { WorktreeInfo } from "../../src/shared/types/git";
+import type { ChangeRequestDetail, IssueFieldValue, ProviderAccount } from "../../src/shared/types/providers";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
 /** providers/: the accounts kept for the providers, and the issues read through them. */
@@ -805,7 +809,7 @@ describe("the issues of a tracker", () => {
     const repositoryAt = (root: string, url?: string): IssueRepository => ({
       at: { path: root },
       started: () => Promise.resolve(),
-      getState: () => ({ remotes: url === undefined ? [] : [{ name: "origin", branches: [], mergedBranches: [], url }] }),
+      getState: () => ({ remotes: url === undefined ? [] : [{ name: "origin", branches: [], mergedBranches: [], url }], worktrees: [] }),
     });
     const ORIGIN = "git@github.com:o/r.git";
 
@@ -818,7 +822,7 @@ describe("the issues of a tracker", () => {
           await new Promise((resolve) => setImmediate(resolve));
           read = true;
         },
-        getState: () => (read ? repositoryAt(root, ORIGIN).getState() : { remotes: [] }),
+        getState: () => (read ? repositoryAt(root, ORIGIN).getState() : { remotes: [], worktrees: [] }),
       };
       const answer = await onTracker(accountsOf(account("a")), opening, async (_provider, { host }) => host);
       assert.equal(answer, "github.com");
@@ -1090,6 +1094,156 @@ describe("a pull or merge request", () => {
     const refused: string[] = [];
     await assert.rejects(() => onHost(accounts, { host: "github.com", path: "o/r" }, opening(403, refused), WRITE_HANDS_OVER), /403/);
     assert.deepEqual(refused, ["token-a"], "another name is not used for what this one may not do");
+  });
+
+  it("reads GitHub's review threads, a line changed since at the one it was written on", () => {
+    const comment = { id: "c1", body: "Rename this", createdAt: "2026-10-03", author: null };
+    const thread = { id: "t1", path: "src/a.ts", line: 4, originalLine: 3, isResolved: false, isOutdated: false };
+    assert.deepEqual(
+      toGitHubReviewThreads([
+        { ...thread, comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [comment] } },
+        {
+          ...thread,
+          id: "t2",
+          line: null,
+          isOutdated: true,
+          comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [comment] },
+        },
+        { ...thread, id: "t3", comments: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } },
+      ]),
+      [
+        {
+          id: "t1",
+          path: "src/a.ts",
+          line: 4,
+          resolved: false,
+          outdated: false,
+          comments: [{ id: "c1", author: "ghost", createdAt: "2026-10-03", body: "Rename this" }],
+        },
+        {
+          id: "t2",
+          path: "src/a.ts",
+          line: 3,
+          resolved: false,
+          outdated: true,
+          comments: [{ id: "c1", author: "ghost", createdAt: "2026-10-03", body: "Rename this" }],
+        },
+      ],
+      "one without comments left out",
+    );
+  });
+
+  it("reads GitLab's discussions on the changes from its notes, what GitLab noted itself left out", () => {
+    const author = { username: "anna" };
+    const position = { filePath: "src/a.ts", newLine: null, oldLine: 7 };
+    const base = { internal: false, author, createdAt: "a", system: false };
+    assert.deepEqual(
+      toGitLabReviewThreads([
+        { ...base, id: "n1", body: "Rename this", position, discussion: { id: "d1", resolved: false } },
+        { ...base, id: "n2", body: "Plain", position: null, discussion: { id: "d2", resolved: false } },
+        { ...base, id: "n3", body: "changed this line", system: true, position, discussion: { id: "d1", resolved: false } },
+        { ...base, id: "n4", body: "Done", position: null, discussion: { id: "d1", resolved: false } },
+        { ...base, id: "n5", body: "noted", system: true, position, discussion: { id: "d3", resolved: true } },
+      ]),
+      [
+        {
+          id: "d1",
+          path: "src/a.ts",
+          line: 7,
+          resolved: false,
+          comments: [
+            { id: "n1", author: "anna", createdAt: "a", body: "Rename this", internal: false },
+            { id: "n4", author: "anna", createdAt: "a", body: "Done", internal: false },
+          ],
+        },
+      ],
+      "a reply in the discussion belongs to it; one of GitLab's notes alone makes none",
+    );
+  });
+
+  it("writes one as a file with its open review threads, a resolved one left out", () => {
+    const request: ChangeRequestDetail = {
+      number: 12,
+      title: "Keep focus",
+      url: "https://github.com/o/r/pull/12",
+      open: true,
+      author: "mira",
+      createdAt: "2026-10-01",
+      updatedAt: "2026-10-02",
+      labels: [],
+      avatars: {},
+      provider: "github",
+      fields: [],
+      body: "Text",
+      notes: [],
+      events: [],
+      status: {
+        state: "open",
+        draft: false,
+        failedChecks: [],
+        conflicts: false,
+        autoMerge: false,
+        autoMergeable: false,
+        approvedBy: [],
+        head: "focus",
+        base: "main",
+        commits: 1,
+      },
+      kind: github.changeRequest,
+      reviewThreads: [
+        {
+          id: "t1",
+          path: "src/a.ts",
+          line: 4,
+          resolved: false,
+          outdated: true,
+          comments: [
+            { id: "c1", author: "lena", createdAt: "2026-10-03", body: "Rename this" },
+            { id: "c2", author: "mira", createdAt: "2026-10-04", body: "Which name?" },
+          ],
+        },
+        {
+          id: "t2",
+          path: "src/b.ts",
+          line: 9,
+          resolved: true,
+          comments: [{ id: "c3", author: "lena", createdAt: "2026-10-03", body: "Settled" }],
+        },
+        {
+          id: "t3",
+          path: "README.md",
+          resolved: false,
+          comments: [{ id: "c4", author: "lena", createdAt: "2026-10-05", body: "Whole file" }],
+        },
+      ],
+    };
+    const markdown = changeRequestMarkdown(request);
+    for (const part of [
+      "\n## Open review threads\n",
+      "\n### src/a.ts:4 (outdated)\n\n#### lena, 2026-10-03\n\nRename this\n\n#### mira, 2026-10-04\n\nWhich name?\n",
+      "\n### README.md\n\n#### lena, 2026-10-05\n\nWhole file\n",
+    ]) {
+      assert.ok(markdown.includes(part), part);
+    }
+    assert.ok(!markdown.includes("src/b.ts") && !markdown.includes("Settled"));
+    const settled = changeRequestMarkdown({ ...request, reviewThreads: request.reviewThreads.filter((thread) => thread.resolved) });
+    assert.ok(!settled.includes("review threads"));
+  });
+
+  it("tells a tab where the branch is checked out, from where the tab runs", () => {
+    const worktrees: WorktreeInfo[] = [
+      { path: "/repo", branch: "main", isRepository: true, current: true },
+      { path: "/tet/worktrees/a", branch: "focus", isRepository: false, key: "a", current: false },
+      { path: "/elsewhere", branch: "other", isRepository: false, current: false },
+    ];
+    const inRepository = { projectId: "p" };
+    const inWorktree = { projectId: "p", worktree: "a" };
+    assert.equal(checkoutSentence(worktrees, inRepository, "main"), "Its branch `main` is checked out here.");
+    assert.equal(checkoutSentence(worktrees, inWorktree, "main"), "Its branch `main` is checked out in the project's repository.");
+    assert.equal(checkoutSentence(worktrees, inWorktree, "focus"), "Its branch `focus` is checked out here.");
+    assert.equal(checkoutSentence(worktrees, inRepository, "focus"), "Its branch `focus` is checked out in the worktree /tet/worktrees/a.");
+    assert.equal(checkoutSentence(worktrees, inRepository, "other"), "Its branch `other` is checked out in the worktree /elsewhere.");
+    assert.equal(checkoutSentence(worktrees, inRepository, "gone"), "Its branch `gone` is checked out nowhere in this project.");
   });
 
   it("found open is the repository's own, never a fork's branch of the same name", () => {

@@ -7,6 +7,7 @@ import {
   type IssueField,
   type IssueFieldValue,
   type ProviderId,
+  type ReviewThread,
   type TrackedKind,
 } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
@@ -21,6 +22,7 @@ import { IconButton } from "../ui/IconButton";
 import {
   BoldIcon,
   CheckIcon,
+  ChevronIcon,
   CircleAlertIcon,
   CloseIcon,
   CodeIcon,
@@ -404,12 +406,6 @@ interface CommentBoxProps {
   writing: TextWriting;
 }
 
-/** A change request is approved from here where its host lets the viewer: GitHub never its author. */
-function approvable(issue: IssueDetail): boolean {
-  const request = changeRequestOf(issue);
-  return request?.status.state === "open" && (request.kind.selfApproval || request.author !== issue.viewer);
-}
-
 function CommentBox({ issue, internalNotes, actions, writing }: CommentBoxProps) {
   const { open } = issue;
   const request = changeRequestOf(issue);
@@ -439,11 +435,6 @@ function CommentBox({ issue, internalNotes, actions, writing }: CommentBoxProps)
     }
     setBusy(false);
   };
-  const approve = async (): Promise<void> => {
-    setBusy(true);
-    await actions.approve();
-    setBusy(false);
-  };
   return (
     <div className="issue-comment">
       <div className="issue-card">
@@ -458,11 +449,6 @@ function CommentBox({ issue, internalNotes, actions, writing }: CommentBoxProps)
           <button type="button" className="button secondary" disabled={busy} onClick={() => void changeState()}>
             {open ? `Close ${noun}` : `Reopen ${noun}`}
             {typed && ` with ${written}`}
-          </button>
-        )}
-        {approvable(issue) && (
-          <button type="button" className="button secondary" disabled={busy} onClick={() => void approve()}>
-            Approve
           </button>
         )}
         <button type="button" className="button" disabled={busy || !typed} onClick={() => void submit()}>
@@ -540,6 +526,50 @@ function IssueCard({ author, avatar, opened, at, text, writing, internal, onEdit
       ) : (
         <IssueText {...writing.rendering} text={text} />
       )}
+    </div>
+  );
+}
+
+/**
+ * A change request's review thread, as the plugin draws one in a pull request's overview: a card headed
+ * by the file and line it was written on, its comments below it, none offered to change. A resolved one
+ * is folded to its head until opened.
+ */
+function ReviewThreadCard({
+  thread,
+  avatars,
+  rendering,
+}: {
+  thread: ReviewThread;
+  avatars: Record<string, string>;
+  rendering: TextRendering;
+}) {
+  const [open, setOpen] = useState(!thread.resolved);
+  return (
+    <div className={open ? "issue-card" : "issue-card review-thread-folded"}>
+      <div className="issue-card-header">
+        <IconButton title={open ? "Collapse" : "Expand"} onClick={() => setOpen(!open)}>
+          <ChevronIcon expanded={open} />
+        </IconButton>
+        <span className="issue-card-title">
+          {named`${thread.path}`}
+          {thread.line !== undefined && `, line ${thread.line}`}
+        </span>
+        {thread.outdated && <span className="issue-label">Outdated</span>}
+        {thread.resolved && <span className="issue-label">Resolved</span>}
+      </div>
+      {open &&
+        thread.comments.map((comment) => (
+          <div key={comment.id} className="review-thread-comment">
+            <div className="review-thread-comment-header">
+              <Person login={comment.author} avatar={avatars[comment.author]} />
+              <span className="issue-card-title">
+                <span className="issue-card-author">{comment.author}</span> {agoOf(comment.createdAt)}
+              </span>
+            </div>
+            <IssueText {...rendering} text={comment.body} />
+          </div>
+        ))}
     </div>
   );
 }
@@ -1168,7 +1198,7 @@ function confirmMerge(request: ChangeRequestDetail, whenChecksPass: boolean): Pr
   });
 }
 
-/** A change request's branches, above its columns: what merges into what, its commits and lines. */
+/** A change request's branches, first in its thread: what merges into what, its commits and lines. */
 function ChangeRequestBranches({ request: { status } }: { request: ChangeRequestDetail }) {
   return (
     <div className="change-request-branches">
@@ -1182,18 +1212,38 @@ function ChangeRequestBranches({ request: { status } }: { request: ChangeRequest
   );
 }
 
+/** A change request is approved from its status line where its host lets the viewer: GitHub never its author. */
+function approvable(request: ChangeRequestDetail, viewer: string | undefined): boolean {
+  return request.status.state === "open" && (request.kind.selfApproval || request.author !== viewer);
+}
+
 /**
  * A change request's line atop its thread: how its checks stand and whether it can merge, a link to the
- * host's page of its checks, and the merge itself. Merge takes the repository's own method; where the
- * host would set it to auto-merge, it has the host merge once nothing is outstanding, and stands
- * disabled where it cannot go through.
+ * host's page of its checks, its approval and the merge itself. Merge takes the repository's own method;
+ * where the host would set it to auto-merge, it has the host merge once nothing is outstanding, and
+ * stands disabled where it cannot go through. Approve and Auto-Merge, once done, stand disabled with a
+ * check.
  */
-function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestDetail; actions: IssueActions }) {
+function ChangeRequestStatusLine({
+  request,
+  viewer,
+  actions,
+}: {
+  request: ChangeRequestDetail;
+  viewer: string | undefined;
+  actions: IssueActions;
+}) {
   const { status, kind } = request;
   const [busy, setBusy] = useState(false);
   const checksWord = capitalized(kind.checks);
   const running = status.checks === "running";
   const mergeable = status.state === "open" && !status.draft && !status.conflicts && status.checks !== "failed";
+  const approved = viewer !== undefined && status.approvedBy.includes(viewer);
+  const approve = async (): Promise<void> => {
+    setBusy(true);
+    await actions.approve();
+    setBusy(false);
+  };
   const merge = async (): Promise<void> => {
     if (!(await confirmMerge(request, status.autoMergeable))) {
       return;
@@ -1209,6 +1259,11 @@ function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestD
           <CheckIcon />
           {named`Merged into ${status.base}`}
           {status.mergedBy && ` by ${status.mergedBy}`}
+        </span>
+      ) : status.state === "closed" ? (
+        <span className="change-request-fact">
+          <CloseIcon />
+          Closed
         </span>
       ) : (
         <>
@@ -1231,12 +1286,10 @@ function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestD
               {status.failedChecks.length > 0 && <span className="issue-none">{status.failedChecks.join(", ")}</span>}
             </span>
           )}
-          {status.state === "open" && (
-            <span className="change-request-fact">
-              {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
-              {status.conflicts ? named`Conflicts with ${status.base}` : status.draft ? "Draft" : named`No conflicts with ${status.base}`}
-            </span>
-          )}
+          <span className="change-request-fact">
+            {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
+            {status.conflicts ? named`Conflicts with ${status.base}` : status.draft ? "Draft" : named`No conflicts with ${status.base}`}
+          </span>
         </>
       )}
       <span className="change-request-actions">
@@ -1245,14 +1298,18 @@ function ChangeRequestStatusLine({ request, actions }: { request: ChangeRequestD
             {checksWord}
           </button>
         )}
-        {status.state === "open" &&
-          (status.autoMerge ? (
-            <span className="issue-none">Auto-merge set</span>
-          ) : (
-            <button type="button" className="button" disabled={busy || !mergeable} onClick={() => void merge()}>
-              {status.autoMergeable ? "Auto-Merge" : "Merge"}
-            </button>
-          ))}
+        {approvable(request, viewer) && (
+          <button type="button" className="button secondary" disabled={busy || approved} onClick={() => void approve()}>
+            {approved && <CheckIcon />}
+            <span>Approve</span>
+          </button>
+        )}
+        {status.state === "open" && (
+          <button type="button" className="button" disabled={busy || !mergeable || status.autoMerge} onClick={() => void merge()}>
+            {status.autoMerge && <CheckIcon />}
+            <span>{status.autoMerge || status.autoMergeable ? "Auto-Merge" : "Merge"}</span>
+          </button>
+        )}
       </span>
     </div>
   );
@@ -1284,10 +1341,10 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
     <>
       <IssueBar issue={issue} session={session} actions={actions} />
       <div className="issue-view">
-        {request && <ChangeRequestBranches request={request} />}
         <div className="issue-columns">
           <div className="issue-thread">
-            {request && <ChangeRequestStatusLine request={request} actions={actions} />}
+            {request && <ChangeRequestBranches request={request} />}
+            {request && <ChangeRequestStatusLine request={request} viewer={viewer} actions={actions} />}
             <IssueCard
               author={issue.author}
               avatar={issue.avatars[issue.author]}
@@ -1300,9 +1357,14 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
                 return Promise.resolve(true);
               }}
             />
-            {issueThread(issue.notes, issue.events).map((entry, index) => {
+            {issueThread(issue.notes, issue.events, request?.reviewThreads).map((entry, index) => {
               if ("event" in entry) {
                 return <IssueEventLine key={`event${index}`} event={entry.event} noun={noun} />;
+              }
+              if ("review" in entry) {
+                return (
+                  <ReviewThreadCard key={entry.review.id} thread={entry.review} avatars={issue.avatars} rendering={writing.rendering} />
+                );
               }
               const { note } = entry;
               return (

@@ -8,11 +8,11 @@ import { ApiError, type GitProvider, type Tracker } from "./provider";
 
 /** What of a repository its issues are found by: its folder, whose tet.json may name the source,
  *  and its remotes, whose first gives the host, known once it has `started`: the lane may ask while
- *  the project is still opening. */
+ *  the project is still opening. Its worktrees tell where a change request's branch is checked out. */
 export interface IssueRepository {
   at: { path: string };
   started(): Promise<void>;
-  getState(): Pick<RepositoryState, "remotes">;
+  getState(): Pick<RepositoryState, "remotes" | "worktrees">;
 }
 
 /** The accounts a tracker is reached through. */

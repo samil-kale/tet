@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { issueThread } from "../../src/renderer/editor/issue-thread";
-import type { IssueEvent, IssueNote } from "../../src/shared/types/providers";
+import type { IssueEvent, IssueNote, ReviewThread } from "../../src/shared/types/providers";
 
 const at = (minute: number): string => new Date(Date.UTC(2026, 9, 1, 10, minute)).toISOString();
 const note = (id: string, minute: number): IssueNote => ({ id, author: "mira", createdAt: at(minute), body: "Text" });
@@ -17,6 +17,12 @@ describe("an issue's thread", () => {
     const closed: IssueEvent = { actor: "mira", createdAt: at(5), kind: "closed" };
     const thread = issueThread([note("1", 5), note("2", 1)], [closed]);
     assert.deepEqual(thread, [{ note: note("2", 1) }, { note: note("1", 5) }, { event: closed }]);
+  });
+
+  it("puts a change request's review thread at its first comment", () => {
+    const review: ReviewThread = { id: "t1", path: "src/a.ts", line: 4, resolved: false, comments: [note("3", 3), note("4", 9)] };
+    const thread = issueThread([note("1", 1), note("2", 5)], [], [review]);
+    assert.deepEqual(thread, [{ note: note("1", 1) }, { review }, { note: note("2", 5) }]);
   });
 
   it("gathers one actor's changes of labels and of assignees into a line each", () => {
