@@ -76,7 +76,8 @@
 
   --tet-menu-background: #343746;
   --tet-menu-foreground: #f8f8f2;
-  --tet-menu-separatorBackground: #191a21;
+  /* Not the theme's #191a21, darker than the tab strip it separates: the app border. */
+  --tet-menu-separatorBackground: #44475a;
 
   --tet-progressBar-background: #ff79c6;
 

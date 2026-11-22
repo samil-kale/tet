@@ -1363,7 +1363,13 @@ function ChangeRequestCard({
           {named`${status.head} into ${status.base}`}
           {" · "}
           {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
-          {status.additions !== undefined && status.deletions !== undefined && ` · +${status.additions} −${status.deletions}`}
+          {status.additions !== undefined && status.deletions !== undefined && (
+            <>
+              {" · "}
+              <span className="change-request-additions">+{status.additions}</span>{" "}
+              <span className="change-request-deletions">−{status.deletions}</span>
+            </>
+          )}
         </span>
       </div>
       <div className="change-request-status">

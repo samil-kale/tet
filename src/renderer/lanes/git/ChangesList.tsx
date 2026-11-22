@@ -143,6 +143,7 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
         : `Stages and commits these ${paths.length} files; the other changes stay as they are.`,
     value: { message: "", push: pushLabel !== undefined && (await window.tet.settings.get()).git.pushOnCommit },
     confirmLabel: "Commit",
+    className: "commit-dialog",
     ready: ({ message }) => filled(message),
     render: ({ value, onChange, error, busy, field, hold }) => (
       <>

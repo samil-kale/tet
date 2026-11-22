@@ -372,8 +372,8 @@ textarea:focus,
   /* `.dialog.tall`'s, the fixed-height dialogs (settings, sbx, Add Repository): switching tabs or
      loading a list must not resize them, and their tabs and lists need this much width. Capped to
      the window. */
-  --dialog-tall-width: 700px;
-  --dialog-tall-height: 450px;
+  --dialog-tall-width: 800px;
+  --dialog-tall-height: 500px;
   --dialog-max-height: calc(100vh - 32px);
 }
 
@@ -1319,6 +1319,14 @@ textarea:focus,
 
 /* A change request's card atop the thread: its branches the title, its status the body. No line of the
    thread runs up to the text's card below it, which stands first as it does without one. */
+.change-request-additions {
+  color: var(--tet-terminal-ansiGreen);
+}
+
+.change-request-deletions {
+  color: var(--tet-terminal-ansiRed);
+}
+
 .change-request-status {
   display: flex;
   flex-wrap: wrap;
@@ -3160,13 +3168,22 @@ button.change-request-check:hover {
 }
 
 /* Room for the description's box to be read and written at length. */
-.dialog.new-issue-dialog,
-.dialog.change-request-dialog {
+.dialog.new-issue-dialog {
   width: 700px;
+}
+
+.dialog.change-request-dialog,
+.dialog.commit-dialog,
+.dialog.env-dialog {
+  width: var(--dialog-tall-width);
 }
 
 .dialog.change-request-dialog .dialog-textarea {
   height: 92px;
+}
+
+.dialog.commit-dialog .dialog-textarea {
+  height: 120px;
 }
 
 /* The options in two columns: draft, auto-merge and squash, each ruling out the next, one below the
