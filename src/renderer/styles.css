@@ -1205,6 +1205,16 @@ textarea:focus,
   --icon-size: 12px;
 }
 
+/* The keyboard's focus on the trigger outlines the whole filter; on its clear button, the button. */
+.issue-filter:has(.issue-filter-trigger:focus-visible) {
+  outline: 1px solid var(--tet-focusBorder);
+  outline-offset: -1px;
+}
+
+.issue-filter .issue-filter-trigger:focus-visible {
+  outline: none;
+}
+
 /* Its clear button is smaller than the row's words are high; not the one in its list's filter field. */
 .issue-filter > .icon-button {
   --action-size: 16px;
