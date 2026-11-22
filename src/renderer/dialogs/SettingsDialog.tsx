@@ -112,14 +112,6 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   changeRequestTab: "Send pull/merge request to agent",
 };
 
-const PROMPT_DETAILS: Record<PromptId, string> = {
-  commitMessage: "Asked in the background",
-  handover: "Sent to the tab taking over",
-  issue: "Sent to the tab opened on an issue",
-  changeRequestTab: "Sent to the tab opened on a pull or merge request",
-  changeRequest: "Asked in the background, of the commit message's agents",
-};
-
 /** The notices in the window of the project's pull and merge requests (change-requests/watch.ts). */
 const CHANGE_REQUEST_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "changeRequestOpened", label: "New - someone opened one, or marked one ready" },
@@ -436,10 +428,9 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
         <div className="master-detail">
           <div className="master-list">
             {PROMPT_IDS.map((id) => (
-              <div key={id} className={`list-row master-row two-line${id === promptId ? " active" : ""}`} onClick={() => setPromptId(id)}>
+              <div key={id} className={`list-row master-row${id === promptId ? " active" : ""}`} title={PROMPT_LABELS[id]} onClick={() => setPromptId(id)}>
                 <span className="list-main">
                   <span className="list-label">{PROMPT_LABELS[id]}</span>
-                  <span className="list-detail">{PROMPT_DETAILS[id]}</span>
                 </span>
               </div>
             ))}
