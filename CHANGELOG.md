@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.1 (2026-11-22)
+
+- **Fixes.** Pull and merge request line counts are colored, the commit and environment dialogs are
+  wider, tab separators use the app border color, and section rows keep equal space on both sides of
+  the scrollbar.
+
 ## 0.27.0 (2026-11-22)
 
 - **Pull and merge requests lane (work in progress).** A new lane lists the repository's pull or
