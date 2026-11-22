@@ -2942,14 +2942,15 @@ button.change-request-check:hover {
   padding: 1px 0;
 }
 
-/* 2px between the rows and the scrollbar, there only while the scrollbar is: the thumb's inset 2px
-   wider on its left, the pill keeping the thin bar's width. */
+/* Room between the rows and the scrollbar, there only while the scrollbar is: a 9px bar whose pill
+   keeps the thin bar's width, the inset the same on both sides — an unequal one would take the
+   rounding off the wider side. */
 .row-section-rows::-webkit-scrollbar {
   width: 9px;
 }
 
 .row-section-rows::-webkit-scrollbar-thumb {
-  border-left-width: calc(var(--scrollbar-inset) + 2px);
+  border-width: calc(var(--scrollbar-inset) + 1px);
 }
 
 /* The three skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
