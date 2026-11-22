@@ -112,6 +112,10 @@ const PROMPT_LABELS: Record<PromptId, string> = {
   changeRequestTab: "Send pull/merge request to agent",
 };
 
+/** The Prompts tab's entry beside the prompts: the agents and models every background prompt is asked with. */
+const MODEL_SELECTION = "modelSelection";
+const MODEL_SELECTION_LABEL = "Model selection";
+
 /** The notices in the window of the project's pull and merge requests (change-requests/watch.ts). */
 const CHANGE_REQUEST_SWITCHES: { key: keyof NotificationSettings; label: string }[] = [
   { key: "changeRequestOpened", label: "New - someone opened one, or marked one ready" },
@@ -172,7 +176,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
   const [addingAccount, setAddingAccount] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
-  const [promptId, setPromptId] = useState<PromptId>(PROMPT_IDS[0]);
+  const [promptId, setPromptId] = useState<PromptId | typeof MODEL_SELECTION>(PROMPT_IDS[0]);
   /** What Save writes: the keys the dialog touched, and no others. tet-ctl may set another one
    *  while the dialog stands open, and Save must not take it back (settings.ts's patch). */
   const edits = useRef<SettingsEdits>({});
@@ -267,7 +271,11 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
   /** TET's own text is stored as "", as in settings.ts; the reset button reads that. */
   const applyPrompt = (id: PromptId, text: string): void =>
     edit({ prompts: { texts: { [id]: text === DEFAULT_PROMPTS[id] ? "" : text } } });
-  const promptTextMenu = useTextContextMenu((text) => applyPrompt(promptId, text));
+  const promptTextMenu = useTextContextMenu((text) => {
+    if (promptId !== MODEL_SELECTION) {
+      applyPrompt(promptId, text);
+    }
+  });
 
   /** A model not offered any more is shown replaced by the default, not saved: another machine may
    *  offer it. */
@@ -428,41 +436,56 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
         <div className="master-detail">
           <div className="master-list">
             {PROMPT_IDS.map((id) => (
-              <div key={id} className={`list-row master-row${id === promptId ? " active" : ""}`} title={PROMPT_LABELS[id]} onClick={() => setPromptId(id)}>
+              <div
+                key={id}
+                className={`list-row master-row${id === promptId ? " active" : ""}`}
+                title={PROMPT_LABELS[id]}
+                onClick={() => setPromptId(id)}
+              >
                 <span className="list-main">
                   <span className="list-label">{PROMPT_LABELS[id]}</span>
                 </span>
               </div>
             ))}
+            <div
+              className={`list-row master-row${promptId === MODEL_SELECTION ? " active" : ""}`}
+              title={MODEL_SELECTION_LABEL}
+              onClick={() => setPromptId(MODEL_SELECTION)}
+            >
+              <span className="list-main">
+                <span className="list-label">{MODEL_SELECTION_LABEL}</span>
+              </span>
+            </div>
           </div>
           <FieldColumn fill>
-            {/* Only for a prompt TET asks in the background; a handover's and an issue's go to the tab they open. */}
-            {promptId === "commitMessage" && (
+            {/* For the prompts TET asks in the background (commit message, pull/merge request); a handover's and an issue's go to the tab they open. */}
+            {promptId === MODEL_SELECTION ? (
               <SuggesterList
                 value={settings.prompts.commitSuggesters}
                 onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
                 onReplaceModel={replaceModel}
                 hold={holdListing}
               />
-            )}
-            <div className="dialog-field prompt-text">
-              <div className="dialog-field-head">
-                <span>Prompt text</span>
-                <ActionLink disabled={settings.prompts.texts[promptId] === ""} onClick={() => applyPrompt(promptId, "")}>
-                  Reset to default
-                </ActionLink>
-              </div>
-              {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
+            ) : (
+              <div className="dialog-field prompt-text">
+                <div className="dialog-field-head">
+                  <span>Prompt text</span>
+                  <ActionLink disabled={settings.prompts.texts[promptId] === ""} onClick={() => applyPrompt(promptId, "")}>
+                    Reset to default
+                  </ActionLink>
+                </div>
+                {/* Always the text the agent gets, never a placeholder. Read when the suggestion is
                   asked for, so it applies on Save. */}
-              <textarea
-                className="settings-prompt"
-                spellCheck={false}
-                value={effectivePrompt(settings.prompts.texts, promptId)}
-                onChange={(event) => applyPrompt(promptId, event.target.value)}
-                onContextMenu={promptTextMenu.onContextMenu}
-              />
-              {promptTextMenu.menu}
-            </div>
+                <textarea
+                  className="settings-prompt"
+                  spellCheck={false}
+                  value={effectivePrompt(settings.prompts.texts, promptId)}
+                  onChange={(event) => applyPrompt(promptId, event.target.value)}
+                  onContextMenu={promptTextMenu.onContextMenu}
+                />
+                {promptTextMenu.menu}
+              </div>
+            )}
           </FieldColumn>
         </div>
       )}
