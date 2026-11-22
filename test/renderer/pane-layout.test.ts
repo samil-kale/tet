@@ -709,20 +709,21 @@ describe("what is persisted", () => {
     }
   });
 
-  it("brings back an issue's tab kept by its number alone", () => {
-    const entry = { path: "issue-412.md", issue: 412, preview: false, diff: false, markdownPreview: "only" };
-    const editorTab: EditorTab = {
-      tabId: "tet:editor:x-2",
-      ref: { projectId: "p" },
-      path: entry.path,
-      tracked: { kind: "issue", number: 412 },
-    };
-    const layout = layoutOf("single", "a", { [editorTab.tabId]: "a" }, [editorTab]);
-    storage.set(
-      "tet.layout.terminals.l.layout",
-      serializeLayout(layout, [editorTab], () => entry as unknown as EditorEntry),
-    );
-    assert.deepEqual(loadPersisted("l").tabs[0].editor?.tracked, { kind: "issue", number: 412 });
+  it("brings back an issue's or change request's tab kept by its number alone", () => {
+    for (const { key, tracked } of [
+      { key: "issue", tracked: { kind: "issue", number: 412 } },
+      { key: "changeRequest", tracked: { kind: "change-request", number: 746 } },
+    ] as const) {
+      const path = `${tracked.kind}-${tracked.number}.md`;
+      const entry = { path, [key]: tracked.number, preview: false, diff: false, markdownPreview: "only" };
+      const editorTab: EditorTab = { tabId: "tet:editor:x-2", ref: { projectId: "p" }, path, tracked };
+      const layout = layoutOf("single", "a", { [editorTab.tabId]: "a" }, [editorTab]);
+      storage.set(
+        "tet.layout.terminals.l.layout",
+        serializeLayout(layout, [editorTab], () => entry as unknown as EditorEntry),
+      );
+      assert.deepEqual(loadPersisted("l").tabs[0].editor?.tracked, tracked);
+    }
   });
 });
 

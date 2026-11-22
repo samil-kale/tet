@@ -753,7 +753,10 @@ function trackedOf(value: unknown): TrackedRef | undefined {
 
 /** A stored editor entry, read defensively: none where its file is not named. */
 function readEditorEntry(value: unknown): EditorEntry | undefined {
-  const { path, commit, tracked, issue, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<string, unknown>;
+  const { path, commit, tracked, issue, changeRequest, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<
+    string,
+    unknown
+  >;
   if (typeof path !== "string") {
     return undefined;
   }
@@ -764,8 +767,14 @@ function readEditorEntry(value: unknown): EditorEntry | undefined {
       typeof sha === "string"
         ? { sha, parent: typeof parent === "string" ? parent : undefined, origPath: typeof origPath === "string" ? origPath : undefined }
         : undefined,
-    // An issue's number alone, as kept before a change request had a tab. Read until 2027-02-22.
-    tracked: trackedOf(tracked) ?? (typeof issue === "number" ? { kind: "issue", number: issue } : undefined),
+    // An issue's or change request's number alone, as kept before `tracked`. Read until 2027-02-22.
+    tracked:
+      trackedOf(tracked) ??
+      (typeof issue === "number"
+        ? { kind: "issue", number: issue }
+        : typeof changeRequest === "number"
+          ? { kind: "change-request", number: changeRequest }
+          : undefined),
     preview: preview === true,
     diff: diff === true,
     markdownPreview: MARKDOWN_PREVIEW_MODES.find((mode) => mode === markdownPreview) ?? "off",
