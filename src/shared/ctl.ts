@@ -237,6 +237,13 @@ const VERBS = [
     positionals: ["scheme"],
   },
   {
+    verb: "settings-set-background-gradient",
+    group: "Settings",
+    usage: "settings-set-background-gradient <on|off>",
+    summary: "Switch the accent gradient on the window's background. Shown at once.",
+    positionals: ["value"],
+  },
+  {
     verb: "settings-set-prompt",
     group: "Settings",
     usage: `settings-set-prompt <${PROMPT_IDS.join("|")}> [text]`,

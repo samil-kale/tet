@@ -52,6 +52,9 @@ export class AppWindow {
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
   /** The theme on screen: the window's initial one or the last `showTheme` took. */
   private theme: ThemeDefinition | undefined;
+  /** `AppearanceSettings.backgroundGradient` on screen: the window's initial one or the last
+   *  `showBackgroundGradient` took. */
+  private backgroundGradient = true;
 
   constructor(private readonly deps: AppWindowDeps) {
     on("app:notice-listening", () => {
@@ -213,9 +216,15 @@ export class AppWindow {
     this.send("app:theme", theme.id);
   }
 
+  showBackgroundGradient(on: boolean): void {
+    this.backgroundGradient = on;
+    this.send("app:background-gradient", on);
+  }
+
   /** Per window: a theme the running window could not take (showTheme) reaches later windows. */
-  create(theme: ThemeDefinition): void {
+  create(theme: ThemeDefinition, backgroundGradient: boolean): void {
     this.theme = theme;
+    this.backgroundGradient = backgroundGradient;
     const window = new BrowserWindow({
       // The last session's size, position and maximized state, kept in Electron's own profile; the
       // size below is only the first start's.
@@ -246,7 +255,11 @@ export class AppWindow {
         spellcheck: false,
         // The preload reads the theme off process.argv synchronously, so the first frame is right;
         // an IPC round trip would paint it in the defaults.
-        additionalArguments: [`${WINDOW_ARGS.theme}${theme.id}`, ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : [])],
+        additionalArguments: [
+          `${WINDOW_ARGS.theme}${theme.id}`,
+          ...(isWaylandSession() ? [WINDOW_ARGS.wayland] : []),
+          ...(backgroundGradient ? [WINDOW_ARGS.backgroundGradient] : []),
+        ],
       },
     });
     this.window = window;
@@ -262,6 +275,7 @@ export class AppWindow {
       if (this.theme) {
         this.send("app:theme", this.theme.id);
       }
+      this.send("app:background-gradient", this.backgroundGradient);
     });
     // Shown once the page has drawn, so no empty window shows first.
     if (!this.deps.hidden) {

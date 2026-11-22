@@ -22,6 +22,7 @@ function access(shown: (settings: SettingsStore) => ThemeDefinition | undefined 
         onScreen = theme;
         calls.push(`shown ${theme.id}`);
       },
+      showBackgroundGradient: (on) => calls.push(`gradient ${on}`),
     },
     tabManagers: {
       themeChanged: () => calls.push("theme"),

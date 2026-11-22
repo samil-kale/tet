@@ -119,6 +119,12 @@ export function verbs(deps: ControlDeps): Handlers {
       return { result: { saved: true, restartRequired: settings.patch({ appearance: { colorScheme } }) } };
     },
 
+    "settings-set-background-gradient": (args) => {
+      // Shown at once by main.ts's settingsAccess.
+      settings.patch({ appearance: { backgroundGradient: onOff(args, "value") } });
+      return { result: { saved: true, restartRequired: false } };
+    },
+
     "settings-set-prompt": (args) => {
       const id = oneOf(args, "id", "prompt", PROMPT_IDS);
       // No text resets: "" means TET's own prompt, read by ipc/repository.ts when asking.

@@ -509,8 +509,17 @@ export interface TETApi {
   onTheme: (listener: (themeId: string) => void) => Unsubscribe;
   /** window.ts's `isWaylandSession`, handed in the same way; terminals stay off WebGL there. */
   waylandSession: boolean;
+  /** `AppearanceSettings.backgroundGradient` as the window was built, handed in the same way. */
+  initialBackgroundGradient: boolean;
+  /** From settings-access.ts's patch, and after every page load. */
+  onBackgroundGradient: (listener: (on: boolean) => void) => Unsubscribe;
 }
 
-/** window.ts's AppWindow.create hands `initialTheme` and `waylandSession` to the preload through
- *  `webPreferences.additionalArguments`: the theme as `theme` + its id, the flag bare. */
-export const WINDOW_ARGS = { theme: "--tet-theme=", wayland: "--tet-wayland" } as const;
+/** window.ts's AppWindow.create hands `initialTheme`, `waylandSession` and `initialBackgroundGradient`
+ *  to the preload through `webPreferences.additionalArguments`: the theme as `theme` + its id, the
+ *  others as bare flags. */
+export const WINDOW_ARGS = {
+  theme: "--tet-theme=",
+  wayland: "--tet-wayland",
+  backgroundGradient: "--tet-background-gradient",
+} as const;

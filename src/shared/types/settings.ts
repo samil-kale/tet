@@ -18,6 +18,8 @@ export interface AppearanceSettings {
   /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
   darkTheme: string;
   lightTheme: string;
+  /** The accent fades in from the top left of the window's ground (`body` in styles.css). */
+  backgroundGradient: boolean;
 }
 
 /** The Notifications tab: what every agent notifies the OS about. */

@@ -19,6 +19,7 @@ const DEFAULTS: AppSettings = {
     colorScheme: "system",
     darkTheme: DEFAULT_THEME_IDS.dark,
     lightTheme: DEFAULT_THEME_IDS.light,
+    backgroundGradient: true,
   },
   notifications: {
     finished: true,
@@ -124,6 +125,7 @@ function appearance(value: Record<string, unknown>): AppearanceSettings {
     colorScheme: COLOR_SCHEMES.find((scheme) => scheme === value.colorScheme) ?? DEFAULTS.appearance.colorScheme,
     darkTheme: themeId(value.darkTheme, "dark"),
     lightTheme: themeId(value.lightTheme, "light"),
+    backgroundGradient: typeof value.backgroundGradient === "boolean" ? value.backgroundGradient : DEFAULTS.appearance.backgroundGradient,
   };
 }
 

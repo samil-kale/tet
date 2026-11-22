@@ -402,7 +402,7 @@ const tracked = trackedOps(issueDeps);
 const changeRequestWatch = new ChangeRequestWatch(issueDeps, (found) => send("app:notice", found));
 
 function createWindow(): void {
-  appWindow.create(currentTheme(settings));
+  appWindow.create(currentTheme(settings), settings.get().appearance.backgroundGradient);
 }
 
 /**

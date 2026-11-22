@@ -21,6 +21,7 @@ function subscribe<C extends keyof EventChannels>(channel: C, listener: (payload
 const initialTheme =
   process.argv.find((arg) => arg.startsWith(WINDOW_ARGS.theme))?.slice(WINDOW_ARGS.theme.length) || DEFAULT_THEME_IDS.dark;
 const waylandSession = process.argv.includes(WINDOW_ARGS.wayland);
+const initialBackgroundGradient = process.argv.includes(WINDOW_ARGS.backgroundGradient);
 
 const api: TETApi = {
   startup: {
@@ -245,6 +246,8 @@ const api: TETApi = {
   initialTheme,
   onTheme: (listener) => subscribe("app:theme", listener),
   waylandSession,
+  initialBackgroundGradient,
+  onBackgroundGradient: (listener) => subscribe("app:background-gradient", listener),
 };
 
 contextBridge.exposeInMainWorld("tet", api);

@@ -8,7 +8,7 @@ import type { AppWindow } from "./window";
 /** What a settings change is handed on to. */
 export interface SettingsAccessDeps {
   settings: SettingsStore;
-  window: Pick<AppWindow, "shownTheme" | "showTheme">;
+  window: Pick<AppWindow, "shownTheme" | "showTheme" | "showBackgroundGradient">;
   tabManagers: Pick<SessionManagerRegistry, "themeChanged" | "idleReminderChanged">;
   repositories: Pick<RepositoryManager, "announceFilesChanged">;
 }
@@ -43,6 +43,9 @@ export function settingsAccessOf(deps: SettingsAccessDeps): SettingsAccess {
     patch(edits) {
       settings.patch(edits);
       const restartRequired = applyTheme(deps);
+      if (edits.appearance?.backgroundGradient !== undefined) {
+        deps.window.showBackgroundGradient(settings.get().appearance.backgroundGradient);
+      }
       if (edits.notifications?.idleReminder !== undefined) {
         tabManagers.idleReminderChanged();
       }

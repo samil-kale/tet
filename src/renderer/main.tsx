@@ -36,6 +36,10 @@ if (!container) {
 // Before any render: xterm, shiki and monaco read the variables once, when built. Synchronous (the
 // preload reads it off window.ts's additionalArguments), so the first frame is right.
 document.documentElement.dataset.theme = window.tet.initialTheme;
+document.documentElement.toggleAttribute("data-background-gradient", window.tet.initialBackgroundGradient);
+
+// Main repeats it after each page load, as it does the theme.
+window.tet.onBackgroundGradient((on) => document.documentElement.toggleAttribute("data-background-gradient", on));
 
 // A runtime theme change (main.ts's applyTheme): the stylesheet first, since the others re-read it.
 // Subscribed before any render: main repeats the theme after each page load, which a reloaded

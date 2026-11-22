@@ -56,6 +56,18 @@ body {
   user-select: none;
 }
 
+/* IntelliJ's colourful toolbar gradient (IslandsGradientPainter.kt) on the ground's top left: over
+   1000 x 300 px (IntelliJ: 700 x 200), a horizontal ramp from the accent mixed in at 50% (IntelliJ:
+   85%) at the left edge, where IntelliJ puts the project widget's offset, to the ground, faded
+   linearly into the ground towards the bottom. Only the ground shows it, the islands cover the rest. */
+:root[data-background-gradient] body {
+  background:
+    linear-gradient(to bottom, transparent, var(--tet-app-background)) 0 0 / 1000px 300px no-repeat,
+    linear-gradient(to right, color-mix(in srgb, var(--tet-focusBorder) 50%, var(--tet-app-background)), var(--tet-app-background)) 0 0 /
+      1000px 300px no-repeat,
+    var(--tet-app-background);
+}
+
 button {
   font: inherit;
   color: inherit;

@@ -359,6 +359,13 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
               }))}
             />
           </Field>
+          <FieldGroup label="Window">
+            <Checkbox
+              label="Gradient background"
+              checked={settings?.appearance.backgroundGradient ?? true}
+              onChange={(backgroundGradient) => edit({ appearance: { backgroundGradient } })}
+            />
+          </FieldGroup>
         </>
       )}
       {shown === "notifications" && (

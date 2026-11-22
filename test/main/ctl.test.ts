@@ -708,6 +708,7 @@ describe("tet-ctl against the control server", () => {
         colorScheme: "system",
         darkTheme: "dark-modern",
         lightTheme: "light-modern",
+        backgroundGradient: true,
       },
       notifications: { finished: true, waiting: true, idleReminder: false, changeRequestOpened: true, changeRequestFailed: true },
       files: { editorKeybindingPreset: "tet", excludeGitIgnore: false, compactFolders: true, sortOrder: "default" },
@@ -905,6 +906,14 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["settings-set-color-scheme", "sepia"]), /unknown color scheme: sepia/);
     assert.equal(settings.appearance.colorScheme, "light");
     assert.deepEqual(calls.shutdown, []);
+  });
+
+  it("switches the background gradient and refuses anything but on and off", async () => {
+    const off = await tetCtl(["settings-set-background-gradient", "off"]);
+    assert.deepEqual(off.result, { saved: true, restartRequired: false });
+    assert.equal(settings.appearance.backgroundGradient, false);
+    assertUsage(await tetCtl(["settings-set-background-gradient", "yes"]), /unknown value: yes/);
+    assert.equal(settings.appearance.backgroundGradient, false);
   });
 
   it("sets a prompt's text, puts TET's own back without one, and refuses an unknown id", async () => {
