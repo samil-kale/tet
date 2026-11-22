@@ -3,6 +3,17 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.0 (2026-11-22)
+
+- **Pull and merge requests lane (work in progress).** A new lane lists the repository's pull or
+  merge requests, read from its own remote, and opens one in a tab with its review threads, approval
+  status, checks and blockers. The view is still being built and changes in the next releases.
+- **Paged reading and search.** The Issues and Pull/Merge Requests lanes load further pages as you
+  scroll and search their text.
+- **Failed notification.** A Claude Code turn that an API error ended is marked as failed.
+- **Fixes.** URLs in notices are links, the issue filter menus line up with their box, and tab labels
+  fade as they scroll.
+
 ## 0.26.4 (2026-11-20)
 
 - **Islands look.** Sections and panes are rounded islands on a common ground, and section titles are
