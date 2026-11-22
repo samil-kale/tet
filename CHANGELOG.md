@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.2 (2026-11-22)
+
+- **Fixes.** The model selection has its own entry at the top of the settings' prompts list, which
+  no longer shows detail lines, change request facts have a smaller icon and the small font, and
+  notices sit slightly higher above the status bar.
+
 ## 0.27.1 (2026-11-22)
 
 - **Fixes.** Pull and merge request line counts are colored, the commit and environment dialogs are
