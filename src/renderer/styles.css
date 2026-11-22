@@ -1251,7 +1251,7 @@ textarea:focus,
 
 /* An issue row the tracker added unfolds fading in, one it removed folds away fading out, as a
    notice does (`.notice-item`) without its rise. The row states its height, so the item clips it
-   rather than it shrinking. `ROW_MS` (lanes/issues/use-issue-rows.ts) is this duration. */
+   rather than it shrinking. `ROW_MS` (lanes/issues/use-tracked-rows.ts) is this duration. */
 .issue-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1317,13 +1317,8 @@ textarea:focus,
   font-size: var(--tet-font-size);
 }
 
-/* A change request's branches, first in its thread, the thread's gap below them. */
-.change-request-branches {
-  color: var(--tet-descriptionForeground);
-}
-
-/* Its status line atop the thread, a box as a card's: no line of the thread runs up to it, the text's
-   card below stands first as it does without one. */
+/* A change request's card atop the thread: its branches the title, its status the body. No line of the
+   thread runs up to the text's card below it, which stands first as it does without one. */
 .change-request-status {
   display: flex;
   flex-wrap: wrap;
@@ -1331,8 +1326,6 @@ textarea:focus,
   gap: 8px 16px;
   min-height: var(--bar-height);
   padding: 6px var(--issue-card-padding);
-  border: 1px solid var(--tet-app-border);
-  border-radius: var(--border-radius);
 }
 
 .change-request-fact {
@@ -1349,7 +1342,7 @@ textarea:focus,
   margin-left: auto;
 }
 
-.issue-thread > .change-request-status + .issue-card::before {
+.issue-thread > .change-request-card + .issue-card::before {
   display: none;
 }
 

@@ -69,7 +69,7 @@ export const NO_CALLBACKS: SessionManagerCallbacks = {
 };
 
 /** Links for a manager whose tabs no test links. */
-export function noIssueLinks(dataRoot: string): TrackedLinks {
+export function noTrackedLinks(dataRoot: string): TrackedLinks {
   return new TrackedLinks(
     dataRoot,
     () => false,
@@ -97,7 +97,7 @@ export async function withEmptyPath(
       ({ tabId }) => manager.hasTab(tabId),
       (projectId) => {
         manager.repostTabs();
-        callbacks.onIssueSessions?.(projectId);
+        callbacks.onTrackedSessions?.(projectId);
       },
     );
     const manager: TabSessionManager = new TabSessionManager(

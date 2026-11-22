@@ -792,7 +792,7 @@ const VERBS = [
     group: "Projects",
     usage: "change-requests-read <number> [--project <id>]",
     summary:
-      "One pull or merge request as its tab shows it: its status (state, draft, checks and the names of those failed, conflicts, branches), text, comments, events and fields, as issues-read answers an issue.",
+      "One pull or merge request as its tab shows it: its state, draft and checks, its status (the names of the checks failed, conflicts, branches), text, comments, review threads, events and fields, as issues-read answers an issue.",
     positionals: ["number"],
     sandbox: "ownProject",
   },

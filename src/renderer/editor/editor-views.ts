@@ -6,14 +6,17 @@ import type { ActionResult } from "../../shared/types/action";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import {
+  isChangeRequest,
   isTimeRemoval,
-  type ChangeRequestRow,
+  type ChangeRequestDetail,
+  type ChecksState,
   type Issue,
   type IssueChange,
   type IssueDetail,
   type IssueField,
   type IssueFieldValue,
   type TrackedKind,
+  type TrackedRef,
 } from "../../shared/types/providers";
 import { toBase64 } from "../ui/base64";
 import { confirmed, confirmedFollowUp, refusal } from "../ui/Dialog";
@@ -28,12 +31,11 @@ import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEd
 import {
   inWorkingTree,
   issueGone,
-  issuesChanged,
   MARKDOWN_PREVIEW_MODES,
   openFile,
-  revealIssue,
-  sendIssueToAgent,
-  trackedOf,
+  revealTracked,
+  sendTrackedToAgent,
+  trackedChanged,
 } from "./editor-tab";
 import { keepSeen } from "./tracked-seen";
 import { editorFontFamily } from "../themes/theme-colors";
@@ -101,12 +103,10 @@ export interface EditorSnapshot {
   unchangedCollapsed: boolean;
   /** A Graph diff: the file at this commit, which nothing outside the tab changes. */
   commit?: CommitSide;
-  /** An issue, which no change of the repository touches. */
-  issue?: number;
-  /** A change request, the same way. */
-  changeRequest?: number;
+  /** An issue or change request, which no change of the repository touches. */
+  tracked?: TrackedRef;
   /** What its tab draws (`IssueView`), once read: an issue's, or a change request's
-   *  (`ChangeRequestDetail`). */
+   *  (`isChangeRequest`). */
   issueDetail?: IssueDetail;
 }
 
@@ -316,9 +316,9 @@ export function editorEntry(tabId: string): EditorEntry | undefined {
   if (!view) {
     return undefined;
   }
-  const { path, commit, issue, changeRequest, preview, diff, markdownPreview } = view.snapshot;
+  const { path, commit, tracked, preview, diff, markdownPreview } = view.snapshot;
   const viewState = view.pendingViewState ?? (view.models && activeEditor(view)?.saveViewState()) ?? undefined;
-  return { path, commit, issue, changeRequest, preview, diff, markdownPreview, viewState };
+  return { path, commit, tracked, preview, diff, markdownPreview, viewState };
 }
 
 /** A match in a tab already open (`App.openEditor`), which needs no new read. */
@@ -501,8 +501,7 @@ export function editorContent(tabId: string): string | undefined {
  * before the tab is drawn, whose host attaches the element made here.
  */
 export function openEditorFile(ref: ProjectRef, tabId: string, path: string, preview: boolean, how: OpenEditor): void {
-  const { commit, issue, changeRequest, diff } = how.restored ?? how;
-  const tracked = trackedOf({ issue, changeRequest });
+  const { commit, tracked, diff } = how.restored ?? how;
   let view = views.get(tabId);
   if (!view) {
     const host = document.createElement("div");
@@ -559,8 +558,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
     preview,
     diff: diff === true || commit !== undefined,
     commit,
-    issue,
-    changeRequest,
+    tracked,
     issueDetail: undefined,
     markdownPreview: isMarkdown(path) ? (how.restored?.markdownPreview ?? markdownPreviewByDefault.get()) : "off",
     sideBySide: diffDefaults.sideBySide.get(),
@@ -572,7 +570,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   const current = view;
   const read =
     tracked !== undefined
-      ? readIssueFile(view, seq, path, tracked.kind, tracked.number)
+      ? readTrackedFile(view, seq, path, tracked)
       : commit
         ? readCommitFile(ref, path, commit)
         : window.tet.repository.readFile(ref, path);
@@ -616,73 +614,27 @@ async function readCommitFile(ref: ProjectRef, path: string, commit: CommitSide)
   };
 }
 
-/** What a tab reads and writes of the host, by the kind it shows: the issues' calls, or the change
- *  requests', whose comments are never internal. */
-interface TrackedApi {
-  read: (projectId: string, number: number) => Promise<{ detail?: IssueDetail; markdown?: string; error?: string }>;
-  image: (projectId: string, source: string) => Promise<string | null>;
-  comment: (projectId: string, number: number, body: string, internal: boolean) => Promise<ActionResult>;
-  editComment: (projectId: string, id: string, body: string) => Promise<ActionResult>;
-  deleteComment: (projectId: string, id: string) => Promise<ActionResult>;
-  update: (projectId: string, number: number, change: IssueChange) => Promise<ActionResult>;
-  fieldOptions: (projectId: string, number: number, fieldId: string) => Promise<{ options?: string[]; error?: string }>;
-  setField: (projectId: string, number: number, fieldId: string, value: IssueFieldValue) => Promise<ActionResult>;
-}
-
-const TRACKED_API: Record<TrackedKind, TrackedApi> = {
-  issue: {
-    read: async (projectId, number) => {
-      const { issue, markdown, error } = await window.tet.issues.read(projectId, number);
-      return { detail: issue, markdown, error };
-    },
-    image: (projectId, source) => window.tet.issues.image(projectId, source),
-    comment: (projectId, number, body, internal) => window.tet.issues.comment(projectId, number, body, internal),
-    editComment: (projectId, id, body) => window.tet.issues.editComment(projectId, id, body),
-    deleteComment: (projectId, id) => window.tet.issues.deleteComment(projectId, id),
-    update: (projectId, number, change) => window.tet.issues.update(projectId, number, change),
-    fieldOptions: (projectId, number, fieldId) => window.tet.issues.fieldOptions(projectId, number, fieldId),
-    setField: (projectId, number, fieldId, value) => window.tet.issues.setField(projectId, number, fieldId, value),
-  },
-  "change-request": {
-    read: async (projectId, number) => {
-      const { changeRequest, markdown, error } = await window.tet.changeRequests.read(projectId, number);
-      return { detail: changeRequest, markdown, error };
-    },
-    image: (projectId, source) => window.tet.changeRequests.image(projectId, source),
-    comment: (projectId, number, body) => window.tet.changeRequests.comment(projectId, number, body),
-    editComment: (projectId, id, body) => window.tet.changeRequests.editComment(projectId, id, body),
-    deleteComment: (projectId, id) => window.tet.changeRequests.deleteComment(projectId, id),
-    update: (projectId, number, change) => window.tet.changeRequests.update(projectId, number, change),
-    fieldOptions: (projectId, number, fieldId) => window.tet.changeRequests.fieldOptions(projectId, number, fieldId),
-    setField: (projectId, number, fieldId, value) => window.tet.changeRequests.setField(projectId, number, fieldId, value),
-  },
-};
-
 /** An issue or change request as the editor tab holds a file, never saved, its text what
  *  `editorContent` answers, with what its view draws. */
-async function readIssueFile(view: EditorView, seq: number, path: string, kind: TrackedKind, number: number): Promise<FileContent> {
-  const { detail, markdown, error } = await TRACKED_API[kind].read(view.ref.projectId, number);
+async function readTrackedFile(view: EditorView, seq: number, path: string, tracked: TrackedRef): Promise<FileContent> {
+  const { detail, markdown, error } = await window.tet.tracked.read(view.ref.projectId, tracked);
   if (detail && !stale(view, seq)) {
     publish(view, { issueDetail: detail });
   }
   return { path, content: markdown ?? "", mtimeMs: 0, binary: false, tooLarge: false, readOnly: true, error };
 }
 
-/** An image of the text of tab `tabId`'s issue or change request: through the account where it takes
- *  the token, else a web image as a preview's. */
-export async function loadIssueImage(tabId: string, source: string): Promise<string | undefined> {
+/** An image of the text of tab `tabId`'s issue or change request (`loadTrackedImage`). */
+export function loadIssueImage(tabId: string, source: string): Promise<string | undefined> {
   const view = views.get(tabId);
-  if (view && trackedOf(view.snapshot)?.kind === "change-request") {
-    const image = await TRACKED_API["change-request"].image(view.ref.projectId, source);
-    return image ?? (/^https:/i.test(source) ? ((await window.tet.shell.fetchImage(source)) ?? undefined) : undefined);
-  }
-  return loadProjectIssueImage(view?.ref.projectId, source);
+  return loadTrackedImage(view?.ref.projectId, view?.snapshot.tracked?.kind ?? "issue", source);
 }
 
-/** `loadIssueImage` for the text of an issue of project `projectId`, an issue yet to be made too; a
- *  text of no project has web images alone. */
-export async function loadProjectIssueImage(projectId: string | undefined, source: string): Promise<string | undefined> {
-  const image = projectId === undefined ? null : await window.tet.issues.image(projectId, source);
+/** An image of the text of an issue or change request of project `projectId`, an issue yet to be made
+ *  too: through the account where it takes the token, else a web image as a preview's. A text of no
+ *  project has web images alone. */
+export async function loadTrackedImage(projectId: string | undefined, kind: TrackedKind, source: string): Promise<string | undefined> {
+  const image = projectId === undefined ? null : await window.tet.tracked.image(projectId, kind, source);
   if (image !== null) {
     return image;
   }
@@ -693,7 +645,7 @@ export async function loadProjectIssueImage(projectId: string | undefined, sourc
  *  opens in the browser, as it saves no upload. */
 export function openIssueLink(tabId: string, url: string): void {
   const view = views.get(tabId);
-  if (view && trackedOf(view.snapshot)?.kind === "change-request") {
+  if (view?.snapshot.tracked?.kind === "change-request") {
     void window.tet.shell.openUrl(url);
     return;
   }
@@ -716,7 +668,7 @@ export async function openProjectIssueLink(projectId: string | undefined, url: s
 export function openLinkedIssue(tabId: string, number: number): void {
   const view = views.get(tabId);
   if (view) {
-    revealIssue(view.ref, number);
+    revealTracked(view.ref, { kind: "issue", number });
   }
 }
 
@@ -743,10 +695,10 @@ async function underIssueBar<T>(view: EditorView, work: () => Promise<T>): Promi
 }
 
 /** Tab `tabId`'s view and the issue or change request it shows, where it shows one. */
-function issueTab(tabId: string): { view: EditorView; kind: TrackedKind; number: number } | undefined {
+function issueTab(tabId: string): { view: EditorView; tracked: TrackedRef } | undefined {
   const view = views.get(tabId);
-  const tracked = view && trackedOf(view.snapshot);
-  return view && tracked ? { view, ...tracked } : undefined;
+  const tracked = view?.snapshot.tracked;
+  return view && tracked ? { view, tracked } : undefined;
 }
 
 /** The issue's tab read afresh from the tracker, what it shows standing until the answer lands. It
@@ -758,7 +710,7 @@ async function reloadIssue(tabId: string): Promise<void> {
   if (!tab) {
     return;
   }
-  const { view, kind, number } = tab;
+  const { view, tracked } = tab;
   const seq = view.readSeq;
   publish(view, { loading: true });
   await view.issueWrites;
@@ -766,7 +718,7 @@ async function reloadIssue(tabId: string): Promise<void> {
     return;
   }
   const edits = view.issueEdits;
-  const { detail, markdown, error } = await TRACKED_API[kind].read(view.ref.projectId, number);
+  const { detail, markdown, error } = await window.tet.tracked.read(view.ref.projectId, tracked);
   if (stale(view, seq)) {
     return;
   }
@@ -782,13 +734,13 @@ async function reloadIssue(tabId: string): Promise<void> {
     file: file && detail ? { ...file, content: markdown ?? file.content, error: undefined } : file,
   });
   if (!detail) {
-    notify("error", error ?? `Could not read ${kind} ${number}`);
+    notify("error", error ?? `Could not read ${tracked.kind} ${tracked.number}`);
   }
 }
 
-/** The checks of a change request the tab read; undefined for an issue's. */
-function checksOf(read: IssueDetail | undefined): string | undefined {
-  return read && "status" in read ? (read as { status: { checks?: string } }).status.checks : undefined;
+/** How the checks of a change request the tab read stand; undefined for an issue's. */
+function checksOf(read: IssueDetail): ChecksState | undefined {
+  return isChangeRequest(read) ? read.checks : undefined;
 }
 
 /** The tab's issue or change request is on screen as the tab has read it, a change request's checks
@@ -797,7 +749,7 @@ export function markIssueSeen(tabId: string): void {
   const tab = issueTab(tabId);
   const read = tab?.view.snapshot.issueDetail;
   if (tab && read) {
-    keepSeen(tab.kind, tab.view.ref.projectId, tab.number, read.updatedAt, checksOf(read) === "failed");
+    keepSeen(tab.view.ref.projectId, tab.tracked, read.updatedAt, checksOf(read) === "failed");
   }
 }
 
@@ -810,40 +762,30 @@ export function issueProjectOf(tabId: string): string | undefined {
 export function sendTabIssueToAgent(tabId: string, agentId: AgentId): void {
   const tab = issueTab(tabId);
   if (tab) {
-    void sendIssueToAgent(tab.view.ref, tab.number, agentId, tab.kind);
+    void sendTrackedToAgent(tab.view.ref, tab.tracked, agentId);
   }
 }
 
 /** The tabs of the project open on one of the kind, with its number and what the tab has read of it. */
-function issueTabsOf(projectId: string, kind: TrackedKind): { tabId: string; number: number; read: IssueDetail | undefined }[] {
+function trackedTabsOf(kind: TrackedKind, projectId: string): { tabId: string; number: number; read: IssueDetail | undefined }[] {
   return [...views].flatMap(([tabId, { ref, snapshot }]) => {
-    const tracked = trackedOf(snapshot);
+    const { tracked } = snapshot;
     return ref.projectId === projectId && tracked?.kind === kind ? [{ tabId, number: tracked.number, read: snapshot.issueDetail }] : [];
   });
 }
 
 /** Every tab of the project open on one of the kind reads it again. */
-export function reloadIssueTabs(projectId: string, kind: TrackedKind = "issue"): void {
-  for (const { tabId } of issueTabsOf(projectId, kind)) {
+export function reloadTrackedTabs(kind: TrackedKind, projectId: string): void {
+  for (const { tabId } of trackedTabsOf(kind, projectId)) {
     void reloadIssue(tabId);
   }
 }
 
-/** Every tab of the project whose issue `issues` lists as changed since the tab read it reads it
- *  again. A tab whose issue is not listed stays as it is. */
-export function reloadChangedIssueTabs(projectId: string, issues: Issue[]): void {
-  for (const { tabId, number, read } of issueTabsOf(projectId, "issue")) {
-    const listed = issues.find((candidate) => candidate.number === number);
-    if (read && listed && listed.updatedAt !== read.updatedAt) {
-      void reloadIssue(tabId);
-    }
-  }
-}
-
-/** Every tab of the project whose change request `rows` lists as changed since the tab read it, or
- *  with its checks standing otherwise, reads it again. */
-export function reloadChangedChangeRequestTabs(projectId: string, rows: ChangeRequestRow[]): void {
-  for (const { tabId, number, read } of issueTabsOf(projectId, "change-request")) {
+/** Every tab of the project whose issue or change request `rows` lists as changed since the tab read
+ *  it, or with its checks standing otherwise, reads it again. A tab whose one is not listed stays as
+ *  it is. */
+export function reloadChangedTabs(kind: TrackedKind, projectId: string, rows: (Issue & { checks?: ChecksState })[]): void {
+  for (const { tabId, number, read } of trackedTabsOf(kind, projectId)) {
     const listed = rows.find((candidate) => candidate.number === number);
     if (read && listed && (listed.updatedAt !== read.updatedAt || listed.checks !== checksOf(read))) {
       void reloadIssue(tabId);
@@ -853,15 +795,12 @@ export function reloadChangedChangeRequestTabs(projectId: string, rows: ChangeRe
 
 /** A write to the tab's issue or change request under its bar, the tab reading it again once it went
  *  through; false, with a notice, when refused. Nothing its section's rows show changes by it. */
-async function writeIssue(
-  tabId: string,
-  write: (api: TrackedApi, projectId: string, number: number) => Promise<ActionResult>,
-): Promise<boolean> {
+async function writeIssue(tabId: string, write: (projectId: string, tracked: TrackedRef) => Promise<ActionResult>): Promise<boolean> {
   const tab = issueTab(tabId);
   if (!tab) {
     return false;
   }
-  const result = await underIssueBar(tab.view, () => write(TRACKED_API[tab.kind], tab.view.ref.projectId, tab.number));
+  const result = await underIssueBar(tab.view, () => write(tab.view.ref.projectId, tab.tracked));
   if (!result.ok) {
     notify("error", result.error);
     return false;
@@ -872,31 +811,31 @@ async function writeIssue(
 
 /** A comment on the tab's issue, which shows once it is up (`writeIssue`). */
 export function commentOnIssue(tabId: string, body: string, internal: boolean): Promise<boolean> {
-  return writeIssue(tabId, (api, projectId, number) => api.comment(projectId, number, body, internal));
+  return writeIssue(tabId, (projectId, tracked) => window.tet.tracked.comment(projectId, tracked, body, internal));
 }
 
 /** A comment of the tab's issue changed (`writeIssue`). */
 export function editIssueComment(tabId: string, id: string, body: string): Promise<boolean> {
-  return writeIssue(tabId, (api, projectId) => api.editComment(projectId, id, body));
+  return writeIssue(tabId, (projectId, { kind }) => window.tet.tracked.editComment(projectId, kind, id, body));
 }
 
 /** A comment of the tab's issue deleted (`writeIssue`). */
 export async function deleteIssueComment(tabId: string, id: string): Promise<void> {
-  await writeIssue(tabId, (api, projectId) => api.deleteComment(projectId, id));
+  await writeIssue(tabId, (projectId, { kind }) => window.tet.tracked.deleteComment(projectId, kind, id));
 }
 
 /** The tab's change request approved as the account's user (`writeIssue`). */
 export async function approveChangeRequest(tabId: string): Promise<void> {
-  await writeIssue(tabId, (_api, projectId, number) => window.tet.changeRequests.approve(projectId, number));
+  await writeIssue(tabId, (projectId, { number }) => window.tet.changeRequests.approve(projectId, number));
 }
 
 /** The tab's change request merged by the repository's own method, or set to be once its checks
  *  passed (`writeIssue`); its section reads it again. */
 export async function mergeChangeRequest(tabId: string, whenChecksPass: boolean): Promise<void> {
   const projectId = issueTab(tabId)?.view.ref.projectId;
-  const merged = await writeIssue(tabId, (_api, project, number) => window.tet.changeRequests.merge(project, number, whenChecksPass));
+  const merged = await writeIssue(tabId, (project, { number }) => window.tet.changeRequests.merge(project, number, whenChecksPass));
   if (merged && projectId !== undefined) {
-    issuesChanged(projectId, "change-request");
+    trackedChanged("change-request", projectId);
   }
 }
 
@@ -907,13 +846,13 @@ export async function deleteIssue(tabId: string): Promise<void> {
     return;
   }
   const { projectId } = tab.view.ref;
-  const result = await underIssueBar(tab.view, () => window.tet.issues.delete(projectId, tab.number));
+  const result = await underIssueBar(tab.view, () => window.tet.issues.delete(projectId, tab.tracked.number));
   if (!result.ok) {
     notify("error", result.error);
     return;
   }
-  issuesChanged(projectId);
-  issueGone(projectId, tab.number);
+  trackedChanged("issue", projectId);
+  issueGone(projectId, tab.tracked.number);
 }
 
 /** What a pick field of the tab's issue can be set to; undefined, with a notice, when the tracker
@@ -923,7 +862,7 @@ export async function issueFieldOptions(tabId: string, fieldId: string): Promise
   if (!tab) {
     return undefined;
   }
-  const { options, error } = await TRACKED_API[tab.kind].fieldOptions(tab.view.ref.projectId, tab.number, fieldId);
+  const { options, error } = await window.tet.tracked.fieldOptions(tab.view.ref.projectId, tab.tracked, fieldId);
   if (options === undefined) {
     notify("error", error ?? "Could not read the options");
   }
@@ -953,14 +892,14 @@ export async function uploadIssueFile(tabId: string, file: File): Promise<string
 async function changeIssue(
   tabId: string,
   show: (detail: IssueDetail) => IssueDetail,
-  write: (api: TrackedApi, projectId: string, number: number) => Promise<ActionResult>,
+  write: (projectId: string, tracked: TrackedRef) => Promise<ActionResult>,
 ): Promise<string | undefined> {
   const tab = issueTab(tabId);
   const detail = tab?.view.snapshot.issueDetail;
   if (!tab || !detail) {
     return undefined;
   }
-  const { view, kind, number } = tab;
+  const { view, tracked } = tab;
   publish(view, { issueDetail: show(detail) });
   const edit = (view.issueEdits ?? 0) + 1;
   view.issueEdits = edit;
@@ -968,9 +907,9 @@ async function changeIssue(
   const previous = view.issueWrites ?? Promise.resolve();
   const written = underIssueBar(view, async () => {
     await previous;
-    const result = await write(TRACKED_API[kind], projectId, number);
+    const result = await write(projectId, tracked);
     if (result.ok) {
-      issuesChanged(projectId, kind);
+      trackedChanged(tracked.kind, projectId);
     }
     if (view.issueEdits === edit) {
       void reloadIssue(tabId);
@@ -981,8 +920,8 @@ async function changeIssue(
   return await written;
 }
 
-/** The issue or change request with a change of its own parts shown; a change request's status takes
- *  its state too. */
+/** The issue or change request with a change of its own parts shown; a change request's state, beside
+ *  `open`, takes it too. */
 function withChange(detail: IssueDetail, change: IssueChange): IssueDetail {
   const changed = {
     ...detail,
@@ -990,11 +929,11 @@ function withChange(detail: IssueDetail, change: IssueChange): IssueDetail {
     body: change.body ?? detail.body,
     open: change.state === undefined ? detail.open : change.state === "open",
   };
-  if (change.state === undefined || !("status" in detail)) {
+  if (!isChangeRequest(changed) || change.state === undefined) {
     return changed;
   }
-  const { status } = detail as { status: object };
-  return { ...changed, status: { ...status, state: change.state } } as IssueDetail;
+  const request: ChangeRequestDetail = { ...changed, state: change.state };
+  return request;
 }
 
 /** The field as it reads once set to `value`; a timelog's new entry and total are left to the read
@@ -1021,7 +960,7 @@ function changeParts(tabId: string, change: IssueChange): Promise<string | undef
   return changeIssue(
     tabId,
     (detail) => withChange(detail, change),
-    (api, projectId, number) => api.update(projectId, number, change),
+    (projectId, tracked) => window.tet.tracked.update(projectId, tracked, change),
   );
 }
 
@@ -1040,20 +979,13 @@ export function editIssueField(tabId: string, fieldId: string, value: IssueField
   return changeIssue(
     tabId,
     (detail) => ({ ...detail, fields: detail.fields.map((field) => (field.id === fieldId ? withValue(field, value) : field)) }),
-    (api, projectId, number) => api.setField(projectId, number, fieldId, value),
+    (projectId, tracked) => window.tet.tracked.setField(projectId, tracked, fieldId, value),
   );
 }
 
 /** Sets a field of the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
 export function setIssueField(tabId: string, fieldId: string, value: IssueFieldValue): void {
   notifying(editIssueField)(tabId, fieldId, value);
-}
-
-/** What the Issues section is filtered by, off its tracker. */
-export interface IssueOptions {
-  labels: string[];
-  /** Offered for both author and assignee. */
-  people: string[];
 }
 
 /**

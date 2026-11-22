@@ -10,9 +10,9 @@ import type { TerminalEnv } from "./pty";
 import { TabSessionManager, type SessionManagerCallbacks } from "./session-manager";
 
 export interface SessionRegistryCallbacks extends SessionManagerCallbacks {
-  /** What the project's issues and change requests show of their sessions changed (`issues.ts`'s
-   *  issueSessions): a link, a linked tab, the archive, a repository or worktree opened or closed. */
-  onIssueSessions: (projectId: string) => void;
+  /** What the project's issues and change requests show of their sessions changed (`tracked.ts`'s
+   *  `trackedSessions`): a link, a linked tab, the archive, a repository or worktree opened or closed. */
+  onTrackedSessions: (projectId: string) => void;
 }
 
 /** A session manager per open repository and worktree, by `refKey`, and the project's links of
@@ -46,7 +46,7 @@ export class SessionManagerRegistry {
         for (const manager of this.forProject(projectId)) {
           manager.repostTabs();
         }
-        callbacks.onIssueSessions(projectId);
+        callbacks.onTrackedSessions(projectId);
       },
     );
     this.managerCallbacks = {
@@ -57,7 +57,7 @@ export class SessionManagerRegistry {
       },
       onArchived: (ref, tabs) => {
         callbacks.onArchived(ref, tabs);
-        callbacks.onIssueSessions(ref.projectId);
+        callbacks.onTrackedSessions(ref.projectId);
       },
     };
   }
@@ -65,13 +65,11 @@ export class SessionManagerRegistry {
   private linkedTabsShown(ref: ProjectRef, tabs: TabDescriptor[]): void {
     const refKey = refKeyOf(ref);
     const shown = JSON.stringify(
-      tabs.flatMap(({ tabId, issue, changeRequest, agentId, title }) =>
-        issue === undefined && changeRequest === undefined ? [] : [[tabId, issue, changeRequest, agentId, title]],
-      ),
+      tabs.flatMap(({ tabId, linked, agentId, title }) => (linked === undefined ? [] : [[tabId, linked, agentId, title]])),
     );
     if (shown !== (this.linkedShown.get(refKey) ?? "[]")) {
       this.linkedShown.set(refKey, shown);
-      this.callbacks.onIssueSessions(ref.projectId);
+      this.callbacks.onTrackedSessions(ref.projectId);
     }
   }
 
@@ -134,7 +132,7 @@ export class SessionManagerRegistry {
     // two.
     this.managers.delete(refKey);
     if (this.linkedShown.delete(refKey)) {
-      this.callbacks.onIssueSessions(ref.projectId);
+      this.callbacks.onTrackedSessions(ref.projectId);
     }
     await manager?.dispose();
   }

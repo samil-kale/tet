@@ -20,9 +20,10 @@ import { HostSetups } from "../../src/main/terminals/host-setup";
 import { ReconcileScheduler } from "../../src/main/terminals/reconcile-scheduler";
 import { type SessionManagerCallbacks, TabSessionManager } from "../../src/main/terminals/session-manager";
 import { CONTROL_ENV, CONTROL_START_SIZE, type HookEvent } from "../../src/shared/ctl";
+import type { ProjectRef } from "../../src/shared/types/project";
 import type { TabDescriptor } from "../../src/shared/types/terminals";
 import { eventually, tempDir, withEnv } from "../helpers";
-import { FakeProcess, NO_CALLBACKS, NO_TERMINAL_ENV, noIssueLinks, withEmptyPath } from "../helpers/session-manager";
+import { FakeProcess, NO_CALLBACKS, NO_TERMINAL_ENV, noTrackedLinks, withEmptyPath } from "../helpers/session-manager";
 import { reportApplies, REPORT_STALE_MS } from "../../src/main/terminals/turn-order";
 import { notificationFor } from "../../src/main/terminals/turn-reports";
 import { answersQuestion, type TabState } from "../../src/main/terminals/tab-state";
@@ -38,7 +39,9 @@ describe("a turn's notification", () => {
   it("is left out for a tab on screen, and only while it is", async () => {
     const root = tempDir("tet-notification-");
     const settings = new SettingsStore(root);
-    settings.patch({ notifications: { finished: true, waiting: true, idleReminder: true, changeRequestOpened: true, changeRequestFailed: true } });
+    settings.patch({
+      notifications: { finished: true, waiting: true, idleReminder: true, changeRequestOpened: true, changeRequestFailed: true },
+    });
     let pushed: TabDescriptor[] = [];
     const manager = new TabSessionManager(
       { ref: { projectId: "p" }, path: root, name: () => "repo" },
@@ -46,7 +49,7 @@ describe("a turn's notification", () => {
       settings,
       new SbxLocalStore(root, async () => ({})),
       new HostSetups(root, settings, () => undefined),
-      noIssueLinks(root),
+      noTrackedLinks(root),
       NO_TERMINAL_ENV,
       { ...NO_CALLBACKS, onTabs: (_projectId, tabs) => (pushed = tabs) },
     );
@@ -110,13 +113,13 @@ describe("a tab linked to an issue", () => {
     const changed: string[] = [];
     const pushed: (number | undefined)[] = [];
     await withEmptyPath(
-      { onIssueSessions: (projectId) => changed.push(projectId), onTabs: (_ref, tabs) => pushed.push(tabs[0]?.issue) },
+      { onTrackedSessions: (projectId) => changed.push(projectId), onTabs: (_ref, tabs) => pushed.push(tabs[0]?.linked?.issue) },
       (manager, project) => {
         const { tabId } = manager.createTab("claude");
-        assert.deepEqual(manager.linkIssue(tabId, 3), { ok: true });
-        assert.equal(manager.snapshot()[0].issue, 3, "its descriptor shows the issue meanwhile");
-        assert.deepEqual(manager.unlinkIssue(tabId, 3), { ok: true });
-        assert.equal(manager.snapshot()[0].issue, undefined);
+        assert.deepEqual(manager.link(tabId, { kind: "issue", number: 3 }), { ok: true });
+        assert.equal(manager.snapshot()[0].linked?.issue, 3, "its descriptor shows the issue meanwhile");
+        assert.deepEqual(manager.unlink(tabId, { kind: "issue", number: 3 }), { ok: true });
+        assert.equal(manager.snapshot()[0].linked?.issue, undefined);
         assert.deepEqual(sessionLinks(path.dirname(project), "p", "issue"), {}, "nothing written without a session");
         assert.deepEqual(changed, ["p", "p"]);
         assert.deepEqual(pushed, [undefined, 3, undefined], "each change sent the tabs again");
@@ -128,11 +131,11 @@ describe("a tab linked to an issue", () => {
     await withEmptyPath({}, (manager) => {
       const first = manager.createTab("claude").tabId;
       const second = manager.createTab("claude").tabId;
-      manager.linkIssue(first, 3);
-      assert.deepEqual(manager.linkIssue(second, 3), { ok: true, replacedSession: true });
-      assert.deepEqual(manager.linkIssue(second, 7), { ok: true, movedFrom: 3 });
+      manager.link(first, { kind: "issue", number: 3 });
+      assert.deepEqual(manager.link(second, { kind: "issue", number: 3 }), { ok: true, replacedSession: true });
+      assert.deepEqual(manager.link(second, { kind: "issue", number: 7 }), { ok: true, movedFrom: 3 });
       assert.deepEqual(
-        manager.snapshot().map((tab) => tab.issue),
+        manager.snapshot().map((tab) => tab.linked?.issue),
         [undefined, 7],
         "the first gave up the issue",
       );
@@ -142,9 +145,9 @@ describe("a tab linked to an issue", () => {
   it("refuses a tab whose agent keeps no session, and one that is not there", async () => {
     await withEmptyPath({}, (manager) => {
       const { tabId } = manager.createTab("shell");
-      assert.match(refusal(manager.linkIssue(tabId, 3)), /keeps no session/);
-      assert.match(refusal(manager.linkIssue("new-gone", 3)), /closed/);
-      assert.match(refusal(manager.unlinkIssue("new-gone", 3)), /closed/);
+      assert.match(refusal(manager.link(tabId, { kind: "issue", number: 3 })), /keeps no session/);
+      assert.match(refusal(manager.link("new-gone", { kind: "issue", number: 3 })), /closed/);
+      assert.match(refusal(manager.unlink("new-gone", { kind: "issue", number: 3 })), /closed/);
     });
   });
 });
@@ -160,6 +163,10 @@ describe("the links of a project's issues", () => {
     ...(sessionId !== undefined && { sessionId }),
   });
 
+  /** What each tab shows linked of the issues, as `TrackedLinks.linksOf` answers it. */
+  const linksOfIssue = (links: TrackedLinks, ref: ProjectRef, tabs: TabState[]): [string, number | undefined][] =>
+    [...links.linksOf(ref, tabs)].map(([tabId, linked]) => [tabId, linked.issue]);
+
   it("let one tab wait for an issue across the repository and its worktrees, until it claims its session", () => {
     const root = tempDir("tet-issue-links-");
     const open = new Set(["repository:a", "k1:b"]);
@@ -169,21 +176,25 @@ describe("the links of a project's issues", () => {
       ({ ref, tabId }) => open.has(`${ref.worktree ?? "repository"}:${tabId}`),
       (projectId) => changed.push(projectId),
     );
-    links.link(repository, "a", undefined, "issue", 3);
-    assert.deepEqual(links.link(worktree, "b", undefined, "issue", 3), { replacedSession: true }, "the repository's tab gives the issue up");
-    assert.deepEqual([...links.linksOf(repository, [tab("a")], "issue")], []);
-    assert.deepEqual([...links.linksOf(worktree, [tab("b")], "issue")], [["b", 3]]);
+    links.link(repository, "a", undefined, { kind: "issue", number: 3 });
+    assert.deepEqual(
+      links.link(worktree, "b", undefined, { kind: "issue", number: 3 }),
+      { replacedSession: true },
+      "the repository's tab gives the issue up",
+    );
+    assert.deepEqual([...linksOfIssue(links, repository, [tab("a")])], []);
+    assert.deepEqual([...linksOfIssue(links, worktree, [tab("b")])], [["b", 3]]);
 
     linkSession(root, repository, "issue", 5, "s1");
-    assert.deepEqual(links.link(worktree, "b", undefined, "issue", 5), { movedFrom: 3, replacedSession: true });
-    assert.deepEqual([...links.linksOf(repository, [tab("c", "s1")], "issue")], [], "the waiting tab stands in for the issue's session");
+    assert.deepEqual(links.link(worktree, "b", undefined, { kind: "issue", number: 5 }), { movedFrom: 3, replacedSession: true });
+    assert.deepEqual([...linksOfIssue(links, repository, [tab("c", "s1")])], [], "the waiting tab stands in for the issue's session");
     links.claimed(worktree, "b", "s2");
     assert.equal(sessionLinks(root, "p", "issue")[5]?.sessionId, "s2", "the claimed session takes the issue's place");
-    assert.deepEqual([...links.linksOf(worktree, [tab("b", "s2")], "issue")], [["b", 5]]);
+    assert.deepEqual([...linksOfIssue(links, worktree, [tab("b", "s2")])], [["b", 5]]);
 
-    links.link(worktree, "b", undefined, "issue", 8);
+    links.link(worktree, "b", undefined, { kind: "issue", number: 8 });
     open.delete("k1:b");
-    assert.deepEqual([...links.linksOf(worktree, [], "issue")], [], "a closed tab waits no more");
+    assert.deepEqual([...linksOfIssue(links, worktree, [])], [], "a closed tab waits no more");
     assert.deepEqual(changed, ["p", "p", "p", "p", "p"]);
   });
 });

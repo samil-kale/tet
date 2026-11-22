@@ -680,34 +680,49 @@ describe("what is persisted", () => {
         id: editorTab.tabId,
         pane: "b",
         kind: "editor",
-        editor: { ...entry, commit: undefined, issue: undefined, changeRequest: undefined },
+        editor: { ...entry, commit: undefined, tracked: undefined },
       },
       { id: "sh", pane: "b", kind: "shell" },
     ]);
   });
 
-  it("brings back an issue's tab by its number, as no file of the tree", () => {
-    const entry: EditorEntry = { path: "issue-412.md", issue: 412, preview: false, diff: false, markdownPreview: "only" };
-    const editorTab: EditorTab = { tabId: "tet:editor:x-2", ref: { projectId: "p" }, path: entry.path, issue: 412 };
-    const layout = layoutOf("single", "a", { [editorTab.tabId]: "a" }, [editorTab]);
-    storage.set(
-      "tet.layout.terminals.i.layout",
-      serializeLayout(layout, [editorTab], () => entry),
-    );
-    assert.equal(loadPersisted("i").tabs[0].editor?.issue, 412);
-    assert.equal(workingTreePathOf([editorTab], editorTab.tabId), null);
+  it("brings back an issue's or change request's tab by what it shows, as no file of the tree", () => {
+    for (const tracked of [
+      { kind: "issue", number: 412 },
+      { kind: "change-request", number: 746 },
+    ] as const) {
+      const entry: EditorEntry = {
+        path: `${tracked.kind}-${tracked.number}.md`,
+        tracked,
+        preview: false,
+        diff: false,
+        markdownPreview: "only",
+      };
+      const editorTab: EditorTab = { tabId: "tet:editor:x-2", ref: { projectId: "p" }, path: entry.path, tracked };
+      const layout = layoutOf("single", "a", { [editorTab.tabId]: "a" }, [editorTab]);
+      storage.set(
+        "tet.layout.terminals.i.layout",
+        serializeLayout(layout, [editorTab], () => entry),
+      );
+      assert.deepEqual(loadPersisted("i").tabs[0].editor?.tracked, tracked);
+      assert.equal(workingTreePathOf([editorTab], editorTab.tabId), null);
+    }
   });
 
-  it("brings back a change request's tab by its number, as no file of the tree", () => {
-    const entry: EditorEntry = { path: "change-request-746.md", changeRequest: 746, preview: false, diff: false, markdownPreview: "only" };
-    const editorTab: EditorTab = { tabId: "tet:editor:x-3", ref: { projectId: "p" }, path: entry.path, changeRequest: 746 };
+  it("brings back an issue's tab kept by its number alone", () => {
+    const entry = { path: "issue-412.md", issue: 412, preview: false, diff: false, markdownPreview: "only" };
+    const editorTab: EditorTab = {
+      tabId: "tet:editor:x-2",
+      ref: { projectId: "p" },
+      path: entry.path,
+      tracked: { kind: "issue", number: 412 },
+    };
     const layout = layoutOf("single", "a", { [editorTab.tabId]: "a" }, [editorTab]);
     storage.set(
-      "tet.layout.terminals.c.layout",
-      serializeLayout(layout, [editorTab], () => entry),
+      "tet.layout.terminals.l.layout",
+      serializeLayout(layout, [editorTab], () => entry as unknown as EditorEntry),
     );
-    assert.equal(loadPersisted("c").tabs[0].editor?.changeRequest, 746);
-    assert.equal(workingTreePathOf([editorTab], editorTab.tabId), null);
+    assert.deepEqual(loadPersisted("l").tabs[0].editor?.tracked, { kind: "issue", number: 412 });
   });
 });
 

@@ -2,7 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "../ui/use-latest";
 import type { AgentInfo } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import { openChangeRequestTab, openIssueTab, type OpenEditor } from "../editor/editor-tab";
+import type { TrackedRef } from "../../shared/types/providers";
+import { openTrackedTab, type OpenEditor } from "../editor/editor-tab";
 import type { ResolvedRef } from "../resolved-ref";
 import { sameList } from "../identity";
 import { disposeTerminal } from "./terminal-views";
@@ -272,39 +273,22 @@ export const TabArea = memo(function TabArea({
     [onDragEnd, resolved.ref, showIn],
   );
 
-  /** An issue's row dropped on a pane: its tab kept, as one placed by hand, and shown as a dragged
-   *  tab is, in the pane or the snap zone. */
-  const onDropIssue = useCallback(
-    (paneId: PaneId, number: number) => {
+  /** An issue's or change request's row dropped on a pane: its tab kept, as one placed by hand, and
+   *  shown as a dragged tab is, in the pane or the snap zone. */
+  const onDropTracked = useCallback(
+    (paneId: PaneId, tracked: TrackedRef) => {
       const transition = dragTargetRef.current?.transition ?? null;
       onDragEnd();
-      showIn(paneId, openIssueTab(onOpenEditor, resolved.ref, number, { keep: true, background: true }), transition);
+      showIn(paneId, openTrackedTab(onOpenEditor, resolved.ref, tracked, { keep: true, background: true }), transition);
     },
     [onDragEnd, onOpenEditor, resolved.ref, showIn],
   );
 
-  /** A tab's "Open Issue": the issue its session is linked to, in the preview tab. */
-  const onOpenIssue = useCallback(
-    (number: number) => {
-      openIssueTab(onOpenEditor, resolved.ref, number);
-    },
-    [onOpenEditor, resolved.ref],
-  );
-
-  /** A change request's row dropped on a pane, as `onDropIssue`. */
-  const onDropChangeRequest = useCallback(
-    (paneId: PaneId, number: number) => {
-      const transition = dragTargetRef.current?.transition ?? null;
-      onDragEnd();
-      showIn(paneId, openChangeRequestTab(onOpenEditor, resolved.ref, number, { keep: true, background: true }), transition);
-    },
-    [onDragEnd, onOpenEditor, resolved.ref, showIn],
-  );
-
-  /** A tab's "Open Pull/Merge Request", as `onOpenIssue`. */
-  const onOpenChangeRequest = useCallback(
-    (number: number) => {
-      openChangeRequestTab(onOpenEditor, resolved.ref, number);
+  /** A tab's "Open Issue" or "Open Pull/Merge Request": what its session is linked to, in the preview
+   *  tab. */
+  const onOpenTracked = useCallback(
+    (tracked: TrackedRef) => {
+      openTrackedTab(onOpenEditor, resolved.ref, tracked);
     },
     [onOpenEditor, resolved.ref],
   );
@@ -376,10 +360,8 @@ export const TabArea = memo(function TabArea({
       onDragOverChange={onDragOverChange}
       onMoveTab={onMoveTab}
       onDropArchived={onDropArchived}
-      onDropIssue={onDropIssue}
-      onOpenIssue={onOpenIssue}
-      onDropChangeRequest={onDropChangeRequest}
-      onOpenChangeRequest={onOpenChangeRequest}
+      onDropTracked={onDropTracked}
+      onOpenTracked={onOpenTracked}
     />
   );
 

@@ -1,13 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ProjectRef } from "../../shared/types/project";
-import type { TrackedKind } from "../../shared/types/providers";
-import type { IssueLinkChange } from "../../shared/types/terminals";
+import { TRACKED_KINDS, type TrackedKind } from "../../shared/types/providers";
+import type { TrackedLinkChange } from "../../shared/types/terminals";
 import { hasStrings, isRecord, logFailure, readJson, writeJson } from "../util/json-file";
 import { entryKeyOf, refOfEntryKey, sessionLinksFile } from "./project-dirs";
-
-/** Both kinds, for what a session or worktree going takes from each. */
-const KINDS: readonly TrackedKind[] = ["issue", "change-request"];
 
 /** A session linked to an issue or change request: where it lives (`entryKeyOf`), and its id. */
 interface StoredLink {
@@ -24,9 +21,21 @@ function names(link: StoredLink, ref: ProjectRef, sessionId: string): boolean {
   return link.at === entryKeyOf(ref) && link.sessionId === sessionId;
 }
 
+/**
+ * Each file as last read or written, by its path: every tab list a repository or worktree sends reads
+ * its links. Only TET writes the files, each through `write`; a project's folder going takes its
+ * entries with it (`dropCachedLinks`).
+ */
+const cached = new Map<string, Readonly<Record<string, StoredLink>>>();
+
 /** The file as stored: the link per number, anything else dropped. */
-function read(dataRoot: string, projectId: string, kind: TrackedKind): Record<string, StoredLink> {
-  const parsed = readJson(sessionLinksFile(dataRoot, projectId, kind));
+function read(dataRoot: string, projectId: string, kind: TrackedKind): Readonly<Record<string, StoredLink>> {
+  const file = sessionLinksFile(dataRoot, projectId, kind);
+  const known = cached.get(file);
+  if (known) {
+    return known;
+  }
+  const parsed = readJson(file);
   const stored: Record<string, StoredLink> = {};
   if (isRecord(parsed)) {
     for (const [number, entry] of Object.entries(parsed)) {
@@ -38,6 +47,7 @@ function read(dataRoot: string, projectId: string, kind: TrackedKind): Record<st
       }
     }
   }
+  cached.set(file, stored);
   return stored;
 }
 
@@ -46,10 +56,18 @@ function write(dataRoot: string, projectId: string, kind: TrackedKind, stored: R
   const file = sessionLinksFile(dataRoot, projectId, kind);
   if (Object.keys(stored).length === 0) {
     fs.rmSync(file, { force: true });
-    return;
+  } else {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    writeJson(file, stored);
   }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  writeJson(file, stored);
+  cached.set(file, stored);
+}
+
+/** The project's files as read before, its folder deleted. */
+export function dropCachedLinks(dataRoot: string, projectId: string): void {
+  for (const kind of TRACKED_KINDS) {
+    cached.delete(sessionLinksFile(dataRoot, projectId, kind));
+  }
 }
 
 /** Every link kept but those `drop` names; written only when one goes. */
@@ -88,7 +106,7 @@ export function linkedOfSession(dataRoot: string, ref: ProjectRef, kind: Tracked
 /** Links the session to one in place of its own, and takes it off any other of the kind: one has one
  *  session, a session one of each kind. Answers what that changed beside the link. Throws when the file
  *  cannot be written, nothing changed. */
-export function linkSession(dataRoot: string, ref: ProjectRef, kind: TrackedKind, number: number, sessionId: string): IssueLinkChange {
+export function linkSession(dataRoot: string, ref: ProjectRef, kind: TrackedKind, number: number, sessionId: string): TrackedLinkChange {
   const kept: Record<string, StoredLink> = {};
   let movedFrom: number | undefined;
   for (const [entry, link] of Object.entries(read(dataRoot, ref.projectId, kind))) {
@@ -115,7 +133,7 @@ export function unlinkSession(dataRoot: string, ref: ProjectRef, kind: TrackedKi
 
 /** A deleted session's links, of both kinds. Left behind they are only unused, so a failure is logged. */
 export function forgetSessionLinks(dataRoot: string, ref: ProjectRef, sessionId: string): void {
-  for (const kind of KINDS) {
+  for (const kind of TRACKED_KINDS) {
     logFailure(`forget the ${kind} of a deleted session`, () =>
       dropLinks(dataRoot, ref.projectId, kind, (_number, link) => names(link, ref, sessionId)),
     );
@@ -125,8 +143,10 @@ export function forgetSessionLinks(dataRoot: string, ref: ProjectRef, sessionId:
 /** A deleted worktree's links, of both kinds. Left behind they are only unused, so a failure is logged. */
 export function forgetSessionLinksAt(dataRoot: string, ref: ProjectRef): void {
   const key = entryKeyOf(ref);
-  for (const kind of KINDS) {
-    logFailure(`forget the ${kind} links of a worktree`, () => dropLinks(dataRoot, ref.projectId, kind, (_number, link) => link.at === key));
+  for (const kind of TRACKED_KINDS) {
+    logFailure(`forget the ${kind} links of a worktree`, () =>
+      dropLinks(dataRoot, ref.projectId, kind, (_number, link) => link.at === key),
+    );
   }
 }
 
@@ -138,9 +158,7 @@ export function forgetLinkedSession(dataRoot: string, projectId: string, kind: T
 /** The whole file of a kind: its numbers name other ones once the source changed. Left behind it would
  *  show their sessions on them, so a failure is logged. */
 export function forgetAllSessionLinks(dataRoot: string, projectId: string, kind: TrackedKind): void {
-  logFailure(`forget the sessions of the project's ${kind}s`, () =>
-    fs.rmSync(sessionLinksFile(dataRoot, projectId, kind), { force: true }),
-  );
+  logFailure(`forget the sessions of the project's ${kind}s`, () => write(dataRoot, projectId, kind, {}));
 }
 
 /** Drops the repository's or worktree's links to sessions not among `present`, of both kinds, as
@@ -148,7 +166,7 @@ export function forgetAllSessionLinks(dataRoot: string, projectId: string, kind:
  *  behind it is only unused, so a failure is logged. */
 export function pruneSessionLinks(dataRoot: string, ref: ProjectRef, present: ReadonlySet<string>): void {
   const key = entryKeyOf(ref);
-  for (const kind of KINDS) {
+  for (const kind of TRACKED_KINDS) {
     logFailure(`prune the ${kind} links of a repository or worktree`, () =>
       dropLinks(dataRoot, ref.projectId, kind, (_number, link) => link.at === key && !present.has(link.sessionId)),
     );

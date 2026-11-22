@@ -18,6 +18,7 @@ import {
 import {
   allNodes,
   ApiError,
+  changeRequestFields,
   checksText,
   fetchImageOk,
   fetchOk,
@@ -27,6 +28,7 @@ import {
   numberOf,
   pickField,
   pickHandler,
+  reached,
   sendGraphql,
   sendMutation,
   textOf,
@@ -217,18 +219,20 @@ const COMMENT_PAGE = `pageInfo { hasNextPage endCursor }
 const ACTOR = "createdAt actor { login avatarUrl }";
 
 /** The kinds of timeline item the tab draws, as `toEvent` reads them. */
-const EVENT_KINDS: Record<string, Exclude<IssueEvent["kind"], "text"> | undefined> = {
-  ClosedEvent: "closed",
-  ReopenedEvent: "reopened",
-  AssignedEvent: "assigned",
-  UnassignedEvent: "unassigned",
-  LabeledEvent: "labeled",
-  UnlabeledEvent: "unlabeled",
-  MilestonedEvent: "milestoned",
-  DemilestonedEvent: "demilestoned",
-  RenamedTitleEvent: "renamed",
-  CrossReferencedEvent: "linked",
-};
+/** The timeline items an issue and a pull request both have; a pull request's own are `toPullRequestEvents`'. */
+const EVENT_KINDS: Record<string, Exclude<IssueEvent["kind"], "text" | "review-requested" | "reviewed" | "pushed" | "merged"> | undefined> =
+  {
+    ClosedEvent: "closed",
+    ReopenedEvent: "reopened",
+    AssignedEvent: "assigned",
+    UnassignedEvent: "unassigned",
+    LabeledEvent: "labeled",
+    UnlabeledEvent: "unlabeled",
+    MilestonedEvent: "milestoned",
+    DemilestonedEvent: "demilestoned",
+    RenamedTitleEvent: "renamed",
+    CrossReferencedEvent: "linked",
+  };
 
 const TIMELINE_ARGUMENTS = `itemTypes: [CLOSED_EVENT, REOPENED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, LABELED_EVENT, UNLABELED_EVENT,
   MILESTONED_EVENT, DEMILESTONED_EVENT, RENAMED_TITLE_EVENT, CROSS_REFERENCED_EVENT]`;
@@ -553,7 +557,7 @@ export function toReviewThreads(threads: GitHubReviewThread[]): ReviewThread[] {
 
 /** How GitHub's rollup of a commit's checks stands, in TET's words; undefined for a commit without any. */
 export function checksOf(rollup: { state: string } | null | undefined): ChecksState | undefined {
-  switch (rollup?.state) {
+  switch (rollup?.state ?? "") {
     case "SUCCESS":
       return "passed";
     case "FAILURE":
@@ -589,39 +593,40 @@ function titleTerms(text: string | undefined): string[] {
   return words.length === 0 ? [] : ["in:title", ...words.map((word) => `"${word}"`)];
 }
 
-/** A filter in the words of GitHub's search, newest first by `sort`; its labels are all required. */
-export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sort: "created" | "updated"): string {
-  const states: Record<NonNullable<ChangeRequestFilter["state"]>, string[]> = {
-    open: ["is:open"],
-    merged: ["is:merged"],
-    closed: ["is:closed", "is:unmerged"],
-  };
+/** A filter in the words of GitHub's search, after the qualifiers of what it lists, newest first by
+ *  `sort`; its labels are all required. */
+function searchOf(path: string, qualifiers: string[], filter: IssueFilter | ChangeRequestFilter, sort: "created" | "updated"): string {
   return [
     `repo:${path}`,
-    "is:pr",
-    ...(filter.state ? states[filter.state] : []),
+    ...qualifiers,
     ...(filter.author ? [`author:${filter.author}`] : []),
     ...(filter.assignee ? [`assignee:${filter.assignee}`] : []),
-    ...(filter.reviewer ? [`review-requested:${filter.reviewer}`] : []),
     ...filter.labels.map((label) => `label:"${label.replaceAll('"', "")}"`),
     ...titleTerms(filter.text),
     `sort:${sort}-desc`,
   ].join(" ");
 }
 
-/** An issue filter in the words of GitHub's search, as `pullRequestSearch` writes one. Taken only for a
- *  filter with text: the search's index follows a change late, `issues` at once. */
+const PULL_REQUEST_STATE_TERMS: Record<ChangeRequestState, string[]> = {
+  open: ["is:open"],
+  merged: ["is:merged"],
+  closed: ["is:closed", "is:unmerged"],
+};
+
+/** A change request filter in the words of GitHub's search (`searchOf`). */
+export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sort: "created" | "updated"): string {
+  const qualifiers = [
+    "is:pr",
+    ...(filter.state ? PULL_REQUEST_STATE_TERMS[filter.state] : []),
+    ...(filter.reviewer ? [`review-requested:${filter.reviewer}`] : []),
+  ];
+  return searchOf(path, qualifiers, filter, sort);
+}
+
+/** An issue filter in the words of GitHub's search (`searchOf`). Taken only for a filter with text: the
+ *  search's index follows a change late, `issues` at once. */
 export function issueSearch(path: string, filter: IssueFilter, sort: "created" | "updated"): string {
-  return [
-    `repo:${path}`,
-    "is:issue",
-    ...(filter.state ? [`is:${filter.state}`] : []),
-    ...(filter.author ? [`author:${filter.author}`] : []),
-    ...(filter.assignee ? [`assignee:${filter.assignee}`] : []),
-    ...filter.labels.map((label) => `label:"${label.replaceAll('"', "")}"`),
-    ...titleTerms(filter.text),
-    `sort:${sort}-desc`,
-  ].join(" ");
+  return searchOf(path, ["is:issue", ...(filter.state ? [`is:${filter.state}`] : [])], filter, sort);
 }
 
 /** Whether a pull request is from a branch of `path` itself; a search answers other kinds as empty nodes. */
@@ -642,31 +647,21 @@ export function toChangeRequestRow(entry: GitHubPullRequestRow): ChangeRequestRo
   };
 }
 
-/** The fields a pull request has, as the tab lists them: who reviews it (has or is asked to), its
- *  assignees and labels, the issues it closes and who took part. */
+/** The fields a pull request has (`changeRequestFields`); its reviewers are those who reviewed it and
+ *  those asked to. */
 export function toPullRequestFields(found: GitHubPullRequestDetail): IssueField[] {
   const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
   const reviewers = [
     ...people(found.latestReviews.nodes.map((review) => review.author)),
     ...people(found.reviewRequests.nodes.map((request) => request.requestedReviewer)),
   ];
-  return [
-    pickField("reviewers", "Reviewers", [...new Set(reviewers)], { several: true, shown: "people" }),
-    pickField("assignees", "Assignees", people(found.assignees.nodes), { several: true, shown: "people" }),
-    pickField(
-      "labels",
-      "Labels",
-      found.labels.nodes.map((label) => label.name),
-      { several: true, shown: "labels" },
-    ),
-    pickField(
-      "linkedIssues",
-      "Linked Issues",
-      (found.closingIssuesReferences?.nodes ?? []).map((issue) => linkedIssueName(issue.number, issue.title)),
-      { several: true, shown: "issues", editable: false },
-    ),
-    pickField("participants", "Participants", people(found.participants.nodes), { several: true, shown: "people", editable: false }),
-  ];
+  return changeRequestFields({
+    reviewers: [...new Set(reviewers)],
+    assignees: people(found.assignees.nodes),
+    labels: found.labels.nodes.map((label) => label.name),
+    linkedIssues: (found.closingIssuesReferences?.nodes ?? []).map((issue) => linkedIssueName(issue.number, issue.title)),
+    participants: people(found.participants.nodes),
+  });
 }
 
 /** The method a merge of the repository takes: its first allowed, in the order GitHub offers them. */
@@ -687,9 +682,14 @@ export function defaultMergeMethod(allowed: {
   throw new Error("This repository allows no way to merge a pull request");
 }
 
+/** An issue's or a pull request's state, in GitHub's words. */
+function githubState(state: "open" | "closed"): "OPEN" | "CLOSED" {
+  return state === "open" ? "OPEN" : "CLOSED";
+}
+
 /** What of a change `updateIssue` sets, in GitHub's words. */
 export function toIssueInput(issueId: string, { title, body, state }: IssueChange): object {
-  return { id: issueId, title, body, state: state && (state === "open" ? "OPEN" : "CLOSED") };
+  return { id: issueId, title, body, state: state && githubState(state) };
 }
 
 /** A parent as its field shows and lists it: its title and where it is, since a number is only unique
@@ -974,11 +974,12 @@ async function readPullRequestNode<T extends object = object>(
   const data = (await send(query, { ...repositoryOf(path), number })) as {
     repository: { pullRequest: ({ id: string } & T) | null } | null;
   };
-  const pullRequest = data.repository?.pullRequest;
-  if (!pullRequest) {
-    throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
-  }
-  return pullRequest;
+  return reached(data.repository?.pullRequest, pullRequestName(path, number));
+}
+
+/** A pull request as a refusal names it. */
+function pullRequestName(path: string, number: number): string {
+  return `Pull request #${number} of ${path}`;
 }
 
 /** What a change of a pull request's field needs of it: its id, and the ids of who reviewed it, whose
@@ -1107,7 +1108,7 @@ export function issuesVariables(path: string, filter: IssueFilter): Record<strin
   return {
     ...repositoryOf(path),
     filter: {
-      states: filter.state && [filter.state === "open" ? "OPEN" : "CLOSED"],
+      states: filter.state && [githubState(filter.state)],
       createdBy: filter.author,
       assignee: filter.assignee,
       labels: filter.labels.length > 0 ? filter.labels : undefined,
@@ -1172,7 +1173,7 @@ export interface GitHubPullRequest {
 
 /** The one of `path`'s own branch among those of a branch of that name, a fork's left out. */
 export function ownPullRequest(found: GitHubPullRequest[], path: string): ChangeRequest | undefined {
-  const own = found.find((entry) => entry.headRepository?.nameWithOwner.toLowerCase() === path.toLowerCase());
+  const own = found.find((entry) => fromOwnBranch(entry, path));
   return own && { number: own.number, url: own.url };
 }
 
@@ -1221,26 +1222,24 @@ export const github: GitProvider = {
     }));
   },
 
-  async listIssues({ host, token, path }, filter, limit) {
-    if (filter.text) {
-      const found = await firstNodes<GitHubIssue>(
-        sender(host, token),
-        ISSUE_SEARCH_QUERY,
-        { query: issueSearch(path, filter, "created") },
-        (data) => (data as { search: GraphqlPage<GitHubIssue> }).search,
-        limit,
-      );
-      return found.map(toIssue);
-    }
-    const entries = await firstNodes<GitHubIssue>(
-      sender(host, token),
-      ISSUES_QUERY,
-      issuesVariables(path, filter),
-      (data) => (data as { repository: { issues: GraphqlPage<GitHubIssue> } }).repository.issues,
-      limit,
-      (entry) => carriesAll(entry, filter.labels),
-    );
-    return entries.map(toIssue);
+  async listIssues({ host, token, path }, filter, limit, after) {
+    const { items, ...rest } = filter.text
+      ? await firstNodes<GitHubIssue>(
+          sender(host, token),
+          ISSUE_SEARCH_QUERY,
+          { query: issueSearch(path, filter, "created") },
+          (data) => (data as { search: GraphqlPage<GitHubIssue> }).search,
+          { limit, after },
+        )
+      : await firstNodes<GitHubIssue>(
+          sender(host, token),
+          ISSUES_QUERY,
+          issuesVariables(path, filter),
+          (data) => (data as { repository: { issues: GraphqlPage<GitHubIssue> } }).repository.issues,
+          // `filterBy` leaves an issue with any of several labels.
+          { limit, after, ...(filter.labels.length > 1 && { keep: (entry: GitHubIssue) => carriesAll(entry, filter.labels) }) },
+        );
+    return { items: items.map(toIssue), ...rest };
   },
 
   async readLatest({ host, token, path }, filter) {
@@ -1311,6 +1310,11 @@ export const github: GitProvider = {
       body: found.body ?? "",
       notes: comments.map(toNote),
     };
+  },
+
+  async readIssueUpdate({ host, token, path }, number) {
+    const { updatedAt } = await readIssueNode<{ updatedAt: string }>(sender(host, token), path, number, "updatedAt");
+    return { updatedAt };
   },
 
   async readImage({ host, token }, source) {
@@ -1391,13 +1395,7 @@ export const github: GitProvider = {
 
   async autoMergeChangeRequest({ host, token, path }, number, squash) {
     const send = sender(host, token);
-    const query =
-      "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { id } } }";
-    const data = (await send(query, { ...repositoryOf(path), number })) as { repository: { pullRequest: { id: string } | null } | null };
-    const pullRequest = data.repository?.pullRequest;
-    if (!pullRequest) {
-      throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
-    }
+    const pullRequest = await readPullRequestNode(send, path, number);
     await mutate(send, {
       mutation: "enablePullRequestAutoMerge",
       inputType: "EnablePullRequestAutoMergeInput",
@@ -1405,16 +1403,15 @@ export const github: GitProvider = {
     });
   },
 
-  async listChangeRequests({ host, token, path }, filter, limit) {
-    const entries = await firstNodes<GitHubPullRequestRow>(
+  async listChangeRequests({ host, token, path }, filter, limit, after) {
+    const { items, ...rest } = await firstNodes<GitHubPullRequestRow>(
       sender(host, token),
       PULL_REQUESTS_QUERY,
       { query: pullRequestSearch(path, filter, "created") },
       (data) => (data as { search: GraphqlPage<GitHubPullRequestRow> }).search,
-      limit,
-      (entry) => fromOwnBranch(entry, path),
+      { limit, after, keep: (entry) => fromOwnBranch(entry, path) },
     );
-    return entries.map(toChangeRequestRow);
+    return { items: items.map(toChangeRequestRow), ...rest };
   },
 
   async readChangeRequestsLatest({ host, token, path }, filter) {
@@ -1436,10 +1433,7 @@ export const github: GitProvider = {
     const send = sender(host, token);
     const variables = { ...repositoryOf(path), number };
     const data = (await send(PULL_REQUEST_QUERY, variables)) as { repository: { pullRequest: GitHubPullRequestDetail | null } | null };
-    const found = data.repository?.pullRequest;
-    if (!found) {
-      throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
-    }
+    const found = reached(data.repository?.pullRequest, pullRequestName(path, number));
     type Answer = {
       repository: {
         pullRequest: {
@@ -1500,9 +1494,6 @@ export const github: GitProvider = {
       notes: [...comments.map(toNote), ...reviewNotes(items)],
       reviewThreads: toReviewThreads(threads),
       status: {
-        state: row.state,
-        draft: row.draft,
-        checks: row.checks,
         failedChecks: failedChecksOf(rollup),
         checksUrl: rollup ? `${found.url}/checks` : undefined,
         conflicts: found.mergeable === "CONFLICTING",
@@ -1527,6 +1518,16 @@ export const github: GitProvider = {
     };
   },
 
+  async readChangeRequestUpdate({ host, token, path }, number) {
+    const found = await readPullRequestNode<Pick<GitHubPullRequestRow, "updatedAt" | "head">>(
+      sender(host, token),
+      path,
+      number,
+      "updatedAt head: commits(last: 1) { nodes { commit { oid statusCheckRollup { state } } } }",
+    );
+    return { updatedAt: found.updatedAt, checks: checksOf(found.head.nodes[0]?.commit.statusCheckRollup) };
+  },
+
   listChangeRequestOptions: pullRequestFields.listOptions,
 
   setChangeRequestField: pullRequestFields.setField,
@@ -1534,7 +1535,7 @@ export const github: GitProvider = {
   async updateChangeRequest({ host, token, path }, number, { title, body, state }) {
     const send = sender(host, token);
     const { id } = await readPullRequestNode(send, path, number);
-    await mutate(send, updatePullRequestWrite({ pullRequestId: id, title, body, state: state && (state === "open" ? "OPEN" : "CLOSED") }));
+    await mutate(send, updatePullRequestWrite({ pullRequestId: id, title, body, state: state && githubState(state) }));
   },
 
   async commentChangeRequest({ host, token, path }, number, body) {
@@ -1545,22 +1546,10 @@ export const github: GitProvider = {
 
   async mergeChangeRequest({ host, token, path }, number, whenChecksPass) {
     const send = sender(host, token);
-    const query = `query(${ISSUE_VARIABLES}) {
-      repository(owner: $owner, name: $name) { mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed pullRequest(number: $number) { id } }
-    }`;
-    type Answer = {
-      repository: {
-        mergeCommitAllowed: boolean;
-        squashMergeAllowed: boolean;
-        rebaseMergeAllowed: boolean;
-        pullRequest: { id: string } | null;
-      } | null;
-    };
-    const { repository } = (await send(query, { ...repositoryOf(path), number })) as Answer;
-    if (!repository?.pullRequest) {
-      throw new ApiError(404, `Pull request #${number} of ${path} was not found, or this account cannot read it`);
-    }
-    const input = { pullRequestId: repository.pullRequest.id, mergeMethod: defaultMergeMethod(repository) };
+    const { id, baseRepository } = await readPullRequestNode<{
+      baseRepository: { mergeCommitAllowed: boolean; squashMergeAllowed: boolean; rebaseMergeAllowed: boolean };
+    }>(send, path, number, "baseRepository { mergeCommitAllowed squashMergeAllowed rebaseMergeAllowed }");
+    const input = { pullRequestId: id, mergeMethod: defaultMergeMethod(baseRepository) };
     await mutate(
       send,
       whenChecksPass

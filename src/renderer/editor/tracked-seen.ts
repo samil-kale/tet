@@ -1,4 +1,4 @@
-import type { TrackedKind, TrackedSeen } from "../../shared/types/providers";
+import { holdsSeen, withSeen, type TrackedKind, type TrackedRef, type TrackedSeen } from "../../shared/types/providers";
 import { notify } from "../ui/Notices";
 import { createStore, useStore } from "../ui/store";
 
@@ -15,36 +15,28 @@ export function setSeen(kind: TrackedKind, projectId: string, seen: TrackedSeen)
   seenByProject.set({ ...seenByProject.get(), [keyOf(kind, projectId)]: seen });
 }
 
-/** A tab shows one as last changed at `updatedAt`, a change request with its checks `failed` or not:
- *  kept, and its section stops marking it. What is already kept is not sent again. */
-export function keepSeen(kind: TrackedKind, projectId: string, number: number, updatedAt: string, failed = false): void {
-  const seen = seenByProject.get()[keyOf(kind, projectId)];
-  const wasFailed = (seen?.failed ?? []).includes(number);
-  if (seen?.shown[number] === updatedAt && (kind === "issue" || wasFailed === failed)) {
+/** A tab shows one as last changed at `updatedAt`, its checks `failed` or not: kept, and its section
+ *  stops marking it. What is already kept is not sent again. */
+export function keepSeen(projectId: string, tracked: TrackedRef, updatedAt: string, failed = false): void {
+  const seen = seenByProject.get()[keyOf(tracked.kind, projectId)];
+  if (seen && holdsSeen(seen, tracked.number, updatedAt, failed)) {
     return;
   }
   if (seen) {
-    const others = (seen.failed ?? []).filter((entry) => entry !== number);
-    setSeen(kind, projectId, {
-      ...seen,
-      shown: { ...seen.shown, [number]: updatedAt },
-      ...(kind === "change-request" && { failed: failed ? [...others, number] : others }),
-    });
+    setSeen(tracked.kind, projectId, withSeen(seen, tracked.number, updatedAt, failed));
   }
-  void (kind === "issue"
-    ? window.tet.issues.markSeen(projectId, number, updatedAt)
-    : window.tet.changeRequests.markSeen(projectId, number, updatedAt, failed));
+  void window.tet.tracked.markSeen(projectId, tracked, updatedAt, failed);
 }
 
 /** It counts as unread again: kept as shown just before its `updatedAt`, so that `isUnread` holds
  *  until its tab shows it. */
-export function keepUnread(kind: TrackedKind, projectId: string, number: number, updatedAt: string): void {
-  keepSeen(kind, projectId, number, new Date(Date.parse(updatedAt) - 1).toISOString());
+export function keepUnread(projectId: string, tracked: TrackedRef, updatedAt: string): void {
+  keepSeen(projectId, tracked, new Date(Date.parse(updatedAt) - 1).toISOString());
 }
 
 /** Every one of the kind read, from now on; a notice when that cannot be kept. */
 export async function keepAllSeen(kind: TrackedKind, projectId: string): Promise<void> {
-  const result = await (kind === "issue" ? window.tet.issues.markAllSeen(projectId) : window.tet.changeRequests.markAllSeen(projectId));
+  const result = await window.tet.tracked.markAllSeen(projectId, kind);
   if (result.ok) {
     setSeen(kind, projectId, result.seen);
   } else {

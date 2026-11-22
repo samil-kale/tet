@@ -69,14 +69,25 @@ export interface IssueFilter {
 /** What the Issues section shows until its filter is changed. */
 export const DEFAULT_ISSUE_FILTER: IssueFilter = { state: "open", labels: [] };
 
-/** What an issue's text is called as a file: in its tab, and in a tab opened on it. */
-export function issueFileName(number: number): string {
-  return `issue-${number}.md`;
-}
-
 /** What TET reads off a host and shows in a tab of its own, beside the repository's files: an issue, or a
  *  pull or merge request. A number names one only together with its kind: GitLab counts each apart. */
-export type TrackedKind = "issue" | "change-request";
+export const TRACKED_KINDS = ["issue", "change-request"] as const;
+export type TrackedKind = (typeof TRACKED_KINDS)[number];
+
+/** One of the project's issues or change requests. */
+export interface TrackedRef {
+  kind: TrackedKind;
+  number: number;
+}
+
+export function sameTracked(a: TrackedRef | undefined, b: TrackedRef | undefined): boolean {
+  return a?.kind === b?.kind && a?.number === b?.number;
+}
+
+/** What its text is called as a file: in its tab, and in a tab opened on it. */
+export function trackedFileName({ kind, number }: TrackedRef): string {
+  return `${kind}-${number}.md`;
+}
 
 /** The states a change request has; `tet-ctl` also filters by `all`. */
 export const CHANGE_REQUEST_STATES = ["open", "merged", "closed"] as const;
@@ -112,11 +123,8 @@ export interface ChangeRequestRow extends Issue {
   headSha?: string;
 }
 
-/** What a change request's tab says of it above its text. */
+/** What a change request's tab says of it above its text, beside what its row says. */
 export interface ChangeRequestStatus {
-  state: ChangeRequestState;
-  draft: boolean;
-  checks?: ChecksState;
   /** The names of the checks or jobs that failed. */
   failedChecks: string[];
   /** The host's page of its checks or pipeline. */
@@ -158,18 +166,33 @@ export interface ReviewThread {
 
 /** One change request with what its row leaves out, for its tab: an issue's, its status, its review
  *  threads, and what its host calls it. */
-export interface ChangeRequestDetail extends IssueDetail {
+export interface ChangeRequestDetail extends IssueDetail, ChangeRequestRow {
   status: ChangeRequestStatus;
   reviewThreads: ReviewThread[];
   kind: ChangeRequestKind;
   /** Whether the project's issues are read from this same repository, so a linked issue opens in its
    *  tab rather than the browser. */
-  ownIssues?: boolean;
+  ownIssues: boolean;
 }
 
-/** What a change request's text is called as a file, as `issueFileName`. */
-export function changeRequestFileName(number: number): string {
-  return `change-request-${number}.md`;
+/** Whether a tab's detail is a change request's rather than an issue's. */
+export function isChangeRequest(detail: IssueDetail): detail is ChangeRequestDetail {
+  return "status" in detail;
+}
+
+/** How its host names one: `#142`, `!42`. */
+export function changeRequestName(kind: ChangeRequestKind, number: number): string {
+  return `${kind.prefix}${number}`;
+}
+
+/** The text with its first letter in upper case: "pull request" as "Pull request". */
+export function capitalized(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** The text with each word's first letter in upper case: "pull request" as "Pull Request". */
+export function titleCased(text: string): string {
+  return text.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 /** A linked issue as its field names it: its number, then its title. */
@@ -199,8 +222,19 @@ export interface TrackedSeen {
   since: string;
   /** Each one's `updatedAt` as its tab last showed it, by number. */
   shown: Record<number, string>;
-  /** Change requests alone: those whose tab last showed their checks failed. */
-  failed?: number[];
+  /** Those whose tab last showed their checks failed; an issue has none. */
+  failed: number[];
+}
+
+/** `seen` once a tab showed one at `updatedAt`, its checks `failed` or not. */
+export function withSeen(seen: TrackedSeen, number: number, updatedAt: string, failed: boolean): TrackedSeen {
+  const others = seen.failed.filter((entry) => entry !== number);
+  return { ...seen, shown: { ...seen.shown, [number]: updatedAt }, failed: failed ? [...others, number] : others };
+}
+
+/** Whether `seen` holds that already, so nothing needs keeping. */
+export function holdsSeen(seen: TrackedSeen, number: number, updatedAt: string, failed: boolean): boolean {
+  return seen.shown[number] === updatedAt && seen.failed.includes(number) === failed;
 }
 
 /** Whether the host created or changed the open issue or change request after its tab last showed it
@@ -215,21 +249,28 @@ export function isUnread(issue: Issue, seen: TrackedSeen | undefined): boolean {
 export function isChangeRequestUnread(row: ChangeRequestRow, seen: TrackedSeen | undefined): boolean {
   return (
     isUnread(row, seen) ||
-    (seen !== undefined &&
-      row.open &&
-      row.checks === "failed" &&
-      seen.shown[row.number] !== undefined &&
-      !(seen.failed ?? []).includes(row.number))
+    (seen !== undefined && row.open && row.checks === "failed" && seen.shown[row.number] !== undefined && !seen.failed.includes(row.number))
   );
 }
 
 export type TrackedSeenResult = (ActionDone & { seen: TrackedSeen }) | ActionRefused;
 
-export interface IssueListResult {
-  issues?: Issue[];
+/** A list of a section as it came: read from its start, or a page more (`after`). */
+export interface TrackedListResult<T extends Issue, L extends IssuesLatest> {
+  items?: T[];
+  /** Read from the start alone. */
   seen?: TrackedSeen;
-  /** Read just before `issues`, so that a change made while the list came is found by the next read. */
-  latest?: IssuesLatest;
+  /** Read from the start alone, just before `items`, so that a change made while the list came is
+   *  found by the next read. */
+  latest?: L;
+  /** Where the next page starts; absent once the host has no more. */
+  after?: string;
+  error?: string;
+  /** `error` is that no account is added for the host. */
+  noAccount?: boolean;
+}
+
+export interface IssueListResult extends TrackedListResult<Issue, IssuesLatest> {
   /** The `issues` of the project's tet.json, where it has one. */
   source?: string;
   /** Where the issues are read from, for what a text that is not yet an issue's links to. */
@@ -240,9 +281,6 @@ export interface IssueListResult {
     /** Whether a new issue can be made confidential (`GitProvider.confidentialIssues`). */
     confidentialIssues: boolean;
   };
-  error?: string;
-  /** `error` is that no account is added for the repository's tracker. */
-  noAccount?: boolean;
 }
 
 export interface IssueLatestResult {
@@ -475,9 +513,10 @@ export interface IssueUploadSaveResult {
   error?: string;
 }
 
-export interface IssueReadResult {
-  issue?: IssueDetail;
-  /** The issue as its tab's text, what an agent reading the tab is answered (`editorContent`). */
+export interface TrackedReadResult {
+  /** An issue's, or a change request's (`isChangeRequest`). */
+  detail?: IssueDetail;
+  /** It as its tab's text, what an agent reading the tab is answered (`editorContent`). */
   markdown?: string;
   error?: string;
 }
@@ -490,28 +529,12 @@ export interface ChangeRequestsLatest extends IssuesLatest {
   checks: string;
 }
 
-export interface ChangeRequestListResult {
-  changeRequests?: ChangeRequestRow[];
-  seen?: TrackedSeen;
-  /** Read just before `changeRequests`, as `IssueListResult.latest`. */
-  latest?: ChangeRequestsLatest;
+export interface ChangeRequestListResult extends TrackedListResult<ChangeRequestRow, ChangeRequestsLatest> {
   /** What the host calls a change request, for the section's title. */
   kind?: ChangeRequestKind;
-  /** Where they are read from, as `IssueListResult.tracker`. */
-  tracker?: { provider: ProviderId; url: string };
-  error?: string;
-  /** `error` is that no account is added for the repository's host. */
-  noAccount?: boolean;
 }
 
 export interface ChangeRequestLatestResult {
   latest?: ChangeRequestsLatest;
-  error?: string;
-}
-
-export interface ChangeRequestReadResult {
-  changeRequest?: ChangeRequestDetail;
-  /** As `IssueReadResult.markdown`. */
-  markdown?: string;
   error?: string;
 }

@@ -14,9 +14,9 @@ import { onDisk, relativeInside } from "../util/path-inside";
  * projects/<id>/                   id: `tet.id` in the repository's git config
  *   archive.json                   the sessions kept archived, per repository and worktree (archive.ts)
  *   issues-seen.json               what the issue tabs showed, and since when others count unread (tracked-seen.ts)
- *   issue-sessions.json            the session linked to each issue, in the repository or a worktree (issue-sessions.ts)
+ *   issue-sessions.json            the session linked to each issue, in the repository or a worktree (session-links.ts)
  *   change-requests-seen.json      the same of the change request tabs, and whose checks they showed failed
- *   change-request-sessions.json   the session linked to each change request
+ *   change-request-sessions.json   the session linked to each change request (session-links.ts)
  *   drops/                     pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
@@ -60,7 +60,7 @@ export function seenFile(dataRoot: string, projectId: string, kind: TrackedKind)
   return path.join(projectDir(dataRoot, projectId), KIND_FILE_NAMES[kind].seen);
 }
 
-/** The session linked to each of the project's issues or change requests (issue-sessions.ts). */
+/** The session linked to each of the project's issues or change requests (session-links.ts). */
 export function sessionLinksFile(dataRoot: string, projectId: string, kind: TrackedKind): string {
   return path.join(projectDir(dataRoot, projectId), KIND_FILE_NAMES[kind].sessions);
 }

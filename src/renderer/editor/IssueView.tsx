@@ -1,6 +1,10 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react";
 import {
+  capitalized,
+  changeRequestName,
+  isChangeRequest,
   linkedIssueNumber,
+  titleCased,
   type ChangeRequestDetail,
   type IssueChange,
   type IssueDetail,
@@ -8,11 +12,11 @@ import {
   type IssueFieldValue,
   type ProviderId,
   type ReviewThread,
-  type TrackedKind,
+  type TrackedRef,
 } from "../../shared/types/providers";
 import { ActionLink } from "../ui/ActionLink";
 import type { AgentId, AgentInfo } from "../../shared/types/agents";
-import type { IssueSession } from "../../shared/types/terminals";
+import type { TrackedSession } from "../../shared/types/terminals";
 import { AgentIcon, agentEntry } from "../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../ui/ContextMenu";
 import { askName, confirmed, filled, prompt, singleField } from "../ui/Dialog";
@@ -48,7 +52,7 @@ import { PickMenu } from "../ui/PickMenu";
 import { SwitchTabs } from "../ui/SwitchTabs";
 import { useTextContextMenu } from "../ui/use-text-context-menu";
 import { useAgents } from "../ui/use-agents";
-import { openIssueSession, unlinkIssueSession } from "./editor-tab";
+import { openTrackedSession, unlinkTrackedSession } from "./editor-tab";
 import { sectionsOf, type AskedField } from "./issue-fields";
 import { issueThread, type ThreadEvent } from "./issue-thread";
 import { issueFileLink, issueLink, issueTextHtml } from "./issue-text";
@@ -167,23 +171,24 @@ export interface IssueActions {
 
 /** The change request a tab shows, where it shows one rather than an issue. */
 export function changeRequestOf(issue: IssueDetail): ChangeRequestDetail | undefined {
-  return "status" in issue ? (issue as ChangeRequestDetail) : undefined;
+  return isChangeRequest(issue) ? issue : undefined;
 }
 
 /** What the tab calls what it shows, in a title's case: "Issue", or the host's own word for a change
  *  request, "Pull Request" or "Merge Request". */
 export function trackedNoun(issue: IssueDetail): string {
   const request = changeRequestOf(issue);
-  return request ? request.kind.noun.replace(/\b\w/g, (letter) => letter.toUpperCase()) : "Issue";
+  return request ? titleCased(request.kind.noun) : "Issue";
 }
 
-function kindOf(issue: IssueDetail): TrackedKind {
-  return changeRequestOf(issue) ? "change-request" : "issue";
+function trackedRefOf(issue: IssueDetail): TrackedRef {
+  return { kind: isChangeRequest(issue) ? "change-request" : "issue", number: issue.number };
 }
 
 /** How the tab names it: `#142`, `!42`. */
-function numberOf(issue: IssueDetail): string {
-  return `${changeRequestOf(issue)?.kind.prefix ?? "#"}${issue.number}`;
+export function numberOf(issue: IssueDetail): string {
+  const request = changeRequestOf(issue);
+  return request ? changeRequestName(request.kind, request.number) : `#${issue.number}`;
 }
 
 /** What an issue's text is rendered with. */
@@ -445,7 +450,7 @@ function CommentBox({ issue, internalNotes, actions, writing }: CommentBoxProps)
       <div className="issue-line">
         {internalNotes && <Checkbox label="Make this an internal note" checked={internal} onChange={setInternal} disabled={busy} />}
         {/* A merged change request has no state left to change. */}
-        {request?.status.state !== "merged" && (
+        {request?.state !== "merged" && (
           <button type="button" className="button secondary" disabled={busy} onClick={() => void changeState()}>
             {open ? `Close ${noun}` : `Reopen ${noun}`}
             {typed && ` with ${written}`}
@@ -708,13 +713,13 @@ export function issueAgentEntries(agents: readonly AgentInfo[], open: (agentId: 
 
 /** A menu's entry for an issue: its session opened where it has one, as an issue has one, else the
  *  agents to send it to. */
-export function issueSessionEntry(
-  session: IssueSession | undefined,
+export function trackedSessionEntry(
+  session: TrackedSession | undefined,
   agents: readonly AgentInfo[],
   send: (agentId: AgentId) => void,
 ): ContextMenuEntry {
   return session
-    ? { label: "Open Session", run: () => void openIssueSession(session) }
+    ? { label: "Open Session", run: () => void openTrackedSession(session) }
     : { label: "Send to Agent", entries: issueAgentEntries(agents, send) };
 }
 
@@ -722,17 +727,17 @@ export function issueSessionEntry(
  *  with a session offers to open it, by its agent's icon, in place of sending it to an agent. */
 /** Where it stands, as the bar says it: open or closed, a change request also draft or merged. */
 function stateOf(issue: IssueDetail): string {
-  const status = changeRequestOf(issue)?.status;
-  if (status?.state === "merged") {
+  const request = changeRequestOf(issue);
+  if (request?.state === "merged") {
     return "Merged";
   }
   if (!issue.open) {
     return "Closed";
   }
-  return status?.draft ? "Draft" : "Open";
+  return request?.draft ? "Draft" : "Open";
 }
 
-function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: IssueSession | undefined; actions: IssueActions }) {
+function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: TrackedSession | undefined; actions: IssueActions }) {
   const agents = useAgents();
   const request = changeRequestOf(issue);
   // As a pane's new-tab menu: a button's padding off it, and beside the bar, whose stacking it slides
@@ -750,7 +755,7 @@ function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: Is
             <RemoteIcon />
           </IconButton>
           {session ? (
-            <IconButton title="Open Session" onClick={() => void openIssueSession(session)}>
+            <IconButton title="Open Session" onClick={() => void openTrackedSession(session)}>
               <AgentIcon agentId={session.agentId} className="line-icon" />
             </IconButton>
           ) : (
@@ -794,17 +799,17 @@ function SideSection({ title, action, children }: { title: string; action?: Reac
   );
 }
 
-/** The session linked to the issue (`IssueSession`), first in the side column: as its tab, its
+/** The session linked to the issue (`TrackedSession`), first in the side column: as its tab, its
  *  agent's icon and title, over the repository or worktree it is in and whether it is archived. A
  *  click brings it to the front, reopening an archived one; its button on hover takes it off the
  *  issue. */
-function SessionSection({ issue, session }: { issue: IssueDetail; session: IssueSession | undefined }) {
+function SessionSection({ issue, session }: { issue: IssueDetail; session: TrackedSession | undefined }) {
   return (
     <SideSection title="Session">
       {session === undefined ? (
         <span className="issue-none">None</span>
       ) : (
-        <div className="issue-session" onClick={() => void openIssueSession(session)}>
+        <div className="issue-session" onClick={() => void openTrackedSession(session)}>
           <AgentIcon agentId={session.agentId} className="line-icon" />
           <span className="issue-session-text">
             <span>{session.title || "New session"}</span>
@@ -815,7 +820,7 @@ function SessionSection({ issue, session }: { issue: IssueDetail; session: Issue
           <IconButton
             title={`Unlink from ${trackedNoun(issue)}`}
             isolated
-            onClick={() => void unlinkIssueSession(session, issue.number, kindOf(issue))}
+            onClick={() => void unlinkTrackedSession(session, trackedRefOf(issue))}
           >
             <CloseIcon />
           </IconButton>
@@ -1181,50 +1186,33 @@ function FieldSection({ field, issue, actions }: { field: IssueField; issue: Iss
   }
 }
 
-function capitalized(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 /** The question merging a change request asks: it is not taken back. */
 function confirmMerge(request: ChangeRequestDetail, whenChecksPass: boolean): Promise<boolean> {
   const { kind, status } = request;
   return confirmed({
     title: whenChecksPass ? `Set ${kind.noun} to auto-merge` : `Merge ${kind.noun}`,
     message: whenChecksPass
-      ? named`Merge ${kind.prefix + String(request.number)} into ${status.base} once nothing is outstanding?`
-      : named`Merge ${kind.prefix + String(request.number)} into ${status.base}?`,
+      ? named`Merge ${changeRequestName(kind, request.number)} into ${status.base} once nothing is outstanding?`
+      : named`Merge ${changeRequestName(kind, request.number)} into ${status.base}?`,
     detail: "It is merged by the repository's own method.",
     confirmLabel: whenChecksPass ? "Auto-Merge" : "Merge",
   });
 }
 
-/** A change request's branches, first in its thread: what merges into what, its commits and lines. */
-function ChangeRequestBranches({ request: { status } }: { request: ChangeRequestDetail }) {
-  return (
-    <div className="change-request-branches">
-      {named`${status.head} into ${status.base}`}
-      <span>
-        {" "}
-        · {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
-        {status.additions !== undefined && status.deletions !== undefined && ` · +${status.additions} −${status.deletions}`}
-      </span>
-    </div>
-  );
-}
-
 /** A change request is approved from its status line where its host lets the viewer: GitHub never its author. */
 function approvable(request: ChangeRequestDetail, viewer: string | undefined): boolean {
-  return request.status.state === "open" && (request.kind.selfApproval || request.author !== viewer);
+  return request.state === "open" && (request.kind.selfApproval || request.author !== viewer);
 }
 
 /**
- * A change request's line atop its thread: how its checks stand and whether it can merge, a link to the
+ * A change request's card atop its thread. Its title is what merges into what, its commits and lines;
+ * its body how its checks stand and whether it can merge, a link to the
  * host's page of its checks, its approval and the merge itself. Merge takes the repository's own method;
  * where the host would set it to auto-merge, it has the host merge once nothing is outstanding, and
  * stands disabled where it cannot go through. Approve and Auto-Merge, once done, stand disabled with a
  * check.
  */
-function ChangeRequestStatusLine({
+function ChangeRequestCard({
   request,
   viewer,
   actions,
@@ -1236,8 +1224,9 @@ function ChangeRequestStatusLine({
   const { status, kind } = request;
   const [busy, setBusy] = useState(false);
   const checksWord = capitalized(kind.checks);
-  const running = status.checks === "running";
-  const mergeable = status.state === "open" && !status.draft && !status.conflicts && status.checks !== "failed";
+  const { state, draft, checks } = request;
+  const running = checks === "running";
+  const mergeable = state === "open" && !draft && !status.conflicts && checks !== "failed";
   const approved = viewer !== undefined && status.approvedBy.includes(viewer);
   const approve = async (): Promise<void> => {
     setBusy(true);
@@ -1253,64 +1242,74 @@ function ChangeRequestStatusLine({
     setBusy(false);
   };
   return (
-    <div className="change-request-status">
-      {status.state === "merged" ? (
-        <span className="change-request-fact">
-          <CheckIcon />
-          {named`Merged into ${status.base}`}
-          {status.mergedBy && ` by ${status.mergedBy}`}
+    <div className="issue-card change-request-card">
+      <div className="issue-card-header">
+        <span className="issue-card-title">
+          {named`${status.head} into ${status.base}`}
+          {" · "}
+          {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
+          {status.additions !== undefined && status.deletions !== undefined && ` · +${status.additions} −${status.deletions}`}
         </span>
-      ) : status.state === "closed" ? (
-        <span className="change-request-fact">
-          <CloseIcon />
-          Closed
-        </span>
-      ) : (
-        <>
-          {status.checks === "passed" && (
-            <span className="change-request-fact">
-              <CheckIcon />
-              {checksWord} passed
-            </span>
-          )}
-          {running && (
-            <span className="change-request-fact">
-              <SpinnerIcon />
-              {checksWord} running
-            </span>
-          )}
-          {status.checks === "failed" && (
-            <span className="change-request-fact">
-              <CircleAlertIcon className="change-request-failed" />
-              {checksWord} failed
-              {status.failedChecks.length > 0 && <span className="issue-none">{status.failedChecks.join(", ")}</span>}
-            </span>
-          )}
+      </div>
+      <div className="change-request-status">
+        {state === "merged" ? (
           <span className="change-request-fact">
-            {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
-            {status.conflicts ? named`Conflicts with ${status.base}` : status.draft ? "Draft" : named`No conflicts with ${status.base}`}
+            <CheckIcon />
+            {named`Merged into ${status.base}`}
+            {status.mergedBy && ` by ${status.mergedBy}`}
           </span>
-        </>
-      )}
-      <span className="change-request-actions">
-        {status.checksUrl !== undefined && (
-          <button type="button" className="button secondary" onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>
-            {checksWord}
-          </button>
+        ) : state === "closed" ? (
+          <span className="change-request-fact">
+            <CloseIcon />
+            Closed
+          </span>
+        ) : (
+          <>
+            {checks === "passed" && (
+              <span className="change-request-fact">
+                <CheckIcon />
+                {checksWord} passed
+              </span>
+            )}
+            {running && (
+              <span className="change-request-fact">
+                <SpinnerIcon />
+                {checksWord} running
+              </span>
+            )}
+            {checks === "failed" && (
+              <span className="change-request-fact">
+                <CircleAlertIcon className="change-request-failed" />
+                {checksWord} failed
+                {status.failedChecks.length > 0 && <span className="issue-none">{status.failedChecks.join(", ")}</span>}
+              </span>
+            )}
+            <span className="change-request-fact">
+              {status.conflicts ? <CircleAlertIcon className="change-request-failed" /> : <CheckIcon />}
+              {status.conflicts ? named`Conflicts with ${status.base}` : draft ? "Draft" : named`No conflicts with ${status.base}`}
+            </span>
+          </>
         )}
-        {approvable(request, viewer) && (
-          <button type="button" className="button secondary" disabled={busy || approved} onClick={() => void approve()}>
-            {approved && <CheckIcon />}
-            <span>Approve</span>
-          </button>
-        )}
-        {status.state === "open" && (
-          <button type="button" className="button" disabled={busy || !mergeable || status.autoMerge} onClick={() => void merge()}>
-            {status.autoMerge && <CheckIcon />}
-            <span>{status.autoMerge || status.autoMergeable ? "Auto-Merge" : "Merge"}</span>
-          </button>
-        )}
-      </span>
+        <span className="change-request-actions">
+          {status.checksUrl !== undefined && (
+            <button type="button" className="button secondary" onClick={() => void window.tet.shell.openUrl(status.checksUrl ?? "")}>
+              {checksWord}
+            </button>
+          )}
+          {approvable(request, viewer) && (
+            <button type="button" className="button secondary" disabled={busy || approved} onClick={() => void approve()}>
+              {approved && <CheckIcon />}
+              <span>Approve</span>
+            </button>
+          )}
+          {state === "open" && (
+            <button type="button" className="button" disabled={busy || !mergeable || status.autoMerge} onClick={() => void merge()}>
+              {status.autoMerge && <CheckIcon />}
+              <span>{status.autoMerge || status.autoMergeable ? "Auto-Merge" : "Merge"}</span>
+            </button>
+          )}
+        </span>
+      </div>
     </div>
   );
 }
@@ -1322,7 +1321,7 @@ function ChangeRequestStatusLine({
  * offer to change: what is read of the tracker says nothing of who else may, and a description it
  * refuses says so in a notice, a title in the dialog that asked.
  */
-export function IssueView({ issue, session, actions }: { issue: IssueDetail; session: IssueSession | undefined; actions: IssueActions }) {
+export function IssueView({ issue, session, actions }: { issue: IssueDetail; session: TrackedSession | undefined; actions: IssueActions }) {
   const writing: TextWriting = {
     rendering: {
       provider: issue.provider,
@@ -1343,8 +1342,7 @@ export function IssueView({ issue, session, actions }: { issue: IssueDetail; ses
       <div className="issue-view">
         <div className="issue-columns">
           <div className="issue-thread">
-            {request && <ChangeRequestBranches request={request} />}
-            {request && <ChangeRequestStatusLine request={request} viewer={viewer} actions={actions} />}
+            {request && <ChangeRequestCard request={request} viewer={viewer} actions={actions} />}
             <IssueCard
               author={issue.author}
               avatar={issue.avatars[issue.author]}

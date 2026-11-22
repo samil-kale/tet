@@ -35,8 +35,9 @@ export interface GitProvider {
   validate(host: string, token: string): Promise<string>;
   /** Every repository the token's user can reach, most recently active first. */
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
-  /** The first `limit` issues the filter leaves, newest first; every one without a `limit`. */
-  listIssues(tracker: Tracker, filter: IssueFilter, limit?: number): Promise<Issue[]>;
+  /** At least the first `limit` issues the filter leaves, newest first, from `after` where given (a
+   *  page's `after`); every one without a `limit`. */
+  listIssues(tracker: Tracker, filter: IssueFilter, limit?: number, after?: string): Promise<ListPage<Issue>>;
   /** How many issues the host counts for the filter and when the latest changed one changed: one
    *  request however long the list. */
   readLatest(tracker: Tracker, filter: IssueFilter): Promise<IssuesLatest>;
@@ -45,6 +46,8 @@ export interface GitProvider {
   /** Who can be assigned, so external authors are not among them. */
   listPeople(tracker: Tracker): Promise<string[]>;
   readIssue(tracker: Tracker, number: number): Promise<IssueDetail>;
+  /** When an issue last changed, what counting it as seen takes, without its text, comments or events. */
+  readIssueUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string }>;
   /** An image of an issue's text that takes the token to read; undefined for any other source. */
   readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
   /** The file name of an upload a link of an issue's text leads to, one that takes the token to
@@ -84,13 +87,15 @@ export interface GitProvider {
   /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
    *  wait for, the host refuses it. */
   autoMergeChangeRequest(tracker: Tracker, number: number, squash: boolean): Promise<void>;
-  /** The first `limit` change requests the filter leaves, of the repository's own branches alone,
-   *  newest first; every one without a `limit`. */
-  listChangeRequests(tracker: Tracker, filter: ChangeRequestFilter, limit?: number): Promise<ChangeRequestRow[]>;
+  /** As `listIssues`, the change requests the filter leaves, of the repository's own branches alone. */
+  listChangeRequests(tracker: Tracker, filter: ChangeRequestFilter, limit?: number, after?: string): Promise<ListPage<ChangeRequestRow>>;
   /** What the host says of the filtered list without sending it whole (`ChangeRequestsLatest`): one
    *  request. */
   readChangeRequestsLatest(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
-  readChangeRequest(tracker: Tracker, number: number): Promise<ChangeRequestDetail>;
+  /** All but what TET itself knows of it (`ownIssues`). */
+  readChangeRequest(tracker: Tracker, number: number): Promise<Omit<ChangeRequestDetail, "ownIssues">>;
+  /** As `readIssueUpdate`, and how its checks stand. */
+  readChangeRequestUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string; checks?: ChecksState }>;
   /** `listOptions` and `setField` of a change request. */
   listChangeRequestOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
   setChangeRequestField(tracker: Tracker, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
@@ -225,31 +230,47 @@ export async function allNodes<T>(
 /** The most nodes either host sends in one page of a GraphQL listing. */
 const GRAPHQL_PAGE = 100;
 
+/** Part of a list as the host sent it, and where the rest starts; `after` is absent once it has no more. */
+export interface ListPage<T> {
+  items: T[];
+  after?: string;
+}
+
 /**
- * The first `limit` nodes of a GraphQL listing that `keep` keeps, every one up to the cap without a
- * `limit`: `allNodes` for a query that takes its page's size as `$first`. Each page asks for `limit` at
- * most, so a short list costs no more than it shows, and for as many again where `keep` dropped some.
+ * At least the first `limit` nodes of a GraphQL listing that `keep` keeps, from `after` where given,
+ * every one up to the cap without a `limit`: `allNodes` for a query that takes its page's size as
+ * `$first`. Each page asks for `limit` at most, so a short list costs no more than it shows; one that
+ * `keep` narrows asks for whole pages, as it drops what it cannot know of before. The pages read are
+ * kept whole, so the next read starts where the last ended.
  */
 export async function firstNodes<T>(
   send: GraphqlSend,
   query: string,
   variables: Record<string, unknown>,
   pageOf: (data: unknown) => GraphqlPage<T>,
-  limit?: number,
-  keep: (node: T) => boolean = () => true,
-): Promise<T[]> {
-  const first = Math.min(limit ?? GRAPHQL_PAGE, GRAPHQL_PAGE);
-  const nodes: T[] = [];
-  let cursor: string | null = null;
+  { limit, after, keep }: { limit?: number; after?: string; keep?: (node: T) => boolean } = {},
+): Promise<ListPage<T>> {
+  const first = keep ? GRAPHQL_PAGE : Math.min(limit ?? GRAPHQL_PAGE, GRAPHQL_PAGE);
+  const items: T[] = [];
+  let cursor = after ?? null;
   for (let page = 0; page < PAGE_CAP; page++) {
     const answer = pageOf(await send(query, { ...variables, first, cursor }));
-    nodes.push(...answer.nodes.filter(keep));
-    if (!answer.pageInfo.hasNextPage || (limit !== undefined && nodes.length >= limit)) {
+    items.push(...(keep ? answer.nodes.filter(keep) : answer.nodes));
+    cursor = answer.pageInfo.hasNextPage ? answer.pageInfo.endCursor : null;
+    if (cursor === null || (limit !== undefined && items.length >= limit)) {
       break;
     }
-    cursor = answer.pageInfo.endCursor;
   }
-  return nodes.slice(0, limit);
+  return { items, ...(cursor !== null && { after: cursor }) };
+}
+
+/** What a host answered for `what`. GraphQL's null says neither that it is missing nor that the token
+ *  cannot read it: REST's 404 for both, which hands over to the next account. */
+export function reached<T>(found: T | null | undefined, what: string): T {
+  if (found === null || found === undefined) {
+    throw new ApiError(404, `${what} was not found, or this account cannot read it`);
+  }
+  return found;
 }
 
 /** What a pick field lists: a name as `IssueField.value` shows it, with the id the tracker addresses it by. */
@@ -279,9 +300,27 @@ export function pickField(
     several = false,
     shown = "text",
     editable = true,
-  }: { several?: boolean; shown?: "text" | "people" | "labels" | "issues"; editable?: boolean } = {},
+  }: { several?: boolean; shown?: Extract<IssueField, { kind: "pick" }>["shown"]; editable?: boolean } = {},
 ): IssueField {
   return { id, name, editable, kind: "pick", value, several, shown };
+}
+
+/** The fields a change request has, as its tab lists them on either host, by what each holds: who
+ *  reviews it, its assignees and labels, the issues it closes (`linkedIssueName`) and who took part. */
+export function changeRequestFields(values: {
+  reviewers: string[];
+  assignees: string[];
+  labels: string[];
+  linkedIssues: string[];
+  participants: string[];
+}): IssueField[] {
+  return [
+    pickField("reviewers", "Reviewers", values.reviewers, { several: true, shown: "people" }),
+    pickField("assignees", "Assignees", values.assignees, { several: true, shown: "people" }),
+    pickField("labels", "Labels", values.labels, { several: true, shown: "labels" }),
+    pickField("linkedIssues", "Linked Issues", values.linkedIssues, { several: true, shown: "issues", editable: false }),
+    pickField("participants", "Participants", values.participants, { several: true, shown: "people", editable: false }),
+  ];
 }
 
 /** The text a field is set to, null taking it off; refuses a value of another kind. */

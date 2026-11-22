@@ -217,6 +217,7 @@ const MAIN_LAYERS = [
     projects: ["*"],
     issues: ["*"],
     "change-requests": ["*"],
+    tracked: ["*"],
     requirements: ["*"],
     "settings-access": ["*"],
     uncaught: ["*"],

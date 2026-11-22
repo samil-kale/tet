@@ -260,7 +260,7 @@ describe("the issues of a tracker", () => {
     assert.deepEqual(sent(mergeRequestsVariables("g/t", { labels: [] })), { path: "g/t" }, "`in` is never sent without a search");
   });
 
-  it("reads the first nodes of a listing a page at a time, as many again where some are dropped", async () => {
+  it("reads the first nodes of a listing a page at a time, whole pages where some are dropped, and on from where it ended", async () => {
     const nodes = Array.from({ length: 250 }, (_, index) => index);
     const asked: number[] = [];
     const send: GraphqlSend = async (_query, variables) => {
@@ -272,16 +272,19 @@ describe("the issues of a tracker", () => {
         nodes: nodes.slice(start, start + first),
       };
     };
-    const read = (limit?: number, keep?: (node: number) => boolean): Promise<number[]> =>
-      firstNodes<number>(send, "query", {}, (data) => data as GraphqlPage<number>, limit, keep);
+    const read = (options: { limit?: number; after?: string; keep?: (node: number) => boolean } = {}) =>
+      firstNodes<number>(send, "query", {}, (data) => data as GraphqlPage<number>, options);
 
-    assert.deepEqual(await read(20), nodes.slice(0, 20));
+    assert.deepEqual(await read({ limit: 20 }), { items: nodes.slice(0, 20), after: "20" });
     assert.deepEqual(asked.splice(0), [20], "one page of as many as asked");
-    assert.deepEqual(await read(10, (node) => node % 2 === 0), nodes.filter((node) => node % 2 === 0).slice(0, 10));
-    assert.deepEqual(asked.splice(0), [10, 10]);
-    assert.deepEqual(await read(150), nodes.slice(0, 150));
+    assert.deepEqual(await read({ limit: 20, after: "20" }), { items: nodes.slice(20, 40), after: "40" }, "on from the last");
+    asked.splice(0);
+    const even = (node: number): boolean => node % 2 === 0;
+    assert.deepEqual(await read({ limit: 10, keep: even }), { items: nodes.slice(0, 100).filter(even), after: "100" });
+    assert.deepEqual(asked.splice(0), [100], "a whole page, kept whole");
+    assert.deepEqual(await read({ limit: 150 }), { items: nodes.slice(0, 200), after: "200" });
     assert.deepEqual(asked.splice(0), [100, 100], "no page larger than the host sends");
-    assert.deepEqual(await read(), nodes);
+    assert.deepEqual(await read(), { items: nodes });
     assert.deepEqual(asked.splice(0), [100, 100, 100]);
   });
 
@@ -1034,8 +1037,20 @@ describe("a pull or merge request", () => {
   });
 
   it("is called by each host's own word and number, and approved by its author where the host lets one", () => {
-    assert.deepEqual(github.changeRequest, { noun: "pull request", prefix: "#", selfApproval: false, deletesSourceBranch: false });
-    assert.deepEqual(gitlab.changeRequest, { noun: "merge request", prefix: "!", selfApproval: true, deletesSourceBranch: true });
+    assert.deepEqual(github.changeRequest, {
+      noun: "pull request",
+      prefix: "#",
+      checks: "checks",
+      selfApproval: false,
+      deletesSourceBranch: false,
+    });
+    assert.deepEqual(gitlab.changeRequest, {
+      noun: "merge request",
+      prefix: "!",
+      checks: "pipeline",
+      selfApproval: true,
+      deletesSourceBranch: true,
+    });
   });
 
   it("is approved before it is set to auto-merge, each failure told and none undoing it", async () => {
@@ -1177,9 +1192,10 @@ describe("a pull or merge request", () => {
       body: "Text",
       notes: [],
       events: [],
+      state: "open",
+      draft: false,
+      ownIssues: true,
       status: {
-        state: "open",
-        draft: false,
         failedChecks: [],
         conflicts: false,
         autoMerge: false,

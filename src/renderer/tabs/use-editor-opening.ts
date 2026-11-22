@@ -1,11 +1,12 @@
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
+import { sameTracked } from "../../shared/types/providers";
 import { forget } from "../identity";
 import {
   nextEditorTabId,
   setIssueGoneHandler,
-  setIssueTabHandler,
+  setTrackedTabHandler,
   setRevealHandler,
   showsSame,
   type EditorTab,
@@ -51,7 +52,7 @@ export function useEditorOpening(
   const openEditor = useCallback(
     (ref: ProjectRef, path: string, how: OpenEditor = {}) => {
       const refKey = refKeyOf(ref);
-      const open = editorTabsRef.current[refKey]?.find((tab) => showsSame(tab, { path, commit: how.commit, issue: how.issue, changeRequest: how.changeRequest }));
+      const open = editorTabsRef.current[refKey]?.find((tab) => showsSame(tab, { path, commit: how.commit, tracked: how.tracked }));
       const preview = how.keep ? undefined : previewEditorTab(ref);
       let tabId: string;
       if (open) {
@@ -74,7 +75,7 @@ export function useEditorOpening(
         setEditorTabs((current) => ({
           ...current,
           [refKey]: (current[refKey] ?? []).map((tab) =>
-            tab.tabId === tabId ? { ...tab, path, commit: how.commit, issue: how.issue, changeRequest: how.changeRequest } : tab,
+            tab.tabId === tabId ? { ...tab, path, commit: how.commit, tracked: how.tracked } : tab,
           ),
         }));
       } else {
@@ -82,7 +83,7 @@ export function useEditorOpening(
         openEditorFile(ref, tabId, path, how.keep !== true, how);
         setEditorTabs((current) => ({
           ...current,
-          [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit, issue: how.issue, changeRequest: how.changeRequest }],
+          [refKey]: [...(current[refKey] ?? []), { tabId, ref, path, commit: how.commit, tracked: how.tracked }],
         }));
       }
       if (!how.background) {
@@ -93,14 +94,14 @@ export function useEditorOpening(
     [activateTab, editorTabsRef, setEditorTabs],
   );
 
-  // A file or issue the control channel asked for, brought to front unless in the background.
+  // A file, issue or change request the control channel asked for, brought to front unless in the background.
   useEffect(
     () =>
-      window.tet.repository.onOpenEditor(({ ref, path, keep, background, issue, changeRequest }) => {
+      window.tet.repository.onOpenEditor(({ ref, path, keep, background, tracked }) => {
         if (!background) {
           activateRef(refKeyOf(ref));
         }
-        openEditor(ref, path, { keep, background, issue, changeRequest });
+        openEditor(ref, path, { keep, background, tracked });
       }),
     [openEditor, activateRef],
   );
@@ -138,7 +139,7 @@ export function useEditorOpening(
 
   useEffect(
     () =>
-      setIssueTabHandler((ref, tabId) => {
+      setTrackedTabHandler((ref, tabId) => {
         activateRef(refKeyOf(ref));
         activateTab(refKeyOf(ref), tabId);
       }),
@@ -149,7 +150,7 @@ export function useEditorOpening(
     () =>
       setIssueGoneHandler((projectId, number) => {
         for (const [refKey, tabs] of Object.entries(editorTabsRef.current)) {
-          const gone = tabs.filter((tab) => tab.ref.projectId === projectId && tab.issue === number);
+          const gone = tabs.filter((tab) => tab.ref.projectId === projectId && sameTracked(tab.tracked, { kind: "issue", number }));
           if (gone.length > 0) {
             closeEditors(
               refKey,

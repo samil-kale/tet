@@ -1,7 +1,7 @@
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
-import { changeRequestFileName, issueFileName, type TrackedKind } from "../../shared/types/providers";
-import type { IssueSession } from "../../shared/types/terminals";
+import { sameTracked, trackedFileName, type TrackedKind, type TrackedRef } from "../../shared/types/providers";
+import type { TrackedSession } from "../../shared/types/terminals";
 import { notify } from "../ui/Notices";
 
 /**
@@ -65,31 +65,19 @@ export interface OpenEditor {
   reveal?: EditorReveal;
   /** The file at a commit, read-only, instead of the working tree's. */
   commit?: CommitSide;
-  /** The project's issue of this number, as `issueFileName`: no file of the tree. */
-  issue?: number;
-  /** The project's change request of this number, as `changeRequestFileName`. */
-  changeRequest?: number;
+  /** The project's issue or change request, as `trackedFileName`: no file of the tree. */
+  tracked?: TrackedRef;
 }
 
-/** Opens the project's issue in an editor tab as `open` opens a file: by its `issueFileName`, the
- *  issue it shows. Answers what `open` does. */
-export function openIssueTab<T>(
+/** Opens the project's issue or change request in an editor tab as `open` opens a file: by its
+ *  `trackedFileName`, what it shows. Answers what `open` does. */
+export function openTrackedTab<T>(
   open: (ref: ProjectRef, path: string, how: OpenEditor) => T,
   ref: ProjectRef,
-  number: number,
-  how: Omit<OpenEditor, "issue"> = {},
+  tracked: TrackedRef,
+  how: Omit<OpenEditor, "tracked"> = {},
 ): T {
-  return open(ref, issueFileName(number), { ...how, issue: number });
-}
-
-/** Opens the project's change request in an editor tab, as `openIssueTab` an issue. */
-export function openChangeRequestTab<T>(
-  open: (ref: ProjectRef, path: string, how: OpenEditor) => T,
-  ref: ProjectRef,
-  number: number,
-  how: Omit<OpenEditor, "changeRequest"> = {},
-): T {
-  return open(ref, changeRequestFileName(number), { ...how, changeRequest: number });
+  return open(ref, trackedFileName(tracked), { ...how, tracked });
 }
 
 /** How a Markdown file shows: the editor alone, the preview beside it, or the preview alone. */
@@ -102,8 +90,7 @@ export const MARKDOWN_PREVIEW_MODES: readonly MarkdownPreviewMode[] = ["off", "s
 export interface EditorEntry {
   path: string;
   commit?: CommitSide;
-  issue?: number;
-  changeRequest?: number;
+  tracked?: TrackedRef;
   preview: boolean;
   diff: boolean;
   markdownPreview: MarkdownPreviewMode;
@@ -118,10 +105,8 @@ export interface EditorTab {
   path: string;
   /** Set for a Graph diff: a path is then open once per commit. */
   commit?: CommitSide;
-  /** Set for an issue, whose `path` is only its `issueFileName`. */
-  issue?: number;
-  /** Set for a change request, whose `path` is only its `changeRequestFileName`. */
-  changeRequest?: number;
+  /** Set for an issue or change request, whose `path` is only its `trackedFileName`. */
+  tracked?: TrackedRef;
 }
 
 /** Closes every tab of an issue that is gone, in the repository and its worktrees. Set by App. */
@@ -140,34 +125,33 @@ export function issueGone(projectId: string, number: number): void {
   issueGoneHandler?.(projectId, number);
 }
 
-/** Shows a tab opened on an issue or linked to one, its repository or worktree made active. Set by
- *  App. */
-let issueTabHandler: ((ref: ProjectRef, tabId: string) => void) | undefined;
+/** Shows a tab opened on an issue or change request or linked to one, its repository or worktree made
+ *  active. Set by App. */
+let trackedTabHandler: ((ref: ProjectRef, tabId: string) => void) | undefined;
 
-export function setIssueTabHandler(handler: (ref: ProjectRef, tabId: string) => void): () => void {
-  issueTabHandler = handler;
+export function setTrackedTabHandler(handler: (ref: ProjectRef, tabId: string) => void): () => void {
+  trackedTabHandler = handler;
   return () => {
-    if (issueTabHandler === handler) {
-      issueTabHandler = undefined;
+    if (trackedTabHandler === handler) {
+      trackedTabHandler = undefined;
     }
   };
 }
 
 /** A new tab of the agent in the repository or worktree, shown, the issue or change request its first
  *  prompt; a notice when it cannot be read. */
-export async function sendIssueToAgent(ref: ProjectRef, number: number, agentId: AgentId, kind: TrackedKind = "issue"): Promise<void> {
-  const result =
-    kind === "issue" ? await window.tet.issues.sendToAgent(ref, number, agentId) : await window.tet.changeRequests.sendToAgent(ref, number, agentId);
+export async function sendTrackedToAgent(ref: ProjectRef, tracked: TrackedRef, agentId: AgentId): Promise<void> {
+  const result = await window.tet.tracked.sendToAgent(ref, tracked, agentId);
   if (result.ok) {
-    issueTabHandler?.(ref, result.tab.tabId);
+    trackedTabHandler?.(ref, result.tab.tabId);
   } else {
     notify("error", result.error);
   }
 }
 
-/** A session linked to an issue or change request brought to the front, an archived one reopened first; a notice when
- *  it cannot be. */
-export async function openIssueSession({ ref, tabId, archived }: IssueSession): Promise<void> {
+/** A session linked to an issue or change request brought to the front, an archived one reopened
+ *  first; a notice when it cannot be. */
+export async function openTrackedSession({ ref, tabId, archived }: TrackedSession): Promise<void> {
   if (archived) {
     const result = await window.tet.archive.reopen(ref, tabId);
     if (!result.ok) {
@@ -175,64 +159,71 @@ export async function openIssueSession({ ref, tabId, archived }: IssueSession): 
       return;
     }
   }
-  issueTabHandler?.(ref, tabId);
+  trackedTabHandler?.(ref, tabId);
 }
 
 /** A session taken off the issue or change request; a notice when it cannot be. */
-export async function unlinkIssueSession({ ref, tabId }: IssueSession, number: number, kind: TrackedKind = "issue"): Promise<void> {
-  const result =
-    kind === "issue" ? await window.tet.tabs.unlinkIssue(ref, tabId, number) : await window.tet.tabs.unlinkChangeRequest(ref, tabId, number);
+export async function unlinkTrackedSession({ ref, tabId }: TrackedSession, tracked: TrackedRef): Promise<void> {
+  const result = await window.tet.tabs.unlink(ref, tabId, tracked);
   if (!result.ok) {
     notify("error", result.error);
   }
 }
 
-const issueListeners = new Set<(projectId: string, kind: TrackedKind) => void>();
+/** The tab's session linked to the issue or change request it was dropped on; a notice says what
+ *  that changed, named as `nameOf` names one of its kind, or what refused it. */
+export async function linkTrackedSession(
+  ref: ProjectRef,
+  tabId: string,
+  tracked: TrackedRef,
+  nameOf: (number: number) => string,
+): Promise<void> {
+  const result = await window.tet.tabs.link(ref, tabId, tracked);
+  if (!result.ok) {
+    notify("error", result.error);
+    return;
+  }
+  const { movedFrom, replacedSession } = result;
+  const linked =
+    movedFrom === undefined
+      ? `Session linked to ${nameOf(tracked.number)}`
+      : `Session moved from ${nameOf(movedFrom)} to ${nameOf(tracked.number)}`;
+  notify("info", replacedSession ? `${linked} in place of its previous one` : linked);
+}
+
+const trackedListeners = new Set<(projectId: string, kind: TrackedKind) => void>();
 
 /** A project's issue or change request changed through its tab, for its section to read again. */
-export function issuesChanged(projectId: string, kind: TrackedKind = "issue"): void {
-  for (const listener of issueListeners) {
+export function trackedChanged(kind: TrackedKind, projectId: string): void {
+  for (const listener of trackedListeners) {
     listener(projectId, kind);
   }
 }
 
 /** `listener` hears of changes of the kind alone. */
-export function subscribeIssues(listener: (projectId: string) => void, kind: TrackedKind = "issue"): () => void {
+export function subscribeTracked(kind: TrackedKind, listener: (projectId: string) => void): () => void {
   const heard = (projectId: string, changed: TrackedKind): void => {
     if (changed === kind) {
       listener(projectId);
     }
   };
-  issueListeners.add(heard);
-  return () => issueListeners.delete(heard);
+  trackedListeners.add(heard);
+  return () => trackedListeners.delete(heard);
 }
 
 /** What an editor tab shows, beside its path. */
-type EditorSource = Pick<EditorTab, "commit" | "issue" | "changeRequest">;
+type EditorSource = Pick<EditorTab, "commit" | "tracked">;
 
 /** Whether an editor tab shows the working tree's file: a commit's file, an issue and a change request
  *  are not in it. */
-export function inWorkingTree({ commit, issue, changeRequest }: EditorSource): boolean {
-  return !commit && issue === undefined && changeRequest === undefined;
-}
-
-/** The issue or change request an editor tab shows, by its kind; undefined for a file. */
-export function trackedOf({ issue, changeRequest }: EditorSource): { kind: TrackedKind; number: number } | undefined {
-  if (issue !== undefined) {
-    return { kind: "issue", number: issue };
-  }
-  return changeRequest === undefined ? undefined : { kind: "change-request", number: changeRequest };
+export function inWorkingTree({ commit, tracked }: EditorSource): boolean {
+  return !commit && tracked === undefined;
 }
 
 /** Whether `tab` shows what `wanted` names: a path is open once per repository or worktree, a
  *  commit's file once per commit, an issue or change request once. */
 export function showsSame(tab: EditorTab, wanted: EditorSource & { path: string }): boolean {
-  return (
-    tab.path === wanted.path &&
-    tab.commit?.sha === wanted.commit?.sha &&
-    tab.issue === wanted.issue &&
-    tab.changeRequest === wanted.changeRequest
-  );
+  return tab.path === wanted.path && tab.commit?.sha === wanted.commit?.sha && sameTracked(tab.tracked, wanted.tracked);
 }
 
 /** The path of tab `tabId` where it shows the working tree's file, the one the Explorer marks open. */
@@ -241,14 +232,11 @@ export function workingTreePathOf(tabs: EditorTab[] | undefined, tabId: string |
   return tab && inWorkingTree(tab) ? tab.path : null;
 }
 
-/** The number of the issue tab `tabId` shows, the one the Issues section marks open. */
-export function issueOf(tabs: EditorTab[] | undefined, tabId: string | undefined): number | null {
-  return tabs?.find((candidate) => candidate.tabId === tabId)?.issue ?? null;
-}
-
-/** The number of the change request tab `tabId` shows, the one its section marks open. */
-export function changeRequestOf(tabs: EditorTab[] | undefined, tabId: string | undefined): number | null {
-  return tabs?.find((candidate) => candidate.tabId === tabId)?.changeRequest ?? null;
+/** The number of the issue or change request of the kind tab `tabId` shows, the one its section marks
+ *  open. */
+export function trackedNumberOf(kind: TrackedKind, tabs: EditorTab[] | undefined, tabId: string | undefined): number | null {
+  const { tracked } = tabs?.find((candidate) => candidate.tabId === tabId) ?? {};
+  return tracked?.kind === kind ? tracked.number : null;
 }
 
 export function isEditorTabId(tabId: string): boolean {
@@ -268,11 +256,11 @@ export function setRevealHandler(handler: (ref: ProjectRef, path: string, how: O
   };
 }
 
-/** The project's issue opened in the preview tab of the repository or worktree, as a file is: a
- *  change request's linked issue. */
-export function revealIssue(ref: ProjectRef, number: number): void {
+/** The project's issue or change request opened in the preview tab of the repository or worktree, as
+ *  a file is: a change request's linked issue. */
+export function revealTracked(ref: ProjectRef, tracked: TrackedRef): void {
   if (revealHandler) {
-    openIssueTab(revealHandler, ref, number);
+    openTrackedTab(revealHandler, ref, tracked);
   }
 }
 

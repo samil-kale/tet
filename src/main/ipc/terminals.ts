@@ -3,7 +3,8 @@ import type { AgentId } from "../../shared/types/agents";
 import type { EditorReport, NoticeReport } from "../../shared/types/app";
 import type { ActionResult } from "../../shared/types/action";
 import type { ProjectRef } from "../../shared/types/project";
-import type { HandoverResult, LinkIssueResult, TabDescriptor } from "../../shared/types/terminals";
+import type { TrackedRef } from "../../shared/types/providers";
+import type { HandoverResult, TrackedLinkResult, TabDescriptor } from "../../shared/types/terminals";
 import { notOpenMessage } from "../store/resolved-ref";
 import type { IpcDeps } from "./deps";
 
@@ -43,32 +44,18 @@ export function registerTerminalsIpc({ store, tabManagers, records }: Pick<IpcDe
       (await tabManagers.get(ref)?.renameTab(tabId, title)) ?? { ok: true },
   );
 
-  // A tab dropped on an Issues row.
+  // A tab dropped on an issue's or change request's row.
   handle(
-    "tabs:link-issue",
-    (_event, ref: ProjectRef, tabId: string, number: number): LinkIssueResult =>
-      tabManagers.get(ref)?.linkIssue(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
+    "tabs:link",
+    (_event, ref: ProjectRef, tabId: string, tracked: TrackedRef): TrackedLinkResult =>
+      tabManagers.get(ref)?.link(tabId, tracked) ?? { ok: false, error: notOpenMessage(store, ref) },
   );
 
-  // A session's row in its issue's tab.
+  // A session's row in its issue's or change request's tab.
   handle(
-    "tabs:unlink-issue",
-    (_event, ref: ProjectRef, tabId: string, number: number): ActionResult =>
-      tabManagers.get(ref)?.unlinkIssue(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
-  );
-
-  // A tab dropped on a change request's row.
-  handle(
-    "tabs:link-change-request",
-    (_event, ref: ProjectRef, tabId: string, number: number): LinkIssueResult =>
-      tabManagers.get(ref)?.linkChangeRequest(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
-  );
-
-  // A session's row in its change request's tab.
-  handle(
-    "tabs:unlink-change-request",
-    (_event, ref: ProjectRef, tabId: string, number: number): ActionResult =>
-      tabManagers.get(ref)?.unlinkChangeRequest(tabId, number) ?? { ok: false, error: notOpenMessage(store, ref) },
+    "tabs:unlink",
+    (_event, ref: ProjectRef, tabId: string, tracked: TrackedRef): ActionResult =>
+      tabManagers.get(ref)?.unlink(tabId, tracked) ?? { ok: false, error: notOpenMessage(store, ref) },
   );
 
   handle(

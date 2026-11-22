@@ -7,7 +7,6 @@ import type { ExplorerListing, ExplorerSettings } from "../../shared/types/files
 import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState } from "../../shared/types/git";
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type {
-  ChangeRequestDetail,
   ChangeRequestFilter,
   ChangeRequestRow,
   ChangeRequestsLatest,
@@ -17,9 +16,11 @@ import type {
   IssueFieldValue,
   IssueFilter,
   IssuesLatest,
+  TrackedKind,
+  TrackedRef,
 } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
-import type { HandoverResult, IssueSession, LinkIssueResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
+import type { HandoverResult, TrackedSession, TrackedLinkResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { IssueTrackerInfo } from "../providers/issues";
 import type { SbxAccess } from "../sbx/sbx-access";
@@ -128,6 +129,53 @@ export function list(args: Record<string, unknown>, name: string): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
+/** The `number` positional, the number of the `noun` it names. */
+export function numberArg(args: Record<string, unknown>, noun: string): number {
+  const typed = text(args, "number", `${noun} number`);
+  const number = positiveInteger(typed);
+  if (number === undefined) {
+    throw new ControlError("bad_args", `not ${/^[aeiou]/.test(noun) ? "an" : "a"} ${noun} number: ${typed}`);
+  }
+  return number;
+}
+
+/** `--label`'s comma-separated names; none narrows nothing. */
+export function labelsArg(args: Record<string, unknown>): string[] {
+  return (optionalText(args, "label") ?? "")
+    .split(",")
+    .map((label) => label.trim())
+    .filter((label) => label !== "");
+}
+
+/** An issue or change request as the CLI answers it: the pictures of the people it names belong to the
+ *  section. */
+export function withoutAvatars<T extends object>(item: T): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(item).filter(([key]) => key !== "avatars"));
+}
+
+/** What an issue's tab and a change request's do alike on its host (tracked.ts's `trackedOps`); each
+ *  throws what the host or the account refused (`refusable`). */
+export interface TrackedOps {
+  /** How a sentence names one: `issue #3`, `change request 4`. */
+  nameOf(number: number): string;
+  /** It, with its text: its tab's, and the file a tab opened on it starts with. */
+  read(projectId: string, number: number): Promise<{ detail: IssueDetail; markdown: string }>;
+  /** The text and first prompt of a tab of the repository or worktree `ref` opened on it. */
+  agentFile(ref: ProjectRef, number: number): Promise<{ content: string; prompt: string }>;
+  /** An image of its text as a data url; null when it takes no token or cannot be read. */
+  image(projectId: string, source: string): Promise<string | null>;
+  fieldOptions(projectId: string, number: number, fieldId: string): Promise<string[]>;
+  setField(projectId: string, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  /** Its title, text or state; a change request is merged by `mergeChangeRequest` alone. */
+  update(projectId: string, number: number, change: IssueChange): Promise<void>;
+  /** `internal` where its host has such comments (`IssueDetail.internalNotes`). */
+  comment(projectId: string, number: number, body: string, internal: boolean): Promise<void>;
+  editComment(projectId: string, id: string, body: string): Promise<void>;
+  deleteComment(projectId: string, id: string): Promise<void>;
+  /** Counts it as its tab shows it, as the host has it now; without a number, every one until now. */
+  markSeen(projectId: string, number?: number): Promise<void>;
+}
+
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/main/ctl.test.ts
  * runs the server under plain node with these faked. The same singletons ipc/ holds: a second
@@ -189,50 +237,31 @@ export interface ControlDeps {
   setIssueSource(projectId: string, source: string): Promise<string | undefined>;
   readIssueTracker(projectId: string): Promise<IssueTrackerInfo>;
   unreadIssues(projectId: string): Promise<Issue[]>;
-  markIssuesSeen(projectId: string, number?: number): Promise<void>;
   /** What the tracker refused is thrown (`refusable`). */
   listIssues(projectId: string, filter: IssueFilter): Promise<Issue[]>;
   latestIssues(projectId: string, filter: IssueFilter): Promise<IssuesLatest>;
   issueFilterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
-  readIssue(projectId: string, number: number): Promise<IssueDetail>;
-  issueImage(projectId: string, source: string): Promise<string | null>;
-  issueFieldOptions(projectId: string, number: number, fieldId: string): Promise<string[]>;
-  setIssueField(projectId: string, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
   createIssue(projectId: string, title: string, body: string): Promise<number>;
-  updateIssue(projectId: string, number: number, change: IssueChange): Promise<void>;
   deleteIssue(projectId: string, number: number): Promise<void>;
-  commentIssue(projectId: string, number: number, body: string, internal: boolean): Promise<void>;
-  editIssueComment(projectId: string, id: string, body: string): Promise<void>;
-  deleteIssueComment(projectId: string, id: string): Promise<void>;
   /** Answers the Markdown that shows the file in an issue's text. */
   uploadIssueFile(projectId: string, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
-  /** Opens the project's issue in the repository's or worktree's preview tab, or a kept tab, and brings
-   *  it to the front unless `background`. */
-  openIssue(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
-  /** `sandboxOnly` as for `ControlTerminals.createTab`. */
-  sendIssueToAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
-  /** issues.ts's: the session linked to the project's issue, as its tab shows it. */
-  issueSession(projectId: string, number: number): IssueSession | undefined;
   /** change-requests/tracker.ts's, by project, with the deps of main.ts; what the host refused is
    *  thrown (`refusable`). */
   listChangeRequests(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]>;
   latestChangeRequests(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
   changeRequestFilterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
-  readChangeRequest(projectId: string, number: number): Promise<ChangeRequestDetail>;
   unreadChangeRequests(projectId: string): Promise<ChangeRequestRow[]>;
-  markChangeRequestsSeen(projectId: string, number?: number): Promise<void>;
-  changeRequestFieldOptions(projectId: string, number: number, fieldId: string): Promise<string[]>;
-  setChangeRequestField(projectId: string, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
-  updateChangeRequest(projectId: string, number: number, change: IssueChange): Promise<void>;
-  commentChangeRequest(projectId: string, number: number, body: string): Promise<void>;
-  editChangeRequestComment(projectId: string, id: string, body: string): Promise<void>;
-  deleteChangeRequestComment(projectId: string, id: string): Promise<void>;
   approveChangeRequest(projectId: string, number: number): Promise<void>;
   mergeChangeRequest(projectId: string, number: number, whenChecksPass: boolean): Promise<void>;
-  /** As `openIssue`, the project's change request. */
-  openChangeRequest(ref: ProjectRef, number: number, keep: boolean, background: boolean): void;
-  sendChangeRequestToAgent(ref: ProjectRef, number: number, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
-  changeRequestSession(projectId: string, number: number): IssueSession | undefined;
+  /** tracked.ts's: what an issue and a change request do alike, by kind. */
+  tracked: Record<TrackedKind, TrackedOps>;
+  /** Opens the project's issue or change request in the repository's or worktree's preview tab, or a
+   *  kept tab, and brings it to the front unless `background`. */
+  openTracked(ref: ProjectRef, tracked: TrackedRef, keep: boolean, background: boolean): void;
+  /** `sandboxOnly` as for `ControlTerminals.createTab`. */
+  sendTrackedToAgent(ref: ProjectRef, tracked: TrackedRef, agentId: AgentId, sandboxOnly: boolean): Promise<HandoverResult>;
+  /** tracked.ts's: the session linked to the project's issue or change request, as its tab shows it. */
+  trackedSession(projectId: string, tracked: TrackedRef): TrackedSession | undefined;
   /** main.ts's teardown: ends every session and quits, optionally relaunching. */
   shutdown(relaunch: boolean): void;
   /** Its process starts with the first resize that draws it. */
@@ -271,13 +300,11 @@ export interface ControlTerminals {
   seenPaths(tabId: string, hostPaths: string[]): Promise<string[]>;
   /** The agent's refusal, or nothing when it went through. */
   renameTab(tabId: string, title: string): Promise<ActionResult>;
-  /** Links the tab's session to the project's issue, or the one it gets; answers what refused it. */
-  linkIssue(tabId: string, number: number): LinkIssueResult;
-  /** Takes the tab's session off the project's issue; answers what refused it. */
-  unlinkIssue(tabId: string, number: number): ActionResult;
-  /** As `linkIssue` and `unlinkIssue`, the project's change request. */
-  linkChangeRequest(tabId: string, number: number): LinkIssueResult;
-  unlinkChangeRequest(tabId: string, number: number): ActionResult;
+  /** Links the tab's session to the project's issue or change request, or the one it gets; answers
+   *  what refused it. */
+  link(tabId: string, tracked: TrackedRef): TrackedLinkResult;
+  /** Takes the tab's session off the project's issue or change request; answers what refused it. */
+  unlink(tabId: string, tracked: TrackedRef): ActionResult;
   /** `at` is when the hook fired, not arrived (ControlRequest.at). An unknown tab is no error: it
    *  may have closed while its CLI ended the turn. */
   hookEvent(tabId: string, event: HookEvent, payload: string, at: number | undefined, side: CallerSide): HookOutcome;

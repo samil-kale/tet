@@ -13,6 +13,7 @@ import { agentConfigDir, prepareDataRoot } from "../../src/main/store/data-root"
 import { writeJson } from "../../src/main/util/json-file";
 import { archivedIds, forgetArchived, pruneArchived, setArchived, setArchivedOrder } from "../../src/main/store/archive";
 import {
+  dropCachedLinks,
   forgetAllSessionLinks,
   forgetLinkedSession,
   forgetSessionLinksAt,
@@ -160,10 +161,10 @@ describe("the issues read", () => {
     assert.deepEqual(issues, {});
     assert.equal(readSeen(root, "p", "issue").since, since, "once, not at every read");
 
-    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
-    setSeen(root, "p", "issue", 7, "2026-11-08T11:00:00Z");
-    setSeen(root, "p", "issue", 3, "2026-11-09T09:00:00Z");
-    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" } });
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z", false);
+    setSeen(root, "p", "issue", 7, "2026-11-08T11:00:00Z", false);
+    setSeen(root, "p", "issue", 3, "2026-11-09T09:00:00Z", false);
+    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 3: "2026-11-09T09:00:00Z", 7: "2026-11-08T11:00:00Z" }, failed: [] });
     assert.deepEqual(readSeen(root, "q", "issue").shown, {}, "another project's own");
     assert.deepEqual(
       fs.readdirSync(path.dirname(seenFile(root, "p", "issue"))),
@@ -174,18 +175,18 @@ describe("the issues read", () => {
 
   it("forget a deleted issue's entry alone", () => {
     const root = tempDir("tet-issues-seen-");
-    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
-    setSeen(root, "p", "issue", 7, "2026-11-08T11:00:00Z");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z", false);
+    setSeen(root, "p", "issue", 7, "2026-11-08T11:00:00Z", false);
     const { since } = readSeen(root, "p", "issue");
     forgetSeen(root, "p", "issue", 3);
-    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 7: "2026-11-08T11:00:00Z" } });
+    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 7: "2026-11-08T11:00:00Z" }, failed: [] });
     forgetSeen(root, "p", "issue", 3);
-    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 7: "2026-11-08T11:00:00Z" } }, "none to forget");
+    assert.deepEqual(readSeen(root, "p", "issue"), { since, shown: { 7: "2026-11-08T11:00:00Z" }, failed: [] }, "none to forget");
   });
 
   it("count from now on once all are read, the entries before dropped", () => {
     const root = tempDir("tet-issues-seen-");
-    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z", false);
     const first = readSeen(root, "p", "issue").since;
     const all = markAllSeen(root, "p", "issue");
     assert.ok(Date.parse(all.since) >= Date.parse(first));
@@ -195,7 +196,7 @@ describe("the issues read", () => {
 
   it("start afresh when forgotten whole, as when the tracker changes", () => {
     const root = tempDir("tet-issues-seen-");
-    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z");
+    setSeen(root, "p", "issue", 3, "2026-11-08T10:00:00Z", false);
     forgetAllSeen(root, "p", "issue");
     assert.equal(fs.existsSync(seenFile(root, "p", "issue")), false);
     assert.deepEqual(readSeen(root, "p", "issue").shown, {}, "the old numbers name other issues now");
@@ -212,11 +213,12 @@ describe("the issues read", () => {
       seenFile(root, "p", "issue"),
       JSON.stringify({ since: "2026-11-01T00:00:00Z", issues: { 3: "2026-11-08T10:00:00Z", x: "junk", 5: 5, 6: null } }),
     );
-    assert.deepEqual(readSeen(root, "p", "issue"), { since: "2026-11-01T00:00:00Z", shown: { 3: "2026-11-08T10:00:00Z" } });
-    setSeen(root, "p", "issue", 8, "2026-11-08T12:00:00Z");
+    assert.deepEqual(readSeen(root, "p", "issue"), { since: "2026-11-01T00:00:00Z", shown: { 3: "2026-11-08T10:00:00Z" }, failed: [] });
+    setSeen(root, "p", "issue", 8, "2026-11-08T12:00:00Z", false);
     assert.deepEqual(readSeen(root, "p", "issue"), {
       since: "2026-11-01T00:00:00Z",
       shown: { 3: "2026-11-08T10:00:00Z", 8: "2026-11-08T12:00:00Z" },
+      failed: [],
     });
   });
 });
@@ -293,6 +295,8 @@ describe("the session linked to an issue", () => {
     fs.mkdirSync(path.dirname(sessionLinksFile(root, "p", "issue")), { recursive: true });
     fs.writeFileSync(sessionLinksFile(root, "p", "issue"), "{ nope");
     assert.equal(sessionOf(root, 3), undefined);
+    // What was read stands until the project's folder goes: only TET writes the file.
+    dropCachedLinks(root, "p");
     fs.writeFileSync(
       sessionLinksFile(root, "p", "issue"),
       JSON.stringify({
@@ -579,7 +583,13 @@ describe("the stores", () => {
       }),
     );
     const settings = new SettingsStore(dir).get();
-    assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: false });
+    assert.deepEqual(settings.notifications, {
+      finished: false,
+      waiting: true,
+      idleReminder: false,
+      changeRequestOpened: true,
+      changeRequestFailed: true,
+    });
     assert.deepEqual(settings.git, {
       checkNewChanges: false,
       pushOnCommit: true,
@@ -607,7 +617,7 @@ describe("the stores", () => {
     });
     assert.deepEqual(
       settings.prompts.texts,
-      { commitMessage: "", handover: "", issue: "", changeRequest: "" },
+      { commitMessage: "", handover: "", issue: "", changeRequest: "", changeRequestTab: "" },
       "TET's own text spelled out is stored as none",
     );
     assert.deepEqual(
@@ -620,7 +630,10 @@ describe("the stores", () => {
     );
     assert.equal(effectivePrompt(settings.prompts.texts, "commitMessage"), DEFAULT_PROMPTS.commitMessage);
     assert.equal(
-      effectivePrompt({ commitMessage: "write a subject", handover: "", issue: "", changeRequest: "", changeRequestTab: "" }, "commitMessage"),
+      effectivePrompt(
+        { commitMessage: "write a subject", handover: "", issue: "", changeRequest: "", changeRequestTab: "" },
+        "commitMessage",
+      ),
       "write a subject",
     );
     const store = new SettingsStore(dir);

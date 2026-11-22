@@ -1,4 +1,5 @@
 import type { AgentId } from "./agents";
+import type { TrackedRef } from "./providers";
 import type { TabRef } from "./terminals";
 
 /** The settings dialog's Info tab, read once. */
@@ -63,8 +64,8 @@ export interface Notice {
   toast?: false;
   /** The tab a click on its entry shows. */
   target?: TabRef;
-  /** The change request a click on its entry opens in its tab, in the project's repository. */
-  opens?: { projectId: string; changeRequest: number };
+  /** The issue or change request a click on its entry opens in its tab, in the project's repository. */
+  opens?: { projectId: string; tracked: TrackedRef };
   mark?: NoticeMark;
   /** A turn's notice: the notification center shows this agent's icon and `message` alone, without `title`. */
   agentId?: AgentId;

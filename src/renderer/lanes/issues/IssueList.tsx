@@ -1,12 +1,12 @@
 import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
-import { DEFAULT_ISSUE_FILTER, isUnread, type Issue } from "../../../shared/types/providers";
-import { issueGone, openIssueTab, sendIssueToAgent, type OpenEditor } from "../../editor/editor-tab";
-import { loadProjectIssueImage, openProjectIssueLink, reloadIssueTabs } from "../../editor/editor-views";
+import { DEFAULT_ISSUE_FILTER, isUnread, type Issue, type TrackedRef } from "../../../shared/types/providers";
+import { issueGone, linkTrackedSession, openTrackedTab, sendTrackedToAgent, type OpenEditor } from "../../editor/editor-tab";
+import { loadTrackedImage, openProjectIssueLink, reloadTrackedTabs } from "../../editor/editor-views";
 import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked-seen";
 import { newIssueUrl } from "../../editor/issue-text";
 import { trackedSessionsOf, useWatchedSessions } from "../../editor/use-tracked-sessions";
-import { askIssueTitle, confirmDeleteIssue, dayOf, issueSessionEntry, Person, TextBox, type TextRendering } from "../../editor/IssueView";
+import { askIssueTitle, confirmDeleteIssue, dayOf, trackedSessionEntry, Person, TextBox, type TextRendering } from "../../editor/IssueView";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
@@ -16,14 +16,19 @@ import { IconButton } from "../../ui/IconButton";
 import { LinkIcon, ListCheckIcon, PlusIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
 import { notify } from "../../ui/Notices";
-import { ISSUE_DRAG_TYPE, SESSION_TAB_DRAG_TYPE } from "../../tabs/pane-layout";
+import { SESSION_TAB_DRAG_TYPE, TRACKED_DRAG_TYPE } from "../../tabs/pane-layout";
 import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { IssueFilterBar } from "./IssueFilterBar";
-import { useIssueRows } from "../../ui/use-issue-rows";
+import { useTrackedRows } from "../../ui/use-tracked-rows";
 import { useScrollMore } from "../../ui/use-scroll-more";
 import { useIssues } from "./use-issues";
+
+/** The project's issue of this number, as the tab and session calls name it. */
+function trackedOf(number: number): TrackedRef {
+  return { kind: "issue", number };
+}
 
 /** The description's box in the new issue's dialog, in px: taller than the tab's, as it is the
  *  dialog's one big field. */
@@ -110,7 +115,7 @@ function IssueRow({
       className={`list-row issue-row two-line${active ? " active" : ""}${dropTarget ? " drop-target" : ""}`}
       title={[`#${issue.number} ${issue.title}`, ...(issue.labels.length > 0 ? [`Labels: ${issue.labels.join(", ")}`] : [])].join("\n")}
       draggable
-      onDragStart={(event) => event.dataTransfer.setData(ISSUE_DRAG_TYPE, String(issue.number))}
+      onDragStart={(event) => event.dataTransfer.setData(TRACKED_DRAG_TYPE, JSON.stringify(trackedOf(issue.number)))}
       onClick={() => onOpen({})}
       onDoubleClick={() => onOpen({ keep: true })}
       onContextMenu={onMenu}
@@ -158,32 +163,19 @@ export const IssueList = memo(function IssueList({
   const { projectId, worktree } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`issues-filter.${projectId}`, DEFAULT_ISSUE_FILTER);
   const [title, setTitle] = useState("");
-  const { issues, total, read, more, source, tracker, noAccount, options, busy, reload, write } = useIssues(
-    projectId,
-    filter,
-    title,
-    shown,
-  );
+  const { items: issues, result, total, rowsKey, more, options, busy, reload, write } = useIssues(projectId, filter, title, shown);
+  const { source, tracker } = result ?? {};
   const seen = useSeen("issue", projectId);
   const unread = (issue: Issue): boolean => isUnread(issue, seen);
   // Keyed by the page count too: the rows a page more brings come as they are, the tracker added none.
-  const shownRows = useIssueRows(issues, read ?? {});
+  const shownRows = useTrackedRows(issues, rowsKey ?? {});
   const scroller = useScrollMore(more);
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
   useWatchedSessions("issue", projectId);
   const issueDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId, number: number) => {
-    void window.tet.tabs.linkIssue(resolved.ref, tabId, number).then((result) => {
-      if (result.ok) {
-        const { movedFrom, replacedSession } = result;
-        const linked =
-          movedFrom === undefined ? `Session linked to Issue #${number}` : `Session moved from Issue #${movedFrom} to Issue #${number}`;
-        notify("info", replacedSession ? `${linked} in place of its previous one` : linked);
-      } else {
-        notify("error", result.error);
-      }
-    });
+    void linkTrackedSession(resolved.ref, tabId, trackedOf(number), (linked) => `Issue #${linked}`);
   });
 
   const askSource = async (): Promise<void> => {
@@ -205,7 +197,7 @@ export const IssueList = memo(function IssueList({
     const rendering: TextRendering = {
       provider: tracker.provider,
       issueUrl: newIssueUrl(tracker.provider, tracker.url),
-      loadImage: (source) => loadProjectIssueImage(projectId, source),
+      loadImage: (image) => loadTrackedImage(projectId, "issue", image),
       openFile: (path) => onOpenFile(resolved.ref, path),
       openLink: (url) => void openProjectIssueLink(projectId, url),
     };
@@ -226,13 +218,13 @@ export const IssueList = memo(function IssueList({
       },
     });
     if (created !== undefined) {
-      openIssueTab(onOpenFile, resolved.ref, created, { keep: true });
+      openTrackedTab(onOpenFile, resolved.ref, trackedOf(created), { keep: true });
     }
   };
 
   const askRename = (issue: Issue): Promise<void> =>
     askIssueTitle(issue.title, async (typed) => {
-      const result = await window.tet.issues.update(projectId, issue.number, { title: typed });
+      const result = await window.tet.tracked.update(projectId, trackedOf(issue.number), { title: typed });
       if (result.ok) {
         reload();
       }
@@ -242,7 +234,7 @@ export const IssueList = memo(function IssueList({
   /** The list and, for an issue the list no longer shows too, every open tab read afresh. */
   const refresh = (): void => {
     reload();
-    reloadIssueTabs(projectId);
+    reloadTrackedTabs("issue", projectId);
   };
 
   const askDelete = async (issue: Issue): Promise<void> => {
@@ -263,17 +255,17 @@ export const IssueList = memo(function IssueList({
       ? [
           SEPARATOR,
           unread(issue)
-            ? { label: "Mark as Read", run: () => keepSeen("issue", projectId, issue.number, issue.updatedAt) }
-            : { label: "Mark as Unread", run: () => keepUnread("issue", projectId, issue.number, issue.updatedAt) },
+            ? { label: "Mark as Read", run: () => keepSeen(projectId, trackedOf(issue.number), issue.updatedAt) }
+            : { label: "Mark as Unread", run: () => keepUnread(projectId, trackedOf(issue.number), issue.updatedAt) },
         ]
       : [];
     return [
       { label: "Open in Browser", run: () => void window.tet.shell.openUrl(issue.url) },
       SEPARATOR,
-      issueSessionEntry(
+      trackedSessionEntry(
         trackedSessionsOf("issue", projectId)[issue.number],
         agents,
-        (agentId) => void sendIssueToAgent(resolved.ref, issue.number, agentId),
+        (agentId) => void sendTrackedToAgent(resolved.ref, trackedOf(issue.number), agentId),
       ),
       ...readEntries,
       SEPARATOR,
@@ -305,7 +297,7 @@ export const IssueList = memo(function IssueList({
                 <LinkIcon />
               </IconButton>
             )}
-            {noAccount && (
+            {result?.noAccount === true && (
               <IconButton title="Add account..." onClick={onOpenAccounts}>
                 <UserPlusIcon />
               </IconButton>
@@ -320,7 +312,7 @@ export const IssueList = memo(function IssueList({
           <FilterField placeholder="Filter issues..." value={title} onChange={setTitle} />
           <IssueFilterBar filter={filter} options={options} onChange={setFilter} />
           <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
-            {shownRows.map(({ issue, entering, leaving }) => (
+            {shownRows.map(({ item: issue, entering, leaving }) => (
               <div key={issue.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <IssueRow
                   issue={issue}
@@ -328,7 +320,7 @@ export const IssueList = memo(function IssueList({
                   unread={unread(issue)}
                   dropTarget={issueDrop.over === issue.number}
                   dropProps={issueDrop.dropPropsOf(issue.number)}
-                  onOpen={(how) => openIssueTab(onOpenFile, resolved.ref, issue.number, how)}
+                  onOpen={(how) => openTrackedTab(onOpenFile, resolved.ref, trackedOf(issue.number), how)}
                   onMenu={(event) => menu.open(event, issue)}
                 />
               </div>

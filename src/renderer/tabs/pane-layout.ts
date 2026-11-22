@@ -1,4 +1,5 @@
 import { ownValue } from "../../shared/own-value";
+import { TRACKED_KINDS, type TrackedRef } from "../../shared/types/providers";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { sameList, sameRecord } from "../identity";
 import { layoutKey } from "../ui/layout-storage";
@@ -39,11 +40,9 @@ export const SESSION_TAB_DRAG_TYPE = "application/x-tet-tab-session";
  *  takes it to reopen the tab there. */
 export const ARCHIVED_TAB_DRAG_TYPE = "application/x-tet-tab-archived";
 
-/** The drag of an issue's row, carrying its number: a pane takes it to open the issue's tab there. */
-export const ISSUE_DRAG_TYPE = "application/x-tet-issue";
-
-/** The drag of a change request's row, as `ISSUE_DRAG_TYPE`'s. */
-export const CHANGE_REQUEST_DRAG_TYPE = "application/x-tet-change-request";
+/** The drag of an issue's or change request's row, carrying its `TrackedRef` as JSON: a pane takes it
+ *  to open its tab there. */
+export const TRACKED_DRAG_TYPE = "application/x-tet-tracked";
 
 /** Which panes exist for a preset, in reading order — also the "move to" menu's order. */
 export const PRESET_PANES: Record<SplitPreset, PaneId[]> = {
@@ -745,9 +744,16 @@ export interface PersistedTab {
   editor?: EditorEntry;
 }
 
+/** A stored issue or change request, read defensively. */
+function trackedOf(value: unknown): TrackedRef | undefined {
+  const { kind, number } = (value ?? {}) as Record<string, unknown>;
+  const known = TRACKED_KINDS.find((entry) => entry === kind);
+  return known && typeof number === "number" ? { kind: known, number } : undefined;
+}
+
 /** A stored editor entry, read defensively: none where its file is not named. */
 function readEditorEntry(value: unknown): EditorEntry | undefined {
-  const { path, commit, issue, changeRequest, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<string, unknown>;
+  const { path, commit, tracked, issue, preview, diff, markdownPreview, viewState } = (value ?? {}) as Record<string, unknown>;
   if (typeof path !== "string") {
     return undefined;
   }
@@ -758,8 +764,8 @@ function readEditorEntry(value: unknown): EditorEntry | undefined {
       typeof sha === "string"
         ? { sha, parent: typeof parent === "string" ? parent : undefined, origPath: typeof origPath === "string" ? origPath : undefined }
         : undefined,
-    issue: typeof issue === "number" ? issue : undefined,
-    changeRequest: typeof changeRequest === "number" ? changeRequest : undefined,
+    // An issue's number alone, as kept before a change request had a tab. Read until 2027-02-22.
+    tracked: trackedOf(tracked) ?? (typeof issue === "number" ? { kind: "issue", number: issue } : undefined),
     preview: preview === true,
     diff: diff === true,
     markdownPreview: MARKDOWN_PREVIEW_MODES.find((mode) => mode === markdownPreview) ?? "off",

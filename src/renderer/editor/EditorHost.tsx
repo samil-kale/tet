@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { ImageView } from "./ImageView";
-import { changeRequestOf, IssueView, trackedNoun, type IssueActions } from "./IssueView";
+import { isChangeRequest } from "../../shared/types/providers";
+import { IssueView, numberOf, trackedNoun, type IssueActions } from "./IssueView";
 import { isMarkdown } from "./diff-highlight";
 import {
   approveChangeRequest,
@@ -41,7 +42,7 @@ import {
   uploadIssueFile,
   type EditorSnapshot,
 } from "./editor-views";
-import { isEditorTabId, trackedOf } from "./editor-tab";
+import { isEditorTabId } from "./editor-tab";
 import { useTrackedSessions } from "./use-tracked-sessions";
 import { IconButton } from "../ui/IconButton";
 import {
@@ -76,7 +77,7 @@ export function useEditorPreview(tabId: string): boolean {
  *  for any other tab, and before. */
 function trackedLabel(snapshot: EditorSnapshot): string | undefined {
   const detail = snapshot.issueDetail;
-  return detail && changeRequestOf(detail) ? `${trackedNoun(detail)} ${changeRequestOf(detail)?.kind.prefix ?? "#"}${detail.number}` : undefined;
+  return detail && isChangeRequest(detail) ? `${trackedNoun(detail)} ${numberOf(detail)}` : undefined;
 }
 
 export function useTrackedLabel(tabId: string): string | undefined {
@@ -111,9 +112,7 @@ interface EditorHostProps {
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
   const snapshot = useEditorStore(tabId, whole);
-  const { path, issue, changeRequest, issueDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } =
-    snapshot;
-  const tracked = trackedOf({ issue, changeRequest });
+  const { path, tracked, issueDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const markdownPreviewFrame = useRef<HTMLDivElement>(null);
@@ -170,12 +169,12 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   // change on the host marks it in its section, one made from this tab, once read back, does not. A
   // change request's checks that changed are read as a change too.
   const updatedAt = issueDetail?.updatedAt;
-  const checks = issueDetail && "status" in issueDetail ? (issueDetail as { status: { checks?: string } }).status.checks : undefined;
+  const checks = issueDetail && isChangeRequest(issueDetail) ? issueDetail.checks : undefined;
   useEffect(() => {
     if (tracked !== undefined && updatedAt !== undefined && visible && active) {
       markIssueSeen(tabId);
     }
-  }, [tabId, tracked?.kind, tracked?.number, updatedAt, checks, visible, active]);
+  }, [tabId, tracked, updatedAt, checks, visible, active]);
 
   const trackedSessions = useTrackedSessions(tracked?.kind ?? "issue", tracked === undefined ? undefined : issueProjectOf(tabId));
   const issueSession = tracked === undefined ? undefined : trackedSessions[tracked.number];
@@ -206,9 +205,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   if (tracked !== undefined) {
     return (
       <div className={`editor-tab${active ? "" : " hidden"}`}>
-        {kind === "error" && (
-          <div className="placeholder">Could not read the {tracked.kind === "issue" ? "issue" : "change request"}.</div>
-        )}
+        {kind === "error" && <div className="placeholder">Could not read the {tracked.kind === "issue" ? "issue" : "change request"}.</div>}
         {issueDetail && <IssueView issue={issueDetail} session={issueSession} actions={issueActions} />}
       </div>
     );

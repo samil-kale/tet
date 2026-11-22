@@ -1,12 +1,8 @@
 import writeFileAtomic from "write-file-atomic";
-import { failure } from "../shared/errors";
-import { effectivePrompt } from "../shared/prompts";
-import type { AgentId } from "../shared/types/agents";
-import { worktreeName, worktreeOf, type ProjectRef } from "../shared/types/project";
+import type { ProjectRef } from "../shared/types/project";
 import {
   DEFAULT_ISSUE_FILTER,
   isUnread,
-  issueFileName,
   type Issue,
   type IssueChange,
   type IssueDetail,
@@ -15,10 +11,8 @@ import {
   type IssueFilterOptions,
   type IssuesLatest,
 } from "../shared/types/providers";
-import type { HandoverResult, IssueSession, TabDescriptor } from "../shared/types/terminals";
 import { MAX_EDIT_BYTES } from "./git/explorer-read";
 import {
-  issueMarkdown,
   onTracker,
   readIssueTracker,
   setIssueSource,
@@ -31,7 +25,7 @@ import { PROVIDERS } from "./providers/index";
 import { forgetAllSessionLinks, forgetLinkedSession } from "./store/session-links";
 import { forgetAllSeen, forgetSeen, markAllSeen, readSeen, setSeen } from "./store/tracked-seen";
 import type { ProjectStore } from "./store/project-store";
-import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
+import { PROJECT_NOT_FOUND } from "./store/resolved-ref";
 import type { SettingsAccess } from "./store/settings";
 import { readIssueSource } from "./store/tet-json";
 import type { SessionManagerRegistry } from "./terminals/session-registry";
@@ -88,11 +82,11 @@ export async function changeIssueSource(
 /** The project's issues the tracker created or changed since their tab last showed them (`isUnread`),
  *  among those the Issues section lists until its filter is changed. */
 export async function unreadIssues(deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">, projectId: string): Promise<Issue[]> {
-  const issues = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  const { items } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
     provider.listIssues(tracker, DEFAULT_ISSUE_FILTER),
   );
   const seen = readSeen(deps.dataRoot, projectId, "issue");
-  return issues.filter((issue) => isUnread(issue, seen));
+  return items.filter((issue) => isUnread(issue, seen));
 }
 
 /**
@@ -109,9 +103,9 @@ export async function markIssuesSeen(
     return;
   }
   const { updatedAt } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
-    provider.readIssue(tracker, number),
+    provider.readIssueUpdate(tracker, number),
   );
-  setSeen(deps.dataRoot, projectId, "issue", number, updatedAt);
+  setSeen(deps.dataRoot, projectId, "issue", number, updatedAt, false);
 }
 
 /** More than either tracker takes of one file: past this it does not cross to main's memory, either way. */
@@ -125,8 +119,11 @@ type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
  */
 
 /** The project's issues the filter narrows to. */
-export function listIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<Issue[]> {
-  return onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.listIssues(tracker, filter));
+export async function listIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<Issue[]> {
+  const { items } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    provider.listIssues(tracker, filter),
+  );
+  return items;
 }
 
 /** What the tracker says of the filtered list without sending it. */
@@ -273,73 +270,6 @@ export function uploadIssueFile(deps: TrackerDeps, projectId: string, name: stri
 
 /** The first prompt of a tab opened on an issue: the settings' text, then which issue it is, ended
  *  by its file's path. */
-function issuePrompt(text: string, number: number): string {
+export function issuePrompt(text: string, number: number): string {
   return `${text}\n\nThe issue: #${number}. The file:`;
-}
-
-/**
- * A new tab of the agent in the repository or worktree, read from the tracker, the issue its first
- * prompt; the tab shows it as a file, and its session is linked to the issue once it has one. Refused
- * for an issue that has a session: it has one. The caller checks that the agent takes a prompt.
- * `sandboxOnly`: opened from a sandbox, so it never runs on this machine
- * (`TabSessionManager.createTab`).
- */
-export async function sendIssueToAgent(
-  deps: Pick<IssueDeps, "accounts" | "repositories" | "settings" | "store" | "tabManagers">,
-  ref: ProjectRef,
-  number: number,
-  agentId: AgentId,
-  sandboxOnly = false,
-): Promise<HandoverResult> {
-  try {
-    const manager = deps.tabManagers.get(ref);
-    if (!manager) {
-      throw new Error(notOpenMessage(deps.store, ref));
-    }
-    if (number in issueSessions(deps, ref.projectId)) {
-      throw new Error(`Issue #${number} has a session already`);
-    }
-    const issue = await onTracker(deps.accounts, issueRepository(deps, ref.projectId), (provider, tracker) =>
-      provider.readIssue(tracker, number),
-    );
-    const file = {
-      name: issueFileName(number),
-      content: issueMarkdown(issue),
-      prompt: issuePrompt(effectivePrompt(deps.settings.get().prompts.texts, "issue"), number),
-    };
-    const tab = manager.createTabOnFile(agentId, file, sandboxOnly);
-    // A fresh tab has no session yet, so this only notes the issue on it.
-    manager.linkIssue(tab.tabId, number);
-    return { ok: true, tab };
-  } catch (error) {
-    return failure(error);
-  }
-}
-
-/**
- * The session linked to each of the project's issues, as its repository or worktrees show it, on the
- * strip or archived: read off its tab's descriptor (`TabDescriptor.issue`), so a rename or archive
- * shows at once, and a tab waiting to link its session stands in for it (tracked-links.ts). One no tab
- * shows (a worktree closed, a session gone) is left out.
- */
-export function issueSessions(deps: Pick<IssueDeps, "store" | "tabManagers">, projectId: string): Record<number, IssueSession> {
-  const project = deps.store.get(projectId);
-  if (!project) {
-    throw new Error(PROJECT_NOT_FOUND);
-  }
-  const sessions: Record<number, IssueSession> = {};
-  for (const manager of deps.tabManagers.forProject(projectId)) {
-    const { ref } = manager.at;
-    const worktree = worktreeOf(project, ref);
-    const shown = (tabs: TabDescriptor[], archived: boolean): void => {
-      for (const { issue, tabId, agentId, title } of tabs) {
-        if (issue !== undefined) {
-          sessions[issue] = { ref, ...(worktree && { worktree: worktreeName(worktree) }), tabId, agentId, title, archived };
-        }
-      }
-    };
-    shown(manager.snapshot(), false);
-    shown(manager.archivedSnapshot(), true);
-  }
-  return sessions;
 }

@@ -1,19 +1,20 @@
 import type { AgentId } from "./agents";
 import type { ActionDone, ActionRefused } from "./action";
 import type { ProjectRef } from "./project";
+import type { TrackedKind } from "./providers";
 
 /** The tab taking over a session, or why there is none. */
 export type HandoverResult = (ActionDone & { tab: TabDescriptor }) | ActionRefused;
 
-/** What linking a session to an issue changed beside the link: the issue it was taken off
- *  (`movedFrom`), and whether the issue's own session gave way (`replacedSession`). */
-export interface IssueLinkChange {
+/** What linking a session to an issue or change request changed beside the link: the one of its kind
+ *  it was taken off (`movedFrom`), and whether that one's own session gave way (`replacedSession`). */
+export interface TrackedLinkChange {
   movedFrom?: number;
   replacedSession?: true;
 }
 
-/** A session linked to an issue, with what that changed, or why it was not. */
-export type LinkIssueResult = (ActionDone & IssueLinkChange) | ActionRefused;
+/** A session linked to an issue or change request, with what that changed, or why it was not. */
+export type TrackedLinkResult = (ActionDone & TrackedLinkChange) | ActionRefused;
 
 /** A tab, addressed by its repository or worktree and its id. */
 export interface TabRef {
@@ -67,15 +68,14 @@ export interface TabDescriptor {
   /** The saved command's line from `tet.json` — the split layout's `commandPane` key, so the next
    *  run lands where the last lay. The line, since `name` may be missing. */
   command?: string;
-  /** The project's issue its session is linked to, or that it links once it has one (tracked-links.ts). */
-  issue?: number;
-  /** The project's change request, the same way. */
-  changeRequest?: number;
+  /** The project's issue and change request its session is linked to, or that it links once it has
+   *  one (tracked-links.ts): one of each kind at most. */
+  linked?: Partial<Record<TrackedKind, number>>;
 }
 
 /** The session linked to an issue or change request, as its tab shows it: its tab in the repository
  *  or a worktree, on the strip or archived. */
-export interface IssueSession {
+export interface TrackedSession {
   ref: ProjectRef;
   /** The worktree's name; absent for the repository. */
   worktree?: string;
@@ -86,9 +86,9 @@ export interface IssueSession {
   archived: boolean;
 }
 
-/** The session linked to each of the project's issues that has one. */
-export interface IssueSessionsResult {
-  sessions?: Record<number, IssueSession>;
+/** The session linked to each of the project's issues, or change requests, that has one. */
+export interface TrackedSessionsResult {
+  sessions?: Record<number, TrackedSession>;
   error?: string;
 }
 

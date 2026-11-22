@@ -5,7 +5,7 @@ import { isUnread, type Issue, type TrackedSeen } from "../../src/shared/types/p
 const issue = (number: number, updatedAt: string, open = true): Issue =>
   ({ number, title: "t", open, updatedAt, createdAt: "2026-10-01T00:00:00Z", author: "mira", labels: [], avatars: {} }) as unknown as Issue;
 
-const seen: TrackedSeen = { since: "2026-11-01T00:00:00Z", shown: { 3: "2026-11-05T10:00:00Z" } };
+const seen: TrackedSeen = { since: "2026-11-01T00:00:00Z", shown: { 3: "2026-11-05T10:00:00Z" }, failed: [] };
 
 describe("an unread issue", () => {
   it("is one the tracker changed after its tab last showed it", () => {

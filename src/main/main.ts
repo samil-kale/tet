@@ -8,33 +8,23 @@ import { CONTROL_ENV } from "../shared/ctl";
 import { RELEASES_URL } from "../shared/release";
 import { overridesMachineNote } from "../shared/types/environment";
 import type { ProjectRef } from "../shared/types/project";
-import { changeRequestFileName, issueFileName } from "../shared/types/providers";
+import { trackedFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
 import {
   changeIssueSource,
-  commentIssue,
   createIssue,
   deleteIssue,
-  deleteIssueComment,
-  editIssueComment,
-  issueFieldOptions,
   issueFilterOptions,
-  issueImage,
-  issueSessions,
   issueTrackerOf,
   latestIssues,
   listIssues,
-  markIssuesSeen,
-  sendIssueToAgent,
-  readIssue,
-  setIssueField,
   unreadIssues,
-  updateIssue,
   uploadIssueFile,
   type IssueDeps,
 } from "./issues";
+import { sendTrackedToAgent, trackedOps, trackedSessions } from "./tracked";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
 import { startControlServer } from "./ctl/ctl-server";
@@ -73,21 +63,11 @@ import { trackerAccount, type TabAccount } from "./providers/issues";
 import { ChangeRequestWatch } from "./change-requests/watch";
 import {
   approveChangeRequest,
-  changeRequestFieldOptions,
   changeRequestFilterOptions,
-  changeRequestSessions,
-  commentChangeRequest,
-  deleteChangeRequestComment,
-  editChangeRequestComment,
   latestChangeRequests,
   listChangeRequests,
-  markChangeRequestsSeen,
   mergeChangeRequest,
-  readChangeRequest,
-  sendChangeRequestToAgent,
-  setChangeRequestField,
   unreadChangeRequests,
-  updateChangeRequest,
 } from "./change-requests/tracker";
 import { dropOuterKept } from "./store/env-names";
 import { installUncaughtHandler } from "./uncaught";
@@ -265,7 +245,7 @@ const tabManagers = new SessionManagerRegistry(dataRoot, settings, sbxLocal, ter
     send("tabs:status", { ref, tabId, status });
   },
   onStartupProgress: (ref, show) => send("tabs:startup-progress", { ref, show }),
-  onIssueSessions: (projectId) => send("issues:sessions-changed", projectId),
+  onTrackedSessions: (projectId) => send("tracked:sessions-changed", projectId),
   onNotice: notice,
 });
 
@@ -370,44 +350,24 @@ async function startControl(): Promise<void> {
         setIssueSource: (projectId, source) => changeIssueSource(issueDeps, projectId, source),
         readIssueTracker: (projectId) => issueTrackerOf(issueDeps, projectId),
         unreadIssues: (projectId) => unreadIssues(issueDeps, projectId),
-        markIssuesSeen: (projectId, number) => markIssuesSeen(issueDeps, projectId, number),
         listIssues: (projectId, filter) => listIssues(issueDeps, projectId, filter),
         latestIssues: (projectId, filter) => latestIssues(issueDeps, projectId, filter),
         issueFilterOptions: (projectId) => issueFilterOptions(issueDeps, projectId),
-        readIssue: (projectId, number) => readIssue(issueDeps, projectId, number),
-        issueImage: (projectId, source) => issueImage(issueDeps, projectId, source),
-        issueFieldOptions: (projectId, number, fieldId) => issueFieldOptions(issueDeps, projectId, number, fieldId),
-        setIssueField: (projectId, number, fieldId, value) => setIssueField(issueDeps, projectId, number, fieldId, value),
         createIssue: (projectId, title, body) => createIssue(issueDeps, projectId, title, body, false),
-        updateIssue: (projectId, number, change) => updateIssue(issueDeps, projectId, number, change),
         deleteIssue: (projectId, number) => deleteIssue(issueDeps, projectId, number),
-        commentIssue: (projectId, number, body, internal) => commentIssue(issueDeps, projectId, number, body, internal),
-        editIssueComment: (projectId, id, body) => editIssueComment(issueDeps, projectId, id, body),
-        deleteIssueComment: (projectId, id) => deleteIssueComment(issueDeps, projectId, id),
         uploadIssueFile: (projectId, name, bytes) => uploadIssueFile(issueDeps, projectId, name, bytes),
-        openIssue: (ref, number, keep, background) =>
-          send("editor:open", { ref, path: issueFileName(number), keep, background, issue: number }),
-        sendIssueToAgent: (ref, number, agentId, sandboxOnly) => sendIssueToAgent(issueDeps, ref, number, agentId, sandboxOnly),
-        issueSession: (projectId, number) => issueSessions(issueDeps, projectId)[number],
-        listChangeRequests: async (projectId, filter) => (await listChangeRequests(issueDeps, projectId, filter)).changeRequests,
+        listChangeRequests: (projectId, filter) => listChangeRequests(issueDeps, projectId, filter),
         latestChangeRequests: (projectId, filter) => latestChangeRequests(issueDeps, projectId, filter),
         changeRequestFilterOptions: (projectId) => changeRequestFilterOptions(issueDeps, projectId),
-        readChangeRequest: (projectId, number) => readChangeRequest(issueDeps, projectId, number),
         unreadChangeRequests: (projectId) => unreadChangeRequests(issueDeps, projectId),
-        markChangeRequestsSeen: (projectId, number) => markChangeRequestsSeen(issueDeps, projectId, number),
-        changeRequestFieldOptions: (projectId, number, fieldId) => changeRequestFieldOptions(issueDeps, projectId, number, fieldId),
-        setChangeRequestField: (projectId, number, fieldId, value) => setChangeRequestField(issueDeps, projectId, number, fieldId, value),
-        updateChangeRequest: (projectId, number, change) => updateChangeRequest(issueDeps, projectId, number, change),
-        commentChangeRequest: (projectId, number, body) => commentChangeRequest(issueDeps, projectId, number, body),
-        editChangeRequestComment: (projectId, id, body) => editChangeRequestComment(issueDeps, projectId, id, body),
-        deleteChangeRequestComment: (projectId, id) => deleteChangeRequestComment(issueDeps, projectId, id),
         approveChangeRequest: (projectId, number) => approveChangeRequest(issueDeps, projectId, number),
         mergeChangeRequest: (projectId, number, whenChecksPass) => mergeChangeRequest(issueDeps, projectId, number, whenChecksPass),
-        openChangeRequest: (ref, number, keep, background) =>
-          send("editor:open", { ref, path: changeRequestFileName(number), keep, background, changeRequest: number }),
-        sendChangeRequestToAgent: (ref, number, agentId, sandboxOnly) =>
-          sendChangeRequestToAgent(issueDeps, ref, number, agentId, sandboxOnly),
-        changeRequestSession: (projectId, number) => changeRequestSessions(issueDeps, projectId)[number],
+        tracked,
+        openTracked: (ref, opened, keep, background) =>
+          send("editor:open", { ref, path: trackedFileName(opened), keep, background, tracked: opened }),
+        sendTrackedToAgent: (ref, opened, agentId, sandboxOnly) =>
+          sendTrackedToAgent(issueDeps, tracked, ref, opened, agentId, sandboxOnly),
+        trackedSession: (projectId, { kind, number }) => trackedSessions(issueDeps, projectId, kind)[number],
         shutdown,
         records,
         projectRefPath: (ref) => {
@@ -436,6 +396,8 @@ async function startControl(): Promise<void> {
 const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
 
 const issueDeps: IssueDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
+/** What an issue and a change request do alike, for the control channel (the window's in ipc/tracked.ts). */
+const tracked = trackedOps(issueDeps);
 /** Tells of new change requests and failed checks of the account's (watch.ts). */
 const changeRequestWatch = new ChangeRequestWatch(issueDeps, (found) => send("app:notice", found));
 

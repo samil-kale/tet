@@ -8,9 +8,9 @@ import type { ControlSide } from "../../shared/ctl-side";
 import { hasSandbox } from "../agents/agent";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
-import type { TrackedKind } from "../../shared/types/providers";
+import { TRACKED_KINDS, type TrackedRef } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
-import type { HandoverResult, LinkIssueResult, TabDescriptor } from "../../shared/types/terminals";
+import type { HandoverResult, TrackedLinkResult, TabDescriptor } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
 import type { TrackedLinks } from "./tracked-links";
@@ -174,16 +174,9 @@ export class TabSessionManager {
 
   /** The tabs' descriptors, the links of their issues and change requests read once for them all. */
   private descriptorsOf(tabs: readonly TabState[]): TabDescriptor[] {
-    const issues = this.trackedLinks.linksOf(this.at.ref, tabs, "issue");
-    const changeRequests = this.trackedLinks.linksOf(this.at.ref, tabs, "change-request");
+    const links = this.trackedLinks.linksOf(this.at.ref, tabs);
     return tabs.map((tab) =>
-      toDescriptor(
-        tab,
-        this.indicators.has(tab.tabId),
-        this.placeOf(tab).sandbox !== undefined,
-        issues.get(tab.tabId),
-        changeRequests.get(tab.tabId),
-      ),
+      toDescriptor(tab, this.indicators.has(tab.tabId), this.placeOf(tab).sandbox !== undefined, links.get(tab.tabId)),
     );
   }
 
@@ -522,41 +515,21 @@ export class TabSessionManager {
     const taking = this.addTab(agentId, { handover, ...(sandboxOnly && { sandboxOnly }) });
     // The new session takes over this one's issue and change request once it has one: each has one
     // session.
-    for (const kind of ["issue", "change-request"] as const) {
-      const linked = linkedOfSession(this.dataRoot, this.at.ref, kind, sessionId);
-      if (linked !== undefined) {
-        this.linkTo(taking.tabId, kind, linked);
+    for (const kind of TRACKED_KINDS) {
+      const number = linkedOfSession(this.dataRoot, this.at.ref, kind, sessionId);
+      if (number !== undefined) {
+        this.link(taking.tabId, { kind, number });
       }
     }
     return { ok: true, tab: taking };
   }
 
-  /** Links the tab's session to the project's issue (`linkTo`). */
-  linkIssue(tabId: string, number: number): LinkIssueResult {
-    return this.linkTo(tabId, "issue", number);
-  }
-
-  /** Links the tab's session to the project's change request (`linkTo`). */
-  linkChangeRequest(tabId: string, number: number): LinkIssueResult {
-    return this.linkTo(tabId, "change-request", number);
-  }
-
-  /** Takes the tab's session off the project's issue (`unlinkFrom`). */
-  unlinkIssue(tabId: string, number: number): ActionResult {
-    return this.unlinkFrom(tabId, "issue", number);
-  }
-
-  /** Takes the tab's session off the project's change request (`unlinkFrom`). */
-  unlinkChangeRequest(tabId: string, number: number): ActionResult {
-    return this.unlinkFrom(tabId, "change-request", number);
-  }
-
   /**
-   * Links the tab's session to one of the kind in place of its own, taking it off any other of the
-   * kind: at once where it has one, else once it is claimed (reconcile; TrackedLinks.link). Answers
-   * what that changed, or what refused it, as renameTab does.
+   * Links the tab's session to the project's issue or change request in place of its own, taking it off
+   * any other of its kind: at once where it has one, else once it is claimed (reconcile;
+   * TrackedLinks.link). Answers what that changed, or what refused it, as renameTab does.
    */
-  private linkTo(tabId: string, kind: TrackedKind, number: number): LinkIssueResult {
+  link(tabId: string, tracked: TrackedRef): TrackedLinkResult {
     const tab = this.tabOf(tabId);
     if (!tab) {
       return { ok: false, error: "The tab is closed" };
@@ -567,21 +540,21 @@ export class TabSessionManager {
     }
     const sessionId = awaitsClaim(tab) ? undefined : tab.sessionId;
     try {
-      return { ok: true, ...this.trackedLinks.link(this.at.ref, tabId, sessionId, kind, number) };
+      return { ok: true, ...this.trackedLinks.link(this.at.ref, tabId, sessionId, tracked) };
     } catch (error) {
       return { ok: false, error: `Could not link the ${agent.displayName} session: ${errorMessage(error)}` };
     }
   }
 
-  /** Takes the session of the tab, on the strip or archived, off one of the kind, and the link it
-   *  waits to make. Answers what refused it. */
-  private unlinkFrom(tabId: string, kind: TrackedKind, number: number): ActionResult {
+  /** Takes the session of the tab, on the strip or archived, off the issue or change request, and the
+   *  link it waits to make. Answers what refused it. */
+  unlink(tabId: string, tracked: TrackedRef): ActionResult {
     const tab = this.tabOf(tabId) ?? this.archived.all().find((candidate) => candidate.tabId === tabId);
     if (!tab) {
       return { ok: false, error: "The tab is closed" };
     }
     try {
-      this.trackedLinks.unlink(this.at.ref, tabId, tab.sessionId, kind, number);
+      this.trackedLinks.unlink(this.at.ref, tabId, tab.sessionId, tracked);
     } catch (error) {
       return {
         ok: false,

@@ -16,7 +16,7 @@ import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
 import { onDisk } from "./util/path-inside";
 import { forgetArchived } from "./store/archive";
-import { forgetSessionLinksAt } from "./store/session-links";
+import { dropCachedLinks, forgetSessionLinksAt } from "./store/session-links";
 import { newWorktreeKey, projectDir, worktreeDir, worktreeFolders, worktreeKeyOf } from "./store/project-dirs";
 import { removeRefSandboxes } from "./sbx/sbx";
 import { releaseDropped } from "./sbx/sbx-mounts";
@@ -286,6 +286,7 @@ async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitComma
     }
   }
   await deleteRefData(closing, [projectDir(deps.dataRoot, projectId)]);
+  dropCachedLinks(deps.dataRoot, projectId);
   if (!there) {
     // Their folders went with TET's; with the repository there, deleteWorktree took them.
     for (const worktree of project.worktrees.filter((entry) => entry.key !== undefined)) {

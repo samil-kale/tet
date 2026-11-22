@@ -1,4 +1,5 @@
 import type { AgentInfo } from "../../shared/types/agents";
+import type { TrackedKind } from "../../shared/types/providers";
 import type { TabDescriptor } from "../../shared/types/terminals";
 import { isEditorTabId, type EditorTab } from "../editor/editor-tab";
 import { keepEditor } from "../editor/editor-views";
@@ -25,13 +26,17 @@ export function kindOf(tab: PaneTab): KindedTab {
   return { kind: paneTabKind(tab.tabId), tab } as KindedTab;
 }
 
-/** An editor tab's name: its file, with the short commit id for a commit's file; an issue's number; a
- *  change request's until its tab has read what its host calls it (`useTrackedLabel`). */
-export function editorLabel({ path, commit, issue, changeRequest }: EditorTab): string {
-  if (issue !== undefined) {
-    return `Issue #${issue}`;
-  }
-  return changeRequest === undefined ? baseName(path) + (commit ? ` (${commit.sha.slice(0, 7)})` : "") : `Request ${changeRequest}`;
+/** What an editor tab is named on an issue or change request, until its tab has read what its host
+ *  calls a change request (`useTrackedLabel`). */
+const TRACKED_LABELS: Record<TrackedKind, (number: number) => string> = {
+  issue: (number) => `Issue #${number}`,
+  "change-request": (number) => `Request ${number}`,
+};
+
+/** An editor tab's name: its file, with the short commit id for a commit's file; an issue's or change
+ *  request's number. */
+export function editorLabel({ path, commit, tracked }: EditorTab): string {
+  return tracked ? TRACKED_LABELS[tracked.kind](tracked.number) : baseName(path) + (commit ? ` (${commit.sha.slice(0, 7)})` : "");
 }
 
 /** A terminal's name: the session title; a session-less agent's name, else a placeholder. */

@@ -1,11 +1,9 @@
 import { sameProjectRef, type ProjectRef } from "../../shared/types/project";
-import type { TrackedKind } from "../../shared/types/providers";
-import type { IssueLinkChange, TabRef } from "../../shared/types/terminals";
+import { TRACKED_KINDS, type TrackedKind, type TrackedRef } from "../../shared/types/providers";
+import type { TabDescriptor, TabRef, TrackedLinkChange } from "../../shared/types/terminals";
 import { linkSession, sessionLinks, unlinkSession } from "../store/session-links";
 import { logFailure } from "../util/json-file";
 import type { TabState } from "./tab-state";
-
-const KINDS: readonly TrackedKind[] = ["issue", "change-request"];
 
 function isTab(at: TabRef, ref: ProjectRef, tabId: string): boolean {
   return at.tabId === tabId && sameProjectRef(at.ref, ref);
@@ -49,10 +47,20 @@ export class TrackedLinks {
     return [...waiting].find(([, at]) => isTab(at, ref, tabId))?.[0];
   }
 
-  /** The one of the kind each of the repository's or worktree's tabs shows, by its id: the one it
-   *  waits for, else its session's, unless another tab waits for that one. The store is read once,
-   *  and not at all for tabs without a session. */
-  linksOf(ref: ProjectRef, tabs: readonly TabState[], kind: TrackedKind): Map<string, number> {
+  /** What each of the repository's or worktree's tabs shows linked, by its id: of each kind the one
+   *  it waits for, else its session's, unless another tab waits for that one. */
+  linksOf(ref: ProjectRef, tabs: readonly TabState[]): Map<string, NonNullable<TabDescriptor["linked"]>> {
+    const links = new Map<string, NonNullable<TabDescriptor["linked"]>>();
+    for (const kind of TRACKED_KINDS) {
+      for (const [tabId, number] of this.linksOfKind(ref, tabs, kind)) {
+        links.set(tabId, { ...links.get(tabId), [kind]: number });
+      }
+    }
+    return links;
+  }
+
+  /** `linksOf` of one kind. The store is read once, and not at all for tabs without a session. */
+  private linksOfKind(ref: ProjectRef, tabs: readonly TabState[], kind: TrackedKind): Map<string, number> {
     const waiting = this.waitingOf(ref.projectId, kind);
     const linked = new Map<string, number>();
     for (const [number, at] of waiting) {
@@ -78,12 +86,12 @@ export class TrackedLinks {
    * its session where it has one, else the one it claims, waiting meanwhile. Answers what that changed
    * beside the link. Throws when the store cannot be written, nothing changed.
    */
-  link(ref: ProjectRef, tabId: string, sessionId: string | undefined, kind: TrackedKind, number: number): IssueLinkChange {
+  link(ref: ProjectRef, tabId: string, sessionId: string | undefined, { kind, number }: TrackedRef): TrackedLinkChange {
     const waiting = this.waitingOf(ref.projectId, kind);
     const waited = this.waitedBy(waiting, ref, tabId);
     const other = waiting.get(number);
     const displaced = other !== undefined && !isTab(other, ref, tabId);
-    let change: IssueLinkChange;
+    let change: TrackedLinkChange;
     if (sessionId === undefined) {
       change = {
         ...(waited !== undefined && waited !== number && { movedFrom: waited }),
@@ -106,7 +114,7 @@ export class TrackedLinks {
 
   /** Takes the tab, its session or its waiting, off one of the kind. Throws when the store cannot be
    *  written, nothing changed. */
-  unlink(ref: ProjectRef, tabId: string, sessionId: string | undefined, kind: TrackedKind, number: number): void {
+  unlink(ref: ProjectRef, tabId: string, sessionId: string | undefined, { kind, number }: TrackedRef): void {
     if (sessionId !== undefined) {
       unlinkSession(this.dataRoot, ref, kind, number, sessionId);
     }
@@ -122,7 +130,7 @@ export class TrackedLinks {
    *  logged, as the claim goes on. */
   claimed(ref: ProjectRef, tabId: string, sessionId: string): void {
     let made = false;
-    for (const kind of KINDS) {
+    for (const kind of TRACKED_KINDS) {
       const waiting = this.waitingOf(ref.projectId, kind);
       const number = this.waitedBy(waiting, ref, tabId);
       if (number !== undefined) {

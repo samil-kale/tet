@@ -18,6 +18,7 @@ import type { EnvAsk } from "../../src/main/ctl/env-requests";
 import { tabControlToken } from "../../src/main/terminals/ctl-token";
 import { CONTROL_ENV, CONTROL_VERBS, EXIT_CODES } from "../../src/shared/ctl";
 import { EMPTY_REPOSITORY_STATE, refName, type FileChange, type GitActionResult, type WorktreeInfo } from "../../src/shared/types/git";
+import type { IssueDetail } from "../../src/shared/types/providers";
 import { type Project, type ProjectCommand, type ProjectRef, refKeyOf } from "../../src/shared/types/project";
 import {
   EMPTY_SBX_SETTINGS,
@@ -267,16 +268,14 @@ function terminalsOf(key: string): ControlTerminals {
       return refuseRename === undefined ? { ok: true } : { ok: false, error: refuseRename };
     },
     // The caller's own tab is a shell, which keeps no session to link.
-    linkIssue: (tabId, number) => {
-      calls.issueLinks.push(`link:${tabId}:${number}`);
+    link: (tabId, { kind, number }) => {
+      calls.issueLinks.push(`link:${kind}:${tabId}:${number}`);
       return tabId === OWN_TAB ? { ok: false, error: "A Shell tab keeps no session" } : { ok: true, movedFrom: 3 };
     },
-    unlinkIssue: (tabId, number) => {
-      calls.issueLinks.push(`unlink:${tabId}:${number}`);
+    unlink: (tabId, { kind, number }) => {
+      calls.issueLinks.push(`unlink:${kind}:${tabId}:${number}`);
       return { ok: true };
     },
-    linkChangeRequest: () => ({ ok: true }),
-    unlinkChangeRequest: () => ({ ok: true }),
     hookEvent: (tabId, event, payload, at, side) => {
       calls.hooks.push([tabId, event, payload]);
       calls.hookTimes.push(at);
@@ -430,9 +429,6 @@ function deps(): ControlDeps {
         },
       ];
     },
-    markIssuesSeen: async (projectId, number) => {
-      calls.issueCalls.push(`seen:${projectId}:${number ?? "all"}`);
-    },
     listIssues: async (projectId, filter) => {
       calls.issueCalls.push(`list:${projectId}:${JSON.stringify(filter)}`);
       return [
@@ -454,98 +450,110 @@ function deps(): ControlDeps {
       return { total: 1, updatedAt: "2026-11-06T09:00:00Z" };
     },
     issueFilterOptions: async () => ({ labels: ["bug"], people: ["mira"] }),
-    readIssue: async (_projectId, number) => {
-      if (number === 404) {
-        throw new Error("404 Not Found");
-      }
-      return {
-        number,
-        title: "Changed",
-        url: `https://gitlab.example.com/g/r/-/issues/${number}`,
-        open: true,
-        author: "mira",
-        createdAt: "2026-11-01T00:00:00Z",
-        updatedAt: "2026-11-06T09:00:00Z",
-        labels: ["bug"],
-        avatars: { mira: "https://gitlab.example.com/mira.png" },
-        provider: "gitlab",
-        body: "The text",
-        notes: [{ id: "note-1", author: "mira", createdAt: "2026-11-02T00:00:00Z", body: "A comment" }],
-        events: [],
-        fields: [
-          { id: "labels", name: "Labels", editable: true, kind: "pick", value: ["bug"], several: true, shown: "labels" },
-          { id: "milestone", name: "Milestone", editable: true, kind: "pick", value: [], several: false, shown: "text" },
-          { id: "weight", name: "Weight", editable: true, kind: "number" },
-          { id: "due", name: "Due date", editable: true, kind: "date" },
-          { id: "confidential", name: "Confidential", editable: true, kind: "flag", value: false },
-          { id: "time", name: "Time", editable: true, kind: "timelog", entries: [] },
-          { id: "type", name: "Type", editable: false, kind: "text", value: "Issue" },
-        ],
-      };
-    },
-    issueImage: async (_projectId, source) => (source === "missing.png" ? null : `data:image/png;base64,${source}`),
-    issueFieldOptions: async (_projectId, number, fieldId) => [`${number}:${fieldId}`],
-    setIssueField: async (_projectId, number, fieldId, value) => {
-      calls.issueCalls.push(`field:${number}:${fieldId}:${JSON.stringify(value)}`);
-    },
     createIssue: async (projectId, title, body) => {
       calls.issueCalls.push(`create:${projectId}:${title}:${body}`);
       return 51;
     },
-    updateIssue: async (_projectId, number, change) => {
-      calls.issueCalls.push(`update:${number}:${JSON.stringify(change)}`);
-    },
     deleteIssue: async (_projectId, number) => {
       calls.issueCalls.push(`delete:${number}`);
-    },
-    commentIssue: async (_projectId, number, body, internal) => {
-      calls.issueCalls.push(`comment:${number}:${body}:${internal}`);
-    },
-    editIssueComment: async (_projectId, id, body) => {
-      calls.issueCalls.push(`edit-comment:${id}:${body}`);
-    },
-    deleteIssueComment: async (_projectId, id) => {
-      calls.issueCalls.push(`delete-comment:${id}`);
     },
     uploadIssueFile: async (_projectId, name, bytes) => {
       calls.issueCalls.push(`upload:${name}:${bytes.toString("utf8")}`);
       return `![${name}](/uploads/${name})`;
     },
-    openIssue: (ref, number, keep, background) => {
+    listChangeRequests: async () => [],
+    latestChangeRequests: async () => ({ total: 0, checks: "" }),
+    changeRequestFilterOptions: async () => ({ labels: [], people: [] }),
+    unreadChangeRequests: async () => [],
+    approveChangeRequest: async () => undefined,
+    tracked: {
+      issue: {
+        nameOf: (number) => `issue #${number}`,
+        agentFile: async () => ({ content: "", prompt: "" }),
+        markSeen: async (projectId, number) => {
+          calls.issueCalls.push(`seen:${projectId}:${number ?? "all"}`);
+        },
+        read: async (_projectId, number) => {
+          if (number === 404) {
+            throw new Error("404 Not Found");
+          }
+          const detail: IssueDetail = {
+            number,
+            title: "Changed",
+            url: `https://gitlab.example.com/g/r/-/issues/${number}`,
+            open: true,
+            author: "mira",
+            createdAt: "2026-11-01T00:00:00Z",
+            updatedAt: "2026-11-06T09:00:00Z",
+            labels: ["bug"],
+            avatars: { mira: "https://gitlab.example.com/mira.png" },
+            provider: "gitlab",
+            body: "The text",
+            notes: [{ id: "note-1", author: "mira", createdAt: "2026-11-02T00:00:00Z", body: "A comment" }],
+            events: [],
+            fields: [
+              { id: "labels", name: "Labels", editable: true, kind: "pick", value: ["bug"], several: true, shown: "labels" },
+              { id: "milestone", name: "Milestone", editable: true, kind: "pick", value: [], several: false, shown: "text" },
+              { id: "weight", name: "Weight", editable: true, kind: "number" },
+              { id: "due", name: "Due date", editable: true, kind: "date" },
+              { id: "confidential", name: "Confidential", editable: true, kind: "flag", value: false },
+              { id: "time", name: "Time", editable: true, kind: "timelog", entries: [] },
+              { id: "type", name: "Type", editable: false, kind: "text", value: "Issue" },
+            ],
+          };
+          return { detail, markdown: "" };
+        },
+        image: async (_projectId, source) => (source === "missing.png" ? null : `data:image/png;base64,${source}`),
+        fieldOptions: async (_projectId, number, fieldId) => [`${number}:${fieldId}`],
+        setField: async (_projectId, number, fieldId, value) => {
+          calls.issueCalls.push(`field:${number}:${fieldId}:${JSON.stringify(value)}`);
+        },
+        update: async (_projectId, number, change) => {
+          calls.issueCalls.push(`update:${number}:${JSON.stringify(change)}`);
+        },
+        comment: async (_projectId, number, body, internal) => {
+          calls.issueCalls.push(`comment:${number}:${body}:${internal}`);
+        },
+        editComment: async (_projectId, id, body) => {
+          calls.issueCalls.push(`edit-comment:${id}:${body}`);
+        },
+        deleteComment: async (_projectId, id) => {
+          calls.issueCalls.push(`delete-comment:${id}`);
+        },
+      },
+      "change-request": {
+        nameOf: (number) => `change request ${number}`,
+        read: async () => {
+          throw new Error("404 Not Found");
+        },
+        agentFile: async () => ({ content: "", prompt: "" }),
+        image: async () => null,
+        fieldOptions: async () => [],
+        setField: async () => undefined,
+        update: async () => undefined,
+        comment: async () => undefined,
+        editComment: async () => undefined,
+        deleteComment: async () => undefined,
+        markSeen: async () => undefined,
+      },
+    },
+    openTracked: (ref, { number }, keep, background) => {
       calls.issuesOpened.push([refKeyOf(ref), number, keep, background]);
     },
-    sendIssueToAgent: async (ref, number, agentId, sandboxOnly) => {
+    sendTrackedToAgent: async (ref, { number }, agentId, sandboxOnly) => {
       calls.issueAgents.push([refKeyOf(ref), number, agentId, sandboxOnly]);
       return number === 404 ? { ok: false, error: "404 Not Found" } : { ok: true, tab: tab("tab-issue") };
     },
     // Issue 7 has a session in the repository on the strip, issue 8 an archived one in the worktree.
-    issueSession: (projectId, number) =>
-      projectId !== PROJECT.id
+    trackedSession: (projectId, { kind, number }) =>
+      projectId !== PROJECT.id || kind !== "issue"
         ? undefined
         : number === 7
           ? { ref: { projectId }, tabId: "tab-2", agentId: "claude", title: "Fix it", archived: false }
           : number === 8
             ? { ref: WORKTREE, worktree: "four", tabId: "s-old", agentId: "claude", title: "", archived: true }
             : undefined,
-    listChangeRequests: async () => [],
-    latestChangeRequests: async () => ({ total: 0, checks: "" }),
-    changeRequestFilterOptions: async () => ({ labels: [], people: [] }),
-    readChangeRequest: async () => {
-      throw new Error("404 Not Found");
-    },
-    unreadChangeRequests: async () => [],
-    markChangeRequestsSeen: async () => undefined,
-    changeRequestFieldOptions: async () => [],
-    setChangeRequestField: async () => undefined,
-    updateChangeRequest: async () => undefined,
-    commentChangeRequest: async () => undefined,
-    editChangeRequestComment: async () => undefined,
-    deleteChangeRequestComment: async () => undefined,
-    approveChangeRequest: async () => undefined,
     mergeChangeRequest: async () => undefined,
-    openChangeRequest: () => undefined,
-    sendChangeRequestToAgent: async () => ({ ok: false, error: "404 Not Found" }),
-    changeRequestSession: () => undefined,
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
     },
@@ -928,7 +936,13 @@ describe("tet-ctl against the control server", () => {
     assert.deepEqual(on.result, { saved: true, restartRequired: true });
     const off = await tetCtl(["settings-set-notification", "finished", "off"]);
     assert.equal(off.status, EXIT_CODES.ok);
-    assert.deepEqual(settings.notifications, { finished: false, waiting: true, idleReminder: true });
+    assert.deepEqual(settings.notifications, {
+      finished: false,
+      waiting: true,
+      idleReminder: true,
+      changeRequestOpened: true,
+      changeRequestFailed: true,
+    });
     assertUsage(await tetCtl(["settings-set-notification", "errors", "on"]), /unknown notification: errors/);
     const badValue = await tetCtl(["settings-set-notification", "waiting", "yes"]);
     assert.equal(badValue.status, EXIT_CODES.usage);
@@ -1291,7 +1305,7 @@ describe("tet-ctl against the control server", () => {
   it("links a tab's session to an issue and takes it off again", async () => {
     assert.deepEqual((await tetCtl(["issues-link-session", "7", "tab-2"])).result, { linked: 7, tabId: "tab-2", movedFrom: 3 });
     assert.deepEqual((await tetCtl(["issues-unlink-session", "7", "tab-2"])).result, { unlinked: 7, tabId: "tab-2" });
-    assert.deepEqual(calls.issueLinks, ["link:tab-2:7", "unlink:tab-2:7"]);
+    assert.deepEqual(calls.issueLinks, ["link:issue:tab-2:7", "unlink:issue:tab-2:7"]);
   });
 
   it("links no session of a tab that keeps none, an unknown tab or what is no issue number", async () => {
@@ -1299,7 +1313,7 @@ describe("tet-ctl against the control server", () => {
     assertUsage(await tetCtl(["issues-link-session", "7", "tab-9"]), /unknown tab: tab-9/);
     assertUsage(await tetCtl(["issues-link-session", "four", "tab-2"]), /not an issue number: four/);
     assert.equal((await tetCtl(["issues-link-session", "7"])).status, EXIT_CODES.usage, "no tab");
-    assert.deepEqual(calls.issueLinks, [`link:${OWN_TAB}:7`]);
+    assert.deepEqual(calls.issueLinks, [`link:issue:${OWN_TAB}:7`]);
   });
 
   it("answers the session linked to an issue, a worktree's by its name", async () => {

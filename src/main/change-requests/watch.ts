@@ -1,12 +1,12 @@
 import type { Notice } from "../../shared/types/app";
-import type { ChangeRequestKind, ChangeRequestRow } from "../../shared/types/providers";
+import { capitalized, changeRequestName, type ChangeRequestKind, type ChangeRequestRow } from "../../shared/types/providers";
 import type { IssueDeps } from "../issues";
 import { NoAccountError, NoRemoteError } from "../providers/issues";
 import { logError } from "../util/error-log";
 import { openChangeRequests } from "./tracker";
 
 /** How often every open project's change requests are read. */
-export const WATCH_MS = 120_000;
+const WATCH_MS = 120_000;
 
 /** What a round keeps of an open change request for the next: whether it was a draft, and the head
  *  commit whose failed checks were told. */
@@ -18,7 +18,7 @@ interface Watched {
 /** What one project's round tells, from what the last one kept (`before`, undefined for its first,
  *  which only keeps): one opened or made ready by someone else, and one of `viewer`'s whose checks failed
  *  on a head commit not told before. Answers what the next round compares with. */
-export function compareRound(
+function compareRound(
   before: ReadonlyMap<number, Watched> | undefined,
   rows: readonly ChangeRequestRow[],
   viewer: string,
@@ -44,10 +44,6 @@ export function compareRound(
   return { kept, opened, failed };
 }
 
-function capitalized(text: string): string {
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
 /**
  * Tells in the window of the change requests of every open project that need the user: one opened or
  * made ready by someone else, and one of the account's whose checks failed, once for each head commit.
@@ -58,25 +54,20 @@ function capitalized(text: string): string {
 export class ChangeRequestWatch {
   private readonly kept = new Map<string, Map<number, Watched>>();
   private readonly failing = new Set<string>();
-  private timer: ReturnType<typeof setInterval> | undefined;
 
   constructor(
     private readonly deps: Pick<IssueDeps, "accounts" | "repositories" | "settings" | "store">,
     private readonly notify: (notice: Notice) => void,
   ) {}
 
+  /** Once, at the app's start. */
   start(): void {
-    this.timer ??= setInterval(() => void this.round(), WATCH_MS);
+    setInterval(() => void this.round(), WATCH_MS);
     void this.round();
   }
 
-  stop(): void {
-    clearInterval(this.timer);
-    this.timer = undefined;
-  }
-
   /** One round over every open project. */
-  async round(): Promise<void> {
+  private async round(): Promise<void> {
     const { changeRequestOpened, changeRequestFailed } = this.deps.settings.get().notifications;
     if (!changeRequestOpened && !changeRequestFailed) {
       // Read afresh once one is on again: what was kept is stale by then.
@@ -108,13 +99,13 @@ export class ChangeRequestWatch {
     const { rows, viewer, kind } = read;
     const { kept, opened, failed } = compareRound(this.kept.get(projectId), rows, viewer);
     this.kept.set(projectId, kept);
-    const opens = (row: ChangeRequestRow) => ({ projectId, changeRequest: row.number });
+    const opens = (row: ChangeRequestRow) => ({ projectId, tracked: { kind: "change-request" as const, number: row.number } });
     if (tell.opened) {
       for (const row of opened) {
         this.notify({
           severity: "info",
           title: `${name}: new ${kind.noun}`,
-          message: `${kind.prefix}${row.number} ${row.title}, by ${row.author}`,
+          message: `${changeRequestName(kind, row.number)} ${row.title}, by ${row.author}`,
           opens: opens(row),
         });
       }
@@ -124,7 +115,7 @@ export class ChangeRequestWatch {
         this.notify({
           severity: "warning",
           title: `${name}: ${capitalized(kind.checks)} failed`,
-          message: `${kind.prefix}${row.number} ${row.title}`,
+          message: `${changeRequestName(kind, row.number)} ${row.title}`,
           opens: opens(row),
         });
       }

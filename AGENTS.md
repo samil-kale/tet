@@ -23,7 +23,8 @@ is rendered, from its Markdown (`issue-text.ts`); **Monaco** for
 the editor tab; VS Code's **GitHub Pull Requests and Issues** (`microsoft/vscode-pull-request-github`)
 for the rest of the Issues lane and its issue tab, which writes an issue's title, text, comments, state and
 fields, uploads what the tracker takes from a token (`uploads`), and makes and deletes issues, and nothing
-else until asked. A field is whatever the tracker lists for the issue (`IssueField`: labels, assignees,
+else until asked; and for the change requests lane and its tab, the same view, which writes a pull or merge
+request's title, text, comments, state and fields, approves and merges it, and nothing else until asked. A field is whatever the tracker lists for the issue (`IssueField`: labels, assignees,
 milestone, and where the tracker has them GitLab's status, parent, weight, iteration, dates, health, time,
 confidential and GitHub's type, parent and issue fields), read by `readIssue` and set by `listOptions` and
 `setField`: a new one is an entry of a provider, never a view.
@@ -57,7 +58,10 @@ project's tabs.
      (`CallerSide`) extends the tab's.
   5. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
      singletons it touches) and, flat, the startup (`main.ts`, `uncaught.ts`), the window
-     (`window.ts`), `projects.ts`, `settings-access.ts` and `requirements.ts`.
+     (`window.ts`), `projects.ts`, `settings-access.ts` and `requirements.ts`; `issues.ts` (the issue
+     tracker), `change-requests/` (making a pull or merge request, reading and writing them on the
+     repository's own remote, `watch.ts` telling of them) and `tracked.ts`, what an issue and a change
+     request do alike, by `TrackedKind` (`trackedOps`, their sessions).
 
   Files that belong together are a folder; one that stands alone stays flat in its layer. A new
   folder or flat file joins a layer in `eslint.config.mjs`, or lint refuses to run.
@@ -77,7 +81,8 @@ project's tabs.
      login every one of them asks alike.
   5. `lanes/` and `dialogs/`, apart from each other. A lane is a folder of `lanes/` — `projects/`
      (the projects and the Commands), `git/` (the branch tree and the changes), `files/` (the
-     Explorer tree, the Search section, Seti's file icons), `issues/` (the Issues), `archive/` (the
+     Explorer tree, the Search section, Seti's file icons), `issues/` (the Issues), `change-requests/` (the
+     pull or merge requests), `archive/` (the
      Archive) — and imports no other lane; beside them, their state (`use-lanes.ts`) and the Navigation Bar that toggles
      them (`NavigationBar.tsx`).
   6. The shell, flat: `App`, `Startup`, `main.tsx`, `styles.css`, and what feeds `App` from main
@@ -128,6 +133,8 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
     archive.json                   the sessions kept archived in the repository and its worktrees
     issues-seen.json               each issue's update as its tab showed it, and since when others count as unread
     issue-sessions.json            the session linked to each issue, in the repository or a worktree
+    change-requests-seen.json      the same of the change requests, and whose checks their tab showed failed
+    change-request-sessions.json   the session linked to each change request
     drops/                         pasted or dropped content without a path, for host tabs
     sandboxes/repository/<agent>/  the repository's sandbox of the agent, mounted whole
       sessions/                    the host side of its session mounts
@@ -139,8 +146,8 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
 
 - **Machine-wide or per project, nothing between.** The top level holds what is global or secret;
   `projects/<id>/` only what a sandbox may see — never a setting, a token or an sbx value — and
-  `archive.json`, `issues-seen.json` and `issue-sessions.json`, session ids and issue numbers with
-  timestamps alone.
+  `archive.json` and the seen and session files of issues and change requests, session ids and their
+  numbers with timestamps alone.
   Removing a project deletes its folder.
 - **A sandbox sees its agent folder, and nothing else of `~/.tet`** — but the worktree it runs in,
   and a worktree or path handed to it (dropped, or by `worktree-agent-merge`), mounted as a drop.
@@ -163,7 +170,8 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
 - **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
   worktree (`SessionProvider`), and keeps only which are archived (`archive.json`, ids alone): such a
   session shows in the Archive lane instead of as a tab, until reopened or deleted. Which are linked to
-  an issue is kept the same way (`issue-sessions.json`), shown by what their tabs say of them.
+  an issue or change request is kept the same way (`issue-sessions.json`, `change-request-sessions.json`),
+  shown by what their tabs say of them.
 - **An agent that cannot fit is not added**: one needing project data on the host, session records
   kept by TET, or a running process to list its sessions. Bending the model for one agent is the
   user's call.
@@ -254,7 +262,7 @@ staging), the commit graph (Graph: VS Code's "Auto" — HEAD, its upstream and t
 read-only, a commit's files and their diffs against its first parent, searched by message, author
 or path), stash of all and apply/pop/drop, remote URL, worktrees (add, rename, delete), init and
 clone (GitHub/GitLab via `GitProvider`), a commit message suggested by an installed agent, and a
-pull or merge request of the checked-out branch from Branches (`change-requests.ts`: into a branch
+pull or merge request of the checked-out branch from Branches (`change-requests/create.ts`: into a branch
 of its remote picked in the dialog, its base offered first, else the default branch, pushing it
 first, its text typed or suggested alike, then, as its checkboxes say, a draft, approved where the
 host lets its author, set to auto-merge and squashed, its branch deleted once merged).
@@ -271,26 +279,29 @@ per-line decision is for an agent.
 
 - **Layout**: the Navigation Bar at the window's left edge (`NavigationBar.tsx`), full height,
   settings right after the lane toggles; beside it the lanes: the projects (each with its worktrees,
-  and the Commands), git, files, the project's issues (read from its tracker, written to from an
-  issue's tab and the section's new issue, rename and delete) and the archived tabs (taken off the
+  and the Commands), files, git, the project's issues (read from its tracker, written to from an
+  issue's tab and the section's new issue, rename and delete), its repository's pull or merge requests
+  (read from its own remote, written to from their tab) and the archived tabs (taken off the
   strip, their sessions kept) — none of them a tab.
-  Only one is ever shown, in a fixed order (`projects`, `git`, `files`, `issues`, `archive`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
+  Only one is ever shown, in a fixed order (`projects`, `files`, `git`, `issues`, `change-requests`, `archive`); the toggles swap it, each closing it back on its own click (`use-lanes.ts`). No pinning,
   no reordering. Which lane is shown and its width are the window's layout storage. The tab strip is
   the agent, shell and editor tabs of the repository or a worktree — VS Code's preview rule, one
   preview tab each (`editor-tab.ts`).
 - **Section titles are the screen's, code names the code's**: Projects `ProjectList`, Commands
   `CommandList`, Branches `BranchTree` (its header's button swaps it for Graph `CommitGraph`),
-  Local Changes `ChangesList`, Search `FileSearch`, Explorer `Explorer`, Issues `IssueList`, Archive
-  `ArchiveList`; each title heads a `Section`, drawn by `ProjectList`, `CommandList`, `IssueList` and
-  `ArchiveList` themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
+  Local Changes `ChangesList`, Search `FileSearch`, Explorer `Explorer`, Issues `IssueList`, Pull Requests or
+  Merge Requests (the host's word) `ChangeRequestList`, Archive `ArchiveList`; each title heads a
+  `Section`, drawn by `ProjectList`, `CommandList`, `IssueList`, `ChangeRequestList` and `ArchiveList`
+  themselves and by `GitLane` and `FilesLane` around the others, never a "pane".
 - **A section's rows drag onto a terminal**, which types what was dropped: a file's or folder's
   path (`TreeRow`'s `dragPath`), else what the row names (`DragName`, `ui/row-drag.ts`), its kind
   before it where the tab's agent reads prose (`AgentTerminal.labelsDrops`). A new section, or a
-  new kind of row in one, comes with an *offer* to add its drag — the user decides. An Issues or
-  Archive row opens instead: the pane or snap zone it drops on takes its tab. An issue reaches an
-  agent through "Send to Agent", in its row's menu, its tab's menu and bar: a new tab of the agent
-  picked, the issue its first prompt. An issue has one session, a session one issue: once it has
-  one, those places offer "Open Session", and the session's tab "Open Issue".
+  new kind of row in one, comes with an *offer* to add its drag — the user decides. An Issues,
+  change requests or Archive row opens instead: the pane or snap zone it drops on takes its tab. An
+  issue or change request reaches an agent through "Send to Agent", in its row's menu, its tab's menu
+  and bar: a new tab of the agent picked, it the first prompt. Each has one session, a session one of
+  each kind: once it has one, those places offer "Open Session", and the session's tab "Open Issue" or
+  "Open Pull/Merge Request".
 - **Split view**: up to four panes in fixed presets, reached only by dragging a tab onto a snap
   zone. Every rule is in `src/renderer/tabs/pane-layout.ts`, the state in
   `use-project-layouts.ts`, called from `App`.

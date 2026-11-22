@@ -1,4 +1,4 @@
-import type { ActionRefused } from "./types/action";
+import type { ActionRefused, ActionResult } from "./types/action";
 
 /**
  * What a caught value says, for anything the user is shown — a notice, a dialog's error, a
@@ -16,4 +16,9 @@ export function errorMessage(error: unknown): string {
 /** A caught value as a failed action (Repository.runAction, git.ts's own file writes). */
 export function failure(error: unknown): ActionRefused {
   return { ok: false, error: errorMessage(error) };
+}
+
+/** An action as an `ActionResult`, whatever it threw as the failure's message. */
+export function attempt(action: () => Promise<unknown>): Promise<ActionResult> {
+  return action().then(() => ({ ok: true }), failure);
 }

@@ -1,17 +1,16 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { sameProjectRef } from "../../shared/types/project";
 import type { TrackedKind } from "../../shared/types/providers";
-import type { IssueSession } from "../../shared/types/terminals";
+import type { TrackedSession } from "../../shared/types/terminals";
 import { forget, stableRecord } from "../identity";
 import { createStore } from "../ui/store";
 
 /** The session linked to each of a project's issues or change requests that has one, by its number. */
-export type TrackedSessions = Readonly<Record<number, IssueSession>>;
+export type TrackedSessions = Readonly<Record<number, TrackedSession>>;
 
 const NONE: TrackedSessions = {};
 
-/** What every view watching a project shows of its sessions, by kind and project (`issues.sessions`,
- *  `changeRequests.sessions`). */
+/** What every view watching a project shows of its sessions, by kind and project (`tracked.sessions`). */
 const sessionsByProject = createStore<Record<string, TrackedSessions>>({});
 
 /** A project some view watches for one kind: how many do, what its last read handed out, and whether
@@ -20,7 +19,7 @@ interface Watched {
   kind: TrackedKind;
   projectId: string;
   views: number;
-  held: { current: Record<string, IssueSession> };
+  held: { current: Record<string, TrackedSession> };
   reading: boolean;
   due: boolean;
 }
@@ -33,7 +32,7 @@ function keyOf(kind: TrackedKind, projectId: string): string {
 }
 
 /** An entry read again the same keeps its identity: `ref` comes as a new object every read. */
-function sameSession(previous: IssueSession, next: IssueSession): boolean {
+function sameSession(previous: TrackedSession, next: TrackedSession): boolean {
   return (
     sameProjectRef(previous.ref, next.ref) &&
     previous.worktree === next.worktree &&
@@ -56,8 +55,7 @@ function read(key: string): void {
     return;
   }
   entry.reading = true;
-  const asked = entry.kind === "issue" ? window.tet.issues.sessions(entry.projectId) : window.tet.changeRequests.sessions(entry.projectId);
-  void asked.then((result) => {
+  void window.tet.tracked.sessions(entry.projectId, entry.kind).then((result) => {
     // Unwatched meanwhile: a later watch is another entry.
     if (watched.get(key) !== entry) {
       return;
@@ -79,7 +77,7 @@ function read(key: string): void {
 function watch(kind: TrackedKind, projectId: string): () => void {
   if (watched.size === 0) {
     unsubscribers = [
-      window.tet.issues.onSessionsChanged((changed) =>
+      window.tet.tracked.onSessionsChanged((changed) =>
         watched.forEach((entry, key) => {
           if (entry.projectId === changed) {
             read(key);

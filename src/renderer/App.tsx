@@ -5,6 +5,7 @@ import { EMPTY_REPOSITORY_STATE } from "../shared/types/git";
 import { projectRef, refKeyOf, projectRefsOf, worktreeName } from "../shared/types/project";
 import type { EnvRequest } from "../shared/types/environment";
 import type { Project, ProjectRef } from "../shared/types/project";
+import type { TrackedRef } from "../shared/types/providers";
 import { resolvedByRefKey, type ResolvedRef } from "./resolved-ref";
 import { AddRepositoryDialog } from "./dialogs/AddRepositoryDialog";
 import { EnvDialog } from "./dialogs/EnvDialog";
@@ -45,7 +46,7 @@ import { PLATFORM } from "./platform";
 import { DEFAULT_LAYOUT, inOrder, paneOf, tabsOnScreen } from "./tabs/pane-layout";
 import { NO_TABS } from "./tabs/layout-state";
 import { useProjectLayouts } from "./tabs/use-project-layouts";
-import { changeRequestOf, issueOf, openChangeRequestTab, workingTreePathOf, type EditorTab } from "./editor/editor-tab";
+import { openTrackedTab, trackedNumberOf, workingTreePathOf, type EditorTab } from "./editor/editor-tab";
 import { editorLabel, kindOf, terminalLabel, type PaneTab } from "./tabs/pane-tab";
 import { canDiscardRefEdits } from "./editor/editor-views";
 import { useEditorOpening } from "./tabs/use-editor-opening";
@@ -407,11 +408,11 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   const closeSbxSettings = useCallback(() => setSbxSettingsProject(null), []);
   /** Opening and closing editor tabs (use-editor-opening.ts). */
   const { openEditor, openActiveDiff, closeEditors } = useEditorOpening(editorTabsRef, setEditorTabs, activateTab, activateRef, activeRef);
-  /** A notice's change request, in its tab in the project's repository. */
-  const openNoticeChangeRequest = useCallback(
-    (projectId: string, number: number) => {
+  /** A notice's issue or change request, in its tab in the project's repository. */
+  const openNoticeTracked = useCallback(
+    (projectId: string, tracked: TrackedRef) => {
       activateRef(refKeyOf({ projectId }));
-      openChangeRequestTab(openEditor, { projectId }, number);
+      openTrackedTab(openEditor, { projectId }, tracked);
     },
     [openEditor, activateRef],
   );
@@ -500,7 +501,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     key={activeResolved.ref.projectId}
                     resolved={activeResolved}
                     shown={shown}
-                    openIssue={issueOf(editorTabs[activeResolved.refKey], activeTabId)}
+                    openIssue={trackedNumberOf("issue", editorTabs[activeResolved.refKey], activeTabId)}
                     onOpenFile={openEditor}
                     onOpenAccounts={openAccounts}
                   />
@@ -511,7 +512,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
                     key={activeResolved.ref.projectId}
                     resolved={activeResolved}
                     shown={shown}
-                    openChangeRequest={changeRequestOf(editorTabs[activeResolved.refKey], activeTabId)}
+                    openChangeRequest={trackedNumberOf("change-request", editorTabs[activeResolved.refKey], activeTabId)}
                     onOpenFile={openEditor}
                     onOpenAccounts={openAccounts}
                   />
@@ -599,7 +600,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 
       <Notices />
-      <NoticesCenter onShowTab={showNoticeTab} onOpenChangeRequest={openNoticeChangeRequest} />
+      <NoticesCenter onShowTab={showNoticeTab} onOpenTracked={openNoticeTracked} />
       <Dialogs />
     </div>
   );

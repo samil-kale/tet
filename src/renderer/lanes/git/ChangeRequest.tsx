@@ -1,13 +1,15 @@
 import { useCallback, useState } from "react";
 import type { RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
-import type {
-  ChangeRequest,
-  ChangeRequestFollowUps,
-  ChangeRequestInput,
-  ChangeRequestKind,
-  ChangeRequestTarget,
-  ChangeRequestTargetResult,
+import {
+  capitalized,
+  changeRequestName,
+  type ChangeRequest,
+  type ChangeRequestFollowUps,
+  type ChangeRequestInput,
+  type ChangeRequestKind,
+  type ChangeRequestTarget,
+  type ChangeRequestTargetResult,
 } from "../../../shared/types/providers";
 import { askLogin } from "../../git/GitLogin";
 import type { FileAsk } from "../../git/run-action";
@@ -16,11 +18,6 @@ import { Dropdown } from "../../ui/Dropdown";
 import { Checkbox, Field, SuggestField, TextField } from "../../ui/Field";
 import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
-
-/** "Pull request" for a title. */
-function capitalized(noun: string): string {
-  return noun.charAt(0).toUpperCase() + noun.slice(1);
-}
 
 /** The button's and the dialog's title, in the host's word: "Push and create Pull-Request". Until
  *  the host is known, or where it is none, it says "Change Request" (the code's word for either). */
@@ -175,7 +172,7 @@ export async function askChangeRequest(
   }
   if (found.open) {
     const { number, url } = found.open;
-    notify("info", `${capitalized(kind.noun)} ${kind.prefix}${number} is open already.\n${url}`, { link: url });
+    notify("info", `${capitalized(kind.noun)} ${changeRequestName(kind, number)} is open already.\n${url}`, { link: url });
     return;
   }
   // Where the remote lacks what the branch has, or has no branch of it yet.
@@ -253,7 +250,7 @@ export async function askChangeRequest(
     ].filter((sentence) => sentence !== undefined);
     notify(
       missed.length > 0 ? "warning" : "info",
-      `${[`Created ${kind.noun} ${kind.prefix}${number} into ${created.into}.`, ...missed].join(" ")}\n${url}`,
+      `${[`Created ${kind.noun} ${changeRequestName(kind, number)} into ${created.into}.`, ...missed].join(" ")}\n${url}`,
       { link: url },
     );
   }

@@ -19,7 +19,7 @@ import {
 } from "../../shared/types/providers";
 import {
   allNodes,
-  ApiError,
+  changeRequestFields,
   checksText,
   fetchImageOk,
   fetchOk,
@@ -30,6 +30,7 @@ import {
   numberOf,
   pickField,
   pickHandler,
+  reached,
   sendDelete,
   sendGraphql,
   sendMutation,
@@ -67,15 +68,6 @@ function bearer(token: string): Record<string, string> {
 
 function sender(host: string, token: string): GraphqlSend {
   return (query, variables) => sendGraphql(graphqlUrl(host), bearer(token), query, variables);
-}
-
-/** A project GraphQL answers null for says neither that it is missing nor that the token cannot read
- *  it: REST's 404 for both, which hands over to the next account. */
-function reached<T>(found: T | null | undefined, what: string): T {
-  if (found === null || found === undefined) {
-    throw new ApiError(404, `${what} was not found, or this account cannot read it`);
-  }
-  return found;
 }
 
 /** The issue a project's answer holds, both reached (`reached`). */
@@ -819,7 +811,7 @@ export interface GitLabMergeRequest {
 
 /** The one from `path`'s own branch among those of a branch of that name, a fork's left out. */
 export function ownMergeRequest(found: GitLabMergeRequest[], path: string): ChangeRequest | undefined {
-  const own = found.find((entry) => entry.sourceProject?.fullPath.toLowerCase() === path.toLowerCase());
+  const own = found.find((entry) => fromOwnProject(entry, path));
   return own && { number: Number(own.iid), url: own.webUrl };
 }
 
@@ -912,7 +904,7 @@ export function mergeRequestsVariables(path: string, filter: ChangeRequestFilter
 
 /** How a pipeline stands, in TET's words; undefined for one that neither runs nor ended passed or failed. */
 export function pipelineChecks(pipeline: { status: string } | null | undefined): ChecksState | undefined {
-  switch (pipeline?.status) {
+  switch (pipeline?.status ?? "") {
     case "SUCCESS":
       return "passed";
     case "FAILED":
@@ -994,40 +986,15 @@ const mergeRequestFields = fieldMethods<MergeRequestTarget>({
   mutate,
 });
 
-/** The fields a merge request has, as the tab lists them, in the order of GitLab's own sidebar. */
+/** The fields a merge request has (`changeRequestFields`), in the order of GitLab's own sidebar. */
 export function toMergeRequestFields(found: GitLabMergeRequestDetail, closes: { iid: number; title: string }[]): IssueField[] {
-  return [
-    pickField(
-      "reviewers",
-      "Reviewers",
-      found.reviewers.nodes.map((user) => user.username),
-      { several: true, shown: "people" },
-    ),
-    pickField(
-      "assignees",
-      "Assignees",
-      found.assignees.nodes.map((user) => user.username),
-      { several: true, shown: "people" },
-    ),
-    pickField(
-      "labels",
-      "Labels",
-      found.labels.nodes.map((label) => label.title),
-      { several: true, shown: "labels" },
-    ),
-    pickField(
-      "linkedIssues",
-      "Linked Issues",
-      closes.map((issue) => linkedIssueName(issue.iid, issue.title)),
-      { several: true, shown: "issues", editable: false },
-    ),
-    pickField(
-      "participants",
-      "Participants",
-      (found.participants?.nodes ?? []).map((user) => user.username),
-      { several: true, shown: "people", editable: false },
-    ),
-  ];
+  return changeRequestFields({
+    reviewers: found.reviewers.nodes.map((user) => user.username),
+    assignees: found.assignees.nodes.map((user) => user.username),
+    labels: found.labels.nodes.map((label) => label.title),
+    linkedIssues: closes.map((issue) => linkedIssueName(issue.iid, issue.title)),
+    participants: (found.participants?.nodes ?? []).map((user) => user.username),
+  });
 }
 
 /** A merge request by its number, as far as `selection` reads it (`readWorkItem`'s for one). */
@@ -1071,8 +1038,8 @@ export const gitlab: GitProvider = {
     }));
   },
 
-  async listIssues({ host, token, path }, filter, limit) {
-    const entries = await firstNodes<GitLabIssue>(
+  async listIssues({ host, token, path }, filter, limit, after) {
+    const { items, ...rest } = await firstNodes<GitLabIssue>(
       sender(host, token),
       ISSUES_QUERY,
       issuesVariables(path, filter),
@@ -1080,9 +1047,9 @@ export const gitlab: GitProvider = {
         const { project } = data as { project: { issues: GraphqlPage<GitLabIssue> } | null };
         return reached(project, path).issues;
       },
-      limit,
+      { limit, after },
     );
-    return entries.map(toIssue);
+    return { items: items.map(toIssue), ...rest };
   },
 
   async readLatest({ host, token, path }, filter) {
@@ -1098,6 +1065,14 @@ export const gitlab: GitProvider = {
 
   async listPeople({ host, token, path }) {
     return (await allPeople(sender(host, token), path)).map((entry) => entry.name);
+  },
+
+  async readIssueUpdate({ host, token, path }, number) {
+    const query = "query($path: ID!, $iid: String!) { project(fullPath: $path) { issue(iid: $iid) { updatedAt } } }";
+    const { project } = (await sender(host, token)(query, { path, iid: String(number) })) as {
+      project: { issue: { updatedAt: string } | null } | null;
+    };
+    return reachedIssue(project, path, number);
   },
 
   async readIssue({ host, token, path }, number) {
@@ -1227,8 +1202,8 @@ export const gitlab: GitProvider = {
     });
   },
 
-  async listChangeRequests({ host, token, path }, filter, limit) {
-    const entries = await firstNodes<GitLabMergeRequestRow>(
+  async listChangeRequests({ host, token, path }, filter, limit, after) {
+    const { items, ...rest } = await firstNodes<GitLabMergeRequestRow>(
       sender(host, token),
       MERGE_REQUESTS_QUERY,
       mergeRequestsVariables(path, filter),
@@ -1236,10 +1211,9 @@ export const gitlab: GitProvider = {
         const { project } = data as { project: { mergeRequests: GraphqlPage<GitLabMergeRequestRow> } | null };
         return reached(project, path).mergeRequests;
       },
-      limit,
-      (entry) => fromOwnProject(entry, path),
+      { limit, after, keep: (entry) => fromOwnProject(entry, path) },
     );
-    return entries.map(toChangeRequestRow);
+    return { items: items.map(toChangeRequestRow), ...rest };
   },
 
   async readChangeRequestsLatest({ host, token, path }, filter) {
@@ -1288,9 +1262,6 @@ export const gitlab: GitProvider = {
       notes: toNotes(notes).filter((note) => !onChanges.has(note.id)),
       reviewThreads,
       status: {
-        state: row.state,
-        draft: row.draft,
-        checks: row.checks,
         failedChecks: (found.headPipeline?.jobs?.nodes ?? []).map((job) => job.name),
         checksUrl: found.headPipeline?.path ? `https://${host}${found.headPipeline.path}` : undefined,
         conflicts: found.conflicts,
@@ -1307,6 +1278,16 @@ export const gitlab: GitProvider = {
         mergedAt: found.mergedAt ?? undefined,
       },
     };
+  },
+
+  async readChangeRequestUpdate({ host, token, path }, number) {
+    const found = await readMergeRequest<Pick<GitLabMergeRequestRow, "updatedAt" | "headPipeline">>(
+      sender(host, token),
+      path,
+      number,
+      "updatedAt headPipeline { status }",
+    );
+    return { updatedAt: found.updatedAt, checks: pipelineChecks(found.headPipeline) };
   },
 
   listChangeRequestOptions: mergeRequestFields.listOptions,

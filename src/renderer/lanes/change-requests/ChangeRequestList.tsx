@@ -1,36 +1,48 @@
 import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
 import {
+  changeRequestName,
   DEFAULT_CHANGE_REQUEST_FILTER,
   isChangeRequestUnread,
+  titleCased,
   type ChangeRequestKind,
   type ChangeRequestRow as Row,
+  type TrackedRef,
 } from "../../../shared/types/providers";
-import { openChangeRequestTab, sendIssueToAgent, type OpenEditor } from "../../editor/editor-tab";
-import { reloadIssueTabs } from "../../editor/editor-views";
-import { dayOf, issueSessionEntry, Person } from "../../editor/IssueView";
+import { linkTrackedSession, openTrackedTab, sendTrackedToAgent, type OpenEditor } from "../../editor/editor-tab";
+import { reloadTrackedTabs } from "../../editor/editor-views";
+import { dayOf, Person, trackedSessionEntry } from "../../editor/IssueView";
 import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked-seen";
 import { trackedSessionsOf, useWatchedSessions } from "../../editor/use-tracked-sessions";
 import type { ResolvedRef } from "../../resolved-ref";
-import { CHANGE_REQUEST_DRAG_TYPE, SESSION_TAB_DRAG_TYPE } from "../../tabs/pane-layout";
+import { SESSION_TAB_DRAG_TYPE, TRACKED_DRAG_TYPE } from "../../tabs/pane-layout";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
 import { ListCheckIcon, SyncIcon, UserPlusIcon } from "../../ui/icons";
 import { useStoredJson } from "../../ui/layout-storage";
-import { notify } from "../../ui/Notices";
 import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
-import { useIssueRows } from "../../ui/use-issue-rows";
 import { useScrollMore } from "../../ui/use-scroll-more";
+import { useTrackedRows } from "../../ui/use-tracked-rows";
 import { ChangeRequestFilterBar } from "./ChangeRequestFilterBar";
 import { useChangeRequests } from "./use-change-requests";
+
+/** The project's change request of this number, as the tab and session calls name it. */
+function trackedOf(number: number): TrackedRef {
+  return { kind: "change-request", number };
+}
 
 /** The section's title: the host's word for them, "Pull Requests" or "Merge Requests", until it is
  *  known both. */
 function titleOf(kind: ChangeRequestKind | undefined): string {
-  return kind ? `${kind.noun.replace(/\b\w/g, (letter) => letter.toUpperCase())}s` : "Pull and Merge Requests";
+  return kind ? `${titleCased(kind.noun)}s` : "Pull and Merge Requests";
+}
+
+/** How a row and a notice name one before the host's word for it is known. */
+function nameOf(kind: ChangeRequestKind | undefined, number: number): string {
+  return kind ? changeRequestName(kind, number) : `#${number}`;
 }
 
 function ChangeRequestRow({
@@ -55,7 +67,7 @@ function ChangeRequestRow({
   onOpen: (how: OpenEditor) => void;
   onMenu: (event: React.MouseEvent) => void;
 }) {
-  const name = `${kind?.prefix ?? "#"}${row.number}`;
+  const name = nameOf(kind, row.number);
   const failed = row.open && row.checks === "failed";
   return (
     <div
@@ -67,7 +79,7 @@ function ChangeRequestRow({
         ...(failed ? [`${kind?.checks ?? "checks"} failed`] : []),
       ].join("\n")}
       draggable
-      onDragStart={(event) => event.dataTransfer.setData(CHANGE_REQUEST_DRAG_TYPE, String(row.number))}
+      onDragStart={(event) => event.dataTransfer.setData(TRACKED_DRAG_TYPE, JSON.stringify(trackedOf(row.number)))}
       onClick={() => onOpen({})}
       onDoubleClick={() => onOpen({ keep: true })}
       onContextMenu={onMenu}
@@ -116,36 +128,25 @@ export const ChangeRequestList = memo(function ChangeRequestList({
   const { projectId } = resolved.ref;
   const [filter, setFilter] = useStoredJson(`change-requests-filter.${projectId}`, DEFAULT_CHANGE_REQUEST_FILTER);
   const [title, setTitle] = useState("");
-  const { changeRequests, total, read, more, kind, noAccount, options, busy, reload } = useChangeRequests(projectId, filter, title, shown);
+  const { items, result, total, rowsKey, more, options, busy, reload } = useChangeRequests(projectId, filter, title, shown);
+  const kind = result?.kind;
   const seen = useSeen("change-request", projectId);
   const unread = (row: Row): boolean => isChangeRequestUnread(row, seen);
   // Keyed by the page count too, as the Issues section's rows.
-  const shownRows = useIssueRows(changeRequests, read ?? {});
+  const shownRows = useTrackedRows(items, rowsKey ?? {});
   const scroller = useScrollMore(more);
   const menu = useContextMenu<Row>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
   useWatchedSessions("change-request", projectId);
   const rowDrop = useDropTarget(SESSION_TAB_DRAG_TYPE, (tabId, number: number) => {
-    void window.tet.tabs.linkChangeRequest(resolved.ref, tabId, number).then((result) => {
-      if (result.ok) {
-        const { movedFrom, replacedSession } = result;
-        const prefix = kind?.prefix ?? "#";
-        const linked =
-          movedFrom === undefined
-            ? `Session linked to ${prefix}${number}`
-            : `Session moved from ${prefix}${movedFrom} to ${prefix}${number}`;
-        notify("info", replacedSession ? `${linked} in place of its previous one` : linked);
-      } else {
-        notify("error", result.error);
-      }
-    });
+    void linkTrackedSession(resolved.ref, tabId, trackedOf(number), (linked) => nameOf(kind, linked));
   });
 
   /** The list and, for one the list no longer shows too, every open tab read afresh. */
   const refresh = (): void => {
     reload();
-    reloadIssueTabs(projectId, "change-request");
+    reloadTrackedTabs("change-request", projectId);
   };
 
   const menuEntries = (row: Row): ContextMenuEntry[] => {
@@ -153,20 +154,17 @@ export const ChangeRequestList = memo(function ChangeRequestList({
       ? [
           SEPARATOR,
           unread(row)
-            ? {
-                label: "Mark as Read",
-                run: () => keepSeen("change-request", projectId, row.number, row.updatedAt, row.checks === "failed"),
-              }
-            : { label: "Mark as Unread", run: () => keepUnread("change-request", projectId, row.number, row.updatedAt) },
+            ? { label: "Mark as Read", run: () => keepSeen(projectId, trackedOf(row.number), row.updatedAt, row.checks === "failed") }
+            : { label: "Mark as Unread", run: () => keepUnread(projectId, trackedOf(row.number), row.updatedAt) },
         ]
       : [];
     return [
       { label: "Open in Browser", run: () => void window.tet.shell.openUrl(row.url) },
       SEPARATOR,
-      issueSessionEntry(
+      trackedSessionEntry(
         trackedSessionsOf("change-request", projectId)[row.number],
         agents,
-        (agentId) => void sendIssueToAgent(resolved.ref, row.number, agentId, "change-request"),
+        (agentId) => void sendTrackedToAgent(resolved.ref, trackedOf(row.number), agentId),
       ),
       ...readEntries,
     ];
@@ -185,12 +183,12 @@ export const ChangeRequestList = memo(function ChangeRequestList({
             </IconButton>
             <IconButton
               title="Mark All as Read"
-              disabled={busy || !(changeRequests ?? []).some(unread)}
+              disabled={busy || !(items ?? []).some(unread)}
               onClick={() => void keepAllSeen("change-request", projectId)}
             >
               <ListCheckIcon />
             </IconButton>
-            {noAccount && (
+            {result?.noAccount === true && (
               <IconButton title="Add account..." onClick={onOpenAccounts}>
                 <UserPlusIcon />
               </IconButton>
@@ -202,7 +200,7 @@ export const ChangeRequestList = memo(function ChangeRequestList({
           <FilterField placeholder={`Filter ${titleOf(kind).toLowerCase()}...`} value={title} onChange={setTitle} />
           <ChangeRequestFilterBar filter={filter} options={options} onChange={setFilter} />
           <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
-            {shownRows.map(({ issue: row, entering, leaving }) => (
+            {shownRows.map(({ item: row, entering, leaving }) => (
               <div key={row.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <ChangeRequestRow
                   row={row}
@@ -211,7 +209,7 @@ export const ChangeRequestList = memo(function ChangeRequestList({
                   unread={unread(row)}
                   dropTarget={rowDrop.over === row.number}
                   dropProps={rowDrop.dropPropsOf(row.number)}
-                  onOpen={(how) => openChangeRequestTab(onOpenFile, resolved.ref, row.number, how)}
+                  onOpen={(how) => openTrackedTab(onOpenFile, resolved.ref, trackedOf(row.number), how)}
                   onMenu={(event) => menu.open(event, row)}
                 />
               </div>
