@@ -176,7 +176,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
   const [addingAccount, setAddingAccount] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
-  const [promptId, setPromptId] = useState<PromptId | typeof MODEL_SELECTION>(PROMPT_IDS[0]);
+  const [promptId, setPromptId] = useState<PromptId | typeof MODEL_SELECTION>(MODEL_SELECTION);
   /** What Save writes: the keys the dialog touched, and no others. tet-ctl may set another one
    *  while the dialog stands open, and Save must not take it back (settings.ts's patch). */
   const edits = useRef<SettingsEdits>({});
@@ -435,6 +435,15 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
       {shown === "prompts" && settings && (
         <div className="master-detail">
           <div className="master-list">
+            <div
+              className={`list-row master-row${promptId === MODEL_SELECTION ? " active" : ""}`}
+              title={MODEL_SELECTION_LABEL}
+              onClick={() => setPromptId(MODEL_SELECTION)}
+            >
+              <span className="list-main">
+                <span className="list-label">{MODEL_SELECTION_LABEL}</span>
+              </span>
+            </div>
             {PROMPT_IDS.map((id) => (
               <div
                 key={id}
@@ -447,25 +456,21 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
                 </span>
               </div>
             ))}
-            <div
-              className={`list-row master-row${promptId === MODEL_SELECTION ? " active" : ""}`}
-              title={MODEL_SELECTION_LABEL}
-              onClick={() => setPromptId(MODEL_SELECTION)}
-            >
-              <span className="list-main">
-                <span className="list-label">{MODEL_SELECTION_LABEL}</span>
-              </span>
-            </div>
           </div>
           <FieldColumn fill>
             {/* For the prompts TET asks in the background (commit message, pull/merge request); a handover's and an issue's go to the tab they open. */}
             {promptId === MODEL_SELECTION ? (
-              <SuggesterList
-                value={settings.prompts.commitSuggesters}
-                onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
-                onReplaceModel={replaceModel}
-                hold={holdListing}
-              />
+              <>
+                <SuggesterList
+                  value={settings.prompts.commitSuggesters}
+                  onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
+                  onReplaceModel={replaceModel}
+                  hold={holdListing}
+                />
+                <p className="dialog-detail">
+                  Asked in this order until one answers, for the commit message and pull/merge request suggestions.
+                </p>
+              </>
             ) : (
               <div className="dialog-field prompt-text">
                 <div className="dialog-field-head">
