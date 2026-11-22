@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.4 (2026-11-23)
+
+- **Fixes.** The issue filter's trigger shows a focus outline when reached by keyboard, and menu
+  separators use the app border color.
+
 ## 0.27.3 (2026-11-22)
 
 - **Background gradient.** The accent color fades in from the window's top left behind the title
