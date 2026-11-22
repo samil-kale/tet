@@ -156,7 +156,6 @@ textarea:focus,
 .tree-extra,
 .section-title,
 .tree-label,
-.tab-label,
 .issue-filter-text,
 .dialog-title,
 .editor-bar-title,
@@ -1917,6 +1916,21 @@ textarea:focus,
   flex: none;
   border-right: 2px solid var(--tet-app-background);
   padding: 0 6px;
+}
+
+.tab-label {
+  overflow: hidden;
+  white-space: nowrap;
+  /* The label's scroll timeline runs only when its text overflows. */
+  animation: tab-label-fade linear both;
+  animation-timeline: scroll(self inline);
+}
+
+@keyframes tab-label-fade {
+  from,
+  to {
+    mask-image: linear-gradient(to left, transparent, #000 var(--tabs-fade));
+  }
 }
 
 .tab.inactive .tab-label {
