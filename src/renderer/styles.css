@@ -1351,9 +1351,11 @@ textarea:focus,
 }
 
 .change-request-fact {
+  --icon-size: 12px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: var(--small-font-size);
 }
 
 /* Its buttons at the end, as close together as the comment box's. */
