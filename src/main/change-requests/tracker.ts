@@ -187,13 +187,18 @@ function threadText(thread: ReviewThread): string {
  *  not yet resolved after its comments. */
 export function changeRequestMarkdown(request: ChangeRequestDetail): string {
   const { status } = request;
+  const failed = status.checks.filter((check) => check.state === "failed").map((check) => check.name);
   const facts = [
     `State: ${request.draft && request.state === "open" ? "draft" : request.state}`,
     `Branch: ${status.head} into ${status.base}`,
     `Author: ${request.author}`,
     `Created: ${request.createdAt}`,
-    ...(request.checks ? [`Checks: ${request.checks}${status.failedChecks.length > 0 ? ` (${status.failedChecks.join(", ")})` : ""}`] : []),
+    ...(request.checks ? [`Checks: ${request.checks}${failed.length > 0 ? ` (${failed.join(", ")})` : ""}`] : []),
     ...(status.conflicts ? ["Conflicts with its base"] : []),
+    ...(status.approvalsOutstanding
+      ? [`Approvals: ${status.approvalsOutstanding.left === undefined ? "required" : `${status.approvalsOutstanding.left} still required`}`]
+      : []),
+    ...status.blockers.map((blocker) => `Blocked: ${blocker}`),
   ];
   const threads = request.reviewThreads.filter((thread) => !thread.resolved).map(threadText);
   return trackedMarkdown(

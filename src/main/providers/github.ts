@@ -3,6 +3,8 @@ import {
   linkedIssueName,
   type ChangeRequest,
   type ChangeRequestFilter,
+  type ChangeRequestCheck,
+  type ChangeRequestReviewer,
   type ChangeRequestRow,
   type ChangeRequestState,
   type ChecksState,
@@ -162,7 +164,21 @@ export interface GitHubEvent {
 /** How a commit's checks stand, as GraphQL rolls them up; `contexts` read for a pull request's tab alone. */
 interface GitHubCheckRollup {
   state: string;
-  contexts?: { nodes: { __typename: string; name?: string; conclusion?: string | null; context?: string; state?: string }[] };
+  contexts?: { nodes: GitHubCheckContext[] };
+}
+
+/** A check run or a commit status of a rollup (`PULL_REQUEST_QUERY`); `isRequired` is for the pull request asked. */
+interface GitHubCheckContext {
+  __typename: string;
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  detailsUrl?: string | null;
+  context?: string;
+  state?: string;
+  description?: string | null;
+  targetUrl?: string | null;
+  isRequired: boolean;
 }
 
 /** A pull request as a row reads it (`PULL_REQUEST_ROW`); `headRepository` null for a deleted fork. */
@@ -181,6 +197,7 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestRow {
   deletions: number;
   mergeable: string;
   mergeStateStatus: string;
+  reviewDecision: string | null;
   mergedAt: string | null;
   mergedBy: { login: string } | null;
   autoMergeRequest: { enabledAt: string | null } | null;
@@ -399,7 +416,7 @@ const PULL_REQUEST_QUERY = `query(${ISSUE_VARIABLES}) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       ${ISSUE_ROW}
-      isDraft body baseRefName headRefName additions deletions mergeable mergeStateStatus mergedAt
+      isDraft body baseRefName headRefName additions deletions mergeable mergeStateStatus reviewDecision mergedAt
       mergedBy { login }
       autoMergeRequest { enabledAt } viewerCanEnableAutoMerge
       commitCount: commits { totalCount }
@@ -409,7 +426,13 @@ const PULL_REQUEST_QUERY = `query(${ISSUE_VARIABLES}) {
             oid
             statusCheckRollup {
               state
-              contexts(first: 100) { nodes { __typename ... on CheckRun { name conclusion } ... on StatusContext { context state } } }
+              contexts(first: 100) {
+                nodes {
+                  __typename
+                  ... on CheckRun { name status conclusion detailsUrl isRequired(pullRequestNumber: $number) }
+                  ... on StatusContext { context state description targetUrl isRequired(pullRequestNumber: $number) }
+                }
+              }
             }
           }
         }
@@ -574,14 +597,69 @@ export function checksOf(rollup: { state: string } | null | undefined): ChecksSt
 /** What a check run ended as that fails the rollup. */
 const FAILED_CONCLUSIONS = new Set(["FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ACTION_REQUIRED"]);
 
-/** The names of the checks that failed, check runs and commit statuses alike. */
-export function failedChecksOf(rollup: GitHubCheckRollup | null | undefined): string[] {
-  return (rollup?.contexts?.nodes ?? []).flatMap((entry) => {
+/** What a check run that completed without failing counts as: it passed, or it did not count. */
+const PASSED_CONCLUSIONS: Record<string, ChangeRequestCheck["state"] | undefined> = {
+  SUCCESS: "passed",
+  NEUTRAL: "skipped",
+  SKIPPED: "skipped",
+  STALE: "skipped",
+};
+
+/** The checks of a rollup, check runs and commit statuses alike. */
+export function checkListOf(rollup: GitHubCheckRollup | null | undefined): ChangeRequestCheck[] {
+  return (rollup?.contexts?.nodes ?? []).flatMap((entry): ChangeRequestCheck[] => {
     if (entry.__typename === "CheckRun") {
-      return FAILED_CONCLUSIONS.has(entry.conclusion ?? "") && entry.name !== undefined ? [entry.name] : [];
+      if (entry.name === undefined) {
+        return [];
+      }
+      const state =
+        entry.status !== "COMPLETED"
+          ? "running"
+          : FAILED_CONCLUSIONS.has(entry.conclusion ?? "")
+            ? "failed"
+            : (PASSED_CONCLUSIONS[entry.conclusion ?? ""] ?? "passed");
+      return [{ name: entry.name, state, url: entry.detailsUrl ?? undefined, required: entry.isRequired }];
     }
-    return (entry.state === "FAILURE" || entry.state === "ERROR") && entry.context !== undefined ? [entry.context] : [];
+    if (entry.context === undefined) {
+      return [];
+    }
+    const state = entry.state === "SUCCESS" ? "passed" : entry.state === "FAILURE" || entry.state === "ERROR" ? "failed" : "running";
+    return [
+      {
+        name: entry.context,
+        state,
+        detail: entry.description ?? undefined,
+        url: entry.targetUrl ?? undefined,
+        required: entry.isRequired,
+      },
+    ];
   });
+}
+
+/** Each reviewer's latest approval or request for changes (one since dismissed stands no more), a
+ *  review asked for again over it; a team asked for has no login and is left out. */
+export function reviewersOf(found: Pick<GitHubPullRequestDetail, "latestOpinionatedReviews" | "reviewRequests">): ChangeRequestReviewer[] {
+  const reviewers = new Map<string, ChangeRequestReviewer["state"]>();
+  for (const review of found.latestOpinionatedReviews.nodes) {
+    if (review.author && (review.state === "APPROVED" || review.state === "CHANGES_REQUESTED")) {
+      reviewers.set(review.author.login, review.state === "APPROVED" ? "approved" : "changes-requested");
+    }
+  }
+  for (const request of found.reviewRequests.nodes) {
+    const requested = request.requestedReviewer as Partial<GitHubUser> | null;
+    if (requested?.login !== undefined) {
+      reviewers.set(requested.login, "requested");
+    }
+  }
+  return [...reviewers].map(([login, state]) => ({ login, state }));
+}
+
+/** What keeps a pull request from merging beside its checks, approvals and conflicts. */
+export function blockersOf(found: Pick<GitHubPullRequestDetail, "mergeStateStatus" | "reviewDecision">): string[] {
+  return [
+    ...(found.reviewDecision === "CHANGES_REQUESTED" ? ["Changes requested"] : []),
+    ...(found.mergeStateStatus === "BEHIND" ? ["Branch is behind its base"] : []),
+  ];
 }
 
 /** A filter's text in the words of GitHub's search: each word quoted, so none is read as a qualifier. */
@@ -1494,8 +1572,11 @@ export const github: GitProvider = {
       notes: [...comments.map(toNote), ...reviewNotes(items)],
       reviewThreads: toReviewThreads(threads),
       status: {
-        failedChecks: failedChecksOf(rollup),
+        checks: checkListOf(rollup),
         checksUrl: rollup ? `${found.url}/checks` : undefined,
+        blockers: blockersOf(found),
+        // GitHub says that approvals are due, not how many: that is the branch protection's, which only an admin reads.
+        approvalsOutstanding: found.reviewDecision === "REVIEW_REQUIRED" ? {} : undefined,
         conflicts: found.mergeable === "CONFLICTING",
         autoMerge: found.autoMergeRequest !== null,
         // GitHub refuses auto-merge for one that can merge at once, which `viewerCanEnableAutoMerge`
@@ -1503,10 +1584,7 @@ export const github: GitProvider = {
         autoMergeable:
           found.viewerCanEnableAutoMerge &&
           (found.mergeable !== "MERGEABLE" || found.mergeStateStatus === "BLOCKED" || found.mergeStateStatus === "BEHIND"),
-        // Each reviewer's latest approval or request for changes: an approval since dismissed stands no more.
-        approvedBy: found.latestOpinionatedReviews.nodes.flatMap((review) =>
-          review.state === "APPROVED" && review.author ? [review.author.login] : [],
-        ),
+        reviewers: reviewersOf(found),
         head: found.headRefName,
         base: found.baseRefName,
         commits: found.commitCount.totalCount,

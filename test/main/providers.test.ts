@@ -8,6 +8,9 @@ import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
 import {
   attachmentName,
+  blockersOf as gitHubBlockersOf,
+  checkListOf,
+  reviewersOf as gitHubReviewersOf,
   contentTypeOf,
   github,
   carriesAll,
@@ -27,10 +30,13 @@ import {
   uploadMarkdown,
 } from "../../src/main/providers/github";
 import {
+  blockersOf as gitLabBlockersOf,
   durationText,
   FIELD_HANDLERS as GITLAB_FIELD_HANDLERS,
   gitlab,
   issuesVariables,
+  jobChecksOf,
+  reviewersOf as gitLabReviewersOf,
   mergeRequestsVariables,
   ownMergeRequest,
   iterationName,
@@ -1176,6 +1182,96 @@ describe("a pull or merge request", () => {
     );
   });
 
+  it("reads GitHub's checks one by one, with which of them merging waits for", () => {
+    const run = { __typename: "CheckRun", isRequired: false, status: "COMPLETED", detailsUrl: "https://ci/1" };
+    assert.deepEqual(
+      checkListOf({
+        state: "FAILURE",
+        contexts: {
+          nodes: [
+            { ...run, name: "build", conclusion: "SUCCESS", isRequired: true },
+            { ...run, name: "lint", conclusion: "FAILURE" },
+            { ...run, name: "docs", conclusion: "SKIPPED" },
+            { ...run, name: "e2e", status: "IN_PROGRESS", conclusion: null },
+            { __typename: "StatusContext", context: "ci-tools", state: "EXPECTED", description: "Waiting for status", isRequired: true },
+          ],
+        },
+      }),
+      [
+        { name: "build", state: "passed", url: "https://ci/1", required: true },
+        { name: "lint", state: "failed", url: "https://ci/1", required: false },
+        { name: "docs", state: "skipped", url: "https://ci/1", required: false },
+        { name: "e2e", state: "running", url: "https://ci/1", required: false },
+        { name: "ci-tools", state: "running", detail: "Waiting for status", url: undefined, required: true },
+      ],
+    );
+    assert.deepEqual(checkListOf(null), []);
+  });
+
+  it("names what else blocks a pull request or merge request, not what its checks and approvals say", () => {
+    assert.deepEqual(gitHubBlockersOf({ mergeStateStatus: "BEHIND", reviewDecision: "CHANGES_REQUESTED" }), [
+      "Changes requested",
+      "Branch is behind its base",
+    ]);
+    assert.deepEqual(gitHubBlockersOf({ mergeStateStatus: "BLOCKED", reviewDecision: "REVIEW_REQUIRED" }), []);
+    assert.deepEqual(gitLabBlockersOf("NEED_REBASE"), ["Branch needs a rebase"]);
+    assert.deepEqual(gitLabBlockersOf("NOT_APPROVED"), []);
+    assert.deepEqual(gitLabBlockersOf(null), []);
+  });
+
+  it("reads who approved, asked for changes or is asked for a review, a request again over an approval", () => {
+    const user = (login: string) => ({ login, avatarUrl: "" });
+    assert.deepEqual(
+      gitHubReviewersOf({
+        latestOpinionatedReviews: {
+          nodes: [
+            { author: { login: "anna" }, state: "APPROVED" },
+            { author: { login: "ben" }, state: "CHANGES_REQUESTED" },
+            { author: { login: "cora" }, state: "DISMISSED" },
+            { author: null, state: "APPROVED" },
+          ],
+        },
+        reviewRequests: {
+          nodes: [{ requestedReviewer: user("anna") }, { requestedReviewer: user("dan") }, { requestedReviewer: {} as never }],
+        },
+      }),
+      [
+        { login: "anna", state: "requested" },
+        { login: "ben", state: "changes-requested" },
+        { login: "dan", state: "requested" },
+      ],
+      "a dismissed review and a team left out",
+    );
+    assert.deepEqual(
+      gitLabReviewersOf({
+        approvedBy: { nodes: [{ username: "anna" }] },
+        reviewers: { nodes: [{ username: "anna" }, { username: "ben" }] },
+      }),
+      [
+        { login: "anna", state: "approved" },
+        { login: "ben", state: "requested" },
+      ],
+    );
+  });
+
+  it("reads GitLab's jobs as checks, one still to run counting as running", () => {
+    const job = { stage: { name: "test" }, detailedStatus: { detailsPath: "/o/r/-/jobs/1" } };
+    assert.deepEqual(
+      jobChecksOf("gitlab.example.com", [
+        { ...job, name: "unit", status: "SUCCESS" },
+        { ...job, name: "lint", status: "FAILED" },
+        { ...job, name: "deploy", status: "MANUAL", detailedStatus: null },
+        { ...job, name: "e2e", status: "CREATED", stage: null },
+      ]),
+      [
+        { name: "unit", state: "passed", detail: "test", url: "https://gitlab.example.com/o/r/-/jobs/1" },
+        { name: "lint", state: "failed", detail: "test", url: "https://gitlab.example.com/o/r/-/jobs/1" },
+        { name: "deploy", state: "skipped", detail: "test", url: undefined },
+        { name: "e2e", state: "running", detail: undefined, url: "https://gitlab.example.com/o/r/-/jobs/1" },
+      ],
+    );
+  });
+
   it("writes one as a file with its open review threads, a resolved one left out", () => {
     const request: ChangeRequestDetail = {
       number: 12,
@@ -1196,11 +1292,12 @@ describe("a pull or merge request", () => {
       draft: false,
       ownIssues: true,
       status: {
-        failedChecks: [],
+        checks: [],
+        blockers: [],
         conflicts: false,
         autoMerge: false,
         autoMergeable: false,
-        approvedBy: [],
+        reviewers: [],
         head: "focus",
         base: "main",
         commits: 1,

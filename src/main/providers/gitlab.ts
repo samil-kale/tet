@@ -4,6 +4,8 @@ import {
   linkedIssueName,
   type ChangeRequest,
   type ChangeRequestFilter,
+  type ChangeRequestCheck,
+  type ChangeRequestReviewer,
   type ChangeRequestRow,
   type ChangeRequestState,
   type ChecksState,
@@ -824,6 +826,14 @@ export interface GitLabMergeRequestRow extends GitLabIssue {
   headPipeline: { status: string } | null;
 }
 
+/** A job of a merge request's head pipeline (`MERGE_REQUEST_QUERY`). */
+export interface GitLabJob {
+  name: string;
+  status: string;
+  stage: { name: string } | null;
+  detailedStatus: { detailsPath: string | null } | null;
+}
+
 /** A merge request as its tab reads it (`MERGE_REQUEST_QUERY`). */
 export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
   description: string | null;
@@ -836,7 +846,9 @@ export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
   availableAutoMergeStrategies: string[] | null;
   commitCount: number | null;
   diffStatsSummary: { additions: number; deletions: number } | null;
-  headPipeline: { status: string; path: string | null; jobs: { nodes: { name: string }[] } | null } | null;
+  headPipeline: { status: string; path: string | null; jobs: { nodes: GitLabJob[] } | null } | null;
+  detailedMergeStatus: string | null;
+  approvalsLeft: number | null;
   reviewers: { nodes: GitLabUser[] };
   approvedBy: { nodes: GitLabUser[] } | null;
   participants: { nodes: GitLabUser[] } | null;
@@ -874,9 +886,10 @@ const MERGE_REQUEST_QUERY = `query($path: ID!, $iid: String!) {
     mergeRequest(iid: $iid) {
       ${MERGE_REQUEST_ROW}
       description sourceBranch targetBranch conflicts mergedAt autoMergeEnabled availableAutoMergeStrategies commitCount
+      detailedMergeStatus approvalsLeft
       mergeUser { username }
       diffStatsSummary { additions deletions }
-      headPipeline { status path jobs(statuses: [FAILED], first: 50) { nodes { name } } }
+      headPipeline { status path jobs(first: 100) { nodes { name status stage { name } detailedStatus { detailsPath } } } }
       reviewers { nodes { username } }
       approvedBy { nodes { username } }
       participants { nodes { username } }
@@ -921,6 +934,56 @@ export function pipelineChecks(pipeline: { status: string } | null | undefined):
     default:
       return undefined;
   }
+}
+
+/** How a job stands; one that is not run (manual, skipped, canceled) does not count. */
+const JOB_STATES: Record<string, ChangeRequestCheck["state"] | undefined> = {
+  SUCCESS: "passed",
+  FAILED: "failed",
+  MANUAL: "skipped",
+  SKIPPED: "skipped",
+  CANCELED: "skipped",
+};
+
+/** The jobs of a pipeline as checks, one with a state of none of those of `JOB_STATES` still to run. */
+export function jobChecksOf(host: string, jobs: GitLabJob[]): ChangeRequestCheck[] {
+  return jobs.map((job) => ({
+    name: job.name,
+    state: JOB_STATES[job.status] ?? "running",
+    detail: job.stage?.name,
+    url: job.detailedStatus?.detailsPath ? `https://${host}${job.detailedStatus.detailsPath}` : undefined,
+  }));
+}
+
+/** What keeps a merge request from merging, per `detailedMergeStatus`, beside what its checks, approvals and
+ *  conflicts say themselves; the statuses left out are those. */
+const MERGE_BLOCKERS: Record<string, string | undefined> = {
+  BLOCKED_STATUS: "Blocked by another merge request",
+  BROKEN_STATUS: "Cannot be merged",
+  COMMITS_STATUS: "Commit rules not met",
+  EXTERNAL_STATUS_CHECKS: "External status checks pending",
+  JIRA_ASSOCIATION: "Jira issue missing",
+  NEED_REBASE: "Branch needs a rebase",
+  POLICIES_DENIED: "Denied by a merge request policy",
+  REQUESTED_CHANGES: "Changes requested",
+  SECURITY_POLICY_VIOLATIONS: "Security policy violated",
+  STATUS_CHECKS_MUST_PASS: "Status checks must pass",
+};
+
+/** Who approved, then who is asked for a review and has not; GitLab tells of no request for changes per person. */
+export function reviewersOf(found: Pick<GitLabMergeRequestDetail, "approvedBy" | "reviewers">): ChangeRequestReviewer[] {
+  const approved = (found.approvedBy?.nodes ?? []).map((user) => user.username);
+  return [
+    ...approved.map((login): ChangeRequestReviewer => ({ login, state: "approved" })),
+    ...found.reviewers.nodes
+      .filter((user) => !approved.includes(user.username))
+      .map((user): ChangeRequestReviewer => ({ login: user.username, state: "requested" })),
+  ];
+}
+
+export function blockersOf(detailedMergeStatus: string | null): string[] {
+  const blocker = MERGE_BLOCKERS[detailedMergeStatus ?? ""];
+  return blocker === undefined ? [] : [blocker];
 }
 
 /** Whether a merge request is from a branch of `path` itself, not of a fork. */
@@ -1262,13 +1325,15 @@ export const gitlab: GitProvider = {
       notes: toNotes(notes).filter((note) => !onChanges.has(note.id)),
       reviewThreads,
       status: {
-        failedChecks: (found.headPipeline?.jobs?.nodes ?? []).map((job) => job.name),
+        checks: jobChecksOf(host, found.headPipeline?.jobs?.nodes ?? []),
         checksUrl: found.headPipeline?.path ? `https://${host}${found.headPipeline.path}` : undefined,
+        blockers: blockersOf(found.detailedMergeStatus),
+        approvalsOutstanding: found.approvalsLeft ? { left: found.approvalsLeft } : undefined,
         conflicts: found.conflicts,
         autoMerge: found.autoMergeEnabled,
         // The strategy `mergeChangeRequest` sets: GitLab offers it only while the merge request cannot merge at once.
         autoMergeable: found.availableAutoMergeStrategies?.includes("merge_when_checks_pass") ?? false,
-        approvedBy: (found.approvedBy?.nodes ?? []).map((user) => user.username),
+        reviewers: reviewersOf(found),
         head: found.sourceBranch,
         base: found.targetBranch,
         commits: found.commitCount ?? 0,

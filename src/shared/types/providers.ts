@@ -123,20 +123,44 @@ export interface ChangeRequestRow extends Issue {
   headSha?: string;
 }
 
+/** One check or job of a change request's head commit; `skipped` is one that did not run or does not count. */
+export interface ChangeRequestCheck {
+  name: string;
+  state: ChecksState | "skipped";
+  /** What the host says of it besides its state: a commit status's description, a job's stage. */
+  detail?: string;
+  /** The host's page of it. */
+  url?: string;
+  /** Merging waits for it; absent where the host does not say. */
+  required?: boolean;
+}
+
+/** Where one reviewer stands: an approval that stands, a request for changes, or a review still asked for. */
+export interface ChangeRequestReviewer {
+  login: string;
+  state: "approved" | "changes-requested" | "requested";
+}
+
 /** What a change request's tab says of it above its text, beside what its row says. */
 export interface ChangeRequestStatus {
-  /** The names of the checks or jobs that failed. */
-  failedChecks: string[];
+  /** Every check or job of its head commit, empty where it has none. */
+  checks: ChangeRequestCheck[];
   /** The host's page of its checks or pipeline. */
   checksUrl?: string;
+  /** What else keeps it from merging, in words, beside its checks, approvals and conflicts: the
+   *  branch behind its base, changes requested, a rule of the host's. */
+  blockers: string[];
+  /** Approvals it still needs; absent where none is outstanding, `left` absent where the host does not
+   *  say how many. */
+  approvalsOutstanding?: { left?: number };
   /** It cannot merge into its base before they are resolved. */
   conflicts: boolean;
   /** The host merges it once nothing is outstanding. */
   autoMerge: boolean;
   /** The host would set it to auto-merge now: something is outstanding, and the account may. */
   autoMergeable: boolean;
-  /** Whose approval stands, by login. */
-  approvedBy: string[];
+  /** Who approved, asked for changes or is asked for a review, by login; one of them once. */
+  reviewers: ChangeRequestReviewer[];
   /** Its source branch and the branch it merges into. */
   head: string;
   base: string;

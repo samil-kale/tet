@@ -1342,13 +1342,134 @@ textarea:focus,
   margin-left: auto;
 }
 
-.issue-thread > .change-request-card + .issue-card::before {
-  display: none;
+.change-request-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-/* Failed checks and conflicts: the error mark. */
-.change-request-failed {
-  color: var(--tet-errorForeground);
+/* Its checks, review threads and approvals side by side as GitHub's merge box has them. The colours are
+   the terminal's ANSI ones: what is done, what is outstanding, what failed. */
+.change-request-segments {
+  display: flex;
+  border-top: 1px solid var(--tet-app-border);
+}
+
+.change-request-segment {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px var(--issue-card-padding);
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.change-request-segment + .change-request-segment {
+  border-left: 1px solid var(--tet-app-border);
+}
+
+button.change-request-segment {
+  cursor: pointer;
+}
+
+button.change-request-segment:hover {
+  background: var(--tet-list-hoverBackground);
+}
+
+.change-request-segment-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.change-request-segment-head > .issue-none {
+  flex: 1;
+  min-width: 0;
+}
+
+.change-request-meter {
+  display: flex;
+  gap: 1px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.change-request-meter-passed {
+  background: var(--tet-terminal-ansiGreen);
+}
+
+.change-request-meter-running {
+  background: var(--tet-terminal-ansiYellow);
+}
+
+.change-request-meter-failed {
+  background: var(--tet-terminal-ansiRed);
+}
+
+.change-request-meter-skipped {
+  background: var(--tet-terminal-ansiBrightBlack);
+}
+
+.change-request-meter-empty {
+  flex: 1;
+  background: repeating-linear-gradient(45deg, var(--tet-app-border) 0 2px, transparent 2px 5px);
+}
+
+.change-request-checks {
+  border-top: 1px solid var(--tet-app-border);
+  max-height: 320px;
+  padding: var(--island-gap);
+  overflow-y: auto;
+}
+
+/* A row as the lists' (`.list-row`): one height, rounded, its hover inside the card's inset. */
+.change-request-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: var(--list-row-height);
+  padding: 0 6px 0 9px;
+  border-radius: var(--border-radius);
+  font-size: var(--tet-font-size);
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.change-request-check {
+  cursor: pointer;
+}
+
+button.change-request-check:hover {
+  background: var(--tet-list-hoverBackground);
+}
+
+.change-request-check-state {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.change-request-required {
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid var(--tet-app-border);
+  border-radius: 10px;
+  font-size: 0.85em;
+}
+
+.issue-thread > .change-request-card + .issue-card::before {
+  display: none;
 }
 
 /* A change request's linked issue, one per line in its field. */
@@ -1365,8 +1486,10 @@ textarea:focus,
 
 /* Takes the room; the side column goes under it in a narrow pane. */
 .issue-thread {
+  /* The entries' distance; the line joining them is drawn to it. */
+  --thread-gap: 16px;
   flex: 999 1 320px;
-  gap: 12px;
+  gap: var(--thread-gap);
   min-width: 0;
 }
 
@@ -1525,12 +1648,12 @@ textarea:focus,
 }
 
 .issue-thread > .issue-card:not(:first-child)::before {
-  top: -13px;
-  height: 14px;
+  top: calc(-1px - var(--thread-gap));
+  height: calc(2px + var(--thread-gap));
 }
 
 .issue-thread > .issue-event::before {
-  top: -12px;
+  top: calc(-1 * var(--thread-gap));
   bottom: 0;
 }
 

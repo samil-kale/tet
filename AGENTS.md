@@ -354,7 +354,8 @@ per-line decision is for an agent.
 - Icons and marks are monochrome. The one accent is `--tet-focusBorder`, for anything that marks or
   points — but the Navigation Bar's shown lane, a filled box as IntelliJ's stripe draws it.
   Exceptions: git status letters, the error mark, a notice's severity icon, an editor tab's
-  unsaved dot, the file icons, an issue's avatars. A theme whose own mark colour differs sets it in place of the accent
+  unsaved dot, the file icons, an issue's avatars, a change request's meters and check dots (the terminal's
+  ANSI green, yellow, red). A theme whose own mark colour differs sets it in place of the accent
   (`THEMES.md`).
 - **A git name or a file's path in a sentence is set apart from the words around it** — a
   branch, a remote, a tag, a stash — in every menu entry and every question: its message,
