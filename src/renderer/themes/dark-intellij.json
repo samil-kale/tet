@@ -124,7 +124,6 @@
     "menu.background": "#2b2d30",
     "menu.border": "#42454a",
     "menu.foreground": "#dfe1e5",
-    "menu.separatorBackground": "#42454a",
     "menubar.selectionBackground": "#404144",
     "menubar.selectionForeground": "#dfe1e5",
     "merge.currentContentBackground": "#3377544d",

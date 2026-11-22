@@ -211,7 +211,6 @@
     "menu.foreground": "#2A2A28",
     "menu.selectionBackground": "#E0DDD8",
     "menu.selectionForeground": "#2A2A28",
-    "menu.separatorBackground": "#D8D8D2",
     "menu.border": "#D8D8D2",
     "commandCenter.foreground": "#5C5C56",
     "commandCenter.activeForeground": "#2A2A28",

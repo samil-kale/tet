@@ -1614,7 +1614,7 @@ button.change-request-check:hover {
   width: 1px;
   height: var(--separator-height);
   margin: 0 4px;
-  background: var(--tet-menu-separatorBackground);
+  background: var(--tet-app-border);
 }
 
 /* The size and look of the textarea it stands in for. */
@@ -2366,7 +2366,7 @@ button.change-request-check:hover {
 .context-menu-separator {
   height: 0;
   margin: 4px 0;
-  border-bottom: 1px solid var(--tet-menu-separatorBackground);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 .pane-body {

@@ -69,7 +69,6 @@
   /* The registry points menu.background/foreground at dropdown.background/foreground. */
   --tet-menu-background: #fafafd;
   --tet-menu-foreground: #202020;
-  --tet-menu-separatorBackground: #eeeef1;
 
   --tet-progressBar-background: #0069cc;
 

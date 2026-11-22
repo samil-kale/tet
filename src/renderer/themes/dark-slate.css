@@ -79,7 +79,6 @@
   --tet-menu-foreground: #dde2e9;
   /* Not the theme's #2a2d35, the menu's own background, which hides every separator: the app
      border, which the menu is drawn in. */
-  --tet-menu-separatorBackground: #30363d;
 
   --tet-progressBar-background: #58a6f0;
 
