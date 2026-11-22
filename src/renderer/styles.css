@@ -3675,7 +3675,7 @@ button.change-request-check:hover {
 .notices {
   position: absolute;
   right: 6px;
-  bottom: 32px;
+  bottom: 35px;
   /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
   z-index: 28;
   display: flex;
