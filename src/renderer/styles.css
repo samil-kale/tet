@@ -1955,7 +1955,7 @@ button.change-request-check:hover {
   mask-image: linear-gradient(
     to left,
     transparent calc(var(--tabs-overflow) * var(--tabs-fade-clear)),
-    #000 calc(var(--tabs-overflow) * (var(--tabs-fade-clear) + var(--tabs-fade)))
+    var(--tet-foreground) calc(var(--tabs-overflow) * (var(--tabs-fade-clear) + var(--tabs-fade)))
   );
   scroll-padding-inline-end: calc(var(--tabs-fade-clear) + var(--tabs-fade));
 }
@@ -2060,7 +2060,7 @@ button.change-request-check:hover {
 @keyframes tab-label-fade {
   from,
   to {
-    mask-image: linear-gradient(to left, transparent, #000 var(--tabs-fade));
+    mask-image: linear-gradient(to left, transparent, var(--tet-foreground) var(--tabs-fade));
   }
 }
 
