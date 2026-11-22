@@ -1204,10 +1204,11 @@ function approvable(request: ChangeRequestDetail, viewer: string | undefined): b
   return request.state === "open" && (request.kind.selfApproval || request.author !== viewer);
 }
 
-const REVIEWER_STATES: Record<ChangeRequestReviewer["state"], string> = {
-  approved: "Approved",
-  "changes-requested": "Changes requested",
-  requested: "Review requested",
+/** What a reviewer's row says, and the colour of its dot (`.change-request-meter-*`): done, failed, outstanding. */
+const REVIEWER_STATES: Record<ChangeRequestReviewer["state"], { text: string; dot: "passed" | "failed" | "running" }> = {
+  approved: { text: "Approved", dot: "passed" },
+  "changes-requested": { text: "Changes requested", dot: "failed" },
+  requested: { text: "Review requested", dot: "running" },
 };
 
 const CHECK_ORDER: Record<ChangeRequestCheck["state"], number> = { failed: 0, running: 1, passed: 2, skipped: 3 };
@@ -1425,9 +1426,9 @@ function ChangeRequestCard({
         <div className="change-request-checks">
           {status.reviewers.map((reviewer) => (
             <div key={reviewer.login} className="change-request-check">
-              <Person login={reviewer.login} avatar={request.avatars[reviewer.login]} />
+              <span className={`change-request-check-state change-request-meter-${REVIEWER_STATES[reviewer.state].dot}`} />
               <span>{reviewer.login}</span>
-              <span className="issue-none">{REVIEWER_STATES[reviewer.state]}</span>
+              <span className="issue-none">{REVIEWER_STATES[reviewer.state].text}</span>
             </div>
           ))}
           {approvalsOutstanding && (

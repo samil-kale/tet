@@ -1328,6 +1328,20 @@ textarea:focus,
   padding: 6px var(--issue-card-padding);
 }
 
+/* Its head, status and lists stand on the editor's fill, the segments on the ground's,
+   under the card's rounded corners. */
+.change-request-card {
+  overflow: hidden;
+}
+
+.change-request-card > .issue-card-header {
+  background: var(--tet-editor-background);
+}
+
+.change-request-segments {
+  background: var(--tet-app-background);
+}
+
 .change-request-fact {
   display: inline-flex;
   align-items: center;
@@ -1423,6 +1437,7 @@ button.change-request-segment:hover {
 
 .change-request-checks {
   border-top: 1px solid var(--tet-app-border);
+  background: var(--tet-editor-background);
   max-height: 320px;
   padding: var(--island-gap);
   overflow-y: auto;
