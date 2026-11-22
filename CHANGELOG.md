@@ -3,6 +3,12 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.3 (2026-11-22)
+
+- **Background gradient.** The accent color fades in from the window's top left behind the title
+  bar, navigation bar and status bar, as in IntelliJ. It is on by default and can be switched off
+  under Appearance in the settings, or with `tet-ctl settings-set-background-gradient`.
+
 ## 0.27.2 (2026-11-22)
 
 - **Fixes.** The model selection has its own entry at the top of the settings' prompts list, which
