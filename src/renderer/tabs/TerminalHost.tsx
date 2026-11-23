@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import type { ProjectRef } from "../../shared/types/project";
 import { attachTerminal, fitTerminal, focusTerminal, hasTerminal, hideTerminal, showTerminal } from "./terminal-views";
 
-/** A window-edge drag fires dozens of observations; every pty resize repaints the TUI. */
+/** A window-edge drag fires many observations; every pty resize repaints the TUI. */
 const RESIZE_DEBOUNCE_MS = 100;
 
 interface TerminalHostProps {
@@ -25,7 +25,7 @@ interface TerminalHostProps {
  * moves it into the DOM.
  *
  * Attached the first time the tab is on screen, not on mount: building every tab's
- * xterm at startup costs most of the window's start. Nothing is lost: a tab's process starts on its
+ * xterm at startup would slow the window's start. Nothing is lost: a tab's process starts on its
  * first fit, which needs the view.
  *
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm

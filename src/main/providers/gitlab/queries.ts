@@ -83,8 +83,8 @@ export const EXTRA_WIDGETS_QUERY = `query($path: ID!, $iid: String!) {
 export const NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
   project(fullPath: $path) { issue(iid: $iid) { notes(first: 100, after: $cursor) { ${NOTE_PAGE} } } }
 }`;
-/** What a filter asks for, in the words of `FILTER_VARIABLES`. */
 
+/** What a filter asks for, in the words of `FILTER_VARIABLES`. */
 export function issuesVariables(path: string, filter: IssueFilter): Record<string, unknown> {
   return {
     path,
@@ -95,9 +95,9 @@ export function issuesVariables(path: string, filter: IssueFilter): Record<strin
     ...titleSearch(filter.text),
   };
 }
+
 /** A filter's text in the words of `FILTER_VARIABLES` and `MERGE_REQUEST_FILTER_VARIABLES`, searched in
  *  titles alone; neither is sent without text, as `in` is refused without a `search`. */
-
 export function titleSearch(text: string | undefined): Record<string, unknown> {
   return text ? { search: text, in: ["TITLE"] } : {};
 }
@@ -149,8 +149,8 @@ export const MERGE_REQUEST_QUERY = `query($path: ID!, $iid: String!) {
 export const MERGE_REQUEST_NOTES_QUERY = `query($path: ID!, $iid: String!, $cursor: String) {
   project(fullPath: $path) { mergeRequest(iid: $iid) { notes(first: 100, after: $cursor) { ${MERGE_REQUEST_NOTE_PAGE} } } }
 }`;
-/** What a filter asks for, in the words of `MERGE_REQUEST_FILTER_VARIABLES`. */
 
+/** What a filter asks for, in the words of `MERGE_REQUEST_FILTER_VARIABLES`. */
 export function mergeRequestsVariables(path: string, filter: ChangeRequestFilter): Record<string, unknown> {
   return {
     path,

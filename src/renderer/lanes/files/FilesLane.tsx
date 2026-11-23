@@ -15,7 +15,7 @@ import { Section } from "../../ui/Section";
 
 interface FilesLaneProps {
   resolved: ResolvedRef;
-  /** False while the git lane stands in its place; hidden, not unmounted, to keep its state. */
+  /** False while another lane stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
   /** The file of the focused pane's active tab — the tree reveals it. */
   openPath: string | null;
@@ -45,7 +45,7 @@ function useDelayed(active: boolean, delayMs: number): boolean {
 }
 
 /**
- * The files lane, sharing the free lane with the git lane (VS Code's Explorer and Source Control).
+ * The files lane, VS Code's Explorer: the tree over the Search section.
  * The listing is read only while on screen.
  */
 export const FilesLane = memo(function FilesLane({ resolved, shown, openPath, onOpenFile, searchHeight, onSearchHeight }: FilesLaneProps) {

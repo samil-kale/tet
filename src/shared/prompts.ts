@@ -1,9 +1,10 @@
 import type { PromptId, PromptTexts } from "./types/settings";
 
 /**
- * What TET asks of an agent: questions in the background, and the first prompt of a handover and of a tab opened on an issue. Here, not
- * beside the caller, because the settings dialog edits them and the renderer may not import
- * src/main. What is appended (the diff, the transcript's paths) is the caller's.
+ * What TET asks of an agent: questions in the background, and the first prompt of a handover and of
+ * a tab opened on an issue or change request. Here, not beside the caller, because the settings
+ * dialog edits them and the renderer may not import src/main. What is appended (the diff, the
+ * transcript's paths) is the caller's.
  */
 
 /** Self-contained — the agent runs no command, so it answers in one round trip. */

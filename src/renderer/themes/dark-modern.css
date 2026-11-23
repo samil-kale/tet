@@ -94,8 +94,8 @@
   --tet-graph-remoteRefColor: #b180d7;
   --tet-graph-baseRefColor: #ea5c00;
 
-  /* Three weights of two hues: a changed line's ground, the changed words on it, and the 15px
-     overview ruler, which disappears against the editor background at anything lighter. */
+  /* Three weights of two hues: a changed line's ground, the changed words on it, and the overview
+     ruler, which disappears against the editor background at anything lighter. */
   --tet-diffEditor-insertedLineBackground: #347d3926;
   --tet-diffEditor-removedLineBackground: #c93c3726;
   --tet-diffEditor-insertedTextBackground: #57ab5a4d;

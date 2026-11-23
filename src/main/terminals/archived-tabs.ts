@@ -204,7 +204,6 @@ export class ArchivedTabs {
     return { ok: true };
   }
 
-  /** Closed. */
   dispose(): void {
     this.tabs = [];
   }

@@ -1,9 +1,10 @@
 import { allNodes, type GraphqlPage, type GraphqlSend, type NamedId, reached, sendGraphql, sendMutation, type Write } from "../provider";
 
-// GraphQL for all that it answers in structure and out of experiment. REST for the rest: an issue's
-// label, state and milestone events, which GraphQL words only as text; deleting an issue and uploading
-// a file, whose mutations are experiments; reading an upload's bytes, which GraphQL cannot carry; and
-// approving a merge request, which it has no mutation for.
+// GraphQL for all that it answers in structure and out of experiment. REST for the rest: the label,
+// state and milestone events of an issue or merge request, which GraphQL words only as text, and the
+// issues a merge request closes; deleting an issue and uploading a file, whose mutations are
+// experiments; reading an upload's bytes, which GraphQL cannot carry; and approving a merge request,
+// which it has no mutation for.
 
 export function apiBase(host: string): string {
   return `https://${host}/api/v4`;
@@ -73,9 +74,9 @@ export async function allPeople(send: GraphqlSend, path: string): Promise<NamedI
 export function projectUrl(host: string, path: string): string {
   return `${apiBase(host)}/projects/${encodeURIComponent(path)}`;
 }
+
 /** The secret and file name of an upload in an issue's text, as the uploads API takes them: linked
  *  relative to the project, or whole on this host, the only one its token goes to. */
-
 export function uploadOf(host: string, source: string): { secret: string; file: string } | undefined {
   let pathname = source;
   if (/^[a-z][a-z0-9+.-]*:/i.test(source)) {

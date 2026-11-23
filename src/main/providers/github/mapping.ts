@@ -20,8 +20,8 @@ export interface GitHubUser {
   login: string;
   avatarUrl: string;
 }
-/** An issue as GraphQL says it; only one read alone has its body, milestone and participants. */
 
+/** An issue as GraphQL says it; only one read alone has its body, milestone and participants. */
 export interface GitHubIssue {
   number: number;
   title: string;
@@ -36,33 +36,33 @@ export interface GitHubIssue {
   milestone?: { title: string } | null;
   participants?: { nodes: (GitHubUser | null)[] };
 }
-/** A parent as GraphQL says it. */
 
+/** A parent as GraphQL says it. */
 export interface GitHubParent {
   number: number;
   title: string;
   repository: { nameWithOwner: string };
 }
+
 /** An issue field of a repository's organization, by the type it is: `__typename` tells which, and
  *  `options` are a select's. */
-
 export interface GitHubFieldDefinition {
   __typename: string;
   id: string;
   name: string;
   options?: NamedId[];
 }
+
 /** What an issue holds in one issue field: a select's `value` is its option's name, a multi select's
  *  are its `options`. */
-
 export interface GitHubFieldValue {
   field: { name: string };
   value?: string | number | null;
   options?: NamedId[];
 }
-/** What an issue has of the fields only some hosts have, a GitHub Enterprise Server lacking them
- *  until a version: each is read on its own (`readExtras`), and left out where the host refuses it. */
 
+/** What an issue has of the fields only some hosts have: each is read on its own (`readExtras`), and
+ *  left out where the host refuses it. */
 export interface GitHubExtras {
   /** What the issue's type is, which the repository offers, and whether the viewer may change it. */
   issueType?: { current: string | null; available: string[]; editable: boolean };
@@ -72,16 +72,16 @@ export interface GitHubExtras {
    *  type or, if it has none, to issues without one, in the order they are shown. */
   issueFields?: { definitions: GitHubFieldDefinition[]; values: GitHubFieldValue[]; pinned: string[]; editable: boolean };
 }
-/** A comment as GraphQL says it. */
 
+/** A comment as GraphQL says it. */
 export interface GitHubComment {
   id: string;
   body: string;
   createdAt: string;
   author: GitHubUser | null;
 }
-/** A timeline item as GraphQL says it; which of the rest it has goes by its `__typename`. */
 
+/** A timeline item as GraphQL says it; which of the rest it has goes by its `__typename`. */
 export interface GitHubEvent {
   __typename: string;
   createdAt: string;
@@ -105,8 +105,8 @@ export interface GitHubCheckRollup {
   state: string;
   contexts?: { nodes: GitHubCheckContext[] };
 }
-/** A check run or a commit status of a rollup (`PULL_REQUEST_QUERY`); `isRequired` is for the pull request asked. */
 
+/** A check run or a commit status of a rollup (`PULL_REQUEST_QUERY`); `isRequired` is for the pull request asked. */
 export interface GitHubCheckContext {
   __typename: string;
   name?: string;
@@ -119,15 +119,15 @@ export interface GitHubCheckContext {
   targetUrl?: string | null;
   isRequired: boolean;
 }
-/** A pull request as a row reads it (`PULL_REQUEST_ROW`); `headRepository` null for a deleted fork. */
 
+/** A pull request as a row reads it (`PULL_REQUEST_ROW`); `headRepository` null for a deleted fork. */
 export interface GitHubPullRequestRow extends GitHubIssue {
   isDraft: boolean;
   headRepository: { nameWithOwner: string } | null;
   head: { nodes: { commit: { oid: string; statusCheckRollup: GitHubCheckRollup | null } }[] };
 }
-/** A pull request as its tab reads it (`PULL_REQUEST_QUERY`). */
 
+/** A pull request as its tab reads it (`PULL_REQUEST_QUERY`). */
 export interface GitHubPullRequestDetail extends GitHubPullRequestRow {
   body: string;
   baseRefName: string;
@@ -151,9 +151,9 @@ export interface GitHubPullRequestDetail extends GitHubPullRequestRow {
   timelineItems: GraphqlPage<GitHubEvent>;
   reviewThreads: GraphqlPage<GitHubReviewThread>;
 }
+
 /** A review thread as GraphQL says it (`REVIEW_THREAD_PAGE`); `line` is null once its lines changed,
  *  `originalLine` where it was written. */
-
 export interface GitHubReviewThread {
   id: string;
   path: string;
@@ -164,8 +164,8 @@ export interface GitHubReviewThread {
   comments: GraphqlPage<GitHubComment>;
 }
 
-/** The kinds of timeline item the tab draws, as `toEvent` reads them. */
-/** The timeline items an issue and a pull request both have; a pull request's own are `toPullRequestEvents`'. */
+/** The timeline items an issue and a pull request both have, as `toEvent` reads them; a pull request's
+ *  own are `toPullRequestEvents`'. */
 export const EVENT_KINDS: Record<
   string,
   Exclude<TrackedEvent["kind"], "text" | "review-requested" | "reviewed" | "pushed" | "merged"> | undefined
@@ -219,9 +219,9 @@ export const REVIEW_VERDICTS: Record<string, "approved" | "changes-requested" | 
   APPROVED: "approved",
   CHANGES_REQUESTED: "changes-requested",
 };
+
 /** A pull request's timeline as the tab draws it: an issue's events, and its own. A run of commits by
  *  one author is one push, at its first. */
-
 export function toPullRequestEvents(items: GitHubEvent[]): TrackedEvent[] {
   const events: TrackedEvent[] = [];
   for (const item of items) {
@@ -267,8 +267,8 @@ export function toPullRequestEvents(items: GitHubEvent[]): TrackedEvent[] {
   }
   return events;
 }
-/** The texts of a pull request's reviews, which show beside its comments but are none of them. */
 
+/** The texts of a pull request's reviews, which show beside its comments but are none of them. */
 export function reviewNotes(items: GitHubEvent[]): TrackedNote[] {
   return items.flatMap((item) =>
     item.__typename === "PullRequestReview" && item.id !== undefined && item.body?.trim()
@@ -276,8 +276,8 @@ export function reviewNotes(items: GitHubEvent[]): TrackedNote[] {
       : [],
   );
 }
-/** A pull request's review threads as the tab shows them, one without comments left out. */
 
+/** A pull request's review threads as the tab shows them, one without comments left out. */
 export function toReviewThreads(threads: GitHubReviewThread[]): ReviewThread[] {
   return threads.flatMap((thread) =>
     thread.comments.nodes.length === 0
@@ -294,8 +294,8 @@ export function toReviewThreads(threads: GitHubReviewThread[]): ReviewThread[] {
         ],
   );
 }
-/** How GitHub's rollup of a commit's checks stands, in TET's words; undefined for a commit without any. */
 
+/** How GitHub's rollup of a commit's checks stands, in TET's words; undefined for a commit without any. */
 export function checksOf(rollup: { state: string } | null | undefined): ChecksState | undefined {
   switch (rollup?.state ?? "") {
     case "SUCCESS":
@@ -321,8 +321,8 @@ export const PASSED_CONCLUSIONS: Record<string, ChangeRequestCheck["state"] | un
   SKIPPED: "skipped",
   STALE: "skipped",
 };
-/** The checks of a rollup, check runs and commit statuses alike. */
 
+/** The checks of a rollup, check runs and commit statuses alike. */
 export function checkListOf(rollup: GitHubCheckRollup | null | undefined): ChangeRequestCheck[] {
   return (rollup?.contexts?.nodes ?? []).flatMap((entry): ChangeRequestCheck[] => {
     if (entry.__typename === "CheckRun") {
@@ -352,9 +352,9 @@ export function checkListOf(rollup: GitHubCheckRollup | null | undefined): Chang
     ];
   });
 }
+
 /** Each reviewer's latest approval or request for changes (one since dismissed stands no more), a
  *  review asked for again over it; a team asked for has no login and is left out. */
-
 export function reviewersOf(found: Pick<GitHubPullRequestDetail, "latestOpinionatedReviews" | "reviewRequests">): ChangeRequestReviewer[] {
   const reviewers = new Map<string, ChangeRequestReviewer["state"]>();
   for (const review of found.latestOpinionatedReviews.nodes) {
@@ -370,8 +370,8 @@ export function reviewersOf(found: Pick<GitHubPullRequestDetail, "latestOpiniona
   }
   return [...reviewers].map(([login, state]) => ({ login, state }));
 }
-/** What keeps a pull request from merging beside its checks, approvals and conflicts. */
 
+/** What keeps a pull request from merging beside its checks, approvals and conflicts. */
 export function blockersOf(found: Pick<GitHubPullRequestDetail, "mergeStateStatus" | "reviewDecision">): string[] {
   return [
     ...(found.reviewDecision === "CHANGES_REQUESTED" ? ["Changes requested"] : []),
@@ -396,9 +396,9 @@ export function toChangeRequestRow(entry: GitHubPullRequestRow): ChangeRequestRo
     headSha: commit?.oid,
   };
 }
+
 /** The fields a pull request has (`changeRequestFields`); its reviewers are those who reviewed it and
  *  those asked to. */
-
 export function toPullRequestFields(found: GitHubPullRequestDetail): TrackedField[] {
   const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
   const reviewers = [
@@ -413,8 +413,8 @@ export function toPullRequestFields(found: GitHubPullRequestDetail): TrackedFiel
     participants: people(found.participants.nodes),
   });
 }
-/** The method a merge of the repository takes: its first allowed, in the order GitHub offers them. */
 
+/** The method a merge of the repository takes: its first allowed, in the order GitHub offers them. */
 export function defaultMergeMethod(allowed: {
   mergeCommitAllowed: boolean;
   squashMergeAllowed: boolean;
@@ -436,14 +436,14 @@ export function defaultMergeMethod(allowed: {
 export function githubState(state: "open" | "closed"): "OPEN" | "CLOSED" {
   return state === "open" ? "OPEN" : "CLOSED";
 }
-/** What of a change `updateIssue` sets, in GitHub's words. */
 
+/** What of a change `updateIssue` sets, in GitHub's words. */
 export function toIssueInput(issueId: string, { title, body, state }: TrackedChange): object {
   return { id: issueId, title, body, state: state && githubState(state) };
 }
+
 /** A parent as its field shows and lists it: its title and where it is, since a number is only unique
  *  in its repository. */
-
 export function parentName(parent: GitHubParent): string {
   return `${parent.title} (${parent.repository.nameWithOwner}#${parent.number})`;
 }
@@ -488,9 +488,9 @@ export function shownIssueFields({ definitions, values, pinned }: NonNullable<Gi
     ),
   ];
 }
+
 /** The fields an issue has, as the tab lists them, in the order of GitHub's own sidebar: those every
  *  issue has, then each that `extras` found the host to have. */
-
 export function toFields(issue: GitHubIssue, extras: GitHubExtras): TrackedField[] {
   const { issueType, parent, issueFields } = extras;
   const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
@@ -513,8 +513,8 @@ export function toFields(issue: GitHubIssue, extras: GitHubExtras): TrackedField
       : []),
   ];
 }
-/** Whether an issue carries every one of a filter's labels. */
 
+/** Whether an issue carries every one of a filter's labels. */
 export function carriesAll(entry: GitHubIssue, labels: string[]): boolean {
   return labels.every((label) => entry.labels.nodes.some((node) => node.name === label));
 }
@@ -561,15 +561,15 @@ export function toNote(entry: GitHubComment): TrackedNote {
     body: entry.body,
   };
 }
-/** An open pull request as `changeRequests.find` reads it; `headRepository` null for a deleted fork. */
 
+/** An open pull request as `changeRequests.find` reads it; `headRepository` null for a deleted fork. */
 export interface GitHubPullRequest {
   number: number;
   url: string;
   headRepository: { nameWithOwner: string } | null;
 }
-/** The one of `path`'s own branch among those of a branch of that name, a fork's left out. */
 
+/** The one of `path`'s own branch among those of a branch of that name, a fork's left out. */
 export function ownPullRequest(found: GitHubPullRequest[], path: string): ChangeRequest | undefined {
   const own = found.find((entry) => fromOwnBranch(entry, path));
   return own && { number: own.number, url: own.url };

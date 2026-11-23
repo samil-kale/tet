@@ -94,8 +94,8 @@ else
   mkdir -p "$HOME/.local/share"
   replace "$(dirname "$binary")" "$dest"
   # --no-sandbox: nothing unpacked without root can give electron's chrome-sandbox the setuid root
-  # bit it wants, and AppArmor on Ubuntu 24.04+ blocks the unprivileged fallback, so electron would
-  # abort at launch. What the renderer then runs without is Chromium's own process sandbox.
+  # bit it wants, and Ubuntu's AppArmor blocks the unprivileged fallback, so electron would abort at
+  # launch. What the renderer then runs without is Chromium's own process sandbox.
   cat >"$bin_dir/tet" <<'EOF'
 #!/bin/sh
 nohup "$HOME/.local/share/tet/tet" --no-sandbox "$@" >/dev/null 2>&1 &

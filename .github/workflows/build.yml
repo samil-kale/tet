@@ -30,15 +30,13 @@ jobs:
 
       - run: npm ci
 
-      # electron has no postinstall download step; it fetches its binary lazily on first
-      # `require("electron")`. Left to happen inside `npm test`, several test files trigger
-      # that download at once (node --test runs them concurrently), racing to extract the same
-      # zip — ETXTBSY on Linux, a startup timeout on Windows. One serial fetch here avoids it.
+      # electron fetches its binary on the first `require("electron")`. Left to `npm test`, whose
+      # files run concurrently, several would race to extract the same zip; one fetch here first.
       - run: node -e "require('electron')"
 
-      # The same four gates the working copy is held to, before anything is packaged. The
-      # tests are what exercises the control channel's loopback TCP port on each platform; the
-      # other three read the same sources everywhere, so one runner answers for all.
+      # The same four gates the working copy is held to, before anything is packaged. Only the
+      # tests differ per platform; the other three read the same sources everywhere, so one runner
+      # answers for all.
       - run: npm run typecheck
         if: runner.os == 'Linux'
       - run: npm run lint
@@ -82,8 +80,8 @@ jobs:
       - run: node --test dist-test/e2e/install.test.js
         if: runner.os != 'Linux'
 
-      # Only a handoff to the release job of this same run; the Release itself keeps the archives.
-      # Kept the default 90 days, they would count against the account's metered Actions storage.
+      # Only a handoff to the release job of this same run; the Release itself keeps the archives,
+      # and kept longer here they would count against the account's metered Actions storage.
       - uses: actions/upload-artifact@v4
         with:
           name: archives-${{ runner.os }}

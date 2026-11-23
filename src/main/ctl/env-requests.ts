@@ -39,7 +39,7 @@ export class EnvRequests {
     return turn;
   }
 
-  /** The dialog's Save (a row per variable) or Cancel (null); a string is why it could not be saved. */
+  /** The dialog's Save (a row per variable) or Cancel (null); answers what refused the save. */
   async answer(id: number, answer: EnvAnswer[] | null): Promise<ActionResult> {
     const open = this.open;
     if (open?.request.id !== id) {

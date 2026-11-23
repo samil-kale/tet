@@ -24,7 +24,7 @@ Notification.handleActivation = () => undefined;
  * reachable from a test reads is here, anything else fails where it is used. `shell`,
  * `utilityProcess`, `ipcMain` and `safeStorage` are empty for a test to fill with its fakes (helpers/index.ts's
  * forkUtilitiesInProcess and fakeSafeStorage, repository.test.ts's trash). `app`'s members are
- * harmless no-ops; nothing yet reads more of it from a test.
+ * harmless no-ops; a test reads nothing else of it.
  */
 module.exports = {
   nativeTheme: { shouldUseDarkColors: true },

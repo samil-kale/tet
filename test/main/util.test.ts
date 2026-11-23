@@ -120,7 +120,7 @@ describe("resolveCommand", () => {
 
   it("hands a batch file reading its own arguments each one once escaped", { skip: !PLATFORM.spawnsThroughCmd && "win32 only" }, () => {
     // Maven's `mvn.cmd` shape: `%~1` compared in an `if`, where a second escape's carets are a
-    // syntax error ("[TET] mvn exited with code 255").
+    // syntax error.
     const dir = tempDir("tet batch (x)-");
     const script = path.join(dir, "argv.js");
     fs.writeFileSync(script, "process.stdout.write(JSON.stringify(process.argv.slice(2)));");

@@ -17,10 +17,9 @@ import { fakeCommand, tempDir, withCommandOn } from "../helpers";
 interface Answers {
   /** `sbx version --json`'s client version; none exits 1, as a missing sbx does not answer. */
   version?: string;
-  /** `sbx ls --json`: the sandboxes, or the stderr it fails with. */
+  /** `sbx ls --json`: the sandboxes, printed as a bare array, or the stderr it fails with. */
   sandboxes?: Record<string, string[]>;
   lsFails?: string;
-  /** The listing as a bare array, as newer sbx prints it, not wrapped in `sandboxes`. */
   /** `sbx policy ls --type filesystem --json`: its rules, or none for a policy never set up. */
   filesystemRules?: object[];
   /** `sbx policy ls`'s whole stdout, where the rules alone do not say it (a governed account). */

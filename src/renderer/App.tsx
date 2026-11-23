@@ -112,7 +112,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   // Section defaults and limits.
   const [branchTreeHeight, setBranchTreeHeight] = useStoredSize("branch-tree", 260, MIN_AREA_HEIGHT);
   const [fileSearchHeight, setFileSearchHeight] = useStoredSize("file-search", 260, MIN_AREA_HEIGHT);
-  // 40% of the window it first opens in.
+  // A share of the window it first opens in.
   const [commandsHeight, setCommandsHeight] = useStoredSize("commands", Math.round(window.innerHeight * 0.4), MIN_AREA_HEIGHT);
   /** The one lane shown, its width and slide (use-lanes.ts). */
   const {
@@ -317,7 +317,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [showTab],
   );
 
-  /** Ctrl/Cmd+Shift+./, — within the focused pane. */
+  /** The `nextTab`/`previousTab` shortcuts, within the focused pane. */
   const cycleTab = useCallback(
     (direction: 1 | -1) => {
       if (!activeRefKey) {
@@ -338,7 +338,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
     [activeRefKey, stripTabs, layouts, activateTab],
   );
 
-  /** Ctrl/Cmd+Shift+T. */
+  /** The `newShellTab` shortcut. */
   const newShellTab = useCallback(() => {
     if (activeRef) {
       openShellTab(activeRef);
@@ -347,7 +347,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
 
   /**
    * Refresh on window focus, for changes the watcher missed. Only the repository or worktree on
-   * screen — each other would cost three git processes for a state nobody reads.
+   * screen — each other would cost git processes for a state nobody reads.
    */
   useEffect(() => {
     if (!activeRef) {

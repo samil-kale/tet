@@ -238,7 +238,7 @@ export function CheckIcon(props: IconProps) {
   return <Lucide {...props} icon={Check} />;
 }
 
-/** Lucide's `list-check` — mark all issues as read. */
+/** Lucide's `list-check` — mark all issues or change requests as read. */
 export function ListCheckIcon(props: IconProps) {
   return <Lucide {...props} icon={ListCheck} extent={17.5} />;
 }
@@ -349,7 +349,7 @@ export function UserIcon(props: IconProps) {
   return <Lucide {...props} icon={User} />;
 }
 
-/** Lucide's `user-plus` — the Issues section's account to add. */
+/** Lucide's `user-plus` — the Issues and change requests sections' account to add. */
 export function UserPlusIcon(props: IconProps) {
   return <Lucide {...props} icon={UserPlus} />;
 }
@@ -488,7 +488,7 @@ export function PencilIcon(props: IconProps) {
   return <Lucide {...props} icon={Pencil} />;
 }
 
-/** Lucide's `trash-2` — an issue's comment to delete. */
+/** Lucide's `trash-2` — an issue, a comment or a time entry to delete. */
 export function TrashIcon(props: IconProps) {
   return <Lucide {...props} icon={Trash2} />;
 }

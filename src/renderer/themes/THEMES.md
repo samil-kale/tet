@@ -57,22 +57,21 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
   (`test/lint.test.ts`). It is the exception, not the way to theme: a theme sets one only where
   its own mark color differs from the accent.
 
-| Optional variable                          | Falls back to                                        | Set by            |
-| ------------------------------------------ | ---------------------------------------------------- | ----------------- |
-| `--tet-tabMark-foreground`                 | `--tet-focusBorder`                                  | Dark/Light GitHub |
-| `--tet-settings-checkboxBackground`        | `--tet-input-background`                             | Dark IntelliJ     |
-| `--tet-settings-checkboxBorder`            | `--tet-app-border`                                   | Dark IntelliJ     |
-| `--tet-settings-checkboxForeground`        | `--tet-input-foreground`                             | Dark IntelliJ     |
+| Optional variable                   | Falls back to            |
+| ----------------------------------- | ------------------------ |
+| `--tet-tabMark-foreground`          | `--tet-focusBorder`      |
+| `--tet-settings-checkboxBackground` | `--tet-input-background` |
+| `--tet-settings-checkboxBorder`     | `--tet-app-border`       |
+| `--tet-settings-checkboxForeground` | `--tet-input-foreground` |
 
 ## From a VS Code theme to a TET theme
 
-1. **Take the theme file as VS Code reads it.** Follow its `include` chain (Light Modern is
-   VS Code's Light 2026, its Islands theme: `2026-light.json` over `light_modern.json` over
-   `light_plus.json` over `light_vs.json`; likewise Dark Modern). Where VS Code has an Islands
-   variant of a theme, that variant is the reference, never the older one. A theme shiki ships is taken
-   as shiki ships it (`@shikijs/themes/<name>`); any other is the extension's theme file as it
-   ships, put beside the stylesheet as `<id>.json` (comments stripped, if it has any, and
-   `semanticHighlighting` and `semanticTokenColors`, which neither shiki nor monaco reads).
+1. **Take the theme file as VS Code reads it**, following its `include` chain. Where VS Code has
+   an Islands variant of a theme, that variant is the reference (Light and Dark Modern are VS
+   Code's Islands themes over `light_modern.json`/`dark_modern.json`). A theme shiki ships is taken
+   as shiki ships it (`@shikijs/themes/<name>`); any other is the extension's theme file, put
+   beside the stylesheet as `<id>.json`, without comments, `semanticHighlighting` and
+   `semanticTokenColors` (neither shiki nor monaco reads them).
 2. **Copy each required variable's value** from the theme's `colors`, by its id.
 3. **Fill what the theme leaves unset with what VS Code would draw**, read from VS Code's color
    registry under the theme's kind (its `dark:` or `light:` branch), never eyeballed: a default
@@ -87,9 +86,8 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
    - There is no `titleBar.activeBackground`: the title bar row is part of the ground, so
      `app.background` paints it (`titleBar.activeForeground` is the theme's).
    - `app.background` and `app.border` are `sideBar.background` and `input.border`, the one border
-     that shows on the ground, in an island and around a field alike (there is no `--tet-input-border`:
-     a field's border is `app.border`); a theme whose values don't fit (the layer above) deviates by
-     step 5.
+     that shows on the ground, in an island and around a field alike (a field's border is
+     `app.border`, there is no `--tet-input-border`); where they don't fit, step 5.
    - There is no `terminal.background` (the layer above), no `menu.selection*` (a menu's selected
      row is drawn in `list.activeSelection*`), no `sash.hoverBorder` (a sash hovers in
      `focusBorder`): a theme's values for them are dropped.
@@ -103,11 +101,9 @@ monaco's `defineTheme`, shiki's `theme.colors`: `theme-colors.ts` maps id to var
    at the end of its `tokenColors`, in a color of the theme's own, and is named in the stylesheet's
    header comment, since the JSON holds none.
 6. **Wire it up**:
-   - Its entry in `THEMES`: `id`, `label` (without Dark/Light), `kind` (the theme's `type`), and
-     `shikiTheme`. `windowBackground` and `titleBarSymbolColor` copy `--tet-app-background`
-     and `--tet-titleBar-activeForeground`, `terminalBackground` and `terminalForeground` copy
-     `--tet-editor-background` and `--tet-terminal-foreground`: they are needed before the stylesheet loads,
-     and `themes.test.ts` holds them equal.
+   - Its entry in `THEMES`: `id`, `label` (without Dark/Light), `kind` (the theme's `type`),
+     `shikiTheme`, and the colors needed before the stylesheet loads, each copying a variable
+     (`ThemeDefinition` says which; `themes.test.ts` holds them equal).
    - Its import in `main.tsx`.
    - Token colors: a `shikiTheme` member and its line in `diff-highlight.ts`'s `THEME_MODULES`
      (shiki's module, or the `<id>.json` beside the stylesheet).
@@ -124,8 +120,8 @@ What draws on a canvas or takes colors through an API reads the resolved values 
   (`diff-highlight.ts`).
 - **monaco** (`MONACO_CSS_VARS`): its chrome and the diff, through `defineTheme`. monaco writes
   its own `--vscode-*` block from them onto its elements; TET's stylesheets never read it.
-- **The window**: the four values `THEMES` copies (step 6), for the window's first paint, the
-  Windows title bar overlay and an agent reading colors off the console.
+- **The window**: the values `THEMES` copies (step 6), for the window's first paint, the Windows
+  title bar overlay and an agent reading colors off the console.
 
 ## Colors not from a variable
 

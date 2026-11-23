@@ -41,7 +41,7 @@ document.documentElement.toggleAttribute("data-background-gradient", window.tet.
 // Main repeats it after each page load, as it does the theme.
 window.tet.onBackgroundGradient((on) => document.documentElement.toggleAttribute("data-background-gradient", on));
 
-// A runtime theme change (main.ts's applyTheme): the stylesheet first, since the others re-read it.
+// A runtime theme change (settings-access.ts's applyTheme): the stylesheet first, since the others re-read it.
 // Subscribed before any render: main repeats the theme after each page load, which a reloaded
 // window's arguments may no longer match.
 window.tet.onTheme((themeId) => {

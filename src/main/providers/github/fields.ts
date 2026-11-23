@@ -25,8 +25,8 @@ export interface Target {
 export function updateIssueWrite(input: object): Write {
   return { mutation: "updateIssue", inputType: "UpdateIssueInput", input };
 }
-/** The fields of GitHub, by the id `toFields` gives them. */
 
+/** The fields of GitHub, by the id `toFields` gives them. */
 export const FIELD_HANDLERS: Record<string, FieldHandler<Target>> = {
   assignees: pickHandler({ what: "person to assign", choices: ({ send, path }) => allAssignable(send, path) }, (target, ids) =>
     updateIssueWrite({ id: target.id, assigneeIds: ids }),
@@ -66,8 +66,8 @@ export function issueFieldWrite(definition: GitHubFieldDefinition, target: Targe
     input: { issueId: target.id, issueFields: [{ fieldId: definition.id, ...(entry ?? { delete: true }) }] },
   };
 }
-/** The handler of one of the organization's issue fields, by the type it is. */
 
+/** The handler of one of the organization's issue fields, by the type it is. */
 export function issueFieldOf(definition: GitHubFieldDefinition): FieldHandler<Target> {
   const options = { what: definition.name, choices: () => Promise.resolve(definition.options ?? []) };
   switch (definition.__typename) {
@@ -89,20 +89,20 @@ export function issueFieldOf(definition: GitHubFieldDefinition): FieldHandler<Ta
       throw new Error(`${definition.name} is a kind of issue field this app does not know`);
   }
 }
-/** A repository's open milestones by title, with their ids. */
 
+/** A repository's open milestones by title, with their ids. */
 export function allMilestones(send: GraphqlSend, path: string): Promise<NamedId[]> {
   return repositoryNodes(send, path, "milestones", "id name: title", "states: [OPEN], orderBy: { field: DUE_DATE, direction: ASC }");
 }
-/** The issue types a repository offers, by name, with their ids. */
 
+/** The issue types a repository offers, by name, with their ids. */
 export async function allIssueTypes(send: GraphqlSend, path: string): Promise<NamedId[]> {
   const types = await repositoryNodes<NamedId & { isEnabled: boolean }>(send, path, "issueTypes", "id name isEnabled");
   return types.filter((type) => type.isEnabled).map(({ id, name }) => ({ id, name }));
 }
+
 /** The open issues of a repository but the issue itself, by the name `parentName` gives them: the
  *  parents it can be given. */
-
 export async function openIssues({ send, path, number }: FieldContext<Target>): Promise<NamedId[]> {
   const entries = await repositoryNodes<{ id: string; number: number; title: string }>(
     send,
@@ -137,8 +137,8 @@ export async function fieldHandlerOf(send: GraphqlSend, path: string, fieldId: s
   }
   return issueFieldOf(definition);
 }
-/** The issue a change of a field is made on. */
 
+/** The issue a change of a field is made on. */
 export async function readTarget(send: GraphqlSend, path: string, number: number): Promise<Target> {
   type WithParent = { parent?: { id: string } | null };
   // A host without sub-issues refuses the query that asks for the parent.
@@ -158,8 +158,8 @@ export interface PullRequestTarget {
 export function updatePullRequestWrite(input: object): Write {
   return { mutation: "updatePullRequest", inputType: "UpdatePullRequestInput", input };
 }
-/** The fields of a pull request, by the id `toPullRequestFields` gives them. */
 
+/** The fields of a pull request, by the id `toPullRequestFields` gives them. */
 export const PULL_REQUEST_FIELD_HANDLERS: Record<string, FieldHandler<PullRequestTarget>> = {
   reviewers: pickHandler({ what: "reviewer", choices: ({ send, path }) => allAssignable(send, path) }, (target, ids) => ({
     mutation: "requestReviews",

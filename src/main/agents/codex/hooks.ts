@@ -10,7 +10,7 @@ import { systemPrompt } from "../system-prompt";
  * matched against a `trusted_hash` in its config. An unknown hash opens a blocking "Hooks need
  * review" screen, so TET reproduces the hash and passes it with the hook.
  *
- * `timeout` is hashed at its effective value, 600 (the default for every event TET uses). Keys
+ * `timeout` is hashed at its effective value, the default for every event TET uses. Keys
  * sort recursively alphabetical (`matcher` after `hooks`). `async` stays `false`: Codex refuses
  * async hooks and drops them from the trust listing.
  *
@@ -105,9 +105,7 @@ function buildHooksArg(entries: HookEntry[], target: HookTarget): string {
  * `tet-ctl hook <event>` (hook-command.ts), and `-c` applies to this process only — Codex's
  * `config.toml` and `hooks.json` are never touched.
  *
- * One command per event: `UserPromptSubmit`'s plain stdout would be appended to the prompt, so the
- * `prompt-submit` answer stays empty. Stop must write one JSON value and gets `{}`
- * (codexHookReply).
+ * One command per event; what each prints back is codexHookReply's.
  *
  * TET's system prompt is `SessionStart`'s added context, not `-c developer_instructions`, which
  * replaces the user's own; `-c hooks` adds to the user's hooks.

@@ -90,7 +90,7 @@ export const BranchTree = memo(function BranchTree({
   const at = resolved.ref;
   const projectId = resolved.ref.projectId;
   const [filter, setFilter] = useState("");
-  // Only local branches start expanded, as in GitHub Desktop; collapsing persists.
+  // Local branches start expanded, as in GitHub Desktop, and so do worktrees; collapsing persists.
   const [isCollapsed, toggle] = useCollapsedGroups("branch-tree.groups", ["remotes", "tags", "stashes"]);
   const menu = useContextMenu<MenuTarget>();
 

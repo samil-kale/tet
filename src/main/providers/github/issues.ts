@@ -62,13 +62,13 @@ export const UPLOAD_TYPES: Record<string, string> = {
   mov: "video/quicktime",
   webm: "video/webm",
 };
-/** What the upload takes a file as, off its name; undefined for one it refuses. */
 
+/** What the upload takes a file as, off its name; undefined for one it refuses. */
 export function contentTypeOf(name: string): string | undefined {
   return UPLOAD_TYPES[name.split(".").pop()?.toLowerCase() ?? ""];
 }
-/** What shows an upload in a text: an image by name, a video by its bare URL. */
 
+/** What shows an upload in a text: an image by name, a video by its bare URL. */
 export function uploadMarkdown(name: string, url: string, contentType: string): string {
   return contentType.startsWith("video/") ? url : `![${name.replace(/[\\[\]]/g, "\\$&")}](${url})`;
 }
@@ -77,9 +77,9 @@ export function uploadMarkdown(name: string, url: string, contentType: string): 
 export function hasUpload(host: string): boolean {
   return host === "github.com" || host.endsWith(".ghe.com");
 }
+
 /** What a filter asks for, in the words of `ISSUES_QUERY` and `LATEST_QUERY`. Its `labels` leave an issue with any of
  *  them, so `carriesAll` narrows what it answers. */
-
 export function issuesVariables(path: string, filter: IssueFilter): Record<string, unknown> {
   return {
     ...repositoryOf(path),
@@ -107,7 +107,6 @@ export const githubIssues: GitProviderIssues = {
           ISSUES_QUERY,
           issuesVariables(path, filter),
           (data) => (data as { repository: { issues: GraphqlPage<GitHubIssue> } }).repository.issues,
-          // `filterBy` leaves an issue with any of several labels.
           { limit, after, ...(filter.labels.length > 1 && { keep: (entry: GitHubIssue) => carriesAll(entry, filter.labels) }) },
         );
     return { items: items.map(toIssue), ...rest };

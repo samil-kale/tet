@@ -100,8 +100,8 @@ function graphRevisions(state: RepositoryState): string[] {
 /** More often than GitHub Desktop's hourly fetch, which it runs for GitHub repositories only: "Update
  *  from" merges what the last fetch brought, whatever the host. */
 const AUTO_FETCH_INTERVAL_MS = 10 * 60_000;
-/** How long the periodic fetch may hold back a click (runAction waits for it). Well past the minute
- *  git and ssh give a silent connection (git.ts's NETWORK_ENV): this catches a credential helper
+/** How long the periodic fetch may hold back a click (runAction waits for it). Well past what git
+ *  and ssh give a silent connection (git.ts's NETWORK_ENV): this catches a credential helper
  *  waiting on its own. */
 const AUTO_FETCH_TIMEOUT_MS = 2 * 60_000;
 
@@ -292,7 +292,7 @@ export class Repository {
     this.branchBases = branchConfig.branchBases;
   }
 
-  /** The periodic fetch. Silent on failure, or an offline machine gets a notice every ten minutes.
+  /** The periodic fetch. Silent on failure, or an offline machine gets a notice at every turn.
    *  It doesn't take the action slot — a click during it waits, in a worktree too — and skips a
    *  turn while a command runs anywhere in the project. */
   private async autoFetch(): Promise<void> {
@@ -358,7 +358,7 @@ export class Repository {
       }
       this.emit(await this.read());
       // What the views are given, not the bare read: `emit` lays the config over it (the remotes'
-      // urls, the default branch, each worktree's base).
+      // urls, each worktree's base and key).
       return this.state;
     })().finally(() => {
       this.inflight = undefined;

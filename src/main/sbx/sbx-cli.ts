@@ -12,8 +12,8 @@ import { logError } from "../util/error-log";
 import { parseSbxJson } from "./sbx-policy";
 
 /**
- * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login` and `policy
- * init` run here (`RunOptions.cancellable`): a spawn's `sbx ls` or `create` must survive Cancel.
+ * The `sbx` process the settings dialog waits on, for `cancelSbxSetup`. Only `login`, `policy init`
+ * and `mcp auth` run here (`RunOptions.cancellable`): a spawn's `sbx ls` or `create` must survive Cancel.
  */
 const setup = stoppable();
 
@@ -137,7 +137,7 @@ export function cancelSbxSetup(): void {
  *  the app. */
 export const SBX_VERIFIED_VERSION = "0.48.0";
 
-/** As long as an agent's version check, for `sbx version` and probeSbx's reads beside it: a hung
+/** As long as an agent's version check (VERSION_CHECK_TIMEOUT_MS), for `sbx version` and probeSbx's reads beside it: a hung
  *  daemon must hold neither the startup, the SBX Settings nor a tab's start. */
 export const SBX_PROBE_TIMEOUT_MS = 10_000;
 

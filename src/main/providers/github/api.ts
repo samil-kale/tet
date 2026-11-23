@@ -12,9 +12,9 @@ export function headers(token: string): Record<string, string> {
     "User-Agent": "tet",
   };
 }
+
 /** Whether an image of an issue's text may be asked for with the token: on the account's host alone,
  *  as anyone can write any address into a text. */
-
 export function readsWithToken(host: string, source: string): boolean {
   const url = URL.parse(source);
   return url?.protocol === "https:" && url.host.toLowerCase() === host.toLowerCase();
@@ -75,13 +75,13 @@ export function repositoryNodes<T>(send: GraphqlSend, path: string, connection: 
     (data) => (data as { repository: Record<string, GraphqlPage<T>> }).repository[connection],
   );
 }
-/** A repository's labels by name, with their ids. */
 
+/** A repository's labels by name, with their ids. */
 export function allLabels(send: GraphqlSend, path: string): Promise<NamedId[]> {
   return repositoryNodes(send, path, "labels", "id name");
 }
-/** Who can be assigned, by login, with their ids. */
 
+/** Who can be assigned, by login, with their ids. */
 export function allAssignable(send: GraphqlSend, path: string): Promise<NamedId[]> {
   return repositoryNodes(send, path, "assignableUsers", "id name: login");
 }
@@ -99,8 +99,8 @@ export async function readPullRequestNode<T extends object = object>(
   };
   return reached(data.repository?.pullRequest, pullRequestName(path, number));
 }
-/** A pull request as a refusal names it. */
 
+/** A pull request as a refusal names it. */
 export function pullRequestName(path: string, number: number): string {
   return `Pull request #${number} of ${path}`;
 }

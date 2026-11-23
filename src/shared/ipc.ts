@@ -182,7 +182,7 @@ export interface SendChannels {
   [reply: WindowReply]: (answer: string | undefined) => void;
 }
 
-/** Main to renderer: `webContents.send` and the preload's subscriptions, by payload. */
+/** Main to renderer: window.ts's `send` and the preload's subscriptions, by payload. */
 export interface EventChannels {
   "app:notice": Payload<TETApi["onNotice"]>;
   "app:notice-progress": Payload<TETApi["onNoticeProgress"]>;

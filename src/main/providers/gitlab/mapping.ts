@@ -19,8 +19,8 @@ import { changeRequestFields, pickField, type GraphqlPage, type NamedId } from "
 export interface GitLabUser {
   username: string;
 }
-/** An issue as GraphQL says it; only one read alone has its description. */
 
+/** An issue as GraphQL says it; only one read alone has its description. */
 export interface GitLabIssue {
   iid: string;
   title: string;
@@ -33,8 +33,8 @@ export interface GitLabIssue {
   labels: { nodes: { title: string }[] };
   description?: string | null;
 }
-/** An iteration as GraphQL says it; `title` is null for one named by its dates alone. */
 
+/** An iteration as GraphQL says it; `title` is null for one named by its dates alone. */
 export interface GitLabIteration {
   id: string;
   title: string | null;
@@ -42,16 +42,16 @@ export interface GitLabIteration {
   dueDate: string | null;
   iterationCadence: { title: string };
 }
-/** The work item a parent is, as the parent field names it. */
 
+/** The work item a parent is, as the parent field names it. */
 export interface GitLabParent {
   iid: string;
   title: string;
   workItemType: { name: string };
   namespace: { fullPath: string };
 }
-/** A booking of time as GraphQL says it; `timeSpent` is in seconds, negative for time taken off. */
 
+/** A booking of time as GraphQL says it; `timeSpent` is in seconds, negative for time taken off. */
 export interface GitLabTimelog {
   id: string;
   timeSpent: number;
@@ -60,9 +60,9 @@ export interface GitLabTimelog {
   user: GitLabUser;
   userPermissions: { adminTimelog: boolean };
 }
-/** One of a work item's widgets as GraphQL says it: `type` names it, and it holds what its own
- *  fragment of `WIDGETS` selected, the rest left out. */
 
+/** One of a work item's widgets as GraphQL says it: `type` names it, and it holds what its own
+ *  fragment of `WIDGETS` or `EXTRA_WIDGETS` selected, the rest left out. */
 export interface GitLabWidget {
   type: string;
   assignees?: { nodes: GitLabUser[] };
@@ -79,14 +79,14 @@ export interface GitLabWidget {
   timelogs?: { nodes: GitLabTimelog[] };
   participants?: { nodes: GitLabUser[] };
 }
-/** An issue as the work item it also is: what its type and plan give it beside its text. */
 
+/** An issue as the work item it also is: what its type and plan give it beside its text. */
 export interface GitLabWorkItem {
   confidential: boolean;
   widgets: GitLabWidget[];
 }
-/** A note as GraphQL says it; `author` is null for a deleted account. */
 
+/** A note as GraphQL says it; `author` is null for a deleted account. */
 export interface GitLabNote {
   id: string;
   /** What GitLab wrote itself (a label added, an assignee changed), not a comment. */
@@ -102,13 +102,13 @@ export interface GitLabNote {
   discussion?: { id: string; resolved: boolean } | null;
 }
 
-/** An entry of an issue's `resource_*_events`; `user` is null for a deleted account. */
+/** An entry of an issue's or merge request's `resource_*_events`; `user` is null for a deleted account. */
 export interface GitLabResourceEvent {
   user: GitLabUser | null;
   created_at: string;
 }
-/** What it says of a label or milestone since deleted is null. */
 
+/** What it says of a label or milestone since deleted is null. */
 export interface GitLabLabelEvent extends GitLabResourceEvent {
   action: string;
   label: { name: string } | null;
@@ -122,8 +122,8 @@ export interface GitLabMilestoneEvent extends GitLabResourceEvent {
 export interface GitLabStateEvent extends GitLabResourceEvent {
   state: string;
 }
-/** What of a change `updateIssue` sets, in GitLab's words. */
 
+/** What of a change `updateIssue` sets, in GitLab's words. */
 export function toIssueInput(path: string, number: number, { title, body, state }: TrackedChange): object {
   return {
     projectPath: path,
@@ -133,16 +133,16 @@ export function toIssueInput(path: string, number: number, { title, body, state 
     stateEvent: state && (state === "open" ? "REOPEN" : "CLOSE"),
   };
 }
+
 /** An iteration as its field shows and lists it: its cadence, then its title or, as most have none,
  *  its dates. */
-
 export function iterationName(iteration: GitLabIteration): string {
   const dates = [iteration.startDate, iteration.dueDate].map((date) => date?.slice(0, 10) ?? "").join(" – ");
   return `${iteration.iterationCadence.title}: ${iteration.title ?? dates}`;
 }
+
 /** A parent as its field shows and lists it: its title and where it is, since an iid is only unique
  *  in its namespace; an epic's is marked as GitLab marks one, `&`. */
-
 export function parentName(parent: GitLabParent): string {
   return `${parent.title} (${parent.namespace.fullPath}${parent.workItemType.name === "Epic" ? "&" : "#"}${parent.iid})`;
 }
@@ -156,8 +156,8 @@ export const DURATION_UNITS: [unit: string, seconds: number][] = [
   ["h", 3600],
   ["m", 60],
 ];
-/** A duration in seconds as GitLab words one, "1h 30m"; a minute is its smallest. */
 
+/** A duration in seconds as GitLab words one, "1h 30m"; a minute is its smallest. */
 export function durationText(seconds: number): string {
   let rest = Math.abs(seconds);
   const parts: string[] = [];
@@ -171,8 +171,8 @@ export function durationText(seconds: number): string {
   const text = parts.length > 0 ? parts.join(" ") : "0m";
   return seconds < 0 ? `-${text}` : text;
 }
-/** The bookings of time a work item has, newest first. */
 
+/** The bookings of time a work item has, newest first. */
 export function toTimeLogs(logs: GitLabTimelog[]): IssueTimeLog[] {
   return [...logs]
     .sort((a, b) => (b.spentAt ?? "").localeCompare(a.spentAt ?? ""))
@@ -265,15 +265,15 @@ export const FIELD_SOURCES: ((item: GitLabWorkItem) => TrackedField[])[] = [
     }),
   ]),
 ];
+
 /** The fields a work item has, as the tab lists them: one for what a widget holds, only where the
  *  item's type and the plan give it the widget. */
-
 export function toFields(item: GitLabWorkItem): TrackedField[] {
   return FIELD_SOURCES.flatMap((source) => source(item));
 }
+
 /** `avatars` stays empty: a private instance serves a user's uploaded picture only to a signed-in
  *  browser session, never to a token, so a user is shown by the first letters of the login. */
-
 export function toIssue(entry: GitLabIssue): Issue {
   return {
     number: Number(entry.iid),
@@ -293,16 +293,16 @@ export function toIssue(entry: GitLabIssue): Issue {
 export function authorOf(note: GitLabNote): string {
   return note.author?.username ?? "ghost";
 }
-/** The comments among an issue's notes. */
 
+/** The comments among an issue's or merge request's notes. */
 export function toNotes(entries: GitLabNote[]): TrackedNote[] {
   return entries
     .filter((entry) => !entry.system)
     .map((entry) => ({ id: entry.id, author: authorOf(entry), createdAt: entry.createdAt, body: entry.body, internal: entry.internal }));
 }
+
 /** A merge request's discussions on its changes, from its notes: every comment of a discussion one of
  *  whose notes was written on them, what GitLab noted itself left out. */
-
 export function toReviewThreads(entries: GitLabNote[]): ReviewThread[] {
   const threads = new Map<string, ReviewThread>();
   for (const { position, discussion } of entries) {
@@ -345,9 +345,9 @@ export function fromSystemNote(body: string): { kind: "renamed"; from: string; t
   }
   return { kind: "text", text: body };
 }
-/** An issue's events, from where GitLab keeps each kind: a change of labels, state or milestone has
- *  its own record, and what else it did only its system notes tell, in its own words. */
 
+/** An issue's or merge request's events, from where GitLab keeps each kind: a change of labels, state
+ *  or milestone has its own record, and what else it did only its system notes tell, in its own words. */
 export function toEvents(
   notes: GitLabNote[],
   labels: GitLabLabelEvent[],
@@ -376,39 +376,39 @@ export function toEvents(
   }
   return events;
 }
+
 /** An open merge request as `changeRequests.find` reads it; `sourceProject` null for one the token
  *  cannot read. */
-
 export interface GitLabMergeRequest {
   iid: string;
   webUrl: string;
   sourceProject: { fullPath: string } | null;
 }
-/** The one from `path`'s own branch among those of a branch of that name, a fork's left out. */
 
+/** The one from `path`'s own branch among those of a branch of that name, a fork's left out. */
 export function ownMergeRequest(found: GitLabMergeRequest[], path: string): ChangeRequest | undefined {
   const own = found.find((entry) => fromOwnProject(entry, path));
   return own && { number: Number(own.iid), url: own.webUrl };
 }
+
 /** A merge request as a row reads it (`MERGE_REQUEST_ROW`); `sourceProject` null for one the token
  *  cannot read. */
-
 export interface GitLabMergeRequestRow extends GitLabIssue {
   draft: boolean;
   sourceProject: { fullPath: string } | null;
   diffHeadSha: string | null;
   headPipeline: { status: string } | null;
 }
-/** A job of a merge request's head pipeline (`MERGE_REQUEST_QUERY`). */
 
+/** A job of a merge request's head pipeline (`MERGE_REQUEST_QUERY`). */
 export interface GitLabJob {
   name: string;
   status: string;
   stage: { name: string } | null;
   detailedStatus: { detailsPath: string | null } | null;
 }
-/** A merge request as its tab reads it (`MERGE_REQUEST_QUERY`). */
 
+/** A merge request as its tab reads it (`MERGE_REQUEST_QUERY`). */
 export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
   description: string | null;
   sourceBranch: string;
@@ -428,8 +428,8 @@ export interface GitLabMergeRequestDetail extends GitLabMergeRequestRow {
   participants: { nodes: GitLabUser[] } | null;
   notes: GraphqlPage<GitLabNote>;
 }
-/** How a pipeline stands, in TET's words; undefined for one that neither runs nor ended passed or failed. */
 
+/** How a pipeline stands, in TET's words; undefined for one that neither runs nor ended passed or failed. */
 export function pipelineChecks(pipeline: { status: string } | null | undefined): ChecksState | undefined {
   switch (pipeline?.status ?? "") {
     case "SUCCESS":
@@ -458,8 +458,8 @@ export const JOB_STATES: Record<string, ChangeRequestCheck["state"] | undefined>
   SKIPPED: "skipped",
   CANCELED: "skipped",
 };
-/** The jobs of a pipeline as checks, one with a state of none of those of `JOB_STATES` still to run. */
 
+/** The jobs of a pipeline as checks, one with a state of none of those of `JOB_STATES` still to run. */
 export function jobChecksOf(host: string, jobs: GitLabJob[]): ChangeRequestCheck[] {
   return jobs.map((job) => ({
     name: job.name,
@@ -483,8 +483,8 @@ export const MERGE_BLOCKERS: Record<string, string | undefined> = {
   SECURITY_POLICY_VIOLATIONS: "Security policy violated",
   STATUS_CHECKS_MUST_PASS: "Status checks must pass",
 };
-/** Who approved, then who is asked for a review and has not; GitLab tells of no request for changes per person. */
 
+/** Who approved, then who is asked for a review and has not; GitLab tells of no request for changes per person. */
 export function reviewersOf(found: Pick<GitLabMergeRequestDetail, "approvedBy" | "reviewers">): ChangeRequestReviewer[] {
   const approved = (found.approvedBy?.nodes ?? []).map((user) => user.username);
   return [
@@ -499,8 +499,8 @@ export function blockersOf(detailedMergeStatus: string | null): string[] {
   const blocker = MERGE_BLOCKERS[detailedMergeStatus ?? ""];
   return blocker === undefined ? [] : [blocker];
 }
-/** Whether a merge request is from a branch of `path` itself, not of a fork. */
 
+/** Whether a merge request is from a branch of `path` itself, not of a fork. */
 export function fromOwnProject(entry: { sourceProject: { fullPath: string } | null }, path: string): boolean {
   return entry.sourceProject?.fullPath.toLowerCase() === path.toLowerCase();
 }
@@ -516,8 +516,8 @@ export function toChangeRequestRow(entry: GitLabMergeRequestRow): ChangeRequestR
     headSha: entry.diffHeadSha ?? undefined,
   };
 }
-/** The fields a merge request has (`changeRequestFields`), in the order of GitLab's own sidebar. */
 
+/** The fields a merge request has (`changeRequestFields`). */
 export function toMergeRequestFields(found: GitLabMergeRequestDetail, closes: { iid: number; title: string }[]): TrackedField[] {
   return changeRequestFields({
     reviewers: found.reviewers.nodes.map((user) => user.username),

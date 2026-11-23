@@ -30,9 +30,6 @@ import { answersQuestion, type TabState } from "../../src/main/terminals/tab-sta
 
 /** terminals/: a tab's turns and marks, its token and environment, when sessions are listed. */
 
-/** Pieces of the main process needing no app and no server: the session manager's turns and
- *  reports, the control records and launchers, the agent PATH, and what the shell may open. */
-
 describe("a turn's notification", () => {
   // A shell tab stands in for an agent: no version check and no sessions, so the manager starts
   // nothing.

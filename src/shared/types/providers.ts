@@ -233,8 +233,8 @@ export function linkedIssueNumber(name: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-/** What the tracker says of a list of issues without sending it: how many it holds and when the most
- *  recently changed one changed. Two reads that agree found nothing new in it. */
+/** What the host says of a list of issues or change requests without sending it: how many it holds
+ *  and when the most recently changed one changed. Two reads that agree found nothing new in it. */
 export interface TrackedLatest {
   total: number;
   /** ISO 8601; absent for an empty list. */
@@ -315,7 +315,7 @@ export interface IssueLatestResult {
   error?: string;
 }
 
-/** What the Issues section's filters offer. */
+/** What the filters of the Issues or change requests section offer. */
 export interface TrackedFilterOptions {
   labels?: string[];
   /** Offered for both author and assignee. */
@@ -323,7 +323,7 @@ export interface TrackedFilterOptions {
   error?: string;
 }
 
-/** A comment of an issue, oldest first in `TrackedDetail.notes`. */
+/** A comment of an issue or change request, oldest first in `TrackedDetail.notes`. */
 export interface TrackedNote {
   /** What the tracker addresses it by, its GraphQL id. */
   id: string;
@@ -337,7 +337,7 @@ export interface TrackedNote {
   fixed?: true;
 }
 
-/** What happened to an issue, shown between its comments. */
+/** What happened to an issue or change request, shown between its comments. */
 export type TrackedEvent = { actor: string; /** ISO 8601. */ createdAt: string } & (
   | { kind: "closed" | "reopened" }
   | { kind: "assigned" | "unassigned"; login: string }
@@ -355,9 +355,9 @@ export type TrackedEvent = { actor: string; /** ISO 8601. */ createdAt: string }
 );
 
 /**
- * One field of an issue, as the tab's side column lists them: what the tracker keeps of an issue
- * beside its text and comments, in the tracker's own words and order. A field the tracker does not
- * have for this issue (its type or plan lacks it) is not listed.
+ * One field of an issue or change request, as the tab's side column lists them: what the tracker
+ * keeps of it beside its text and comments, in the tracker's own words and order. A field the
+ * tracker does not have for this one (its type or plan lacks it) is not listed.
  */
 export type TrackedField = {
   /** What the provider addresses it by in `listOptions` and `setField`. */
@@ -456,8 +456,8 @@ export interface IssueUploads {
   extensions?: string[];
 }
 
-/** What the issue's tab sets of the issue itself; a part left out stays as it is. Its fields are set
- *  one at a time (`TrackedField`). */
+/** What a tab sets of its issue or change request itself; a part left out stays as it is. Its
+ *  fields are set one at a time (`TrackedField`). */
 export interface TrackedChange {
   title?: string;
   body?: string;
@@ -481,8 +481,8 @@ export interface ChangeRequestKind {
 }
 
 /** Where the checked-out branch's pull or merge request can go: the host's kind, the branches of
- *  its remote it can merge into, and the one offered first (`change-requests.ts`: the base TET
- *  recorded, else the default branch). */
+ *  its remote it can merge into, and the one offered first (`change-requests/create.ts`: the base
+ *  TET recorded, else the default branch). */
 export interface ChangeRequestTarget {
   kind: ChangeRequestKind;
   into: string;

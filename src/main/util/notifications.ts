@@ -123,7 +123,7 @@ function escapeXml(text: string): string {
 /**
  * Electron's notification plus a `launch` string Windows hands back on a click. `type` and `tag` are
  * Electron's keys, so it still finds the Notification while TET runs; the session id outlives a
- * quit (showTabRef).
+ * quit (main.ts's showNotificationTarget).
  */
 function windowsToastXml(id: string, title: string, message: string, target?: TabRef): string {
   const launch = new URLSearchParams({ type: "click", tag: id });

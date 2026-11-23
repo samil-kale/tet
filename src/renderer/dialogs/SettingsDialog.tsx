@@ -172,7 +172,7 @@ const INFO_ROWS: { key: keyof AppInfo; label: string }[] = [
  */
 export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) {
   const [tab, setTab] = useState<SettingsTab>(openedOn ?? TABS[0].id);
-  /** An account is being added (`ProviderAccounts`). */
+  /** An account is being added or removed (`ProviderAccounts`). */
   const [addingAccount, setAddingAccount] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -314,7 +314,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
 
   // Nothing of it shown while it could not be read.
   const shown = loadFailed === undefined ? tab : undefined;
-  // Live within one kind only: an agent gets light or dark when its tab starts (main.ts's
+  // Live within one kind only: an agent gets light or dark when its tab starts (settings-access.ts's
   // applyTheme).
   const kindSwitched = settings !== null && chosenKind !== shownKind;
   const envRestart = envChanged(variables, loadedVariables);

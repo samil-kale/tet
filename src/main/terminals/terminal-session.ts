@@ -11,9 +11,9 @@ interface SessionCallbacks {
 
 // Stopping writes the Ctrl+C bytes an agent quits on (`AgentTerminal.quitPresses`) before a
 // kill, so the CLI runs its exit handlers. Claude Code arms a record in `~/.claude.json` while its
-// fullscreen renderer boots and clears it ten seconds later; a process dying in between counts as a
-// strike, and two turn fullscreen off machine-wide — a tab spawned at TET's startup is in that
-// window. `\x03` is safe only because an agent TUI in raw mode reads it as a byte; in cooked mode
+// fullscreen renderer boots and clears it once booted; a process dying in between counts as a
+// strike, and enough of them turn fullscreen off machine-wide — a tab spawned at TET's startup is in
+// that window. `\x03` is safe only because an agent TUI in raw mode reads it as a byte; in cooked mode
 // ConPTY makes it a CTRL_C_EVENT that kills without running anything.
 
 /** Between two Ctrl+C bytes: long enough to be read as two keypresses, short enough for the offer

@@ -92,7 +92,7 @@ export interface TETApi {
      *  main shows the window. */
     drawn: () => void;
   };
-  /** Docker Sandboxes,opt-in per project through the project row's "SBX Settings". */
+  /** Docker Sandboxes, opt-in per project through the project row's "SBX Settings". */
   sbx: {
     /** All the dialog checks before showing its fields. Never cached, PATH re-read first. Per
      *  project: the policy must allow the project's folder. */
@@ -108,7 +108,7 @@ export interface TETApi {
     signIn: (user: string, token: string, accountId?: string) => Promise<SbxSignInResult>;
     /** `sbx logout`, which stops every running sandbox; what sbx said on failing. */
     signOut: () => Promise<ActionResult>;
-    /** The General tab's access token rows at Save; what refused them, else undefined. */
+    /** The General tab's access token rows at Save; answers what refused them. */
     saveAccounts: (edits: SbxAccountEdit[]) => Promise<ActionResult>;
     /** Sets the machine-wide network policy to "balanced", Docker's recommended default. */
     initPolicy: () => Promise<boolean>;
@@ -122,8 +122,8 @@ export interface TETApi {
     skillsSources: () => Promise<SbxSkillsSource[]>;
     /** The MCP servers sbx has registered, for the MCP tab's picker; undefined when sbx cannot say. */
     mcpRegistered: () => Promise<SbxRegisteredMcp[] | undefined>;
-    /** Opens the browser for a registered MCP server's OAuth and waits; what sbx said on refusing,
-     *  else undefined. Killed by `cancelSetup`. */
+    /** Opens the browser for a registered MCP server's OAuth and waits; answers what sbx said on
+     *  refusing. Killed by `cancelSetup`. */
     mcpSignIn: (name: string) => Promise<ActionResult>;
     /** Stores `local` (the values typed at this Save, the skills) on this machine, then saves
      *  and applies the rows without a problem (sbx-settings.ts's saveProjectSbx); a sandbox whose
@@ -185,7 +185,7 @@ export interface TETApi {
     accounts: () => Promise<ProviderAccount[]>;
     /** Validates the token against the host and stores it main-side. */
     addAccount: (provider: ProviderId, host: string, token: string) => Promise<AddAccountResult>;
-    /** Why it could not be removed; undefined once it is gone. */
+    /** Answers why it could not be removed. */
     removeAccount: (accountId: string) => Promise<ActionResult>;
     /** The remote tab's group filter; "" (all) is a choice too. */
     setNamespace: (accountId: string, namespace: string) => Promise<void>;
@@ -275,8 +275,8 @@ export interface TETApi {
     /** Schedules a refresh, for changes the watcher may have missed; the state arrives as a push. */
     refresh: (ref: ProjectRef) => Promise<void>;
     checkout: (ref: ProjectRef, target: CheckoutTarget) => Promise<GitCommandResult>;
-    /** `git fetch --prune`. Also runs quietly every ten minutes. Each command reaching a remote
-     *  takes the `login` typed after it answered `loginUrl`. */
+    /** `git fetch --prune`. Also runs quietly on a timer (`AUTO_FETCH_INTERVAL_MS`). Each command
+     *  reaching a remote takes the `login` typed after it answered `loginUrl`. */
     fetch: (ref: ProjectRef, login?: GitLogin) => Promise<GitCommandResult>;
     pull: (ref: ProjectRef, login?: GitLogin) => Promise<GitCommandResult>;
     /** Sets the upstream when there is none ("publish"). */
@@ -508,7 +508,7 @@ export interface TETApi {
   onNoticeProgress: (listener: (payload: NoticeProgress) => void) => Unsubscribe;
   /** Read synchronously off `webPreferences.additionalArguments` before main.tsx runs. */
   initialTheme: string;
-  /** From main.ts's `applyTheme`, and after every page load. */
+  /** From settings-access.ts's `applyTheme`, and after every page load. */
   onTheme: (listener: (themeId: string) => void) => Unsubscribe;
   /** window.ts's `isWaylandSession`, handed in the same way; terminals stay off WebGL there. */
   waylandSession: boolean;

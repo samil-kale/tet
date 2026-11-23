@@ -19,14 +19,11 @@ const systemPromptArgs = (side: ControlSide): string[] => ["--append-system-prom
 /**
  * pi (`@earendil-works/pi-coding-agent`): a minimal TUI read through JSONL transcripts, reporting
  * turns through a generated extension. Its TUI is fullscreen by default: it enters the alternate
- * screen and owns the viewport, so a resize redraws in place, and turns on mouse reporting
- * (`?1000;1002;1006h`): pi scrolls, selects and pastes on a right click itself (terminal-views.ts).
+ * screen and owns the viewport, so a resize redraws in place, and turns on mouse reporting: pi
+ * scrolls, selects and pastes on a right click itself (terminal-views.ts).
  *
  * Deliberately unset: `PI_CODING_AGENT_DIR` (would move the user's sessions and auth) and
- * `PI_OFFLINE`.
- *
- * Sandboxed through Docker's kit — see `sandbox.kit` (its Anthropic credential comes from sbx's
- * store).
+ * `PI_OFFLINE`. Sandboxed through Docker's kit (`sandbox.kit`).
  */
 export const piAgent: SandboxedAgent = {
   id: "pi",
@@ -103,7 +100,7 @@ export const piAgent: SandboxedAgent = {
     },
     sharedSkillsTarget: `${SANDBOX_HOME}/.agents/skills`,
     // pi has no built-in kit, so it is Docker's, whose image sbx pulls on the first create; home is
-    // `/home/agent` like every built-in. It is `create`'s first positional (`--kit` means a mixin);
+    // SANDBOX_HOME like every built-in. It is `create`'s first positional (`--kit` means a mixin);
     // `sbx run` reattaches by `--name` alone, the agent read from the sandbox. Auth is not TET's: the
     // kit takes an Anthropic credential from sbx's store, without which every model call fails.
     kit: "docker.io/docker/sbx-kit-pi:latest",

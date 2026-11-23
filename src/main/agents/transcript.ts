@@ -109,7 +109,7 @@ export function forgetMissing(root: string, present: string[], caches: Map<strin
   }
 }
 
-/** Transcript fields are untrusted JSON — a title only counts if it's a non-blank string. */
+/** Transcript and hook fields are untrusted JSON — a value only counts if it's a non-blank string. */
 export function nonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value : undefined;
 }

@@ -9,7 +9,7 @@ export function urlOrigin(url: string): string {
   return parsed && (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.password === "" ? parsed.origin : "";
 }
 
-/** The username written into a url (`https://saka@host/...`), "" where there is none: git then
+/** The username written into a url (`https://user@host/...`), "" where there is none: git then
  *  asks only for its password. */
 export function urlUsername(url: string): string {
   try {

@@ -203,7 +203,7 @@ const SETUP_DONE = "/var/lib/tet/setup";
  * Runs the setup script by `sh -e` as root, unless SETUP_DONE holds its hash already, and records
  * it once it ran to its end. A script that fails is not recorded, to be tried at the next start,
  * and comes back as the line it last printed to stderr, for the start's notice. What an earlier
- * version did is not undone: the sandbox keeps it until it is created anew. One turn per sandbox
+ * script did is not undone: the sandbox keeps it until it is created anew. One turn per sandbox
  * (`sandboxSetups`): two tabs starting together would both run it. Script and hash go in as
  * arguments, so nothing of them is quoted into the command line. `DEBIAN_FRONTEND=noninteractive`:
  * there is no terminal to answer a package's question (tzdata's), so apt takes the defaults.
@@ -737,7 +737,7 @@ interface SbxCheck {
   skills: SbxSkillsSettings;
   /** The env names holding a value here: stored, or typed at this Save. */
   values: { environment: ReadonlySet<string> };
-  /** Whose skills is mounted: every agent at Save, the starting one at its spawn. */
+  /** Whose skills are mounted: every agent at Save, the starting one at its spawn. */
   agents: readonly SandboxedAgent[];
   /** readPolicy's. */
   organization: string | undefined;

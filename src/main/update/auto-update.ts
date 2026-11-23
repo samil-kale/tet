@@ -219,7 +219,7 @@ async function stage(
 }
 
 /**
- * Installs only (`app.isPackaged`). Checks at startup and every four hours; a newer version is
+ * Installs only (`app.isPackaged`). Checks at startup and every CHECK_INTERVAL_MS; a newer version is
  * fetched, unpacked and copied beside the install at once — one notice from the download's share
  * to the announcement it ends on, which goes silently if any step fails — announced once, and
  * installed on quit (`installPendingUpdate`), never mid-session. If TET cannot replace its own
@@ -250,7 +250,7 @@ export function startAutoUpdate(
     }
     checking = true;
     try {
-      // Silent on failure, or an offline machine gets a notice every four hours.
+      // Silent on failure, or an offline machine gets a notice at every check.
       const latest = await latestVersion(releasesUrl);
       if (!latest || !semver.gt(latest, app.getVersion()) || latest === announced) {
         return;

@@ -89,7 +89,7 @@ interface ExplorerProps {
   resolved: ResolvedRef;
   /** Undefined while the listing is read. */
   files: ExplorerListing | undefined;
-  /** False while hidden behind the git lane, where a row can't be scrolled to. */
+  /** False while another lane stands in its place, where a row can't be scrolled to. */
   shown: boolean;
   /** The file of the focused pane's active tab — revealed and highlighted. */
   selected: string | null;
@@ -186,7 +186,7 @@ export const Explorer = memo(function Explorer({
   }, [selected, roots]);
   // The scroll, once the row exists: re-run on `expanded` (a collapsed folder's rows aren't in the
   // DOM yet) and `shown` (the listing arrives after the view opens). The pending ref keeps an expand
-  // or collapse from yanking back to an old selection; it stays pending while hidden behind git.
+  // or collapse from yanking back to an old selection; it stays pending while the lane is hidden.
   useEffect(() => {
     if (visible && pendingReveal.current) {
       const row = rows.current.get(pendingReveal.current);

@@ -156,9 +156,8 @@ function projectsRoot(): string {
   return path.join(claudeConfigDir(), "projects");
 }
 
-/** Claude Code's folder name for a cwd: every non-alphanumeric as `-`; past 200 characters the
- *  first 200, a `-` and the path's 32-bit string hash (`(h << 5) - h + c | 0`), absolute, in base
- *  36. */
+/** Claude Code's folder name for a cwd: every non-alphanumeric as `-`; past PROJECT_DIR_MAX
+ *  characters the first PROJECT_DIR_MAX, a `-` and the path's 32-bit string hash, absolute, in base 36. */
 const PROJECT_DIR_MAX = 200;
 
 function projectDirName(cwd: string): string {

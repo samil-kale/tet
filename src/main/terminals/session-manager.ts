@@ -250,9 +250,9 @@ export class TabSessionManager {
     this.resolveWindowRestored();
   }
 
-  /** Drops archive.json ids and issue links no agent recognizes anymore, once every agent with
-   *  sessions was listed (bringUp): skipped where one wasn't (not installed, sbx not ready yet), so a
-   *  session merely unreachable right now is never mistaken for one that is gone. */
+  /** Drops archive.json ids and issue and change request links no agent recognizes, once every agent
+   *  with sessions was listed (bringUp): skipped where one wasn't (not installed, sbx not ready yet),
+   *  so a session merely unreachable right now is never mistaken for one that is gone. */
   private pruneArchive(): void {
     if (this.disposed) {
       return;
@@ -414,7 +414,8 @@ export class TabSessionManager {
    * tet.json was written, by anyone (tet-json.ts's PROJECT_FILE). Picked up now, not at the next
    * start: `addProject` opens the project before the dialog enabling SBX shows, and a
    * machine with no agent would sit at an empty project. Only unstartable runtimes are acted on.
-   * `enabled` is whether the file enables SBX, read once for every repository and worktree (main.ts).
+   * `enabled` is whether the file enables SBX, read once for every repository and worktree
+   * (projects.ts's projectFileChanged).
    */
   async sbxSettingsChanged(enabled: boolean): Promise<void> {
     const sbxRuntimes = [...this.runtimes.values()].filter((runtime) => runtime.sandbox !== undefined);

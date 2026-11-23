@@ -176,7 +176,7 @@ async function handPaths(view: TerminalView, paths: string[]): Promise<void> {
 
 /**
  * Types the dropped files' paths; content without a path (from a browser) is written into the
- * tab's drops folder first, swept a day old at startup.
+ * tab's drops folder first, swept at startup (`sweepDropFiles`).
  */
 async function pasteDroppedFiles(view: TerminalView, files: File[]): Promise<void> {
   const paths: string[] = [];

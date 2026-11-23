@@ -3,7 +3,7 @@
  * colors through shiki (`editor.ts`). Monaco has no narrower entry point, so this is
  * `editor.main.js`'s import list minus the languages and every contribution that only talks to a
  * language provider (hover, suggestions, format, rename, go-to-definition, ...). Not a public API:
- * re-diff against `node_modules/monaco-editor/editor/editor.main.js` on a monaco upgrade.
+ * re-diff against `node_modules/monaco-editor/esm/vs/editor/editor.main.js` on a monaco upgrade.
  */
 import "monaco-editor/editor/contrib/anchorSelect/browser/anchorSelect.js";
 import "monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js";

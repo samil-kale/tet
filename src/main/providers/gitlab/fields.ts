@@ -92,8 +92,8 @@ export async function openWorkItems(context: Context, namespace: string, types: 
 export function workItemUpdate(target: Target, input: object): Write {
   return { mutation: "workItemUpdate", inputType: "WorkItemUpdateInput", input: { id: target.id, ...input } };
 }
-/** The fields of GitLab, by the id `toFields` gives them. */
 
+/** The fields of GitLab, by the id `toFields` gives them. */
 export const FIELD_HANDLERS: Record<string, FieldHandler<Target>> = {
   status: pickHandler(
     {
@@ -196,8 +196,8 @@ export function fieldHandlerOf(fieldId: string): FieldHandler<Target> {
   }
   return handler;
 }
-/** The work item an issue is, with what a change of its fields needs of it. */
 
+/** The work item an issue is, with what a change of its fields needs of it. */
 export async function readTarget(send: GraphqlSend, path: string, number: number): Promise<Target> {
   const item = await readWorkItem<{ id: string; widgets: { type: string; labels?: { nodes: { id: string; title: string }[] } }[] }>(
     send,
@@ -227,8 +227,8 @@ export interface MergeRequestTarget {
 export async function peopleByLogin(send: GraphqlSend, path: string): Promise<NamedId[]> {
   return (await allPeople(send, path)).map((person) => ({ id: person.name, name: person.name }));
 }
-/** The fields of a merge request, by the id `toMergeRequestFields` gives them. */
 
+/** The fields of a merge request, by the id `toMergeRequestFields` gives them. */
 export const MERGE_REQUEST_FIELD_HANDLERS: Record<string, FieldHandler<MergeRequestTarget>> = {
   reviewers: pickHandler({ what: "reviewer", choices: ({ send, path }) => peopleByLogin(send, path) }, (target, reviewerUsernames) => ({
     mutation: "mergeRequestSetReviewers",

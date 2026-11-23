@@ -46,8 +46,8 @@ export function layoutChoice<T extends string>(key: string, choices: readonly T[
 const PERSIST_MS = 300;
 
 /**
- * Whether an area is showing, in the same layout storage. It stays as set until toggled again —
- * a lane stays out until its toggle is pressed again, one for all projects.
+ * A yes or no the user toggles (Local Changes as a tree, Branches swapped for Graph), in the same
+ * layout storage, one for all projects.
  */
 export function useStoredToggle(key: string, initial: boolean): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(() => {
@@ -66,8 +66,8 @@ export function useStoredToggle(key: string, initial: boolean): [boolean, (open:
 }
 
 /**
- * Which of `choices` an area shows, in the same layout storage, kept as `useStoredToggle` keeps
- * whether it is out. Anything stored outside `choices` is `initial`.
+ * Which of `choices` an area shows (the lane shown), in the same layout storage, kept as
+ * `useStoredToggle`'s. Anything stored outside `choices` is `initial`.
  */
 export function useStoredChoice<T extends string>(key: string, choices: readonly T[], initial: T): [T, (choice: T) => void] {
   const [choice, setChoice] = useState<T>(() => storedChoice(key, choices, initial));
@@ -106,7 +106,7 @@ export function useStoredJson<T>(key: string, initial: T): [T, (next: T) => void
 
 /**
  * Which groups of a tree the user has collapsed, restored on the next start, in layout storage.
- * `initial` names what starts collapsed; a key never toggled stands expanded.
+ * `initial` names what starts collapsed; any other group stands expanded until toggled.
  */
 export function useCollapsedGroups(key: string, initial: string[]): [(group: string) => boolean, (group: string) => void] {
   const storageKey = layoutKey(key);
@@ -136,8 +136,7 @@ export function useCollapsedGroups(key: string, initial: string[]): [(group: str
 /**
  * A number the user sets by dragging, restored on the next start. `restore` maps what storage
  * holds (`NaN` when nothing) to the start value. Written once the drag settles, not per move: the
- * write is synchronous and a drag delivers 60+ values a second. A write pending on unmount is
- * dropped.
+ * write is synchronous. A write pending on unmount is dropped.
  */
 function usePersistedNumber(storageKey: string, restore: (stored: number) => number): [number, (next: number) => void] {
   const [value, setValue] = useState(() => restore(Number(localStorage.getItem(storageKey))));

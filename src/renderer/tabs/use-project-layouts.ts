@@ -37,11 +37,7 @@ export function useProjectLayouts(tabs: Record<string, LayoutTab[]>, starting: R
   /** The tab list `layouts` was last normalized against, per repository or worktree — see
    *  `normalizeLayout`. */
   const previousTabsRef = useRef<Record<string, LayoutTab[]>>({});
-  /**
-   * The tab list each layout was reconciled against: reconciling it again against the same list
-   * returns it unchanged, so a push for another repository or worktree skips it. Only a cache, so
-   * safe to write in the updater.
-   */
+  /** The tab list each layout was reconciled against (`reconcileLayouts`). */
   const reconciledRef = useRef(new WeakMap<ProjectLayout, LayoutTab[]>());
   /** Read by the callbacks: depending on `tabs` would remake every pane's props on every push. */
   const tabsRef = useLatest(tabs);

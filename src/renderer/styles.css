@@ -56,10 +56,10 @@ body {
   user-select: none;
 }
 
-/* IntelliJ's colourful toolbar gradient (IslandsGradientPainter.kt) on the ground's top left: over
-   1000 x 300 px (IntelliJ: 700 x 200), a horizontal ramp from the accent mixed in at 50% (IntelliJ:
-   85%) at the left edge, where IntelliJ puts the project widget's offset, to the ground, faded
-   linearly into the ground towards the bottom. Only the ground shows it, the islands cover the rest. */
+/* IntelliJ's colourful toolbar gradient (IslandsGradientPainter.kt) on the ground's top left, wider
+   and fainter than IntelliJ's: a horizontal ramp from the accent mixed in at the left edge, where
+   IntelliJ puts the project widget's offset, to the ground, faded linearly into the ground towards
+   the bottom. Only the ground shows it, the islands cover the rest. */
 :root[data-background-gradient] body {
   background:
     linear-gradient(to bottom, transparent, var(--tet-app-background)) 0 0 / 1000px 300px no-repeat,
@@ -691,7 +691,7 @@ textarea:focus,
   padding: 0 calc(var(--island-gap) + 6px) 0 calc(var(--island-gap) + 10px);
 }
 
-/* Every list row is one height. Stated rather than padded, so a row with a 22px action button
+/* Every list row is one height. Stated rather than padded, so a row with an action button
    stands no taller than one holding only text. Rounded, its hover and selection inside the island's
    inset. */
 .list-row,
@@ -703,8 +703,8 @@ textarea:focus,
 }
 
 /* One row shape for the projects, the commands and the archived tabs. The icon buttons ending a row stand
-   apart as everywhere else; the label before them needs no more, the buttons carrying 4px around a
-   14px drawing in a 22px box. */
+   apart as everywhere else; the label before them needs no more, the buttons carrying room of their
+   own around the drawing (`--icon-size` in `--action-size`). */
 .list-row {
   display: flex;
   align-items: center;
@@ -867,8 +867,8 @@ textarea:focus,
 }
 
 /* Room for the search icon on the left. On the right, room for what stands inside the field
-   (`.filter-toggles`: 20px each, --action-gap apart, 6px off the edge), and 6px before the text:
-   the clear button, and before it the Search and Graph sections' three toggles, VS Code's. */
+   (`.filter-toggles`) and a gap before the text: the clear button, and before it the Search and
+   Graph sections' three toggles, VS Code's. */
 .filter-field input {
   width: 100%;
   padding-left: 28px;
@@ -927,7 +927,7 @@ textarea:focus,
   min-height: 0;
   overflow-y: auto;
   padding: 0 var(--island-gap);
-  /* A margin, not padding: rows scrolling past the bottom are cut off 8px above the island's edge. */
+  /* A margin, not padding: rows scrolling past the bottom are cut off above the island's edge. */
   margin-bottom: 8px;
 }
 
@@ -1273,7 +1273,7 @@ textarea:focus,
 
 /* An issue row the tracker added unfolds fading in, one it removed folds away fading out, as a
    notice does (`.notice-item`) without its rise. The row states its height, so the item clips it
-   rather than it shrinking. `ROW_MS` (lanes/issues/use-tracked-rows.ts) is this duration. */
+   rather than it shrinking. `ROW_MS` (editor/tracked/use-tracked-rows.ts) is this duration. */
 .issue-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1320,7 +1320,7 @@ textarea:focus,
   min-height: 0;
   overflow-y: auto;
   /* The scrollbar's room is kept, so the cards' width holds when a text box opens and the view starts
-     to scroll; the right padding is the left's less the 11px scrollbar a tab's content has. */
+     to scroll; the right padding is the left's less the scrollbar a tab's content has. */
   scrollbar-gutter: stable;
   padding: 20px 9px 20px 20px;
   background: var(--tet-editor-background);
@@ -1703,7 +1703,7 @@ button.change-request-check:hover {
   top: calc(-1 * var(--thread-gap));
   bottom: 0;
 }
-/* A filled dot in the place of an avatar: the same 22px footprint, so the line and the message keep
+/* A filled dot in the place of an avatar: the avatar's footprint, so the line and the message keep
    their places. */
 .issue-event-dot {
   position: relative;
@@ -1942,7 +1942,7 @@ button.change-request-check:hover {
 }
 
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
-   travel (`--travel`) and duration absolutely, so it looks alike in a 300px section and a 900px
+   travel (`--travel`) and duration absolutely, so it looks alike in a narrow section and a wide
    pane. */
 .progress-bar,
 .notice-progress {
@@ -2014,7 +2014,7 @@ button.change-request-check:hover {
   /* For its separator, the drop line (`.tab::before`). */
   position: relative;
   gap: 8px;
-  /* Less on the right: the close button carries 4px of its own around the glyph. */
+  /* Less on the right: the close button carries room of its own around the glyph. */
   padding: 0 3px 0 10px;
   max-width: 300px;
   cursor: pointer;
@@ -2386,7 +2386,7 @@ button.change-request-check:hover {
   background: var(--tet-editor-background);
 }
 
-/* A tab's own content (the editor, its Markdown preview) keeps the wider 10px scrollbar; the
+/* A tab's own content (the editor, its Markdown preview) keeps the wider scrollbar; the
    rest of the app uses the narrower one above. A menu opened in a tab is drawn inside it, but is
    the app's, so it keeps the narrower one. */
 .pane-body :not(.context-menu)::-webkit-scrollbar {
@@ -2397,7 +2397,7 @@ button.change-request-check:hover {
 /* Where one xterm mounts. `-host`, never `terminal`: xterm's own element has class "terminal",
    so a rule on the plain word lands on both (xterm's classes: `xterm`, `xterm-viewport`,
    `xterm-screen`, `terminal`). Paints the terminal background from the variable
-   `theme.ts` reads, so the two cannot drift. */
+   `buildXtermTheme` reads (themes/theme-colors.ts), so the two cannot drift. */
 .terminal-host {
   position: absolute;
   /* Right inset is narrower than left: no scrollbar sits there to leave room for. */
@@ -2428,7 +2428,7 @@ button.change-request-check:hover {
 
 /*
  * These only hide a native scrollbar. xterm's own bar is a <div class="slider"> out of CSS's
- * reach; `theme.ts` hides it by color, with the overview ruler.
+ * reach; `buildXtermTheme` hides it by color, with the overview ruler.
  */
 
 /* Lanes ---------------------------------------------------------------------------------- */
@@ -2588,7 +2588,7 @@ button.change-request-check:hover {
   color: var(--tet-gitDecoration-modifiedResourceForeground);
 }
 
-/* Monaco's own scrollbars take the page's pill (`::-webkit-scrollbar-thumb`), at their 11px
+/* Monaco's own scrollbars take the page's pill (`::-webkit-scrollbar-thumb`), at their size
    (`editor.ts`). `!important` on the clip: monaco's slider rules set the `background` shorthand,
    which resets it, and its stylesheet is bundled after this file and wins on order. */
 .editor-host .monaco-scrollable-element > .scrollbar > .slider {
@@ -2977,7 +2977,7 @@ button.change-request-check:hover {
   border-width: calc(var(--scrollbar-inset) + 1px);
 }
 
-/* The three skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
+/* The skills rows: a fixed count, so no scrollbox like .row-section-rows'. Four columns —
    label, the skills' source, the agents, access — so the agents and access line up across rows. */
 .sbx-skills-rows {
   display: grid;
@@ -3547,7 +3547,7 @@ button.change-request-check:hover {
   color: var(--tet-noticeWarningIcon-foreground);
 }
 
-/* A prompt's color swatches, in the 22px of every action button. The colors themselves come from
+/* A prompt's color swatches, an action button's size (`--action-size`). The colors themselves come from
    the choices, as theme variables, so the row repaints with the theme. */
 .dialog-colors {
   display: flex;
@@ -3855,7 +3855,7 @@ button.change-request-check:hover {
 
 /* The notification center: over the right edge, above the status bar (`.status-bar`'s height).
    Its notices are `.notice`s, laid flat in a list. The status bar's lists have their box,
-   over their button, as wide as their entries between 360px and 450px. */
+   over their button, as wide as their entries, up to `--popup-width`. */
 .notices-center,
 .status-list {
   position: absolute;
@@ -3900,7 +3900,7 @@ button.change-request-check:hover {
   border-radius: 0 0 calc(var(--border-radius) - 1px) calc(var(--border-radius) - 1px);
 }
 
-/* A session: its icon, then its name. */
+/* An entry: its icon, then its label. */
 .status-list-item {
   font-size: var(--tet-font-size);
   line-height: 22px;

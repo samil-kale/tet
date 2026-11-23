@@ -172,8 +172,8 @@ function patch(root: string, edit: (content: ProjectFile) => Change[]): Promise<
  * comma before it goes, and the element with the blank start of its line. Undefined for any other
  * path, which `modify` removes.
  *
- * A workaround for a jsonc-parser bug fixed in its next major version; once package.json has that,
- * this function and its call in `patchNow` go.
+ * A workaround for a jsonc-parser bug; once package.json has a jsonc-parser that fixes it, this
+ * function and its call in `patchNow` go.
  */
 function lastElementRemoval(text: string, jsonPath: JSONPath): Edit[] | undefined {
   const tree = parseTree(text, [], { allowTrailingComma: true });

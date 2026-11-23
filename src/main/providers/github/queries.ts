@@ -257,8 +257,8 @@ export const PULL_REQUEST_STATE_TERMS: Record<ChangeRequestState, string[]> = {
   merged: ["is:merged"],
   closed: ["is:closed", "is:unmerged"],
 };
-/** A change request filter in the words of GitHub's search (`searchOf`). */
 
+/** A change request filter in the words of GitHub's search (`searchOf`). */
 export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sort: "created" | "updated"): string {
   const qualifiers = [
     "is:pr",
@@ -267,9 +267,9 @@ export function pullRequestSearch(path: string, filter: ChangeRequestFilter, sor
   ];
   return searchOf(path, qualifiers, filter, sort);
 }
+
 /** An issue filter in the words of GitHub's search (`searchOf`). Taken only for a filter with text: the
  *  search's index follows a change late, `issues` at once. */
-
 export function issueSearch(path: string, filter: IssueFilter, sort: "created" | "updated"): string {
   return searchOf(path, ["is:issue", ...(filter.state ? [`is:${filter.state}`] : [])], filter, sort);
 }

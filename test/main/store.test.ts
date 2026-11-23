@@ -336,7 +336,7 @@ describe("the environment variables kept in TET", () => {
       { name: "GITLAB_TOKEN", overridesMachine: false },
       { name: "STRIPE_KEY", overridesMachine: false },
     ]);
-    // Its own name: the first one in process.env may be one a TET this runs in kept (TET_KEPT_ENV).
+    // Its own name: the first one in process.env may be one a TET this runs in kept (KEPT_ENV_NAME).
     await withEnvAsync({ TET_TEST_MACHINE: "machine" }, async () => {
       await store.set([row("TET_TEST_MACHINE", "x")]);
       assert.equal(store.info("TET_TEST_MACHINE")?.overridesMachine, true, "one this machine sets too");

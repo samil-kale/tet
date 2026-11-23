@@ -60,7 +60,7 @@ const run = (...args: string[]): string => git(cwd, ...args);
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
-/** The editor tab's read cap; `readBlobAt` takes it per call. */
+/** The editor tab's read cap (explorer-read.ts's MAX_EDIT_BYTES); `readBlobAt` takes it per call. */
 const MAX_BYTES = 4 * 1024 * 1024;
 const head = (name: string, origPath?: string) => readBlobAt(cwd, "HEAD", name, { origPath, maxBytes: MAX_BYTES });
 const changed = async (): Promise<string[]> => (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();

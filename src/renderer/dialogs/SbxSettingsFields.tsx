@@ -525,8 +525,7 @@ export function SbxSettingsFields({
           </EditRow>
         )}
         add={
-          // Two "+ Add": a folder and a file are two native pickers, which cannot be one dialog off
-          // macOS (see the projects:pick-file handler).
+          // Two "+ Add", as `addPath` says.
           <FieldRow>
             <ActionLink onClick={() => void addPath(window.tet.projects.pickDirectory("Allow a folder in the sandbox", [projectPath]))}>
               + Add folder

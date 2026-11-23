@@ -13,7 +13,7 @@ export type Lane = (typeof LANES)[number];
 /** The Appearance tab. */
 export interface AppearanceSettings {
   /** "system" follows the OS. A window's kind is fixed when it is built (`applyTheme` in
-   *  src/main/main.ts). */
+   *  src/main/settings-access.ts). */
   colorScheme: ColorScheme;
   /** Per kind, an id out of `THEMES` of that kind; applies at once while the window is that kind. */
   darkTheme: string;
@@ -112,10 +112,9 @@ export interface EnvironmentSettings {
 }
 
 /** What TET keeps about itself, not about a repository; written whole, one object per tab of the
- *  settings dialog that has values here (Info has none). A new setting
- *  joins its tab's object, never the top level. The dialog holds no setting of a project: those are
- *  tet.json's, edited where they show. `normalize` (store/settings.ts) reads every key back
- *  defensively, with its default. */
+ *  settings dialog that has values here (Info has none). A new setting joins its tab's object, never
+ *  the top level. The dialog holds no setting of a project: those are tet.json's, edited where they
+ *  show. `normalize` (store/settings.ts) reads every key back defensively, with its default. */
 export interface AppSettings {
   appearance: AppearanceSettings;
   notifications: NotificationSettings;

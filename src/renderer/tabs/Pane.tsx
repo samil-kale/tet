@@ -147,7 +147,7 @@ export const Pane = memo(function Pane({
   // Read by a tab's menu alone, when it opens.
   useWatchedSessions("issue", at.projectId);
   useWatchedSessions("change-request", at.projectId);
-  // In line with the line left of the plus, `.new-tab`'s border: 1px past its box, where it reads flush.
+  // In line with the line left of the plus (`.new-tab::before`): a pixel past its box, where it reads flush.
   const plusMenu = useAnchoredMenu(
     (rect) => ({ x: (newTab.current?.getBoundingClientRect().left ?? rect.left) + 1, y: rect.bottom + BAR_MENU_DROP }),
     true,

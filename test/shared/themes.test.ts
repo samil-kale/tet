@@ -36,7 +36,7 @@ describe("the color themes", () => {
     }
   });
 
-  // Hand-kept copies of four stylesheet values, for code that needs them outside the renderer's CSS.
+  // Hand-kept copies of stylesheet values, for code that needs them outside the renderer's CSS.
   it("keeps each definition's window and terminal colors in step with its stylesheet", () => {
     for (const theme of THEMES) {
       const css = sheets.get(theme.id)!;

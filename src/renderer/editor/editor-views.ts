@@ -32,7 +32,7 @@ import { editorFontFamily } from "../themes/theme-colors";
  *  the whole file. */
 const MARKDOWN_PREVIEW_RENDER_DELAY_MS = 150;
 /** How long a scroll one side drove is expected to echo back from the other, which must not then
- *  drive it again (VS Code keeps the two in step the same way, by counting the echoes). */
+ *  drive it again. */
 const SCROLL_ECHO_MS = 150;
 /** A render while typing shows only images already loaded; a new source, likely half typed
  *  (`https://exa`), is asked for once typing has stopped this long. */

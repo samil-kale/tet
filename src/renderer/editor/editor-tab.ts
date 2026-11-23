@@ -109,7 +109,7 @@ export interface EditorTab {
   tracked?: TrackedRef;
 }
 
-/** Closes every tab of an issue that is gone, in the repository and its worktrees. Set by App. */
+/** Closes every tab of an issue that is gone, in the repository and its worktrees. Set by `useEditorOpening`. */
 let issueGoneHandler: ((projectId: string, number: number) => void) | undefined;
 
 export function setIssueGoneHandler(handler: (projectId: string, number: number) => void): () => void {
@@ -126,7 +126,7 @@ export function issueGone(projectId: string, number: number): void {
 }
 
 /** Shows a tab opened on an issue or change request or linked to one, its repository or worktree made
- *  active. Set by App. */
+ *  active. Set by `useEditorOpening`. */
 let trackedTabHandler: ((ref: ProjectRef, tabId: string) => void) | undefined;
 
 export function setTrackedTabHandler(handler: (ref: ProjectRef, tabId: string) => void): () => void {
@@ -244,7 +244,7 @@ export function isEditorTabId(tabId: string): boolean {
 }
 
 /** Opens a file of the repository or worktree in its preview tab, a Markdown file with its preview
- *  beside the editor if asked. Set by App. */
+ *  beside the editor if asked. Set by `useEditorOpening`. */
 let revealHandler: ((ref: ProjectRef, path: string, how: OpenEditor) => void) | undefined;
 
 export function setRevealHandler(handler: (ref: ProjectRef, path: string, how: OpenEditor) => void): () => void {

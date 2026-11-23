@@ -19,7 +19,7 @@ import type {
 } from "../../shared/types/providers";
 import { fetchHttpsImage } from "../util/image-response";
 
-/** A repository's issue tracker as one call reaches it: the host, the token of the account it goes
+/** A repository on its host as one call reaches it: the host, the token of the account it goes
  *  through, and the repository's path there, "owner/name" or "group/subgroup/name". */
 export interface Tracker {
   host: string;
@@ -144,8 +144,8 @@ export interface ChangeRequestDraft {
   deleteSourceBranch: boolean;
 }
 
-/** Pages follow the RFC 5988 `Link` header both hosts send; the cap bounds an account reaching
- *  thousands of repositories. */
+/** The most pages one listing reads, by a REST `Link` header or a GraphQL cursor: it bounds an account
+ *  reaching thousands of repositories. */
 const PAGE_CAP = 10;
 
 /** A host's non-2xx answer: `status` to go by, the message to tell. */
@@ -159,7 +159,7 @@ export class ApiError extends Error {
 }
 
 /**
- * One GET; a non-2xx status throws with what the API said. `net.fetch`, never the global fetch: only
+ * One request, a GET unless `init` says otherwise; a non-2xx status throws with what the API said. `net.fetch`, never the global fetch: only
  * Chromium's stack applies the machine's proxy settings and certificate store, so a company proxy or
  * private root certificate works. `no-store`: its HTTP cache would answer a host's reads for their
  * `max-age`, and a write invalidates only its own URL, so what was just written would not read back.

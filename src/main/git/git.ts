@@ -727,8 +727,8 @@ export async function hasChanges(cwd: string): Promise<boolean> {
 export async function readState(cwd: string, remoteNames: string[] = [], fallbackDefault?: string): Promise<RepositoryState> {
   try {
     // No `isRepository` check: Repository asks once on open. Status, refs and the stash list are
-    // the three git processes, run at once; anything added here has to earn its process too.
-    // Operation and worktrees are file reads.
+    // the three git processes, run at once (readRefs adds one only for a diverged branch or a moved
+    // ref); anything added here has to earn its process too. Operation and worktrees are file reads.
     const statusOf = readStatus(cwd);
     const refsOf = readRefs(cwd, remoteNames, fallbackDefault);
     const stashesOf = readStashes(cwd);
@@ -1177,7 +1177,7 @@ export async function commitPaths(cwd: string, message: string, paths: string[],
 /*
  * Paths from the changes list reach git two ways, both literal — otherwise git reads `*`, `?` and
  * `[…]` as a pattern, and discarding `app/[id]/page.tsx` also resets `app/i/page.tsx` — and never
- * as one long command line, which Windows caps at 32 767 characters, a thousand paths or so.
+ * as one long command line, which Windows caps at 32 767 characters.
  */
 const LITERAL_PATHSPECS = "--literal-pathspecs";
 

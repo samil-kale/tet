@@ -162,8 +162,8 @@ export function editorOptions(fontFamily: string): Record<string, unknown> {
  * a deleted line has none (`hideOriginalLineNumbers`, absent from monaco's typings).
  *
  * Left at default on purpose: `renderGutterMenu` and `renderMarginRevertIcon` (their reverts edit
- * the buffer, a save away from disk, never a git discard); `maxFileSize` (50 MB, beyond our 4 MB
- * ceiling). Defaults below are spelled out: each is a decision the tab rests on, and a default is
+ * the buffer, a save away from disk, never a git discard); `maxFileSize` (above main's
+ * `MAX_EDIT_BYTES`). Defaults below are spelled out: each is a decision the tab rests on, and a default is
  * no promise across upgrades.
  */
 export function diffEditorOptions(): Record<string, unknown> {

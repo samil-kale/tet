@@ -216,9 +216,9 @@ export function stoppable(): Stoppable {
 /**
  * Runs a command to completion through `resolveCommand`, without a shell, and never rejects. It
  * answers on `close`, once every pipe is drained, so no output is cut off. The timeout does not wait
- * for that: a child the program started can hold the pipes open past its end. Killed with its
- * children, as on win32 `kill()` would end only the cmd.exe in front of a shim (killProcessTree).
- * A timeout and a start that fails are logged; an exit code is the caller's to judge.
+ * for that: a child the program started can hold the pipes open past its end, and kills the process
+ * with its children (killProcessTree). A timeout and a start that fails are logged; an exit code is
+ * the caller's to judge.
  */
 export function runProcess(executable: string, args: string[], options: RunProcessOptions = {}): Promise<ProcessResult> {
   return new Promise((resolve) => {

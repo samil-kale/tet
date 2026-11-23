@@ -17,9 +17,9 @@
 
 & {
   $ErrorActionPreference = 'Stop'
-  # Invoke-WebRequest's progress bar slows a download many times over in Windows PowerShell 5.1.
+  # Invoke-WebRequest's progress bar slows a download many times over in Windows PowerShell.
   $ProgressPreference = 'SilentlyContinue'
-  # Windows PowerShell 5.1 may still offer only TLS 1.0, which GitHub refuses.
+  # Windows PowerShell may still offer only TLS 1.0, which GitHub refuses.
   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
   $releases = if ($env:TET_RELEASES_URL) { $env:TET_RELEASES_URL } else { 'https://github.com/samil-kale/tet/releases' }
@@ -29,7 +29,7 @@
   $dest = Join-Path $env:LOCALAPPDATA 'Programs\TET'
   $exe = Join-Path $dest 'TET.exe'
 
-  # Replacing the files of a running TET takes its sessions down with it, and win32 refuses anyway.
+  # Replacing the files of a running TET takes its sessions down with it, and Windows refuses anyway.
   if (Get-Process -Name TET -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe }) {
     throw 'tet: TET is running; quit it first'
   }

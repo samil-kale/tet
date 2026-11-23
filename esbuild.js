@@ -20,7 +20,7 @@ const common = {
   tsconfig,
 };
 
-/** Everything electron's node runs: main, the git host, preload, the CLIs, the tests. */
+/** Everything electron's node runs: main, the utility hosts, preload, the CLIs, the tests. */
 const node = { ...common, platform: "node", target: "node22", format: "cjs" };
 
 /** The window's two bundles. */

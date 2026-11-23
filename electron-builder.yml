@@ -49,7 +49,7 @@ win:
       to: bin/tet.cmd
 
 mac:
-  # Generated from the 1200px png; macOS wants at least 512.
+  # macOS wants the png at least 512px.
   icon: src/renderer/assets/icon.png
   category: public.app-category.developer-tools
   target:

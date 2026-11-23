@@ -58,7 +58,7 @@ const DEFAULTS: AppSettings = {
 
 /** Reading and editing the settings, all either transport does with them: both take this rather
  *  than the store, so a change from `settings-set-*` reaches everything a change from the window's
- *  `settings:patch` does (main.ts). `patch` returns whether a restart is still needed. */
+ *  `settings:patch` does (settings-access.ts). `patch` returns whether a restart is still needed. */
 export interface SettingsAccess {
   get(): AppSettings;
   patch(edits: SettingsEdits): boolean;

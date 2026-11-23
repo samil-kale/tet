@@ -72,8 +72,8 @@ export function processAlive(pid: number): boolean {
   }
 }
 
-/** Far past the updater's longest run (tet-update.ts: a minute's wait for TET to exit, then
- *  half-minute retry windows). An older lock outlived its updater — killed by a shutdown before its
+/** Far past the updater's longest run (tet-update.ts's wait for TET to exit, then its retry
+ *  windows). An older lock outlived its updater — killed by a shutdown before its
  *  `finally` — and its pid may since name another process, which would hold every later TET back. */
 const UPDATER_MAX_LIFE_MS = 10 * 60_000;
 

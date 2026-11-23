@@ -39,7 +39,7 @@ export interface SbxAccess {
   ): Promise<SbxProblems>;
   /** sbx-settings.ts's saveProjectSbx: takes the status's organization, and lists the rest in its turn. */
   save(project: Project, request: SbxProjectSettings, local: SbxLocalSave, known?: Pick<SbxReading, "status">): Promise<SbxSaveResult>;
-  /** The access tokens kept for every project (sbx-accounts.ts), never a token. */
+  /** The accounts whose access tokens are kept for every project (sbx-accounts.ts), never a token. */
   accounts(): SbxAccount[];
   /** sbx-status.ts's readSbxSignedIn: one `sbx ls`, not the whole status — the question is the
    *  machine's. */

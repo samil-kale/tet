@@ -112,12 +112,12 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "settings-set-color-scheme": (args) => {
       const colorScheme = oneOf(args, "scheme", "color scheme", COLOR_SCHEMES);
-      // A kind the window is not drawn in waits for a restart (main.ts's applyTheme).
+      // A kind the window is not drawn in waits for a restart (settings-access.ts's applyTheme).
       return { result: { saved: true, restartRequired: settings.patch({ appearance: { colorScheme } }) } };
     },
 
     "settings-set-background-gradient": (args) => {
-      // Shown at once by main.ts's settingsAccess.
+      // Shown at once (settings-access.ts).
       settings.patch({ appearance: { backgroundGradient: onOff(args, "value") } });
       return { result: { saved: true, restartRequired: false } };
     },
@@ -150,7 +150,7 @@ export function verbs(deps: ControlDeps): Handlers {
 
     "settings-set-explorer": (args) => {
       const id = oneOf(args, "id", "explorer setting", EXPLORER_SETTING_IDS);
-      // Announced to every open Explorer by main.ts's settingsAccess.
+      // Announced to every open Explorer (settings-access.ts).
       if (id === "sortOrder") {
         settings.patch({ files: { sortOrder: oneOf(args, "value", "sort order", EXPLORER_SORT_ORDERS) } });
       } else {
@@ -518,7 +518,7 @@ export function verbs(deps: ControlDeps): Handlers {
       }
       const payload = typeof args.payload === "string" ? args.payload : "";
       // The caller's own, never `--project`: the token vouches for its tab in its repository or
-      // worktree only, and tab ids like `new-1` repeat across repositories and worktrees.
+      // worktree only, and a tab id names a tab only there.
       const where = refFrom({}, caller).ref;
       const outcome = terminals(where).hookEvent(caller.tabId, event, payload, at, caller.side);
       if (outcome.notification) {

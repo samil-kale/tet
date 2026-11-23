@@ -17,7 +17,7 @@ import { onDisk, relativeInside } from "../util/path-inside";
  *   issue-sessions.json            the session linked to each issue, in the repository or a worktree (session-links.ts)
  *   change-requests-seen.json      the same of the change request tabs, and whose checks they showed failed
  *   change-request-sessions.json   the session linked to each change request (session-links.ts)
- *   drops/                     pasted or dropped content without a path, for host tabs
+ *   drops/                         pasted or dropped content without a path, for host tabs
  *   sandboxes/                     what the sandboxes mount, and nothing else of ~/.tet
  *     repository/<agent>/          the repository's sandbox of the agent
  *       sessions/                  the host side of the agent's session mounts
@@ -72,8 +72,8 @@ export function dropsDir(dataRoot: string, projectId: string): string {
 }
 
 /** What the project's files call the repository or a worktree: "repository", or a worktree's key
- *  (8 hex digits, never that). Its sandbox folder, and its entries in archive.json and
- *  issue-sessions.json. */
+ *  (8 hex digits, never that). Its sandbox folder, and its entries in archive.json and the
+ *  session files. */
 export function entryKeyOf(ref: ProjectRef): string {
   return ref.worktree ?? "repository";
 }

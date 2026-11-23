@@ -244,8 +244,9 @@ export function SbxSettingsDialog({ project, onClose }: SbxSettingsDialogProps) 
       }
     },
   );
-  // Its setup (`sbx login`, `policy init`) is aborted with Cancel, a no-op when none runs; a Save,
-  // a token's sign-in or a sign-out is not, so it finishes first.
+  // Its setup (the browser's sign-in, `policy init`, an MCP server's sign-in) is aborted with Cancel
+  // (`cancelSetup`), a no-op when none runs; a Save, a token's sign-in or a sign-out is not, so it
+  // finishes first.
   const holding = saving || signingIn || signingOut;
   const editState = changing(setState);
   const editEnabled = changing(setEnabled);

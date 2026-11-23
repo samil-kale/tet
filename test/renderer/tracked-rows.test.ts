@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { mergeTrackedRows, type TrackedRowItem } from "../../src/renderer/editor/tracked/use-tracked-rows";
 import type { Issue } from "../../src/shared/types/providers";
 
-/** lanes/issues/use-tracked-rows.ts: what the tracker adds or removes enters or leaves in place. */
+/** editor/tracked/use-tracked-rows.ts: what the tracker adds or removes enters or leaves in place. */
 
 const issue = (number: number): Issue => ({
   number,

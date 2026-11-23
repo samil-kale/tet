@@ -32,7 +32,7 @@ import { useCommitGraph } from "./use-commit-graph";
 interface GitLaneProps {
   resolved: ResolvedRef;
   state: RepositoryState;
-  /** False while the files lane stands in its place; hidden, not unmounted, to keep its state. */
+  /** False while another lane stands in its place; hidden, not unmounted, to keep its state. */
   shown: boolean;
   branch: BranchActions;
   /** Set by the sash between tree and changes; held by the app, like the width. */

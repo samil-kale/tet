@@ -3,7 +3,7 @@ import { resolveTheme, schemeKind, themeKey, type ThemeDefinition } from "../../
 import type { SettingsStore } from "./settings";
 
 /** The saved theme for the kind in use, "system" answered by `nativeTheme`. Asked per window and
- *  agent, so a change reaches what opens later; the running window only via main.ts's `applyTheme`. */
+ *  agent, so a change reaches what opens later; the running window only via settings-access.ts's `applyTheme`. */
 export function currentTheme(settings: Pick<SettingsStore, "get">): ThemeDefinition {
   const current = settings.get().appearance;
   const kind = schemeKind(current.colorScheme, nativeTheme.shouldUseDarkColors);

@@ -1,14 +1,13 @@
 import { useRef, useState, type PointerEvent } from "react";
 
 /**
- * The floor every lane and section shares, one per direction: a section header (35px) plus three 28px
- * rows high, and as wide as the widest such header needs with its actions, the Explorer's four. Kept
- * in step with `styles.css`'s `--area-min-width`/`--area-min-height`: a sash bounds only a drag, a
- * shrinking window bypasses it.
+ * The floor every lane and section shares, one per direction: about a section header plus three rows
+ * high, and as wide as the widest such header needs with its actions. Kept in step with `styles.css`'s
+ * `--area-min-width`/`--area-min-height`: a sash bounds only a drag, a shrinking window bypasses it.
  */
 export const MIN_AREA_WIDTH = 230;
 export const MIN_AREA_HEIGHT = 120;
-/** The floor for the tab area, the one area no sash sizes directly. */
+/** The floor for the tab area, the one area no sash sizes directly (`--content-min-width`). */
 export const MIN_CONTENT_WIDTH = 320;
 
 interface SashProps {
@@ -65,7 +64,7 @@ export function Sash({ orientation, size, min, minOther, reverse, onResize }: Sa
     const moved = (vertical ? event.clientX : event.clientY) - start.origin;
     const next = reverse ? start.size - moved : start.size + moved;
     pending.current = Math.round(Math.max(min, Math.min(next, start.total - minOther)));
-    // One resize per frame, not per pointer event (hundreds a second). The last position wins;
+    // One resize per frame, not per pointer event. The last position wins;
     // `end` flushes what no frame has taken yet.
     frame.current ??= requestAnimationFrame(flush);
   };

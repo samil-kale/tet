@@ -10,7 +10,7 @@ interface RadioGroupProps<T extends string> {
 }
 
 /**
- * VS Code's radio widget (base/browser/ui/radio): a row of joined buttons, the chosen one marked.
+ * VS Code's radio widget: a row of joined buttons, the chosen one marked.
  * The borders between them are drawn once — by the chosen one, or else by the right-hand one.
  */
 export function RadioGroup<T extends string>({ value, options, onChange }: RadioGroupProps<T>) {

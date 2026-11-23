@@ -48,9 +48,9 @@ export function sbxVariableRefusal(env: string, others: string[], ignoreCase: bo
 const MCP_IMAGE_PREFIX = "dhi.io/";
 
 /**
- * A server's row: one per name, and a URL sbx can register it from
- * — an http(s) one or an image of sbx's own registry; none for a server it has registered already.
- * What sbx then makes of the URL is its own answer at Save.
+ * A server's row: one per name, and a URL sbx can register it from — an http(s) one or an image of
+ * sbx's own registry; none for a server it has registered already. What sbx then makes of the URL is
+ * its own answer at Save.
  */
 export function sbxMcpRefusal({ name, url }: SbxMcpServer, others: SbxMcpServer[]): string | undefined {
   if (others.some((other) => other.name.trim() === name.trim())) {

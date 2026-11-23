@@ -284,7 +284,7 @@ function terminalsOf(key: string): ControlTerminals {
       if (tabId !== OWN_TAB) {
         return { stdout };
       }
-      // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifications.
+      // As TabSessionManager.hookEvent: neither a session's start nor a prompt notifies.
       return event === "session-start" || event === "prompt-submit"
         ? { stdout }
         : { stdout, notification: { title: "Finished [Claude]", message: "Finished in one", mark: "finished", agentId: "claude" } };
@@ -768,8 +768,8 @@ describe("tet-ctl against the control server", () => {
     assert.equal(run.status, EXIT_CODES.ok);
     assert.match(run.stdout, /settings-set-theme <theme-id>/);
     assert.match(run.stdout, /app-restart --confirm/);
-    // An agent's shell gives up on a command after its own timeout (Claude Code: 2 minutes), which
-    // takes the dialog down before the user has seen it.
+    // An agent's shell gives up on a command after its own timeout, which takes the dialog down
+    // before the user has seen it.
     assert.match(run.stdout, /env-request waits[^.]*timeout/);
     // Printed under each verb's own group (ControlVerb.group), which an unlisted one has not.
     for (const entry of CONTROL_VERBS) {
@@ -2212,7 +2212,7 @@ describe("tet-ctl against the control server", () => {
   });
 
   it("carries a payload far bigger than any answer a person would read", async () => {
-    // A Stop payload holds the whole last assistant message; 200 KB is a long but ordinary one.
+    // A Stop payload holds the whole last assistant message, however long.
     const payload = JSON.stringify({ session_id: "abc", last_assistant_message: "ü".repeat(200_000) });
     const run = await tetCtl(["hook", "stop"], {}, payload);
     assert.equal(run.status, EXIT_CODES.ok);

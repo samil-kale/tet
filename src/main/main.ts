@@ -67,7 +67,7 @@ import { PLATFORM } from "./util/host-platform";
 dropOuterKept();
 
 /**
- * A separate profile for tests driving the real app via tet-ctl (test/e2e/app.test.ts): own
+ * A separate profile for tests driving the real app via tet-ctl (test/helpers/): own
  * projects, settings and control port, and — the lock being per profile — a second TET beside the
  * working one. Both Chromium's profile and TET's data folder (data-root.ts), set before either is
  * asked for. Only then is the control token taken from the environment.
@@ -89,10 +89,10 @@ try {
 
 /**
  * Who Windows says a notification is from: name and icon come from the Start menu entry carrying
- * this id, never from the notification. Electron writes that entry on the first notification
- * (windows_toast_activator.cc), named after the executable's ProductName, with the id and the
- * activator CLSID. Installed, the executable is `TET.exe` (electron-builder.yml), so the entry is
- * install.ps1's `TET.lnk` rewritten in place; a development run's electron.exe reads "Electron".
+ * this id, never from the notification. Electron writes that entry on the first notification,
+ * named after the executable's ProductName, with the id and the activator CLSID. Installed, the
+ * executable is `TET.exe` (electron-builder.yml), so the entry is install.ps1's `TET.lnk` rewritten
+ * in place; a development run's electron.exe reads "Electron".
  *
  * Windows remembers what it decided about an id, so `npm start` gets its own id, else one dev
  * notification leaves the installed TET reading "Electron". The CLSID is fixed, not Electron's
@@ -110,8 +110,9 @@ if (PLATFORM.windowsNotifications) {
   }
 }
 
-// Every visible terminal plus the warm hidden ones (webgl-pool.ts) holds a WebGL context. Past 16
-// per renderer Blink silently evicts the oldest to the DOM renderer; 128 leaves room, a leak shows.
+// Every visible terminal plus the warm hidden ones (webgl-pool.ts) holds a WebGL context. Past its
+// default cap per renderer Blink silently evicts the oldest to the DOM renderer; this leaves room, a
+// leak still shows.
 app.commandLine.appendSwitch("max-active-webgl-contexts", "128");
 
 /**
