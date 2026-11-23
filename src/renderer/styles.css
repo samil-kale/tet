@@ -3063,6 +3063,13 @@ button.change-request-check:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* Fills the row like .sbx-path-value. Used as `row-${width}-input` by RowInput and SecretInput, so no
+   search for the full class name finds it. */
+.row-fill-input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* A path's access: one width for either choice, which still holds "Read+Write" once the row's
    mark takes its room. */
 .edit-row > .select-field {
@@ -3081,6 +3088,13 @@ button.change-request-check:hover {
   flex: none;
   width: 80px;
   font-weight: 500;
+}
+
+/* A name or value beside a field filling the row (.row-fill-input): an environment variable's value.
+   Used as `row-${width}-input` by RowInput and SecretInput, so no search for the full class name finds it. */
+.row-fixed-input {
+  --field-width: 200px;
+  width: var(--field-width);
 }
 
 .sbx-mcp-add {

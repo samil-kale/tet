@@ -118,6 +118,7 @@ export function RowInput({
   const textMenu = useTextContextMenu(onChange ?? (() => {}));
   return (
     <>
+      {/* The class names are built from `width`, so a search for `row-fill-input` or `row-fixed-input` finds no use: they are not unused. */}
       <input
         className={width === "port" ? "sbx-port-input" : `row-${width}-input`}
         type="text"
