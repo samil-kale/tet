@@ -14,7 +14,7 @@
     "npm run dist"
   ],
   "sbx": {
-    "enabled": true,
+    "enabled": false,
     "ports": [],
     "paths": [],
     "hosts": [],
