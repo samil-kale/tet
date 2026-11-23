@@ -56,12 +56,14 @@ project's tabs.
      control token.
   4. `ctl/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
      (`CallerSide`) extends the tab's.
-  5. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
+  5. The services both transports share, flat but `change-requests/`: `projects.ts`,
+     `requirements.ts`, `issues.ts` (the issue tracker), `change-requests/` (making a pull or merge
+     request, reading and writing them on the repository's own remote, `watch.ts` telling of them)
+     and `tracked.ts`, what an issue and a change request do alike, by `TrackedKind` (`trackedOps`,
+     their sessions).
+  6. The wiring: `ipc/` (the `TETApi` handlers, registrars by area, each taking only the
      singletons it touches) and, flat, the startup (`main.ts`, `uncaught.ts`), the window
-     (`window.ts`), `projects.ts`, `settings-access.ts` and `requirements.ts`; `issues.ts` (the issue
-     tracker), `change-requests/` (making a pull or merge request, reading and writing them on the
-     repository's own remote, `watch.ts` telling of them) and `tracked.ts`, what an issue and a change
-     request do alike, by `TrackedKind` (`trackedOps`, their sessions).
+     (`window.ts`) and `settings-access.ts`.
 
   Files that belong together are a folder; one that stands alone stays flat in its layer. A new
   folder or flat file joins a layer in `eslint.config.mjs`, or lint refuses to run.

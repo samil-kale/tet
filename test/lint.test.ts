@@ -35,6 +35,12 @@ const IMPORTS: Probe[] = [
   ["src/main/terminals/x.ts", 'import "../ctl/ctl-verb";', "no-restricted-imports"],
   ["src/main/ctl/x.ts", 'import "../window";', "no-restricted-imports"],
   ["src/main/window.ts", 'import "./projects";', null],
+  // The services beneath the wiring, each reaching only the ones it lists beside it.
+  ["src/main/change-requests/x.ts", 'import "../issues";', null],
+  ["src/main/change-requests/x.ts", 'import "../window";', "no-restricted-imports"],
+  ["src/main/projects.ts", 'import "./ipc";', "no-restricted-imports"],
+  ["src/main/tracked.ts", 'import "./change-requests/tracker";', null],
+  ["src/main/issues.ts", 'import "./tracked";', "no-restricted-imports"],
   // A detour through the process's own folder reaches the same area.
   ["src/main/ctl/x.ts", 'import "../../main/terminals/pty";', null],
   ["src/main/terminals/x.ts", 'import "../../main/ctl/ctl-verb";', "no-restricted-imports"],
