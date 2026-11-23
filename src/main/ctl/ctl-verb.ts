@@ -12,19 +12,19 @@ import type {
   ChangeRequestRow,
   ChangeRequestsLatest,
   Issue,
-  IssueChange,
-  IssueFieldValue,
+  TrackedChange,
+  TrackedFieldValue,
   IssueFilter,
   IssueListResult,
-  IssuesLatest,
-  IssueDetail,
+  TrackedLatest,
+  TrackedDetail,
   TrackedKind,
   TrackedRef,
 } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TrackedSession, TrackedLinkResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { IssueTrackerInfo } from "../providers/issues";
+import type { IssueTrackerInfo } from "../providers/tracker";
 import type { ListPage } from "../providers/provider";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
@@ -162,16 +162,16 @@ export interface TrackedOps {
   /** How a sentence names one: `issue #3`, `change request 4`. */
   nameOf(number: number): string;
   /** It, with its text: its tab's, and the file a tab opened on it starts with. */
-  read(projectId: string, number: number): Promise<{ detail: IssueDetail; markdown: string }>;
+  read(projectId: string, number: number): Promise<{ detail: TrackedDetail; markdown: string }>;
   /** The text and first prompt of a tab of the repository or worktree `ref` opened on it. */
   agentFile(ref: ProjectRef, number: number): Promise<{ content: string; prompt: string }>;
   /** An image of its text as a data url; null when it takes no token or cannot be read. */
   image(projectId: string, source: string): Promise<string | null>;
   fieldOptions(projectId: string, number: number, fieldId: string): Promise<string[]>;
-  setField(projectId: string, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  setField(projectId: string, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
   /** Its title, text or state; a change request is merged by `mergeChangeRequest` alone. */
-  update(projectId: string, number: number, change: IssueChange): Promise<void>;
-  /** `internal` where its host has such comments (`IssueDetail.internalNotes`). */
+  update(projectId: string, number: number, change: TrackedChange): Promise<void>;
+  /** `internal` where its host has such comments (`TrackedDetail.internalNotes`). */
   comment(projectId: string, number: number, body: string, internal: boolean): Promise<void>;
   editComment(projectId: string, id: string, body: string): Promise<void>;
   deleteComment(projectId: string, id: string): Promise<void>;
@@ -201,7 +201,7 @@ export interface IssueOps {
   /** Every issue the filter leaves. */
   list(projectId: string, filter: IssueFilter): Promise<Issue[]>;
   /** What the tracker says of the filtered list without sending it. */
-  latest(projectId: string, filter: IssueFilter): Promise<IssuesLatest>;
+  latest(projectId: string, filter: IssueFilter): Promise<TrackedLatest>;
   filterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
   /** Those changed since their tab last showed them (`isUnread`), among the section's first list. */
   unread(projectId: string): Promise<Issue[]>;

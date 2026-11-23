@@ -63,9 +63,9 @@ import {
   trackerAccount,
   writeOnTracker,
   WRITE_HANDS_OVER,
-  type IssueAccounts,
-  type IssueRepository,
-} from "../../src/main/providers/issues";
+  type TrackerAccounts,
+  type TrackerRepository,
+} from "../../src/main/providers/tracker";
 import {
   ApiError,
   fieldContext,
@@ -85,7 +85,7 @@ import {
 import { RepoCache } from "../../src/main/providers/repo-cache";
 import { readIssueSource } from "../../src/main/store/tet-json";
 import type { WorktreeInfo } from "../../src/shared/types/git";
-import type { ChangeRequestDetail, IssueFieldValue, ProviderAccount } from "../../src/shared/types/providers";
+import type { ChangeRequestDetail, TrackedFieldValue, ProviderAccount } from "../../src/shared/types/providers";
 import { fakeSafeStorage, tempDir } from "../helpers";
 
 /** providers/: the accounts kept for the providers, and the issues read through them. */
@@ -352,9 +352,10 @@ describe("the issues of a tracker", () => {
         { id: "L2", name: "ui" },
       ],
     };
-    const write = (fieldId: string, value: IssueFieldValue, ids: string[] = []) => GITLAB_FIELD_HANDLERS[fieldId].write(target, value, ids);
+    const write = (fieldId: string, value: TrackedFieldValue, ids: string[] = []) =>
+      GITLAB_FIELD_HANDLERS[fieldId].write(target, value, ids);
     // What `workItemUpdate` is sent, as it is sent: a null stays in, what is left out stays out.
-    const sent = (fieldId: string, value: IssueFieldValue, ids: string[] = []): unknown => {
+    const sent = (fieldId: string, value: TrackedFieldValue, ids: string[] = []): unknown => {
       const { mutation, inputType, input } = JSON.parse(JSON.stringify(write(fieldId, value, ids))) as {
         mutation: string;
         inputType: string;
@@ -811,11 +812,11 @@ describe("the issues of a tracker", () => {
 
   describe("reached through an account", () => {
     const account = (id: string, host = "github.com"): ProviderAccount => ({ id, provider: "github", host, user: id });
-    const accountsOf = (...accounts: ProviderAccount[]): IssueAccounts => ({
+    const accountsOf = (...accounts: ProviderAccount[]): TrackerAccounts => ({
       list: () => accounts,
       token: async (id) => (id === "unreadable" ? undefined : `token-${id}`),
     });
-    const repositoryAt = (root: string, url?: string): IssueRepository => ({
+    const repositoryAt = (root: string, url?: string): TrackerRepository => ({
       at: { path: root },
       started: () => Promise.resolve(),
       getState: () => ({ remotes: url === undefined ? [] : [{ name: "origin", branches: [], mergedBranches: [], url }], worktrees: [] }),
@@ -825,7 +826,7 @@ describe("the issues of a tracker", () => {
     it("waits for a repository still opening, whose state holds no remotes yet", async () => {
       const root = tempDir("tet-issues-");
       let read = false;
-      const opening: IssueRepository = {
+      const opening: TrackerRepository = {
         ...repositoryAt(root, ORIGIN),
         started: async () => {
           await new Promise((resolve) => setImmediate(resolve));
@@ -1037,7 +1038,7 @@ describe("the issues of a tracker", () => {
 
 describe("a pull or merge request", () => {
   const account = (id: string, provider: ProviderAccount["provider"], host: string): ProviderAccount => ({ id, provider, host, user: id });
-  const accountsOf = (...accounts: ProviderAccount[]): IssueAccounts => ({
+  const accountsOf = (...accounts: ProviderAccount[]): TrackerAccounts => ({
     list: () => accounts,
     token: async (id) => `token-${id}`,
   });

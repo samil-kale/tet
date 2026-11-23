@@ -7,7 +7,7 @@ import type { EnvRequests } from "../ctl/env-requests";
 import type { EnvStore } from "../store/environment";
 import type { GitLoginStore } from "../git/git-logins";
 import type { RepositoryManager } from "../git/repository";
-import type { IssueDeps } from "../issues";
+import type { TrackedDeps } from "../issues";
 import type { ProjectDeps } from "../projects";
 import type { ProjectStore } from "../store/project-store";
 import type { AccountStore } from "../providers/accounts";
@@ -40,7 +40,7 @@ export interface IpcDeps {
   /** Shared with the control channel (main.ts). */
   projectDeps: ProjectDeps;
   /** Shared with the control channel (main.ts). */
-  issueDeps: IssueDeps;
+  trackedDeps: TrackedDeps;
   /** issues.ts's `issueOps`, the same the control channel takes. */
   issues: IssueOps;
   /** change-requests/tracker.ts's `changeRequestOps`, the same the control channel takes. */

@@ -1,4 +1,4 @@
-import type { Issue, IssueFilter, IssueListResult, IssuesLatest } from "../../../shared/types/providers";
+import type { Issue, IssueFilter, IssueListResult, TrackedLatest } from "../../../shared/types/providers";
 import { subscribeTracked } from "../../editor/editor-tab";
 import { reloadChangedTabs } from "../../editor/editor-views";
 import { setSeen } from "../../editor/tracked-seen";
@@ -7,7 +7,7 @@ import { useTrackedList, type TrackedList, type TrackedListSource } from "../../
 
 /** The Issues section's list, from the project's tracker: read again once tet.json, an account or an
  *  issue through its tab changes. */
-const ISSUES: TrackedListSource<IssueFilter, Issue, IssuesLatest, IssueListResult> = {
+const ISSUES: TrackedListSource<IssueFilter, Issue, TrackedLatest, IssueListResult> = {
   list: (projectId, filter, limit, after) => window.tet.issues.list(projectId, filter, limit, after),
   latest: (projectId, filter) => window.tet.issues.latest(projectId, filter),
   filterOptions: (projectId) => window.tet.issues.filterOptions(projectId),

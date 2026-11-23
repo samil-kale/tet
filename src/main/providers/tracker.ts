@@ -1,6 +1,6 @@
 import { errorMessage } from "../../shared/errors";
 import type { RepositoryState } from "../../shared/types/git";
-import type { IssueDetail, IssueField, ProviderAccount, ProviderId } from "../../shared/types/providers";
+import type { IssueDetail, TrackedDetail, TrackedField, ProviderAccount, ProviderId } from "../../shared/types/providers";
 import { isIssueSource, readIssueSource, writeIssueSource } from "../store/tet-json";
 import type { AccountStore } from "./accounts";
 import { PROVIDERS } from "./index";
@@ -9,14 +9,14 @@ import { ApiError, type GitProvider, type Tracker } from "./provider";
 /** What of a repository its issues are found by: its folder, whose tet.json may name the source,
  *  and its remotes, whose first gives the host, known once it has `started`: the lane may ask while
  *  the project is still opening. Its worktrees tell where a change request's branch is checked out. */
-export interface IssueRepository {
+export interface TrackerRepository {
   at: { path: string };
   started(): Promise<void>;
   getState(): Pick<RepositoryState, "remotes" | "worktrees">;
 }
 
 /** The accounts a tracker is reached through. */
-export type IssueAccounts = Pick<AccountStore, "list" | "token">;
+export type TrackerAccounts = Pick<AccountStore, "list" | "token">;
 
 /** The tracker's host has no account added: `host` is the one to add it for. */
 export class NoAccountError extends Error {
@@ -64,7 +64,7 @@ function withPath(host: string, rawPath: string): { host: string; path: string }
 
 /** The repository's first remote that has a url, which its tracker and its change requests are reached
  *  through. */
-export async function trackerRemote(repository: IssueRepository): Promise<{ host: string; path: string }> {
+export async function trackerRemote(repository: TrackerRepository): Promise<{ host: string; path: string }> {
   await repository.started();
   const url = repository.getState().remotes.find((remote) => remote.url !== undefined)?.url;
   const remote = url === undefined ? undefined : parseRemoteUrl(url);
@@ -75,7 +75,7 @@ export async function trackerRemote(repository: IssueRepository): Promise<{ host
 }
 
 /** The host's accounts, in the order they are tried. */
-function accountsOf(accounts: IssueAccounts, host: string): ProviderAccount[] {
+function accountsOf(accounts: TrackerAccounts, host: string): ProviderAccount[] {
   return accounts.list().filter((account) => account.host.toLowerCase() === host);
 }
 
@@ -85,7 +85,7 @@ function accountsOf(accounts: IssueAccounts, host: string): ProviderAccount[] {
  * one asked for (`asked`), else tet.json's `issues` (`source`, read only without `asked`), else the
  * remote's own.
  */
-async function resolveTracker(accounts: IssueAccounts, repository: IssueRepository, asked?: string) {
+async function resolveTracker(accounts: TrackerAccounts, repository: TrackerRepository, asked?: string) {
   const remote = await trackerRemote(repository);
   const source = asked === undefined ? await readIssueSource(repository.at.path) : undefined;
   return {
@@ -106,7 +106,7 @@ export interface TabAccount {
 
 /** The first account of the tracker's host, the one `onTracker` tries first; undefined without a
  *  remote on a host, an account there, or a token that can be read. */
-export async function trackerAccount(accounts: IssueAccounts, repository: IssueRepository): Promise<TabAccount | undefined> {
+export async function trackerAccount(accounts: TrackerAccounts, repository: TrackerRepository): Promise<TabAccount | undefined> {
   const remote = await trackerRemote(repository).catch(() => undefined);
   const account = remote && accountsOf(accounts, remote.host)[0];
   const token = account && (await accounts.token(account.id));
@@ -123,8 +123,8 @@ type HandsOver = (error: unknown) => boolean;
  * its host's accounts (`onHost`).
  */
 export async function onTracker<T>(
-  accounts: IssueAccounts,
-  repository: IssueRepository,
+  accounts: TrackerAccounts,
+  repository: TrackerRepository,
   call: TrackerCall<T>,
   { source, handsOver }: { source?: string; handsOver?: HandsOver } = {},
 ): Promise<T> {
@@ -142,7 +142,7 @@ export async function onTracker<T>(
  * do.
  */
 export async function onHost<T>(
-  accounts: IssueAccounts,
+  accounts: TrackerAccounts,
   { host, path }: { host: string; path: string },
   call: TrackerCall<T>,
   handsOver?: HandsOver,
@@ -178,19 +178,23 @@ export async function onHost<T>(
 export const WRITE_HANDS_OVER: HandsOver = (error) => error instanceof ApiError && (error.status === 401 || error.status === 404);
 
 /** The provider of `host`'s first account, the one `onHost` tries first; undefined without one. */
-export function hostProvider(accounts: IssueAccounts, host: string): GitProvider | undefined {
+export function hostProvider(accounts: TrackerAccounts, host: string): GitProvider | undefined {
   const account = accountsOf(accounts, host)[0];
   return account && PROVIDERS[account.provider];
 }
 
 /** `onTracker` for what writes (`WRITE_HANDS_OVER`). */
-export function writeOnTracker<T>(accounts: IssueAccounts, repository: IssueRepository, call: TrackerCall<T>): Promise<T> {
+export function writeOnTracker<T>(accounts: TrackerAccounts, repository: TrackerRepository, call: TrackerCall<T>): Promise<T> {
   return onTracker(accounts, repository, call, { handsOver: WRITE_HANDS_OVER });
 }
 
 /** Saves the repository's issue source once the tracker reads it and answers what was saved; empty
  *  goes back to its own. A url counts as its path, on the remote's host alone, where it is read from. */
-export async function setIssueSource(accounts: IssueAccounts, repository: IssueRepository, source: string): Promise<string | undefined> {
+export async function setIssueSource(
+  accounts: TrackerAccounts,
+  repository: TrackerRepository,
+  source: string,
+): Promise<string | undefined> {
   const typed = source.trim();
   if (typed === "") {
     await writeIssueSource(repository.at.path, undefined);
@@ -226,7 +230,7 @@ export interface IssueTrackerInfo {
 }
 
 /** The tracker `onTracker` reads the repository's issues from, without asking it. */
-export async function readIssueTracker(accounts: IssueAccounts, repository: IssueRepository): Promise<IssueTrackerInfo> {
+export async function readIssueTracker(accounts: TrackerAccounts, repository: TrackerRepository): Promise<IssueTrackerInfo> {
   const { host, source, path, candidates } = await resolveTracker(accounts, repository);
   return {
     provider: candidates[0]?.provider ?? null,
@@ -238,7 +242,7 @@ export async function readIssueTracker(accounts: IssueAccounts, repository: Issu
 }
 
 /** A field as the issue's text gives it; undefined where it holds nothing. */
-function fieldText(field: IssueField): string | undefined {
+function fieldText(field: TrackedField): string | undefined {
   if (field.kind === "pick") {
     return field.value.length === 0 ? undefined : field.value.join(", ");
   }
@@ -254,7 +258,7 @@ function fieldText(field: IssueField): string | undefined {
  * reading it should take it for information, not for its instructions. Then `facts` and its fields,
  * its text, its comments and what `after` adds.
  */
-export function trackedMarkdown(detail: IssueDetail, name: string, source: string, facts: string[], after: string[] = []): string {
+export function trackedMarkdown(detail: TrackedDetail, name: string, source: string, facts: string[], after: string[] = []): string {
   const fields = detail.fields.flatMap((field) => {
     const text = fieldText(field);
     return text === undefined ? [] : [`${field.name}: ${text}`];

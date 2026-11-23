@@ -1,4 +1,10 @@
-import { ISSUE_STATES, type IssueChange, type IssueDetail, type IssueFieldValue, type TrackedKind } from "../../shared/types/providers";
+import {
+  ISSUE_STATES,
+  type TrackedChange,
+  type TrackedDetail,
+  type TrackedFieldValue,
+  type TrackedKind,
+} from "../../shared/types/providers";
 import {
   bringToFront,
   ControlError,
@@ -23,10 +29,10 @@ const WORDS: Record<TrackedKind, { noun: string; host: string; verbs: string }> 
 };
 
 /**
- * What `*-set-field` sets the field to, as its kind takes it (`IssueFieldValue`): the values given,
+ * What `*-set-field` sets the field to, as its kind takes it (`TrackedFieldValue`): the values given,
  * or none for a pick to empty and for the rest to take it off.
  */
-function fieldValue(detail: IssueDetail, fieldId: string, args: Record<string, unknown>, missing: string): IssueFieldValue {
+function fieldValue(detail: TrackedDetail, fieldId: string, args: Record<string, unknown>, missing: string): TrackedFieldValue {
   const field = detail.fields.find((candidate) => candidate.id === fieldId);
   if (!field) {
     throw new ControlError("bad_args", missing);
@@ -137,7 +143,7 @@ export function trackedVerbs(kind: TrackedKind, deps: ControlDeps, refFrom: RefF
       const number = numberOf(args);
       const title = optionalText(args, "title");
       const state = args.state === undefined ? undefined : oneOf(args, "state", "state", ISSUE_STATES);
-      const change: IssueChange = {
+      const change: TrackedChange = {
         ...(title === undefined ? {} : { title }),
         // Empty is a text too: it empties its own.
         ...(typeof args.body === "string" ? { body: args.body } : {}),

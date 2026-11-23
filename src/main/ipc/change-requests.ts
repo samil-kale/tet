@@ -4,17 +4,17 @@ import type {
   ChangeRequestFilter,
   ChangeRequestLatestResult,
   ChangeRequestListResult,
-  IssueFilterOptions,
+  TrackedFilterOptions,
 } from "../../shared/types/providers";
-import { NoAccountError } from "../providers/issues";
+import { NoAccountError } from "../providers/tracker";
 import { readSeen } from "../store/tracked-seen";
 import type { IpcDeps } from "./deps";
 
 /** The change requests section, as the Issues section's registrar: by project, each answering its
  *  failure for the caller to notify. What a change request's tab does as an issue's does is
  *  tracked.ts's. */
-export function registerChangeRequestsIpc({ changeRequests, issueDeps }: Pick<IpcDeps, "changeRequests" | "issueDeps">): void {
-  const { dataRoot } = issueDeps;
+export function registerChangeRequestsIpc({ changeRequests, trackedDeps }: Pick<IpcDeps, "changeRequests" | "trackedDeps">): void {
+  const { dataRoot } = trackedDeps;
 
   handle(
     "change-requests:list",
@@ -43,7 +43,7 @@ export function registerChangeRequestsIpc({ changeRequests, issueDeps }: Pick<Ip
     }
   });
 
-  handle("change-requests:filter-options", async (_event, projectId: string): Promise<IssueFilterOptions> => {
+  handle("change-requests:filter-options", async (_event, projectId: string): Promise<TrackedFilterOptions> => {
     try {
       return await changeRequests.filterOptions(projectId);
     } catch (error) {

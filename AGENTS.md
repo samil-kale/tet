@@ -24,7 +24,7 @@ the editor tab; VS Code's **GitHub Pull Requests and Issues** (`microsoft/vscode
 for the rest of the Issues lane and its issue tab, which writes an issue's title, text, comments, state and
 fields, uploads what the tracker takes from a token (`uploads`), and makes and deletes issues, and nothing
 else until asked; and for the change requests lane and its tab, the same view, which writes a pull or merge
-request's title, text, comments, state and fields, approves and merges it, and nothing else until asked. A field is whatever the tracker lists for the issue (`IssueField`: labels, assignees,
+request's title, text, comments, state and fields, approves and merges it, and nothing else until asked. A field is whatever the tracker lists for the issue (`TrackedField`: labels, assignees,
 milestone, and where the tracker has them GitLab's status, parent, weight, iteration, dates, health, time,
 confidential and GitHub's type, parent and issue fields), read by `readIssue` and set by `listOptions` and
 `setField`: a new one is an entry of a provider, never a view.

@@ -12,7 +12,7 @@ import { trackedFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
-import { issueOps, type IssueDeps } from "./issues";
+import { issueOps, type TrackedDeps } from "./issues";
 import { sendTrackedToAgent, trackedOps, trackedSessions } from "./tracked";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
@@ -48,7 +48,7 @@ import { augmentAgentPath } from "./agents/agent-path";
 import type { TerminalEnv } from "./terminals/pty";
 import { accountEnv, sandboxTetValues } from "./terminals/account-env";
 import { ensureAskpass } from "./git/askpass";
-import { trackerAccount, type TabAccount } from "./providers/issues";
+import { trackerAccount, type TabAccount } from "./providers/tracker";
 import { ChangeRequestWatch } from "./change-requests/watch";
 import { changeRequestOps } from "./change-requests/tracker";
 import { dropOuterKept } from "./store/env-names";
@@ -253,14 +253,14 @@ const projectDeps: ProjectDeps = {
 
 const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
 
-const issueDeps: IssueDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
+const trackedDeps: TrackedDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
 /** What the Issues and change requests sections do and what an issue and a change request do alike,
  *  one of each for both transports (ipc/ and the control channel). */
-const issues = issueOps(issueDeps);
-const changeRequests = changeRequestOps(issueDeps);
-const tracked = trackedOps(issueDeps);
+const issues = issueOps(trackedDeps);
+const changeRequests = changeRequestOps(trackedDeps);
+const tracked = trackedOps(trackedDeps);
 /** Tells of new change requests and failed checks of the account's (watch.ts). */
-const changeRequestWatch = new ChangeRequestWatch(issueDeps, (found) => send("app:notice", found));
+const changeRequestWatch = new ChangeRequestWatch(trackedDeps, (found) => send("app:notice", found));
 
 let workspaceOpened: Promise<void> | undefined;
 
@@ -346,8 +346,8 @@ async function startControl(): Promise<void> {
         openTracked: (ref, opened, keep, background) =>
           send("editor:open", { ref, path: trackedFileName(opened), keep, background, tracked: opened }),
         sendTrackedToAgent: (ref, opened, agentId, sandboxOnly) =>
-          sendTrackedToAgent(issueDeps, tracked, ref, opened, agentId, sandboxOnly),
-        trackedSession: (projectId, { kind, number }) => trackedSessions(issueDeps, projectId, kind)[number],
+          sendTrackedToAgent(trackedDeps, tracked, ref, opened, agentId, sandboxOnly),
+        trackedSession: (projectId, { kind, number }) => trackedSessions(trackedDeps, projectId, kind)[number],
         shutdown,
         records,
         projectRefPath: (ref) => {
@@ -433,7 +433,7 @@ if (!app.requestSingleInstanceLock()) {
       tabManagers,
       records,
       projectDeps,
-      issueDeps,
+      trackedDeps,
       issues,
       changeRequests,
       tracked,

@@ -10,13 +10,13 @@ import {
   isTimeRemoval,
   type ChangeRequestDetail,
   type ChecksState,
-  type Issue,
-  type IssueChange,
-  type IssueDetail,
-  type IssueField,
-  type IssueFieldValue,
+  type TrackedChange,
+  type TrackedDetail,
+  type TrackedField,
+  type TrackedFieldValue,
   type TrackedKind,
   type TrackedRef,
+  type TrackedRow,
 } from "../../shared/types/providers";
 import { toBase64 } from "../ui/base64";
 import { confirmed, confirmedFollowUp, refusal } from "../ui/Dialog";
@@ -107,7 +107,7 @@ export interface EditorSnapshot {
   tracked?: TrackedRef;
   /** What its tab draws (`IssueView`), once read: an issue's, or a change request's
    *  (`isChangeRequest`). */
-  issueDetail?: IssueDetail;
+  issueDetail?: TrackedDetail;
 }
 
 type DiffState = Pick<EditorSnapshot, "diff" | "file" | "dirty">;
@@ -739,7 +739,7 @@ async function reloadIssue(tabId: string): Promise<void> {
 }
 
 /** How the checks of a change request the tab read stand; undefined for an issue's. */
-function checksOf(read: IssueDetail): ChecksState | undefined {
+function checksOf(read: TrackedDetail): ChecksState | undefined {
   return isChangeRequest(read) ? read.checks : undefined;
 }
 
@@ -767,7 +767,7 @@ export function sendTabIssueToAgent(tabId: string, agentId: AgentId): void {
 }
 
 /** The tabs of the project open on one of the kind, with its number and what the tab has read of it. */
-function trackedTabsOf(kind: TrackedKind, projectId: string): { tabId: string; number: number; read: IssueDetail | undefined }[] {
+function trackedTabsOf(kind: TrackedKind, projectId: string): { tabId: string; number: number; read: TrackedDetail | undefined }[] {
   return [...views].flatMap(([tabId, { ref, snapshot }]) => {
     const { tracked } = snapshot;
     return ref.projectId === projectId && tracked?.kind === kind ? [{ tabId, number: tracked.number, read: snapshot.issueDetail }] : [];
@@ -784,7 +784,7 @@ export function reloadTrackedTabs(kind: TrackedKind, projectId: string): void {
 /** Every tab of the project whose issue or change request `rows` lists as changed since the tab read
  *  it, or with its checks standing otherwise, reads it again. A tab whose one is not listed stays as
  *  it is. */
-export function reloadChangedTabs(kind: TrackedKind, projectId: string, rows: (Issue & { checks?: ChecksState })[]): void {
+export function reloadChangedTabs(kind: TrackedKind, projectId: string, rows: (TrackedRow & { checks?: ChecksState })[]): void {
   for (const { tabId, number, read } of trackedTabsOf(kind, projectId)) {
     const listed = rows.find((candidate) => candidate.number === number);
     if (read && listed && (listed.updatedAt !== read.updatedAt || listed.checks !== checksOf(read))) {
@@ -891,7 +891,7 @@ export async function uploadIssueFile(tabId: string, file: File): Promise<string
  *  refused. */
 async function changeIssue(
   tabId: string,
-  show: (detail: IssueDetail) => IssueDetail,
+  show: (detail: TrackedDetail) => TrackedDetail,
   write: (projectId: string, tracked: TrackedRef) => Promise<ActionResult>,
 ): Promise<string | undefined> {
   const tab = issueTab(tabId);
@@ -922,7 +922,7 @@ async function changeIssue(
 
 /** The issue or change request with a change of its own parts shown; a change request's state, beside
  *  `open`, takes it too. */
-function withChange(detail: IssueDetail, change: IssueChange): IssueDetail {
+function withChange(detail: TrackedDetail, change: TrackedChange): TrackedDetail {
   const changed = {
     ...detail,
     title: change.title ?? detail.title,
@@ -938,7 +938,7 @@ function withChange(detail: IssueDetail, change: IssueChange): IssueDetail {
 
 /** The field as it reads once set to `value`; a timelog's new entry and total are left to the read
  *  back. */
-function withValue(field: IssueField, value: IssueFieldValue): IssueField {
+function withValue(field: TrackedField, value: TrackedFieldValue): TrackedField {
   switch (field.kind) {
     case "pick":
       return { ...field, value: value as string[] };
@@ -956,7 +956,7 @@ function withValue(field: IssueField, value: IssueFieldValue): IssueField {
 }
 
 /** Changes the tab's issue's own parts, answering what the tracker refused (`changeIssue`). */
-function changeParts(tabId: string, change: IssueChange): Promise<string | undefined> {
+function changeParts(tabId: string, change: TrackedChange): Promise<string | undefined> {
   return changeIssue(
     tabId,
     (detail) => withChange(detail, change),
@@ -965,7 +965,7 @@ function changeParts(tabId: string, change: IssueChange): Promise<string | undef
 }
 
 /** Changes the tab's issue, with a notice if the tracker refuses (`changeParts`). */
-export function updateIssue(tabId: string, change: IssueChange): void {
+export function updateIssue(tabId: string, change: TrackedChange): void {
   notifying(changeParts)(tabId, change);
 }
 
@@ -975,7 +975,7 @@ export function renameIssue(tabId: string, title: string): Promise<string | unde
 }
 
 /** Sets a field of the tab's issue, answering what the tracker refused (`changeIssue`). */
-export function editIssueField(tabId: string, fieldId: string, value: IssueFieldValue): Promise<string | undefined> {
+export function editIssueField(tabId: string, fieldId: string, value: TrackedFieldValue): Promise<string | undefined> {
   return changeIssue(
     tabId,
     (detail) => ({ ...detail, fields: detail.fields.map((field) => (field.id === fieldId ? withValue(field, value) : field)) }),
@@ -984,7 +984,7 @@ export function editIssueField(tabId: string, fieldId: string, value: IssueField
 }
 
 /** Sets a field of the tab's issue, with a notice if the tracker refuses (`changeIssue`). */
-export function setIssueField(tabId: string, fieldId: string, value: IssueFieldValue): void {
+export function setIssueField(tabId: string, fieldId: string, value: TrackedFieldValue): void {
   notifying(editIssueField)(tabId, fieldId, value);
 }
 

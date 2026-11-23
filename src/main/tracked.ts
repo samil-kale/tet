@@ -29,9 +29,9 @@ import {
   readIssue,
   setIssueField,
   updateIssue,
-  type IssueDeps,
+  type TrackedDeps,
 } from "./issues";
-import { issueMarkdown } from "./providers/issues";
+import { issueMarkdown } from "./providers/tracker";
 import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
 
 /**
@@ -39,7 +39,7 @@ import { notOpenMessage, PROJECT_NOT_FOUND } from "./store/resolved-ref";
  * and the `tet-ctl` verbs of both. An issue goes to the Issues section's tracker (issues.ts), a change
  * request to the repository's own remote (change-requests/tracker.ts).
  */
-export function trackedOps(deps: IssueDeps): Record<TrackedKind, TrackedOps> {
+export function trackedOps(deps: TrackedDeps): Record<TrackedKind, TrackedOps> {
   return {
     issue: {
       nameOf: (number) => `issue #${number}`,
@@ -90,7 +90,7 @@ export function trackedOps(deps: IssueDeps): Record<TrackedKind, TrackedOps> {
  * (tracked-links.ts). One no tab shows (a worktree closed, a session gone) is left out.
  */
 export function trackedSessions(
-  deps: Pick<IssueDeps, "store" | "tabManagers">,
+  deps: Pick<TrackedDeps, "store" | "tabManagers">,
   projectId: string,
   kind: TrackedKind,
 ): Record<number, TrackedSession> {
@@ -124,7 +124,7 @@ export function trackedSessions(
  * (`TabSessionManager.createTab`).
  */
 export async function sendTrackedToAgent(
-  deps: Pick<IssueDeps, "store" | "tabManagers">,
+  deps: Pick<TrackedDeps, "store" | "tabManagers">,
   ops: Record<TrackedKind, TrackedOps>,
   ref: ProjectRef,
   tracked: TrackedRef,

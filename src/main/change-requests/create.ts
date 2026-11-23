@@ -12,7 +12,7 @@ import type {
 } from "../../shared/types/providers";
 import { suggestChangeRequest as suggestText } from "../agents/suggest";
 import { git } from "../git/git-client";
-import { hostProvider, NoAccountError, onHost, parseRemoteUrl, WRITE_HANDS_OVER, type IssueAccounts } from "../providers/issues";
+import { hostProvider, NoAccountError, onHost, parseRemoteUrl, WRITE_HANDS_OVER, type TrackerAccounts } from "../providers/tracker";
 import type { GitProvider, Tracker } from "../providers/provider";
 import { notOpenMessage } from "../store/resolved-ref";
 import type { ProjectStore } from "../store/project-store";
@@ -24,7 +24,7 @@ import type { SettingsAccess } from "../store/settings";
  * its tracker (`onHost`): what Branches' button and the checked-out branch's menu ask.
  */
 export interface ChangeRequestDeps {
-  accounts: IssueAccounts;
+  accounts: TrackerAccounts;
   repositories: { get(ref: ProjectRef): { at: { path: string }; getState(): RepositoryState } | undefined };
   settings: SettingsAccess;
   store: ProjectStore;

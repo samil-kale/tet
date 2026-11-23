@@ -10,11 +10,11 @@ import {
   type ChangeRequestState,
   type ChecksState,
   type Issue,
-  type IssueChange,
-  type IssueEvent,
-  type IssueField,
+  type TrackedChange,
+  type TrackedEvent,
+  type TrackedField,
   type IssueFilter,
-  type IssueNote,
+  type TrackedNote,
   type IssueTimeLog,
   type RemoteRepository,
   type ReviewThread,
@@ -273,7 +273,7 @@ export interface GitLabStateEvent extends GitLabResourceEvent {
 }
 
 /** What of a change `updateIssue` sets, in GitLab's words. */
-export function toIssueInput(path: string, number: number, { title, body, state }: IssueChange): object {
+export function toIssueInput(path: string, number: number, { title, body, state }: TrackedChange): object {
   return {
     projectPath: path,
     iid: String(number),
@@ -399,8 +399,8 @@ const HEALTH_STATUSES: NamedId[] = [
 function fromWidget(
   type: string,
   read: keyof GitLabWidget,
-  fields: (widget: GitLabWidget) => IssueField[],
-): (item: GitLabWorkItem) => IssueField[] {
+  fields: (widget: GitLabWidget) => TrackedField[],
+): (item: GitLabWorkItem) => TrackedField[] {
   return (item) => {
     const widget = item.widgets.find((candidate) => candidate.type === type && candidate[read] !== undefined);
     return widget ? fields(widget) : [];
@@ -408,7 +408,7 @@ function fromWidget(
 }
 
 /** Where each field comes from, in the order GitLab's own sidebar lists them. */
-const FIELD_SOURCES: ((item: GitLabWorkItem) => IssueField[])[] = [
+const FIELD_SOURCES: ((item: GitLabWorkItem) => TrackedField[])[] = [
   fromWidget("STATUS", "status", (widget) => [
     pickField("status", "Status", widget.status ? [widget.status.name] : [], { shown: "labels" }),
   ]),
@@ -468,7 +468,7 @@ const FIELD_SOURCES: ((item: GitLabWorkItem) => IssueField[])[] = [
 
 /** The fields a work item has, as the tab lists them: one for what a widget holds, only where the
  *  item's type and the plan give it the widget. */
-export function toFields(item: GitLabWorkItem): IssueField[] {
+export function toFields(item: GitLabWorkItem): TrackedField[] {
   return FIELD_SOURCES.flatMap((source) => source(item));
 }
 
@@ -721,7 +721,7 @@ function authorOf(note: GitLabNote): string {
 }
 
 /** The comments among an issue's notes. */
-export function toNotes(entries: GitLabNote[]): IssueNote[] {
+export function toNotes(entries: GitLabNote[]): TrackedNote[] {
   return entries
     .filter((entry) => !entry.system)
     .map((entry) => ({ id: entry.id, author: authorOf(entry), createdAt: entry.createdAt, body: entry.body, internal: entry.internal }));
@@ -779,9 +779,9 @@ export function toEvents(
   labels: GitLabLabelEvent[],
   states: GitLabStateEvent[],
   milestones: GitLabMilestoneEvent[],
-): IssueEvent[] {
+): TrackedEvent[] {
   const base = (entry: GitLabResourceEvent) => ({ actor: entry.user?.username ?? "ghost", createdAt: entry.created_at });
-  const events: IssueEvent[] = [];
+  const events: TrackedEvent[] = [];
   for (const note of notes) {
     if (note.system) {
       events.push({ actor: authorOf(note), createdAt: note.createdAt, ...fromSystemNote(note.body) });
@@ -1050,7 +1050,7 @@ const mergeRequestFields = fieldMethods<MergeRequestTarget>({
 });
 
 /** The fields a merge request has (`changeRequestFields`), in the order of GitLab's own sidebar. */
-export function toMergeRequestFields(found: GitLabMergeRequestDetail, closes: { iid: number; title: string }[]): IssueField[] {
+export function toMergeRequestFields(found: GitLabMergeRequestDetail, closes: { iid: number; title: string }[]): TrackedField[] {
   return changeRequestFields({
     reviewers: found.reviewers.nodes.map((user) => user.username),
     assignees: found.assignees.nodes.map((user) => user.username),

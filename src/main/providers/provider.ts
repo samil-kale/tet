@@ -8,12 +8,12 @@ import type {
   ChangeRequestsLatest,
   ChecksState,
   Issue,
-  IssueChange,
+  TrackedChange,
   IssueDetail,
-  IssueField,
-  IssueFieldValue,
+  TrackedField,
+  TrackedFieldValue,
   IssueFilter,
-  IssuesLatest,
+  TrackedLatest,
   IssueUploads,
   RemoteRepository,
 } from "../../shared/types/providers";
@@ -40,7 +40,7 @@ export interface GitProvider {
   listIssues(tracker: Tracker, filter: IssueFilter, limit?: number, after?: string): Promise<ListPage<Issue>>;
   /** How many issues the host counts for the filter and when the latest changed one changed: one
    *  request however long the list. */
-  readLatest(tracker: Tracker, filter: IssueFilter): Promise<IssuesLatest>;
+  readLatest(tracker: Tracker, filter: IssueFilter): Promise<TrackedLatest>;
   /** Refuses a path the token cannot read, which is how a new issue source is checked. */
   listLabels(tracker: Tracker): Promise<string[]>;
   /** Who can be assigned, so external authors are not among them. */
@@ -55,11 +55,11 @@ export interface GitProvider {
   uploadName(host: string, source: string): string | undefined;
   /** That upload, read with the token; undefined for any other link. */
   readUpload(tracker: Tracker, source: string): Promise<Response | undefined>;
-  /** What a pick field of the issue can be set to, by the names `IssueField.value` uses. */
+  /** What a pick field of the issue can be set to, by the names `TrackedField.value` uses. */
   listOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
   /** Sets one field of the issue, a pick's values as a whole; refuses one it does not have or a value
    *  it does not take. */
-  setField(tracker: Tracker, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  setField(tracker: Tracker, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
   /** Whether a new issue can be made confidential, visible to the project's members alone. */
   readonly confidentialIssues: boolean;
   createIssue(tracker: Tracker, title: string, body: string, confidential: boolean): Promise<number>;
@@ -74,7 +74,7 @@ export interface GitProvider {
   uploads(host: string): IssueUploads | undefined;
   /** Uploads a file for an issue's text and answers the Markdown that shows it. */
   uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
-  updateIssue(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
+  updateIssue(tracker: Tracker, number: number, change: TrackedChange): Promise<void>;
   /** What the host calls a request to merge a branch, and how it writes one's number. */
   readonly changeRequest: ChangeRequestKind;
   /** The open one from `head`, a branch of the repository itself, not of a fork; undefined where
@@ -98,9 +98,9 @@ export interface GitProvider {
   readChangeRequestUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string; checks?: ChecksState }>;
   /** `listOptions` and `setField` of a change request. */
   listChangeRequestOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
-  setChangeRequestField(tracker: Tracker, number: number, fieldId: string, value: IssueFieldValue): Promise<void>;
+  setChangeRequestField(tracker: Tracker, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
   /** Its title, text or state; merged it is set by `mergeChangeRequest` alone. */
-  updateChangeRequest(tracker: Tracker, number: number, change: IssueChange): Promise<void>;
+  updateChangeRequest(tracker: Tracker, number: number, change: TrackedChange): Promise<void>;
   commentChangeRequest(tracker: Tracker, number: number, body: string): Promise<void>;
   /** Merges one by the repository's own method, at once, or with `whenChecksPass` once its checks
    *  passed, as `autoMergeChangeRequest` has the host do. */
@@ -273,7 +273,7 @@ export function reached<T>(found: T | null | undefined, what: string): T {
   return found;
 }
 
-/** What a pick field lists: a name as `IssueField.value` shows it, with the id the tracker addresses it by. */
+/** What a pick field lists: a name as `TrackedField.value` shows it, with the id the tracker addresses it by. */
 export interface NamedId {
   id: string;
   name: string;
@@ -300,8 +300,8 @@ export function pickField(
     several = false,
     shown = "text",
     editable = true,
-  }: { several?: boolean; shown?: Extract<IssueField, { kind: "pick" }>["shown"]; editable?: boolean } = {},
-): IssueField {
+  }: { several?: boolean; shown?: Extract<TrackedField, { kind: "pick" }>["shown"]; editable?: boolean } = {},
+): TrackedField {
   return { id, name, editable, kind: "pick", value, several, shown };
 }
 
@@ -313,7 +313,7 @@ export function changeRequestFields(values: {
   labels: string[];
   linkedIssues: string[];
   participants: string[];
-}): IssueField[] {
+}): TrackedField[] {
   return [
     pickField("reviewers", "Reviewers", values.reviewers, { several: true, shown: "people" }),
     pickField("assignees", "Assignees", values.assignees, { several: true, shown: "people" }),
@@ -324,7 +324,7 @@ export function changeRequestFields(values: {
 }
 
 /** The text a field is set to, null taking it off; refuses a value of another kind. */
-export function textOf(value: IssueFieldValue): string | null {
+export function textOf(value: TrackedFieldValue): string | null {
   if (value !== null && typeof value !== "string") {
     throw new Error("It takes text");
   }
@@ -332,7 +332,7 @@ export function textOf(value: IssueFieldValue): string | null {
 }
 
 /** The number a field is set to, null taking it off; refuses a value of another kind. */
-export function numberOf(value: IssueFieldValue, whole = false): number | null {
+export function numberOf(value: TrackedFieldValue, whole = false): number | null {
   if (value !== null && (typeof value !== "number" || !Number.isFinite(value) || (whole && !Number.isInteger(value)))) {
     throw new Error(whole ? "It takes a whole number" : "It takes a number");
   }
@@ -394,7 +394,7 @@ export interface FieldHandler<Target> {
     choices: (context: FieldContext<Target>) => Promise<NamedId[]>;
   };
   /** `ids` are those of the values of a pick, which `writeOf` looks up. */
-  write: (target: Target, value: IssueFieldValue, ids: string[]) => Write;
+  write: (target: Target, value: TrackedFieldValue, ids: string[]) => Write;
 }
 
 /** A pick, set by the ids of the values chosen. */
@@ -406,11 +406,11 @@ export function pickHandler<Target>(
 }
 
 /** A field set by its value. */
-export function valueHandler<Target>(write: (target: Target, value: IssueFieldValue) => Write): FieldHandler<Target> {
+export function valueHandler<Target>(write: (target: Target, value: TrackedFieldValue) => Write): FieldHandler<Target> {
   return { write };
 }
 
-/** What a pick field can be set to, by the names `IssueField.value` uses. */
+/** What a pick field can be set to, by the names `TrackedField.value` uses. */
 export async function optionsOf<Target>(handler: FieldHandler<Target>, context: FieldContext<Target>, fieldId: string): Promise<string[]> {
   if (!handler.pick) {
     throw new Error(`${fieldId} is no field to choose from`);
@@ -423,7 +423,7 @@ export async function writeOf<Target>(
   handler: FieldHandler<Target>,
   context: FieldContext<Target>,
   fieldId: string,
-  value: IssueFieldValue,
+  value: TrackedFieldValue,
 ): Promise<Write> {
   if (!handler.pick) {
     return handler.write(await context.target(), value, []);

@@ -1,7 +1,7 @@
 import type { Notice } from "../../shared/types/app";
 import { capitalized, changeRequestName, type ChangeRequestKind, type ChangeRequestRow } from "../../shared/types/providers";
-import type { IssueDeps } from "../issues";
-import { NoAccountError, NoRemoteError } from "../providers/issues";
+import type { TrackedDeps } from "../issues";
+import { NoAccountError, NoRemoteError } from "../providers/tracker";
 import { logError } from "../util/error-log";
 import { openChangeRequests } from "./tracker";
 
@@ -56,7 +56,7 @@ export class ChangeRequestWatch {
   private readonly failing = new Set<string>();
 
   constructor(
-    private readonly deps: Pick<IssueDeps, "accounts" | "repositories" | "settings" | "store">,
+    private readonly deps: Pick<TrackedDeps, "accounts" | "repositories" | "settings" | "store">,
     private readonly notify: (notice: Notice) => void,
   ) {}
 

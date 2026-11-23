@@ -1,17 +1,17 @@
-import type { IssueField } from "../../shared/types/providers";
+import type { TrackedField } from "../../shared/types/providers";
 
 /** A field changed by a question of its own, rather than picked from a list or ticked. */
-export type AskedField = Exclude<IssueField, { kind: "pick" | "flag" }>;
+export type AskedField = Exclude<TrackedField, { kind: "pick" | "flag" }>;
 
-export function isAsked(field: IssueField): field is AskedField {
+export function isAsked(field: TrackedField): field is AskedField {
   return field.kind !== "pick" && field.kind !== "flag";
 }
 
 /** The side column's sections: a field alone, or the fields of one group together at the place of
  *  the group's first. */
-export type Section = { field: IssueField } | { group: string; fields: AskedField[] };
+export type Section = { field: TrackedField } | { group: string; fields: AskedField[] };
 
-export function sectionsOf(fields: IssueField[]): Section[] {
+export function sectionsOf(fields: TrackedField[]): Section[] {
   const sections: Section[] = [];
   for (const field of fields) {
     const { group } = field;

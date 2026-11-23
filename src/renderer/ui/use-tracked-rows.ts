@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import type { Issue } from "../../shared/types/providers";
+import type { TrackedRow } from "../../shared/types/providers";
 
 /** How long a row takes to unfold or fold away; the stylesheet's `.issue-item` transition. */
 const ROW_MS = 350;
 
-export interface TrackedRowItem<T extends Issue = Issue> {
+export interface TrackedRowItem<T extends TrackedRow = TrackedRow> {
   item: T;
   /** New to the host's list since the one before: it unfolds. */
   entering: boolean;
@@ -12,7 +12,7 @@ export interface TrackedRowItem<T extends Issue = Issue> {
   leaving: boolean;
 }
 
-function settled<T extends Issue>(items: readonly T[] | undefined): TrackedRowItem<T>[] {
+function settled<T extends TrackedRow>(items: readonly T[] | undefined): TrackedRowItem<T>[] {
   return (items ?? []).map((item) => ({ item, entering: false, leaving: false }));
 }
 
@@ -20,7 +20,7 @@ function settled<T extends Issue>(items: readonly T[] | undefined): TrackedRowIt
  * `items` as rows after `previous`: a row new to the list enters, one gone from it stays leaving
  * after the row it stood behind, one that comes back while leaving unfolds again from where it is.
  */
-export function mergeTrackedRows<T extends Issue>(previous: readonly TrackedRowItem<T>[], items: readonly T[]): TrackedRowItem<T>[] {
+export function mergeTrackedRows<T extends TrackedRow>(previous: readonly TrackedRowItem<T>[], items: readonly T[]): TrackedRowItem<T>[] {
   const before = new Map(previous.map((row) => [row.item.number, row]));
   const rows = items.map((item): TrackedRowItem<T> => ({ item, entering: before.get(item.number)?.entering ?? true, leaving: false }));
   let at = 0;
@@ -42,7 +42,7 @@ export function mergeTrackedRows<T extends Issue>(previous: readonly TrackedRowI
  * The first list and the first under a changed filter come as they are, as they change nothing on
  * the host. Worked out in render, so a row gone never paints without its leaving.
  */
-export function useTrackedRows<T extends Issue>(items: T[] | undefined, filter: object): TrackedRowItem<T>[] {
+export function useTrackedRows<T extends TrackedRow>(items: T[] | undefined, filter: object): TrackedRowItem<T>[] {
   const filterKey = JSON.stringify(filter);
   const [state, setState] = useState(() => ({ items, filterKey, rows: settled(items) }));
   if (state.items !== items) {

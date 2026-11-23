@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Issue, IssueFilterOptions, IssuesLatest, TrackedListResult, TrackedSeen } from "../../shared/types/providers";
+import type { TrackedRow, TrackedFilterOptions, TrackedLatest, TrackedListResult, TrackedSeen } from "../../shared/types/providers";
 import { notify } from "./Notices";
 import { useWindowFocused } from "./use-window-focused";
 
@@ -23,11 +23,11 @@ const PAGE = 20;
 const SEARCH_DELAY_MS = 300;
 
 /** How a section reads its list (`useTrackedList`): a constant of the section's, never changing. */
-export interface TrackedListSource<F extends object, T extends Issue, L extends IssuesLatest, R extends TrackedListResult<T, L>> {
+export interface TrackedListSource<F extends object, T extends TrackedRow, L extends TrackedLatest, R extends TrackedListResult<T, L>> {
   /** At least `limit` from the start, or from `after` for a page more. */
   list(projectId: string, filter: F, limit: number, after?: string): Promise<R>;
   latest(projectId: string, filter: F): Promise<{ latest?: L }>;
-  filterOptions(projectId: string): Promise<IssueFilterOptions>;
+  filterOptions(projectId: string): Promise<TrackedFilterOptions>;
   /** Whether two answers of the host differ: the list they stand for has changed. */
   differ(shown: L | undefined, found: L): boolean;
   /** A list came from the start, with what the project's tabs showed of the kind. */
@@ -81,7 +81,7 @@ export interface TrackedList<T, R> {
  * filter or text starts over at one page. The text is sent once the typing stops. What the filters
  * offer comes once a list came, so one failure is told once. Held per project by the caller's `key`.
  */
-export function useTrackedList<F extends object, T extends Issue, L extends IssuesLatest, R extends TrackedListResult<T, L>>(
+export function useTrackedList<F extends object, T extends TrackedRow, L extends TrackedLatest, R extends TrackedListResult<T, L>>(
   source: TrackedListSource<F, T, L, R>,
   projectId: string,
   filter: F,

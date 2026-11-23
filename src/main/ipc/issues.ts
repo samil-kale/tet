@@ -6,13 +6,13 @@ import type { ActionResult } from "../../shared/types/action";
 import type {
   IssueCreateResult,
   IssueFilter,
-  IssueFilterOptions,
+  TrackedFilterOptions,
   IssueLatestResult,
   IssueListResult,
   IssueUploadResult,
   IssueUploadSaveResult,
 } from "../../shared/types/providers";
-import { NoAccountError } from "../providers/issues";
+import { NoAccountError } from "../providers/tracker";
 import { readSeen } from "../store/tracked-seen";
 import type { IpcDeps } from "./deps";
 
@@ -20,8 +20,12 @@ import type { IpcDeps } from "./deps";
  *  worktrees share one. Each answers its failure for the section to notify; `setSource` for the
  *  question still up to show it at its field. What an issue's tab does as a change request's does is
  *  tracked.ts's. */
-export function registerIssuesIpc({ issues, issueDeps, noticeProgress }: Pick<IpcDeps, "issues" | "issueDeps" | "noticeProgress">): void {
-  const { dataRoot } = issueDeps;
+export function registerIssuesIpc({
+  issues,
+  trackedDeps,
+  noticeProgress,
+}: Pick<IpcDeps, "issues" | "trackedDeps" | "noticeProgress">): void {
+  const { dataRoot } = trackedDeps;
 
   handle("issues:list", async (_event, projectId: string, filter: IssueFilter, limit: number, after?: string): Promise<IssueListResult> => {
     let source: string | undefined;
@@ -44,7 +48,7 @@ export function registerIssuesIpc({ issues, issueDeps, noticeProgress }: Pick<Ip
     }
   });
 
-  handle("issues:filter-options", async (_event, projectId: string): Promise<IssueFilterOptions> => {
+  handle("issues:filter-options", async (_event, projectId: string): Promise<TrackedFilterOptions> => {
     try {
       return await issues.filterOptions(projectId);
     } catch (error) {

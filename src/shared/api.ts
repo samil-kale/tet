@@ -21,12 +21,12 @@ import type {
   ChangeRequestFindResult,
   ChangeRequestInput,
   ChangeRequestTargetResult,
-  IssueChange,
+  TrackedChange,
   IssueCreateResult,
-  IssueFieldOptionsResult,
-  IssueFieldValue,
+  TrackedFieldOptionsResult,
+  TrackedFieldValue,
   IssueFilter,
-  IssueFilterOptions,
+  TrackedFilterOptions,
   IssueLatestResult,
   IssueListResult,
   TrackedKind,
@@ -201,7 +201,7 @@ export interface TETApi {
     /** How many issues the filter leaves and when the latest changed: the list is read again once this
      *  differs from the `latest` of the list shown. */
     latest: (projectId: string, filter: IssueFilter) => Promise<IssueLatestResult>;
-    filterOptions: (projectId: string) => Promise<IssueFilterOptions>;
+    filterOptions: (projectId: string) => Promise<TrackedFilterOptions>;
     create: (projectId: string, title: string, body: string, confidential: boolean) => Promise<IssueCreateResult>;
     /** For good, with its comments. */
     delete: (projectId: string, number: number) => Promise<ActionResult>;
@@ -220,7 +220,7 @@ export interface TETApi {
     list: (projectId: string, filter: ChangeRequestFilter, limit: number, after?: string) => Promise<ChangeRequestListResult>;
     /** As `issues.latest`, with each one's checks. */
     latest: (projectId: string, filter: ChangeRequestFilter) => Promise<ChangeRequestLatestResult>;
-    filterOptions: (projectId: string) => Promise<IssueFilterOptions>;
+    filterOptions: (projectId: string) => Promise<TrackedFilterOptions>;
     approve: (projectId: string, number: number) => Promise<ActionResult>;
     /** By the repository's own method; `whenChecksPass` has the host merge it once they passed. The
      *  caller confirms first. */
@@ -239,10 +239,10 @@ export interface TETApi {
     editComment: (projectId: string, kind: TrackedKind, id: string, body: string) => Promise<ActionResult>;
     deleteComment: (projectId: string, kind: TrackedKind, id: string) => Promise<ActionResult>;
     /** Its title, text or state; a change request is merged by `changeRequests.merge` alone. */
-    update: (projectId: string, tracked: TrackedRef, change: IssueChange) => Promise<ActionResult>;
+    update: (projectId: string, tracked: TrackedRef, change: TrackedChange) => Promise<ActionResult>;
     /** What a pick field of it can be set to. */
-    fieldOptions: (projectId: string, tracked: TrackedRef, fieldId: string) => Promise<IssueFieldOptionsResult>;
-    setField: (projectId: string, tracked: TrackedRef, fieldId: string, value: IssueFieldValue) => Promise<ActionResult>;
+    fieldOptions: (projectId: string, tracked: TrackedRef, fieldId: string) => Promise<TrackedFieldOptionsResult>;
+    setField: (projectId: string, tracked: TrackedRef, fieldId: string, value: TrackedFieldValue) => Promise<ActionResult>;
     /** Keeps its `updatedAt` as its tab showed it, and whether its checks had failed (`TrackedSeen`);
      *  a failure is logged. */
     markSeen: (projectId: string, tracked: TrackedRef, updatedAt: string, failed: boolean) => Promise<void>;

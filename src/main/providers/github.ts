@@ -9,11 +9,11 @@ import {
   type ChangeRequestState,
   type ChecksState,
   type Issue,
-  type IssueChange,
-  type IssueEvent,
-  type IssueField,
+  type TrackedChange,
+  type TrackedEvent,
+  type TrackedField,
   type IssueFilter,
-  type IssueNote,
+  type TrackedNote,
   type RemoteRepository,
   type ReviewThread,
 } from "../../shared/types/providers";
@@ -237,19 +237,21 @@ const ACTOR = "createdAt actor { login avatarUrl }";
 
 /** The kinds of timeline item the tab draws, as `toEvent` reads them. */
 /** The timeline items an issue and a pull request both have; a pull request's own are `toPullRequestEvents`'. */
-const EVENT_KINDS: Record<string, Exclude<IssueEvent["kind"], "text" | "review-requested" | "reviewed" | "pushed" | "merged"> | undefined> =
-  {
-    ClosedEvent: "closed",
-    ReopenedEvent: "reopened",
-    AssignedEvent: "assigned",
-    UnassignedEvent: "unassigned",
-    LabeledEvent: "labeled",
-    UnlabeledEvent: "unlabeled",
-    MilestonedEvent: "milestoned",
-    DemilestonedEvent: "demilestoned",
-    RenamedTitleEvent: "renamed",
-    CrossReferencedEvent: "linked",
-  };
+const EVENT_KINDS: Record<
+  string,
+  Exclude<TrackedEvent["kind"], "text" | "review-requested" | "reviewed" | "pushed" | "merged"> | undefined
+> = {
+  ClosedEvent: "closed",
+  ReopenedEvent: "reopened",
+  AssignedEvent: "assigned",
+  UnassignedEvent: "unassigned",
+  LabeledEvent: "labeled",
+  UnlabeledEvent: "unlabeled",
+  MilestonedEvent: "milestoned",
+  DemilestonedEvent: "demilestoned",
+  RenamedTitleEvent: "renamed",
+  CrossReferencedEvent: "linked",
+};
 
 const TIMELINE_ARGUMENTS = `itemTypes: [CLOSED_EVENT, REOPENED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, LABELED_EVENT, UNLABELED_EVENT,
   MILESTONED_EVENT, DEMILESTONED_EVENT, RENAMED_TITLE_EVENT, CROSS_REFERENCED_EVENT]`;
@@ -466,7 +468,7 @@ const PULL_REQUEST_TIMELINE_QUERY = `query(${ISSUE_VARIABLES}, $cursor: String) 
 }`;
 
 /** What a timeline item shows, for those the tab draws; a comment is read on its own. */
-function toEvent(item: GitHubEvent): IssueEvent | undefined {
+function toEvent(item: GitHubEvent): TrackedEvent | undefined {
   const base = { actor: item.actor?.login ?? "ghost", createdAt: item.createdAt };
   const kind = EVENT_KINDS[item.__typename];
   switch (kind) {
@@ -493,7 +495,7 @@ function toEvent(item: GitHubEvent): IssueEvent | undefined {
   }
 }
 
-export function toEvents(items: GitHubEvent[]): IssueEvent[] {
+export function toEvents(items: GitHubEvent[]): TrackedEvent[] {
   return items.map(toEvent).filter((event) => event !== undefined);
 }
 
@@ -505,8 +507,8 @@ const REVIEW_VERDICTS: Record<string, "approved" | "changes-requested" | undefin
 
 /** A pull request's timeline as the tab draws it: an issue's events, and its own. A run of commits by
  *  one author is one push, at its first. */
-export function toPullRequestEvents(items: GitHubEvent[]): IssueEvent[] {
-  const events: IssueEvent[] = [];
+export function toPullRequestEvents(items: GitHubEvent[]): TrackedEvent[] {
+  const events: TrackedEvent[] = [];
   for (const item of items) {
     const base = { actor: item.actor?.login ?? "ghost", createdAt: item.createdAt };
     switch (item.__typename) {
@@ -552,7 +554,7 @@ export function toPullRequestEvents(items: GitHubEvent[]): IssueEvent[] {
 }
 
 /** The texts of a pull request's reviews, which show beside its comments but are none of them. */
-export function reviewNotes(items: GitHubEvent[]): IssueNote[] {
+export function reviewNotes(items: GitHubEvent[]): TrackedNote[] {
   return items.flatMap((item) =>
     item.__typename === "PullRequestReview" && item.id !== undefined && item.body?.trim()
       ? [{ id: item.id, author: item.actor?.login ?? "ghost", createdAt: item.createdAt, body: item.body, fixed: true as const }]
@@ -727,7 +729,7 @@ export function toChangeRequestRow(entry: GitHubPullRequestRow): ChangeRequestRo
 
 /** The fields a pull request has (`changeRequestFields`); its reviewers are those who reviewed it and
  *  those asked to. */
-export function toPullRequestFields(found: GitHubPullRequestDetail): IssueField[] {
+export function toPullRequestFields(found: GitHubPullRequestDetail): TrackedField[] {
   const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
   const reviewers = [
     ...people(found.latestReviews.nodes.map((review) => review.author)),
@@ -766,7 +768,7 @@ function githubState(state: "open" | "closed"): "OPEN" | "CLOSED" {
 }
 
 /** What of a change `updateIssue` sets, in GitHub's words. */
-export function toIssueInput(issueId: string, { title, body, state }: IssueChange): object {
+export function toIssueInput(issueId: string, { title, body, state }: TrackedChange): object {
   return { id: issueId, title, body, state: state && githubState(state) };
 }
 
@@ -855,7 +857,7 @@ export function issueFieldOf(definition: GitHubFieldDefinition): FieldHandler<Ta
 function toIssueField(
   definition: GitHubFieldDefinition,
   { values, editable }: { values: GitHubFieldValue[]; editable: boolean },
-): IssueField[] {
+): TrackedField[] {
   const held = values.find((candidate) => candidate.field.name === definition.name);
   const base = { id: definition.id, name: definition.name, editable };
   switch (definition.__typename) {
@@ -894,7 +896,7 @@ function shownIssueFields({ definitions, values, pinned }: NonNullable<GitHubExt
 
 /** The fields an issue has, as the tab lists them, in the order of GitHub's own sidebar: those every
  *  issue has, then each that `extras` found the host to have. */
-export function toFields(issue: GitHubIssue, extras: GitHubExtras): IssueField[] {
+export function toFields(issue: GitHubIssue, extras: GitHubExtras): TrackedField[] {
   const { issueType, parent, issueFields } = extras;
   const people = (users: (GitHubUser | null)[]): string[] => users.flatMap((user) => user?.login ?? []);
   return [
@@ -1233,7 +1235,7 @@ export function toIssue(entry: GitHubIssue): Issue {
   };
 }
 
-function toNote(entry: GitHubComment): IssueNote {
+function toNote(entry: GitHubComment): TrackedNote {
   return {
     id: entry.id,
     author: entry.author?.login ?? "ghost",

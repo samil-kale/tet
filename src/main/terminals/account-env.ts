@@ -1,6 +1,6 @@
 import { urlOrigin } from "../../shared/git-url";
 import { askpassEnv } from "../git/askpass";
-import type { TabAccount } from "../providers/issues";
+import type { TabAccount } from "../providers/tracker";
 import { machineName, machineSets } from "../store/env-names";
 
 /** The sets given whole or not at all: one of whose names `taken` holds already is left out, so no

@@ -1,11 +1,11 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { sectionsOf } from "../../src/renderer/editor/issue-fields";
-import type { IssueField } from "../../src/shared/types/providers";
+import type { TrackedField } from "../../src/shared/types/providers";
 
-const pick = (id: string): IssueField => ({ id, name: id, editable: true, kind: "pick", value: [], several: false, shown: "text" });
-const typed = (id: string, group?: string): IssueField => ({ id, name: id, group, editable: true, kind: "date", value: undefined });
-const timelog = (id: string, group?: string): IssueField => ({ id, name: id, group, editable: true, kind: "timelog", entries: [] });
+const pick = (id: string): TrackedField => ({ id, name: id, editable: true, kind: "pick", value: [], several: false, shown: "text" });
+const typed = (id: string, group?: string): TrackedField => ({ id, name: id, group, editable: true, kind: "date", value: undefined });
+const timelog = (id: string, group?: string): TrackedField => ({ id, name: id, group, editable: true, kind: "timelog", entries: [] });
 
 describe("an issue's fields as sections", () => {
   it("makes a section of each field alone and of each group's fields together, at the first one's place", () => {
@@ -23,7 +23,7 @@ describe("an issue's fields as sections", () => {
   });
 
   it("leaves a grouped field alone that no question changes, as a pick", () => {
-    const grouped: IssueField = { ...pick("status"), group: "Plan" };
+    const grouped: TrackedField = { ...pick("status"), group: "Plan" };
     assert.deepEqual(sectionsOf([grouped]), [{ field: grouped }]);
   });
 });

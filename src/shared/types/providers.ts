@@ -32,8 +32,8 @@ export interface ListRepositoriesResult {
   error?: string;
 }
 
-/** A row of the Issues section. */
-export interface Issue {
+/** A row of the Issues or change requests section: what an issue and a change request have alike. */
+export interface TrackedRow {
   /** GitHub's `number`, GitLab's `iid`: what the host's pages call it. */
   number: number;
   title: string;
@@ -50,6 +50,9 @@ export interface Issue {
   /** The picture of whom it names, by login, where the host has one. */
   avatars: Record<string, string>;
 }
+
+/** A row of the Issues section: a tracked row as it is, as `ChangeRequestRow` is the other kind's. */
+export type Issue = TrackedRow;
 
 /** The states an issue has; `tet-ctl` also filters by `all`. */
 export const ISSUE_STATES = ["open", "closed"] as const;
@@ -113,8 +116,8 @@ export const DEFAULT_CHANGE_REQUEST_FILTER: ChangeRequestFilter = { state: "open
 /** How the checks of a change request's head commit stand: GitHub's checks, GitLab's pipeline. */
 export type ChecksState = "passed" | "running" | "failed";
 
-/** A row of the change requests section: an issue's, and where the request stands. */
-export interface ChangeRequestRow extends Issue {
+/** A row of the change requests section: a tracked row, and where the request stands. */
+export interface ChangeRequestRow extends TrackedRow {
   state: ChangeRequestState;
   draft: boolean;
   /** Absent where its head commit has no checks. */
@@ -185,12 +188,12 @@ export interface ReviewThread {
   /** The lines it was written on have changed since; only GitHub tells. */
   outdated?: boolean;
   /** Oldest first, never empty. */
-  comments: IssueNote[];
+  comments: TrackedNote[];
 }
 
-/** One change request with what its row leaves out, for its tab: an issue's, its status, its review
- *  threads, and what its host calls it. */
-export interface ChangeRequestDetail extends IssueDetail, ChangeRequestRow {
+/** One change request with what its row leaves out, for its tab: a tracked detail, its status, its
+ *  review threads, and what its host calls it. */
+export interface ChangeRequestDetail extends TrackedDetail, ChangeRequestRow {
   status: ChangeRequestStatus;
   reviewThreads: ReviewThread[];
   kind: ChangeRequestKind;
@@ -200,7 +203,7 @@ export interface ChangeRequestDetail extends IssueDetail, ChangeRequestRow {
 }
 
 /** Whether a tab's detail is a change request's rather than an issue's. */
-export function isChangeRequest(detail: IssueDetail): detail is ChangeRequestDetail {
+export function isChangeRequest(detail: TrackedDetail): detail is ChangeRequestDetail {
   return "status" in detail;
 }
 
@@ -232,7 +235,7 @@ export function linkedIssueNumber(name: string): number | undefined {
 
 /** What the tracker says of a list of issues without sending it: how many it holds and when the most
  *  recently changed one changed. Two reads that agree found nothing new in it. */
-export interface IssuesLatest {
+export interface TrackedLatest {
   total: number;
   /** ISO 8601; absent for an empty list. */
   updatedAt?: string;
@@ -264,8 +267,8 @@ export function holdsSeen(seen: TrackedSeen, number: number, updatedAt: string, 
 /** Whether the host created or changed the open issue or change request after its tab last showed it
  *  or, if none did, after `seen.since`; a closed one needs no attention, closing it being a change too.
  *  Dates are compared as times: the hosts spell them differently. */
-export function isUnread(issue: Issue, seen: TrackedSeen | undefined): boolean {
-  return seen !== undefined && issue.open && Date.parse(issue.updatedAt) > Date.parse(seen.shown[issue.number] ?? seen.since);
+export function isUnread(row: TrackedRow, seen: TrackedSeen | undefined): boolean {
+  return seen !== undefined && row.open && Date.parse(row.updatedAt) > Date.parse(seen.shown[row.number] ?? seen.since);
 }
 
 /** `isUnread`, or its checks failed since its tab last showed it with them not failed: a check that ends
@@ -280,7 +283,7 @@ export function isChangeRequestUnread(row: ChangeRequestRow, seen: TrackedSeen |
 export type TrackedSeenResult = (ActionDone & { seen: TrackedSeen }) | ActionRefused;
 
 /** A list of a section as it came: read from its start, or a page more (`after`). */
-export interface TrackedListResult<T extends Issue, L extends IssuesLatest> {
+export interface TrackedListResult<T extends TrackedRow, L extends TrackedLatest> {
   items?: T[];
   /** Read from the start alone. */
   seen?: TrackedSeen;
@@ -294,7 +297,7 @@ export interface TrackedListResult<T extends Issue, L extends IssuesLatest> {
   noAccount?: boolean;
 }
 
-export interface IssueListResult extends TrackedListResult<Issue, IssuesLatest> {
+export interface IssueListResult extends TrackedListResult<Issue, TrackedLatest> {
   /** The `issues` of the project's tet.json, where it has one. */
   source?: string;
   /** Where the issues are read from, for what a text that is not yet an issue's links to. */
@@ -308,20 +311,20 @@ export interface IssueListResult extends TrackedListResult<Issue, IssuesLatest> 
 }
 
 export interface IssueLatestResult {
-  latest?: IssuesLatest;
+  latest?: TrackedLatest;
   error?: string;
 }
 
 /** What the Issues section's filters offer. */
-export interface IssueFilterOptions {
+export interface TrackedFilterOptions {
   labels?: string[];
   /** Offered for both author and assignee. */
   people?: string[];
   error?: string;
 }
 
-/** A comment of an issue, oldest first in `IssueDetail.notes`. */
-export interface IssueNote {
+/** A comment of an issue, oldest first in `TrackedDetail.notes`. */
+export interface TrackedNote {
   /** What the tracker addresses it by, its GraphQL id. */
   id: string;
   author: string;
@@ -335,7 +338,7 @@ export interface IssueNote {
 }
 
 /** What happened to an issue, shown between its comments. */
-export type IssueEvent = { actor: string; /** ISO 8601. */ createdAt: string } & (
+export type TrackedEvent = { actor: string; /** ISO 8601. */ createdAt: string } & (
   | { kind: "closed" | "reopened" }
   | { kind: "assigned" | "unassigned"; login: string }
   | { kind: "labeled" | "unlabeled"; label: string }
@@ -356,7 +359,7 @@ export type IssueEvent = { actor: string; /** ISO 8601. */ createdAt: string } &
  * beside its text and comments, in the tracker's own words and order. A field the tracker does not
  * have for this issue (its type or plan lacks it) is not listed.
  */
-export type IssueField = {
+export type TrackedField = {
   /** What the provider addresses it by in `listOptions` and `setField`. */
   id: string;
   name: string;
@@ -415,26 +418,26 @@ export interface IssueTimeEntry {
 
 /** What `setField` sets, by the field's kind: a pick's values; a text, number, date or duration, null
  *  taking it off; a flag's state; a timelog's new entry or the removal of one. */
-export type IssueFieldValue = string[] | number | string | boolean | IssueTimeEntry | IssueTimeRemoval | null;
+export type TrackedFieldValue = string[] | number | string | boolean | IssueTimeEntry | IssueTimeRemoval | null;
 
-export function isTimeRemoval(value: IssueFieldValue): value is IssueTimeRemoval {
+export function isTimeRemoval(value: TrackedFieldValue): value is IssueTimeRemoval {
   return value !== null && typeof value === "object" && !Array.isArray(value) && "remove" in value;
 }
 
-export interface IssueFieldOptionsResult {
-  /** What a pick field can be set to, by the names `IssueField.value` uses. */
+export interface TrackedFieldOptionsResult {
+  /** What a pick field can be set to, by the names `TrackedField.value` uses. */
   options?: string[];
   error?: string;
 }
 
-/** One issue with what its row leaves out, for its tab. */
-export interface IssueDetail extends Issue {
+/** One issue or change request with what its row leaves out, for its tab. */
+export interface TrackedDetail extends TrackedRow {
   /** Whose Markdown its texts are written in (`issueTextHtml`). */
   provider: ProviderId;
-  fields: IssueField[];
+  fields: TrackedField[];
   body: string;
-  notes: IssueNote[];
-  events: IssueEvent[];
+  notes: TrackedNote[];
+  events: TrackedEvent[];
   /** The login of the account it was read through. */
   viewer?: string;
   /** What its tracker takes for its text; absent where it takes no file. */
@@ -443,6 +446,10 @@ export interface IssueDetail extends Issue {
   internalNotes?: boolean;
 }
 
+/** One issue with what its row leaves out, for its tab: a tracked detail as it is, as
+ *  `ChangeRequestDetail` is the other kind's. */
+export type IssueDetail = TrackedDetail;
+
 /** What a tracker takes of a file for an issue's text. */
 export interface IssueUploads {
   /** File name extensions, without the dot; absent takes any file. */
@@ -450,8 +457,8 @@ export interface IssueUploads {
 }
 
 /** What the issue's tab sets of the issue itself; a part left out stays as it is. Its fields are set
- *  one at a time (`IssueField`). */
-export interface IssueChange {
+ *  one at a time (`TrackedField`). */
+export interface TrackedChange {
   title?: string;
   body?: string;
   state?: "open" | "closed";
@@ -539,16 +546,16 @@ export interface IssueUploadSaveResult {
 
 export interface TrackedReadResult {
   /** An issue's, or a change request's (`isChangeRequest`). */
-  detail?: IssueDetail;
+  detail?: TrackedDetail;
   /** It as its tab's text, what an agent reading the tab is answered (`editorContent`). */
   markdown?: string;
   error?: string;
 }
 
-/** What the host says of a list of change requests without sending it whole: `IssuesLatest`, and how
+/** What the host says of a list of change requests without sending it whole: `TrackedLatest`, and how
  *  each one's checks stand, as a check that ends changes no `updatedAt`. Two reads that agree found
  *  nothing new in it. */
-export interface ChangeRequestsLatest extends IssuesLatest {
+export interface ChangeRequestsLatest extends TrackedLatest {
   /** Each one's number and checks, in one text. */
   checks: string;
 }

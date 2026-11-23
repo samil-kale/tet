@@ -4,13 +4,13 @@ import {
   DEFAULT_ISSUE_FILTER,
   isUnread,
   type Issue,
-  type IssueChange,
+  type TrackedChange,
   type IssueDetail,
-  type IssueFieldValue,
+  type TrackedFieldValue,
   type IssueFilter,
-  type IssueFilterOptions,
+  type TrackedFilterOptions,
   type IssueListResult,
-  type IssuesLatest,
+  type TrackedLatest,
 } from "../shared/types/providers";
 import type { IssueOps } from "./ctl/ctl-verb";
 import { MAX_EDIT_BYTES } from "./git/explorer-read";
@@ -19,10 +19,10 @@ import {
   readIssueTracker,
   setIssueSource,
   writeOnTracker,
-  type IssueAccounts,
-  type IssueRepository,
+  type TrackerAccounts,
+  type TrackerRepository,
   type IssueTrackerInfo,
-} from "./providers/issues";
+} from "./providers/tracker";
 import { PROVIDERS } from "./providers/index";
 import type { ListPage } from "./providers/provider";
 import { forgetAllSessionLinks, forgetLinkedSession } from "./store/session-links";
@@ -35,21 +35,22 @@ import type { SessionManagerRegistry } from "./terminals/session-registry";
 import { imageDataUrl } from "./util/image-response";
 
 /**
- * What the Issues section and `tet-ctl`'s issue verbs share, built once in main.ts like
- * `ProjectDeps`. A project's tracker is read through its repository, never a worktree's: the
+ * What the issues and change requests share with both transports, built once in main.ts like
+ * `ProjectDeps`; it lies here, the lowest of their modules (tracked.ts builds on this one and
+ * change-requests/). A project's tracker is read through its repository, never a worktree's: the
  * repository and its worktrees share one.
  */
-export interface IssueDeps {
-  accounts: IssueAccounts;
+export interface TrackedDeps {
+  accounts: TrackerAccounts;
   dataRoot: string;
-  repositories: { get(ref: ProjectRef): IssueRepository | undefined };
+  repositories: { get(ref: ProjectRef): TrackerRepository | undefined };
   settings: SettingsAccess;
   store: ProjectStore;
   tabManagers: SessionManagerRegistry;
 }
 
-/** The project's repository, which its tracker is read through. */
-export function issueRepository({ repositories }: Pick<IssueDeps, "repositories">, projectId: string): IssueRepository {
+/** The project's repository, which its issue tracker and its change requests' remote are read through. */
+export function trackerRepository({ repositories }: Pick<TrackedDeps, "repositories">, projectId: string): TrackerRepository {
   const repository = repositories.get({ projectId });
   if (!repository) {
     throw new Error(PROJECT_NOT_FOUND);
@@ -58,13 +59,13 @@ export function issueRepository({ repositories }: Pick<IssueDeps, "repositories"
 }
 
 /** Where the project's issues are read from (`readIssueTracker`). */
-export async function issueTrackerOf(deps: Pick<IssueDeps, "accounts" | "repositories">, projectId: string): Promise<IssueTrackerInfo> {
-  return readIssueTracker(deps.accounts, issueRepository(deps, projectId));
+export async function issueTrackerOf(deps: Pick<TrackedDeps, "accounts" | "repositories">, projectId: string): Promise<IssueTrackerInfo> {
+  return readIssueTracker(deps.accounts, trackerRepository(deps, projectId));
 }
 
 /** The `issues` of the project's tet.json, where it names one. */
-export function issueSource(deps: Pick<IssueDeps, "repositories">, projectId: string): Promise<string | undefined> {
-  return readIssueSource(issueRepository(deps, projectId).at.path);
+export function issueSource(deps: Pick<TrackedDeps, "repositories">, projectId: string): Promise<string | undefined> {
+  return readIssueSource(trackerRepository(deps, projectId).at.path);
 }
 
 /**
@@ -73,11 +74,11 @@ export function issueSource(deps: Pick<IssueDeps, "repositories">, projectId: st
  * old source's issue numbers.
  */
 export async function changeIssueSource(
-  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">,
   projectId: string,
   source: string,
 ): Promise<string | undefined> {
-  const repository = issueRepository(deps, projectId);
+  const repository = trackerRepository(deps, projectId);
   const before = await readIssueSource(repository.at.path);
   const saved = await setIssueSource(deps.accounts, repository, source);
   if (saved !== before) {
@@ -89,8 +90,8 @@ export async function changeIssueSource(
 
 /** The project's issues the tracker created or changed since their tab last showed them (`isUnread`),
  *  among those the Issues section lists until its filter is changed. */
-export async function unreadIssues(deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">, projectId: string): Promise<Issue[]> {
-  const { items } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+export async function unreadIssues(deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">, projectId: string): Promise<Issue[]> {
+  const { items } = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.listIssues(tracker, DEFAULT_ISSUE_FILTER),
   );
   const seen = readSeen(deps.dataRoot, projectId, "issue");
@@ -102,7 +103,7 @@ export async function unreadIssues(deps: Pick<IssueDeps, "accounts" | "dataRoot"
  * issue created or changed until now.
  */
 export async function markIssuesSeen(
-  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">,
   projectId: string,
   number?: number,
 ): Promise<void> {
@@ -110,7 +111,7 @@ export async function markIssuesSeen(
     markAllSeen(deps.dataRoot, projectId, "issue");
     return;
   }
-  const { updatedAt } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  const { updatedAt } = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.readIssueUpdate(tracker, number),
   );
   setSeen(deps.dataRoot, projectId, "issue", number, updatedAt, false);
@@ -119,7 +120,7 @@ export async function markIssuesSeen(
 /** More than either tracker takes of one file: past this it does not cross to main's memory, either way. */
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
-type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
+type TrackerDeps = Pick<TrackedDeps, "accounts" | "repositories">;
 
 /**
  * What the Issues section and `tet-ctl` do on the project's tracker beyond the above, each throwing
@@ -136,7 +137,7 @@ export async function readIssuePage(
   limit: number,
   after?: string,
 ): Promise<ListPage<Issue> & Pick<IssueListResult, "latest" | "tracker">> {
-  const repository = issueRepository(deps, projectId);
+  const repository = trackerRepository(deps, projectId);
   if (after !== undefined) {
     return onTracker(deps.accounts, repository, (provider, tracker) => provider.listIssues(tracker, filter, limit, after));
   }
@@ -151,20 +152,20 @@ export async function readIssuePage(
 
 /** The project's issues the filter narrows to. */
 export async function listIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<Issue[]> {
-  const { items } = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  const { items } = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.listIssues(tracker, filter),
   );
   return items;
 }
 
 /** What the tracker says of the filtered list without sending it. */
-export function latestIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<IssuesLatest> {
-  return onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.readLatest(tracker, filter));
+export function latestIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<TrackedLatest> {
+  return onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.readLatest(tracker, filter));
 }
 
 /** What the filters offer. */
-export function issueFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<IssueFilterOptions, "error">>> {
-  return onTracker(deps.accounts, issueRepository(deps, projectId), async (provider, tracker) => {
+export function issueFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<TrackedFilterOptions, "error">>> {
+  return onTracker(deps.accounts, trackerRepository(deps, projectId), async (provider, tracker) => {
     const [labels, people] = await Promise.all([provider.listLabels(tracker), provider.listPeople(tracker)]);
     return { labels, people };
   });
@@ -172,7 +173,7 @@ export function issueFilterOptions(deps: TrackerDeps, projectId: string): Promis
 
 /** One issue with what its tab shows beside it. */
 export function readIssue(deps: TrackerDeps, projectId: string, number: number): Promise<IssueDetail> {
-  return onTracker(deps.accounts, issueRepository(deps, projectId), async (provider, tracker, viewer) => ({
+  return onTracker(deps.accounts, trackerRepository(deps, projectId), async (provider, tracker, viewer) => ({
     ...(await provider.readIssue(tracker, number)),
     viewer,
     uploads: provider.uploads(tracker.host),
@@ -184,7 +185,7 @@ export function readIssue(deps: TrackerDeps, projectId: string, number: number):
  *  stands without it, as a preview's does. */
 export async function issueImage(deps: TrackerDeps, projectId: string, source: string): Promise<string | null> {
   try {
-    const response = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+    const response = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
       provider.readImage(tracker, source),
     );
     return response ? await imageDataUrl(response, MAX_EDIT_BYTES) : null;
@@ -196,7 +197,7 @@ export async function issueImage(deps: TrackerDeps, projectId: string, source: s
 /** The file name of the upload a link of an issue's text leads to; undefined for any other link, and
  *  on a tracker without an account: the browser opens those. */
 export async function issueUploadName(deps: TrackerDeps, projectId: string, source: string): Promise<string | undefined> {
-  const { provider, host } = await readIssueTracker(deps.accounts, issueRepository(deps, projectId));
+  const { provider, host } = await readIssueTracker(deps.accounts, trackerRepository(deps, projectId));
   return provider === null ? undefined : PROVIDERS[provider].uploadName(host, source);
 }
 
@@ -209,7 +210,7 @@ export async function saveIssueUpload(
   target: string,
   onProgress: (fraction: number) => void,
 ): Promise<void> {
-  const response = await onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  const response = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.readUpload(tracker, source),
   );
   if (!response?.body) {
@@ -234,32 +235,34 @@ export async function saveIssueUpload(
 
 /** What a pick field of the issue can be set to. */
 export function issueFieldOptions(deps: TrackerDeps, projectId: string, number: number, fieldId: string): Promise<string[]> {
-  return onTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.listOptions(tracker, number, fieldId));
+  return onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
+    provider.listOptions(tracker, number, fieldId),
+  );
 }
 
 /** A new issue, answered by its number. */
 export function createIssue(deps: TrackerDeps, projectId: string, title: string, body: string, confidential: boolean): Promise<number> {
-  return writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  return writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.createIssue(tracker, title, body, confidential),
   );
 }
 
 export async function commentIssue(deps: TrackerDeps, projectId: string, number: number, body: string, internal: boolean): Promise<void> {
-  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.addComment(tracker, number, body, internal),
   );
 }
 
 export async function editIssueComment(deps: TrackerDeps, projectId: string, id: string, body: string): Promise<void> {
-  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.editComment(tracker, id, body));
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.editComment(tracker, id, body));
 }
 
 export async function deleteIssueComment(deps: TrackerDeps, projectId: string, id: string): Promise<void> {
-  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteComment(tracker, id));
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.deleteComment(tracker, id));
 }
 
-export async function updateIssue(deps: TrackerDeps, projectId: string, number: number, change: IssueChange): Promise<void> {
-  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+export async function updateIssue(deps: TrackerDeps, projectId: string, number: number, change: TrackedChange): Promise<void> {
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.updateIssue(tracker, number, change),
   );
 }
@@ -269,20 +272,20 @@ export async function setIssueField(
   projectId: string,
   number: number,
   fieldId: string,
-  value: IssueFieldValue,
+  value: TrackedFieldValue,
 ): Promise<void> {
-  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.setField(tracker, number, fieldId, value),
   );
 }
 
 /** Deletes the issue; its entry of what the tabs showed and its sessions' links go with it. */
 export async function deleteIssue(
-  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">,
   projectId: string,
   number: number,
 ): Promise<void> {
-  await writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
   forgetSeen(deps.dataRoot, projectId, "issue", number);
   forgetLinkedSession(deps.dataRoot, projectId, "issue", number);
 }
@@ -292,7 +295,7 @@ export function uploadIssueFile(deps: TrackerDeps, projectId: string, name: stri
   if (bytes.byteLength > MAX_UPLOAD_BYTES) {
     return Promise.reject(new Error(`${name} is too large to upload`));
   }
-  return writeOnTracker(deps.accounts, issueRepository(deps, projectId), (provider, tracker) =>
+  return writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
     provider.uploads(tracker.host)
       ? provider.uploadFile(tracker, name, bytes)
       : Promise.reject(new Error(`${tracker.host} takes no upload`)),
@@ -307,7 +310,7 @@ export function issuePrompt(text: string, number: number): string {
 
 /** What the Issues section and `tet-ctl` do on the project's tracker beyond an issue's tab, for both
  *  transports alike, as `trackedOps` is for what its tab does. */
-export function issueOps(deps: IssueDeps): IssueOps {
+export function issueOps(deps: TrackedDeps): IssueOps {
   return {
     tracker: (projectId) => issueTrackerOf(deps, projectId),
     source: (projectId) => issueSource(deps, projectId),

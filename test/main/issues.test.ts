@@ -2,23 +2,23 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { changeIssueSource, issueRepository, unreadIssues, type IssueDeps } from "../../src/main/issues";
+import { changeIssueSource, trackerRepository, unreadIssues, type TrackedDeps } from "../../src/main/issues";
 import { PROVIDERS } from "../../src/main/providers";
-import type { IssueRepository } from "../../src/main/providers/issues";
+import type { TrackerRepository } from "../../src/main/providers/tracker";
 import type { Tracker } from "../../src/main/providers/provider";
 import { seenFile } from "../../src/main/store/project-dirs";
 import { PROJECT_NOT_FOUND } from "../../src/main/store/resolved-ref";
 import type { ProviderAccount } from "../../src/shared/types/providers";
 import { tempDir } from "../helpers";
 
-type Deps = Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">;
+type Deps = Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">;
 
 const ACCOUNT: ProviderAccount = { id: "a", provider: "github", host: "github.com", user: "a" };
 
 /** The project "p1", whose repository lies in `root` with a remote on github.com; `accounts` hold
  *  the host's account. */
 function depsAt(dataRoot: string, root: string, accounts: ProviderAccount[] = [ACCOUNT]): Deps {
-  const repository: IssueRepository = {
+  const repository: TrackerRepository = {
     at: { path: root },
     started: () => Promise.resolve(),
     getState: () => ({ remotes: [{ name: "origin", branches: [], mergedBranches: [], url: "git@github.com:o/r.git" }], worktrees: [] }),
@@ -40,8 +40,8 @@ function keepSeen(dataRoot: string, seen: object): void {
 describe("the issues of a project", () => {
   it("are read through its repository, which has to be open", () => {
     const deps = depsAt(tempDir("tet-issues-data-"), tempDir("tet-issues-"));
-    assert.equal(issueRepository(deps, "p1").at.path, deps.repositories.get({ projectId: "p1" })?.at.path);
-    assert.throws(() => issueRepository(deps, "p2"), new RegExp(PROJECT_NOT_FOUND));
+    assert.equal(trackerRepository(deps, "p1").at.path, deps.repositories.get({ projectId: "p1" })?.at.path);
+    assert.throws(() => trackerRepository(deps, "p2"), new RegExp(PROJECT_NOT_FOUND));
   });
 
   it("are unread once the tracker changed an open one after its tab showed it", async (t) => {

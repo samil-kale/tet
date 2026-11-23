@@ -13,7 +13,7 @@ import { buildEnv, storedEnvOf, type TerminalEnv } from "../../src/main/terminal
 import { TerminalSession } from "../../src/main/terminals/terminal-session";
 import { accountEnv, sandboxTetValues } from "../../src/main/terminals/account-env";
 import { PROVIDERS } from "../../src/main/providers";
-import type { TabAccount } from "../../src/main/providers/issues";
+import type { TabAccount } from "../../src/main/providers/tracker";
 import { sessionLinks, linkSession } from "../../src/main/store/session-links";
 import { TrackedLinks } from "../../src/main/terminals/tracked-links";
 import { HostSetups } from "../../src/main/terminals/host-setup";

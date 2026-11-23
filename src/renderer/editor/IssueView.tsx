@@ -8,10 +8,10 @@ import {
   type ChangeRequestCheck,
   type ChangeRequestDetail,
   type ChangeRequestReviewer,
-  type IssueChange,
-  type IssueDetail,
-  type IssueField,
-  type IssueFieldValue,
+  type TrackedChange,
+  type TrackedDetail,
+  type TrackedField,
+  type TrackedFieldValue,
   type ProviderId,
   type ReviewThread,
   type TrackedRef,
@@ -150,14 +150,14 @@ export interface IssueActions {
   editComment: (id: string, body: string) => Promise<boolean>;
   deleteComment: (id: string) => Promise<void>;
   deleteIssue: () => Promise<void>;
-  update: (change: IssueChange) => void;
+  update: (change: TrackedChange) => void;
   /** The title changed; what the tracker refused, for the dialog that asked (`askName`). */
   rename: (title: string) => Promise<string | undefined>;
   /** What a pick field can be set to; undefined, with a notice, when the tracker cannot say. */
   fieldOptions: (fieldId: string) => Promise<string[] | undefined>;
-  setField: (fieldId: string, value: IssueFieldValue) => void;
+  setField: (fieldId: string, value: TrackedFieldValue) => void;
   /** A field set; what the tracker refused, for the dialog that asked (`askFieldValue`). */
-  editField: (fieldId: string, value: IssueFieldValue) => Promise<string | undefined>;
+  editField: (fieldId: string, value: TrackedFieldValue) => Promise<string | undefined>;
   /** The Markdown that shows the file, once it is up. */
   upload: (file: File) => Promise<string | undefined>;
   sendToAgent: (agentId: AgentId) => void;
@@ -170,23 +170,23 @@ export interface IssueActions {
 }
 
 /** The change request a tab shows, where it shows one rather than an issue. */
-export function changeRequestOf(issue: IssueDetail): ChangeRequestDetail | undefined {
+export function changeRequestOf(issue: TrackedDetail): ChangeRequestDetail | undefined {
   return isChangeRequest(issue) ? issue : undefined;
 }
 
 /** What the tab calls what it shows, in a title's case: "Issue", or the host's own word for a change
  *  request, "Pull Request" or "Merge Request". */
-export function trackedNoun(issue: IssueDetail): string {
+export function trackedNoun(issue: TrackedDetail): string {
   const request = changeRequestOf(issue);
   return request ? titleCased(request.kind.noun) : "Issue";
 }
 
-function trackedRefOf(issue: IssueDetail): TrackedRef {
+function trackedRefOf(issue: TrackedDetail): TrackedRef {
   return { kind: isChangeRequest(issue) ? "change-request" : "issue", number: issue.number };
 }
 
 /** How the tab names it: `#142`, `!42`. */
-export function numberOf(issue: IssueDetail): string {
+export function numberOf(issue: TrackedDetail): string {
   const request = changeRequestOf(issue);
   return request ? changeRequestName(request.kind, request.number) : `#${issue.number}`;
 }
@@ -404,7 +404,7 @@ export function TextBox({
 }
 
 interface CommentBoxProps {
-  issue: IssueDetail;
+  issue: TrackedDetail;
   /** Offered where the tracker has internal comments. */
   internalNotes: boolean;
   actions: IssueActions;
@@ -681,7 +681,11 @@ function IssueEventLine({ event, noun }: { event: ThreadEvent; noun: string }) {
 }
 
 /** The question renaming an issue asks, wherever it is offered. */
-export function askIssueTitle(current: string, submit: (title: string) => Promise<string | undefined>, issue?: IssueDetail): Promise<void> {
+export function askIssueTitle(
+  current: string,
+  submit: (title: string) => Promise<string | undefined>,
+  issue?: TrackedDetail,
+): Promise<void> {
   const noun = issue ? trackedNoun(issue).toLowerCase() : "issue";
   return askName({ title: `Rename ${noun}`, label: "Title", current, confirmLabel: "Rename", submit });
 }
@@ -726,7 +730,7 @@ export function trackedSessionEntry(
 /** The tab's bar, as a file's: what can be done to the issue, its state, then what names it. An issue
  *  with a session offers to open it, by its agent's icon, in place of sending it to an agent. */
 /** Where it stands, as the bar says it: open or closed, a change request also draft or merged. */
-function stateOf(issue: IssueDetail): string {
+function stateOf(issue: TrackedDetail): string {
   const request = changeRequestOf(issue);
   if (request?.state === "merged") {
     return "Merged";
@@ -737,7 +741,7 @@ function stateOf(issue: IssueDetail): string {
   return request?.draft ? "Draft" : "Open";
 }
 
-function IssueBar({ issue, session, actions }: { issue: IssueDetail; session: TrackedSession | undefined; actions: IssueActions }) {
+function IssueBar({ issue, session, actions }: { issue: TrackedDetail; session: TrackedSession | undefined; actions: IssueActions }) {
   const agents = useAgents();
   const request = changeRequestOf(issue);
   // As a pane's new-tab menu: a button's padding off it, and beside the bar, whose stacking it slides
@@ -803,7 +807,7 @@ function SideSection({ title, action, children }: { title: string; action?: Reac
  *  agent's icon and title, over the repository or worktree it is in and whether it is archived. A
  *  click brings it to the front, reopening an archived one; its button on hover takes it off the
  *  issue. */
-function SessionSection({ issue, session }: { issue: IssueDetail; session: TrackedSession | undefined }) {
+function SessionSection({ issue, session }: { issue: TrackedDetail; session: TrackedSession | undefined }) {
   return (
     <SideSection title="Session">
       {session === undefined ? (
@@ -901,7 +905,7 @@ const TYPING_HINTS: Record<TypedField["kind"], string> = {
 
 /** The question a text, a number, a date or a duration is changed in; an empty answer takes the value
  *  off, and `edit` answers what the tracker refused. */
-async function askFieldValue(field: TypedField, edit: (value: IssueFieldValue) => Promise<string | undefined>): Promise<void> {
+async function askFieldValue(field: TypedField, edit: (value: TrackedFieldValue) => Promise<string | undefined>): Promise<void> {
   await prompt({
     title: `Change ${field.name.toLowerCase()}`,
     detail: `${TYPING_HINTS[field.kind]}. Empty takes it off.`,
@@ -924,7 +928,7 @@ interface TimeEntryDraft {
 }
 
 /** The question a booking of time is made in; `edit` answers what the tracker refused. */
-async function askTimeEntry(edit: (value: IssueFieldValue) => Promise<string | undefined>): Promise<void> {
+async function askTimeEntry(edit: (value: TrackedFieldValue) => Promise<string | undefined>): Promise<void> {
   await prompt<TimeEntryDraft>({
     title: "Add time entry",
     detail: "Track time spent on this issue.",
@@ -967,7 +971,7 @@ async function askTimeEntry(edit: (value: IssueFieldValue) => Promise<string | u
 
 /** Asks for the field's change; `actions.editField` answers what the tracker refused. */
 function askField(field: AskedField, actions: IssueActions): Promise<void> {
-  const edit = (value: IssueFieldValue) => actions.editField(field.id, value);
+  const edit = (value: TrackedFieldValue) => actions.editField(field.id, value);
   return field.kind === "timelog" ? askTimeEntry(edit) : askFieldValue(field, edit);
 }
 
@@ -983,8 +987,8 @@ function TimeLogs({
   avatars,
   actions,
 }: {
-  field: Extract<IssueField, { kind: "timelog" }>;
-  avatars: IssueDetail["avatars"];
+  field: Extract<TrackedField, { kind: "timelog" }>;
+  avatars: TrackedDetail["avatars"];
   actions: IssueActions;
 }) {
   return field.entries.map((entry) => (
@@ -1029,7 +1033,7 @@ function GroupSection({
 }: {
   title: string;
   fields: AskedField[];
-  avatars: IssueDetail["avatars"];
+  avatars: TrackedDetail["avatars"];
   actions: IssueActions;
 }) {
   const editable = fields.filter((field) => field.editable);
@@ -1086,7 +1090,15 @@ function GroupSection({
 }
 
 /** What a field's pick holds, as its values are drawn: as labels, people too, or plain text. */
-function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kind: "pick" }>; issue: IssueDetail; actions: IssueActions }) {
+function PickValue({
+  field,
+  issue,
+  actions,
+}: {
+  field: Extract<TrackedField, { kind: "pick" }>;
+  issue: TrackedDetail;
+  actions: IssueActions;
+}) {
   const { viewer } = issue;
   // A linked issue opens in its tab where the project's issues are read from this same repository.
   const opensIssues = changeRequestOf(issue)?.ownIssues === true;
@@ -1123,7 +1135,7 @@ function PickValue({ field, issue, actions }: { field: Extract<IssueField, { kin
 
 /** One field of the issue in the side column, drawn by its kind; where it can be changed, its section
  *  offers how. */
-function FieldSection({ field, issue, actions }: { field: IssueField; issue: IssueDetail; actions: IssueActions }) {
+function FieldSection({ field, issue, actions }: { field: TrackedField; issue: TrackedDetail; actions: IssueActions }) {
   switch (field.kind) {
     case "pick":
       return (
@@ -1507,7 +1519,15 @@ function ChangeRequestCard({
  * offer to change: what is read of the tracker says nothing of who else may, and a description it
  * refuses says so in a notice, a title in the dialog that asked.
  */
-export function IssueView({ issue, session, actions }: { issue: IssueDetail; session: TrackedSession | undefined; actions: IssueActions }) {
+export function IssueView({
+  issue,
+  session,
+  actions,
+}: {
+  issue: TrackedDetail;
+  session: TrackedSession | undefined;
+  actions: IssueActions;
+}) {
   const writing: TextWriting = {
     rendering: {
       provider: issue.provider,

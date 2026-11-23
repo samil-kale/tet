@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { TrackedOps } from "../../src/main/ctl/ctl-verb";
-import type { IssueDeps } from "../../src/main/issues";
+import type { TrackedDeps } from "../../src/main/issues";
 import { PROJECT_NOT_FOUND } from "../../src/main/store/resolved-ref";
 import { sendTrackedToAgent, trackedSessions } from "../../src/main/tracked";
 import type { AgentId } from "../../src/shared/types/agents";
@@ -12,7 +12,7 @@ import type { TabDescriptor } from "../../src/shared/types/terminals";
 /** tracked.ts with the store and the tab managers faked: which session each issue or change request
  *  has, read off the tabs, and a tab sent one as its first prompt. */
 
-type Deps = Pick<IssueDeps, "store" | "tabManagers">;
+type Deps = Pick<TrackedDeps, "store" | "tabManagers">;
 
 const PROJECT: Project = {
   id: "p1",

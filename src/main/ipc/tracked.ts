@@ -3,9 +3,9 @@ import { attempt, errorMessage, failure } from "../../shared/errors";
 import type { AgentId } from "../../shared/types/agents";
 import type { ProjectRef } from "../../shared/types/project";
 import type {
-  IssueChange,
-  IssueFieldOptionsResult,
-  IssueFieldValue,
+  TrackedChange,
+  TrackedFieldOptionsResult,
+  TrackedFieldValue,
   TrackedKind,
   TrackedReadResult,
   TrackedRef,
@@ -19,15 +19,15 @@ import type { IpcDeps } from "./deps";
 
 /** An issue's tab and a change request's alike, by kind (tracked.ts's `trackedOps`): by project, each
  *  answering its failure for the caller to notify. */
-export function registerTrackedIpc({ issueDeps, tracked: ops }: Pick<IpcDeps, "issueDeps" | "tracked">): void {
-  const { dataRoot } = issueDeps;
+export function registerTrackedIpc({ trackedDeps, tracked: ops }: Pick<IpcDeps, "trackedDeps" | "tracked">): void {
+  const { dataRoot } = trackedDeps;
 
   handle("tracked:read", async (_event, projectId: string, { kind, number }: TrackedRef): Promise<TrackedReadResult> => {
     try {
       return await ops[kind].read(projectId, number);
     } catch (error) {
       // Names what was read and where: the notice may come up in another project's tab.
-      const named = issueDeps.store.get(projectId)?.name;
+      const named = trackedDeps.store.get(projectId)?.name;
       return { error: `${named ? `${named}: ` : ""}${ops[kind].nameOf(number)}: ${errorMessage(error)}` };
     }
   });
@@ -48,13 +48,13 @@ export function registerTrackedIpc({ issueDeps, tracked: ops }: Pick<IpcDeps, "i
     attempt(() => ops[kind].deleteComment(projectId, id)),
   );
 
-  handle("tracked:update", (_event, projectId: string, { kind, number }: TrackedRef, change: IssueChange) =>
+  handle("tracked:update", (_event, projectId: string, { kind, number }: TrackedRef, change: TrackedChange) =>
     attempt(() => ops[kind].update(projectId, number, change)),
   );
 
   handle(
     "tracked:field-options",
-    async (_event, projectId: string, { kind, number }: TrackedRef, fieldId: string): Promise<IssueFieldOptionsResult> => {
+    async (_event, projectId: string, { kind, number }: TrackedRef, fieldId: string): Promise<TrackedFieldOptionsResult> => {
       try {
         return { options: await ops[kind].fieldOptions(projectId, number, fieldId) };
       } catch (error) {
@@ -63,7 +63,7 @@ export function registerTrackedIpc({ issueDeps, tracked: ops }: Pick<IpcDeps, "i
     },
   );
 
-  handle("tracked:set-field", (_event, projectId: string, { kind, number }: TrackedRef, fieldId: string, value: IssueFieldValue) =>
+  handle("tracked:set-field", (_event, projectId: string, { kind, number }: TrackedRef, fieldId: string, value: TrackedFieldValue) =>
     attempt(() => ops[kind].setField(projectId, number, fieldId, value)),
   );
 
@@ -80,12 +80,12 @@ export function registerTrackedIpc({ issueDeps, tracked: ops }: Pick<IpcDeps, "i
   });
 
   handle("tracked:send-to-agent", (_event, ref: ProjectRef, tracked: TrackedRef, agentId: AgentId) =>
-    sendTrackedToAgent(issueDeps, ops, ref, tracked, agentId),
+    sendTrackedToAgent(trackedDeps, ops, ref, tracked, agentId),
   );
 
   handle("tracked:sessions", (_event, projectId: string, kind: TrackedKind): TrackedSessionsResult => {
     try {
-      return { sessions: trackedSessions(issueDeps, projectId, kind) };
+      return { sessions: trackedSessions(trackedDeps, projectId, kind) };
     } catch (error) {
       return { error: errorMessage(error) };
     }

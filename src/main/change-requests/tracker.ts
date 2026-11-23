@@ -10,15 +10,15 @@ import {
   type ChangeRequestKind,
   type ChangeRequestRow,
   type ChangeRequestsLatest,
-  type IssueChange,
-  type IssueFieldValue,
-  type IssueFilterOptions,
+  type TrackedChange,
+  type TrackedFieldValue,
+  type TrackedFilterOptions,
   type ReviewThread,
 } from "../../shared/types/providers";
 import type { ChangeRequestOps } from "../ctl/ctl-verb";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
-import { issueRepository, type IssueDeps } from "../issues";
-import { hostProvider, onHost, trackedMarkdown, trackerRemote, WRITE_HANDS_OVER, type TrackerCall } from "../providers/issues";
+import { trackerRepository, type TrackedDeps } from "../issues";
+import { hostProvider, onHost, trackedMarkdown, trackerRemote, WRITE_HANDS_OVER, type TrackerCall } from "../providers/tracker";
 import type { ListPage } from "../providers/provider";
 import { readIssueSource } from "../store/tet-json";
 import { markAllSeen, readSeen, setSeen } from "../store/tracked-seen";
@@ -29,18 +29,18 @@ import { imageDataUrl } from "../util/image-response";
  * merge requests, read on its repository's own remote (`trackerRemote`) through that host's accounts,
  * never from the issue source tet.json may name. Each throws what the host or the account refused.
  */
-type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
+type TrackerDeps = Pick<TrackedDeps, "accounts" | "repositories">;
 
 /** Runs `call` against the repository's own remote, as `onTracker` runs it against the issue tracker. */
 async function onRemote<T>(deps: TrackerDeps, projectId: string, call: TrackerCall<T>, write = false): Promise<T> {
-  const remote = await trackerRemote(issueRepository(deps, projectId));
+  const remote = await trackerRemote(trackerRepository(deps, projectId));
   return onHost(deps.accounts, remote, call, write ? WRITE_HANDS_OVER : undefined);
 }
 
 /** What the host of the project's repository's remote calls a change request; undefined without an
  *  account for it. */
 export async function changeRequestKind(deps: TrackerDeps, projectId: string): Promise<ChangeRequestKind | undefined> {
-  const remote = await trackerRemote(issueRepository(deps, projectId));
+  const remote = await trackerRemote(trackerRepository(deps, projectId));
   return hostProvider(deps.accounts, remote.host)?.changeRequest;
 }
 
@@ -71,7 +71,7 @@ export function latestChangeRequests(deps: TrackerDeps, projectId: string, filte
 }
 
 /** What the filters offer. */
-export function changeRequestFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<IssueFilterOptions, "error">>> {
+export function changeRequestFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<TrackedFilterOptions, "error">>> {
   return onRemote(deps, projectId, async (provider, tracker) => {
     const [labels, people] = await Promise.all([provider.listLabels(tracker), provider.listPeople(tracker)]);
     return { labels, people };
@@ -81,7 +81,7 @@ export function changeRequestFilterOptions(deps: TrackerDeps, projectId: string)
 /** One change request with what its tab shows beside it. */
 export async function readChangeRequest(deps: TrackerDeps, projectId: string, number: number): Promise<ChangeRequestDetail> {
   const [source, detail] = await Promise.all([
-    readIssueSource(issueRepository(deps, projectId).at.path),
+    readIssueSource(trackerRepository(deps, projectId).at.path),
     onRemote(deps, projectId, async (provider, tracker, viewer) => ({ ...(await provider.readChangeRequest(tracker, number)), viewer })),
   ]);
   return { ...detail, ownIssues: source === undefined };
@@ -106,12 +106,12 @@ export async function setChangeRequestField(
   projectId: string,
   number: number,
   fieldId: string,
-  value: IssueFieldValue,
+  value: TrackedFieldValue,
 ): Promise<void> {
   await onRemote(deps, projectId, (provider, tracker) => provider.setChangeRequestField(tracker, number, fieldId, value), true);
 }
 
-export async function updateChangeRequest(deps: TrackerDeps, projectId: string, number: number, change: IssueChange): Promise<void> {
+export async function updateChangeRequest(deps: TrackerDeps, projectId: string, number: number, change: TrackedChange): Promise<void> {
   await onRemote(deps, projectId, (provider, tracker) => provider.updateChangeRequest(tracker, number, change), true);
 }
 
@@ -153,7 +153,7 @@ export function openChangeRequests(
  *  tab last showed them (`isChangeRequestUnread`), among those the section lists until its filter is
  *  changed. */
 export async function unreadChangeRequests(
-  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">,
   projectId: string,
 ): Promise<ChangeRequestRow[]> {
   const changeRequests = await listChangeRequests(deps, projectId, DEFAULT_CHANGE_REQUEST_FILTER);
@@ -164,7 +164,7 @@ export async function unreadChangeRequests(
 /** Counts it as its tab shows it, at the update and checks the host has now; without a number, every
  *  one created or changed until now. */
 export async function markChangeRequestsSeen(
-  deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">,
+  deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">,
   projectId: string,
   number?: number,
 ): Promise<void> {
@@ -178,7 +178,7 @@ export async function markChangeRequestsSeen(
 
 /** What the change requests section and `tet-ctl` do on the repository's own remote beyond a change
  *  request's tab, for both transports alike, as `trackedOps` is for what its tab does. */
-export function changeRequestOps(deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">): ChangeRequestOps {
+export function changeRequestOps(deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">): ChangeRequestOps {
   return {
     kind: (projectId) => changeRequestKind(deps, projectId),
     page: (projectId, filter, limit, after) => readChangeRequestPage(deps, projectId, filter, limit, after),
@@ -244,12 +244,12 @@ export function checkoutSentence(worktrees: WorktreeInfo[], ref: ProjectRef, hea
 /** The first prompt of a tab opened on a change request in the repository or worktree `ref`: the
  *  settings' text, then which one it is and where its branch is checked out, ended by its file's path. */
 export function changeRequestPrompt(
-  deps: Pick<IssueDeps, "repositories" | "settings">,
+  deps: Pick<TrackedDeps, "repositories" | "settings">,
   ref: ProjectRef,
   request: ChangeRequestDetail,
 ): string {
   const text = effectivePrompt(deps.settings.get().prompts.texts, "changeRequestTab");
-  const { worktrees } = issueRepository(deps, ref.projectId).getState();
+  const { worktrees } = trackerRepository(deps, ref.projectId).getState();
   const name = changeRequestName(request.kind, request.number);
   return `${text}\n\nThe ${request.kind.noun}: ${name}. ${checkoutSentence(worktrees, ref, request.status.head)} The file:`;
 }
