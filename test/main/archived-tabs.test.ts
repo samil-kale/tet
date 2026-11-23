@@ -8,6 +8,7 @@ import { archivedIds } from "../../src/main/store/archive";
 import { sessionLinks, linkSession } from "../../src/main/store/session-links";
 import { archiveFile } from "../../src/main/store/project-dirs";
 import { ArchivedTabs } from "../../src/main/terminals/archived-tabs";
+import { SessionRemovals } from "../../src/main/terminals/session-removals";
 import { HostPlace } from "../../src/main/terminals/tab-place";
 import { toDescriptor, type TabState } from "../../src/main/terminals/tab-state";
 import type { ActionResult } from "../../src/shared/types/action";
@@ -41,13 +42,13 @@ async function settled(promise: Promise<unknown>): Promise<boolean> {
 function archive(options: { filesOf?: (id: string) => string[]; refusal?: string } = {}) {
   const dataRoot = tempDir("tet-archived-");
   const calls: string[] = [];
-  const deletingSessionIds = new Set<string>();
+  const removals = new SessionRemovals();
   const fail = (): Promise<void> => (options.refusal === undefined ? Promise.resolve() : Promise.reject(new Error(options.refusal)));
   const sessions: SessionProvider = {
     list: () => Promise.resolve([]),
     resumeArgs: (id) => ["--resume", id],
     remove: (_executable, _cwd, id) => {
-      calls.push(`remove:${id}${deletingSessionIds.has(id) ? " (deleting)" : ""}`);
+      calls.push(`remove:${id}${removals.has(id) ? " (deleting)" : ""}`);
       return fail();
     },
     rename: (_executable, _cwd, id, title) => {
@@ -78,7 +79,7 @@ function archive(options: { filesOf?: (id: string) => string[]; refusal?: string
     agentOf: () => agent,
     placeOf: () => place,
     descriptorsOf: (tabs) => tabs.map((tab) => toDescriptor(tab, false, false, undefined)),
-    deletingSessionIds,
+    removals,
     takeOffStrip: (tab) => {
       calls.push(`off-strip:${tab.tabId}`);
       strip.splice(strip.indexOf(tab), 1);

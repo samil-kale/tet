@@ -8,7 +8,7 @@ import { forgetSessionLinks } from "../store/session-links";
 import { logError } from "../util/error-log";
 import type { TabPlace } from "./tab-place";
 import { awaitsClaim, settleWithoutProcess, type TabState } from "./tab-state";
-import { SESSION_REMOVE_DELAY_MS } from "./terminal-session";
+import type { SessionRemovals } from "./session-removals";
 
 /** What the archived tabs run on, handed in by the session manager. */
 export interface ArchiveTarget {
@@ -17,9 +17,8 @@ export interface ArchiveTarget {
   placeOf(tab: TabState): TabPlace;
   /** The tabs' descriptors, in their order (TabSessionManager.descriptorsOf). */
   descriptorsOf(tabs: readonly TabState[]): TabDescriptor[];
-  /** Session ids whose removal is in flight — reconcile must not re-claim them. The session
-   *  manager's own, shared. */
-  deletingSessionIds: Set<string>;
+  /** The sessions being deleted, which reconcile must not claim again (the session manager's). */
+  removals: SessionRemovals;
   /** The tab leaves the strip, its process asked to stop: what that stop resolves on, if it has
    *  one. */
   takeOffStrip(tab: TabState): Promise<void> | undefined;
@@ -187,22 +186,14 @@ export class ArchivedTabs {
     if (!tab || !sessionId) {
       return { ok: true };
     }
-    const stopping = this.stopping.get(tabId);
-    const deleting = this.target.deletingSessionIds;
-    deleting.add(sessionId);
     try {
-      if (stopping) {
-        await stopping;
-        // See SESSION_REMOVE_DELAY_MS.
-        await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
-      }
-      await this.target.placeOf(tab).sessionActions()?.remove(sessionId);
-      setArchived(this.dataRoot, this.ref, sessionId, false);
-      forgetSessionLinks(this.dataRoot, this.ref, sessionId);
+      await this.target.removals.during(sessionId, this.stopping.get(tabId), async () => {
+        await this.target.placeOf(tab).sessionActions()?.remove(sessionId);
+        setArchived(this.dataRoot, this.ref, sessionId, false);
+        forgetSessionLinks(this.dataRoot, this.ref, sessionId);
+      });
     } catch (error) {
       return { ok: false, error: `Could not delete the ${this.target.agentOf(tab).displayName} session: ${errorMessage(error)}` };
-    } finally {
-      deleting.delete(sessionId);
     }
     this.tabs = this.tabs.filter((candidate) => candidate !== tab);
     // As TabSessionManager.destroyTab: the copy goes with the tab.

@@ -23,7 +23,7 @@ import type { AgentRuntime } from "./agent-runtime";
 import { ArchivedTabs } from "./archived-tabs";
 import { PlaceResolver } from "./place-resolver";
 import type { spawnAgentProcess, TerminalEnv } from "./pty";
-import { SESSION_REMOVE_DELAY_MS } from "./terminal-session";
+import { SessionRemovals } from "./session-removals";
 import { HostPlace, SandboxPlace } from "./tab-place";
 import type { PlaceContext, TabPlace } from "./tab-place";
 import { removeHandoverCopy, TabRuns, type RunCallbacks } from "./tab-runs";
@@ -87,8 +87,8 @@ export class TabSessionManager {
   private readonly archived: ArchivedTabs;
   private readonly places: PlaceResolver;
   private readonly runtimes = new Map<AgentId, AgentRuntime>();
-  /** Session ids whose removal is in flight — reconcile must not re-claim them. */
-  private readonly deletingSessionIds = new Set<string>();
+  /** The sessions being deleted, of the strip and the archive: reconcile must not claim them again. */
+  private readonly removals = new SessionRemovals();
   /** Tabs gone from the UI whose persisted session must still be claimed for deletion. */
   private readonly detachedTabs: TabState[] = [];
   /** See `events`. */
@@ -136,7 +136,7 @@ export class TabSessionManager {
       agentOf: (tab) => this.runtimeFor(tab.agentId).agent,
       placeOf: (tab) => this.placeOf(tab),
       descriptorsOf: (tabs) => this.descriptorsOf(tabs),
-      deletingSessionIds: this.deletingSessionIds,
+      removals: this.removals,
       takeOffStrip: (tab) => this.takeOffStrip(tab),
       reopened: (tab) => {
         this.tabs.push(tab);
@@ -401,7 +401,7 @@ export class TabSessionManager {
     // tab keeps its session's id after moving on to another (`/clear`), and ids must stay unique.
     const known = new Set([
       ...[...this.tabs, ...this.archived.all()].flatMap((tab) => [tab.tabId, tab.sessionId, tab.reportedSessionId]),
-      ...this.deletingSessionIds,
+      ...this.removals.all(),
     ]);
     const fresh = infos.filter((candidate) => !known.has(candidate.id));
     const archived = this.archived.storedIds();
@@ -681,20 +681,16 @@ export class TabSessionManager {
     if (!sessionId) {
       return;
     }
-    this.deletingSessionIds.add(sessionId);
     try {
-      if (ended) {
-        await new Promise((resolve) => setTimeout(resolve, SESSION_REMOVE_DELAY_MS));
-      }
-      await this.placeOf(tab).sessionActions()?.remove(sessionId);
-      forgetSessionLinks(this.dataRoot, this.at.ref, sessionId);
+      await this.removals.during(sessionId, ended, async () => {
+        await this.placeOf(tab).sessionActions()?.remove(sessionId);
+        forgetSessionLinks(this.dataRoot, this.at.ref, sessionId);
+      });
     } catch (error) {
       this.callbacks.onNotice("error", `Could not delete ${agent.displayName} session: ${errorMessage(error)}`);
       settleWithoutProcess(tab);
       this.tabs.splice(Math.min(index, this.tabs.length), 0, tab);
       this.postTabs();
-    } finally {
-      this.deletingSessionIds.delete(sessionId);
     }
   }
 
@@ -903,7 +899,7 @@ export class TabSessionManager {
     }
     const infos = await this.listSessions(runtime);
     const ownTabs = this.tabs.filter((tab) => tab.agentId === agent.id);
-    const claimed = new Set([...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined), ...this.deletingSessionIds]);
+    const claimed = new Set([...ownTabs.map((tab) => tab.sessionId).filter((id) => id !== undefined), ...this.removals.all()]);
     let changed = false;
 
     // Each tab takes the session its hooks named (bindReportedSession), once listed, and only from
