@@ -3700,7 +3700,7 @@ button.change-request-check:hover {
    pointer. */
 .notices {
   position: absolute;
-  right: 6px;
+  right: 10px;
   bottom: 35px;
   /* Above the views and the context menus. Over a dialog they are drawn inside it (Notices). */
   z-index: 28;
@@ -3859,7 +3859,7 @@ button.change-request-check:hover {
 .notices-center,
 .status-list {
   position: absolute;
-  right: 6px;
+  right: 10px;
   bottom: 35px;
   z-index: 25;
   display: flex;
