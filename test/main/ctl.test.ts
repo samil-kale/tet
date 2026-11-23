@@ -108,7 +108,7 @@ interface Calls {
   handed: [string, string[]][];
   shutdown: boolean[];
   desktopNotifications: [string, string, TabRef | undefined][];
-  notices: [string, string, string | undefined][];
+  notices: [string, string, string | undefined, TabRef | undefined][];
   hooks: [string, string, string][];
   /** Each hook's own time — see ControlRequest.at. */
   hookTimes: (number | undefined)[];
@@ -563,8 +563,8 @@ function deps(): ControlDeps {
     showDesktopNotification: (title, message, target) => {
       calls.desktopNotifications.push([title, message, target]);
     },
-    notice: (severity, message, title) => {
-      calls.notices.push([severity, message, title]);
+    notice: (severity, message, title, target) => {
+      calls.notices.push([severity, message, title, target]);
     },
     environment: {
       list: () => envNames.map((name) => ({ name, overridesMachine: name === "PATH" })),
@@ -2079,9 +2079,10 @@ describe("tet-ctl against the control server", () => {
       notified: true,
     });
     assert.deepEqual((await tetCtl(["notify", "Build finished", "--toast"])).result, { notified: true });
+    const own = { ref: { projectId: PROJECT.id }, tabId: OWN_TAB };
     assert.deepEqual(calls.notices, [
-      ["error", "see the log", "Build failed"],
-      ["info", "Build finished", undefined],
+      ["error", "see the log", "Build failed", own],
+      ["info", "Build finished", undefined, own],
     ]);
     assert.deepEqual(calls.desktopNotifications, [], "no desktop notification beside it");
     assertUsage(await tetCtl(["notify", "x", "--toast", "--severity", "loud"]), /unknown severity/);

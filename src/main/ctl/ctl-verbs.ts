@@ -499,17 +499,17 @@ export function verbs(deps: ControlDeps): Handlers {
     notify: (args, caller) => {
       const message = text(args, "message", "message");
       const title = typeof args.title === "string" ? args.title : undefined;
+      // From one of TET's terminals, the notification or notice is about that tab.
+      const own = callerRef(caller);
+      const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;
       if (args.toast === true) {
         const severity = args.severity === undefined ? "info" : oneOf(args, "severity", "severity", NOTICE_SEVERITIES);
-        deps.notice(severity, message, title);
+        deps.notice(severity, message, title, target);
         return { result: { notified: true } };
       }
       if (title === undefined) {
         throw new ControlError("bad_args", "a desktop notification needs a --title");
       }
-      // From one of TET's terminals, the notification is about that tab.
-      const own = callerRef(caller);
-      const target = own && caller.tabId ? { ref: own, tabId: caller.tabId } : undefined;
       deps.showDesktopNotification(title, message, target);
       return { result: { notified: true } };
     },

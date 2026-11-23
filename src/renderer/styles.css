@@ -2113,11 +2113,13 @@ button.change-request-check:hover {
   color: var(--tet-tabMark-foreground, var(--tet-focusBorder));
 }
 
-/* `SpinnerIcon`'s turn about the svg's centre. A CSS animation starts with the frame the icon
-   appears in; a SMIL one waits for the svg's own timeline. */
-.spinner-turn {
+/* `SpinnerIcon`'s turn, its drawing inside Lucide's svg about the arc's centre, (12, 12) of its grid:
+   a percentage would be of a box at the grid's origin, not at the corner its cropped viewBox starts
+   from. A CSS animation starts with the frame the icon appears in; a SMIL one waits for the svg's own
+   timeline. */
+.spinner > path {
   transform-box: view-box;
-  transform-origin: 50% 50%;
+  transform-origin: 12px 12px;
   animation: spinner-turn 1.2s linear infinite;
 }
 
@@ -2236,12 +2238,12 @@ button.change-request-check:hover {
   font-weight: normal;
 }
 
-/* A menu's entry, a status bar list's row, the line of an empty list and a session's row in the
+/* A menu's entry, a status bar list's row, the line of an empty list and a notice in the
    notification center read alike because this box is declared once, shared by the selectors. */
 .context-menu-item,
 .status-list-item,
 .popup-empty,
-.notices-center .notice.session {
+.notices-center .notice {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -3792,8 +3794,8 @@ button.change-request-check:hover {
   /* An integer box of its own, as `.line-icon`. */
   width: var(--icon-size);
   height: var(--icon-size);
-  /* Optical: half the gap between the first line's height and the icon's own. */
-  margin-top: calc((22px - var(--icon-size)) / 2);
+  /* Optical: centred on 20px, a pixel above the middle of the first line's 22px. */
+  margin-top: calc((20px - var(--icon-size)) / 2);
 }
 
 /* A turn's mark (`.tab-mark`) keeps its own colour, as on a tab. */
@@ -3888,8 +3890,11 @@ button.change-request-check:hover {
   max-width: var(--popup-width);
 }
 
+/* Its title and buttons stand as far in as the rows' icons and buttons below, as a section's do:
+   `.popup-items`' margin, then a row's margin and padding. */
 .status-list > .section-header,
 .notices-center > .section-header {
+  padding: 0 calc(var(--menu-padding-inline) + 4px + 8px);
   border-bottom: 1px solid var(--tet-app-border);
 }
 
@@ -3908,9 +3913,17 @@ button.change-request-check:hover {
 
 .notices-center .notice {
   width: auto;
-  padding: 4px 6px 4px 10px;
   border: none;
-  border-radius: var(--border-radius);
+}
+
+/* A notice of several lines grows with them, its icon and buttons level with the first, where a
+   one-line row centres them. `:where` keeps the specificity below `.notice-item.leaving > .notice`,
+   whose padding must win while it leaves. */
+.notices-center .notice:where(:not(.session)) {
+  height: auto;
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 /* What was listed when the center opened comes with the center itself. */
@@ -3918,18 +3931,13 @@ button.change-request-check:hover {
   animation: none;
 }
 
-.notices-center .notice.clickable {
+.notice.clickable {
   cursor: pointer;
 }
 
-.notice .icon-button {
+/* A notice's buttons and its agent's icon (`NoticeBody`), at the right edge. */
+.notice > .toolbar {
   margin-left: auto;
-}
-
-/* The copy button sits right before the X (`NoticeCopyButton`): the first takes the room, the
-   rest follow it without a gap of their own. */
-.notice .icon-button + .icon-button {
-  margin-left: 0;
 }
 
 /* A url in a notice's message (`LinkedMessage`), as VS Code's notification links: the theme's link
