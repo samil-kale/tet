@@ -60,24 +60,24 @@ export function changeRequestVerbs(
     "change-requests-list": (args, caller) => {
       const { project } = refFrom(args, caller);
       const filter = changeRequestFilter(args);
-      return refusable(async () => ({ result: (await deps.listChangeRequests(project.id, filter)).map(withoutAvatars) }));
+      return refusable(async () => ({ result: (await deps.changeRequests.list(project.id, filter)).map(withoutAvatars) }));
     },
 
     "change-requests-latest": (args, caller) => {
       const { project } = refFrom(args, caller);
       const filter = changeRequestFilter(args);
-      return refusable(async () => ({ result: await deps.latestChangeRequests(project.id, filter) }));
+      return refusable(async () => ({ result: await deps.changeRequests.latest(project.id, filter) }));
     },
 
     "change-requests-filter-options": (args, caller) => {
       const { project } = refFrom(args, caller);
-      return refusable(async () => ({ result: await deps.changeRequestFilterOptions(project.id) }));
+      return refusable(async () => ({ result: await deps.changeRequests.filterOptions(project.id) }));
     },
 
     "change-requests-unread": (args, caller) => {
       const { project } = refFrom(args, caller);
       return refusable(async () => {
-        const unread = await deps.unreadChangeRequests(project.id);
+        const unread = await deps.changeRequests.unread(project.id);
         return { result: unread.map(({ number, title, url, updatedAt, checks }) => ({ number, title, url, updatedAt, checks })) };
       });
     },
@@ -96,7 +96,7 @@ export function changeRequestVerbs(
       const { project } = refFrom(args, caller);
       const number = requestNumber(args);
       return refusable(async () => {
-        await deps.approveChangeRequest(project.id, number);
+        await deps.changeRequests.approve(project.id, number);
         return { result: { approved: number } };
       });
     },
@@ -109,7 +109,7 @@ export function changeRequestVerbs(
         throw new ControlError("bad_args", `merging ${number} is not taken back. Ask the user, then pass --confirm.`);
       }
       return refusable(async () => {
-        await deps.mergeChangeRequest(project.id, number, auto);
+        await deps.changeRequests.merge(project.id, number, auto);
         return { result: auto ? { autoMerge: number } : { merged: number } };
       });
     },

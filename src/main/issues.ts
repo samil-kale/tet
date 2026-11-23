@@ -9,8 +9,10 @@ import {
   type IssueFieldValue,
   type IssueFilter,
   type IssueFilterOptions,
+  type IssueListResult,
   type IssuesLatest,
 } from "../shared/types/providers";
+import type { IssueOps } from "./ctl/ctl-verb";
 import { MAX_EDIT_BYTES } from "./git/explorer-read";
 import {
   onTracker,
@@ -22,6 +24,7 @@ import {
   type IssueTrackerInfo,
 } from "./providers/issues";
 import { PROVIDERS } from "./providers/index";
+import type { ListPage } from "./providers/provider";
 import { forgetAllSessionLinks, forgetLinkedSession } from "./store/session-links";
 import { forgetAllSeen, forgetSeen, markAllSeen, readSeen, setSeen } from "./store/tracked-seen";
 import type { ProjectStore } from "./store/project-store";
@@ -57,6 +60,11 @@ export function issueRepository({ repositories }: Pick<IssueDeps, "repositories"
 /** Where the project's issues are read from (`readIssueTracker`). */
 export async function issueTrackerOf(deps: Pick<IssueDeps, "accounts" | "repositories">, projectId: string): Promise<IssueTrackerInfo> {
   return readIssueTracker(deps.accounts, issueRepository(deps, projectId));
+}
+
+/** The `issues` of the project's tet.json, where it names one. */
+export function issueSource(deps: Pick<IssueDeps, "repositories">, projectId: string): Promise<string | undefined> {
+  return readIssueSource(issueRepository(deps, projectId).at.path);
 }
 
 /**
@@ -117,6 +125,29 @@ type TrackerDeps = Pick<IssueDeps, "accounts" | "repositories">;
  * What the Issues section and `tet-ctl` do on the project's tracker beyond the above, each throwing
  * what the tracker or the account refused: the callers tell it as their transport does.
  */
+
+/** At least the first `limit` issues the filter narrows to, from `after` where given; read from the
+ *  start, with what the tracker said of the list just before, so a change made while the list comes
+ *  differs from it at the next read, and where the issues are read from. */
+export async function readIssuePage(
+  deps: TrackerDeps,
+  projectId: string,
+  filter: IssueFilter,
+  limit: number,
+  after?: string,
+): Promise<ListPage<Issue> & Pick<IssueListResult, "latest" | "tracker">> {
+  const repository = issueRepository(deps, projectId);
+  if (after !== undefined) {
+    return onTracker(deps.accounts, repository, (provider, tracker) => provider.listIssues(tracker, filter, limit, after));
+  }
+  const { page, latest, confidentialIssues } = await onTracker(deps.accounts, repository, async (provider, tracker) => ({
+    latest: await provider.readLatest(tracker, filter),
+    page: await provider.listIssues(tracker, filter, limit),
+    confidentialIssues: provider.confidentialIssues,
+  }));
+  const { provider, host, path } = await readIssueTracker(deps.accounts, repository);
+  return { ...page, latest, tracker: provider === null ? undefined : { provider, url: `https://${host}/${path}`, confidentialIssues } };
+}
 
 /** The project's issues the filter narrows to. */
 export async function listIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<Issue[]> {
@@ -272,4 +303,24 @@ export function uploadIssueFile(deps: TrackerDeps, projectId: string, name: stri
  *  by its file's path. */
 export function issuePrompt(text: string, number: number): string {
   return `${text}\n\nThe issue: #${number}. The file:`;
+}
+
+/** What the Issues section and `tet-ctl` do on the project's tracker beyond an issue's tab, for both
+ *  transports alike, as `trackedOps` is for what its tab does. */
+export function issueOps(deps: IssueDeps): IssueOps {
+  return {
+    tracker: (projectId) => issueTrackerOf(deps, projectId),
+    source: (projectId) => issueSource(deps, projectId),
+    setSource: (projectId, source) => changeIssueSource(deps, projectId, source),
+    page: (projectId, filter, limit, after) => readIssuePage(deps, projectId, filter, limit, after),
+    list: (projectId, filter) => listIssues(deps, projectId, filter),
+    latest: (projectId, filter) => latestIssues(deps, projectId, filter),
+    filterOptions: (projectId) => issueFilterOptions(deps, projectId),
+    unread: (projectId) => unreadIssues(deps, projectId),
+    create: (projectId, title, body, confidential) => createIssue(deps, projectId, title, body, confidential),
+    delete: (projectId, number) => deleteIssue(deps, projectId, number),
+    upload: (projectId, name, bytes) => uploadIssueFile(deps, projectId, name, bytes),
+    uploadName: (projectId, source) => issueUploadName(deps, projectId, source),
+    saveUpload: (projectId, source, target, onProgress) => saveIssueUpload(deps, projectId, source, target, onProgress),
+  };
 }

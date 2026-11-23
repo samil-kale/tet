@@ -61,18 +61,18 @@ export function issueVerbs(
     "issues-set-source": (args, caller) => {
       const { project } = refFrom(args, caller);
       const source = optionalText(args, "source") ?? "";
-      return refusable(async () => ({ result: { source: (await deps.setIssueSource(project.id, source)) ?? null } }));
+      return refusable(async () => ({ result: { source: (await deps.issues.setSource(project.id, source)) ?? null } }));
     },
 
     "issues-get-source": (args, caller) => {
       const { project } = refFrom(args, caller);
-      return refusable(async () => ({ result: await deps.readIssueTracker(project.id) }));
+      return refusable(async () => ({ result: await deps.issues.tracker(project.id) }));
     },
 
     "issues-unread": (args, caller) => {
       const { project } = refFrom(args, caller);
       return refusable(async () => {
-        const unread = await deps.unreadIssues(project.id);
+        const unread = await deps.issues.unread(project.id);
         return { result: unread.map(({ number, title, url, updatedAt }) => ({ number, title, url, updatedAt })) };
       });
     },
@@ -81,7 +81,7 @@ export function issueVerbs(
       const { project } = refFrom(args, caller);
       const filter = issueFilter(args);
       return refusable(async () => {
-        const issues = await deps.listIssues(project.id, filter);
+        const issues = await deps.issues.list(project.id, filter);
         return { result: issues.map(withoutAvatars) };
       });
     },
@@ -89,12 +89,12 @@ export function issueVerbs(
     "issues-latest": (args, caller) => {
       const { project } = refFrom(args, caller);
       const filter = issueFilter(args);
-      return refusable(async () => ({ result: await deps.latestIssues(project.id, filter) }));
+      return refusable(async () => ({ result: await deps.issues.latest(project.id, filter) }));
     },
 
     "issues-filter-options": (args, caller) => {
       const { project } = refFrom(args, caller);
-      return refusable(async () => ({ result: await deps.issueFilterOptions(project.id) }));
+      return refusable(async () => ({ result: await deps.issues.filterOptions(project.id) }));
     },
 
     "issues-image": (args, caller) => {
@@ -107,7 +107,7 @@ export function issueVerbs(
       const { project } = refFrom(args, caller);
       const title = text(args, "title", "title");
       const body = optionalText(args, "body") ?? "";
-      return refusable(async () => ({ result: { created: await deps.createIssue(project.id, title, body) } }));
+      return refusable(async () => ({ result: { created: await deps.issues.create(project.id, title, body, false) } }));
     },
 
     "issues-delete": (args, caller) => {
@@ -117,7 +117,7 @@ export function issueVerbs(
         throw new ControlError("bad_args", `deleting #${number} removes it from the tracker for good. Ask the user, then pass --confirm.`);
       }
       return refusable(async () => {
-        await deps.deleteIssue(project.id, number);
+        await deps.issues.delete(project.id, number);
         return { result: { deleted: number } };
       });
     },
@@ -141,7 +141,7 @@ export function issueVerbs(
       }
       const file = path.resolve(root, text(args, "path", "path"));
       return refusable(async () => {
-        const markdown = await deps.uploadIssueFile(project.id, path.basename(file), await caller.side.readFile(root, file));
+        const markdown = await deps.issues.upload(project.id, path.basename(file), await caller.side.readFile(root, file));
         return { result: { markdown } };
       });
     },

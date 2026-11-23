@@ -8,14 +8,16 @@ import type { CheckoutTarget, GitActionResult, GitCommandResult, RepositoryState
 import type { AddRepositoryResult, Project, ProjectCommand, ProjectRef } from "../../shared/types/project";
 import type {
   ChangeRequestFilter,
+  ChangeRequestKind,
   ChangeRequestRow,
   ChangeRequestsLatest,
   Issue,
   IssueChange,
-  IssueDetail,
   IssueFieldValue,
   IssueFilter,
+  IssueListResult,
   IssuesLatest,
+  IssueDetail,
   TrackedKind,
   TrackedRef,
 } from "../../shared/types/providers";
@@ -23,6 +25,7 @@ import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TrackedSession, TrackedLinkResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
 import type { IssueTrackerInfo } from "../providers/issues";
+import type { ListPage } from "../providers/provider";
 import type { SbxAccess } from "../sbx/sbx-access";
 import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
 import type { CallerSide } from "./caller-side";
@@ -176,6 +179,66 @@ export interface TrackedOps {
   markSeen(projectId: string, number?: number): Promise<void>;
 }
 
+/** What the Issues section and `tet-ctl`'s issue verbs do on the project's tracker beyond an issue's
+ *  tab (issues.ts's `issueOps`), by project; each throws what the tracker or the account refused
+ *  (`refusable`). */
+export interface IssueOps {
+  /** Where the project's issues are read from (`readIssueTracker`). */
+  tracker(projectId: string): Promise<IssueTrackerInfo>;
+  /** The `issues` of the project's tet.json, where it names one. */
+  source(projectId: string): Promise<string | undefined>;
+  /** Saves the project's issue source once the tracker reads it, answering what was saved; "" goes
+   *  back to the remote's own. */
+  setSource(projectId: string, source: string): Promise<string | undefined>;
+  /** At least the first `limit` issues the filter leaves, from `after` where given; read from the
+   *  start, with what the tracker said of the list just before and where the issues are read from. */
+  page(
+    projectId: string,
+    filter: IssueFilter,
+    limit: number,
+    after?: string,
+  ): Promise<ListPage<Issue> & Pick<IssueListResult, "latest" | "tracker">>;
+  /** Every issue the filter leaves. */
+  list(projectId: string, filter: IssueFilter): Promise<Issue[]>;
+  /** What the tracker says of the filtered list without sending it. */
+  latest(projectId: string, filter: IssueFilter): Promise<IssuesLatest>;
+  filterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
+  /** Those changed since their tab last showed them (`isUnread`), among the section's first list. */
+  unread(projectId: string): Promise<Issue[]>;
+  /** A new issue, answered by its number. */
+  create(projectId: string, title: string, body: string, confidential: boolean): Promise<number>;
+  delete(projectId: string, number: number): Promise<void>;
+  /** Answers the Markdown that shows the file in an issue's text. */
+  upload(projectId: string, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
+  /** The file name of the upload a link of an issue's text leads to; undefined for any other link. */
+  uploadName(projectId: string, source: string): Promise<string | undefined>;
+  /** Saves that upload as `target`; `onProgress` gets the share read after each chunk. */
+  saveUpload(projectId: string, source: string, target: string, onProgress: (fraction: number) => void): Promise<void>;
+}
+
+/** What the change requests section and `tet-ctl`'s change request verbs do on the repository's own
+ *  remote beyond a change request's tab (change-requests/tracker.ts's `changeRequestOps`), by project;
+ *  each throws what the host or the account refused (`refusable`). */
+export interface ChangeRequestOps {
+  /** What the host calls one; undefined without an account for it. */
+  kind(projectId: string): Promise<ChangeRequestKind | undefined>;
+  /** As `IssueOps.page`. */
+  page(
+    projectId: string,
+    filter: ChangeRequestFilter,
+    limit: number,
+    after?: string,
+  ): Promise<ListPage<ChangeRequestRow> & { latest?: ChangeRequestsLatest }>;
+  list(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]>;
+  latest(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
+  filterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
+  /** Those changed, or whose checks failed, since their tab last showed them (`isChangeRequestUnread`). */
+  unread(projectId: string): Promise<ChangeRequestRow[]>;
+  approve(projectId: string, number: number): Promise<void>;
+  /** By the repository's own method; `whenChecksPass` has the host merge it once they did. */
+  merge(projectId: string, number: number, whenChecksPass: boolean): Promise<void>;
+}
+
 /**
  * Handed over by main.ts, not imported: no electron or node-pty here, so test/main/ctl.test.ts
  * runs the server under plain node with these faked. The same singletons ipc/ holds: a second
@@ -233,26 +296,10 @@ export interface ControlDeps {
   addWorktree(projectId: string, branch: string): Promise<AddRepositoryResult>;
   deleteWorktree(worktree: ProjectRef, force: boolean): Promise<GitActionResult>;
   readCommands(root: string): Promise<ProjectCommand[]>;
-  /** issues.ts's, by project, with the deps of main.ts. */
-  setIssueSource(projectId: string, source: string): Promise<string | undefined>;
-  readIssueTracker(projectId: string): Promise<IssueTrackerInfo>;
-  unreadIssues(projectId: string): Promise<Issue[]>;
-  /** What the tracker refused is thrown (`refusable`). */
-  listIssues(projectId: string, filter: IssueFilter): Promise<Issue[]>;
-  latestIssues(projectId: string, filter: IssueFilter): Promise<IssuesLatest>;
-  issueFilterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
-  createIssue(projectId: string, title: string, body: string): Promise<number>;
-  deleteIssue(projectId: string, number: number): Promise<void>;
-  /** Answers the Markdown that shows the file in an issue's text. */
-  uploadIssueFile(projectId: string, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
-  /** change-requests/tracker.ts's, by project, with the deps of main.ts; what the host refused is
-   *  thrown (`refusable`). */
-  listChangeRequests(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]>;
-  latestChangeRequests(projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
-  changeRequestFilterOptions(projectId: string): Promise<{ labels: string[]; people: string[] }>;
-  unreadChangeRequests(projectId: string): Promise<ChangeRequestRow[]>;
-  approveChangeRequest(projectId: string, number: number): Promise<void>;
-  mergeChangeRequest(projectId: string, number: number, whenChecksPass: boolean): Promise<void>;
+  /** issues.ts's, the same the window's IPC takes. */
+  issues: IssueOps;
+  /** change-requests/tracker.ts's, the same the window's IPC takes. */
+  changeRequests: ChangeRequestOps;
   /** tracked.ts's: what an issue and a change request do alike, by kind. */
   tracked: Record<TrackedKind, TrackedOps>;
   /** Opens the project's issue or change request in the repository's or worktree's preview tab, or a

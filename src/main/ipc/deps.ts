@@ -1,6 +1,8 @@
 import type { NoticeProgress, NoticeSeverity } from "../../shared/types/app";
 import type { Requirements } from "../../shared/types/agents";
+import type { TrackedKind } from "../../shared/types/providers";
 import type { ControlRecords } from "../ctl/ctl-records";
+import type { ChangeRequestOps, IssueOps, TrackedOps } from "../ctl/ctl-verb";
 import type { EnvRequests } from "../ctl/env-requests";
 import type { EnvStore } from "../store/environment";
 import type { GitLoginStore } from "../git/git-logins";
@@ -39,6 +41,12 @@ export interface IpcDeps {
   projectDeps: ProjectDeps;
   /** Shared with the control channel (main.ts). */
   issueDeps: IssueDeps;
+  /** issues.ts's `issueOps`, the same the control channel takes. */
+  issues: IssueOps;
+  /** change-requests/tracker.ts's `changeRequestOps`, the same the control channel takes. */
+  changeRequests: ChangeRequestOps;
+  /** tracked.ts's `trackedOps`, the same the control channel takes. */
+  tracked: Record<TrackedKind, TrackedOps>;
   /** Tells the user (Notices.tsx), as main.ts does; a handler with a dialog up answers it instead. */
   notice: (severity: NoticeSeverity, message: string) => void;
   /** A download's progress notice (Notices.tsx's `showProgress`), as the auto-update's. */

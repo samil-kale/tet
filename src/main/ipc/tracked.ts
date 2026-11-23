@@ -13,15 +13,14 @@ import type {
 } from "../../shared/types/providers";
 import type { TrackedSessionsResult } from "../../shared/types/terminals";
 import { markAllSeen, setSeen } from "../store/tracked-seen";
-import { sendTrackedToAgent, trackedOps, trackedSessions } from "../tracked";
+import { sendTrackedToAgent, trackedSessions } from "../tracked";
 import { logFailure } from "../util/json-file";
 import type { IpcDeps } from "./deps";
 
 /** An issue's tab and a change request's alike, by kind (tracked.ts's `trackedOps`): by project, each
  *  answering its failure for the caller to notify. */
-export function registerTrackedIpc({ issueDeps }: Pick<IpcDeps, "issueDeps">): void {
+export function registerTrackedIpc({ issueDeps, tracked: ops }: Pick<IpcDeps, "issueDeps" | "tracked">): void {
   const { dataRoot } = issueDeps;
-  const ops = trackedOps(issueDeps);
 
   handle("tracked:read", async (_event, projectId: string, { kind, number }: TrackedRef): Promise<TrackedReadResult> => {
     try {

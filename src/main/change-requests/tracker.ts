@@ -15,6 +15,7 @@ import {
   type IssueFilterOptions,
   type ReviewThread,
 } from "../../shared/types/providers";
+import type { ChangeRequestOps } from "../ctl/ctl-verb";
 import { MAX_EDIT_BYTES } from "../git/explorer-read";
 import { issueRepository, type IssueDeps } from "../issues";
 import { hostProvider, onHost, trackedMarkdown, trackerRemote, WRITE_HANDS_OVER, type TrackerCall } from "../providers/issues";
@@ -173,6 +174,21 @@ export async function markChangeRequestsSeen(
   }
   const { updatedAt, checks } = await onRemote(deps, projectId, (provider, tracker) => provider.readChangeRequestUpdate(tracker, number));
   setSeen(deps.dataRoot, projectId, "change-request", number, updatedAt, checks === "failed");
+}
+
+/** What the change requests section and `tet-ctl` do on the repository's own remote beyond a change
+ *  request's tab, for both transports alike, as `trackedOps` is for what its tab does. */
+export function changeRequestOps(deps: Pick<IssueDeps, "accounts" | "dataRoot" | "repositories">): ChangeRequestOps {
+  return {
+    kind: (projectId) => changeRequestKind(deps, projectId),
+    page: (projectId, filter, limit, after) => readChangeRequestPage(deps, projectId, filter, limit, after),
+    list: (projectId, filter) => listChangeRequests(deps, projectId, filter),
+    latest: (projectId, filter) => latestChangeRequests(deps, projectId, filter),
+    filterOptions: (projectId) => changeRequestFilterOptions(deps, projectId),
+    unread: (projectId) => unreadChangeRequests(deps, projectId),
+    approve: (projectId, number) => approveChangeRequest(deps, projectId, number),
+    merge: (projectId, number, whenChecksPass) => mergeChangeRequest(deps, projectId, number, whenChecksPass),
+  };
 }
 
 /** A review thread as the change request's text gives it: where it was written, then its comments. */

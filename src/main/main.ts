@@ -12,18 +12,7 @@ import { trackedFileName } from "../shared/types/providers";
 import type { TabDescriptor, TabRef, TerminalStatus } from "../shared/types/terminals";
 import { installPendingUpdate, startAutoUpdate } from "./update/auto-update";
 import { readCommands } from "./store/tet-json";
-import {
-  changeIssueSource,
-  createIssue,
-  deleteIssue,
-  issueFilterOptions,
-  issueTrackerOf,
-  latestIssues,
-  listIssues,
-  unreadIssues,
-  uploadIssueFile,
-  type IssueDeps,
-} from "./issues";
+import { issueOps, type IssueDeps } from "./issues";
 import { sendTrackedToAgent, trackedOps, trackedSessions } from "./tracked";
 import { prepareControl } from "./ctl/ctl-channel";
 import { ControlRecords } from "./ctl/ctl-records";
@@ -61,14 +50,7 @@ import { accountEnv, sandboxTetValues } from "./terminals/account-env";
 import { ensureAskpass } from "./git/askpass";
 import { trackerAccount, type TabAccount } from "./providers/issues";
 import { ChangeRequestWatch } from "./change-requests/watch";
-import {
-  approveChangeRequest,
-  changeRequestFilterOptions,
-  latestChangeRequests,
-  listChangeRequests,
-  mergeChangeRequest,
-  unreadChangeRequests,
-} from "./change-requests/tracker";
+import { changeRequestOps } from "./change-requests/tracker";
 import { dropOuterKept } from "./store/env-names";
 import { installUncaughtHandler } from "./uncaught";
 import { AppWindow } from "./window";
@@ -269,6 +251,17 @@ const projectDeps: ProjectDeps = {
   notice,
 };
 
+const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
+
+const issueDeps: IssueDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
+/** What the Issues and change requests sections do and what an issue and a change request do alike,
+ *  one of each for both transports (ipc/ and the control channel). */
+const issues = issueOps(issueDeps);
+const changeRequests = changeRequestOps(issueDeps);
+const tracked = trackedOps(issueDeps);
+/** Tells of new change requests and failed checks of the account's (watch.ts). */
+const changeRequestWatch = new ChangeRequestWatch(issueDeps, (found) => send("app:notice", found));
+
 let workspaceOpened: Promise<void> | undefined;
 
 /**
@@ -347,21 +340,8 @@ async function startControl(): Promise<void> {
         addWorktree: (projectId, branch) => addWorktree(projectDeps, projectId, branch),
         deleteWorktree: (worktree, force) => deleteWorktree(projectDeps, worktree, { force, onRemote: false }),
         readCommands,
-        setIssueSource: (projectId, source) => changeIssueSource(issueDeps, projectId, source),
-        readIssueTracker: (projectId) => issueTrackerOf(issueDeps, projectId),
-        unreadIssues: (projectId) => unreadIssues(issueDeps, projectId),
-        listIssues: (projectId, filter) => listIssues(issueDeps, projectId, filter),
-        latestIssues: (projectId, filter) => latestIssues(issueDeps, projectId, filter),
-        issueFilterOptions: (projectId) => issueFilterOptions(issueDeps, projectId),
-        createIssue: (projectId, title, body) => createIssue(issueDeps, projectId, title, body, false),
-        deleteIssue: (projectId, number) => deleteIssue(issueDeps, projectId, number),
-        uploadIssueFile: (projectId, name, bytes) => uploadIssueFile(issueDeps, projectId, name, bytes),
-        listChangeRequests: (projectId, filter) => listChangeRequests(issueDeps, projectId, filter),
-        latestChangeRequests: (projectId, filter) => latestChangeRequests(issueDeps, projectId, filter),
-        changeRequestFilterOptions: (projectId) => changeRequestFilterOptions(issueDeps, projectId),
-        unreadChangeRequests: (projectId) => unreadChangeRequests(issueDeps, projectId),
-        approveChangeRequest: (projectId, number) => approveChangeRequest(issueDeps, projectId, number),
-        mergeChangeRequest: (projectId, number, whenChecksPass) => mergeChangeRequest(issueDeps, projectId, number, whenChecksPass),
+        issues,
+        changeRequests,
         tracked,
         openTracked: (ref, opened, keep, background) =>
           send("editor:open", { ref, path: trackedFileName(opened), keep, background, tracked: opened }),
@@ -392,14 +372,6 @@ async function startControl(): Promise<void> {
     logError("control channel not started", error);
   }
 }
-
-const settingsAccess = settingsAccessOf({ settings, window: appWindow, tabManagers, repositories });
-
-const issueDeps: IssueDeps = { accounts, dataRoot, repositories, settings: settingsAccess, store, tabManagers };
-/** What an issue and a change request do alike, for the control channel (the window's in ipc/tracked.ts). */
-const tracked = trackedOps(issueDeps);
-/** Tells of new change requests and failed checks of the account's (watch.ts). */
-const changeRequestWatch = new ChangeRequestWatch(issueDeps, (found) => send("app:notice", found));
 
 function createWindow(): void {
   appWindow.create(currentTheme(settings), settings.get().appearance.backgroundGradient);
@@ -462,6 +434,9 @@ if (!app.requestSingleInstanceLock()) {
       records,
       projectDeps,
       issueDeps,
+      issues,
+      changeRequests,
+      tracked,
       notice,
       noticeProgress: appWindow.noticeProgress,
       initialRequirements,

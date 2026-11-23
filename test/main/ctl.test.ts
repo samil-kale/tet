@@ -396,76 +396,88 @@ function deps(): ControlDeps {
       return force ? { ok: true } : (merging.deleteRefused ?? { ok: true });
     },
     readCommands: async () => [{ command: "npm run build", name: "build" }],
-    setIssueSource: async (projectId, source) => {
-      if (source === "no/such") {
-        throw new Error("404 Not Found");
-      }
-      calls.issueSources.push([projectId, source]);
-      return source.replace("https://host/", "") || undefined;
+    issues: {
+      // What only the window asks: the Issues section's page and an upload saved.
+      source: async () => undefined,
+      page: async () => ({ items: [] }),
+      uploadName: async () => undefined,
+      saveUpload: async () => undefined,
+      setSource: async (projectId, source) => {
+        if (source === "no/such") {
+          throw new Error("404 Not Found");
+        }
+        calls.issueSources.push([projectId, source]);
+        return source.replace("https://host/", "") || undefined;
+      },
+      tracker: async (projectId) => ({
+        provider: "gitlab",
+        host: "gitlab.example.com",
+        path: `${projectId}/tracker`,
+        source: null,
+        accounts: ["skale"],
+      }),
+      // The other project has no account for its tracker's host.
+      unread: async (projectId) => {
+        if (projectId === OTHER.id) {
+          throw new Error("No account for gitlab.example.com: add one under Accounts in Settings");
+        }
+        return [
+          {
+            number: 7,
+            title: "Changed",
+            url: "https://gitlab.example.com/g/r/-/issues/7",
+            open: true,
+            author: "mira",
+            createdAt: "2026-11-01T00:00:00Z",
+            updatedAt: "2026-11-06T09:00:00Z",
+            labels: ["bug"],
+            avatars: {},
+          },
+        ];
+      },
+      list: async (projectId, filter) => {
+        calls.issueCalls.push(`list:${projectId}:${JSON.stringify(filter)}`);
+        return [
+          {
+            number: 7,
+            title: "Changed",
+            url: "https://gitlab.example.com/g/r/-/issues/7",
+            open: true,
+            author: "mira",
+            createdAt: "2026-11-01T00:00:00Z",
+            updatedAt: "2026-11-06T09:00:00Z",
+            labels: ["bug"],
+            avatars: { mira: "https://gitlab.example.com/mira.png" },
+          },
+        ];
+      },
+      latest: async (projectId, filter) => {
+        calls.issueCalls.push(`latest:${projectId}:${JSON.stringify(filter)}`);
+        return { total: 1, updatedAt: "2026-11-06T09:00:00Z" };
+      },
+      filterOptions: async () => ({ labels: ["bug"], people: ["mira"] }),
+      create: async (projectId, title, body) => {
+        calls.issueCalls.push(`create:${projectId}:${title}:${body}`);
+        return 51;
+      },
+      delete: async (_projectId, number) => {
+        calls.issueCalls.push(`delete:${number}`);
+      },
+      upload: async (_projectId, name, bytes) => {
+        calls.issueCalls.push(`upload:${name}:${bytes.toString("utf8")}`);
+        return `![${name}](/uploads/${name})`;
+      },
     },
-    readIssueTracker: async (projectId) => ({
-      provider: "gitlab",
-      host: "gitlab.example.com",
-      path: `${projectId}/tracker`,
-      source: null,
-      accounts: ["skale"],
-    }),
-    // The other project has no account for its tracker's host.
-    unreadIssues: async (projectId) => {
-      if (projectId === OTHER.id) {
-        throw new Error("No account for gitlab.example.com: add one under Accounts in Settings");
-      }
-      return [
-        {
-          number: 7,
-          title: "Changed",
-          url: "https://gitlab.example.com/g/r/-/issues/7",
-          open: true,
-          author: "mira",
-          createdAt: "2026-11-01T00:00:00Z",
-          updatedAt: "2026-11-06T09:00:00Z",
-          labels: ["bug"],
-          avatars: {},
-        },
-      ];
+    changeRequests: {
+      kind: async () => undefined,
+      page: async () => ({ items: [] }),
+      list: async () => [],
+      latest: async () => ({ total: 0, checks: "" }),
+      filterOptions: async () => ({ labels: [], people: [] }),
+      unread: async () => [],
+      approve: async () => undefined,
+      merge: async () => undefined,
     },
-    listIssues: async (projectId, filter) => {
-      calls.issueCalls.push(`list:${projectId}:${JSON.stringify(filter)}`);
-      return [
-        {
-          number: 7,
-          title: "Changed",
-          url: "https://gitlab.example.com/g/r/-/issues/7",
-          open: true,
-          author: "mira",
-          createdAt: "2026-11-01T00:00:00Z",
-          updatedAt: "2026-11-06T09:00:00Z",
-          labels: ["bug"],
-          avatars: { mira: "https://gitlab.example.com/mira.png" },
-        },
-      ];
-    },
-    latestIssues: async (projectId, filter) => {
-      calls.issueCalls.push(`latest:${projectId}:${JSON.stringify(filter)}`);
-      return { total: 1, updatedAt: "2026-11-06T09:00:00Z" };
-    },
-    issueFilterOptions: async () => ({ labels: ["bug"], people: ["mira"] }),
-    createIssue: async (projectId, title, body) => {
-      calls.issueCalls.push(`create:${projectId}:${title}:${body}`);
-      return 51;
-    },
-    deleteIssue: async (_projectId, number) => {
-      calls.issueCalls.push(`delete:${number}`);
-    },
-    uploadIssueFile: async (_projectId, name, bytes) => {
-      calls.issueCalls.push(`upload:${name}:${bytes.toString("utf8")}`);
-      return `![${name}](/uploads/${name})`;
-    },
-    listChangeRequests: async () => [],
-    latestChangeRequests: async () => ({ total: 0, checks: "" }),
-    changeRequestFilterOptions: async () => ({ labels: [], people: [] }),
-    unreadChangeRequests: async () => [],
-    approveChangeRequest: async () => undefined,
     tracked: {
       issue: {
         nameOf: (number) => `issue #${number}`,
@@ -553,7 +565,6 @@ function deps(): ControlDeps {
           : number === 8
             ? { ref: WORKTREE, worktree: "four", tabId: "s-old", agentId: "claude", title: "", archived: true }
             : undefined,
-    mergeChangeRequest: async () => undefined,
     shutdown: (relaunch) => {
       calls.shutdown.push(relaunch);
     },
