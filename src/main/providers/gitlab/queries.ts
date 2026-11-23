@@ -120,10 +120,12 @@ export const MERGE_REQUESTS_QUERY = `query($path: ID!, $first: Int!, $cursor: St
   }
 }`;
 
-export const MERGE_REQUESTS_LATEST_QUERY = `query($path: ID!, ${MERGE_REQUEST_FILTER_VARIABLES}) {
+/** Paged whole: `count` takes in merge requests from forks, which only their nodes tell apart. */
+export const MERGE_REQUESTS_LATEST_QUERY = `query($path: ID!, $cursor: String, ${MERGE_REQUEST_FILTER_VARIABLES}) {
   project(fullPath: $path) {
-    mergeRequests(first: 100, sort: UPDATED_DESC, ${MERGE_REQUEST_FILTER_ARGUMENTS}) {
+    mergeRequests(first: 100, after: $cursor, sort: UPDATED_DESC, ${MERGE_REQUEST_FILTER_ARGUMENTS}) {
       count
+      pageInfo { hasNextPage endCursor }
       nodes { iid updatedAt sourceProject { fullPath } headPipeline { status } }
     }
   }

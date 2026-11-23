@@ -1198,7 +1198,8 @@ const MAX_BATCH_CHARS = 24_000;
 async function gitOnPaths(cwd: string, args: string[], paths?: string[], emptyCode?: number): Promise<GitResult> {
   const literal = [LITERAL_PATHSPECS, ...args];
   if (paths === undefined) {
-    return git(cwd, literal);
+    // Even with no paths: a file named as a revision ("HEAD") is otherwise ambiguous.
+    return git(cwd, [...literal, "--"]);
   }
   const batches: string[][] = [[]];
   let length = 0;
@@ -1326,7 +1327,8 @@ export async function checkout(cwd: string, target: CheckoutTarget, localBranche
   if (target.remote === undefined || localBranches.includes(target.name)) {
     return run(cwd, ["switch", target.name]);
   }
-  const tracked = await run(cwd, ["switch", "--track", fullRefName(target)]);
+  // Named, as git would take a remote's name containing "/" into the branch's.
+  const tracked = await run(cwd, ["switch", "--create", target.name, "--track", fullRefName(target)]);
   if (tracked.ok) {
     return tracked;
   }
@@ -1535,6 +1537,9 @@ export async function readLog(cwd: string, limit: number, revisions: string[], s
     "-z",
     `--format=%H${LOG_FIELD}%P${LOG_FIELD}%an${LOG_FIELD}%at${LOG_FIELD}%D${LOG_FIELD}%s`,
     ...(search ? searchArgs(search) : []),
+    // The revisions end here, so a file named as one ("HEAD") is no ambiguity.
+    "--",
+    ...(search?.field === "path" ? [searchPathspec(search.text)] : []),
   ]);
   // An unborn branch has no HEAD to log: an empty graph, not an error.
   if (result.code !== 0) {
@@ -1575,8 +1580,13 @@ function searchArgs({ text, field }: CommitSearch): string[] {
     case "author":
       return ["--fixed-strings", "-i", `--author=${text}`];
     case "path":
-      return ["--", `:(icase)*${text.replace(/[*?[]/g, "[$&]")}*`];
+      return [];
   }
+}
+
+/** A path search's pathspec: the text anywhere in the path, ignoring case, its glob characters literal. */
+function searchPathspec(text: string): string {
+  return `:(icase)*${text.replace(/[*?[]/g, "[$&]")}*`;
 }
 
 const REF_KINDS: [prefix: string, kind: GraphRef["kind"]][] = [

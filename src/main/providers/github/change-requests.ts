@@ -1,4 +1,13 @@
-import { type GitProviderChangeRequests, ApiError, firstNodes, type GraphqlPage, checksText, reached, allNodes } from "../provider";
+import {
+  type GitProviderChangeRequests,
+  ApiError,
+  firstNodes,
+  type GraphqlPage,
+  checksText,
+  reached,
+  allNodes,
+  ownTotal,
+} from "../provider";
 import { sender, repositoryOf, repositoryIds, mutate, readPullRequestNode, pullRequestName } from "./api";
 import { pullRequestFields, updatePullRequestWrite } from "./fields";
 import {
@@ -40,20 +49,23 @@ export const githubChangeRequests: GitProviderChangeRequests = {
 
   async find({ host, token, path }, head) {
     // `headRefName` matches a fork's branch of that name too, so its repository is read alongside.
-    const query = `query($owner: String!, $name: String!, $head: String!) {
+    // Paged whole, as forks' pull requests of that branch name may come first.
+    const query = `query($owner: String!, $name: String!, $head: String!, $cursor: String) {
       repository(owner: $owner, name: $name) {
-        pullRequests(headRefName: $head, states: OPEN, first: 20) {
+        pullRequests(headRefName: $head, states: OPEN, first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
           nodes { number url headRepository { nameWithOwner } }
         }
       }
     }`;
-    const data = (await sender(host, token)(query, { ...repositoryOf(path), head })) as {
-      repository: { pullRequests: { nodes: GitHubPullRequest[] } } | null;
-    };
-    if (!data.repository) {
-      throw new ApiError(404, `${path} was not found, or this account cannot read it`);
-    }
-    return ownPullRequest(data.repository.pullRequests.nodes, path);
+    const found = await allNodes<GitHubPullRequest>(sender(host, token), query, { ...repositoryOf(path), head }, (data) => {
+      const repository = (data as { repository: { pullRequests: GraphqlPage<GitHubPullRequest> } | null }).repository;
+      if (!repository) {
+        throw new ApiError(404, `${path} was not found, or this account cannot read it`);
+      }
+      return repository.pullRequests;
+    });
+    return ownPullRequest(found, path);
   },
 
   async create({ host, token, path }, { head, base, title, body, draft }) {
@@ -107,12 +119,20 @@ export const githubChangeRequests: GitProviderChangeRequests = {
     type Latest = Pick<GitHubPullRequestRow, "number" | "updatedAt" | "headRepository"> & {
       head: { nodes: { commit: { statusCheckRollup: { state: string } | null } }[] };
     };
-    const data = (await sender(host, token)(PULL_REQUESTS_LATEST_QUERY, { query: pullRequestSearch(path, filter, "updated") })) as {
-      search: { issueCount: number; nodes: Latest[] };
-    };
-    const own = data.search.nodes.filter((entry) => fromOwnBranch(entry, path));
+    let found = 0;
+    const nodes = await allNodes<Latest>(
+      sender(host, token),
+      PULL_REQUESTS_LATEST_QUERY,
+      { query: pullRequestSearch(path, filter, "updated") },
+      (data) => {
+        const { search } = data as { search: GraphqlPage<Latest> & { issueCount: number } };
+        found = search.issueCount;
+        return search;
+      },
+    );
+    const own = nodes.filter((entry) => fromOwnBranch(entry, path));
     return {
-      total: data.search.issueCount,
+      total: ownTotal(own.length, nodes.length, found),
       updatedAt: own[0]?.updatedAt,
       checks: checksText(own.map((entry) => ({ number: entry.number, checks: checksOf(entry.head.nodes[0]?.commit.statusCheckRollup) }))),
     };

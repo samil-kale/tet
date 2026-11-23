@@ -141,6 +141,19 @@ export function requireTitle(title: string): string {
 }
 
 /**
+ * Opens `filePath` for reading only as a plain file: a sandbox writes into its session folders, and a
+ * pipe planted there would hold the open, and a thread of the main process with it, forever.
+ */
+export async function openPlainFile(filePath: string): Promise<fs.promises.FileHandle> {
+  const handle = await fs.promises.open(filePath, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  if (!(await handle.stat()).isFile()) {
+    await handle.close();
+    throw new Error(`${filePath} is not a plain file`);
+  }
+  return handle;
+}
+
+/**
  * Hands `onLine` the transcript's lines from the start until it returns true or the window ends —
  * the forward counterpart to `readLinesBackwards`, for what only the head of a file says (the
  * session's id, when it began, the first prompt).
@@ -149,7 +162,14 @@ export function requireTitle(title: string): string {
  * `onLine` saw only part of the window, so a caller caching by size must not keep that answer.
  */
 export async function readHeadLines(filePath: string, label: string, onLine: (line: string) => boolean): Promise<boolean> {
-  const stream = fs.createReadStream(filePath, { encoding: "utf8", end: TRANSCRIPT_SCAN_BYTES });
+  let handle: fs.promises.FileHandle;
+  try {
+    handle = await openPlainFile(filePath);
+  } catch (error) {
+    logError(`${label} transcript head scan failed`, error);
+    return false;
+  }
+  const stream = handle.createReadStream({ encoding: "utf8", end: TRANSCRIPT_SCAN_BYTES });
   const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
   try {
     for await (const line of lines) {
@@ -278,7 +298,7 @@ export async function scanTranscriptTail<T>(
   if (hit?.size === known.size) {
     return { tail: hit.tail, size: known.size, mtimeMs: known.mtimeMs };
   }
-  const handle = await fs.promises.open(filePath, "r");
+  const handle = await openPlainFile(filePath);
   try {
     const { size, mtimeMs } = await handle.stat();
     const cached = cache.get(filePath);

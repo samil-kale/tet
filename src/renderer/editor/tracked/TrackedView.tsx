@@ -53,6 +53,7 @@ export function TrackedView({
               at={issue.createdAt}
               text={issue.body}
               writing={writing}
+              onDraft={actions.draft}
               onEdit={(body) => {
                 actions.update({ body });
                 return Promise.resolve(true);
@@ -77,6 +78,7 @@ export function TrackedView({
                   text={note.body}
                   writing={writing}
                   internal={note.internal}
+                  onDraft={actions.draft}
                   onEdit={note.author === viewer && !note.fixed ? (body) => actions.editComment(note.id, body) : undefined}
                   onDelete={
                     note.author === viewer && !note.fixed

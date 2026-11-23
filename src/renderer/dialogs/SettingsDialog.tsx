@@ -5,7 +5,6 @@ import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { DEFAULT_PROMPTS, effectivePrompt } from "../../shared/prompts";
 import { resolveTheme, schemeKind, themeKey, THEMES } from "../../shared/themes";
 import { COLOR_SCHEMES, DEFAULT_KEYBINDING_PRESET_ID, PROMPT_IDS, withSettings } from "../../shared/types/settings";
-import type { AgentId } from "../../shared/types/agents";
 import type { AppInfo } from "../../shared/types/app";
 import type { EnvEdit } from "../../shared/types/environment";
 import type { ExplorerSortOrder } from "../../shared/types/files";
@@ -277,26 +276,6 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
     }
   });
 
-  /** A model not offered any more is shown replaced by the default, not saved: another machine may
-   *  offer it. */
-  const replaceModel = useCallback(
-    (agentId: AgentId): void =>
-      setSettings((current) =>
-        current
-          ? {
-              ...current,
-              prompts: {
-                ...current.prompts,
-                commitSuggesters: current.prompts.commitSuggesters.map((entry) =>
-                  entry.agentId === agentId ? { ...entry, model: "" } : entry,
-                ),
-              },
-            }
-          : current,
-      ),
-    [],
-  );
-
   const editVariables = changing((change: (rows: typeof variables) => typeof variables): void => {
     variablesEdited.current = true;
     setVariables(change);
@@ -340,7 +319,8 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
       primary={{ label: "Save", blocked, disabled: loading || loadFailed !== undefined, run: () => void save() }}
     >
       {loadFailed !== undefined && <DialogError message={loadFailed} />}
-      {shown === "appearance" && (
+      {/* Once read, as every tab of settings: an edit before would be saved but not shown. */}
+      {shown === "appearance" && settings && (
         <>
           <FieldGroup label="Color scheme">
             <RadioGroup
@@ -351,7 +331,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
           </FieldGroup>
           <Field label={chosenKind === "dark" ? "Dark theme" : "Light theme"}>
             <Dropdown
-              value={resolveTheme(settings?.appearance[themeKey(chosenKind)], chosenKind).id}
+              value={resolveTheme(settings.appearance[themeKey(chosenKind)], chosenKind).id}
               onChange={(id) => edit({ appearance: { [themeKey(chosenKind)]: id } })}
               options={THEMES.filter((theme) => theme.kind === chosenKind).map((theme) => ({
                 value: theme.id,
@@ -362,7 +342,7 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
           <FieldGroup label="Window">
             <Checkbox
               label="Gradient background"
-              checked={settings?.appearance.backgroundGradient ?? true}
+              checked={settings.appearance.backgroundGradient}
               onChange={(backgroundGradient) => edit({ appearance: { backgroundGradient } })}
             />
           </FieldGroup>
@@ -471,7 +451,6 @@ export function SettingsDialog({ tab: openedOn, onClose }: SettingsDialogProps) 
                 <SuggesterList
                   value={settings.prompts.commitSuggesters}
                   onChange={(suggesters) => edit({ prompts: { commitSuggesters: suggesters } })}
-                  onReplaceModel={replaceModel}
                   hold={holdListing}
                 />
                 <p className="dialog-detail">

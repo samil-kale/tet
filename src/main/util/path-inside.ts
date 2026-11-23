@@ -44,9 +44,10 @@ export function repositoryRelative(root: string, target: string): string | undef
  * so a link swapped in meanwhile is refused too, before anything is read or written. Its folder is
  * checked before, too: a file created through a linked folder would be left behind outside.
  */
-export async function openInside(root: string, file: string, flags: string | number): Promise<fs.promises.FileHandle> {
+export async function openInside(root: string, file: string, flags: InsideFlags): Promise<fs.promises.FileHandle> {
   await assertInside(root, path.dirname(file));
-  const handle = await fs.promises.open(file, flags);
+  // Never waits on a pipe planted there: it opens at once and fails the plain-file check below.
+  const handle = await fs.promises.open(file, (typeof flags === "number" ? flags : FLAGS[flags]) | (fs.constants.O_NONBLOCK ?? 0));
   try {
     const [realRoot, realFile] = await Promise.all([root, file].map((entry) => fs.promises.realpath(entry)));
     const [opened, there] = await Promise.all([handle.stat(), fs.promises.stat(realFile)]);
@@ -60,6 +61,19 @@ export async function openInside(root: string, file: string, flags: string | num
     throw error;
   }
 }
+
+const { O_RDONLY, O_RDWR, O_WRONLY, O_CREAT, O_EXCL, O_TRUNC, O_APPEND } = fs.constants;
+
+/** `fs.open`'s flag strings openInside takes, as numbers it can add to. */
+const FLAGS = {
+  r: O_RDONLY,
+  "r+": O_RDWR,
+  wx: O_WRONLY | O_CREAT | O_TRUNC | O_EXCL,
+  "wx+": O_RDWR | O_CREAT | O_TRUNC | O_EXCL,
+  a: O_WRONLY | O_CREAT | O_APPEND,
+} as const;
+
+type InsideFlags = keyof typeof FLAGS | number;
 
 /** Reads `file`, opened as openInside opens it. */
 export async function readInside(root: string, file: string): Promise<Buffer<ArrayBuffer>> {

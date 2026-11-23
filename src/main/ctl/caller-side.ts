@@ -58,7 +58,7 @@ export const SANDBOX_CALLER: CallerSide = {
   ...SANDBOX_TAB,
   opens: hasSandbox,
   holdsTabs: true,
-  reachesTab: (tab, own) => own || tab?.sandbox !== undefined || tab?.sandboxOnly === true,
+  reachesTab: (tab, own) => own || tab?.sandboxed === true || tab?.sandbox !== undefined || tab?.sandboxOnly === true,
   projects: (list, own) =>
     list
       .filter((entry) => entry.id === own.projectId)

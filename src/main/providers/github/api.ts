@@ -20,9 +20,14 @@ export function readsWithToken(host: string, source: string): boolean {
   return url?.protocol === "https:" && url.host.toLowerCase() === host.toLowerCase();
 }
 
-/** github.com's GraphQL lives on its own subdomain; GitHub Enterprise serves it under /api. */
+/** github.com and its data residency tenants (`*.ghe.com`), unlike a GitHub Enterprise Server. */
+export function isDotcom(host: string): boolean {
+  return host === "github.com" || host.endsWith(".ghe.com");
+}
+
+/** github.com's GraphQL, and a tenant's, lives on an `api.` subdomain; GitHub Enterprise Server serves it under /api. */
 export function graphqlUrl(host: string): string {
-  return host === "github.com" ? "https://api.github.com/graphql" : `https://${host}/api/graphql`;
+  return isDotcom(host) ? `https://api.${host}/graphql` : `https://${host}/api/graphql`;
 }
 
 export function sender(host: string, token: string): GraphqlSend {

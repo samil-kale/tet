@@ -100,16 +100,16 @@ export function runWithFollowUp(
 }
 
 /**
- * Runs a file action. The running mark is per repository or worktree, since one lane serves all;
- * called once per section, each with its own bar, and raised by `act` alone. Counted, not flagged: an
- * action the main process refuses while another runs (a context menu entry during a commit) ends
- * first, and must not clear the mark of the one still running.
+ * `useBusy` per repository or worktree, since one lane serves all: `hold` marks `refKey` while
+ * `work` runs. Counted, not flagged: an action the main process refuses while another runs (a
+ * context menu entry during a commit) ends first, and must not clear the mark of the one still
+ * running. `hold` is stable.
  */
-export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask: FileAsk } {
-  const [actingIn, setActingIn] = useState<ReadonlyMap<string, number>>(() => new Map());
+function useBusyIn(): { busyIn: ReadonlyMap<string, number>; hold: <T>(refKey: string, work: () => Promise<T>) => Promise<T> } {
+  const [busyIn, setBusyIn] = useState<ReadonlyMap<string, number>>(() => new Map());
   const count = useCallback(
-    (delta: number): void =>
-      setActingIn((current) => {
+    (refKey: string, delta: number): void =>
+      setBusyIn((current) => {
         const next = new Map(current);
         const running = (next.get(refKey) ?? 0) + delta;
         if (running > 0) {
@@ -119,29 +119,38 @@ export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask
         }
         return next;
       }),
-    [refKey],
+    [],
   );
+  const hold = useCallback(
+    async <T>(refKey: string, work: () => Promise<T>): Promise<T> => {
+      count(refKey, 1);
+      try {
+        return await work();
+      } finally {
+        count(refKey, -1);
+      }
+    },
+    [count],
+  );
+  return { busyIn, hold };
+}
+
+/** Runs a file action, called once per section, each with its own bar, raised by `act` alone. */
+export function useFileAct(refKey: string): { acting: boolean; act: FileAct; ask: FileAsk } {
+  const { busyIn, hold } = useBusyIn();
   const ask: FileAsk = useCallback(async (action) => refusal(await action(), "Git command failed"), []);
   const act: FileAct = useMemo(
-    () =>
-      notifying(async (action: () => Promise<GitActionResult>) => {
-        count(1);
-        try {
-          return await ask(action);
-        } finally {
-          count(-1);
-        }
-      }),
-    [count, ask],
+    () => notifying((action: () => Promise<GitActionResult>) => hold(refKey, () => ask(action))),
+    [hold, refKey, ask],
   );
-  return { acting: actingIn.has(refKey), act, ask };
+  return { acting: busyIn.has(refKey), act, ask };
 }
 
 /**
- * The same for a branch command, which App runs (`runBranchAction`: one per repository or worktree,
- * whatever started it) while the bar belongs to the view that offered it: the git lane and the
- * project list each have one. Counted for the same reason as above, and wrapped around `run` alone:
- * what a question asked for runs on the question's bar.
+ * The project list's bar for a branch command, which App runs (`runBranchAction`: one per repository
+ * or worktree, whatever started it) while the bar belongs to the view that offered it; one bar over
+ * every repository and worktree the list holds, where the git lane's is per one (`useBusyIn`).
+ * Wrapped around `run` alone: what a question asked for runs on the question's bar.
  */
 function useBusyStart<A extends unknown[], R>(run: (...args: A) => Promise<R>): { busy: boolean; start: (...args: A) => Promise<R> } {
   const { busy, run: hold } = useBusy();
@@ -185,7 +194,14 @@ export function useBranchActions(activeRefKey: string | null): {
       activeRefKey ? runBranchAction(activeRefKey, action) : Promise.resolve({ ok: true }),
     [activeRefKey, runBranchAction],
   );
-  const { busy: gitLaneBusy, start: runActiveHere } = useBusyStart(runActiveBranchAction);
+  // The git lane's bar is per repository or worktree: a slow fetch in one shows nothing in another.
+  const { busyIn: gitLaneBusyIn, hold: holdGitLane } = useBusyIn();
+  const runActiveHere = useCallback(
+    (action: () => Promise<GitActionResult>): Promise<GitActionResult> =>
+      activeRefKey ? holdGitLane(activeRefKey, () => runBranchAction(activeRefKey, action)) : Promise.resolve({ ok: true }),
+    [activeRefKey, holdGitLane, runBranchAction],
+  );
+  const gitLaneBusy = activeRefKey !== null && gitLaneBusyIn.has(activeRefKey);
   const activeBranch = useMemo<BranchActions>(
     () => ({
       locked: activeRefKey !== null && branchActions.has(activeRefKey),

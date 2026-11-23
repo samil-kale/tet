@@ -38,7 +38,7 @@ import { AgentIcon } from "./ui/agent-icons";
 import { NavigationBar } from "./lanes/NavigationBar";
 import { StatusBar } from "./ui/StatusBar";
 import type { StatusListItem } from "./ui/StatusList";
-import { isWindowCovered, useWindowCovered } from "./ui/window-covered";
+import { useWindowCovered } from "./ui/window-covered";
 import { useAgents } from "./ui/use-agents";
 import { forget, sameList } from "./identity";
 import { onRefClosed, refClosed } from "./ref-lifetime";
@@ -237,8 +237,9 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         const project = opened && list.find((entry) => entry.id === opened.projectId);
         if (project) {
           void window.tet.startup.anyAgentInstalled().then((installed) => {
+            // Never over one already open: its edits are for its own project.
             if (!installed) {
-              setSbxSettingsProject(project);
+              setSbxSettingsProject((current) => current ?? project);
             }
           });
         }
@@ -361,9 +362,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, [activeRef]);
 
   useWindowShortcuts({
-    // Never over another dialog: Escape closes the last one opened (use-escape.ts), which has to be
-    // the one on top — an agent's environment dialog, drawn last, can already be up.
-    settings: () => !isWindowCovered() && setSettingsOpen({}),
+    settings: () => setSettingsOpen({}),
     toggleProjects: () => toggleLane("projects"),
     toggleGit: () => toggleLane("git"),
     toggleFiles: () => toggleLane("files"),
@@ -598,7 +597,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       {addOpen && <AddRepositoryDialog onClose={closeAdd} />}
 
       {settingsOpen && <SettingsDialog tab={settingsOpen.tab} onClose={closeSettings} />}
-      {sbxSettingsProject && <SbxSettingsDialog project={sbxSettingsProject} onClose={closeSbxSettings} />}
+      {sbxSettingsProject && <SbxSettingsDialog key={sbxSettingsProject.id} project={sbxSettingsProject} onClose={closeSbxSettings} />}
       {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 
       <Notices />

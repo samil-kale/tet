@@ -11,6 +11,8 @@ export interface TrackedActions {
   openFile: (path: string) => void;
   /** Any other link of its text: an upload saved where the user picks, the rest in the browser. */
   openLink: (url: string) => void;
+  /** A box (`key`, one per box) holds text not yet sent, or no longer (`setTrackedDraft`). */
+  draft: (key: string, drafting: boolean) => void;
   comment: (body: string, internal: boolean) => Promise<boolean>;
   editComment: (id: string, body: string) => Promise<boolean>;
   deleteComment: (id: string) => Promise<void>;

@@ -57,19 +57,19 @@ export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): HandlersOf<"
       return { result: { deleted: branch } };
     },
 
-    // From the repository alone: the worktree goes at the end, which would end a caller inside it.
+    // Not from the worktree merged: it goes at the end, which would end a caller inside it.
     // Every step before the fast-forward leaves nothing to undo, so each refusal says what to do
     // and that running it again picks up where it stopped.
     "worktree-agent-merge": async (args, caller) => {
       const found = project(args, caller);
       const name = text(args, "branch", "branch");
-      if (caller.worktree !== undefined) {
+      const { worktree, ref } = tetWorktree(found, name);
+      if (sameProjectRef(ref, callerRef(caller))) {
         throw new ControlError(
           "bad_args",
-          `worktree-agent-merge runs only from the project's repository: it deletes the worktree when done, which would close this tab. Run "tet-ctl worktree-agent-merge ${name}" from a tab of the repository, or ask the user to.`,
+          `worktree-agent-merge cannot run from the worktree it merges: it deletes the worktree when done, which would close this tab. Run "tet-ctl worktree-agent-merge ${name}" from another tab of the project, or ask the user to.`,
         );
       }
-      const { worktree, ref } = tetWorktree(found, name);
       const branch = worktree.branch;
       if (branch === undefined) {
         throw new ControlError(

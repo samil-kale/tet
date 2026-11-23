@@ -231,9 +231,14 @@ export const Explorer = memo(function Explorer({
     setDropDir(null);
   };
 
+  // Nothing while filtering, where every folder shows expanded: a click would change unseen state.
   const toggle = useCallback(
-    (node: TreeNode): void => setExpanded((current) => ({ ...current, [node.id]: !isExpanded(node, current) })),
-    [],
+    (node: TreeNode): void => {
+      if (!filtering) {
+        setExpanded((current) => ({ ...current, [node.id]: !isExpanded(node, current) }));
+      }
+    },
+    [filtering],
   );
   const flat = useMemo(() => visibleRows(shown, (node) => filtering || isExpanded(node, expanded)), [shown, expanded, filtering]);
   const anyExpanded = tree.some((node) => node.children !== undefined && isExpanded(node, expanded));

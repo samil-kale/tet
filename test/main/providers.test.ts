@@ -28,7 +28,7 @@ import {
 } from "../../src/main/providers/github/issues";
 import { issueFieldOf as gitHubIssueFieldOf, FIELD_HANDLERS as GITHUB_FIELD_HANDLERS } from "../../src/main/providers/github/fields";
 import { issueSearch, pullRequestSearch } from "../../src/main/providers/github/queries";
-import { readsWithToken } from "../../src/main/providers/github/api";
+import { graphqlUrl, readsWithToken } from "../../src/main/providers/github/api";
 import { gitlab } from "../../src/main/providers/gitlab";
 import {
   blockersOf as gitLabBlockersOf,
@@ -72,6 +72,7 @@ import {
   graphqlError,
   idsByName,
   optionsOf,
+  ownTotal,
   pickHandler,
   sendMutation,
   valueHandler,
@@ -332,6 +333,12 @@ describe("the issues of a tracker", () => {
     assert.equal(readsWithToken("github.com", "https://github.com.example.com/a.png"), false);
     assert.equal(readsWithToken("github.com", "http://github.com/a.png"), false);
     assert.equal(readsWithToken("github.com", "docs/a.png"), false);
+  });
+
+  it("sends GraphQL to github.com's and a tenant's api subdomain, an Enterprise Server's /api", () => {
+    assert.equal(graphqlUrl("github.com"), "https://api.github.com/graphql");
+    assert.equal(graphqlUrl("octo.ghe.com"), "https://api.octo.ghe.com/graphql");
+    assert.equal(graphqlUrl("git.example.com"), "https://git.example.com/api/graphql");
   });
 
   it("puts a change in GitLab's words", () => {
@@ -1359,6 +1366,13 @@ describe("a pull or merge request", () => {
     assert.equal(checkoutSentence(worktrees, inRepository, "focus"), "Its branch `focus` is checked out in the worktree /tet/worktrees/a.");
     assert.equal(checkoutSentence(worktrees, inRepository, "other"), "Its branch `other` is checked out in the worktree /elsewhere.");
     assert.equal(checkoutSentence(worktrees, inRepository, "gone"), "Its branch `gone` is checked out nowhere in this project.");
+  });
+
+  it("counts a pull request search's own, and what paging left unread", () => {
+    // 3 found, one a fork's: the list shows 2.
+    assert.equal(ownTotal(2, 3, 3), 2);
+    // 1200 found, 1000 read (900 own): the 200 unread count as found.
+    assert.equal(ownTotal(900, 1000, 1200), 1100);
   });
 
   it("found open is the repository's own, never a fork's branch of the same name", () => {

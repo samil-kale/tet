@@ -85,6 +85,14 @@ describe("file links", () => {
     assert.deepEqual(fileLinksIn("see ../up/file.json"), ["../up/file.json"]);
     assert.deepEqual(fileLinksIn(String.raw`opened C:\Users\x\file.txt ok`), [String.raw`C:\Users\x\file.txt`]);
     assert.deepEqual(fileLinksIn("config ~/.tet/settings.json"), ["~/.tet/settings.json"]);
+    assert.deepEqual(fileLinksIn("error in /home/u/src/a.ts now"), ["/home/u/src/a.ts"]);
+    assert.deepEqual(fileLinksIn("/etc/hosts.conf"), ["/etc/hosts.conf"]);
+    assert.deepEqual(fileLinksIn("at /srv/app/x.ts:12:3"), ["/srv/app/x.ts"]);
+    assert.deepEqual(fileLinksIn("see /a.ts"), ["/a.ts"]);
+  });
+
+  it("takes a URL's path without the slashes before its host", () => {
+    assert.deepEqual(fileLinksIn("https://example.com/a/b.html"), ["example.com/a/b.html"]);
   });
 
   it("finds a bare file name, and every one on a row", () => {

@@ -9,7 +9,7 @@ import {
   fetchOk,
   ApiError,
 } from "../provider";
-import { headers, issueNodeId, mutate, readIssueNode, readsWithToken, repositoryIds, repositoryOf, sender } from "./api";
+import { headers, isDotcom, issueNodeId, mutate, readIssueNode, readsWithToken, repositoryIds, repositoryOf, sender } from "./api";
 import { fieldHandlerOf, readExtras, readTarget, updateIssueWrite } from "./fields";
 import {
   assigneesOf,
@@ -75,7 +75,7 @@ export function uploadMarkdown(name: string, url: string, contentType: string): 
 
 /** github.com and its data residency tenants have the upload; a GitHub Enterprise Server does not. */
 export function hasUpload(host: string): boolean {
-  return host === "github.com" || host.endsWith(".ghe.com");
+  return isDotcom(host);
 }
 
 /** What a filter asks for, in the words of `ISSUES_QUERY` and `LATEST_QUERY`. Its `labels` leave an issue with any of
@@ -119,11 +119,19 @@ export const githubIssues: GitProviderIssues = {
       };
       return { total: found.search.issueCount, updatedAt: found.search.nodes[0]?.updatedAt };
     }
-    const data = (await sender(host, token)(LATEST_QUERY, issuesVariables(path, filter))) as {
-      repository: { issues: { totalCount: number; nodes: { updatedAt: string }[] } };
-    };
+    const send = sender(host, token);
+    // `issues` counts an issue with any of several labels, so the search, which needs them all, counts
+    // instead; the latest update stays `issues`', which follows a change at once.
+    const [data, searched] = await Promise.all([
+      send(LATEST_QUERY, issuesVariables(path, filter)) as Promise<{
+        repository: { issues: { totalCount: number; nodes: { updatedAt: string }[] } };
+      }>,
+      filter.labels.length > 1
+        ? (send(ISSUE_SEARCH_LATEST_QUERY, { query: issueSearch(path, filter, "updated") }) as Promise<{ search: { issueCount: number } }>)
+        : undefined,
+    ]);
     const { totalCount, nodes } = data.repository.issues;
-    return { total: totalCount, updatedAt: nodes[0]?.updatedAt };
+    return { total: searched?.search.issueCount ?? totalCount, updatedAt: nodes[0]?.updatedAt };
   },
 
   async read({ host, token, path }, number) {

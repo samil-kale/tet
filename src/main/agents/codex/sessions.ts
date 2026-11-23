@@ -8,6 +8,7 @@ import {
   nonEmptyString,
   parseLine,
   READ_CONCURRENCY,
+  openPlainFile,
   readHeadLines,
   requireTitle,
   scanTranscriptHead,
@@ -178,7 +179,12 @@ async function readSessionNames(home: string): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   let text: string;
   try {
-    text = await fs.promises.readFile(sessionIndexFile(home), "utf8");
+    const handle = await openPlainFile(sessionIndexFile(home));
+    try {
+      text = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
   } catch {
     return names;
   }

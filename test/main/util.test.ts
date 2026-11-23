@@ -200,7 +200,7 @@ describe("the quoting helpers", () => {
 describe("an external terminal", () => {
   it("is Windows Terminal on win32, PowerShell calling the program", () => {
     // `;` would end Windows Terminal's tab.
-    assert.deepEqual(WINDOWS.externalTerminals("C:\\a;b", "C:\\Program Files\\claude.exe", ["--resume", "abc"], {}, {}), [
+    assert.deepEqual(WINDOWS.externalTerminals("C:\\a;b", "C:\\Program Files\\claude.exe", ["--resume", "abc"], {}, undefined), [
       {
         command: "wt.exe",
         args: ["-d", "C:\\a\\;b", "powershell.exe", "-NoExit", "-Command", "& 'C:\\Program Files\\claude.exe' --resume abc"],
@@ -209,31 +209,33 @@ describe("an external terminal", () => {
   });
 
   it("is Terminal.app on macOS, the folder and the line in one AppleScript string", () => {
-    const [terminal] = MAC.externalTerminals("/my repo", "/opt/my agent/pi", ["--session", "abc"], {}, {});
+    const [terminal] = MAC.externalTerminals("/my repo", "/opt/my agent/pi", ["--session", "abc"], {}, undefined);
     assert.equal(terminal.command, "osascript");
     assert.equal(terminal.args[1], `tell application "Terminal" to do script "cd '/my repo' && '/opt/my agent/pi' --session abc"`);
   });
 
   it("is the user's $TERMINAL first on Linux, keeping the shell once the line ends", () => {
-    const [first] = LINUX.externalTerminals("/repo", "/opt/my agent/pi", ["--session", "abc"], { TERMINAL: "kitty" }, {});
+    const [first] = LINUX.externalTerminals("/repo", "/opt/my agent/pi", ["--session", "abc"], { TERMINAL: "kitty" }, undefined);
     assert.deepEqual(first, { command: "kitty", args: ["-e", "sh", "-c", `'/opt/my agent/pi' --session abc; exec "\${SHELL:-sh}"`] });
-    assert.equal(LINUX.externalTerminals("/repo", "pi", [], {}, {})[0].command, "x-terminal-emulator");
+    assert.equal(LINUX.externalTerminals("/repo", "pi", [], {}, undefined)[0].command, "x-terminal-emulator");
   });
 
-  it("sets the variables in the line, before the program", () => {
+  it("sets the variables from a setup file it reads and removes before the program, never in the line", () => {
     // A plain word among them: PowerShell would run it as a command unless quoted.
     const variables = { PLAIN: "mxwell", SPACED: "a b", QUOTE: "it's" };
+    assert.equal(WINDOWS.terminalSetup(variables), "$env:PLAIN = 'mxwell'\n$env:SPACED = 'a b'\n$env:QUOTE = 'it''s'\n");
+    assert.equal(LINUX.terminalSetup(variables), "export PLAIN=mxwell\nexport SPACED='a b'\nexport QUOTE='it'\\''s'\n");
     assert.equal(
-      WINDOWS.externalTerminals("C:\\a", "claude", [], {}, variables)[0].args[5],
-      "$env:PLAIN = 'mxwell'\\; $env:SPACED = 'a b'\\; $env:QUOTE = 'it''s'\\; & claude",
+      WINDOWS.externalTerminals("C:\\a", "claude", [], {}, "C:\\t\\setup")[0].args[5],
+      "Invoke-Expression (Get-Content -Raw -LiteralPath 'C:\\t\\setup')\\; Remove-Item -LiteralPath 'C:\\t\\setup'\\; & claude",
     );
     assert.equal(
-      MAC.externalTerminals("/r", "claude", [], {}, variables)[0].args[1],
-      `tell application "Terminal" to do script "cd /r && export PLAIN=mxwell && export SPACED='a b' && export QUOTE='it'\\\\''s' && claude"`,
+      MAC.externalTerminals("/r", "claude", [], {}, "/t/setup")[0].args[1],
+      `tell application "Terminal" to do script "cd /r && . /t/setup && rm -f /t/setup && claude"`,
     );
     assert.equal(
-      LINUX.externalTerminals("/r", "claude", [], {}, variables)[1].args[3],
-      `export PLAIN=mxwell; export SPACED='a b'; export QUOTE='it'\\''s'; claude; exec "\${SHELL:-sh}"`,
+      LINUX.externalTerminals("/r", "claude", [], {}, "/t/setup")[1].args[3],
+      `. /t/setup; rm -f /t/setup; claude; exec "\${SHELL:-sh}"`,
     );
   });
 });

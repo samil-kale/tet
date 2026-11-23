@@ -13,6 +13,10 @@ export function writePiExtension(agentDir: string): string {
   // pi lists a local extension by its file name, or by its folder's for an index.ts:
   // `tet/index.ts` reads "tet" beside the others.
   const folder = path.join(agentDir, "tet");
+  // The agent folder is the sandbox's to write: a link there would carry the file elsewhere.
+  if (fs.lstatSync(folder, { throwIfNoEntry: false })?.isDirectory() === false) {
+    fs.rmSync(folder, { force: true });
+  }
   fs.mkdirSync(folder, { recursive: true });
   const file = path.join(folder, "index.ts");
   writeIfChanged(file, renderPiExtension());

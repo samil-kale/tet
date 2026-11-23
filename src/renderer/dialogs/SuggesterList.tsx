@@ -16,26 +16,21 @@ interface SuggesterRowProps {
   name: string;
   drag: RowReorder | undefined;
   onChange: (entry: SuggesterEntry) => void;
-  onReplaceModel: (agentId: AgentId) => void;
   hold: (held: boolean) => void;
 }
 
 /** One agent: its name, the model it is asked with, and whether it is asked at all. */
-function SuggesterRow({ entry, name, drag, onChange, onReplaceModel, hold }: SuggesterRowProps) {
+function SuggesterRow({ entry, name, drag, onChange, hold }: SuggesterRowProps) {
   const { options, error, offered } = useAskModels(entry.agentId, entry.model, hold);
-
-  useEffect(() => {
-    if (!offered) {
-      onReplaceModel(entry.agentId);
-    }
-  }, [offered, entry.agentId, onReplaceModel]);
 
   return (
     <EditRow className="suggester-row" reorder={drag} off={!entry.enabled}>
       <span className="suggester-name" title={name}>
         {name}
       </span>
-      <Dropdown value={entry.model} options={options} onChange={(model) => onChange({ ...entry, model })} />
+      {/* A model not offered any more shows as the default but stays stored until another is
+          picked: another machine may offer it. */}
+      <Dropdown value={offered ? entry.model : ""} options={options} onChange={(model) => onChange({ ...entry, model })} />
       <RowMark title={error} />
       <IconButton title={entry.enabled ? "Switch off" : "Switch on"} onClick={() => onChange({ ...entry, enabled: !entry.enabled })}>
         {entry.enabled ? <PowerIcon /> : <PowerOffIcon />}
@@ -48,8 +43,6 @@ interface SuggesterListProps {
   value: SuggesterEntry[];
   /** What the user changes: the whole list, in the order shown. */
   onChange: (entries: SuggesterEntry[]) => void;
-  /** What stands in for a model not offered any more: shown, never saved. */
-  onReplaceModel: (agentId: AgentId) => void;
   /** The models' listing underway, on the dialog's bar (as `PromptFields.hold`): it asks the agent,
    *  changes nothing and its late answer is dropped, so it holds no Cancel. */
   hold: (held: boolean) => void;
@@ -60,7 +53,7 @@ interface SuggesterListProps {
  * (`suggestersFor`, as the commit prompt's suggestion takes them): dragged into place, each with its
  * model and a switch that leaves it unasked.
  */
-export function SuggesterList({ value, onChange, onReplaceModel, hold }: SuggesterListProps) {
+export function SuggesterList({ value, onChange, hold }: SuggesterListProps) {
   const agents = useAgents();
   const [askable, setAskable] = useState<AgentId[]>();
 
@@ -85,15 +78,7 @@ export function SuggesterList({ value, onChange, onReplaceModel, hold }: Suggest
       rows={entries.map((entry) => ({ id: entry.agentId, entry }))}
       reorder={{ dragType: DRAG_TYPE, onMove: (from, to) => onChange(reorder(entries, from, to)) }}
       renderRow={({ id, entry }, drag) => (
-        <SuggesterRow
-          key={id}
-          entry={entry}
-          name={agentName(agents, id)}
-          drag={drag}
-          onChange={change}
-          onReplaceModel={onReplaceModel}
-          hold={hold}
-        />
+        <SuggesterRow key={id} entry={entry} name={agentName(agents, id)} drag={drag} onChange={change} hold={hold} />
       )}
     />
   );

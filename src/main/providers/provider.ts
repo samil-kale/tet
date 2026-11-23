@@ -211,12 +211,19 @@ export async function sendGraphql(url: string, headers: Record<string, string>, 
     { ...headers, "Content-Type": "application/json" },
     { method: "POST", body: JSON.stringify({ query, variables }) },
   );
-  const body = (await response.json()) as { data?: unknown; errors?: { message?: string }[] };
+  const body = (await response.json()) as { data?: unknown; errors?: { message?: string; type?: string }[] };
   const refused = graphqlError(body);
   if (refused !== undefined) {
-    throw new Error(refused);
+    // GitHub's answer for what the token cannot see, so a write hands over to the next account as on REST's 404.
+    throw body.errors?.every((error) => error.type === "NOT_FOUND") ? new ApiError(404, refused) : new Error(refused);
   }
   return body.data;
+}
+
+/** How many of a listing's `found` entries the list shows, `own` of the `read` ones being the
+ *  repository's own (not a fork's); any beyond what paging reaches count as found. */
+export function ownTotal(own: number, read: number, found: number): number {
+  return own + Math.max(0, found - read);
 }
 
 /** Sends one GraphQL request to a host, answering its `data` (`sendGraphql`). */

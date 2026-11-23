@@ -44,6 +44,7 @@ import {
   worktreeAdd,
 } from "../../src/main/git/git";
 import { ensureAskpass } from "../../src/main/git/askpass";
+import { MAX_EDIT_BYTES } from "../../src/main/git/explorer-read";
 import { worktreesSupported } from "../../src/shared/types/git";
 import { commitFiles, git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
 
@@ -60,9 +61,7 @@ const run = (...args: string[]): string => git(cwd, ...args);
 
 const write = (name: string, content: string): void => fs.writeFileSync(path.join(cwd, name), content);
 
-/** The editor tab's read cap (explorer-read.ts's MAX_EDIT_BYTES); `readBlobAt` takes it per call. */
-const MAX_BYTES = 4 * 1024 * 1024;
-const head = (name: string, origPath?: string) => readBlobAt(cwd, "HEAD", name, { origPath, maxBytes: MAX_BYTES });
+const head = (name: string, origPath?: string) => readBlobAt(cwd, "HEAD", name, { origPath, maxBytes: MAX_EDIT_BYTES });
 const changed = async (): Promise<string[]> => (await readState(cwd)).changes.map((change) => `${change.status} ${change.path}`).sort();
 
 describe("git's version", () => {
@@ -1114,7 +1113,7 @@ describe("the commits the Graph shows", () => {
   });
 
   it("reads a file as a commit left it, and a path it lacks as missing", async () => {
-    const options = { maxBytes: MAX_BYTES };
+    const options = { maxBytes: MAX_EDIT_BYTES };
     assert.equal((await readBlobAt(repo, feature, "a.txt", options)).content, "two\n");
     assert.equal((await readBlobAt(repo, base, "a.txt", options)).content, "one\n");
     assert.equal((await readBlobAt(repo, base, "b.txt", options)).missing, true);

@@ -137,10 +137,18 @@ export async function sendTrackedToAgent(
       throw new Error(notOpenMessage(deps.store, ref));
     }
     const op = ops[tracked.kind];
-    if (tracked.number in trackedSessions(deps, ref.projectId, tracked.kind)) {
-      throw new Error(`${capitalized(op.nameOf(tracked.number))} has a session already`);
-    }
+    const refuseTaken = (): void => {
+      if (tracked.number in trackedSessions(deps, ref.projectId, tracked.kind)) {
+        throw new Error(`${capitalized(op.nameOf(tracked.number))} has a session already`);
+      }
+    };
+    refuseTaken();
     const { content, prompt } = await op.agentFile(ref, tracked.number);
+    // Again after the read: another send may have taken it meanwhile, or the worktree closed.
+    if (deps.tabManagers.get(ref) !== manager) {
+      throw new Error(notOpenMessage(deps.store, ref));
+    }
+    refuseTaken();
     const tab = manager.createTabOnFile(agentId, { name: trackedFileName(tracked), content, prompt }, sandboxOnly);
     // A fresh tab has no session yet, so this only notes it on the tab.
     manager.link(tab.tabId, tracked);

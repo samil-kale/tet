@@ -111,9 +111,12 @@ export async function confirmDiscard(ref: ProjectRef, paths: string[], act: File
 }
 
 /** One message, then `add` and `commit` of all changes or only `paths`, optionally pushing. No
- *  staging area: the checked files are what one commit takes. Every change given is all of them. */
-export async function askCommit(ref: ProjectRef, state: RepositoryState, given: string[] | undefined, ask: FileAsk): Promise<void> {
-  const paths = given?.length === state.changes.length ? undefined : given;
+ *  staging area: the checked files are what one commit takes. Every change given commits as all of
+ *  them only while a merge or rebase is being concluded, where git refuses a partial commit;
+ *  otherwise a file that appeared since the list was read stays out. */
+export async function askCommit(ref: ProjectRef, state: RepositoryState, given: string[], ask: FileAsk): Promise<void> {
+  const all = given.length === state.changes.length;
+  const paths = all && state.operation !== undefined ? undefined : given;
   // Told before the question: a message typed for a commit that cannot go is typed for nothing.
   const refusal = await window.tet.repository.commitRefusal(ref, paths);
   if (refusal !== undefined) {
@@ -135,12 +138,12 @@ export async function askCommit(ref: ProjectRef, state: RepositoryState, given: 
     return { committed, pushed: committed.ok && push ? await window.tet.repository.push(ref) : undefined };
   };
   await prompt({
-    title: !paths ? "Commit all changes" : paths.length === 1 ? "Commit changes" : `Commit ${paths.length} changes`,
-    detail: !paths
+    title: all ? "Commit all changes" : given.length === 1 ? "Commit changes" : `Commit ${given.length} changes`,
+    detail: all
       ? `Stages and commits all ${state.changes.length} changed files, untracked ones included.`
-      : paths.length === 1
-        ? named`Stages and commits ${paths[0]}; the other changes stay as they are.`
-        : `Stages and commits these ${paths.length} files; the other changes stay as they are.`,
+      : given.length === 1
+        ? named`Stages and commits ${given[0]}; the other changes stay as they are.`
+        : `Stages and commits these ${given.length} files; the other changes stay as they are.`,
     value: { message: "", push: pushLabel !== undefined && (await window.tet.settings.get()).git.pushOnCommit },
     confirmLabel: "Commit",
     className: "commit-dialog",
@@ -337,7 +340,14 @@ export const ChangesList = memo(function ChangesList({
                 title={change ? (change.origPath ? `${change.origPath} → ${change.path}` : change.path) : node.path || undefined}
                 // Not the top row, which is no folder, nor a deleted file, whose path is gone.
                 dragPath={node.id === ROOT_ID || change?.status === "deleted" ? undefined : absolutePath(resolved.path, node.path)}
-                onClick={change ? () => onOpenDiff(change.path) : () => setExpanded((current) => ({ ...current, [node.id]: !isExpanded }))}
+                // A folder's does nothing while filtering, where every folder shows expanded.
+                onClick={
+                  change
+                    ? () => onOpenDiff(change.path)
+                    : filtering
+                      ? undefined
+                      : () => setExpanded((current) => ({ ...current, [node.id]: !isExpanded }))
+                }
                 // As the Explorer: a single click previews, a double click keeps.
                 onDoubleClick={change ? () => onOpenDiff(change.path, { keep: true }) : undefined}
                 onContextMenu={(event) => menu.open(event, node)}

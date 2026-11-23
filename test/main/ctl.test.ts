@@ -1976,10 +1976,10 @@ describe("tet-ctl against the control server", () => {
       assert.match(again.stderr, /merge is in progress in \/wt\/four: resolve and commit it/);
     });
 
-    it("refuses a caller inside a worktree, saying where to run it from", async () => {
+    it("refuses a caller inside the worktree it merges, saying where to run it from", async () => {
       assertUsage(
         await tetCtl(["worktree-agent-merge", "four"], { [CONTROL_ENV.worktree]: WORKTREE.worktree }),
-        /only from the project's repository[^.]*close this tab\. Run "tet-ctl worktree-agent-merge four" from a tab of the repository/,
+        /cannot run from the worktree it merges[^.]*close this tab\. Run "tet-ctl worktree-agent-merge four" from another tab of the project/,
       );
       assert.deepEqual(calls.merges, []);
     });

@@ -562,24 +562,47 @@ describe("a terminal's environment", () => {
     assert.deepEqual(storedEnvOf(SANDBOX_CALLER, stored, account), {}, "a sandbox gets none");
   });
 
-  it("respawns in place with the variables kept in TET as they are at the restart", () => {
+  /** A command session whose processes leave on Ctrl+C, counting what each was sent. */
+  function restartable(): { session: TerminalSession; spawned: (Record<string, string> | undefined)[]; writes: string[] } {
     const spawned: (Record<string, string> | undefined)[] = [];
+    const writes: string[] = [];
     const session = new TerminalSession(
       "command",
       { cwd: ".", stored: { TET_TEST_STORED: "first" }, terminalEnv: NO_TERMINAL_ENV },
       { onOutput: () => undefined, onStatusChange: () => undefined },
-      0,
+      1,
       [],
       (_executable, _args, options) => {
         spawned.push(options.stored);
-        return new FakeProcess(false) as unknown as IPty;
+        const proc = new FakeProcess(false);
+        const write = proc.write.bind(proc);
+        proc.write = (data: string) => {
+          writes.push(data);
+          write(data);
+        };
+        return proc as unknown as IPty;
       },
     );
     session.markInstalled(true);
     session.ensureStarted(80, 24);
+    return { session, spawned, writes };
+  }
+
+  it("respawns in place with the variables kept in TET as they are at the restart, the old one asked to quit", async () => {
+    const { session, spawned, writes } = restartable();
     session.restart({ TET_TEST_STORED: "second" });
-    (session as unknown as { process: FakeProcess }).process.exit();
+    // The fake leaves a moment after its Ctrl+C.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(writes, ["\x03"], "asked to quit before any kill");
     assert.deepEqual(spawned, [{ TET_TEST_STORED: "first" }, { TET_TEST_STORED: "second" }]);
+  });
+
+  it("respawns nothing when stopped while a restart stops it", async () => {
+    const { session, spawned } = restartable();
+    session.restart({ TET_TEST_STORED: "second" });
+    await session.stop();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(spawned, [{ TET_TEST_STORED: "first" }]);
   });
 
   it("replaces the machine's variable spelled in another case, where names ignore case", { skip: !PLATFORM.envNamesIgnoreCase }, () => {

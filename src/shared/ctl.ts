@@ -355,7 +355,7 @@ const VERBS = [
     group: "Worktrees",
     usage: "worktree-agent-merge <branch|key> [--project <id>]",
     summary:
-      "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, run it again. Only from the repository, since deleting a worktree closes its tabs.",
+      "Merge the worktree's base into it, fast-forward the base in the repository, then delete the worktree with its branch. On a conflict it answers the files and where to resolve them: resolve, commit, run it again. Not from the worktree it merges, since deleting a worktree closes its tabs.",
     positionals: ["branch"],
     sandbox: "ownProject",
   },

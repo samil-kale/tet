@@ -63,6 +63,8 @@ export interface EditorSnapshot {
   /** Monaco, a grammar or the editor loading. */
   building: boolean;
   saving: boolean;
+  /** Unsaved edits: a file's, or an issue's text not yet sent (`setTrackedDraft`), which has no
+   *  save. Asked before the tab goes. */
   dirty: boolean;
   /** The tab the next file replaces — until kept, which the first edit does (VS Code). */
   preview: boolean;
@@ -153,6 +155,8 @@ export interface EditorView {
   trackedEdits?: number;
   /** What the tab is writing to the tracker now, its pane's bar running meanwhile. */
   trackedWork?: number;
+  /** The boxes of the issue holding text not yet sent, by a key each (`setTrackedDraft`). */
+  trackedDrafts?: Set<string>;
   /** Bumped by every save that reached disk: an older re-read must not restore the replaced text
    *  and mtime as clean. */
   saves: number;
@@ -470,6 +474,27 @@ export function keepEditor(tabId: string): void {
   }
 }
 
+/** A box of tab `tabId`'s issue or change request (`key`, one per box) holds text not yet sent, or
+ *  no longer. While any does, the tab is dirty, so asked before it goes, and kept, as a file's
+ *  first edit keeps it: a preview tab's reuse would drop the text. */
+export function setTrackedDraft(tabId: string, key: string, drafting: boolean): void {
+  const view = views.get(tabId);
+  if (!view?.snapshot.tracked) {
+    return;
+  }
+  view.trackedDrafts ??= new Set();
+  const drafts = view.trackedDrafts;
+  if (drafting) {
+    drafts.add(key);
+  } else {
+    drafts.delete(key);
+  }
+  const dirty = drafts.size > 0;
+  if (dirty !== view.snapshot.dirty) {
+    publish(view, { dirty, preview: view.snapshot.preview && !dirty });
+  }
+}
+
 /** The tab's edited side, for `tet-ctl editor-get`. Undefined unless a text file is open. */
 export function editorContent(tabId: string): string | undefined {
   const view = views.get(tabId);
@@ -531,6 +556,7 @@ export function openEditorFile(ref: ProjectRef, tabId: string, path: string, pre
   view.version = undefined;
   view.pendingVersion = undefined;
   view.onDisk = undefined;
+  view.trackedDrafts?.clear();
   view.pendingReveal = how.reveal;
   // monaco's own shape, as `editorEntry` gave it.
   view.pendingViewState = how.restored?.viewState as MonacoEditor.ICodeEditorViewState | undefined;

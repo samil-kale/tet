@@ -7,6 +7,7 @@ import {
   type GitProviderChangeRequests,
   type GraphqlPage,
   type GraphqlSend,
+  ownTotal,
   reached,
 } from "../provider";
 import { sender, mutate, projectUrl, headers } from "./api";
@@ -50,18 +51,21 @@ export const gitlabChangeRequests: GitProviderChangeRequests = {
   kind: { noun: "merge request", prefix: "!", checks: "pipeline", selfApproval: true, deletesSourceBranch: true },
 
   async find({ host, token, path }, head) {
-    // A project's merge requests are those into it; one from a fork names its own source project.
-    const query = `query($path: ID!, $head: [String!]) {
+    // A project's merge requests are those into it; one from a fork names its own source project. Paged
+    // whole, as forks' of that branch name may come first.
+    const query = `query($path: ID!, $head: [String!], $cursor: String) {
       project(fullPath: $path) {
-        mergeRequests(sourceBranches: $head, state: opened, first: 20) {
+        mergeRequests(sourceBranches: $head, state: opened, first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
           nodes { iid webUrl sourceProject { fullPath } }
         }
       }
     }`;
-    const data = (await sender(host, token)(query, { path, head: [head] })) as {
-      project: { mergeRequests: { nodes: GitLabMergeRequest[] } } | null;
-    };
-    return ownMergeRequest(reached(data.project, path).mergeRequests.nodes, path);
+    const found = await allNodes<GitLabMergeRequest>(sender(host, token), query, { path, head: [head] }, (data) => {
+      const { project } = data as { project: { mergeRequests: GraphqlPage<GitLabMergeRequest> } | null };
+      return reached(project, path).mergeRequests;
+    });
+    return ownMergeRequest(found, path);
   },
 
   async create({ host, token, path }, { head, base, title, body, draft, deleteSourceBranch }) {
@@ -128,12 +132,16 @@ export const gitlabChangeRequests: GitProviderChangeRequests = {
 
   async readLatest({ host, token, path }, filter) {
     type Latest = Pick<GitLabMergeRequestRow, "iid" | "updatedAt" | "sourceProject" | "headPipeline">;
-    const data = await sender(host, token)(MERGE_REQUESTS_LATEST_QUERY, mergeRequestsVariables(path, filter));
-    const { project } = data as { project: { mergeRequests: { count: number; nodes: Latest[] } } | null };
-    const { count, nodes } = reached(project, path).mergeRequests;
+    let found = 0;
+    const nodes = await allNodes<Latest>(sender(host, token), MERGE_REQUESTS_LATEST_QUERY, mergeRequestsVariables(path, filter), (data) => {
+      const { project } = data as { project: { mergeRequests: GraphqlPage<Latest> & { count: number } } | null };
+      const page = reached(project, path).mergeRequests;
+      found = page.count;
+      return page;
+    });
     const own = nodes.filter((entry) => fromOwnProject(entry, path));
     return {
-      total: count,
+      total: ownTotal(own.length, nodes.length, found),
       updatedAt: own[0]?.updatedAt,
       checks: checksText(own.map((entry) => ({ number: Number(entry.iid), checks: pipelineChecks(entry.headPipeline) }))),
     };

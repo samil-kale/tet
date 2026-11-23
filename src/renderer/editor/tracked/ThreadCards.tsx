@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { ReviewThread, TrackedDetail } from "../../../shared/types/providers";
 import { Checkbox } from "../../ui/Field";
 import { TextBox, TrackedText } from "./TextBox";
@@ -10,6 +10,19 @@ import { Person } from "./Person";
 import { named } from "../../ui/named";
 import { ActionLink } from "../../ui/ActionLink";
 import type { ThreadEvent } from "./tracked-thread";
+
+/** Tells the tab while the box holds text not yet sent (`TrackedActions.draft`), and no longer once
+ *  it is sent, dropped or gone. */
+function useDraft(draft: TrackedActions["draft"], drafting: boolean): void {
+  const key = useId();
+  useEffect(() => {
+    if (!drafting) {
+      return;
+    }
+    draft(key, true);
+    return () => draft(key, false);
+  }, [draft, key, drafting]);
+}
 
 export interface CommentBoxProps {
   issue: TrackedDetail;
@@ -27,6 +40,7 @@ export function CommentBox({ issue, internalNotes, actions, writing }: CommentBo
   const [internal, setInternal] = useState(false);
   const [busy, setBusy] = useState(false);
   const typed = text.trim() !== "";
+  useDraft(actions.draft, typed);
   const written = internal ? "Internal Note" : "Comment";
   const reset = (): void => {
     setText("");
@@ -85,11 +99,14 @@ export interface TrackedCardProps {
   internal?: boolean;
   /** Offered where it can be changed; false keeps the box open. */
   onEdit?: (text: string) => Promise<boolean>;
+  /** Told while the box is open (`TrackedActions.draft`). */
+  onDraft: TrackedActions["draft"];
   onDelete?: () => void;
 }
 
-export function TrackedCard({ author, avatar, opened, at, text, writing, internal, onEdit, onDelete }: TrackedCardProps) {
+export function TrackedCard({ author, avatar, opened, at, text, writing, internal, onEdit, onDraft, onDelete }: TrackedCardProps) {
   const [draft, setDraft] = useState<string>();
+  useDraft(onDraft, draft !== undefined);
   const [busy, setBusy] = useState(false);
   const save = async (): Promise<void> => {
     setBusy(true);

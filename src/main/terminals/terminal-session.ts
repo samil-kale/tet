@@ -44,8 +44,10 @@ export class TerminalSession {
   private intentionalStop = false;
   /** The size of the last `ensureStarted` call — what `restart` respawns at. */
   private lastSize: { cols: number; rows: number } | undefined;
-  /** Set while killing for a restart, so a second click can't queue another. */
+  /** Set while stopping for a restart, so a second click can't queue another. */
   private restartQueued = false;
+  /** A `stop()` asked for while a restart stops the process: it is not respawned. */
+  private restartCancelled = false;
   /** The teardown underway, which a second `stop()` joins. */
   private stopping: Promise<boolean> | undefined;
 
@@ -124,6 +126,7 @@ export class TerminalSession {
    *  session persisted and must not race it. False where it outlived the kill, as stopping cannot
    *  hang on it. Asks to quit first (see the Ctrl+C comment above). */
   stop(): Promise<boolean> {
+    this.restartCancelled = true;
     this.stopping ??= this.runStop().finally(() => {
       this.stopping = undefined;
     });
@@ -168,9 +171,10 @@ export class TerminalSession {
     }
   }
 
-  /** Kills and respawns at the same size with the variables kept in TET as they are now (`stored`), on
-   *  the old process's exit: `start`'s handler clears `this.process`, and firing late it would clobber
-   *  an immediate respawn. No-op before the first `ensureStarted`. */
+  /** Stops (asking to quit first, as `stop`) and respawns at the same size with the variables kept in
+   *  TET as they are now (`stored`), once the old process is gone: `start`'s handler clears
+   *  `this.process`, and firing late it would clobber an immediate respawn. No-op before the first
+   *  `ensureStarted`. */
   restart(stored: Record<string, string>): void {
     const size = this.lastSize;
     if (size === undefined || this.restartQueued) {
@@ -179,8 +183,8 @@ export class TerminalSession {
     this.spawn = { ...this.spawn, stored };
     const respawn = (): void => {
       this.restartQueued = false;
-      // A `stop()` mid-kill wins: a process spawned now would never be killed.
-      if (this.stopping) {
+      // A `stop()` meanwhile wins: a process spawned now would never be killed.
+      if (this.restartCancelled || this.stopping) {
         return;
       }
       this.setStatus("ready");
@@ -188,15 +192,18 @@ export class TerminalSession {
     };
     if (this.process) {
       this.restartQueued = true;
-      this.intentionalStop = true;
-      this.process.onExit(respawn);
-      try {
-        this.process.kill();
-      } catch (error) {
-        // Already gone; `respawn` runs from its exit.
-        logError(`failed to kill ${this.executable}`, error);
-      }
+      const stopped = this.stop();
+      this.restartCancelled = false;
+      void stopped.then((gone) => {
+        if (gone) {
+          respawn();
+        } else {
+          // It outlived the kill: a second process beside it would be worse than none.
+          this.restartQueued = false;
+        }
+      });
     } else {
+      this.restartCancelled = false;
       respawn();
     }
   }

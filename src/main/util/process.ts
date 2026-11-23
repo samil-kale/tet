@@ -1,5 +1,6 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { logError } from "./error-log";
 import { PLATFORM } from "./host-platform";
@@ -103,6 +104,23 @@ export function resolveCommand(executable: string, args: string[]): ResolvedComm
   return { command: executable, args };
 }
 
+/** How long a setup file waits for the terminal's shell to read and remove it, before TET does. */
+const TERMINAL_SETUP_MS = 120_000;
+
+/** `variables` in a file of this account alone, for the external terminal to read and remove
+ *  (Platform.terminalSetup); undefined when there are none. Its folder goes after a while
+ *  regardless: a terminal that never ran the line would leave the tokens there. */
+function writeTerminalSetup(variables: Record<string, string>): string | undefined {
+  if (Object.keys(variables).length === 0) {
+    return undefined;
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tet-terminal-"));
+  const file = path.join(dir, "setup");
+  fs.writeFileSync(file, PLATFORM.terminalSetup(variables), { flag: "wx", mode: 0o600 });
+  setTimeout(() => fs.rmSync(dir, { recursive: true, force: true }), TERMINAL_SETUP_MS).unref();
+  return file;
+}
+
 /**
  * Opens the OS's own terminal window in `cwd`, running `executable` with `args` there, `variables`
  * set (Platform.externalTerminals). Each candidate is tried until one starts; false when none did.
@@ -116,7 +134,8 @@ export async function openExternalTerminal(
   args: string[],
   variables: Record<string, string>,
 ): Promise<boolean> {
-  for (const { command, args: terminalArgs } of PLATFORM.externalTerminals(cwd, executable, args, process.env, variables)) {
+  const setup = writeTerminalSetup(variables);
+  for (const { command, args: terminalArgs } of PLATFORM.externalTerminals(cwd, executable, args, process.env, setup)) {
     const started = await new Promise<boolean>((resolve) => {
       const child = spawn(command, terminalArgs, { cwd, detached: true, stdio: "ignore" });
       child.once("spawn", () => {
@@ -133,6 +152,9 @@ export async function openExternalTerminal(
     if (started) {
       return true;
     }
+  }
+  if (setup !== undefined) {
+    fs.rmSync(path.dirname(setup), { recursive: true, force: true });
   }
   return false;
 }

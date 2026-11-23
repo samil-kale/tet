@@ -265,7 +265,7 @@ async function removeNow(deps: ProjectDeps, projectId: string): Promise<GitComma
   const there = !directoryMissing(project.path);
   const [main, ...worktrees] = projectRefsOf(project);
   for (const ref of worktrees) {
-    const deleted = there ? await deleteWorktree(deps, ref, { force: true, onRemote: false }) : undefined;
+    const deleted = there ? await deleteNow(deps, ref, { force: true, onRemote: false }) : undefined;
     if (deleted && !deleted.ok) {
       return deleted;
     }
@@ -356,7 +356,19 @@ export async function deleteWorktree(
   ref: ProjectRef,
   options: { force: boolean; onRemote: boolean },
 ): Promise<GitActionResult>;
-export async function deleteWorktree(
+export function deleteWorktree(
+  deps: ProjectDeps,
+  ref: ProjectRef,
+  options: { force: boolean; onRemote: boolean },
+): Promise<GitActionResult> {
+  // In the project changes' turn, as a removal of its project deletes it too.
+  return inTurn(changes, CHANGE, () => deleteNow(deps, ref, options));
+}
+
+/** `deleteWorktree` within the changes' turn: `removeNow` calls it there, as `inTurn` does not nest. */
+async function deleteNow(deps: ProjectDeps, ref: ProjectRef, options: { force: true; onRemote: boolean }): Promise<GitCommandResult>;
+async function deleteNow(deps: ProjectDeps, ref: ProjectRef, options: { force: boolean; onRemote: boolean }): Promise<GitActionResult>;
+async function deleteNow(
   deps: ProjectDeps,
   ref: ProjectRef,
   { force, onRemote }: { force: boolean; onRemote: boolean },

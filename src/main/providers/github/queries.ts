@@ -145,9 +145,11 @@ export const PULL_REQUESTS_QUERY = `query($query: String!, $first: Int!, $cursor
   }
 }`;
 
-export const PULL_REQUESTS_LATEST_QUERY = `query($query: String!) {
-  search(query: $query, type: ISSUE, first: 100) {
+/** Paged whole: the search also finds pull requests from forks, which only their nodes tell apart. */
+export const PULL_REQUESTS_LATEST_QUERY = `query($query: String!, $cursor: String) {
+  search(query: $query, type: ISSUE, first: 100, after: $cursor) {
     issueCount
+    pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest { number updatedAt headRepository { nameWithOwner } head: commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }
     }
