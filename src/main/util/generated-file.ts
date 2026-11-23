@@ -28,7 +28,8 @@ export function writePosixScript(file: string, contents: string): void {
   writeIfChanged(file, contents.replace(/\r\n/g, "\n"), { mode: 0o755 });
 }
 
-/** A POSIX sh single-quoted string, safe for any content. */
+/** A POSIX sh single-quoted string, safe for any content. Whatever is written into a generated sh
+ *  script goes through it. */
 export function shellSingleQuote(value: string): string {
   return "'" + value.replace(/'/g, "'\\''") + "'";
 }

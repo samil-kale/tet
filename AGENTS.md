@@ -163,10 +163,6 @@ change, and every agent added, fits it. The one file TET writes elsewhere is sbx
   sandboxed tab's sight is mounted rw at its container path (`mountDropped`), never written into
   `tet.json`. Only what has no path of its own (a browser's drop, a pasted image) is written, into
   `drops/` on either side; a handover copies what sits in another agent's store.
-- **A store written by a Save someone waits on writes before it changes** (`writeJson`); only a write
-  nobody waits on logs its failure instead (`logFailure`).
-- **`settings.json` is one object per tab of the settings dialog** (`AppSettings`): a new setting
-  joins its tab's object, never the top level.
 - **Sessions stay the agent's own.** TET lists them from the agent's own store, per repository or
   worktree (`SessionProvider`), and keeps only which are archived (`archive.json`, ids alone): such a
   session shows in the Archive lane instead of as a tab, until reopened or deleted. Which are linked to
@@ -193,10 +189,6 @@ at from outside. `host.prepare` and `sandbox.prepare` are the only places an age
 configuration; beyond them it touches only its own sessions: when the user renames or deletes one,
 and every one of a worktree it deleted, once its folder is gone (`removeAllSessions`).
 
-- Claude Code: a generated `--settings` file; never `~/.claude/settings.json`.
-- Codex: `-c key=value` for that one process; never `~/.codex/config.toml` or `hooks.json`.
-- pi: a generated extension via `-e`; never `PI_CODING_AGENT_DIR`.
-
 ## Cross-platform
 
 Must work on Windows, Linux and macOS; no OS-specific behaviour without an equivalent for the
@@ -214,9 +206,6 @@ others.
   run under node takes it as a parameter defaulting to `net.fetch` (`resumableDownload`). A request
   that reads a redirect instead of following it uses `net.request`, the same stack (the update
   check's `latestVersion`).
-- A generated `sh` script is LF, and anything written into it is quoted with `shellSingleQuote`
-  (`src/main/util/generated-file.ts`).
-- A hook command runs under whichever shell the agent picks: keep it a bare `tet-ctl hook <event>`.
 - A file another process reads (hook settings, launchers) is written beside the target and renamed
   into place.
 
@@ -319,8 +308,6 @@ per-line decision is for an agent.
   `PromptOptions.submit`): the dialog stays up while the action runs, which hands its failure back
   (`ActionResult`). A `confirm` has no field, so it notifies. Where a new failure message goes is the
   user's call: propose those places and ask before building it.
-- **What a dialog runs finishes before it goes, unless stopping it leaves nothing behind**: a new run
-  is held unless it meets the conditions in `DialogFrame`'s comment; a Save is always held.
 - **Nothing is written until Save**; Cancel and Escape drop edits. The exception is the SBX
   dialog's Docker sign-in and sign-out, the Add Repository dialog's account adding and
   removal and namespace pick and the Settings dialog's account adding and removal, which act at once. A setting reaches an agent at its setup
@@ -397,11 +384,6 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
 `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`ControlDeps`,
 `ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
 
-- `app-restart` passes `--confirm` only when the user asked. `restartRequired` is relayed to the
-  user, never acted on.
-- Agents learn of `tet-ctl` once per session: `systemPrompt` (`src/main/agents/system-prompt.ts`),
-  appended to each agent's system prompt (Codex: its `SessionStart` hook's added context), never
-  replacing the user's instructions.
 - **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent needs
   are typed only into TET's dialog (`env-request`), never the chat. The account of the project's
   host is kept like them: a host tab gets its token as the host CLI's variables (`tokenEnv`) and as
@@ -410,9 +392,6 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
   (sbx section).
 - A caller is a project, a worktree (`TET_WORKTREE`, its key) and a tab; its ids count only with
   the token made for them (`ctl-token.ts`): a terminal gets its tab's token, never the run's.
-- **Where a caller runs is its side** (`ControlSide`, `src/shared/ctl-side.ts`, extended in main by
-  `TabSide` and `CallerSide`), set by its tab's place and read back off its token. Nothing else asks
-  whether a caller is sandboxed; a new difference extends the side.
 - A host caller reaches every project and every one of its tabs; a sandboxed one what runs in a
   sandbox of its project (`ControlVerb.sandbox`, `SANDBOX_CALLER`). **Refuse a sandbox only what it
   cannot do itself**: where it already can and `tet-ctl` doing it changes nothing beyond that, the
@@ -426,8 +405,6 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
 Opt-in per project (`sbx` in `tet.json`), for every agent but the shell. `src/main/sbx/` drives
 the `sbx` CLI.
 
-- **Where a tab runs is its `TabPlace`** (`src/main/terminals/tab-place.ts`): nothing else asks, and
-  a new difference between host and sandbox extends the interface.
 - **Never falls back to the host**: when sbx isn't ready, a sandboxed tab stays in `error`.
 - **sbx alone is enough**: an agent missing on the host still starts in the sandbox
   (`AgentPlaces.sbxOnly`).
@@ -437,9 +414,6 @@ the `sbx` CLI.
   folder alone; the one exception is a worktree's repository `.git` (`worktreeMountSpecs`). The user's
   grants (Allowed paths, skills) and what is handed over as a drop are theirs, not TET's.
 - Generated setup targets where it runs, not the host's platform (`HookTarget`).
-- **tet.json holds what was applied**: a row that cannot be applied is neither saved nor applied, by
-  one check for the dialog, `sbx-set-*` and a session's start (`readSbxProblems`). A session's start
-  applies it as it stands and never writes it (`prepareSbxRun`).
 - An Environment row takes its value of its own on this machine, else TET's variable of its name —
   `environment.json`'s, or the project's account (`tokenEnv`) — read at each start
   (`SbxLocalStore.environmentValues`): handed over, never copied.
