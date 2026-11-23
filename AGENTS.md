@@ -19,7 +19,7 @@ References: **GitHub Desktop** for the git half (shapes, not scope); **VS Code**
 classic layout, Dark Modern's palette, tab semantics, theme names; **IntelliJ** where VS Code has
 no answer or the git lane's tree is concerned — the commit view's checkboxes, tree headers,
 toolbar spacing, its themes, its font (JetBrains Mono for terminals and editor), how an issue's text
-is rendered, from its Markdown (`issue-text.ts`); **Monaco** for
+is rendered, from its Markdown (`tracked-text.ts`); **Monaco** for
 the editor tab; VS Code's **GitHub Pull Requests and Issues** (`microsoft/vscode-pull-request-github`)
 for the rest of the Issues lane and its issue tab, which writes an issue's title, text, comments, state and
 fields, uploads what the tracker takes from a token (`uploads`), and makes and deletes issues, and nothing
@@ -51,7 +51,8 @@ project's tabs.
      (`sbx-local.ts`, `providers/accounts.ts`).
   2. The areas, apart from each other but `sbx/` using `agents/`: `git/` (the git process and
      everything talking to it), `agents/` (each agent and what drives one: hooks, readiness, PATH,
-     the install check, asking), `sbx/` (the `sbx` CLI), `providers/`, `update/` (the auto-update).
+     the install check, asking), `sbx/` (the `sbx` CLI), `providers/` (each host a folder, a file per
+     group of `GitProvider` as `AgentDefinition`'s), `update/` (the auto-update).
   3. `terminals/`: pty, sessions, where a tab runs and the side it runs on (`TabSide`), its
      control token.
   4. `ctl/` (`tet-ctl`): drives the tabs through `ControlTerminals`; the caller's side
@@ -76,7 +77,9 @@ project's tabs.
      `ref-lifetime.ts`, `shortcuts.ts`) and `themes/` (the stylesheets and the colors built from them).
   1. `ui/`: views and hooks of no feature — dialogs' frame, fields, menus, the tree row and the
      tree it lists, icons.
-  2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one.
+  2. `editor/`: the editor tab — monaco + shiki, the tab's model and opening a file in one; in
+     `tracked/` an issue's or change request's tab, and what the Issues and change requests sections
+     share of them.
   3. `tabs/`: the tab area — panes, split view, the terminals (xterm, link providers), hosting
      editor tabs beside them (`pane-tab.ts` tells terminals and editors apart).
   4. `git/`: running a git action from the views above it (`run-action.ts`), and the questions and

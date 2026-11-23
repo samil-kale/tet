@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
-import type { DropdownOption } from "./Dropdown";
-import { fetchHeld } from "./fetch-held";
+import type { DropdownOption } from "../ui/Dropdown";
+import { fetchHeld } from "../ui/fetch-held";
 
 /** No model argument: the agent's own configuration picks. */
 const DEFAULT_MODEL = { value: "", label: "Default", separatorAfter: true };

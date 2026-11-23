@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sectionsOf } from "../../src/renderer/editor/issue-fields";
+import { sectionsOf } from "../../src/renderer/editor/tracked/tracked-fields";
 import type { TrackedField } from "../../src/shared/types/providers";
 
 const pick = (id: string): TrackedField => ({ id, name: id, editable: true, kind: "pick", value: [], several: false, shown: "text" });

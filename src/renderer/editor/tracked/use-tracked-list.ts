@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { TrackedRow, TrackedFilterOptions, TrackedLatest, TrackedListResult, TrackedSeen } from "../../shared/types/providers";
-import { notify } from "./Notices";
-import { useWindowFocused } from "./use-window-focused";
+import type { TrackedRow, TrackedFilterOptions, TrackedLatest, TrackedListResult, TrackedSeen } from "../../../shared/types/providers";
+import { notify } from "../../ui/Notices";
+import { useWindowFocused } from "../../ui/use-window-focused";
 
 /** What a section's filters offer, off its host. */
 export interface TrackedOptions {

@@ -432,7 +432,7 @@ export interface TrackedFieldOptionsResult {
 
 /** One issue or change request with what its row leaves out, for its tab. */
 export interface TrackedDetail extends TrackedRow {
-  /** Whose Markdown its texts are written in (`issueTextHtml`). */
+  /** Whose Markdown its texts are written in (`trackedTextHtml`). */
   provider: ProviderId;
   fields: TrackedField[];
   body: string;

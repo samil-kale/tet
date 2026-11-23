@@ -1,4 +1,4 @@
-import type { TrackedEvent, TrackedNote, ReviewThread } from "../../shared/types/providers";
+import type { TrackedEvent, TrackedNote, ReviewThread } from "../../../shared/types/providers";
 
 /** One actor's changes of assignees or labels this close together read as one line. */
 const CONSOLIDATION_WINDOW_MS = 10 * 60 * 1000;
@@ -73,7 +73,7 @@ function shown(event: TrackedEvent): ThreadEvent {
 
 /** An issue's comments and events, and a change request's review threads at their first comment, in
  *  the order they happened; a comment made with a change, at the same moment, comes first. */
-export function issueThread(notes: TrackedNote[], events: TrackedEvent[], reviews: ReviewThread[] = []): ThreadEntry[] {
+export function trackedThread(notes: TrackedNote[], events: TrackedEvent[], reviews: ReviewThread[] = []): ThreadEntry[] {
   const happened = [
     ...notes.map((note) => ({ at: note.createdAt, note })),
     ...reviews.map((review) => ({ at: review.comments[0].createdAt, review })),

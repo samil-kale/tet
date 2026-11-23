@@ -1,9 +1,9 @@
 import type { Issue, IssueFilter, IssueListResult, TrackedLatest } from "../../../shared/types/providers";
 import { subscribeTracked } from "../../editor/editor-tab";
-import { reloadChangedTabs } from "../../editor/editor-views";
-import { setSeen } from "../../editor/tracked-seen";
+import { reloadChangedTabs } from "../../editor/tracked/tracked-views";
+import { setSeen } from "../../editor/tracked/tracked-seen";
 import { subscribeAccounts } from "../../git/ProviderAccount";
-import { useTrackedList, type TrackedList, type TrackedListSource } from "../../ui/use-tracked-list";
+import { useTrackedList, type TrackedList, type TrackedListSource } from "../../editor/tracked/use-tracked-list";
 
 /** The Issues section's list, from the project's tracker: read again once tet.json, an account or an
  *  issue through its tab changes. */

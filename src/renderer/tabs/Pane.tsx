@@ -14,9 +14,10 @@ import { TerminalHost } from "./TerminalHost";
 import { clearTerminalOutput, resetMouseModes } from "./terminal-views";
 import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview, useTrackedLabel } from "../editor/EditorHost";
-import { getEditorSnapshot, keepEditor, sendTabIssueToAgent } from "../editor/editor-views";
-import { trackedSessionEntry } from "../editor/IssueView";
-import { trackedSessionsOf, useWatchedSessions } from "../editor/use-tracked-sessions";
+import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
+import { sendTabTrackedToAgent } from "../editor/tracked/tracked-views";
+import { trackedSessionEntry } from "../editor/tracked/TrackedBar";
+import { trackedSessionsOf, useWatchedSessions } from "../editor/tracked/use-tracked-sessions";
 import { IconButton } from "../ui/IconButton";
 import { ChangeRequestIcon, CloseIcon, FilesIcon, IssuesIcon, PlusIcon, ShieldIcon, type IconProps } from "../ui/icons";
 import { TabMark } from "../ui/TabMark";
@@ -416,7 +417,7 @@ export const Pane = memo(function Pane({
               tracked === undefined
                 ? undefined
                 : trackedSessionEntry(trackedSessionsOf(tracked.kind, at.projectId)[tracked.number], agents, (agentId) =>
-                    sendTabIssueToAgent(tabId, agentId),
+                    sendTabTrackedToAgent(tabId, agentId),
                   ),
             ),
             // VS Code's wording; a kept tab has nothing to keep.

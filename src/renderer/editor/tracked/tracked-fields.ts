@@ -1,4 +1,4 @@
-import type { TrackedField } from "../../shared/types/providers";
+import type { TrackedField } from "../../../shared/types/providers";
 
 /** A field changed by a question of its own, rather than picked from a list or ticked. */
 export type AskedField = Exclude<TrackedField, { kind: "pick" | "flag" }>;

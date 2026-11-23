@@ -77,7 +77,7 @@ export async function renderMarkdown(
 }
 
 /**
- * Markdown already made HTML (`issueTextHtml`) into `body` at once, for a text shown once rather
+ * Markdown already made HTML (`trackedTextHtml`) into `body` at once, for a text shown once rather
  * than rendered anew on every keystroke: its code blocks color and its images arrive there, each
  * holding its place until then. A failure leaves the text standing.
  */

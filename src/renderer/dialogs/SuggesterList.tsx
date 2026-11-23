@@ -7,7 +7,7 @@ import { IconButton } from "../ui/IconButton";
 import { PowerIcon, PowerOffIcon } from "../ui/icons";
 import { EditRow, RowMark, RowSection, type RowReorder } from "../ui/RowSection";
 import { agentName, useAgents } from "../ui/use-agents";
-import { useAskModels } from "../ui/use-ask-models";
+import { useAskModels } from "./use-ask-models";
 
 const DRAG_TYPE = "application/x-tet-suggester";
 

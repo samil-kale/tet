@@ -1,6 +1,6 @@
-import { holdsSeen, withSeen, type TrackedKind, type TrackedRef, type TrackedSeen } from "../../shared/types/providers";
-import { notify } from "../ui/Notices";
-import { createStore, useStore } from "../ui/store";
+import { holdsSeen, withSeen, type TrackedKind, type TrackedRef, type TrackedSeen } from "../../../shared/types/providers";
+import { notify } from "../../ui/Notices";
+import { createStore, useStore } from "../../ui/store";
 
 /** What the tabs showed of each project's issues and change requests, by kind and project: what the
  *  file held when the list was read, since then what `keepSeen` and `keepAllSeen` kept. */

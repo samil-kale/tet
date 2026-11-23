@@ -1,9 +1,9 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { sameProjectRef } from "../../shared/types/project";
-import type { TrackedKind } from "../../shared/types/providers";
-import type { TrackedSession } from "../../shared/types/terminals";
-import { forget, stableRecord } from "../identity";
-import { createStore } from "../ui/store";
+import { sameProjectRef } from "../../../shared/types/project";
+import type { TrackedKind } from "../../../shared/types/providers";
+import type { TrackedSession } from "../../../shared/types/terminals";
+import { forget, stableRecord } from "../../identity";
+import { createStore } from "../../ui/store";
 
 /** The session linked to each of a project's issues or change requests that has one, by its number. */
 export type TrackedSessions = Readonly<Record<number, TrackedSession>>;

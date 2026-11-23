@@ -10,7 +10,7 @@
   color: var(--tet-editor-foreground);
 }
 
-/* An issue's text, in its card (`IssueText`). */
+/* An issue's text, in its card (`TrackedText`). */
 .markdown-body.compact {
   padding: 8px 10px 0;
 }
@@ -89,7 +89,7 @@
   margin-bottom: 0;
 }
 
-/* An issue's task (`issue-text.ts`): its box stands where the list's marker would. */
+/* An issue's task (`tracked/tracked-text.ts`): its box stands where the list's marker would. */
 .markdown-body .task-list-item {
   list-style: none;
 }

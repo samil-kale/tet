@@ -2,11 +2,19 @@ import { memo, useState } from "react";
 import type { ProjectRef } from "../../../shared/types/project";
 import { DEFAULT_ISSUE_FILTER, isUnread, type Issue, type TrackedRef } from "../../../shared/types/providers";
 import { issueGone, linkTrackedSession, openTrackedTab, sendTrackedToAgent, type OpenEditor } from "../../editor/editor-tab";
-import { loadTrackedImage, openProjectIssueLink, reloadTrackedTabs } from "../../editor/editor-views";
-import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked-seen";
-import { newIssueUrl } from "../../editor/issue-text";
-import { trackedSessionsOf, useWatchedSessions } from "../../editor/use-tracked-sessions";
-import { askIssueTitle, confirmDeleteIssue, dayOf, trackedSessionEntry, Person, TextBox, type TextRendering } from "../../editor/IssueView";
+import { reloadTrackedTabs } from "../../editor/tracked/tracked-views";
+import { openProjectIssueLink } from "../../editor/tracked/tracked-views";
+import { loadProjectTrackedImage } from "../../editor/tracked/tracked-views";
+import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked/tracked-seen";
+import { newIssueUrl } from "../../editor/tracked/tracked-text";
+import { trackedSessionsOf, useWatchedSessions } from "../../editor/tracked/use-tracked-sessions";
+import { trackedSessionEntry } from "../../editor/tracked/TrackedBar";
+import { confirmDeleteIssue } from "../../editor/tracked/TrackedBar";
+import { askTrackedTitle } from "../../editor/tracked/TrackedBar";
+import { TextBox } from "../../editor/tracked/TextBox";
+import type { TextRendering } from "../../editor/tracked/tracked-actions";
+import { Person } from "../../editor/tracked/Person";
+import { dayOf } from "../../editor/tracked/tracked-words";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { filled, prompt, refusal, singleField, type PromptFields } from "../../ui/Dialog";
@@ -21,7 +29,7 @@ import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { IssueFilterBar } from "./IssueFilterBar";
-import { useTrackedRows } from "../../ui/use-tracked-rows";
+import { useTrackedRows } from "../../editor/tracked/use-tracked-rows";
 import { useScrollMore } from "../../ui/use-scroll-more";
 import { useIssues } from "./use-issues";
 
@@ -197,7 +205,7 @@ export const IssueList = memo(function IssueList({
     const rendering: TextRendering = {
       provider: tracker.provider,
       issueUrl: newIssueUrl(tracker.provider, tracker.url),
-      loadImage: (image) => loadTrackedImage(projectId, "issue", image),
+      loadImage: (image) => loadProjectTrackedImage(projectId, "issue", image),
       openFile: (path) => onOpenFile(resolved.ref, path),
       openLink: (url) => void openProjectIssueLink(projectId, url),
     };
@@ -223,7 +231,7 @@ export const IssueList = memo(function IssueList({
   };
 
   const askRename = (issue: Issue): Promise<void> =>
-    askIssueTitle(issue.title, async (typed) => {
+    askTrackedTitle(issue.title, async (typed) => {
       const result = await window.tet.tracked.update(projectId, trackedOf(issue.number), { title: typed });
       if (result.ok) {
         reload();

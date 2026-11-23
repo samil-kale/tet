@@ -10,10 +10,12 @@ import {
   type TrackedRef,
 } from "../../../shared/types/providers";
 import { linkTrackedSession, openTrackedTab, sendTrackedToAgent, type OpenEditor } from "../../editor/editor-tab";
-import { reloadTrackedTabs } from "../../editor/editor-views";
-import { dayOf, Person, trackedSessionEntry } from "../../editor/IssueView";
-import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked-seen";
-import { trackedSessionsOf, useWatchedSessions } from "../../editor/use-tracked-sessions";
+import { reloadTrackedTabs } from "../../editor/tracked/tracked-views";
+import { trackedSessionEntry } from "../../editor/tracked/TrackedBar";
+import { Person } from "../../editor/tracked/Person";
+import { dayOf } from "../../editor/tracked/tracked-words";
+import { keepAllSeen, keepSeen, keepUnread, useSeen } from "../../editor/tracked/tracked-seen";
+import { trackedSessionsOf, useWatchedSessions } from "../../editor/tracked/use-tracked-sessions";
 import type { ResolvedRef } from "../../resolved-ref";
 import { SESSION_TAB_DRAG_TYPE, TRACKED_DRAG_TYPE } from "../../tabs/pane-layout";
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
@@ -25,7 +27,7 @@ import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
 import { useScrollMore } from "../../ui/use-scroll-more";
-import { useTrackedRows } from "../../ui/use-tracked-rows";
+import { useTrackedRows } from "../../editor/tracked/use-tracked-rows";
 import { ChangeRequestFilterBar } from "./ChangeRequestFilterBar";
 import { useChangeRequests } from "./use-change-requests";
 

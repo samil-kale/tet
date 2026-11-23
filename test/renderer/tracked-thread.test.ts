@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { issueThread } from "../../src/renderer/editor/issue-thread";
+import { trackedThread } from "../../src/renderer/editor/tracked/tracked-thread";
 import type { TrackedEvent, TrackedNote, ReviewThread } from "../../src/shared/types/providers";
 
 const at = (minute: number): string => new Date(Date.UTC(2026, 9, 1, 10, minute)).toISOString();
@@ -15,18 +15,18 @@ const labeled = (minute: number, name: string, actor = "mira"): TrackedEvent => 
 describe("an issue's thread", () => {
   it("lists comments and events as they happened, a comment before what it was made with", () => {
     const closed: TrackedEvent = { actor: "mira", createdAt: at(5), kind: "closed" };
-    const thread = issueThread([note("1", 5), note("2", 1)], [closed]);
+    const thread = trackedThread([note("1", 5), note("2", 1)], [closed]);
     assert.deepEqual(thread, [{ note: note("2", 1) }, { note: note("1", 5) }, { event: closed }]);
   });
 
   it("puts a change request's review thread at its first comment", () => {
     const review: ReviewThread = { id: "t1", path: "src/a.ts", line: 4, resolved: false, comments: [note("3", 3), note("4", 9)] };
-    const thread = issueThread([note("1", 1), note("2", 5)], [], [review]);
+    const thread = trackedThread([note("1", 1), note("2", 5)], [], [review]);
     assert.deepEqual(thread, [{ note: note("1", 1) }, { review }, { note: note("2", 5) }]);
   });
 
   it("gathers one actor's changes of labels and of assignees into a line each", () => {
-    const thread = issueThread(
+    const thread = trackedThread(
       [],
       [
         labeled(0, "bug"),
@@ -44,7 +44,7 @@ describe("an issue's thread", () => {
   });
 
   it("gathers nothing past the window, across actors or across a comment", () => {
-    const lines = (notes: TrackedNote[], events: TrackedEvent[]): number => issueThread(notes, events).length;
+    const lines = (notes: TrackedNote[], events: TrackedEvent[]): number => trackedThread(notes, events).length;
     assert.equal(lines([], [labeled(0, "a"), labeled(10, "b")]), 2);
     assert.equal(lines([], [labeled(0, "a"), labeled(1, "b", "jonas")]), 2);
     assert.equal(lines([note("1", 1)], [labeled(0, "a"), labeled(2, "b")]), 3);

@@ -1,6 +1,6 @@
 import type { IssueFilter } from "../../../shared/types/providers";
 import { LabelFilter, PersonFilter, StateFilter } from "../../ui/FilterControl";
-import type { TrackedOptions } from "../../ui/use-tracked-list";
+import type { TrackedOptions } from "../../editor/tracked/use-tracked-list";
 
 const STATES = { Open: "open", Closed: "closed" } as const;
 

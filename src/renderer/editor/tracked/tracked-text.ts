@@ -1,5 +1,5 @@
 import MarkdownIt, { type Env, type StateCore, type Token } from "markdown-it";
-import type { ProviderId } from "../../shared/types/providers";
+import type { ProviderId } from "../../../shared/types/providers";
 
 /** What a text is rendered for. */
 interface IssueTextEnv extends Env {
@@ -146,7 +146,7 @@ markdown.core.ruler.push("tet_issue_text", (state) => {
  * `GHMarkdownToHtmlConverter` and `GitLabMarkdownToHtmlConverter` do, never by its host, but for
  * the size of a GitLab image (`applyImageSettings`).
  */
-export function issueTextHtml(text: string, provider: ProviderId, issueUrl: string): string {
+export function trackedTextHtml(text: string, provider: ProviderId, issueUrl: string): string {
   return markdown.render(text, { provider, issueUrl } satisfies IssueTextEnv);
 }
 
@@ -158,7 +158,7 @@ export function newIssueUrl(provider: ProviderId, repositoryUrl: string): string
 
 /** Where a link of an issue's text at `issueUrl` leads; undefined for one within the text. An
  *  upload's is relative to the project, whatever else is to the host. */
-export function issueLink(href: string, issueUrl: string): string | undefined {
+export function trackedLink(href: string, issueUrl: string): string | undefined {
   if (href === "" || href.startsWith("#")) {
     return undefined;
   }
@@ -168,7 +168,7 @@ export function issueLink(href: string, issueUrl: string): string | undefined {
 
 /** The file of the repository a link of an issue's text means, as written: any other than a web
  *  address, an upload or one into its own project. Undefined for those. */
-export function issueFileLink(href: string, issueUrl: string): string | undefined {
+export function trackedFileLink(href: string, issueUrl: string): string | undefined {
   if (href === "" || href.startsWith("#") || href.startsWith("//") || href.startsWith("/uploads/")) {
     return undefined;
   }

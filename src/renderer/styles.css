@@ -1127,7 +1127,7 @@ textarea:focus,
   height: calc(var(--icon-size) - 2px);
 }
 
-/* The Issues section (lanes/issues/) and an issue's tab (editor/IssueView.tsx) declare once what
+/* The Issues section (lanes/issues/) and an issue's tab (editor/tracked/TrackedView.tsx) declare once what
    they share: a row of items centered on its line, entries one under the next, the secondary text
    and the bold names. */
 .issue-filter-bar,

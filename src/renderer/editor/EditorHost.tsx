@@ -2,48 +2,51 @@ import { memo, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } f
 import type { ProjectRef } from "../../shared/types/project";
 import { ImageView } from "./ImageView";
 import { isChangeRequest } from "../../shared/types/providers";
-import { IssueView, numberOf, trackedNoun, type IssueActions } from "./IssueView";
+import { TrackedView } from "./tracked/TrackedView";
+import { numberOf } from "./tracked/tracked-words";
+import { trackedNoun } from "./tracked/tracked-words";
+import type { TrackedActions } from "./tracked/tracked-actions";
 import { isMarkdown } from "./diff-highlight";
 import {
-  approveChangeRequest,
   attachEditor,
   attachMarkdownPreview,
-  commentOnIssue,
   createMissingFile,
-  deleteIssue,
-  deleteIssueComment,
   diffShown,
-  editIssueComment,
-  editIssueField,
   editorKind,
   focusEditor,
   getEditorSnapshot,
   hasChanges,
   isReadOnly,
-  issueFieldOptions,
-  issueProjectOf,
-  loadIssueImage,
-  markIssueSeen,
-  mergeChangeRequest,
-  openIssueFile,
-  openLinkedIssue,
-  openIssueLink,
-  sendTabIssueToAgent,
   previewWithheld,
-  renameIssue,
   saveEditorFile,
   setDiffOption,
-  setIssueField,
   showDiff,
   showMarkdownPreview,
   subscribeEditor,
   subscribeRefEditors,
-  updateIssue,
-  uploadIssueFile,
   type EditorSnapshot,
 } from "./editor-views";
+import { setTrackedField } from "./tracked/tracked-views";
+import { editTrackedField } from "./tracked/tracked-views";
+import { renameTracked } from "./tracked/tracked-views";
+import { updateTracked } from "./tracked/tracked-views";
+import { uploadIssueFile } from "./tracked/tracked-views";
+import { trackedFieldOptions } from "./tracked/tracked-views";
+import { deleteIssue } from "./tracked/tracked-views";
+import { mergeChangeRequest } from "./tracked/tracked-views";
+import { approveChangeRequest } from "./tracked/tracked-views";
+import { deleteTrackedComment } from "./tracked/tracked-views";
+import { editTrackedComment } from "./tracked/tracked-views";
+import { commentOnTracked } from "./tracked/tracked-views";
+import { sendTabTrackedToAgent } from "./tracked/tracked-views";
+import { trackedProjectOf } from "./tracked/tracked-views";
+import { markTrackedSeen } from "./tracked/tracked-views";
+import { openTrackedFile } from "./tracked/tracked-views";
+import { openLinkedIssue } from "./tracked/tracked-views";
+import { openTrackedLink } from "./tracked/tracked-views";
+import { loadTrackedImage } from "./tracked/tracked-views";
 import { isEditorTabId } from "./editor-tab";
-import { useTrackedSessions } from "./use-tracked-sessions";
+import { useTrackedSessions } from "./tracked/use-tracked-sessions";
 import { IconButton } from "../ui/IconButton";
 import {
   BookOpenIcon,
@@ -76,7 +79,7 @@ export function useEditorPreview(tabId: string): boolean {
 /** A change request's tab's name once it read what its host calls one, "Pull Request #142"; undefined
  *  for any other tab, and before. */
 function trackedLabel(snapshot: EditorSnapshot): string | undefined {
-  const detail = snapshot.issueDetail;
+  const detail = snapshot.trackedDetail;
   return detail && isChangeRequest(detail) ? `${trackedNoun(detail)} ${numberOf(detail)}` : undefined;
 }
 
@@ -112,7 +115,7 @@ interface EditorHostProps {
  */
 export const EditorHost = memo(function EditorHost({ tabId, active, visible, focused }: EditorHostProps) {
   const snapshot = useEditorStore(tabId, whole);
-  const { path, tracked, issueDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
+  const { path, tracked, trackedDetail, file, building, saving, dirty, diff, markdownPreview, sideBySide, unchangedCollapsed } = snapshot;
   const frame = useRef<HTMLDivElement>(null);
   const split = useRef<HTMLDivElement>(null);
   const markdownPreviewFrame = useRef<HTMLDivElement>(null);
@@ -168,33 +171,33 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
   // An issue or change request on screen counts as seen with what the tab has read of it: a later
   // change on the host marks it in its section, one made from this tab, once read back, does not. A
   // change request's checks that changed are read as a change too.
-  const updatedAt = issueDetail?.updatedAt;
-  const checks = issueDetail && isChangeRequest(issueDetail) ? issueDetail.checks : undefined;
+  const updatedAt = trackedDetail?.updatedAt;
+  const checks = trackedDetail && isChangeRequest(trackedDetail) ? trackedDetail.checks : undefined;
   useEffect(() => {
     if (tracked !== undefined && updatedAt !== undefined && visible && active) {
-      markIssueSeen(tabId);
+      markTrackedSeen(tabId);
     }
   }, [tabId, tracked, updatedAt, checks, visible, active]);
 
-  const trackedSessions = useTrackedSessions(tracked?.kind ?? "issue", tracked === undefined ? undefined : issueProjectOf(tabId));
-  const issueSession = tracked === undefined ? undefined : trackedSessions[tracked.number];
+  const trackedSessions = useTrackedSessions(tracked?.kind ?? "issue", tracked === undefined ? undefined : trackedProjectOf(tabId));
+  const trackedSession = tracked === undefined ? undefined : trackedSessions[tracked.number];
 
-  const issueActions = useMemo<IssueActions>(
+  const trackedActions = useMemo<TrackedActions>(
     () => ({
-      loadImage: (source) => loadIssueImage(tabId, source),
-      openFile: (path) => openIssueFile(tabId, path),
-      openLink: (url) => openIssueLink(tabId, url),
-      comment: (body, internal) => commentOnIssue(tabId, body, internal),
-      editComment: (id, body) => editIssueComment(tabId, id, body),
-      deleteComment: (id) => deleteIssueComment(tabId, id),
+      loadImage: (source) => loadTrackedImage(tabId, source),
+      openFile: (path) => openTrackedFile(tabId, path),
+      openLink: (url) => openTrackedLink(tabId, url),
+      comment: (body, internal) => commentOnTracked(tabId, body, internal),
+      editComment: (id, body) => editTrackedComment(tabId, id, body),
+      deleteComment: (id) => deleteTrackedComment(tabId, id),
       deleteIssue: () => deleteIssue(tabId),
-      update: (change) => updateIssue(tabId, change),
-      rename: (title) => renameIssue(tabId, title),
-      fieldOptions: (fieldId) => issueFieldOptions(tabId, fieldId),
-      setField: (fieldId, value) => setIssueField(tabId, fieldId, value),
-      editField: (fieldId, value) => editIssueField(tabId, fieldId, value),
+      update: (change) => updateTracked(tabId, change),
+      rename: (title) => renameTracked(tabId, title),
+      fieldOptions: (fieldId) => trackedFieldOptions(tabId, fieldId),
+      setField: (fieldId, value) => setTrackedField(tabId, fieldId, value),
+      editField: (fieldId, value) => editTrackedField(tabId, fieldId, value),
       upload: (file) => uploadIssueFile(tabId, file),
-      sendToAgent: (agentId) => sendTabIssueToAgent(tabId, agentId),
+      sendToAgent: (agentId) => sendTabTrackedToAgent(tabId, agentId),
       approve: () => approveChangeRequest(tabId),
       merge: (whenChecksPass) => mergeChangeRequest(tabId, whenChecksPass),
       openIssue: (number) => openLinkedIssue(tabId, number),
@@ -206,7 +209,7 @@ export const EditorHost = memo(function EditorHost({ tabId, active, visible, foc
     return (
       <div className={`editor-tab${active ? "" : " hidden"}`}>
         {kind === "error" && <div className="placeholder">Could not read the {tracked.kind === "issue" ? "issue" : "change request"}.</div>}
-        {issueDetail && <IssueView issue={issueDetail} session={issueSession} actions={issueActions} />}
+        {trackedDetail && <TrackedView issue={trackedDetail} session={trackedSession} actions={trackedActions} />}
       </div>
     );
   }

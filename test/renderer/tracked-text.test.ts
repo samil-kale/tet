@@ -1,12 +1,12 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { issueFileLink, issueLink, issueTextHtml, newIssueUrl } from "../../src/renderer/editor/issue-text";
+import { trackedFileLink, trackedLink, trackedTextHtml, newIssueUrl } from "../../src/renderer/editor/tracked/tracked-text";
 
 const GITHUB_ISSUE = "https://github.com/o/r/issues/5";
 const GITLAB_ISSUE = "https://gitlab.example.com/g/p/-/issues/5";
 
-const github = (text: string): string => issueTextHtml(text, "github", GITHUB_ISSUE).trim();
-const gitlab = (text: string): string => issueTextHtml(text, "gitlab", GITLAB_ISSUE).trim();
+const github = (text: string): string => trackedTextHtml(text, "github", GITHUB_ISSUE).trim();
+const gitlab = (text: string): string => trackedTextHtml(text, "gitlab", GITLAB_ISSUE).trim();
 
 describe("an issue's text on GitHub", () => {
   it("links a number to its issue and a mention to its user", () => {
@@ -47,13 +47,13 @@ describe("an issue's text on GitHub", () => {
   });
 
   it("opens a link in the repository, as on GitLab", () => {
-    assert.equal(issueFileLink("bla.md", GITHUB_ISSUE), "bla.md");
-    assert.equal(issueFileLink("directory/a/bla.md", GITHUB_ISSUE), "directory/a/bla.md");
-    assert.equal(issueFileLink("/some/path?query=1", GITHUB_ISSUE), "/some/path?query=1");
-    assert.equal(issueFileLink("/o/r/pull/3", GITHUB_ISSUE), undefined);
-    assert.equal(issueFileLink("https://example.com/a", GITHUB_ISSUE), undefined);
-    assert.equal(issueFileLink("mailto:a@example.com", GITHUB_ISSUE), undefined);
-    assert.equal(issueFileLink("#note", GITHUB_ISSUE), undefined);
+    assert.equal(trackedFileLink("bla.md", GITHUB_ISSUE), "bla.md");
+    assert.equal(trackedFileLink("directory/a/bla.md", GITHUB_ISSUE), "directory/a/bla.md");
+    assert.equal(trackedFileLink("/some/path?query=1", GITHUB_ISSUE), "/some/path?query=1");
+    assert.equal(trackedFileLink("/o/r/pull/3", GITHUB_ISSUE), undefined);
+    assert.equal(trackedFileLink("https://example.com/a", GITHUB_ISSUE), undefined);
+    assert.equal(trackedFileLink("mailto:a@example.com", GITHUB_ISSUE), undefined);
+    assert.equal(trackedFileLink("#note", GITHUB_ISSUE), undefined);
   });
 });
 
@@ -87,21 +87,21 @@ describe("an issue's text on GitLab", () => {
   });
 
   it("opens a link in the repository, and only that", () => {
-    assert.equal(issueFileLink("bla.md", GITLAB_ISSUE), "bla.md");
-    assert.equal(issueFileLink("directory/a/bla.md", GITLAB_ISSUE), "directory/a/bla.md");
-    assert.equal(issueFileLink("/some/path?query=1", GITLAB_ISSUE), "/some/path?query=1");
-    assert.equal(issueFileLink("/g/p/-/merge_requests/1", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("/uploads/a/c.pdf", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("https://example.com/a", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("mailto:a@example.com", GITLAB_ISSUE), undefined);
-    assert.equal(issueFileLink("#note", GITLAB_ISSUE), undefined);
+    assert.equal(trackedFileLink("bla.md", GITLAB_ISSUE), "bla.md");
+    assert.equal(trackedFileLink("directory/a/bla.md", GITLAB_ISSUE), "directory/a/bla.md");
+    assert.equal(trackedFileLink("/some/path?query=1", GITLAB_ISSUE), "/some/path?query=1");
+    assert.equal(trackedFileLink("/g/p/-/merge_requests/1", GITLAB_ISSUE), undefined);
+    assert.equal(trackedFileLink("/uploads/a/c.pdf", GITLAB_ISSUE), undefined);
+    assert.equal(trackedFileLink("https://example.com/a", GITLAB_ISSUE), undefined);
+    assert.equal(trackedFileLink("mailto:a@example.com", GITLAB_ISSUE), undefined);
+    assert.equal(trackedFileLink("#note", GITLAB_ISSUE), undefined);
   });
 
   it("leads a link to the tracker, an upload's from its project", () => {
-    assert.equal(issueLink("/uploads/abc/a.pdf", GITLAB_ISSUE), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
-    assert.equal(issueLink("/g/p/-/issues/3", GITLAB_ISSUE), "https://gitlab.example.com/g/p/-/issues/3");
-    assert.equal(issueLink("https://example.com/x", GITLAB_ISSUE), "https://example.com/x");
-    assert.equal(issueLink("#note", GITLAB_ISSUE), undefined);
+    assert.equal(trackedLink("/uploads/abc/a.pdf", GITLAB_ISSUE), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
+    assert.equal(trackedLink("/g/p/-/issues/3", GITLAB_ISSUE), "https://gitlab.example.com/g/p/-/issues/3");
+    assert.equal(trackedLink("https://example.com/x", GITLAB_ISSUE), "https://example.com/x");
+    assert.equal(trackedLink("#note", GITLAB_ISSUE), undefined);
   });
 });
 
@@ -109,11 +109,14 @@ describe("the text of an issue not yet made", () => {
   it("leads from where the issue will be, on either host", () => {
     const github = newIssueUrl("github", "https://github.com/o/r");
     const gitlab = newIssueUrl("gitlab", "https://gitlab.example.com/g/p");
-    assert.equal(issueTextHtml("#1", "github", github).trim(), '<p><a href="https://github.com/o/r/issues/1">#1</a></p>');
-    assert.equal(issueTextHtml("!2", "gitlab", gitlab).trim(), '<p><a href="https://gitlab.example.com/g/p/-/merge_requests/2">!2</a></p>');
-    assert.equal(issueFileLink("/o/r/pull/3", github), undefined);
-    assert.equal(issueFileLink("bla.md", github), "bla.md");
-    assert.equal(issueFileLink("/g/p/-/merge_requests/1", gitlab), undefined);
-    assert.equal(issueLink("/uploads/abc/a.pdf", gitlab), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
+    assert.equal(trackedTextHtml("#1", "github", github).trim(), '<p><a href="https://github.com/o/r/issues/1">#1</a></p>');
+    assert.equal(
+      trackedTextHtml("!2", "gitlab", gitlab).trim(),
+      '<p><a href="https://gitlab.example.com/g/p/-/merge_requests/2">!2</a></p>',
+    );
+    assert.equal(trackedFileLink("/o/r/pull/3", github), undefined);
+    assert.equal(trackedFileLink("bla.md", github), "bla.md");
+    assert.equal(trackedFileLink("/g/p/-/merge_requests/1", gitlab), undefined);
+    assert.equal(trackedLink("/uploads/abc/a.pdf", gitlab), "https://gitlab.example.com/g/p/uploads/abc/a.pdf");
   });
 });
