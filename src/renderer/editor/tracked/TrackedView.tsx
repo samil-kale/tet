@@ -42,9 +42,9 @@ export function TrackedView({
   return (
     <>
       <TrackedBar issue={issue} session={session} actions={actions} />
-      <div className="issue-view">
-        <div className="issue-columns">
-          <div className="issue-thread">
+      <div className="tracked-view">
+        <div className="tracked-columns">
+          <div className="tracked-main">
             {request && <ChangeRequestCard request={request} viewer={viewer} actions={actions} />}
             <TrackedCard
               author={issue.author}
@@ -90,7 +90,7 @@ export function TrackedView({
             })}
             <CommentBox issue={issue} internalNotes={issue.internalNotes === true} actions={actions} writing={writing} />
           </div>
-          <div className="issue-side">
+          <div className="tracked-side">
             <SessionSection issue={issue} session={session} />
             {sectionsOf(issue.fields).map((section) =>
               "group" in section ? (

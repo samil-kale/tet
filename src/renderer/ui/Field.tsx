@@ -380,7 +380,7 @@ interface CheckboxProps {
 /** A checkbox with its label beside it; the box itself is drawn by TET, never by Chrome. */
 export function Checkbox({ label, checked, onChange, disabled }: CheckboxProps) {
   return (
-    <label className="dialog-checkbox">
+    <label className="checkbox-label">
       <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>

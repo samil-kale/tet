@@ -74,7 +74,7 @@ function ChangeRequestRow({
   return (
     <div
       {...dropProps}
-      className={`list-row issue-row two-line${active ? " active" : ""}${dropTarget ? " drop-target" : ""}`}
+      className={`list-row tracked-row two-line${active ? " active" : ""}${dropTarget ? " drop-target" : ""}`}
       title={[
         `${name} ${row.title}`,
         ...(row.labels.length > 0 ? [`Labels: ${row.labels.join(", ")}`] : []),
@@ -88,17 +88,17 @@ function ChangeRequestRow({
     >
       <span className="list-main">
         <span className="list-label">{row.title}</span>
-        <span className="issue-detail-line">
+        <span className="tracked-detail-line">
           <span className="list-detail">
             {name}
             {row.open && row.draft && " · draft"} · opened {dayOf(row.createdAt)}, by {row.author}
           </span>
-          {failed && <span className="issue-mark failed" />}
-          {unread && <span className="issue-mark" />}
+          {failed && <span className="row-dot failed" />}
+          {unread && <span className="row-dot" />}
         </span>
       </span>
       {row.assignee === undefined ? (
-        <span className="issue-person vacant" />
+        <span className="user-avatar vacant" />
       ) : (
         <Person login={row.assignee} avatar={row.avatars[row.assignee]} />
       )}
@@ -203,7 +203,7 @@ export const ChangeRequestList = memo(function ChangeRequestList({
           <ChangeRequestFilterBar filter={filter} options={options} onChange={setFilter} />
           <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
             {shownRows.map(({ item: row, entering, leaving }) => (
-              <div key={row.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
+              <div key={row.number} className={`tracked-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <ChangeRequestRow
                   row={row}
                   kind={kind}

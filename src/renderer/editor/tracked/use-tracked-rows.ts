@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TrackedRow } from "../../../shared/types/providers";
 
-/** How long a row takes to unfold or fold away; the stylesheet's `.issue-item` transition. */
+/** How long a row takes to unfold or fold away; the stylesheet's `.tracked-item` transition. */
 const ROW_MS = 350;
 
 export interface TrackedRowItem<T extends TrackedRow = TrackedRow> {

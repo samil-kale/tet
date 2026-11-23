@@ -63,13 +63,13 @@ export function CommentBox({ issue, internalNotes, actions, writing }: CommentBo
     setBusy(false);
   };
   return (
-    <div className="issue-comment">
-      <div className="issue-card">
-        <div className="issue-card-edit">
+    <div className="tracked-comment">
+      <div className="tracked-card">
+        <div className="tracked-card-edit">
           <TextBox label="Add a comment" value={text} onChange={setText} disabled={busy} writing={writing} />
         </div>
       </div>
-      <div className="issue-line">
+      <div className="tracked-line">
         {internalNotes && <Checkbox label="Make this an internal note" checked={internal} onChange={setInternal} disabled={busy} />}
         {/* A merged change request has no state left to change. */}
         {request?.state !== "merged" && (
@@ -116,15 +116,15 @@ export function TrackedCard({ author, avatar, opened, at, text, writing, interna
     setBusy(false);
   };
   return (
-    <div className="issue-card">
-      <div className="issue-card-header">
+    <div className="tracked-card">
+      <div className="tracked-card-header">
         <Person login={author} avatar={avatar} />
-        <span className="issue-card-title">
-          <span className="issue-card-author">{author}</span> {opened && "opened "}
+        <span className="tracked-card-title">
+          <span className="tracked-card-author">{author}</span> {opened && "opened "}
           {agoOf(at)}
         </span>
         {internal && (
-          <span className="issue-label" title="Visible to project members only">
+          <span className="label-pill" title="Visible to project members only">
             Internal note
           </span>
         )}
@@ -140,9 +140,9 @@ export function TrackedCard({ author, avatar, opened, at, text, writing, interna
         )}
       </div>
       {draft !== undefined ? (
-        <div className="issue-comment issue-card-edit">
+        <div className="tracked-comment tracked-card-edit">
           <TextBox label="Text" value={draft} onChange={setDraft} disabled={busy} writing={writing} />
-          <div className="issue-line">
+          <div className="tracked-line">
             <button type="button" className="button secondary" disabled={busy} onClick={() => setDraft(undefined)}>
               Cancel
             </button>
@@ -152,7 +152,7 @@ export function TrackedCard({ author, avatar, opened, at, text, writing, interna
           </div>
         </div>
       ) : text === "" ? (
-        <div className="issue-empty">No description provided.</div>
+        <div className="tracked-empty">No description provided.</div>
       ) : (
         <TrackedText {...writing.rendering} text={text} />
       )}
@@ -176,25 +176,25 @@ export function ReviewThreadCard({
 }) {
   const [open, setOpen] = useState(!thread.resolved);
   return (
-    <div className={open ? "issue-card" : "issue-card review-thread-folded"} data-review-thread={thread.id}>
-      <div className="issue-card-header">
+    <div className={open ? "tracked-card" : "tracked-card review-thread-folded"} data-review-thread={thread.id}>
+      <div className="tracked-card-header">
         <IconButton title={open ? "Collapse" : "Expand"} onClick={() => setOpen(!open)}>
           <ChevronIcon expanded={open} />
         </IconButton>
-        <span className="issue-card-title">
+        <span className="tracked-card-title">
           {named`${thread.path}`}
           {thread.line !== undefined && `, line ${thread.line}`}
         </span>
-        {thread.outdated && <span className="issue-label">Outdated</span>}
-        {thread.resolved && <span className="issue-label">Resolved</span>}
+        {thread.outdated && <span className="label-pill">Outdated</span>}
+        {thread.resolved && <span className="label-pill">Resolved</span>}
       </div>
       {open &&
         thread.comments.map((comment) => (
           <div key={comment.id} className="review-thread-comment">
             <div className="review-thread-comment-header">
               <Person login={comment.author} avatar={avatars[comment.author]} />
-              <span className="issue-card-title">
-                <span className="issue-card-author">{comment.author}</span> {agoOf(comment.createdAt)}
+              <span className="tracked-card-title">
+                <span className="tracked-card-author">{comment.author}</span> {agoOf(comment.createdAt)}
               </span>
             </div>
             <TrackedText {...rendering} text={comment.body} />
@@ -261,7 +261,7 @@ export function eventMessage(event: ThreadEvent, noun: string): React.ReactNode 
     case "renamed":
       return (
         <>
-          changed the title <del className="issue-event-old">{event.from}</del> <ins className="issue-event-new">{event.to}</ins>
+          changed the title <del className="tracked-event-old">{event.from}</del> <ins className="tracked-event-new">{event.to}</ins>
         </>
       );
     case "linked":
@@ -278,10 +278,10 @@ export function eventMessage(event: ThreadEvent, noun: string): React.ReactNode 
 /** A line of the thread saying what happened, as the plugin's timeline draws one. */
 export function TrackedEventLine({ event, noun }: { event: ThreadEvent; noun: string }) {
   return (
-    <div className="issue-event">
-      <span className="issue-event-dot" />
-      <span className="issue-event-message">
-        {login(event.actor)} {eventMessage(event, noun)} <span className="issue-event-time">{agoOf(event.createdAt)}</span>
+    <div className="tracked-event">
+      <span className="tracked-event-dot" />
+      <span className="tracked-event-message">
+        {login(event.actor)} {eventMessage(event, noun)} <span className="tracked-event-time">{agoOf(event.createdAt)}</span>
       </span>
     </div>
   );

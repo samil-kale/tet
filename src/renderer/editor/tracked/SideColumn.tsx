@@ -22,8 +22,8 @@ export const SIDE_MENU_MAX_WIDTH = 300;
 
 export function SideSection({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="issue-side-section">
-      <div className="issue-side-title">
+    <div className="tracked-side-section">
+      <div className="tracked-side-title">
         <span>{title}</span>
         {action}
       </div>
@@ -40,13 +40,13 @@ export function SessionSection({ issue, session }: { issue: TrackedDetail; sessi
   return (
     <SideSection title="Session">
       {session === undefined ? (
-        <span className="issue-none">None</span>
+        <span className="tracked-none">None</span>
       ) : (
-        <div className="issue-session" onClick={() => void openTrackedSession(session)}>
+        <div className="tracked-session" onClick={() => void openTrackedSession(session)}>
           <AgentIcon agentId={session.agentId} className="line-icon" />
-          <span className="issue-session-text">
+          <span className="tracked-session-text">
             <span>{session.title || "New session"}</span>
-            <span className="issue-session-where">
+            <span className="tracked-session-where">
               {session.worktree ?? "repository"} · {session.archived ? "archived" : "open"}
             </span>
           </span>
@@ -221,10 +221,10 @@ export function TimeLogs({
   actions: TrackedActions;
 }) {
   return field.entries.map((entry) => (
-    <div key={entry.id} className="issue-time-log">
-      <div className="issue-time-log-line">
+    <div key={entry.id} className="tracked-time-log">
+      <div className="tracked-time-log-line">
         <span>{entry.timeSpent}</span>
-        {entry.spentAt && <span className="issue-side-name">{entry.spentAt}</span>}
+        {entry.spentAt && <span className="tracked-side-name">{entry.spentAt}</span>}
         {entry.removable && (
           <IconButton
             title="Delete..."
@@ -238,18 +238,18 @@ export function TimeLogs({
           </IconButton>
         )}
       </div>
-      <div className="issue-side-person">
+      <div className="tracked-side-person">
         <Person login={entry.author} avatar={avatars[entry.author]} />
-        <span className="issue-side-name">{entry.author}</span>
+        <span className="tracked-side-name">{entry.author}</span>
       </div>
-      {entry.summary && <div className="issue-side-name">{entry.summary}</div>}
+      {entry.summary && <div className="tracked-side-name">{entry.summary}</div>}
     </div>
   ));
 }
 
 /** A typed field's value in the side column, "None" where it has none. */
 export function FieldValue({ value }: { value: string | number | undefined }) {
-  return <span className={value === undefined ? "issue-none" : undefined}>{value ?? "None"}</span>;
+  return <span className={value === undefined ? "tracked-none" : undefined}>{value ?? "None"}</span>;
 }
 
 /** The fields of one group as a section: their values or, where none has one, a sentence offering to
@@ -288,7 +288,7 @@ export function GroupSection({
       }
     >
       {fields.every((field) => field.value === undefined) ? (
-        <span className="issue-none">
+        <span className="tracked-none">
           {editable.length === 0 ? (
             "None"
           ) : (
@@ -307,8 +307,8 @@ export function GroupSection({
         </span>
       ) : (
         fields.map((field) => (
-          <div key={field.id} className="issue-side-row">
-            <span className="issue-side-name">{field.name}</span>
+          <div key={field.id} className="tracked-side-row">
+            <span className="tracked-side-name">{field.name}</span>
             <FieldValue value={field.value} />
           </div>
         ))
@@ -333,20 +333,20 @@ export function PickValue({
   const opensIssues = changeRequestOf(issue)?.ownIssues === true;
   return (
     <>
-      {field.value.length === 0 && <span className="issue-none">None</span>}
+      {field.value.length === 0 && <span className="tracked-none">None</span>}
       {field.shown === "issues" &&
         field.value.map((name) => {
           const number = linkedIssueNumber(name);
           return (
-            <span key={name} className="issue-linked">
+            <span key={name} className="tracked-linked">
               {opensIssues && number !== undefined ? <ActionLink onClick={() => actions.openIssue(number)}>{name}</ActionLink> : name}
             </span>
           );
         })}
       {field.shown !== "text" && field.shown !== "issues" && (
-        <div className="issue-labels">
+        <div className="label-pills">
           {field.value.map((label) => (
-            <span key={label} className="issue-label">
+            <span key={label} className="label-pill">
               {label}
             </span>
           ))}
@@ -381,7 +381,7 @@ export function FieldSection({ field, issue, actions }: { field: TrackedField; i
       );
     case "flag":
       return (
-        <div className="issue-side-section">
+        <div className="tracked-side-section">
           <Checkbox
             label={field.name}
             checked={field.value}

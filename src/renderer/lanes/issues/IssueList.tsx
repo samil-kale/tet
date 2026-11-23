@@ -70,9 +70,9 @@ function NewIssueFields({
         error={error}
       />
       <FieldGroup label="Description">
-        <div className="issue-comment">
-          <div className="issue-card">
-            <div className="issue-card-edit">
+        <div className="tracked-comment">
+          <div className="tracked-card">
+            <div className="tracked-card-edit">
               <TextBox
                 label="Description"
                 value={value.body}
@@ -120,7 +120,7 @@ function IssueRow({
   return (
     <div
       {...dropProps}
-      className={`list-row issue-row two-line${active ? " active" : ""}${dropTarget ? " drop-target" : ""}`}
+      className={`list-row tracked-row two-line${active ? " active" : ""}${dropTarget ? " drop-target" : ""}`}
       title={[`#${issue.number} ${issue.title}`, ...(issue.labels.length > 0 ? [`Labels: ${issue.labels.join(", ")}`] : [])].join("\n")}
       draggable
       onDragStart={(event) => event.dataTransfer.setData(TRACKED_DRAG_TYPE, JSON.stringify(trackedOf(issue.number)))}
@@ -130,15 +130,15 @@ function IssueRow({
     >
       <span className="list-main">
         <span className="list-label">{issue.title}</span>
-        <span className="issue-detail-line">
+        <span className="tracked-detail-line">
           <span className="list-detail">
             #{issue.number} · opened {dayOf(issue.createdAt)}, by {issue.author}
           </span>
-          {unread && <span className="issue-mark" />}
+          {unread && <span className="row-dot" />}
         </span>
       </span>
       {issue.assignee === undefined ? (
-        <span className="issue-person vacant" />
+        <span className="user-avatar vacant" />
       ) : (
         <Person login={issue.assignee} avatar={issue.avatars[issue.assignee]} />
       )}
@@ -321,7 +321,7 @@ export const IssueList = memo(function IssueList({
           <IssueFilterBar filter={filter} options={options} onChange={setFilter} />
           <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
             {shownRows.map(({ item: issue, entering, leaving }) => (
-              <div key={issue.number} className={`issue-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
+              <div key={issue.number} className={`tracked-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <IssueRow
                   issue={issue}
                   active={issue.number === openIssue}

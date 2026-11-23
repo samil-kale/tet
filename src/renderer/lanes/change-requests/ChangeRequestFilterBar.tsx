@@ -16,7 +16,7 @@ export function ChangeRequestFilterBar({
   onChange: (filter: ChangeRequestFilter) => void;
 }) {
   return (
-    <div className="issue-filter-bar">
+    <div className="filter-bar">
       <StateFilter states={STATES} value={filter.state} onChange={(state) => onChange({ ...filter, state })} />
       <PersonFilter title="Author" value={filter.author} people={options.people} onChange={(author) => onChange({ ...filter, author })} />
       <PersonFilter

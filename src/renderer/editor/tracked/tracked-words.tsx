@@ -72,11 +72,11 @@ export function listed<T = string>(items: T[], show: (item: T) => React.ReactNod
 }
 
 export function login(name: string): React.ReactNode {
-  return <span className="issue-event-name">{name}</span>;
+  return <span className="tracked-event-name">{name}</span>;
 }
 
 export function label(name: string): React.ReactNode {
-  return <span className="issue-label">{name}</span>;
+  return <span className="label-pill">{name}</span>;
 }
 
 /** Where it stands, as the bar says it: open or closed, a change request also draft or merged. */

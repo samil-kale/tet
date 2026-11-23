@@ -39,7 +39,7 @@ export function Person({ login, avatar }: { login: string; avatar: string | unde
   }, [avatar]);
   const image = avatar === undefined ? undefined : avatarImages.get(avatar);
   return (
-    <span className="issue-person" title={login}>
+    <span className="user-avatar" title={login}>
       {image === undefined ? login.slice(0, 2).toUpperCase() : <img src={image} alt="" draggable={false} />}
     </span>
   );

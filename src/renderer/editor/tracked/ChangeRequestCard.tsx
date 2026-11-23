@@ -77,7 +77,7 @@ export function Segment({
     <>
       <span className="change-request-segment-head">
         <strong>{title}</strong>
-        <span className="issue-none">{summary}</span>
+        <span className="tracked-none">{summary}</span>
         {onToggle && <ChevronIcon expanded={expanded === true} />}
       </span>
       {meter}
@@ -182,9 +182,9 @@ export function ChangeRequestCard({
     </span>
   );
   return (
-    <div className="issue-card change-request-card">
-      <div className="issue-card-header">
-        <span className="issue-card-title">
+    <div className="tracked-card change-request-card">
+      <div className="tracked-card-header">
+        <span className="tracked-card-title">
           {named`${status.head} into ${status.base}`}
           {" · "}
           {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
@@ -201,7 +201,7 @@ export function ChangeRequestCard({
         {state === "open" ? (
           <span className="change-request-headline">
             <strong>{draft ? "Draft" : reasons.length > 0 ? "Merging is blocked" : "Ready to merge"}</strong>
-            <span className="issue-none">
+            <span className="tracked-none">
               {draft
                 ? `This ${kind.noun} is not ready for review yet.`
                 : reasons.length > 0
@@ -259,13 +259,13 @@ export function ChangeRequestCard({
             <div key={reviewer.login} className="change-request-check">
               <span className={`change-request-check-state change-request-meter-${REVIEWER_STATES[reviewer.state].dot}`} />
               <span>{reviewer.login}</span>
-              <span className="issue-none">{REVIEWER_STATES[reviewer.state].text}</span>
+              <span className="tracked-none">{REVIEWER_STATES[reviewer.state].text}</span>
             </div>
           ))}
           {approvalsOutstanding && (
             <div className="change-request-check">
               <span className="change-request-check-state change-request-meter-running" />
-              <span className="issue-none">
+              <span className="tracked-none">
                 {approvalsOutstanding.left === undefined ? "Approval required" : `${approvalsOutstanding.left} still required`}
               </span>
             </div>
@@ -286,7 +286,7 @@ export function ChangeRequestCard({
                 {thread.path}
                 {thread.line !== undefined && `:${thread.line}`}
               </span>
-              <span className="issue-none">{thread.comments[0]?.author}</span>
+              <span className="tracked-none">{thread.comments[0]?.author}</span>
             </button>
           ))}
         </div>
@@ -300,7 +300,7 @@ export function ChangeRequestCard({
                 <>
                   <span className={`change-request-check-state change-request-meter-${check.state}`} />
                   <span>{check.name}</span>
-                  {check.detail && <span className="issue-none">{check.detail}</span>}
+                  {check.detail && <span className="tracked-none">{check.detail}</span>}
                   {check.required && <span className="change-request-required">Required</span>}
                 </>
               );

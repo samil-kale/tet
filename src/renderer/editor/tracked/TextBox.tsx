@@ -48,7 +48,7 @@ export function TrackedText({ text, provider, issueUrl, loadImage, openFile, ope
       console.warn("[TET] An issue's text failed to render:", error),
     );
   }, [text, provider, issueUrl, loadImage, openFile, openLink]);
-  return <div ref={host} className="issue-text" />;
+  return <div ref={host} className="markdown-text" />;
 }
 
 export const BOX_TABS = [
@@ -144,10 +144,10 @@ export function TextBox({
         }
       }}
     >
-      <div className="issue-box-tabs">
+      <div className="text-box-tabs">
         <SwitchTabs tabs={BOX_TABS} active={previewing ? "preview" : "write"} onSelect={(id) => switchTo(id === "preview")} locked={busy} />
         {!previewing && (
-          <div className="toolbar issue-box-tools">
+          <div className="toolbar text-box-tools">
             {BOX_FORMATS.map(({ format: kind, title, Icon }) => (
               <Fragment key={kind}>
                 <IconButton
@@ -159,15 +159,15 @@ export function TextBox({
                 >
                   <Icon />
                 </IconButton>
-                {kind === "link" && <span className="issue-box-separator" />}
+                {kind === "link" && <span className="text-box-separator" />}
               </Fragment>
             ))}
           </div>
         )}
       </div>
       {previewing ? (
-        <div className="issue-box-preview" style={{ minHeight: dragged }}>
-          {value.trim() === "" ? <div className="issue-empty">Nothing to preview</div> : <TrackedText {...rendering} text={value} />}
+        <div className="text-box-preview" style={{ minHeight: dragged }}>
+          {value.trim() === "" ? <div className="tracked-empty">Nothing to preview</div> : <TrackedText {...rendering} text={value} />}
         </div>
       ) : (
         <textarea
@@ -202,7 +202,7 @@ export function TextBox({
               event.target.value = "";
             }}
           />
-          <button type="button" className="issue-attach" disabled={busy} onClick={() => picker.current?.click()}>
+          <button type="button" className="text-box-attach" disabled={busy} onClick={() => picker.current?.click()}>
             <PaperclipIcon className="line-icon" />
             Paste, drop, or click to add {accept === undefined ? "files" : "images"}
           </button>

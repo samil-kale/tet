@@ -80,7 +80,7 @@ export function TrackedBar({
   };
   return (
     <>
-      <div className="editor-bar issue-bar">
+      <div className="editor-bar tracked-bar">
         <div className="toolbar editor-bar-actions">
           <IconButton title="Open in Browser" onClick={() => void window.tet.shell.openUrl(issue.url)}>
             <RemoteIcon />
@@ -107,8 +107,8 @@ export function TrackedBar({
             </IconButton>
           )}
         </div>
-        <div className="toolbar editor-bar-actions issue-state">{stateOf(issue)}</div>
-        <div className="toolbar editor-bar-actions issue-bar-number">{numberOf(issue)}</div>
+        <div className="toolbar editor-bar-actions tracked-state">{stateOf(issue)}</div>
+        <div className="toolbar editor-bar-actions tracked-bar-number">{numberOf(issue)}</div>
         <span className="editor-bar-title" title={issue.title}>
           {issue.title}
         </span>

@@ -24,9 +24,9 @@ interface FilterControlProps {
 export function FilterControl({ title, value, options, isPicked, onPick, onClear, several }: FilterControlProps) {
   const box = useRef<HTMLSpanElement>(null);
   return (
-    <span ref={box} className={value === undefined ? "issue-filter" : "issue-filter set"}>
+    <span ref={box} className={value === undefined ? "filter-chip" : "filter-chip set"}>
       <PickMenu
-        className="issue-filter-trigger"
+        className="filter-chip-trigger"
         maxWidth={FILTER_MENU_MAX_WIDTH}
         alignTo={box}
         options={options}
@@ -34,7 +34,7 @@ export function FilterControl({ title, value, options, isPicked, onPick, onClear
         onPick={onPick}
         several={several}
       >
-        <span className="issue-filter-text">{value === undefined ? title : `${title}: ${value}`}</span>
+        <span className="filter-chip-text">{value === undefined ? title : `${title}: ${value}`}</span>
         {value === undefined && <ChevronIcon expanded />}
       </PickMenu>
       {value !== undefined && (
