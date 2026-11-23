@@ -102,15 +102,12 @@ textarea,
   border: 1px solid var(--tet-app-border);
 }
 
-input[type="text"],
-input[type="password"],
-input[type="date"],
+input:is([type="text"], [type="password"], [type="date"]),
 .dropdown-trigger {
   height: var(--field-height);
 }
 
-input::placeholder,
-textarea::placeholder {
+:is(input, textarea)::placeholder {
   color: var(--tet-input-placeholderForeground);
 }
 
@@ -741,21 +738,16 @@ textarea:focus,
 }
 
 /* Being dragged; it stays in place until the drop. A project moves with its worktrees. */
-.project-group.dragging,
-.tab.dragging,
-.list-row.dragging,
-.edit-row.dragging {
+:is(.project-group, .tab, .list-row, .edit-row).dragging {
   opacity: 0.5;
 }
 
 /* Where the drop lands: a line between rows, inset so it adds no height. */
-.list-row.drop-before,
-.edit-row.drop-before {
+:is(.list-row, .edit-row).drop-before {
   box-shadow: inset 0 1px 0 var(--tet-focusBorder);
 }
 
-.list-row.drop-after,
-.edit-row.drop-after {
+:is(.list-row, .edit-row).drop-after {
   box-shadow: inset 0 -1px 0 var(--tet-focusBorder);
 }
 
@@ -946,8 +938,7 @@ textarea:focus,
 
 /* What trails a tree row's label: a file's folder, a worktree's base, a commit's author. Centered
    in the row, the smaller text sits above the label's baseline; the offset puts it on it. */
-.tree-row > .tree-extra,
-.tree-row > .count-badge {
+.tree-row > :is(.tree-extra, .count-badge) {
   position: relative;
   top: 0.5px;
   margin-left: 6px;
@@ -980,8 +971,7 @@ textarea:focus,
 /* Rows shaped the same across lanes: the files lane's Explorer tree and the Search section under
    it, and the git lane's Local Changes and Branches. It nests arbitrarily deep, so rows set
    `padding-left` inline. */
-.dense-tree .tree-header,
-.dense-tree .tree-row {
+.dense-tree :is(.tree-header, .tree-row) {
   height: var(--tree-row-height);
 }
 
@@ -1329,8 +1319,7 @@ textarea:focus,
   padding: 0;
 }
 
-.tracked-bar > .tracked-state,
-.tracked-bar > .tracked-bar-number {
+.tracked-bar > :is(.tracked-state, .tracked-bar-number) {
   padding: 0 10px;
   font-size: var(--tet-font-size);
 }
@@ -1827,8 +1816,7 @@ button.change-request-check:hover {
   border-radius: var(--island-radius);
 }
 
-.pane.fill,
-.panes-column.fill {
+:is(.pane, .panes-column).fill {
   flex: 1;
 }
 
@@ -1839,9 +1827,8 @@ button.change-request-check:hover {
    paints behind the opaque tab strip, and panes keep their sizes until the drop, or every pty under
    them refits mid-drag. Above the layers beneath them, which xterm's decorations reach 7 of. The
    veil is VS Code's drop-target wash. */
-.pane.drag-over::after,
+:is(.pane, .lane-content).drag-over::after,
 .snap-preview,
-.lane-content.drag-over::after,
 .tracked-row.drop-target::after {
   position: absolute;
   border: 1px solid var(--tet-focusBorder);
@@ -1851,8 +1838,7 @@ button.change-request-check:hover {
   pointer-events: none;
 }
 
-.pane.drag-over::after,
-.lane-content.drag-over::after,
+:is(.pane, .lane-content).drag-over::after,
 .tracked-row.drop-target::after {
   content: "";
   inset: 0;
@@ -1983,15 +1969,13 @@ button.change-request-check:hover {
 }
 
 /* The active tab, in the strip and a switching one (`.switch-tab`) alike. */
-.tab.active,
-.switch-tab.active {
+:is(.tab, .switch-tab).active {
   color: var(--tet-tab-activeForeground);
   background: transparent;
   border-color: var(--tet-tab-activeBorder);
 }
 
-.tab:not(.active):hover,
-.switch-tab:not(.active):hover {
+:is(.tab, .switch-tab):not(.active):hover {
   background: var(--tet-list-hoverBackground);
 }
 
@@ -2127,8 +2111,7 @@ button.change-request-check:hover {
   stroke-opacity: 0.6;
 }
 
-.tab.active .tab-badge,
-.tab.active .tab-badge-ring {
+.tab.active :is(.tab-badge, .tab-badge-ring) {
   fill: var(--tet-tab-activeBackground);
 }
 
@@ -2250,16 +2233,14 @@ button.change-request-check:hover {
 
 /* A pane's slides down from behind its tab strip, an issue tab's from behind its bar, and back up,
    in `CLOSE_MS`. */
-.pane > .new-tab-menu,
-.editor-tab > .new-tab-menu {
+:is(.pane, .editor-tab) > .new-tab-menu {
   animation: drop-in var(--popup-fade) ease-out;
   transition:
     opacity var(--popup-fade) ease-out,
     transform var(--popup-fade) ease-out;
 }
 
-.pane > .new-tab-menu.closing,
-.editor-tab > .new-tab-menu.closing {
+:is(.pane, .editor-tab) > .new-tab-menu.closing {
   opacity: 0;
   transform: translateY(-16px);
   pointer-events: none;
@@ -2472,14 +2453,8 @@ button.change-request-check:hover {
    diff editor on both, for its accessible diff viewer), showing them through a hidden ancestor.
    `.editor-host` is the editor the tab isn't showing: its box stays laid out, so the switch needs
    no relayout. */
-.editor-tab.hidden,
-.editor-tab.hidden *,
-.editor-split.hidden,
-.editor-split.hidden *,
-.editor-frame.hidden,
-.editor-frame.hidden *,
-.editor-host.hidden,
-.editor-host.hidden * {
+:is(.editor-tab, .editor-split, .editor-frame, .editor-host).hidden,
+:is(.editor-tab, .editor-split, .editor-frame, .editor-host).hidden * {
   visibility: hidden !important;
 }
 
@@ -3142,9 +3117,7 @@ button.change-request-check:hover {
   width: 700px;
 }
 
-.dialog.change-request-dialog,
-.dialog.commit-dialog,
-.dialog.env-dialog {
+.dialog:is(.change-request-dialog, .commit-dialog, .env-dialog) {
   width: var(--dialog-tall-width);
 }
 
@@ -3355,8 +3328,7 @@ button.change-request-check:hover {
 /* Lucide's `check`, as a mask so it takes the theme's color. The box centres its margin box, so
    the top margin sets the mark 1px below the middle. */
 .checkbox-label input:checked::before,
-.tree-checkbox[aria-checked="true"]::before,
-.tree-checkbox[aria-checked="mixed"]::before {
+.tree-checkbox:is([aria-checked="true"], [aria-checked="mixed"])::before {
   content: "";
   margin-top: 2px;
   width: 14px;
@@ -3816,8 +3788,7 @@ button.change-request-check:hover {
     transform var(--popup-fade) ease-out;
 }
 
-.notices-center.closing,
-.status-list.closing {
+:is(.notices-center, .status-list).closing {
   opacity: 0;
   transform: translateY(16px);
   pointer-events: none;
@@ -3831,8 +3802,7 @@ button.change-request-check:hover {
   max-width: var(--popup-width);
 }
 
-.status-list > .section-header,
-.notices-center > .section-header {
+:is(.status-list, .notices-center) > .section-header {
   border-bottom: 1px solid var(--tet-app-border);
 }
 
