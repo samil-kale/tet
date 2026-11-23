@@ -386,6 +386,8 @@ function scanTail(filePath: string, sessionId: string): Promise<ScannedTail<Tran
       readTailEntries(lines, sessionId, tail);
       return scanComplete(tail);
     },
+    // A turn_duration with nothing below it in the new lines may be answered by the lines before them.
+    undecided: (tail) => tail.pendingTurnEnd !== undefined,
     finish: (tail) => {
       // Nothing below a turn_duration: its summary, written right before it, is missing — cut short.
       if (tail.pendingTurnEnd !== undefined) {

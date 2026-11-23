@@ -19,6 +19,7 @@ import { INDENT_BASE, INDENT_STEP, TreeRow, ChevronBox } from "../../ui/tree-row
 import { SEPARATOR, useContextMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirmed } from "../../ui/Dialog";
 import { FilterField } from "../../ui/FilterField";
+import { RowSpacer, TREE_ROW_HEIGHT, useWindowedRows } from "../../ui/use-windowed-rows";
 import { named } from "../../ui/named";
 import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 
@@ -152,6 +153,11 @@ export const Explorer = memo(function Explorer({
     return files?.compactFolders ? compactTree(filtered) : filtered;
   }, [tree, query, files?.compactFolders]);
 
+  const flat = useMemo(() => visibleRows(shown, (node) => filtering || isExpanded(node, expanded)), [shown, expanded, filtering]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const windowing = useWindowedRows(scroller, flat.length, "--tree-row-height", TREE_ROW_HEIGHT);
+  const { windowed, scrollToRow } = windowing;
+
   // Reveals the selected file in the innermost root containing it.
   const roots = files?.roots;
   const pendingReveal = useRef<string | null>(null);
@@ -193,9 +199,16 @@ export const Explorer = memo(function Explorer({
       if (row) {
         row.scrollIntoView({ block: "nearest" });
         pendingReveal.current = null;
+      } else if (windowed) {
+        // A row outside the window isn't in the DOM: scrolled to by its place in the list.
+        const index = flat.findIndex((candidate) => candidate.node.id === pendingReveal.current);
+        if (index !== -1) {
+          scrollToRow(index);
+          pendingReveal.current = null;
+        }
       }
     }
-  }, [selected, expanded, shown, visible]);
+  }, [selected, expanded, shown, visible, flat, windowed, scrollToRow]);
 
   /** The path of the row being dragged, while a drag that began in this tree lasts: what a drop
    *  moves. A root is a view onto a folder and is never moved. */
@@ -240,7 +253,6 @@ export const Explorer = memo(function Explorer({
     },
     [filtering],
   );
-  const flat = useMemo(() => visibleRows(shown, (node) => filtering || isExpanded(node, expanded)), [shown, expanded, filtering]);
   const anyExpanded = tree.some((node) => node.children !== undefined && isExpanded(node, expanded));
   useEffect(() => onExpanded(anyExpanded), [anyExpanded, onExpanded]);
 
@@ -380,6 +392,7 @@ export const Explorer = memo(function Explorer({
       <FilterField placeholder="Filter files..." value={filter} onChange={setFilter} />
       <div
         className="tree"
+        ref={scroller}
         onContextMenu={(event) => {
           // Only the empty space below the rows.
           if (event.target === event.currentTarget) {
@@ -401,7 +414,8 @@ export const Explorer = memo(function Explorer({
         onDrop={drop}
         onDragEnd={endDrag}
       >
-        {flat.map((row) => (
+        <RowSpacer height={windowing.before} />
+        {flat.slice(windowing.start, windowing.end).map((row) => (
           <ExplorerRow
             key={row.node.id}
             {...row}
@@ -416,11 +430,15 @@ export const Explorer = memo(function Explorer({
             rows={rows.current}
           />
         ))}
+        <RowSpacer height={windowing.after} />
       </div>
       {menu.render(menuEntries)}
     </div>
   );
 });
+
+/** How long a burst of changes is waited out before the listing is read again. */
+const REFRESH_DELAY_MS = 200;
 
 /**
  * The Explorer's listing, carrying the view settings. Re-read, as VS Code's, on what the filesystem
@@ -439,46 +457,84 @@ export function useExplorerListing(
   const [listing, setListing] = useState(false);
   const [explorerVersion, setExplorerVersion] = useState(0);
   const refreshExplorer = useCallback(() => setExplorerVersion((count) => count + 1), []);
+  /** A read is on its way: what asks meanwhile is answered by one more read after it. */
+  const reading = useRef(false);
+  const rereadAfter = useRef(false);
   useEffect(() => {
+    // Bursts (a build writing files, focus after a change) come as one read, never while another
+    // runs.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = (): void => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (reading.current) {
+          rereadAfter.current = true;
+        } else {
+          refreshExplorer();
+        }
+      }, REFRESH_DELAY_MS);
+    };
     // tet.json is the project's, wherever it shows; the files are this repository's or worktree's
     // own.
     const unsubscribeCommands = window.tet.commands.onChanged(({ projectId }) => {
       if (projectId === resolved.ref.projectId) {
-        refreshExplorer();
+        schedule();
       }
     });
     const unsubscribeFiles = window.tet.repository.onFilesChanged((payload) => {
       if (refKeyOf(payload.ref) === resolved.refKey) {
-        refreshExplorer();
+        schedule();
       }
     });
-    window.addEventListener("focus", refreshExplorer);
+    window.addEventListener("focus", schedule);
     return () => {
+      clearTimeout(timer);
       unsubscribeCommands();
       unsubscribeFiles();
-      window.removeEventListener("focus", refreshExplorer);
+      window.removeEventListener("focus", schedule);
     };
   }, [resolved, refreshExplorer]);
   // Read only while shown, and again on return: changes meanwhile went unread.
   useEffect(() => {
     if (!shown) {
+      reading.current = false;
+      rereadAfter.current = false;
       return;
     }
     let cancelled = false;
+    reading.current = true;
     setListing(true);
-    void window.tet.repository.listExplorer(resolved.ref).then((result) => {
-      if (!cancelled) {
-        setHeld((previous) => ({
-          refKey: resolved.refKey,
-          listing: keepListing(previous?.refKey === resolved.refKey ? previous.listing : undefined, result),
-        }));
-        setListing(false);
+    // A failed read ends the read too, or every later one would wait on it.
+    const done = (): void => {
+      reading.current = false;
+      if (rereadAfter.current) {
+        rereadAfter.current = false;
+        refreshExplorer();
       }
-    });
+    };
+    void window.tet.repository.listExplorer(resolved.ref).then(
+      (result) => {
+        if (!cancelled) {
+          done();
+          setHeld((previous) => ({
+            refKey: resolved.refKey,
+            listing: keepListing(previous?.refKey === resolved.refKey ? previous.listing : undefined, result),
+          }));
+          setListing(false);
+        }
+      },
+      (error: unknown) => {
+        if (!cancelled) {
+          done();
+          setListing(false);
+        }
+        throw error;
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [resolved, explorerVersion, shown]);
+  }, [resolved, explorerVersion, shown, refreshExplorer]);
   return { explorerListing: held?.refKey === resolved.refKey ? held.listing : undefined, listing, refreshExplorer };
 }
 

@@ -122,6 +122,20 @@ export class TerminalSession {
     this.process?.write(data);
   }
 
+  /** Stops reading the pty while the window has not drawn what it sent (AppWindow's flow control);
+   *  the process blocks on its own writes meanwhile. A new process starts unpaused. */
+  setPaused(paused: boolean): void {
+    try {
+      if (paused) {
+        this.process?.pause();
+      } else {
+        this.process?.resume();
+      }
+    } catch {
+      // Dead meanwhile: the exit handler sets the status.
+    }
+  }
+
   /** Resolves once the process is gone, not once a kill was asked for: `destroyTab` deletes what the
    *  session persisted and must not race it. False where it outlived the kill, as stopping cannot
    *  hang on it. Asks to quit first (see the Ctrl+C comment above). */
@@ -138,6 +152,8 @@ export class TerminalSession {
     if (!proc) {
       return true;
     }
+    // A paused pty would not drain its own exit.
+    this.setPaused(false);
     // Before the first write: `start`'s exit handler reads it to tell "stopped" from a failure.
     this.intentionalStop = true;
     // node-pty's onExit is multicast; this one only observes, `start`'s clears and sets status.

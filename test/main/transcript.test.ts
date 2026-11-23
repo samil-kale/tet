@@ -235,6 +235,37 @@ describe("a transcript's tail", () => {
     assert.equal(cache.get(target)?.size, fs.statSync(target).size);
   });
 
+  it("reads a grown file from the line the last scan ended in, not a window below it", async () => {
+    const old = `${"x".repeat(TRANSCRIPT_SCAN_BYTES / 2)}\n`.repeat(3);
+    const target = file(`${old}half`);
+    const cache = new Map<string, { size: number; tail: Tail }>();
+    await scanTranscriptTail(target, cache, scanOf());
+    fs.appendFileSync(target, "-done\nnext\n");
+    const seen: string[][] = [];
+    const scan = scanOf();
+    const grown = await scanTranscriptTail(target, cache, { ...scan, read: (lines, tail) => (seen.push(lines), scan.read(lines, tail)) });
+    assert.deepEqual(seen, [["half-done", "next", ""]], "only the new lines, the cut one whole");
+    assert.deepEqual(grown.tail.lines.slice(0, 2), ["next", "half-done"]);
+  });
+
+  it("reads the window again where the new lines leave the answer undecided", async () => {
+    const target = file("one\ntwo\n");
+    const cache = new Map<string, { size: number; tail: Tail }>();
+    await scanTranscriptTail(target, cache, scanOf());
+    fs.appendFileSync(target, "three\n");
+    const seen: string[][] = [];
+    const scan = scanOf();
+    await scanTranscriptTail(target, cache, {
+      ...scan,
+      read: (lines, tail) => (seen.push(lines), scan.read(lines, tail)),
+      undecided: () => true,
+    });
+    assert.deepEqual(seen, [
+      ["three", ""],
+      ["one", "two", "three", ""],
+    ]);
+  });
+
   it("rejects for a file that cannot be opened", async () => {
     await assert.rejects(scanTranscriptTail(path.join(tempDir("tet-transcript-tail-"), "missing.jsonl"), new Map(), scanOf()));
   });

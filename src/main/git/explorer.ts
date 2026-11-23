@@ -7,7 +7,7 @@ import type { ActionResult } from "../../shared/types/action";
 import { readExplorerView } from "../store/tet-json";
 import { walkExplorer } from "./explorer-read";
 import { explorerRead } from "./explorer-client";
-import { git } from "./git-client";
+import { listIgnored } from "./ignored";
 import { relativeInside } from "../util/path-inside";
 import { logError } from "../util/error-log";
 
@@ -17,12 +17,12 @@ import { logError } from "../util/error-log";
  */
 
 /** Every file, plus empty directories — see `ExplorerListing` — walked in the Explorer's process
- *  (explorer-read.ts's `walkExplorer`). Git's ignore list is one `ls-files` per walk, never on the
- *  refresh path. A process that died walks here instead: the Explorer waits on an answer. */
+ *  (explorer-read.ts's `walkExplorer`). Git's ignore list is one `ls-files` per change (ignored.ts), never on
+ *  the refresh path. A process that died walks here instead: the Explorer waits on an answer. */
 export async function listExplorer(root: string, settings: ExplorerSettings): Promise<ExplorerListing> {
   const view = await readExplorerView(root);
   const wantMtimes = settings.sortOrder === "modified";
-  const ignored = settings.excludeGitIgnore ? await git.listIgnored(root).catch(() => []) : [];
+  const ignored = settings.excludeGitIgnore ? await listIgnored(root).catch(() => []) : [];
   const walked = await explorerRead.walkExplorer(root, view, ignored, wantMtimes).catch((error: unknown) => {
     logError("the Explorer's process failed to list", error);
     return walkExplorer(root, view, ignored, wantMtimes);
@@ -41,7 +41,7 @@ export async function listExplorer(root: string, settings: ExplorerSettings): Pr
  *  process that died answers as a failed search. */
 export async function searchFiles(root: string, query: FileSearchQuery, signal: AbortSignal): Promise<FileSearchResult> {
   const view = await readExplorerView(root);
-  const ignored = await git.listIgnored(root).catch(() => []);
+  const ignored = await listIgnored(root).catch(() => []);
   // Overtaken while these were read: the walk is no use any more.
   if (signal.aborted) {
     return { files: [], truncated: false };

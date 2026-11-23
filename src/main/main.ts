@@ -124,6 +124,7 @@ const releasesUrl = (userDataArg && process.env.TET_RELEASES_URL) || RELEASES_UR
 const appWindow: AppWindow = new AppWindow({
   hidden: HIDE_WINDOW,
   hasTab: (ref, tabId): boolean => tabManagers.get(ref)?.hasTab(tabId) === true,
+  setOutputPaused: (ref, tabId, paused): void => tabManagers.get(ref)?.setOutputPaused(tabId, paused),
   // The environment dialog went with the page.
   onPageLoad: (): void => envRequests.drop(),
 });
@@ -261,7 +262,7 @@ const issues = issueOps(trackedDeps);
 const changeRequests = changeRequestOps(trackedDeps);
 const tracked = trackedOps(trackedDeps);
 /** Tells of new change requests and failed checks of the account's (watch.ts). */
-const changeRequestWatch = new ChangeRequestWatch(trackedDeps, (found) => send("app:notice", found));
+const changeRequestWatch = new ChangeRequestWatch(trackedDeps, (found) => send("app:notice", found), appWindow);
 
 let workspaceOpened: Promise<void> | undefined;
 

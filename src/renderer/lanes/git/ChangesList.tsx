@@ -26,6 +26,7 @@ import { confirmed, confirmedFollowUp, filled, prompt } from "../../ui/Dialog";
 import { askLogin } from "../../git/GitLogin";
 import { Checkbox, SuggestField } from "../../ui/Field";
 import { FilterField } from "../../ui/FilterField";
+import { RowSpacer, TREE_ROW_HEIGHT, useWindowedRows } from "../../ui/use-windowed-rows";
 import { named } from "../../ui/named";
 import type { CollapseExpandAll } from "../../ui/CollapseExpandAllButton";
 import { notify } from "../../ui/Notices";
@@ -262,6 +263,8 @@ export const ChangesList = memo(function ChangesList({
     () => visibleRows([root], (node) => filtering || (ownValue(expanded, node.id) ?? true)),
     [root, expanded, filtering],
   );
+  const scroller = useRef<HTMLDivElement>(null);
+  const windowing = useWindowedRows(scroller, changes.length > 0 ? rows.length : 0, "--tree-row-height", TREE_ROW_HEIGHT);
   /** What each row's checkbox stands for, read once per tree rather than per row and render. */
   const filesOf = useMemo(() => filesByNode([root]), [root]);
   const shownFiles = filesOf.get(ROOT_ID)!;
@@ -328,9 +331,10 @@ export const ChangesList = memo(function ChangesList({
   return (
     <div className="dense-tree">
       <FilterField placeholder="Filter changes..." value={filter} onChange={setFilter} />
-      <div className="tree">
+      <div className="tree" ref={scroller}>
+        {changes.length > 0 && <RowSpacer height={windowing.before} />}
         {changes.length > 0 &&
-          rows.map(({ node, depth, expanded: isExpanded }) => {
+          rows.slice(windowing.start, windowing.end).map(({ node, depth, expanded: isExpanded }) => {
             const change = node.children ? undefined : byPath.get(node.path);
             const box = <TreeCheckbox checked={checkState(node)} onToggle={() => toggleChecked(node)} />;
             return (
@@ -372,6 +376,7 @@ export const ChangesList = memo(function ChangesList({
               </TreeRow>
             );
           })}
+        {changes.length > 0 && <RowSpacer height={windowing.after} />}
       </div>
       {menu.render(menuEntries)}
     </div>

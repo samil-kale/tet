@@ -28,6 +28,7 @@ import { SESSION_TAB_DRAG_TYPE, TRACKED_DRAG_TYPE } from "../../tabs/pane-layout
 import { Section } from "../../ui/Section";
 import { useAgents } from "../../ui/use-agents";
 import { useDropTarget } from "../../ui/use-drop-target";
+import { RowSpacer, TWO_LINE_ROW_HEIGHT, useWindowedRows } from "../../ui/use-windowed-rows";
 import { IssueFilterBar } from "./IssueFilterBar";
 import { useTrackedRows } from "../../editor/tracked/use-tracked-rows";
 import { useScrollMore } from "../../ui/use-scroll-more";
@@ -178,6 +179,14 @@ export const IssueList = memo(function IssueList({
   // Keyed by the page count too: the rows a page more brings come as they are, the tracker added none.
   const shownRows = useTrackedRows(issues, rowsKey ?? {});
   const scroller = useScrollMore(more);
+  // Not while a row unfolds or folds away: it is then no fixed height.
+  const windowing = useWindowedRows(
+    scroller.ref,
+    shownRows.length,
+    "--two-line-row-height",
+    TWO_LINE_ROW_HEIGHT,
+    !shownRows.some((row) => row.entering || row.leaving),
+  );
   const menu = useContextMenu<Issue>();
   const agents = useAgents();
   // Read by the row's menu alone, when it opens.
@@ -320,7 +329,8 @@ export const IssueList = memo(function IssueList({
           <FilterField placeholder="Filter issues..." value={title} onChange={setTitle} />
           <IssueFilterBar filter={filter} options={options} onChange={setFilter} />
           <div className="tree" ref={scroller.ref} onScroll={scroller.onScroll}>
-            {shownRows.map(({ item: issue, entering, leaving }) => (
+            <RowSpacer height={windowing.before} />
+            {shownRows.slice(windowing.start, windowing.end).map(({ item: issue, entering, leaving }) => (
               <div key={issue.number} className={`tracked-item${entering ? " entering" : ""}${leaving ? " leaving" : ""}`}>
                 <IssueRow
                   issue={issue}
@@ -333,6 +343,7 @@ export const IssueList = memo(function IssueList({
                 />
               </div>
             ))}
+            <RowSpacer height={windowing.after} />
           </div>
         </div>
         {menu.render(menuEntries)}

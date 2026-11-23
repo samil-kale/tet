@@ -82,7 +82,41 @@ function file(root: string): string {
  * commas allowed. A file there but unreadable for the moment (EPERM while another process renames
  * over it on win32) is broken, not missing, which `patch` would write over.
  */
-async function readNow(filePath: string): Promise<{ text: string | null; content: ProjectFile | null } | { problem: string }> {
+async function readNow(filePath: string): Promise<Reading> {
+  const stamp = await stampOf(filePath);
+  const known = readings.get(filePath);
+  if (stamp !== undefined && known?.stamp === stamp.key) {
+    return known.reading;
+  }
+  const reading = await readUncached(filePath);
+  if (stamp === undefined || !("text" in reading)) {
+    readings.delete(filePath);
+  } else if (Date.now() - stamp.mtimeMs > STABLE_MS) {
+    readings.set(filePath, { stamp: stamp.key, reading });
+  }
+  return reading;
+}
+
+type Reading = { text: string | null; content: ProjectFile | null } | { problem: string };
+
+/** A file this old at its read is taken as unchanged while its stat is: a filesystem with coarse
+ *  timestamps may give a second write within the same tick the same stat. */
+const STABLE_MS = 2000;
+
+/** Each file's last whole reading by its stat (`readNow`): the Explorer asks for its view on every
+ *  listing and search query. A write changes the stat, so it is never read stale. */
+const readings = new Map<string, { stamp: string; reading: Reading }>();
+
+async function stampOf(filePath: string): Promise<{ key: string; mtimeMs: number } | undefined> {
+  try {
+    const stat = await fs.stat(filePath, { bigint: true });
+    return { key: `${stat.mtimeNs}:${stat.ctimeNs}:${stat.size}:${stat.ino}`, mtimeMs: Number(stat.mtimeMs) };
+  } catch {
+    return undefined;
+  }
+}
+
+async function readUncached(filePath: string): Promise<Reading> {
   let text: string;
   try {
     text = await fs.readFile(filePath, "utf8");

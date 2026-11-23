@@ -6,7 +6,7 @@ import type { ThemeDefinition } from "../shared/themes";
 import { refKeyOf } from "../shared/types/project";
 import type { Notice, NoticeProgress, NoticeSeverity } from "../shared/types/app";
 import type { ProjectRef } from "../shared/types/project";
-import type { TerminalOutput } from "../shared/types/terminals";
+import type { TabRef, TerminalOutput } from "../shared/types/terminals";
 import { on, once } from "./ipc/channels";
 import { logError } from "./util/error-log";
 import { PLATFORM } from "./util/host-platform";
@@ -14,6 +14,17 @@ import { isOpenableUrl } from "./util/shell-open";
 
 /** Output arrives in small chunks; batch them rather than one IPC message each. */
 const OUTPUT_FLUSH_MS = 8;
+/** The same while the window is out of the user's sight: nobody watches the lines scroll. */
+const BACKGROUND_OUTPUT_FLUSH_MS = 64;
+/** The most one tab hands the window per timed flush; the rest follows on the next. */
+const MAX_FLUSH_CHARS = 64 * 1024;
+/** Sent to a tab's terminal and not yet parsed, above which its process is paused... */
+const OUTPUT_HIGH_WATER = 256 * 1024;
+/** ...and below which it runs again. */
+const OUTPUT_LOW_WATER = 64 * 1024;
+/** A paused process runs again after this long without an ack: a window that never answers (a page
+ *  reloading, a lost message) must not freeze it. */
+const OUTPUT_PAUSE_LIMIT_MS = 3000;
 /** Minimum gap between two renderer-crash rebuilds. */
 const RENDERER_REBUILD_GAP_MS = 60_000;
 /** How long a window stays hidden for the page's `app:drawn` before it shows regardless. */
@@ -21,11 +32,26 @@ const SHOW_FALLBACK_MS = 5000;
 /** A question's wait for the window: one in its requirements check or reloading never answers. */
 const WINDOW_ANSWER_TIMEOUT_MS = 2000;
 
+/** A tab's output sent to the window and not yet parsed there. */
+interface FlowState extends TabRef {
+  chars: number;
+  paused: boolean;
+  /** Resumed by `OUTPUT_PAUSE_LIMIT_MS` or out of sight: not paused again until below the low water. */
+  gaveUp: boolean;
+  limit: ReturnType<typeof setTimeout> | undefined;
+}
+
+function flowKey(ref: ProjectRef, tabId: string): string {
+  return `${refKeyOf(ref)}\u0000${tabId}`;
+}
+
 export interface AppWindowDeps {
   /** For tests run locally (test/helpers/): the window is drawn but never shown. */
   hidden: boolean;
   /** Whether the tab is still open: output batched for one closed meanwhile is dropped. */
   hasTab(ref: ProjectRef, tabId: string): boolean;
+  /** Stops or resumes reading the tab's process (flow control, see `ackOutput`). */
+  setOutputPaused(ref: ProjectRef, tabId: string, paused: boolean): void;
   /** A page load began, reloads included: what the page showed is gone with it. */
   onPageLoad(): void;
 }
@@ -52,6 +78,9 @@ export class AppWindow {
   private windowQuestions = 0;
   private readonly pendingOutput = new Map<string, TerminalOutput>();
   private flushTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly foregroundListeners: (() => void)[] = [];
+  /** Per tab, what was sent and not yet acked; an entry lives while it is nonzero or paused. */
+  private readonly inFlight = new Map<string, FlowState>();
   /** The theme on screen: the window's initial one or the last `showTheme` took. */
   private theme: ThemeDefinition | undefined;
   /** `AppearanceSettings.backgroundGradient` on screen: the window's initial one or the last
@@ -60,6 +89,7 @@ export class AppWindow {
 
   constructor(private readonly deps: AppWindowDeps) {
     on("app:drawn", () => this.showOnce(this.liveWindow()));
+    on("tabs:output-ack", (_event, ref, tabId, length) => this.ackOutput(ref, tabId, length));
     on("app:notice-listening", () => {
       this.noticesHeard = true;
       for (const notice of this.heldNotices.splice(0)) {
@@ -110,11 +140,23 @@ export class AppWindow {
     return this.noticesHeard && this.liveWindow() !== undefined;
   }
 
+  /** Calls `listener` whenever the window comes back into sight: focused, shown or restored. */
+  onForeground(listener: () => void): void {
+    this.foregroundListeners.push(listener);
+  }
+
   /** Out of the user's sight: unfocused, or minimized — a win32 window minimized by its button
    *  still reports `isFocused`. */
   inBackground(): boolean {
     const window = this.liveWindow();
     return window !== undefined && (!window.isFocused() || window.isMinimized());
+  }
+
+  /** Nowhere on screen: minimized or hidden. A window merely unfocused still shows beside others;
+   *  one drawn for tests never shows and counts as in sight. */
+  outOfSight(): boolean {
+    const window = this.liveWindow();
+    return !this.deps.hidden && window !== undefined && (window.isMinimized() || !window.isVisible());
   }
 
   /** A repository's or worktree's active editor tab text (ControlDeps.editorContent). */
@@ -155,24 +197,139 @@ export class AppWindow {
     } else {
       this.pendingOutput.set(key, { ref, tabId, data });
     }
-    this.flushTimer ??= setTimeout(() => this.flushOutput(), OUTPUT_FLUSH_MS);
+    // Counted once queued, not once sent: a backlog held here must pause the process too.
+    this.sent(ref, tabId, data.length);
+    this.scheduleFlush();
+  }
+
+  private scheduleFlush(): void {
+    this.flushTimer ??= setTimeout(() => this.flushOutput(false), this.inBackground() ? BACKGROUND_OUTPUT_FLUSH_MS : OUTPUT_FLUSH_MS);
+  }
+
+  /**
+   * The terminal parsed `length` characters of the tab's output. Below the low-water mark a paused
+   * process runs again; a process is never left paused without an ack due: see `OUTPUT_PAUSE_LIMIT_MS`.
+   */
+  ackOutput(ref: ProjectRef, tabId: string, length: number): void {
+    const key = flowKey(ref, tabId);
+    const flow = this.inFlight.get(key);
+    if (!flow) {
+      return;
+    }
+    flow.chars = Math.max(0, flow.chars - length);
+    if (flow.chars < OUTPUT_LOW_WATER) {
+      flow.gaveUp = false;
+    }
+    if (flow.paused && flow.chars < OUTPUT_LOW_WATER) {
+      this.resumeFlow(flow);
+    } else if (flow.paused) {
+      this.armPauseLimit(key, flow);
+    }
+    if (flow.chars === 0 && !flow.paused) {
+      this.inFlight.delete(key);
+    }
+  }
+
+  private armPauseLimit(key: string, flow: FlowState): void {
+    clearTimeout(flow.limit);
+    flow.limit = setTimeout(() => this.giveUp(flow), OUTPUT_PAUSE_LIMIT_MS);
+  }
+
+  /** Runs the process again without an ack due, and pauses it no more until the acks still owed
+   *  bring it below the low-water mark: counting on keeps late acks from crediting later output. */
+  private giveUp(flow: FlowState): void {
+    flow.gaveUp = true;
+    this.resumeFlow(flow);
+  }
+
+  /** Ends every pause while the window is out of sight: Chromium throttles its timers then, so
+   *  xterm would ack slowly and hold background processes back. */
+  private releasePaused(): void {
+    for (const flow of this.inFlight.values()) {
+      if (flow.paused) {
+        this.giveUp(flow);
+      }
+    }
+  }
+
+  private resumeFlow(flow: FlowState): void {
+    clearTimeout(flow.limit);
+    flow.limit = undefined;
+    if (flow.paused) {
+      flow.paused = false;
+      this.deps.setOutputPaused(flow.ref, flow.tabId, false);
+    }
+  }
+
+  /** Owes nothing more and runs the process again if paused: the acks are not coming. */
+  private forgetFlow(key: string, flow: FlowState): void {
+    this.resumeFlow(flow);
+    flow.chars = 0;
+    if (this.inFlight.get(key) === flow) {
+      this.inFlight.delete(key);
+    }
+  }
+
+  /** Counts what is sent and pauses the tab's process above the high-water mark. */
+  private sent(ref: ProjectRef, tabId: string, length: number): void {
+    const key = flowKey(ref, tabId);
+    let flow = this.inFlight.get(key);
+    if (!flow) {
+      flow = { ref, tabId, chars: 0, paused: false, gaveUp: false, limit: undefined };
+      this.inFlight.set(key, flow);
+    }
+    flow.chars += length;
+    if (flow.chars > OUTPUT_HIGH_WATER && !flow.paused && !flow.gaveUp && !this.outOfSight()) {
+      flow.paused = true;
+      this.deps.setOutputPaused(ref, tabId, true);
+      this.armPauseLimit(key, flow);
+    }
+  }
+
+  /** Every pause ends, and nothing is owed: the page that would have acked is gone. */
+  private resetFlow(): void {
+    for (const [key, flow] of [...this.inFlight]) {
+      this.forgetFlow(key, flow);
+    }
   }
 
   /**
    * One message for all tabs: see TerminalOutput. Output whose tab closed while it was batched is
    * dropped here: the renderer has disposed that view by now, and a late batch would look to it
    * like output for a tab not yet attached (terminal-views.ts's earlyOutput). Called early by a
-   * status change, which must not overtake the output before it.
+   * status change, which must not overtake the output before it. Handing over everything (`all`) is
+   * the default; the timer hands over at most MAX_FLUSH_CHARS per tab and keeps the rest.
    */
-  flushOutput(): void {
+  flushOutput(all = true): void {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
     }
     this.flushTimer = undefined;
-    const live = [...this.pendingOutput.values()].filter((pending) => this.deps.hasTab(pending.ref, pending.tabId));
-    this.pendingOutput.clear();
+    const live: TerminalOutput[] = [];
+    for (const [key, pending] of [...this.pendingOutput]) {
+      if (!this.deps.hasTab(pending.ref, pending.tabId)) {
+        this.pendingOutput.delete(key);
+        const flowId = flowKey(pending.ref, pending.tabId);
+        const flow = this.inFlight.get(flowId);
+        if (flow) {
+          this.forgetFlow(flowId, flow);
+        }
+        continue;
+      }
+      // Out of sight nothing is paused, so nothing is held back either: the backlog would only grow.
+      if (all || pending.data.length <= MAX_FLUSH_CHARS || this.outOfSight()) {
+        this.pendingOutput.delete(key);
+        live.push(pending);
+      } else {
+        live.push({ ref: pending.ref, tabId: pending.tabId, data: pending.data.slice(0, MAX_FLUSH_CHARS) });
+        pending.data = pending.data.slice(MAX_FLUSH_CHARS);
+      }
+    }
     if (live.length > 0) {
       this.send("tabs:output", live);
+    }
+    if (this.pendingOutput.size > 0) {
+      this.scheduleFlush();
     }
   }
 
@@ -278,6 +435,7 @@ export class AppWindow {
     // Every load, reloads included, has no listener until App subscribes.
     window.webContents.on("did-start-loading", () => {
       this.noticesHeard = false;
+      this.resetFlow();
       this.deps.onPageLoad();
     });
     // A reload reads the theme off the window's original arguments, possibly stale since showTheme.
@@ -296,7 +454,18 @@ export class AppWindow {
     }
     // Ends attractAttention's flash.
     window.on("focus", () => window.flashFrame(false));
+    const foregrounded = (): void => {
+      for (const listener of this.foregroundListeners) {
+        listener();
+      }
+    };
+    window.on("focus", foregrounded);
+    window.on("show", foregrounded);
+    window.on("restore", foregrounded);
+    window.on("minimize", () => this.releasePaused());
+    window.on("hide", () => this.releasePaused());
     window.on("closed", () => {
+      this.resetFlow();
       if (this.window === window) {
         this.window = undefined;
       }

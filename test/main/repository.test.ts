@@ -14,6 +14,7 @@ import { type GitCommandResult, type GitLogin, worktreeBase } from "../../src/sh
 import { MISSING_MTIME_MS, type FileSearchQuery, type FileSearchResult } from "../../src/shared/types/files";
 import {
   commitFiles,
+  eventually,
   fakeSafeStorage,
   forkUtilitiesInProcess,
   git,
@@ -22,6 +23,7 @@ import {
   initRepository,
   isolateGitConfig,
   serveOverHttp,
+  sleep,
   tempDir,
 } from "../helpers";
 
@@ -1018,6 +1020,12 @@ describe("the Graph's commits and their files", () => {
       (await repository.log(10, { text: "second", field: "message" })).map((commit) => commit.sha),
       [second],
     );
+    assert.deepEqual(
+      (await repository.log(10, undefined, 1)).map((commit) => commit.sha),
+      [first],
+      "skip leaves out the newest",
+    );
+    assert.deepEqual(await repository.log(10, undefined, 2), [], "skipping past the end is empty");
   });
 
   it("lists what a commit changed against its first parent, and answers nothing for what is no commit id", async () => {
@@ -1096,5 +1104,42 @@ describe("the Explorer's own edits", () => {
     const added = trashed().slice(before);
     assert.equal(added.length, 1);
     assert.equal(fs.readFileSync(path.join(trash, added[0]), "utf8"), "precious\n");
+  });
+});
+
+describe("the watcher under a folder git ignores", () => {
+  it("reports nothing for a build's writes, but what is tracked or new elsewhere as before", async () => {
+    const dir = initRepository("tet-repository-ignored-");
+    fs.writeFileSync(path.join(dir, ".gitignore"), "out/\n");
+    fs.mkdirSync(path.join(dir, "out"));
+    fs.writeFileSync(path.join(dir, "out", "first.js"), "1\n");
+    let states = 0;
+    let listings = 0;
+    const repository = new Repository(
+      { ref: { projectId: path.basename(dir) }, path: dir, name: () => path.basename(dir) },
+      () => undefined,
+      new GitLoginStore(tempDir("tet-logins-")),
+      {
+        onState: () => states++,
+        onNotice: () => undefined,
+        onCommandsChanged: () => undefined,
+        onFilesChanged: () => listings++,
+        onFileChanged: () => undefined,
+        onMissing: () => undefined,
+      },
+    );
+    opened.push(repository);
+    await repository.start();
+    // The ignore list is read once the watcher stands.
+    await sleep(500);
+    const baseline = { states, listings };
+    fs.writeFileSync(path.join(dir, "out", "second.js"), "2\n");
+    fs.mkdirSync(path.join(dir, "out", "nested"));
+    fs.writeFileSync(path.join(dir, "out", "nested", "third.js"), "3\n");
+    await sleep(3000);
+    assert.deepEqual({ states, listings }, baseline);
+    fs.writeFileSync(path.join(dir, "new.txt"), "new\n");
+    await eventually("a new file elsewhere is listed", () => listings > baseline.listings, 5000);
+    await eventually("and shows in the state", () => states > baseline.states, 5000);
   });
 });

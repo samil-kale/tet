@@ -237,6 +237,18 @@ describe("writeCommands, entry by entry", () => {
 });
 
 describe("readExplorerView", () => {
+  it("reads a file that stood a while once, and a rewrite as soon as its stat changes", async () => {
+    put('{"exclude": ["aa"]}');
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(file(), past, past);
+    assert.deepEqual((await readExplorerView(root)).exclude, ["aa"]);
+    assert.deepEqual((await readExplorerView(root)).exclude, ["aa"]);
+    put('{"exclude": ["bb"]}');
+    assert.deepEqual((await readExplorerView(root)).exclude, ["bb"]);
+    put('{"exclude": ["cc"]}');
+    assert.deepEqual((await readExplorerView(root)).exclude, ["cc"], "same size, written at once");
+  });
+
   it("is the whole repository with defaults when there is nothing to read", async () => {
     assert.deepEqual(await readExplorerView(root), { folders: [], exclude: [] });
     put("[]");

@@ -86,9 +86,12 @@ window.tet.tabs.onOutput((batch) => {
     const view = views.get(key);
     if (!view) {
       earlyOutput.set(key, ((earlyOutput.get(key) ?? "") + data).slice(-MAX_EARLY_OUTPUT));
+      // Nothing parses it now; main would otherwise wait on an ack that never comes.
+      window.tet.tabs.ackOutput(ref, tabId, data.length);
       continue;
     }
-    view.term.write(data);
+    // Acked once xterm parsed it: main pauses the process while the terminal falls behind.
+    view.term.write(data, () => window.tet.tabs.ackOutput(ref, tabId, data.length));
   }
 });
 

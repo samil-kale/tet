@@ -769,6 +769,11 @@ export class TabSessionManager {
     this.runs.write(tabId, data);
   }
 
+  /** TabRuns.setOutputPaused. */
+  setOutputPaused(tabId: string, paused: boolean): void {
+    this.runs.setOutputPaused(tabId, paused);
+  }
+
   /** TabRuns.openInTerminal. */
   openInTerminal(tabId: string): Promise<void> {
     return this.runs.openInTerminal(tabId);

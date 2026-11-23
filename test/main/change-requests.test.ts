@@ -1,6 +1,6 @@
 import * as assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { compareRound } from "../../src/main/change-requests/watch";
+import { compareRound, probeKey } from "../../src/main/change-requests/watch";
 import type { ChangeRequestRow } from "../../src/shared/types/providers";
 
 /** watch.ts's rounds: what one round tells of the open change requests against what the last kept. */
@@ -78,5 +78,16 @@ describe("a round of the change request watch", () => {
     const { kept } = compareRound(undefined, [row(1, VIEWER)], VIEWER);
     const { failed } = compareRound(kept, [row(1, VIEWER, { checks: "failed" })], VIEWER);
     assert.deepEqual(failed, []);
+  });
+});
+
+describe("watch.ts's cheap probe", () => {
+  it("tells a change of the list, of its newest update or of its checks by the probe's key", () => {
+    const base = { total: 2, updatedAt: "2026-01-01T00:00:00Z", checks: "1:passed" };
+    assert.equal(probeKey(base), probeKey({ ...base }));
+    assert.notEqual(probeKey(base), probeKey({ ...base, total: 3 }));
+    assert.notEqual(probeKey(base), probeKey({ ...base, updatedAt: "2026-01-02T00:00:00Z" }));
+    assert.notEqual(probeKey(base), probeKey({ ...base, checks: "1:failed" }));
+    assert.notEqual(probeKey({ total: 0, checks: "" }), probeKey({ total: 0, updatedAt: "x", checks: "" }));
   });
 });

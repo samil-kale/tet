@@ -245,8 +245,8 @@ export function registerRepositoryIpc({
     return repository.readFile(filePath);
   });
 
-  handle("repository:log", async (_event, ref: ProjectRef, limit: number, search?: CommitSearch): Promise<GraphCommit[]> => {
-    return (await repositories.get(ref)?.log(limit, search)) ?? [];
+  handle("repository:log", async (_event, ref: ProjectRef, limit: number, search?: CommitSearch, skip?: number): Promise<GraphCommit[]> => {
+    return (await repositories.get(ref)?.log(limit, search, skip)) ?? [];
   });
 
   handle("repository:commit-files", async (_event, ref: ProjectRef, sha: string, parent: string | undefined): Promise<FileChange[]> => {

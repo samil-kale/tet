@@ -11,7 +11,16 @@ import { notify } from "../ui/Notices";
 import { isMarkdown, languageForPath, subscribeHighlightTheme } from "./diff-highlight";
 import { diffEditorOptions, editorOptions, ensureLanguage, loadMonaco, type Monaco } from "./editor";
 import { parseKeyCombo, resolveKeybindings } from "./keybindings";
-import { createMarkdownPreview, lineAtScroll, renderMarkdown, resolveLink, scrollToLine, type ColoredBlocks } from "./markdown";
+import type { BlockMarks } from "./block-marks";
+import {
+  blockMarksOf,
+  createMarkdownPreview,
+  lineAtScroll,
+  renderMarkdown,
+  resolveLink,
+  scrollToLine,
+  type ColoredBlocks,
+} from "./markdown";
 import type { CommitSide, EditorEntry, EditorReveal, MarkdownPreviewMode, OpenEditor } from "./editor-tab";
 import { inWorkingTree, MARKDOWN_PREVIEW_MODES, openFile } from "./editor-tab";
 import { editorFontFamily } from "../themes/theme-colors";
@@ -127,6 +136,12 @@ interface MarkdownPreviewView {
   renderSeq: number;
   /** Which side last set a scroll position, and when (`echoing`). */
   scrolledBy: { side: "editor" | "preview"; at: number } | undefined;
+  /** Where its blocks lie, until a render or a resize (`scheduleFollow` reads it on every scroll). */
+  marks: BlockMarks;
+  /** Invalidates `marks` when the preview changes size: images arriving, the pane resizing. */
+  resizes: ResizeObserver;
+  /** The animation frame each side's follow waits for: scroll events in one frame make one. */
+  frames: { editor?: number; preview?: number };
 }
 
 export interface EditorView {
@@ -890,6 +905,10 @@ export function disposeEditor(tabId: string): void {
   view.host.remove();
   view.plainHost.remove();
   view.markdownView?.scroller.remove();
+  view.markdownView?.resizes.disconnect();
+  for (const frame of Object.values(view.markdownView?.frames ?? {})) {
+    cancelAnimationFrame(frame);
+  }
   emit(view);
   // Safe here, not in an unsubscribe: ids are never reused, so nobody subscribes to this one again.
   tabListeners.delete(tabId);
@@ -993,8 +1012,42 @@ function makeMarkdownPreview(view: EditorView): MarkdownPreviewView {
       void window.tet.shell.openUrl(href);
     }
   });
-  scroller.addEventListener("scroll", () => followMarkdownPreview(view));
-  return { scroller, body, images: new Map(), colored: new Map(), timer: undefined, renderSeq: 0, scrolledBy: undefined };
+  const marks = blockMarksOf(scroller, body);
+  const resizes = new ResizeObserver(() => marks.invalidate());
+  resizes.observe(scroller);
+  resizes.observe(body);
+  scroller.addEventListener("scroll", () => scheduleFollow(view, "preview"));
+  return {
+    scroller,
+    body,
+    images: new Map(),
+    colored: new Map(),
+    timer: undefined,
+    renderSeq: 0,
+    scrolledBy: undefined,
+    marks,
+    resizes,
+    frames: {},
+  };
+}
+
+/** Follows the other side at the next frame, once however many scroll events come before it. */
+function scheduleFollow(view: EditorView, side: "editor" | "preview"): void {
+  const preview = view.markdownView;
+  if (!preview || preview.frames[side] !== undefined) {
+    return;
+  }
+  preview.frames[side] = requestAnimationFrame(() => {
+    preview.frames[side] = undefined;
+    if (disposed(view)) {
+      return;
+    }
+    if (side === "editor") {
+      followEditor(view);
+    } else {
+      followMarkdownPreview(view);
+    }
+  });
 }
 
 /**
@@ -1041,6 +1094,7 @@ function renderMarkdownPreview(view: EditorView, delay: number): void {
         preview.colored = colored;
         if (!disposed(view) && preview.renderSeq === seq) {
           preview.body.replaceChildren(...doc.body.childNodes);
+          preview.marks.invalidate();
           followEditor(view);
           if (skipped) {
             preview.timer = setTimeout(() => renderMarkdownPreview(view, 0), MARKDOWN_PREVIEW_IMAGE_DELAY_MS);
@@ -1059,6 +1113,7 @@ function clearMarkdownPreview(view: EditorView): void {
     clearTimeout(view.markdownView.timer);
     view.markdownView.renderSeq++;
     view.markdownView.body.replaceChildren();
+    view.markdownView.marks.invalidate();
     view.markdownView.images.clear();
   }
 }
@@ -1085,7 +1140,7 @@ function followEditor(view: EditorView): void {
   const height = editor.getTopForLineNumber(line + 1) - top;
   const share = height > 0 ? Math.min(1, Math.max(0, (editor.getScrollTop() - top) / height)) : 0;
   view.markdownView.scrolledBy = { side: "editor", at: performance.now() };
-  scrollToLine(view.markdownView.scroller, view.markdownView.body, line - 1 + share);
+  scrollToLine(view.markdownView.scroller, view.markdownView.marks, line - 1 + share);
 }
 
 /** And back: the editor scrolls to the line at the top of the Markdown preview (VS Code's
@@ -1096,7 +1151,7 @@ function followMarkdownPreview(view: EditorView): void {
   if (!preview || !editor || echoing(preview, "preview")) {
     return;
   }
-  const line = lineAtScroll(preview.scroller, preview.body);
+  const line = lineAtScroll(preview.scroller, preview.marks);
   if (line === undefined) {
     return;
   }
@@ -1142,7 +1197,7 @@ function configureEditor(view: EditorView, setup: EditorSetup, editor: MonacoEdi
   });
   editor.onDidScrollChange((event) => {
     if (event.scrollTopChanged) {
-      followEditor(view);
+      scheduleFollow(view, "editor");
     }
   });
   // Monaco's find action declares no context menu group.

@@ -297,6 +297,11 @@ export class TabRuns {
     }
   }
 
+  /** Pauses or resumes the tab's pty reads (TerminalSession.setPaused). */
+  setOutputPaused(tabId: string, paused: boolean): void {
+    this.sessionOf(tabId)?.setPaused(paused);
+  }
+
   /** Wipes the tab's scrollback and screen with a reset (RIS), sent as output so it lands after what
    *  the session wrote last. */
   private clearOutput(tab: TabState): void {

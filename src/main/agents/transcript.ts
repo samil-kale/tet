@@ -232,20 +232,29 @@ export function truncateTitle(text: string): string {
  * Hands `onLines` the file's lines from `size` down to `floor`, last chunk (TRANSCRIPT_SCAN_BYTES)
  * first, until it returns true. Lines arrive whole: bytes before a chunk's first newline carry (as
  * bytes, so a cut character survives) into the next chunk — except at `floor`, where the partial
- * line is handed over as is; hence a resumed scan overlaps the earlier one by a chunk.
+ * line is handed over as is; a `floor` at a line's start (`lineStart`) cuts none. Answers where the
+ * file's last line begins (`size` for one ending in a newline), undefined where it began before
+ * the chunk read first.
  */
 async function readLinesBackwards(
   handle: fs.promises.FileHandle,
   size: number,
   floor: number,
   onLines: (lines: string[]) => boolean,
-): Promise<void> {
+): Promise<number | undefined> {
   let end = size;
   let carry = Buffer.alloc(0);
+  let lastLineStart: number | undefined;
+  let first = true;
   while (end > floor) {
     const start = Math.max(floor, end - TRANSCRIPT_SCAN_BYTES);
     const buffer = Buffer.alloc(end - start);
     await handle.read(buffer, 0, buffer.length, start);
+    if (first) {
+      first = false;
+      const newline = buffer.lastIndexOf(10);
+      lastLineStart = newline === -1 ? (start === 0 ? 0 : undefined) : start + newline + 1;
+    }
     let chunk = Buffer.concat([buffer, carry]);
     if (start > floor) {
       const cut = chunk.indexOf(10);
@@ -253,10 +262,11 @@ async function readLinesBackwards(
       chunk = cut === -1 ? Buffer.alloc(0) : chunk.subarray(cut + 1);
     }
     if (onLines(chunk.toString("utf8").split("\n"))) {
-      return;
+      return lastLineStart;
     }
     end = start;
   }
+  return lastLineStart;
 }
 
 /** The per-agent, format-specific half of a cached tail scan; `scanTranscriptTail` handles the file. */
@@ -266,6 +276,9 @@ interface TailScan<T> {
   create: () => T;
   /** Takes one chunk's lines into `tail`; true once nothing further is wanted. */
   read: (lines: string[], tail: T) => boolean;
+  /** After a scan of the new lines alone: true where what they leave open depends on lines below
+   *  them, so the answer needs the whole window scanned (as for a first scan). */
+  undecided?: (tail: T) => boolean;
   /** Runs after the backward read, before `merge`. */
   finish?: (tail: T) => void;
   /** Fills what this scan did not find from the previous one. */
@@ -282,15 +295,17 @@ export interface ScannedTail<T> {
 /**
  * Reads a transcript backwards for the agent's `read`, answering an unchanged file from `cache` by
  * a stat, without opening it: an open costs far more than a stat, and most files are unchanged.
- * A grown file is read only down to a chunk below the previous scan's end, the rest merged from
- * the old answer — the overlap covers a line caught half-written. The caller owns and evicts the cache.
+ * A grown file is read only from the start of the line the previous scan ended in (whole lines, so
+ * one caught half-written is read again complete), the rest merged from the old answer; where that
+ * line's start is unknown, or the reader finds the new lines `undecided`, from a window below the
+ * previous end, as a first scan. The caller owns and evicts the cache.
  *
  * A file that cannot be opened or stat'ed rejects, failing the listing; a failed read is logged
  * and answers what it found.
  */
 export async function scanTranscriptTail<T>(
   filePath: string,
-  cache: Map<string, { size: number; tail: T }>,
+  cache: Map<string, { size: number; tail: T; lineStart?: number }>,
   scan: TailScan<T>,
 ): Promise<ScannedTail<T>> {
   const known = await fs.promises.stat(filePath);
@@ -305,16 +320,24 @@ export async function scanTranscriptTail<T>(
     if (cached?.size === size) {
       return { tail: cached.tail, size, mtimeMs };
     }
-    const tail = scan.create();
+    let tail = scan.create();
     try {
       const previous = cached && cached.size < size ? cached : undefined;
-      const floor = previous ? Math.max(0, previous.size - TRANSCRIPT_SCAN_BYTES) : 0;
-      await readLinesBackwards(handle, size, floor, (lines) => scan.read(lines, tail));
+      const windowFloor = previous ? Math.max(0, previous.size - TRANSCRIPT_SCAN_BYTES) : 0;
+      // A last line begun before the window is cut by it anyway; its start is no use then.
+      const lineStart = previous?.lineStart !== undefined && previous.lineStart >= windowFloor ? previous.lineStart : undefined;
+      const readFrom = (floor: number): Promise<number | undefined> =>
+        readLinesBackwards(handle, size, floor, (lines) => scan.read(lines, tail));
+      let lastLineStart = await readFrom(lineStart ?? windowFloor);
+      if (lineStart !== undefined && scan.undecided?.(tail)) {
+        tail = scan.create();
+        lastLineStart = await readFrom(windowFloor);
+      }
       scan.finish?.(tail);
       if (previous) {
         scan.merge(tail, previous.tail);
       }
-      cache.set(filePath, { size, tail });
+      cache.set(filePath, { size, tail, lineStart: lastLineStart });
     } catch (error) {
       logError(`${scan.label} transcript scan failed`, error);
     }

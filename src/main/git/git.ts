@@ -1525,15 +1525,17 @@ const LOG_FIELD = "\x1f";
  * The commits reachable from `revisions` (full ref names, or HEAD), newest first in topological
  * order — a child before its parents, which the lane layout relies on. `--decorate=full` so a local
  * branch and a remote's are told apart by their prefix, not guessed from a slash. A `search` keeps
- * only the commits it finds.
+ * only the commits it finds. `skip` leaves out that many of the newest, so a page follows the one
+ * before it (applied after the search's filtering).
  */
-export async function readLog(cwd: string, limit: number, revisions: string[], search?: CommitSearch): Promise<GraphCommit[]> {
+export async function readLog(cwd: string, limit: number, revisions: string[], search?: CommitSearch, skip = 0): Promise<GraphCommit[]> {
   const result = await git(cwd, [
     "log",
     ...revisions,
     "--topo-order",
     "--decorate=full",
     `-${limit}`,
+    ...(skip > 0 ? [`--skip=${skip}`] : []),
     "-z",
     `--format=%H${LOG_FIELD}%P${LOG_FIELD}%an${LOG_FIELD}%at${LOG_FIELD}%D${LOG_FIELD}%s`,
     ...(search ? searchArgs(search) : []),
@@ -1649,11 +1651,12 @@ export async function readCommitFiles(cwd: string, sha: string, parent: string |
 }
 
 /** Every path the exclude chain hides, repository-relative with forward slashes; `--directory`
- *  collapses an ignored directory to one entry with a trailing `/`, so the walk can skip it. */
+ *  collapses an ignored directory to one entry with a trailing `/`, so the walk can skip it. Throws
+ *  on a failed read rather than answer "nothing ignored": the answer is cached (ignored.ts). */
 export async function listIgnored(cwd: string): Promise<string[]> {
   const result = await git(cwd, ["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]);
   if (result.code !== 0) {
-    return [];
+    throw new Error(result.stderr.trim() || `git ls-files exited with ${result.code}`);
   }
   return result.stdout.split("\0").filter((entry) => entry !== "");
 }

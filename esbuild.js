@@ -17,14 +17,17 @@ const common = {
   bundle: true,
   sourcemap: !production,
   minify: production,
+  treeShaking: true,
+  legalComments: "none",
   tsconfig,
 };
 
 /** Everything electron's node runs: main, the utility hosts, preload, the CLIs, the tests. */
 const node = { ...common, platform: "node", target: "node22", format: "cjs" };
 
-/** The window's two bundles. */
-const browser = { ...common, platform: "browser", format: "iife", target: "chrome130" };
+/** The window's two bundles: the renderer is ES modules, split where it `import()`s; the editor's
+ *  worker (a classic one, see editor.ts) stays one script. */
+const browser = { ...common, platform: "browser", target: "chrome130" };
 
 /** @type {import('esbuild').BuildOptions} */
 const mainConfig = {
@@ -84,18 +87,56 @@ function preloadConfig(name) {
   };
 }
 
+/** esbuild emits the CSS of a lazy chunk beside it and nothing loads it: of the chunks, only the
+ *  editor's own (monaco-core, which editor.ts links before importing it) has CSS the page needs. The
+ *  language definitions carry monaco's shared CSS again; it is dropped, and a lazy chunk with CSS the
+ *  page has neither in the entry's nor in monaco-core's fails the build. */
+/** @type {import('esbuild').Plugin} */
+const lazyCss = {
+  name: "lazy-css",
+  setup(build) {
+    build.onEnd((result) => {
+      if (!result.metafile) {
+        return;
+      }
+      // The metafile names a CSS output by its file alone; a chunk's is named like its script.
+      const outputs = Object.entries(result.metafile.outputs)
+        .filter(([file]) => file.endsWith(".css"))
+        .map(([file, output]) => ({ name: path.basename(file), inputs: Object.keys(output.inputs) }));
+      const monaco = outputs.find(({ name }) => name.startsWith("monaco-core-"));
+      const shown = new Set(outputs.filter(({ name }) => name === "renderer.css" || name === monaco?.name).flatMap(({ inputs }) => inputs));
+      for (const { name, inputs } of outputs) {
+        if (name === "renderer.css") {
+          continue;
+        }
+        const lost = inputs.filter((input) => !shown.has(input));
+        if (lost.length > 0) {
+          throw new Error(`${name} is CSS of a lazy chunk nothing loads: ${lost.join(", ")}`);
+        }
+        if (name === monaco?.name) {
+          fs.copyFileSync(path.join(dist, name), path.join(dist, "monaco-core.css"));
+        }
+        fs.rmSync(path.join(dist, name), { force: true });
+        fs.rmSync(path.join(dist, `${name}.map`), { force: true });
+      }
+    });
+  },
+};
+
 /** @type {import('esbuild').BuildOptions} */
 const rendererConfig = {
+  metafile: true,
+  plugins: [lazyCss],
   ...browser,
-  entryPoints: [path.join(__dirname, "src", "renderer", "main.tsx")],
-  outfile: path.join(dist, "renderer.js"),
+  format: "esm",
+  splitting: true,
+  entryPoints: { renderer: path.join(__dirname, "src", "renderer", "main.tsx") },
+  outdir: dist,
+  // Beside the entry, so a font's url in a chunk resolves against the page like the entry's own.
+  chunkNames: "[name]-[hash]",
   // monaco's CSS pulls in codicon.ttf, and styles.css the Explorer's seti.woff and the app's fonts;
   // without a loader for them the build fails outright.
   loader: { ".ttf": "file", ".woff": "file", ".woff2": "file" },
-  // monaco reads `import.meta.url` as a worker-location fallback (unreached, see editor.ts's
-  // `getWorker`); esbuild replaces `import.meta` with `{}` under `format: "iife"` and warns at
-  // every such site, burying real warnings.
-  logOverride: { "empty-import-meta": "silent" },
 };
 
 /** The editor's own web worker (tokenization, etc. off the main thread) — see editor.ts. */
@@ -103,6 +144,7 @@ const rendererConfig = {
 const editorWorkerConfig = {
   ...browser,
   entryPoints: [require.resolve("monaco-editor/editor/editor.worker.js")],
+  format: "iife",
   outfile: path.join(dist, "editor.worker.js"),
 };
 

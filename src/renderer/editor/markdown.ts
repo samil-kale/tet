@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
 import { highlighter, highlightTheme, languageForFence, loadGrammar } from "./diff-highlight";
+import { BlockMarks, lineOfTop, topOfLine, type Mark } from "./block-marks";
 import styles from "./markdown-preview.css" with { type: "text" };
 
 /**
@@ -121,15 +122,8 @@ async function holdPlace(img: HTMLImageElement, loadImage: (source: string) => P
   }
 }
 
-interface Mark {
-  /** The block's first source line, 0-based. */
-  line: number;
-  /** Its offset in the scroller. */
-  top: number;
-}
-
-/** Every marked block, in document order, which is also the source's. */
-function blocks(scroller: HTMLElement, body: HTMLElement): Mark[] {
+/** Every marked block, in document order, which is also the source's, measured. */
+function measureBlocks(scroller: HTMLElement, body: HTMLElement): Mark[] {
   const origin = scroller.getBoundingClientRect().top - scroller.scrollTop;
   return [...body.querySelectorAll(`[${LINE_ATTRIBUTE}]`)].map((block) => ({
     line: Number(block.getAttribute(LINE_ATTRIBUTE)),
@@ -137,42 +131,23 @@ function blocks(scroller: HTMLElement, body: HTMLElement): Mark[] {
   }));
 }
 
-/** The last block `reached` holds for, and the one after it — what a position falls between. */
-function around(marks: Mark[], reached: (mark: Mark) => boolean): [Mark | undefined, Mark | undefined] {
-  let index = -1;
-  while (index + 1 < marks.length && reached(marks[index + 1])) {
-    index++;
-  }
-  return [marks[index], marks[index + 1]];
+/** The marks of a preview, kept while it is neither rendered again nor resized: `marks.invalidate()`
+ *  tells them. */
+export function blockMarksOf(scroller: HTMLElement, body: HTMLElement): BlockMarks {
+  return new BlockMarks(() => measureBlocks(scroller, body));
 }
 
-/**
- * Scrolls the preview to the editor's `line` (0-based, fractional): between the blocks marked
- * around it, in proportion.
- */
-export function scrollToLine(scroller: HTMLElement, body: HTMLElement, line: number): void {
-  const [before, after] = around(blocks(scroller, body), (mark) => mark.line <= line);
-  if (!before) {
-    scroller.scrollTop = 0;
-    return;
-  }
-  const share = after ? (line - before.line) / (after.line - before.line) : 0;
-  scroller.scrollTop = before.top + share * ((after?.top ?? before.top) - before.top);
+/** Scrolls the preview to the editor's `line` (0-based, fractional). */
+export function scrollToLine(scroller: HTMLElement, marks: BlockMarks, line: number): void {
+  scroller.scrollTop = topOfLine(marks.get(), line);
 }
 
 /**
  * The other way round: the source line at the top of the preview, 0-based and fractional, for the
  * editor to follow. Undefined while nothing is rendered.
  */
-export function lineAtScroll(scroller: HTMLElement, body: HTMLElement): number | undefined {
-  const marks = blocks(scroller, body);
-  const [before, after] = around(marks, (mark) => mark.top <= scroller.scrollTop);
-  if (!before) {
-    return marks.length > 0 ? 0 : undefined;
-  }
-  const height = after ? after.top - before.top : 0;
-  const share = height > 0 ? (scroller.scrollTop - before.top) / height : 0;
-  return before.line + share * ((after?.line ?? before.line) - before.line);
+export function lineAtScroll(scroller: HTMLElement, marks: BlockMarks): number | undefined {
+  return lineOfTop(marks.get(), scroller.scrollTop);
 }
 
 /**

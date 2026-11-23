@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { MAX_GRAPH_COMMITS } from "../../shared/types/git";
 import { shell } from "electron";
 import { errorMessage, failure } from "../../shared/errors";
 import type { ActionRefused, ActionResult } from "../../shared/types/action";
@@ -46,6 +48,7 @@ import {
 } from "./explorer";
 import { MAX_EDIT_BYTES } from "./explorer-read";
 import { git } from "./git-client";
+import { forgetIgnored, invalidateIgnored, listIgnored } from "./ignored";
 import type { GitLoginStore } from "./git-logins";
 import { readLinkedGitDir } from "../util/linked-git-dir";
 import { openInside } from "../util/path-inside";
@@ -71,9 +74,6 @@ function settle(timer: ReturnType<typeof setTimeout> | undefined, lastAt: number
 /** What the renderer asks the graph's reads about is a commit and nothing git could take for an
  *  option. */
 const isObjectId = (value: string): boolean => /^[0-9a-f]{4,64}$/i.test(value);
-
-/** The most commits the Graph reads at once. */
-const MAX_GRAPH_COMMITS = 5000;
 
 /** The most files a refused commit names, the rest counted: a merge may leave dozens. */
 const MAX_NAMED_CONFLICTS = 5;
@@ -134,6 +134,32 @@ function isIgnoredEvent(relativePath: string, ownWorktree?: string): boolean {
   );
 }
 
+/** Whether git ignores the path or a folder above it, as `ignored` lists them (git.ts's
+ *  `listIgnored`: an ignored folder is one entry with a trailing "/"). A folder holding a tracked
+ *  file is not one entry, so what is tracked inside an otherwise ignored folder is still seen; an
+ *  ignored folder's own contents are not, whether tracked or not, once it is listed whole. */
+function isUnderIgnored(relativePath: string, ignored: ReadonlySet<string>): boolean {
+  if (ignored.size === 0) {
+    return false;
+  }
+  const normalized = relativePath.replace(/\\/g, "/");
+  if (ignored.has(normalized) || ignored.has(`${normalized}/`)) {
+    return true;
+  }
+  for (let slash = normalized.indexOf("/"); slash !== -1; slash = normalized.indexOf("/", slash + 1)) {
+    if (ignored.has(normalized.slice(0, slash + 1))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** This checkout's index: the repository's, or a linked worktree's under its admin folder. */
+function isIndexFile(relativePath: string, ownWorktree?: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/");
+  return ownWorktree === undefined ? normalized === ".git/index" : normalized === `.git/worktrees/${ownWorktree}/index`;
+}
+
 /** A `.gitignore` anywhere in the tree, or the repository's own exclude file. */
 function isIgnoreFile(relativePath: string): boolean {
   return /(?:^|[\\/])\.gitignore$|^\.git[\\/]info[\\/]exclude$/.test(relativePath);
@@ -170,8 +196,13 @@ export interface RepositoryManagerCallbacks {
  *  terminals. Refreshed after filesystem changes, so a branch switched in a terminal shows up. */
 export class Repository {
   private state: RepositoryState = EMPTY_REPOSITORY_STATE;
-  /** `state` serialized, so a refresh serializes only its own side to compare. */
-  private stateJson = JSON.stringify(EMPTY_REPOSITORY_STATE);
+  /** What git ignores (ignored.ts), for the watcher to drop events under; empty until first read. */
+  private ignored: ReadonlySet<string> = new Set();
+  /** The newest `reloadIgnored`, so an older read finishing late is not taken. */
+  private ignoredLoad = 0;
+  private ignoredTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The Explorer's last listing showed ignored files: paths appearing under them re-list it. */
+  private explorerShowsIgnored = false;
   private watcher: fs.FSWatcher | undefined;
   /** A linked worktree's or submodule's git directory — see watchLinkedGitDir. */
   private gitDirWatcher: fs.FSWatcher | undefined;
@@ -274,6 +305,7 @@ export class Repository {
       return;
     }
     this.startWatching();
+    this.reloadIgnored();
     // The repository's alone: its worktrees share its refs, and their watchers see a fetch land.
     if (this.at.ref.worktree === undefined) {
       this.autoFetchTimer = setInterval(() => void this.autoFetch(), AUTO_FETCH_INTERVAL_MS);
@@ -401,10 +433,8 @@ export class Repository {
     this.reportError(next);
     // Only on an actual change: the watcher fires for edits leaving the state identical, and every
     // emit re-renders the views.
-    const nextJson = JSON.stringify(next);
-    if (!this.disposed && nextJson !== this.stateJson) {
+    if (!this.disposed && !isDeepStrictEqual(next, this.state)) {
       this.state = next;
-      this.stateJson = nextJson;
       this.callbacks.onState(next);
     }
   }
@@ -815,6 +845,7 @@ export class Repository {
 
   /** The Explorer's listing (explorer.ts): a filesystem walk off the index lock `runAction` holds. */
   listExplorer(settings: ExplorerSettings): Promise<ExplorerListing> {
+    this.explorerShowsIgnored = !settings.excludeGitIgnore;
     return listExplorer(this.at.path, settings);
   }
 
@@ -906,9 +937,15 @@ export class Repository {
 
   /** The Graph's commits, only those `search` finds if given. A read beside `runAction`: it touches
    *  neither index nor working tree. */
-  log(limit: number, search?: CommitSearch): Promise<GraphCommit[]> {
+  log(limit: number, search?: CommitSearch, skip?: number): Promise<GraphCommit[]> {
     return git
-      .readLog(this.at.path, Math.min(Math.max(Math.floor(limit) || 1, 1), MAX_GRAPH_COMMITS), graphRevisions(this.state), search)
+      .readLog(
+        this.at.path,
+        Math.min(Math.max(Math.floor(limit) || 1, 1), MAX_GRAPH_COMMITS),
+        graphRevisions(this.state),
+        search,
+        Math.min(Math.max(Math.floor(skip ?? 0) || 0, 0), MAX_GRAPH_COMMITS),
+      )
       .catch(() => []);
   }
 
@@ -1031,9 +1068,24 @@ export class Repository {
       }
       // Events arrive, so the next failure backs off from the start.
       this.watchRetryDelay = WATCH_RETRY_MS;
+      // Under an ignored folder nothing a refresh reports changes: a build's output costs no status
+      // read, and no re-list of a tree that leaves it out. tet.json and the ignore files count
+      // wherever they are.
+      if (name && name !== PROJECT_FILE && !isIgnoreFile(name) && isUnderIgnored(name, this.ignored)) {
+        if (rootEvent === "rename" && this.explorerShowsIgnored) {
+          this.scheduleFilesChanged();
+        }
+        this.notifyWatchedFile(name);
+        return;
+      }
     }
     if (name && /^\.git[\\/]config$/.test(name)) {
       this.configStale = true;
+    }
+    // `git add -f` or `git rm --cached` makes a folder partly tracked or wholly ignored again.
+    if (name && isIndexFile(name, ownWorktree)) {
+      invalidateIgnored(this.at.path);
+      this.scheduleReloadIgnored();
     }
     if (name === PROJECT_FILE) {
       // Debounced: the file is written in place, and a read mid-write finds half of it.
@@ -1045,22 +1097,55 @@ export class Repository {
     // hides or shows other paths (listIgnored) — a worktree's exclude file is the common one, which
     // only the git directory's watcher sees.
     if (name && ((rootEvent === "rename" && !/^\.git(?:[\\/]|$)/.test(name)) || isIgnoreFile(name))) {
+      // The ignore list moves with the paths and the ignore files: asked again, for the Explorer too.
+      invalidateIgnored(this.at.path);
+      this.scheduleReloadIgnored();
       this.scheduleFilesChanged();
     }
-    // Any event: writing beside and renaming into place reports "rename", not "change". The size
-    // check first: this runs for every event under the root, mostly with no file open.
-    const watchedFile = rootEvent !== undefined && this.watchedFiles.size > 0 ? name?.replace(/\\/g, "/") : undefined;
-    if (watchedFile !== undefined && this.watchedFiles.has(watchedFile)) {
-      clearTimeout(this.watchedFileTimers.get(watchedFile));
-      this.watchedFileTimers.set(
-        watchedFile,
-        setTimeout(() => {
-          this.watchedFileTimers.delete(watchedFile);
-          this.callbacks.onFileChanged(watchedFile);
-        }, REFRESH_DEBOUNCE_MS),
-      );
+    if (rootEvent !== undefined) {
+      this.notifyWatchedFile(name);
     }
     this.scheduleRefresh();
+  }
+
+  /** Any event on a `watchFiles` file: writing beside and renaming into place reports "rename", not
+   *  "change". The size check first: this runs for every event under the root, mostly with no file
+   *  open. */
+  private notifyWatchedFile(name: string | undefined): void {
+    const watchedFile = this.watchedFiles.size > 0 ? name?.replace(/\\/g, "/") : undefined;
+    if (watchedFile === undefined || !this.watchedFiles.has(watchedFile)) {
+      return;
+    }
+    clearTimeout(this.watchedFileTimers.get(watchedFile));
+    this.watchedFileTimers.set(
+      watchedFile,
+      setTimeout(() => {
+        this.watchedFileTimers.delete(watchedFile);
+        this.callbacks.onFileChanged(watchedFile);
+      }, REFRESH_DEBOUNCE_MS),
+    );
+  }
+
+  /** Debounced like the refresh: a checkout renames many paths at once. */
+  private scheduleReloadIgnored(): void {
+    clearTimeout(this.ignoredTimer);
+    this.ignoredTimer = setTimeout(() => this.reloadIgnored(), REFRESH_DEBOUNCE_MS);
+  }
+
+  /** Takes the ignore list the Explorer's listing shares (ignored.ts); a failed read keeps the last. */
+  private reloadIgnored(): void {
+    if (this.disposed) {
+      return;
+    }
+    const load = ++this.ignoredLoad;
+    void listIgnored(this.at.path).then(
+      (entries) => {
+        if (load === this.ignoredLoad && !this.disposed) {
+          this.ignored = new Set(entries);
+        }
+      },
+      () => undefined,
+    );
   }
 
   /** Only a missing repository folder closes the project; a worktree belongs to syncWorktrees. */
@@ -1111,6 +1196,9 @@ export class Repository {
       }
       this.startWatching();
       if (this.watcher) {
+        // Changes while unwatched may include ignore files.
+        invalidateIgnored(this.at.path);
+        this.reloadIgnored();
         void this.refresh();
         this.scheduleFilesChanged();
       }
@@ -1129,6 +1217,8 @@ export class Repository {
     clearTimeout(this.debounceTimer);
     clearTimeout(this.commandsTimer);
     clearTimeout(this.filesTimer);
+    clearTimeout(this.ignoredTimer);
+    forgetIgnored(this.at.path);
     this.watchedFileTimers.forEach(clearTimeout);
     clearTimeout(this.watchRetryTimer);
     clearInterval(this.autoFetchTimer);

@@ -179,6 +179,7 @@ export interface SendChannels {
   "tabs:on-screen": TETApi["tabs"]["reportOnScreen"];
   "tabs:input": TETApi["tabs"]["input"];
   "tabs:resize": TETApi["tabs"]["resize"];
+  "tabs:output-ack": TETApi["tabs"]["ackOutput"];
   [reply: WindowReply]: (answer: string | undefined) => void;
 }
 

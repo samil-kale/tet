@@ -360,8 +360,8 @@ export interface TETApi {
     searchFiles: (ref: ProjectRef, query: FileSearchQuery) => Promise<FileSearchResult>;
     readFile: (ref: ProjectRef, path: string) => Promise<FileContent>;
     /** The Graph's `limit` newest commits of HEAD, its upstream and the default branch, topologically
-     *  ordered; with `search`, only those it finds. */
-    log: (ref: ProjectRef, limit: number, search?: CommitSearch) => Promise<GraphCommit[]>;
+     *  ordered, after the `skip` newest; with `search`, only those it finds. */
+    log: (ref: ProjectRef, limit: number, search?: CommitSearch, skip?: number) => Promise<GraphCommit[]>;
     /** The files a commit changed against its first parent (`parent` absent for a root commit). */
     commitFiles: (ref: ProjectRef, sha: string, parent: string | undefined) => Promise<FileChange[]>;
     /** One of them, both sides as the read-only diff shows them. */
@@ -442,6 +442,9 @@ export interface TETApi {
     resize: (ref: ProjectRef, tabId: string, cols: number, rows: number) => void;
     /** The repository's or worktree's full tab list on every change. */
     onTabs: (listener: (payload: { ref: ProjectRef; tabs: TabDescriptor[] }) => void) => Unsubscribe;
+    /** Tells main how many characters of a tab's output the terminal has parsed, so main can pause
+     *  the tab's process while the window falls behind (AppWindow's flow control). */
+    ackOutput: (ref: ProjectRef, tabId: string, length: number) => void;
     /** One message per flush for all terminals. */
     onOutput: (listener: (batch: TerminalOutput[]) => void) => Unsubscribe;
     onStatus: (listener: (payload: TabRef & { status: TerminalStatus }) => void) => Unsubscribe;

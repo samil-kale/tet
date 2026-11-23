@@ -191,6 +191,9 @@ export interface CheckoutTarget {
 /** Why a worktree cannot be created with an older git (worktreesSupported). */
 export const WORKTREES_NEED_GIT = "needs git 2.48 or newer";
 
+/** The most commits the Graph shows, paged or read at once. */
+export const MAX_GRAPH_COMMITS = 5000;
+
 /**
  * Whether `git --version`'s answer has `worktree add --relative-paths`, which TET's worktrees are
  * made with (git.ts's worktreeAdd). Renaming (the branch alone) and deleting need nothing new.

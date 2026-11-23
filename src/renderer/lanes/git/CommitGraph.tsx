@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState, type ReactNode, type UIEvent } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type ReactNode, type UIEvent } from "react";
 import type { CommitSearch, FileChange, GraphCommit, RepositoryState } from "../../../shared/types/git";
 import type { OpenEditor } from "../../editor/editor-tab";
 import { baseName, parentOf } from "../../paths";
@@ -6,6 +6,7 @@ import type { ResolvedRef } from "../../resolved-ref";
 import { FilterField } from "../../ui/FilterField";
 import { IconButton } from "../../ui/IconButton";
 import { useLatest } from "../../ui/use-latest";
+import { RowSpacer, TREE_ROW_HEIGHT, useWindowedRows } from "../../ui/use-windowed-rows";
 import { CommitIcon, MessageIcon, PathIcon, UserIcon, type IconProps } from "../../ui/icons";
 import { COLUMN_STEP, INDENT_BASE, TreeRow } from "../../ui/tree-row";
 import { STATUS_LETTER } from "./ChangesList";
@@ -176,53 +177,61 @@ function LanesBeside({ row }: { row: GraphRow }) {
   );
 }
 
-interface CommitEntryProps {
+/** One line of the list, each a row of the same height: a commit, or a file of the open commit. */
+type GraphLine =
+  | { kind: "commit"; commit: GraphCommit; row: GraphRow | undefined }
+  | { kind: "file"; commit: GraphCommit; row: GraphRow | undefined; file: FileChange };
+
+interface CommitLineProps {
   commit: GraphCommit;
   /** Undefined for a search's finds, listed flat. */
   row: GraphRow | undefined;
   isOpen: boolean;
-  /** The open commit's files, once read. */
-  files: FileChange[] | undefined;
   toggle: (commit: GraphCommit) => void;
-  openFile: (commit: GraphCommit, file: FileChange, keep: boolean) => void;
 }
 
 /** Memoized with stable handlers: opening a commit re-renders its row, not every loaded commit. */
-const CommitEntry = memo(function CommitEntry({ commit, row, isOpen, files, toggle, openFile }: CommitEntryProps) {
+const CommitLine = memo(function CommitLine({ commit, row, isOpen, toggle }: CommitLineProps) {
   return (
-    <div>
-      <TreeRow
-        className={isOpen ? "selected" : undefined}
-        title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
-        dragName={{ kind: "commit", name: commit.sha }}
-        onClick={() => toggle(commit)}
-        icon={row ? <Lanes row={row} expanded={isOpen} /> : <CommitIcon className="line-icon" />}
-        label={commit.subject}
-      >
-        <span className="tree-extra">{commit.author}</span>
-      </TreeRow>
-      {isOpen &&
-        (files ?? []).map((file) => (
-          <TreeRow
-            key={file.path}
-            // A search's find has no lanes to run beside: its files start a column in, under its subject.
-            indent={row ? undefined : INDENT_BASE + COLUMN_STEP}
-            title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}
-            onClick={() => openFile(commit, file, false)}
-            // As the Explorer: a single click previews, a double click keeps.
-            onDoubleClick={() => openFile(commit, file, true)}
-            icon={
-              <>
-                {row && <LanesBeside row={row} />}
-                <span className={`line-icon change-status ${file.status}`}>{STATUS_LETTER[file.status]}</span>
-              </>
-            }
-            label={baseName(file.path)}
-          >
-            {parentOf(file.path) && <span className="tree-extra">{parentOf(file.path)}</span>}
-          </TreeRow>
-        ))}
-    </div>
+    <TreeRow
+      className={isOpen ? "selected" : undefined}
+      title={`${commit.sha.slice(0, 7)} ${commit.subject}\n${commit.author}, ${new Date(commit.date * 1000).toLocaleString()}`}
+      dragName={{ kind: "commit", name: commit.sha }}
+      onClick={() => toggle(commit)}
+      icon={row ? <Lanes row={row} expanded={isOpen} /> : <CommitIcon className="line-icon" />}
+      label={commit.subject}
+    >
+      <span className="tree-extra">{commit.author}</span>
+    </TreeRow>
+  );
+});
+
+interface FileLineProps {
+  commit: GraphCommit;
+  row: GraphRow | undefined;
+  file: FileChange;
+  openFile: (commit: GraphCommit, file: FileChange, keep: boolean) => void;
+}
+
+const FileLine = memo(function FileLine({ commit, row, file, openFile }: FileLineProps) {
+  return (
+    <TreeRow
+      // A search's find has no lanes to run beside: its files start a column in, under its subject.
+      indent={row ? undefined : INDENT_BASE + COLUMN_STEP}
+      title={file.origPath ? `${file.origPath} → ${file.path}` : file.path}
+      onClick={() => openFile(commit, file, false)}
+      // As the Explorer: a single click previews, a double click keeps.
+      onDoubleClick={() => openFile(commit, file, true)}
+      icon={
+        <>
+          {row && <LanesBeside row={row} />}
+          <span className={`line-icon change-status ${file.status}`}>{STATUS_LETTER[file.status]}</span>
+        </>
+      }
+      label={baseName(file.path)}
+    >
+      {parentOf(file.path) && <span className="tree-extra">{parentOf(file.path)}</span>}
+    </TreeRow>
   );
 });
 
@@ -250,6 +259,22 @@ export function CommitGraph({
   const rows = useMemo(() => (searched ? undefined : layoutGraph(commits, refColors)), [searched, commits, refColors]);
   const [open, setOpen] = useState<string | undefined>();
   const [files, setFiles] = useState<Record<string, FileChange[]>>({});
+  // Every line is one row high, so the lines in view are found by arithmetic (`useWindowedRows`).
+  const lines = useMemo(() => {
+    const list: GraphLine[] = [];
+    commits.forEach((commit, index) => {
+      const row = rows?.[index];
+      list.push({ kind: "commit", commit, row });
+      if (commit.sha === open) {
+        for (const file of files[commit.sha] ?? []) {
+          list.push({ kind: "file", commit, row, file });
+        }
+      }
+    });
+    return list;
+  }, [commits, rows, open, files]);
+  const scroller = useRef<HTMLDivElement>(null);
+  const windowing = useWindowedRows(scroller, lines.length, "--tree-row-height", TREE_ROW_HEIGHT);
   const openRef = useLatest(open);
   const filesRef = useLatest(files);
   const onOpenDiffRef = useLatest(onOpenDiff);
@@ -291,18 +316,24 @@ export function CommitGraph({
           </IconButton>
         ))}
       </FilterField>
-      <div className={state.head === "" ? "graph-tree tree pending" : "graph-tree tree"} onScroll={scrolled}>
-        {commits.map((commit, index) => (
-          <CommitEntry
-            key={commit.sha}
-            commit={commit}
-            row={rows?.[index]}
-            isOpen={open === commit.sha}
-            files={open === commit.sha ? files[commit.sha] : undefined}
-            toggle={toggle}
-            openFile={openFile}
-          />
-        ))}
+      <div className={state.head === "" ? "graph-tree tree pending" : "graph-tree tree"} ref={scroller} onScroll={scrolled}>
+        <RowSpacer height={windowing.before} />
+        {lines
+          .slice(windowing.start, windowing.end)
+          .map((line) =>
+            line.kind === "commit" ? (
+              <CommitLine key={line.commit.sha} commit={line.commit} row={line.row} isOpen={open === line.commit.sha} toggle={toggle} />
+            ) : (
+              <FileLine
+                key={`${line.commit.sha}:${line.file.path}`}
+                commit={line.commit}
+                row={line.row}
+                file={line.file}
+                openFile={openFile}
+              />
+            ),
+          )}
+        <RowSpacer height={windowing.after} />
       </div>
     </div>
   );

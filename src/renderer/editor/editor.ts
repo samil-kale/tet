@@ -18,6 +18,11 @@ export function loadMonaco(): Promise<Monaco> {
     (self as unknown as { MonacoEnvironment: unknown }).MonacoEnvironment = {
       getWorker: () => new Worker("./editor.worker.js"),
     };
+    // The CSS of a lazy chunk is not loaded by the chunk (esbuild.js's lazyCss).
+    const styles = document.createElement("link");
+    styles.rel = "stylesheet";
+    styles.href = "monaco-core.css";
+    document.head.append(styles);
     monacoPromise = import("./monaco-core");
   }
   return monacoPromise;
