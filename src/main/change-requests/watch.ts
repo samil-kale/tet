@@ -18,7 +18,7 @@ interface Watched {
 /** What one project's round tells, from what the last one kept (`before`, undefined for its first,
  *  which only keeps): one opened or made ready by someone else, and one of `viewer`'s whose checks failed
  *  on a head commit not told before. Answers what the next round compares with. */
-function compareRound(
+export function compareRound(
   before: ReadonlyMap<number, Watched> | undefined,
   rows: readonly ChangeRequestRow[],
   viewer: string,
