@@ -41,7 +41,7 @@ async function onRemote<T>(deps: TrackerDeps, projectId: string, call: TrackerCa
  *  account for it. */
 export async function changeRequestKind(deps: TrackerDeps, projectId: string): Promise<ChangeRequestKind | undefined> {
   const remote = await trackerRemote(trackerRepository(deps, projectId));
-  return hostProvider(deps.accounts, remote.host)?.changeRequest;
+  return hostProvider(deps.accounts, remote.host)?.changeRequests.kind;
 }
 
 /** At least the first `limit` change requests the filter narrows to, from `after` where given; read
@@ -55,25 +55,25 @@ export function readChangeRequestPage(
   after?: string,
 ): Promise<ListPage<ChangeRequestRow> & { latest?: ChangeRequestsLatest }> {
   return onRemote(deps, projectId, async (provider, tracker) => {
-    const latest = after === undefined ? await provider.readChangeRequestsLatest(tracker, filter) : undefined;
-    return { ...(await provider.listChangeRequests(tracker, filter, limit, after)), latest };
+    const latest = after === undefined ? await provider.changeRequests.readLatest(tracker, filter) : undefined;
+    return { ...(await provider.changeRequests.list(tracker, filter, limit, after)), latest };
   });
 }
 
 /** Every one of the project's change requests the filter narrows to. */
 export async function listChangeRequests(deps: TrackerDeps, projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestRow[]> {
-  const { items } = await onRemote(deps, projectId, (provider, tracker) => provider.listChangeRequests(tracker, filter));
+  const { items } = await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.list(tracker, filter));
   return items;
 }
 
 export function latestChangeRequests(deps: TrackerDeps, projectId: string, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest> {
-  return onRemote(deps, projectId, (provider, tracker) => provider.readChangeRequestsLatest(tracker, filter));
+  return onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.readLatest(tracker, filter));
 }
 
 /** What the filters offer. */
 export function changeRequestFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<TrackedFilterOptions, "error">>> {
   return onRemote(deps, projectId, async (provider, tracker) => {
-    const [labels, people] = await Promise.all([provider.listLabels(tracker), provider.listPeople(tracker)]);
+    const [labels, people] = await Promise.all([provider.repository.listLabels(tracker), provider.repository.listPeople(tracker)]);
     return { labels, people };
   });
 }
@@ -82,7 +82,7 @@ export function changeRequestFilterOptions(deps: TrackerDeps, projectId: string)
 export async function readChangeRequest(deps: TrackerDeps, projectId: string, number: number): Promise<ChangeRequestDetail> {
   const [source, detail] = await Promise.all([
     readIssueSource(trackerRepository(deps, projectId).at.path),
-    onRemote(deps, projectId, async (provider, tracker, viewer) => ({ ...(await provider.readChangeRequest(tracker, number)), viewer })),
+    onRemote(deps, projectId, async (provider, tracker, viewer) => ({ ...(await provider.changeRequests.read(tracker, number)), viewer })),
   ]);
   return { ...detail, ownIssues: source === undefined };
 }
@@ -90,7 +90,7 @@ export async function readChangeRequest(deps: TrackerDeps, projectId: string, nu
 /** An image of a change request's text as a data url; null when it takes no token or cannot be read. */
 export async function changeRequestImage(deps: TrackerDeps, projectId: string, source: string): Promise<string | null> {
   try {
-    const response = await onRemote(deps, projectId, (provider, tracker) => provider.readImage(tracker, source));
+    const response = await onRemote(deps, projectId, (provider, tracker) => provider.repository.readImage(tracker, source));
     return response ? await imageDataUrl(response, MAX_EDIT_BYTES) : null;
   } catch {
     return null;
@@ -98,7 +98,7 @@ export async function changeRequestImage(deps: TrackerDeps, projectId: string, s
 }
 
 export function changeRequestFieldOptions(deps: TrackerDeps, projectId: string, number: number, fieldId: string): Promise<string[]> {
-  return onRemote(deps, projectId, (provider, tracker) => provider.listChangeRequestOptions(tracker, number, fieldId));
+  return onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.listOptions(tracker, number, fieldId));
 }
 
 export async function setChangeRequestField(
@@ -108,32 +108,32 @@ export async function setChangeRequestField(
   fieldId: string,
   value: TrackedFieldValue,
 ): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.setChangeRequestField(tracker, number, fieldId, value), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.setField(tracker, number, fieldId, value), true);
 }
 
 export async function updateChangeRequest(deps: TrackerDeps, projectId: string, number: number, change: TrackedChange): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.updateChangeRequest(tracker, number, change), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.update(tracker, number, change), true);
 }
 
 export async function commentChangeRequest(deps: TrackerDeps, projectId: string, number: number, body: string): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.commentChangeRequest(tracker, number, body), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.comment(tracker, number, body), true);
 }
 
 export async function editChangeRequestComment(deps: TrackerDeps, projectId: string, id: string, body: string): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.editComment(tracker, id, body), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.repository.editComment(tracker, id, body), true);
 }
 
 export async function deleteChangeRequestComment(deps: TrackerDeps, projectId: string, id: string): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.deleteComment(tracker, id), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.repository.deleteComment(tracker, id), true);
 }
 
 export async function approveChangeRequest(deps: TrackerDeps, projectId: string, number: number): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.approveChangeRequest(tracker, number), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.approve(tracker, number), true);
 }
 
 /** Merges it by the repository's own method; `whenChecksPass` has the host merge it once they did. */
 export async function mergeChangeRequest(deps: TrackerDeps, projectId: string, number: number, whenChecksPass: boolean): Promise<void> {
-  await onRemote(deps, projectId, (provider, tracker) => provider.mergeChangeRequest(tracker, number, whenChecksPass), true);
+  await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.merge(tracker, number, whenChecksPass), true);
 }
 
 /** The project's open change requests, with the login of the account that read them and what the host
@@ -143,9 +143,9 @@ export function openChangeRequests(
   projectId: string,
 ): Promise<{ rows: ChangeRequestRow[]; viewer: string; kind: ChangeRequestKind }> {
   return onRemote(deps, projectId, async (provider, tracker, viewer) => ({
-    rows: (await provider.listChangeRequests(tracker, DEFAULT_CHANGE_REQUEST_FILTER)).items,
+    rows: (await provider.changeRequests.list(tracker, DEFAULT_CHANGE_REQUEST_FILTER)).items,
     viewer,
-    kind: provider.changeRequest,
+    kind: provider.changeRequests.kind,
   }));
 }
 
@@ -172,7 +172,7 @@ export async function markChangeRequestsSeen(
     markAllSeen(deps.dataRoot, projectId, "change-request");
     return;
   }
-  const { updatedAt, checks } = await onRemote(deps, projectId, (provider, tracker) => provider.readChangeRequestUpdate(tracker, number));
+  const { updatedAt, checks } = await onRemote(deps, projectId, (provider, tracker) => provider.changeRequests.readUpdate(tracker, number));
   setSeen(deps.dataRoot, projectId, "change-request", number, updatedAt, checks === "failed");
 }
 

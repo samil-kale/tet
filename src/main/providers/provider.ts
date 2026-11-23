@@ -27,98 +27,120 @@ export interface Tracker {
   path: string;
 }
 
-/** A repository host: authenticate, list repositories with their clone url and read their issues.
- *  One interface for GitHub and GitLab, over plain REST and GraphQL rather than Octokit or GitBeaker,
- *  and kept out of the local git layer: everything past the clone goes through the local git CLI. */
+/** A repository host: authenticate, list repositories with their clone url and read their issues
+ *  and change requests. One interface for GitHub and GitLab, over plain REST and GraphQL rather than
+ *  Octokit or GitBeaker, and kept out of the local git layer: everything past the clone goes through
+ *  the local git CLI. Grouped by what it reaches, as `AgentDefinition` is by what an agent does. */
 export interface GitProvider {
+  account: GitProviderAccount;
+  repository: GitProviderRepository;
+  issues: GitProviderIssues;
+  changeRequests: GitProviderChangeRequests;
+}
+
+/** The account itself, on its host. */
+export interface GitProviderAccount {
   /** Checks the token against the host and returns its login. */
   validate(host: string, token: string): Promise<string>;
   /** Every repository the token's user can reach, most recently active first. */
   listRepositories(host: string, token: string): Promise<RemoteRepository[]>;
-  /** At least the first `limit` issues the filter leaves, newest first, from `after` where given (a
-   *  page's `after`); every one without a `limit`. */
-  listIssues(tracker: Tracker, filter: IssueFilter, limit?: number, after?: string): Promise<ListPage<Issue>>;
-  /** How many issues the host counts for the filter and when the latest changed one changed: one
-   *  request however long the list. */
-  readLatest(tracker: Tracker, filter: IssueFilter): Promise<TrackedLatest>;
-  /** Refuses a path the token cannot read, which is how a new issue source is checked. */
-  listLabels(tracker: Tracker): Promise<string[]>;
-  /** Who can be assigned, so external authors are not among them. */
-  listPeople(tracker: Tracker): Promise<string[]>;
-  readIssue(tracker: Tracker, number: number): Promise<IssueDetail>;
-  /** When an issue last changed, what counting it as seen takes, without its text, comments or events. */
-  readIssueUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string }>;
-  /** An image of an issue's text that takes the token to read; undefined for any other source. */
-  readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
-  /** The file name of an upload a link of an issue's text leads to, one that takes the token to
-   *  read; undefined for any other link. */
-  uploadName(host: string, source: string): string | undefined;
-  /** That upload, read with the token; undefined for any other link. */
-  readUpload(tracker: Tracker, source: string): Promise<Response | undefined>;
-  /** What a pick field of the issue can be set to, by the names `TrackedField.value` uses. */
-  listOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
-  /** Sets one field of the issue, a pick's values as a whole; refuses one it does not have or a value
-   *  it does not take. */
-  setField(tracker: Tracker, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
-  /** Whether a new issue can be made confidential, visible to the project's members alone. */
-  readonly confidentialIssues: boolean;
-  createIssue(tracker: Tracker, title: string, body: string, confidential: boolean): Promise<number>;
-  /** Whether a comment can be made internal, visible to the project's members alone. */
-  readonly internalNotes: boolean;
-  addComment(tracker: Tracker, number: number, body: string, internal: boolean): Promise<void>;
-  /** A comment by its id, which the tracker knows without its issue. */
-  editComment(tracker: Tracker, id: string, body: string): Promise<void>;
-  deleteComment(tracker: Tracker, id: string): Promise<void>;
-  deleteIssue(tracker: Tracker, number: number): Promise<void>;
-  /** What `uploadFile` takes on this host; undefined where it takes nothing. */
-  uploads(host: string): IssueUploads | undefined;
-  /** Uploads a file for an issue's text and answers the Markdown that shows it. */
-  uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
-  updateIssue(tracker: Tracker, number: number, change: TrackedChange): Promise<void>;
-  /** What the host calls a request to merge a branch, and how it writes one's number. */
-  readonly changeRequest: ChangeRequestKind;
-  /** The open one from `head`, a branch of the repository itself, not of a fork; undefined where
-   *  there is none. */
-  findChangeRequest(tracker: Tracker, head: string): Promise<ChangeRequest | undefined>;
-  /** Opens one from `head` into `base`, both branches of the repository. */
-  createChangeRequest(tracker: Tracker, request: ChangeRequestDraft): Promise<ChangeRequest>;
-  /** Approves one as the account's user, its author; refused where `changeRequest.selfApproval` is not. */
-  approveChangeRequest(tracker: Tracker, number: number): Promise<void>;
-  /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
-   *  wait for, the host refuses it. */
-  autoMergeChangeRequest(tracker: Tracker, number: number, squash: boolean): Promise<void>;
-  /** As `listIssues`, the change requests the filter leaves, of the repository's own branches alone. */
-  listChangeRequests(tracker: Tracker, filter: ChangeRequestFilter, limit?: number, after?: string): Promise<ListPage<ChangeRequestRow>>;
-  /** What the host says of the filtered list without sending it whole (`ChangeRequestsLatest`): one
-   *  request. */
-  readChangeRequestsLatest(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
-  /** All but what TET itself knows of it (`ownIssues`). */
-  readChangeRequest(tracker: Tracker, number: number): Promise<Omit<ChangeRequestDetail, "ownIssues">>;
-  /** As `readIssueUpdate`, and how its checks stand. */
-  readChangeRequestUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string; checks?: ChecksState }>;
-  /** `listOptions` and `setField` of a change request. */
-  listChangeRequestOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
-  setChangeRequestField(tracker: Tracker, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
-  /** Its title, text or state; merged it is set by `mergeChangeRequest` alone. */
-  updateChangeRequest(tracker: Tracker, number: number, change: TrackedChange): Promise<void>;
-  commentChangeRequest(tracker: Tracker, number: number, body: string): Promise<void>;
-  /** Merges one by the repository's own method, at once, or with `whenChecksPass` once its checks
-   *  passed, as `autoMergeChangeRequest` has the host do. */
-  mergeChangeRequest(tracker: Tracker, number: number, whenChecksPass: boolean): Promise<void>;
   /** The variables the host's own CLI and scripts read the account's token from, which a host tab of
    *  a project on this host gets: the rest of the API, which this interface leaves out, is the
    *  agent's to call. */
   tokenEnv(host: string, token: string): Record<string, string>;
 }
 
-/** What `createChangeRequest` opens. */
+/** What an issue and a change request share on their repository. */
+export interface GitProviderRepository {
+  /** Refuses a path the token cannot read, which is how a new issue source is checked. */
+  listLabels(tracker: Tracker): Promise<string[]>;
+  /** Who can be assigned, so external authors are not among them. */
+  listPeople(tracker: Tracker): Promise<string[]>;
+  /** An image of an issue's or change request's text that takes the token to read; undefined for any
+   *  other source. */
+  readImage(tracker: Tracker, source: string): Promise<Response | undefined>;
+  /** A comment by its id, which the tracker knows without its issue or change request. */
+  editComment(tracker: Tracker, id: string, body: string): Promise<void>;
+  deleteComment(tracker: Tracker, id: string): Promise<void>;
+}
+
+/** The repository's issues. */
+export interface GitProviderIssues {
+  /** At least the first `limit` issues the filter leaves, newest first, from `after` where given (a
+   *  page's `after`); every one without a `limit`. */
+  list(tracker: Tracker, filter: IssueFilter, limit?: number, after?: string): Promise<ListPage<Issue>>;
+  /** How many issues the host counts for the filter and when the latest changed one changed: one
+   *  request however long the list. */
+  readLatest(tracker: Tracker, filter: IssueFilter): Promise<TrackedLatest>;
+  read(tracker: Tracker, number: number): Promise<IssueDetail>;
+  /** When an issue last changed, what counting it as seen takes, without its text, comments or events. */
+  readUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string }>;
+  /** What a pick field of the issue can be set to, by the names `TrackedField.value` uses. */
+  listOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
+  /** Sets one field of the issue, a pick's values as a whole; refuses one it does not have or a value
+   *  it does not take. */
+  setField(tracker: Tracker, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
+  /** Whether a new issue can be made confidential, visible to the project's members alone. */
+  readonly confidential: boolean;
+  create(tracker: Tracker, title: string, body: string, confidential: boolean): Promise<number>;
+  update(tracker: Tracker, number: number, change: TrackedChange): Promise<void>;
+  delete(tracker: Tracker, number: number): Promise<void>;
+  /** Whether a comment can be made internal, visible to the project's members alone. */
+  readonly internalNotes: boolean;
+  comment(tracker: Tracker, number: number, body: string, internal: boolean): Promise<void>;
+  /** What `uploadFile` takes on this host; undefined where it takes nothing. */
+  uploads(host: string): IssueUploads | undefined;
+  /** Uploads a file for an issue's text and answers the Markdown that shows it. */
+  uploadFile(tracker: Tracker, name: string, bytes: Buffer<ArrayBuffer>): Promise<string>;
+  /** The file name of an upload a link of an issue's text leads to, one that takes the token to
+   *  read; undefined for any other link. */
+  uploadName(host: string, source: string): string | undefined;
+  /** That upload, read with the token; undefined for any other link. */
+  readUpload(tracker: Tracker, source: string): Promise<Response | undefined>;
+}
+
+/** The repository's pull or merge requests, of its own branches alone. */
+export interface GitProviderChangeRequests {
+  /** What the host calls a request to merge a branch, and how it writes one's number. */
+  readonly kind: ChangeRequestKind;
+  /** The open one from `head`, a branch of the repository itself, not of a fork; undefined where
+   *  there is none. */
+  find(tracker: Tracker, head: string): Promise<ChangeRequest | undefined>;
+  /** Opens one from `head` into `base`, both branches of the repository. */
+  create(tracker: Tracker, request: ChangeRequestDraft): Promise<ChangeRequest>;
+  /** Approves one as the account's user, its author; refused where `kind.selfApproval` is not. */
+  approve(tracker: Tracker, number: number): Promise<void>;
+  /** Has the host merge one once nothing is outstanding. Never merges at once: with nothing left to
+   *  wait for, the host refuses it. */
+  autoMerge(tracker: Tracker, number: number, squash: boolean): Promise<void>;
+  /** As `GitProviderIssues.list`, the change requests the filter leaves. */
+  list(tracker: Tracker, filter: ChangeRequestFilter, limit?: number, after?: string): Promise<ListPage<ChangeRequestRow>>;
+  /** What the host says of the filtered list without sending it whole (`ChangeRequestsLatest`): one
+   *  request. */
+  readLatest(tracker: Tracker, filter: ChangeRequestFilter): Promise<ChangeRequestsLatest>;
+  /** All but what TET itself knows of it (`ownIssues`). */
+  read(tracker: Tracker, number: number): Promise<Omit<ChangeRequestDetail, "ownIssues">>;
+  /** As `GitProviderIssues.readUpdate`, and how its checks stand. */
+  readUpdate(tracker: Tracker, number: number): Promise<{ updatedAt: string; checks?: ChecksState }>;
+  /** As `GitProviderIssues.listOptions` and `setField`. */
+  listOptions(tracker: Tracker, number: number, fieldId: string): Promise<string[]>;
+  setField(tracker: Tracker, number: number, fieldId: string, value: TrackedFieldValue): Promise<void>;
+  /** Its title, text or state; merged it is set by `merge` alone. */
+  update(tracker: Tracker, number: number, change: TrackedChange): Promise<void>;
+  comment(tracker: Tracker, number: number, body: string): Promise<void>;
+  /** Merges one by the repository's own method, at once, or with `whenChecksPass` once its checks
+   *  passed, as `autoMerge` has the host do. */
+  merge(tracker: Tracker, number: number, whenChecksPass: boolean): Promise<void>;
+}
+
+/** What `GitProviderChangeRequests.create` opens. */
 export interface ChangeRequestDraft {
   head: string;
   base: string;
   title: string;
   body: string;
   draft: boolean;
-  /** Ignored where `changeRequest.deletesSourceBranch` is not. */
+  /** Ignored where `kind.deletesSourceBranch` is not. */
   deleteSourceBranch: boolean;
 }
 
@@ -443,7 +465,7 @@ export function fieldMethods<Target>(tracker: {
   /** What a change of a field needs of the issue. */
   readTarget: (send: GraphqlSend, path: string, number: number) => Promise<Target>;
   mutate: (send: GraphqlSend, write: Write) => Promise<unknown>;
-}): Pick<GitProvider, "listOptions" | "setField"> {
+}): Pick<GitProviderIssues, "listOptions" | "setField"> {
   const contextOf = (send: GraphqlSend, path: string, number: number): FieldContext<Target> =>
     fieldContext(send, path, number, () => tracker.readTarget(send, path, number));
   return {

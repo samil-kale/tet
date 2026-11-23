@@ -106,7 +106,7 @@ export function changeRequestTarget(
   }
   const { host, into } = found.target;
   const provider = hostProvider(deps.accounts, host);
-  return provider ? { kind: provider.changeRequest, into, branches: found.branches } : { refusal: new NoAccountError(host).message };
+  return provider ? { kind: provider.changeRequests.kind, into, branches: found.branches } : { refusal: new NoAccountError(host).message };
 }
 
 /** The checked-out branch's open one, asked of its host. */
@@ -116,7 +116,7 @@ export async function findChangeRequest(
 ): Promise<ChangeRequestFindResult> {
   try {
     const { target } = requireTarget(deps, ref);
-    const open = await onHost(deps.accounts, target, (provider, tracker) => provider.findChangeRequest(tracker, target.head));
+    const open = await onHost(deps.accounts, target, (provider, tracker) => provider.changeRequests.find(tracker, target.head));
     return { ok: true, open };
   } catch (error) {
     return failure(error);
@@ -158,7 +158,7 @@ export async function createChangeRequest(
       deps.accounts,
       target,
       async (provider, tracker) => {
-        const opened = await provider.createChangeRequest(tracker, {
+        const opened = await provider.changeRequests.create(tracker, {
           head: target.head,
           base: target.into,
           title,
@@ -190,14 +190,14 @@ export async function approveAndAutoMerge(
   const told: ChangeRequestFollowUps = {};
   if (approve) {
     try {
-      await provider.approveChangeRequest(tracker, number);
+      await provider.changeRequests.approve(tracker, number);
     } catch (error) {
       told.approveError = errorMessage(error);
     }
   }
   if (autoMerge) {
     try {
-      await provider.autoMergeChangeRequest(tracker, number, squash);
+      await provider.changeRequests.autoMerge(tracker, number, squash);
     } catch (error) {
       told.autoMergeError = errorMessage(error);
     }

@@ -92,7 +92,7 @@ export async function changeIssueSource(
  *  among those the Issues section lists until its filter is changed. */
 export async function unreadIssues(deps: Pick<TrackedDeps, "accounts" | "dataRoot" | "repositories">, projectId: string): Promise<Issue[]> {
   const { items } = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.listIssues(tracker, DEFAULT_ISSUE_FILTER),
+    provider.issues.list(tracker, DEFAULT_ISSUE_FILTER),
   );
   const seen = readSeen(deps.dataRoot, projectId, "issue");
   return items.filter((issue) => isUnread(issue, seen));
@@ -112,7 +112,7 @@ export async function markIssuesSeen(
     return;
   }
   const { updatedAt } = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.readIssueUpdate(tracker, number),
+    provider.issues.readUpdate(tracker, number),
   );
   setSeen(deps.dataRoot, projectId, "issue", number, updatedAt, false);
 }
@@ -139,12 +139,12 @@ export async function readIssuePage(
 ): Promise<ListPage<Issue> & Pick<IssueListResult, "latest" | "tracker">> {
   const repository = trackerRepository(deps, projectId);
   if (after !== undefined) {
-    return onTracker(deps.accounts, repository, (provider, tracker) => provider.listIssues(tracker, filter, limit, after));
+    return onTracker(deps.accounts, repository, (provider, tracker) => provider.issues.list(tracker, filter, limit, after));
   }
   const { page, latest, confidentialIssues } = await onTracker(deps.accounts, repository, async (provider, tracker) => ({
-    latest: await provider.readLatest(tracker, filter),
-    page: await provider.listIssues(tracker, filter, limit),
-    confidentialIssues: provider.confidentialIssues,
+    latest: await provider.issues.readLatest(tracker, filter),
+    page: await provider.issues.list(tracker, filter, limit),
+    confidentialIssues: provider.issues.confidential,
   }));
   const { provider, host, path } = await readIssueTracker(deps.accounts, repository);
   return { ...page, latest, tracker: provider === null ? undefined : { provider, url: `https://${host}/${path}`, confidentialIssues } };
@@ -153,20 +153,20 @@ export async function readIssuePage(
 /** The project's issues the filter narrows to. */
 export async function listIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<Issue[]> {
   const { items } = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.listIssues(tracker, filter),
+    provider.issues.list(tracker, filter),
   );
   return items;
 }
 
 /** What the tracker says of the filtered list without sending it. */
 export function latestIssues(deps: TrackerDeps, projectId: string, filter: IssueFilter): Promise<TrackedLatest> {
-  return onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.readLatest(tracker, filter));
+  return onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.issues.readLatest(tracker, filter));
 }
 
 /** What the filters offer. */
 export function issueFilterOptions(deps: TrackerDeps, projectId: string): Promise<Required<Omit<TrackedFilterOptions, "error">>> {
   return onTracker(deps.accounts, trackerRepository(deps, projectId), async (provider, tracker) => {
-    const [labels, people] = await Promise.all([provider.listLabels(tracker), provider.listPeople(tracker)]);
+    const [labels, people] = await Promise.all([provider.repository.listLabels(tracker), provider.repository.listPeople(tracker)]);
     return { labels, people };
   });
 }
@@ -174,10 +174,10 @@ export function issueFilterOptions(deps: TrackerDeps, projectId: string): Promis
 /** One issue with what its tab shows beside it. */
 export function readIssue(deps: TrackerDeps, projectId: string, number: number): Promise<IssueDetail> {
   return onTracker(deps.accounts, trackerRepository(deps, projectId), async (provider, tracker, viewer) => ({
-    ...(await provider.readIssue(tracker, number)),
+    ...(await provider.issues.read(tracker, number)),
     viewer,
-    uploads: provider.uploads(tracker.host),
-    internalNotes: provider.internalNotes,
+    uploads: provider.issues.uploads(tracker.host),
+    internalNotes: provider.issues.internalNotes,
   }));
 }
 
@@ -186,7 +186,7 @@ export function readIssue(deps: TrackerDeps, projectId: string, number: number):
 export async function issueImage(deps: TrackerDeps, projectId: string, source: string): Promise<string | null> {
   try {
     const response = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-      provider.readImage(tracker, source),
+      provider.repository.readImage(tracker, source),
     );
     return response ? await imageDataUrl(response, MAX_EDIT_BYTES) : null;
   } catch {
@@ -198,7 +198,7 @@ export async function issueImage(deps: TrackerDeps, projectId: string, source: s
  *  on a tracker without an account: the browser opens those. */
 export async function issueUploadName(deps: TrackerDeps, projectId: string, source: string): Promise<string | undefined> {
   const { provider, host } = await readIssueTracker(deps.accounts, trackerRepository(deps, projectId));
-  return provider === null ? undefined : PROVIDERS[provider].uploadName(host, source);
+  return provider === null ? undefined : PROVIDERS[provider].issues.uploadName(host, source);
 }
 
 /** Saves the upload a link of an issue's text leads to as `target`, renamed into place once whole.
@@ -211,7 +211,7 @@ export async function saveIssueUpload(
   onProgress: (fraction: number) => void,
 ): Promise<void> {
   const response = await onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.readUpload(tracker, source),
+    provider.issues.readUpload(tracker, source),
   );
   if (!response?.body) {
     throw new Error("The tracker sent no file");
@@ -236,34 +236,38 @@ export async function saveIssueUpload(
 /** What a pick field of the issue can be set to. */
 export function issueFieldOptions(deps: TrackerDeps, projectId: string, number: number, fieldId: string): Promise<string[]> {
   return onTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.listOptions(tracker, number, fieldId),
+    provider.issues.listOptions(tracker, number, fieldId),
   );
 }
 
 /** A new issue, answered by its number. */
 export function createIssue(deps: TrackerDeps, projectId: string, title: string, body: string, confidential: boolean): Promise<number> {
   return writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.createIssue(tracker, title, body, confidential),
+    provider.issues.create(tracker, title, body, confidential),
   );
 }
 
 export async function commentIssue(deps: TrackerDeps, projectId: string, number: number, body: string, internal: boolean): Promise<void> {
   await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.addComment(tracker, number, body, internal),
+    provider.issues.comment(tracker, number, body, internal),
   );
 }
 
 export async function editIssueComment(deps: TrackerDeps, projectId: string, id: string, body: string): Promise<void> {
-  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.editComment(tracker, id, body));
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
+    provider.repository.editComment(tracker, id, body),
+  );
 }
 
 export async function deleteIssueComment(deps: TrackerDeps, projectId: string, id: string): Promise<void> {
-  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.deleteComment(tracker, id));
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
+    provider.repository.deleteComment(tracker, id),
+  );
 }
 
 export async function updateIssue(deps: TrackerDeps, projectId: string, number: number, change: TrackedChange): Promise<void> {
   await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.updateIssue(tracker, number, change),
+    provider.issues.update(tracker, number, change),
   );
 }
 
@@ -275,7 +279,7 @@ export async function setIssueField(
   value: TrackedFieldValue,
 ): Promise<void> {
   await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.setField(tracker, number, fieldId, value),
+    provider.issues.setField(tracker, number, fieldId, value),
   );
 }
 
@@ -285,7 +289,7 @@ export async function deleteIssue(
   projectId: string,
   number: number,
 ): Promise<void> {
-  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.deleteIssue(tracker, number));
+  await writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) => provider.issues.delete(tracker, number));
   forgetSeen(deps.dataRoot, projectId, "issue", number);
   forgetLinkedSession(deps.dataRoot, projectId, "issue", number);
 }
@@ -296,8 +300,8 @@ export function uploadIssueFile(deps: TrackerDeps, projectId: string, name: stri
     return Promise.reject(new Error(`${name} is too large to upload`));
   }
   return writeOnTracker(deps.accounts, trackerRepository(deps, projectId), (provider, tracker) =>
-    provider.uploads(tracker.host)
-      ? provider.uploadFile(tracker, name, bytes)
+    provider.issues.uploads(tracker.host)
+      ? provider.issues.uploadFile(tracker, name, bytes)
       : Promise.reject(new Error(`${tracker.host} takes no upload`)),
   );
 }

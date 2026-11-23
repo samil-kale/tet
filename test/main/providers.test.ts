@@ -6,50 +6,49 @@ import { approveAndAutoMerge } from "../../src/main/change-requests/create";
 import { changeRequestMarkdown, checkoutSentence } from "../../src/main/change-requests/tracker";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
+import { github } from "../../src/main/providers/github";
 import {
-  attachmentName,
-  blockersOf as gitHubBlockersOf,
-  checkListOf,
-  reviewersOf as gitHubReviewersOf,
-  contentTypeOf,
-  github,
-  carriesAll,
   ownPullRequest,
-  issueSearch,
-  issuesVariables as gitHubIssuesVariables,
-  pullRequestSearch,
-  readsWithToken,
-  toEvents as toGitHubEvents,
-  FIELD_HANDLERS as GITHUB_FIELD_HANDLERS,
-  issueFieldOf as gitHubIssueFieldOf,
-  parentName as gitHubParentName,
-  toFields as toGitHubFields,
   toIssue as toGitHubIssue,
+  carriesAll,
+  toFields as toGitHubFields,
+  parentName as gitHubParentName,
   toIssueInput as toGitHubInput,
+  blockersOf as gitHubBlockersOf,
+  reviewersOf as gitHubReviewersOf,
+  checkListOf,
   toReviewThreads as toGitHubReviewThreads,
+  toEvents as toGitHubEvents,
+} from "../../src/main/providers/github/mapping";
+import {
+  issuesVariables as gitHubIssuesVariables,
   uploadMarkdown,
-} from "../../src/main/providers/github";
+  contentTypeOf,
+  attachmentName,
+} from "../../src/main/providers/github/issues";
+import { issueFieldOf as gitHubIssueFieldOf, FIELD_HANDLERS as GITHUB_FIELD_HANDLERS } from "../../src/main/providers/github/fields";
+import { issueSearch, pullRequestSearch } from "../../src/main/providers/github/queries";
+import { readsWithToken } from "../../src/main/providers/github/api";
+import { gitlab } from "../../src/main/providers/gitlab";
 import {
   blockersOf as gitLabBlockersOf,
-  durationText,
-  FIELD_HANDLERS as GITLAB_FIELD_HANDLERS,
-  gitlab,
-  issuesVariables,
-  jobChecksOf,
   reviewersOf as gitLabReviewersOf,
-  mergeRequestsVariables,
+  jobChecksOf,
   ownMergeRequest,
-  iterationName,
-  parentName,
   toEvents as toGitLabEvents,
-  toFields as toGitLabFields,
-  toIssue as toGitLabIssue,
-  toIssueInput,
-  toNotes as toGitLabNotes,
   toReviewThreads as toGitLabReviewThreads,
+  toNotes as toGitLabNotes,
+  toIssue as toGitLabIssue,
+  toFields as toGitLabFields,
   toTimeLogs,
-  uploadOf,
-} from "../../src/main/providers/gitlab";
+  durationText,
+  parentName,
+  iterationName,
+  toIssueInput,
+} from "../../src/main/providers/gitlab/mapping";
+import { mergeRequestsVariables, issuesVariables } from "../../src/main/providers/gitlab/queries";
+import { uploadOf } from "../../src/main/providers/gitlab/api";
+import { FIELD_HANDLERS as GITLAB_FIELD_HANDLERS } from "../../src/main/providers/gitlab/fields";
 import {
   hostProvider,
   issueMarkdown,
@@ -311,8 +310,8 @@ describe("the issues of a tracker", () => {
   it("names a GitLab upload by its file", () => {
     const secret = "0123456789abcdef0123456789abcdef";
     const host = "gitlab.example.com";
-    assert.equal(PROVIDERS.gitlab.uploadName(host, `https://${host}/g/p/uploads/${secret}/a%20b.pdf`), "a b.pdf");
-    assert.equal(PROVIDERS.gitlab.uploadName(host, `https://${host}/g/p/-/issues/3`), undefined);
+    assert.equal(PROVIDERS.gitlab.issues.uploadName(host, `https://${host}/g/p/uploads/${secret}/a%20b.pdf`), "a b.pdf");
+    assert.equal(PROVIDERS.gitlab.issues.uploadName(host, `https://${host}/g/p/-/issues/3`), undefined);
   });
 
   it("finds a GitHub attachment on the account's host alone", () => {
@@ -756,15 +755,15 @@ describe("the issues of a tracker", () => {
   });
 
   it("offers an upload where the host takes one from a token, and what it takes", () => {
-    assert.ok(github.uploads("github.com")?.extensions?.includes("png"));
-    assert.ok(github.uploads("tenant.ghe.com")?.extensions?.includes("mp4"));
-    assert.equal(github.uploads("github.example.com"), undefined, "an Enterprise Server has none");
-    assert.deepEqual(gitlab.uploads("gitlab.example.com"), {}, "any file");
+    assert.ok(github.issues.uploads("github.com")?.extensions?.includes("png"));
+    assert.ok(github.issues.uploads("tenant.ghe.com")?.extensions?.includes("mp4"));
+    assert.equal(github.issues.uploads("github.example.com"), undefined, "an Enterprise Server has none");
+    assert.deepEqual(gitlab.issues.uploads("gitlab.example.com"), {}, "any file");
   });
 
   it("refuses what GitHub takes no upload of, without asking it", async () => {
     const tracker = { host: "github.com", token: "t", path: "o/r" };
-    await assert.rejects(() => github.uploadFile(tracker, "a.pdf", Buffer.from("x")), /only images and videos/);
+    await assert.rejects(() => github.issues.uploadFile(tracker, "a.pdf", Buffer.from("x")), /only images and videos/);
   });
 
   it("reads what a GraphQL answer refused, under its status of 200", () => {
@@ -924,7 +923,7 @@ describe("the issues of a tracker", () => {
     it("takes a url for the source as its path", async (t) => {
       const root = tempDir("tet-issues-");
       const asked: string[] = [];
-      t.mock.method(PROVIDERS.github, "listLabels", async ({ path }: Tracker) => {
+      t.mock.method(PROVIDERS.github.repository, "listLabels", async ({ path }: Tracker) => {
         asked.push(path);
         return [];
       });
@@ -1044,14 +1043,14 @@ describe("a pull or merge request", () => {
   });
 
   it("is called by each host's own word and number, and approved by its author where the host lets one", () => {
-    assert.deepEqual(github.changeRequest, {
+    assert.deepEqual(github.changeRequests.kind, {
       noun: "pull request",
       prefix: "#",
       checks: "checks",
       selfApproval: false,
       deletesSourceBranch: false,
     });
-    assert.deepEqual(gitlab.changeRequest, {
+    assert.deepEqual(gitlab.changeRequests.kind, {
       noun: "merge request",
       prefix: "!",
       checks: "pipeline",
@@ -1065,15 +1064,17 @@ describe("a pull or merge request", () => {
     const calls: string[] = [];
     const providerOf = (approveFails: boolean): GitProvider =>
       ({
-        approveChangeRequest: async (on: Tracker, number: number) => {
-          calls.push(`approve ${on.token} ${number}`);
-          if (approveFails) {
-            throw new ApiError(401, "401 Unauthorized");
-          }
-        },
-        autoMergeChangeRequest: async (on: Tracker, number: number) => {
-          calls.push(`auto-merge ${on.token} ${number}`);
-          throw new Error("The merge failed");
+        changeRequests: {
+          approve: async (on: Tracker, number: number) => {
+            calls.push(`approve ${on.token} ${number}`);
+            if (approveFails) {
+              throw new ApiError(401, "401 Unauthorized");
+            }
+          },
+          autoMerge: async (on: Tracker, number: number) => {
+            calls.push(`auto-merge ${on.token} ${number}`);
+            throw new Error("The merge failed");
+          },
         },
       }) as unknown as GitProvider;
     assert.deepEqual(await approveAndAutoMerge(providerOf(true), tracker, 42, { approve: true, autoMerge: true, squash: false }), {
@@ -1091,7 +1092,7 @@ describe("a pull or merge request", () => {
     const reached = await onHost(
       accounts,
       { host: "gitlab.example.com", path: "group/app" },
-      async (provider, tracker, user) => `${provider.changeRequest.noun} ${tracker.host} ${tracker.path} ${tracker.token} ${user}`,
+      async (provider, tracker, user) => `${provider.changeRequests.kind.noun} ${tracker.host} ${tracker.path} ${tracker.token} ${user}`,
     );
     assert.equal(reached, "merge request gitlab.example.com group/app token-b b");
     assert.equal(hostProvider(accounts, "gitlab.example.com"), gitlab);
@@ -1303,7 +1304,7 @@ describe("a pull or merge request", () => {
         base: "main",
         commits: 1,
       },
-      kind: github.changeRequest,
+      kind: github.changeRequests.kind,
       reviewThreads: [
         {
           id: "t1",
@@ -1457,9 +1458,9 @@ describe("the accounts kept for the providers", () => {
   });
 
   it("name an account's token for the host's own CLI", () => {
-    assert.deepEqual(gitlab.tokenEnv("gitlab.example.com", "t"), { GITLAB_TOKEN: "t", GITLAB_HOST: "https://gitlab.example.com" });
-    assert.deepEqual(github.tokenEnv("github.com", "t"), { GITHUB_TOKEN: "t" });
-    assert.deepEqual(github.tokenEnv("ghe.example.com", "t"), { GITHUB_ENTERPRISE_TOKEN: "t", GH_HOST: "ghe.example.com" });
+    assert.deepEqual(gitlab.account.tokenEnv("gitlab.example.com", "t"), { GITLAB_TOKEN: "t", GITLAB_HOST: "https://gitlab.example.com" });
+    assert.deepEqual(github.account.tokenEnv("github.com", "t"), { GITHUB_TOKEN: "t" });
+    assert.deepEqual(github.account.tokenEnv("ghe.example.com", "t"), { GITHUB_ENTERPRISE_TOKEN: "t", GH_HOST: "ghe.example.com" });
   });
 });
 

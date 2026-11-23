@@ -211,7 +211,7 @@ export async function setIssueSource(
       throw new Error(`Not on this repository's host, ${host}: ${typed}`);
     }
   }
-  await onTracker(accounts, repository, (provider, tracker) => provider.listLabels(tracker), { source: sourcePath });
+  await onTracker(accounts, repository, (provider, tracker) => provider.repository.listLabels(tracker), { source: sourcePath });
   await writeIssueSource(repository.at.path, sourcePath);
   return sourcePath;
 }

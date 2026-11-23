@@ -134,7 +134,7 @@ export function registerProjectsIpc({
       .replace(/^[a-z]+:\/\//i, "")
       .replace(/\/.*$/, "");
     try {
-      const user = await PROVIDERS[provider].validate(bare, token);
+      const user = await PROVIDERS[provider].account.validate(bare, token);
       return { ok: true, account: await accounts.add(provider, bare, user, token) };
     } catch (error) {
       return failure(error);
@@ -164,7 +164,7 @@ export function registerProjectsIpc({
       return { error: "The account's token could not be read — add the account again" };
     }
     try {
-      const repos = await PROVIDERS[account.provider].listRepositories(account.host, token);
+      const repos = await PROVIDERS[account.provider].account.listRepositories(account.host, token);
       repoCache.set(accountId, repos);
       return { repos };
     } catch (error) {

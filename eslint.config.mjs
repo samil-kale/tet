@@ -175,6 +175,17 @@ const propertiesWithout = (...allowed) => ["error", ...SRC_PROPERTIES.filter((en
 const upInto = (process) => `^(\\.{1,2}/)+((src/)?${process}/|(?!(src/)?${process}/))`;
 
 /**
+ * `upInto` from a file `depth` folders below the process's own (1 in an area's folder, 2 in a
+ * folder of it): exactly that many `../` reach the process's folder, fewer stay within the area —
+ * `./issues` beside a provider's own files is no area — and the detour past the process's name is
+ * the same from anywhere.
+ */
+const upFrom = (process, depth) => `^((\\.\\./){${depth}}(?!\\.\\./)|(\\.{1,2}/)+(src/)?${process}/)`;
+
+/** The deepest an area's folder nests: its files at depth 1, its folders' at 2, and deeper alike. */
+const AREA_DEPTHS = [1, 2, 3];
+
+/**
  * Shared code reaches an agent through the registry, never its own folder (AGENTS.md); inside
  * agents/ that folder lies beside the importer (`./claude`), or beside its own (`../codex`).
  */
@@ -253,8 +264,9 @@ function assertLayered(process, layers) {
 assertLayered("main", MAIN_LAYERS);
 assertLayered("renderer", RENDERER_LAYERS);
 
-/** An area's process border and every area of its process it may not reach. */
-function layerPatterns(process, layers, area) {
+/** An area's process border and every area of its process it may not reach, from a file `depth`
+ *  folders below the process's own (`upFrom`), or a flat area's own file without one. */
+function layerPatterns(process, layers, area, depth) {
   const index = layers.findIndex((layer) => area in layer);
   const layer = layers[index];
   const beside = layer[area];
@@ -268,25 +280,30 @@ function layerPatterns(process, layers, area) {
       : [
           {
             // A flat area is the same file with its extension written out (`../window.js`).
-            regex: `${upInto(process)}(${barred.join("|")})(\\.[jt]sx?)?(/|$)`,
+            regex: `${depth === undefined ? upInto(process) : upFrom(process, depth)}(${barred.join("|")})(\\.[jt]sx?)?(/|$)`,
             message: `${area} may not import this area: only its own layer's allowed ones and those below (AGENTS.md, "Where things live").`,
           },
         ]),
   ];
 }
 
-/** One config per area of the process: its layer patterns and `extra`. */
+/** One config per area of the process, and per depth of a folder area's files (`AREA_DEPTHS`): its
+ *  layer patterns and `extra`. */
 function layerConfigs(process, layers, extra = () => []) {
+  const config = (files, area, depth) => ({
+    files: [files],
+    rules: {
+      "no-restricted-imports": ["error", { patterns: [...layerPatterns(process, layers, area, depth), ...extra(area)] }],
+    },
+  });
   return layers.flatMap((layer) =>
-    Object.keys(layer).map((area) => {
-      const folder = fs.existsSync(new URL(`./src/${process}/${area}`, import.meta.url));
-      return {
-        files: [folder ? `src/${process}/${area}/**` : `src/${process}/${area}.{ts,tsx}`],
-        rules: {
-          "no-restricted-imports": ["error", { patterns: [...layerPatterns(process, layers, area), ...extra(area)] }],
-        },
-      };
-    }),
+    Object.keys(layer).flatMap((area) =>
+      fs.existsSync(new URL(`./src/${process}/${area}`, import.meta.url))
+        ? AREA_DEPTHS.map((depth) =>
+            config(`src/${process}/${area}/${"*/".repeat(depth - 1)}${depth === AREA_DEPTHS.length ? "**/" : ""}*.{ts,tsx}`, area, depth),
+          )
+        : [config(`src/${process}/${area}.{ts,tsx}`, area, undefined)],
+    ),
   );
 }
 
@@ -363,7 +380,7 @@ export default tseslint.config(
   // The registry is the one file naming the agents' folders.
   {
     files: ["src/main/agents/index.ts"],
-    rules: { "no-restricted-imports": ["error", { patterns: [...layerPatterns("main", MAIN_LAYERS, "agents"), NODE_HTTPS] }] },
+    rules: { "no-restricted-imports": ["error", { patterns: [...layerPatterns("main", MAIN_LAYERS, "agents", 1), NODE_HTTPS] }] },
   },
   ...layerConfigs("renderer", RENDERER_LAYERS, (area) => [NODE_BUILTIN, ...(area === "lanes" ? [LANE_FOLDER] : [])]),
   {

@@ -41,6 +41,13 @@ const IMPORTS: Probe[] = [
   ["src/main/projects.ts", 'import "./ipc";', "no-restricted-imports"],
   ["src/main/tracked.ts", 'import "./change-requests/tracker";', null],
   ["src/main/issues.ts", 'import "./tracked";', "no-restricted-imports"],
+  // Within an area's folder a file named as an area is the area's own, at any depth; leaving it counts.
+  ["src/main/providers/github/x.ts", 'import "./issues";', null],
+  ["src/main/providers/github/x.ts", 'import "../issues";', null],
+  ["src/main/providers/x.ts", 'import "./issues";', null],
+  ["src/main/providers/github/x.ts", 'import "../../issues";', "no-restricted-imports"],
+  ["src/main/providers/x.ts", 'import "../issues";', "no-restricted-imports"],
+  ["src/main/providers/github/x.ts", 'import "../../../main/issues";', "no-restricted-imports"],
   // A detour through the process's own folder reaches the same area.
   ["src/main/ctl/x.ts", 'import "../../main/terminals/pty";', null],
   ["src/main/terminals/x.ts", 'import "../../main/ctl/ctl-verb";', "no-restricted-imports"],

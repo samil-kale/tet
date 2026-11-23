@@ -17,7 +17,7 @@ function storedHas(stored: Record<string, string>): (name: string) => boolean {
 
 /**
  * What a host tab gets of its project's account (TerminalEnv.account), in two sets: the variables
- * the host's CLI reads (GitProvider.tokenEnv), and git's login for that host alone, as TET's own
+ * the host's CLI reads (GitProviderAccount.tokenEnv), and git's login for that host alone, as TET's own
  * git runs have it (git.ts's loginEnv): the user's credential helper answers first, Git Credential
  * Manager told not to open a window of its own there (it reads `credential.<url>.interactive`), then
  * askpass with the account's token, which git stores in the helper once it worked. A set one of whose
@@ -28,7 +28,7 @@ export function accountEnv(account: TabAccount, askpass: string, stored: Record<
   const inStored = storedHas(stored);
   return wholeSets(
     [
-      account.provider.tokenEnv(account.host, account.token),
+      account.provider.account.tokenEnv(account.host, account.token),
       {
         GIT_CONFIG_COUNT: "1",
         GIT_CONFIG_KEY_0: `credential.${origin}.interactive`,
@@ -44,6 +44,6 @@ export function accountEnv(account: TabAccount, askpass: string, stored: Record<
  *  host CLI's variables of the account, by the same rule as a host tab's, the machine aside — a
  *  sandbox gets none of its variables. */
 export function sandboxTetValues(account: TabAccount | undefined, stored: Record<string, string>): Record<string, string> {
-  const fromAccount = account ? wholeSets([account.provider.tokenEnv(account.host, account.token)], storedHas(stored)) : {};
+  const fromAccount = account ? wholeSets([account.provider.account.tokenEnv(account.host, account.token)], storedHas(stored)) : {};
   return { ...fromAccount, ...stored };
 }

@@ -26,8 +26,8 @@ fields, uploads what the tracker takes from a token (`uploads`), and makes and d
 else until asked; and for the change requests lane and its tab, the same view, which writes a pull or merge
 request's title, text, comments, state and fields, approves and merges it, and nothing else until asked. A field is whatever the tracker lists for the issue (`TrackedField`: labels, assignees,
 milestone, and where the tracker has them GitLab's status, parent, weight, iteration, dates, health, time,
-confidential and GitHub's type, parent and issue fields), read by `readIssue` and set by `listOptions` and
-`setField`: a new one is an entry of a provider, never a view.
+confidential and GitHub's type, parent and issue fields), read by `GitProviderIssues.read` and set by its
+`listOptions` and `setField`: a new one is an entry of a provider, never a view.
 
 ## Do not restart the app yourself
 

@@ -305,7 +305,7 @@ export interface IssueListResult extends TrackedListResult<Issue, TrackedLatest>
     provider: ProviderId;
     /** The repository's address on its host. */
     url: string;
-    /** Whether a new issue can be made confidential (`GitProvider.confidentialIssues`). */
+    /** Whether a new issue can be made confidential (`GitProviderIssues.confidential`). */
     confidentialIssues: boolean;
   };
 }
@@ -442,7 +442,7 @@ export interface TrackedDetail extends TrackedRow {
   viewer?: string;
   /** What its tracker takes for its text; absent where it takes no file. */
   uploads?: IssueUploads;
-  /** Whether a comment can be made internal (`GitProvider.internalNotes`). */
+  /** Whether a comment can be made internal (`GitProviderIssues.internalNotes`). */
   internalNotes?: boolean;
 }
 

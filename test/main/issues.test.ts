@@ -46,7 +46,7 @@ describe("the issues of a project", () => {
 
   it("are unread once the tracker changed an open one after its tab showed it", async (t) => {
     const asked: unknown[] = [];
-    t.mock.method(PROVIDERS.github, "listIssues", async (_tracker: Tracker, filter: unknown) => {
+    t.mock.method(PROVIDERS.github.issues, "list", async (_tracker: Tracker, filter: unknown) => {
       asked.push(filter);
       return {
         items: [
@@ -74,7 +74,7 @@ describe("the issues of a project", () => {
   });
 
   it("forget what their tabs showed once their source changed, and not before", async (t) => {
-    t.mock.method(PROVIDERS.github, "listLabels", async () => []);
+    t.mock.method(PROVIDERS.github.repository, "listLabels", async () => []);
     const dataRoot = tempDir("tet-issues-data-");
     const root = tempDir("tet-issues-");
     const deps = depsAt(dataRoot, root);

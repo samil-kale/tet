@@ -66,7 +66,7 @@ export class SbxLocalStore {
 
   constructor(
     dataRoot: string,
-    /** TET's variables for a project: EnvStore.values over its host's account (GitProvider.tokenEnv). */
+    /** TET's variables for a project: EnvStore.values over its host's account (GitProviderAccount.tokenEnv). */
     private readonly tetValues: (projectId: string) => Promise<Record<string, string>>,
   ) {
     this.file = path.join(dataRoot, "sbx-local.json");
