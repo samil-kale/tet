@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.5 (2026-11-23)
+
+- **Fixes.** Inline rename and edit fields in rows look as before again, with their row fill and fixed input styles.
+
 ## 0.27.4 (2026-11-23)
 
 - **Fixes.** The issue filter's trigger shows a focus outline when reached by keyboard, and menu
