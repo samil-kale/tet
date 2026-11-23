@@ -33,7 +33,7 @@ export class SessionManagerRegistry {
 
   constructor(
     private readonly dataRoot: string,
-    private readonly settings: SettingsStore,
+    private readonly settings: Pick<SettingsStore, "get">,
     private readonly sbxLocal: SbxLocalStore,
     private readonly terminalEnv: TerminalEnv,
     private readonly callbacks: SessionRegistryCallbacks,

@@ -31,7 +31,7 @@ export class HostSetups {
 
   constructor(
     private readonly dataRoot: string,
-    private readonly settings: SettingsStore,
+    private readonly settings: Pick<SettingsStore, "get">,
     private readonly onNotice: (severity: NoticeSeverity, message: string) => void,
   ) {}
 

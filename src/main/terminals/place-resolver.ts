@@ -54,7 +54,7 @@ export class PlaceResolver {
 
   constructor(
     private readonly at: ResolvedRef,
-    private readonly settings: SettingsStore,
+    private readonly settings: Pick<SettingsStore, "get">,
     private readonly sbxLocal: SbxLocalStore,
     private readonly target: PlaceTarget,
     private readonly reads: PlaceReads = SBX_READS,

@@ -98,7 +98,7 @@ export class TabRuns {
 
   constructor(
     private readonly at: ResolvedRef,
-    private readonly settings: SettingsStore,
+    private readonly settings: Pick<SettingsStore, "get">,
     private readonly terminalEnv: TerminalEnv,
     private readonly callbacks: RunCallbacks,
     private readonly target: RunsTarget,

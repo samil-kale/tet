@@ -116,7 +116,7 @@ export class TabSessionManager {
      *  (sbx-local.ts), as it takes the project's tet.json (tet-json.ts's configRoot). */
     readonly at: ResolvedRef,
     private readonly dataRoot: string,
-    private readonly settings: SettingsStore,
+    private readonly settings: Pick<SettingsStore, "get">,
     private readonly sbxLocal: SbxLocalStore,
     private readonly hostSetups: HostSetups,
     /** The project's links of issues and change requests and sessions, the registry's, shared by its
