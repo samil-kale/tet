@@ -1721,6 +1721,7 @@ button.change-request-check:hover {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+  line-height: 20px;
 }
 
 .issue-event-new {
