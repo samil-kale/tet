@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.6 (2026-11-23)
+
+- **Clickable notices.** A notice about a tab, an issue or a change request opens it on click.
+- **Fixes.** Issue event text and dots line up, and the window shows once its page has drawn.
+
 ## 0.27.5 (2026-11-23)
 
 - **Fixes.** Inline rename and edit fields in rows look as before again, with their row fill and fixed input styles.
