@@ -5,7 +5,7 @@ import type { Project } from "../../shared/types/project";
 import { hasSandbox, type AgentDefinition } from "../agents/agent";
 import { HOST_TAB, SANDBOX_TAB, type TabSide } from "../terminals/tab-side";
 import { readInside, relativeInside } from "../util/path-inside";
-import type { InspectedTab } from "../terminals/session-manager";
+import type { InspectedTab } from "../../shared/types/terminals";
 import { ControlError } from "./ctl-verb";
 
 /**

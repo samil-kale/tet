@@ -1,5 +1,4 @@
 import * as path from "node:path";
-import type { ControlVerbName } from "../../shared/ctl";
 import { ISSUE_STATE_FILTERS, type IssueFilter } from "../../shared/types/providers";
 import { notOpenMessage } from "../store/resolved-ref";
 import { trackedVerbs } from "./ctl-tracked-verbs";
@@ -13,7 +12,7 @@ import {
   text,
   withoutAvatars,
   type ControlDeps,
-  type Handler,
+  type HandlersOf,
   type OwnedTab,
   type RefFrom,
 } from "./ctl-verb";
@@ -36,11 +35,7 @@ function issueFilter(args: Record<string, unknown>): IssueFilter {
  * is the project's, so the verbs asking it act on the project of the repository or worktree `refFrom`
  * finds (resolveCallerRef), whichever of them that is.
  */
-export function issueVerbs(
-  deps: ControlDeps,
-  refFrom: RefFrom,
-  ownedTab: OwnedTab,
-): Record<Extract<ControlVerbName, `issues-${string}`>, Handler> {
+export function issueVerbs(deps: ControlDeps, refFrom: RefFrom, ownedTab: OwnedTab): HandlersOf<"issues-"> {
   const shared = trackedVerbs("issue", deps, refFrom, ownedTab);
   const issueNumber = (args: Record<string, unknown>): number => numberArg(args, "issue");
 

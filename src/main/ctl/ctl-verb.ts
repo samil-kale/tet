@@ -1,5 +1,13 @@
 import { errorMessage } from "../../shared/errors";
-import type { ControlErrorCode, ControlEvent, ControlRequest, HookEvent } from "../../shared/ctl";
+import type {
+  ControlErrorCode,
+  ControlEvent,
+  ControlRequest,
+  ControlResults,
+  ControlVerbName,
+  HELP_VERB,
+  HookEvent,
+} from "../../shared/ctl";
 import { projectRef } from "../../shared/types/project";
 import type { AgentId, AskModelsResult } from "../../shared/types/agents";
 import type { EditorListing, EditorReport, NoticeMark, NoticeReport, NoticeSeverity } from "../../shared/types/app";
@@ -24,10 +32,11 @@ import type {
 import type { ActionResult } from "../../shared/types/action";
 import type { HandoverResult, TrackedSession, TrackedLinkResult, TabDescriptor, TabRef } from "../../shared/types/terminals";
 import type { AgentDefinition } from "../agents/agent";
-import type { IssueTrackerInfo } from "../providers/tracker";
+import type { IssueTrackerInfo } from "../../shared/types/providers";
 import type { ListPage } from "../providers/provider";
 import type { SbxAccess } from "../sbx/sbx-access";
-import type { HookOutcome, InspectedTab } from "../terminals/session-manager";
+import type { HookOutcome } from "../terminals/session-manager";
+import type { InspectedTab } from "../../shared/types/terminals";
 import type { CallerSide } from "./caller-side";
 import type { EnvStore } from "../store/environment";
 import type { EnvRequests } from "./env-requests";
@@ -49,22 +58,29 @@ export class ControlError extends Error {
 
 /** `after` runs once the response reached the CLI: a verb ending the caller's process must reply
  *  first, or the CLI dies with an empty stdout. */
-export interface Answer {
-  result: unknown;
+export interface Answer<R = unknown> {
+  result: R;
   after?: () => void;
 }
 
 /** The request's caller, and the side its tab runs on (CallerSide). */
 export type Caller = ControlRequest["caller"] & { side: CallerSide };
 
-export type Handler = (
+export type Handler<R = unknown> = (
   args: Record<string, unknown>,
   caller: Caller,
   /** See ControlRequest.at. */
   at: number | undefined,
   /** Aborted once the CLI is gone (Ctrl+C) before its answer: nothing waits for it any more. */
   gone: AbortSignal,
-) => Promise<Answer> | Answer;
+) => Promise<Answer<R>> | Answer<R>;
+
+/** Every verb's handler but `help`, which the CLI answers itself, each held to its answer
+ *  (`ControlResults`). */
+export type Handlers = { [V in Exclude<ControlVerbName, typeof HELP_VERB>]: Handler<ControlResults[V]> };
+
+/** The handlers of the verbs whose names start with `prefix`, for the verb files beside this one. */
+export type HandlersOf<Prefix extends string> = Pick<Handlers, Extract<keyof Handlers, `${Prefix}${string}`>>;
 
 export function text(args: Record<string, unknown>, name: string, what: string): string {
   const value = args[name];
@@ -152,8 +168,9 @@ export function labelsArg(args: Record<string, unknown>): string[] {
 
 /** An issue or change request as the CLI answers it: the pictures of the people it names belong to the
  *  section. */
-export function withoutAvatars<T extends object>(item: T): Record<string, unknown> {
-  return Object.fromEntries(Object.entries(item).filter(([key]) => key !== "avatars"));
+export function withoutAvatars<T extends object>(item: T): Omit<T, "avatars"> {
+  // Its own entries but one: what Omit says of it.
+  return Object.fromEntries(Object.entries(item).filter(([key]) => key !== "avatars")) as Omit<T, "avatars">;
 }
 
 /** What an issue's tab and a change request's do alike on its host (tracked.ts's `trackedOps`); each

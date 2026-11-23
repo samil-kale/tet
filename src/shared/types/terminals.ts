@@ -96,3 +96,12 @@ export interface TrackedSessionsResult {
 export function isWorking(tab: TabDescriptor): boolean {
   return tab.inTurn === true && tab.waitingAt === undefined;
 }
+
+/** A `tabs-list` entry: the window's descriptor plus what only the session manager knows. */
+export interface InspectedTab extends TabDescriptor {
+  /** The session this tab's hooks named, claimed or not. */
+  reportedSessionId?: string;
+  sandbox?: string;
+  /** Opened from a sandbox, so it runs there or not at all. */
+  sandboxOnly?: true;
+}

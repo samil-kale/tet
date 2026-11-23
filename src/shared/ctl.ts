@@ -1,9 +1,27 @@
 import { SBX_SKILLS_KINDS } from "./sbx-rules";
-import { NOTICE_SEVERITIES } from "./types/app";
-import { EXPLORER_SORT_ORDERS } from "./types/files";
-import { CHANGE_REQUEST_STATE_FILTERS, ISSUE_STATE_FILTERS, ISSUE_STATES } from "./types/providers";
-import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "./types/settings";
-import { TERMINAL_STATUSES } from "./types/terminals";
+import type { ThemeKind } from "./themes";
+import type { AgentId } from "./types/agents";
+import { NOTICE_SEVERITIES, type EditorListing, type EditorReport, type NoticeReport } from "./types/app";
+import type { EnvVarInfo } from "./types/environment";
+import { EXPLORER_SORT_ORDERS, type ExplorerListing } from "./types/files";
+import type { RepositoryState } from "./types/git";
+import type { Project } from "./types/project";
+import {
+  CHANGE_REQUEST_STATE_FILTERS,
+  ISSUE_STATE_FILTERS,
+  ISSUE_STATES,
+  type ChangeRequestRow,
+  type ChangeRequestsLatest,
+  type ChecksState,
+  type Issue,
+  type IssueTrackerInfo,
+  type TrackedDetail,
+  type TrackedFieldValue,
+  type TrackedLatest,
+} from "./types/providers";
+import type { SbxProblems, SbxProjectSettings, SbxSkillsSettings, SbxStatus } from "./types/sbx";
+import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS, type AppSettings } from "./types/settings";
+import { TERMINAL_STATUSES, type InspectedTab, type TabDescriptor, type TrackedSession } from "./types/terminals";
 
 /**
  * The control channel's wire contract, shared by `src/main/ctl/ctl-server.ts` and
@@ -1022,6 +1040,139 @@ export const CONTROL_VERBS: readonly ControlVerb[] = VERBS;
 export type ControlVerbName = (typeof VERBS)[number]["verb"];
 
 export const HELP_VERB = "help";
+
+/** `T`, refused unless it holds every verb but `help`, and nothing else. */
+type EveryVerb<T extends Record<Exclude<ControlVerbName, typeof HELP_VERB>, unknown> & Record<Exclude<keyof T, ControlVerbName>, never>> =
+  T;
+
+/** A settings verb's answer: whether the change waits for a restart to show. */
+interface SettingSaved {
+  saved: true;
+  restartRequired: boolean;
+}
+
+/** An SBX Settings verb's answer, beside what of it this machine could not apply. */
+interface SbxSaved extends SettingSaved {
+  notApplied?: SbxProblems;
+}
+
+/** A session linked to an issue or change request, as `issues-session` and `change-requests-session`
+ *  answer it: its repository or worktree by name. */
+type ControlTrackedSession = Omit<TrackedSession, "ref"> | null;
+
+/**
+ * What each verb answers, as `ControlResponse.result`: the JSON an agent reads off `tet-ctl`, held
+ * by the server's handlers (ctl-verb.ts's `Handlers`), so an answer that changes its shape does not
+ * compile until it is changed here too. `help` is the CLI's own.
+ */
+export type ControlResults = EveryVerb<{
+  version: { version: string; pid: number };
+  "themes-list": { id: string; label: string; kind: ThemeKind }[];
+  "keybinding-presets-list": { id: string; label: string }[];
+  "agents-list": { id: AgentId; name: string; installed: boolean }[];
+  "settings-get": AppSettings;
+  "settings-set-theme": SettingSaved;
+  "settings-set-color-scheme": SettingSaved;
+  "settings-set-background-gradient": SettingSaved;
+  "settings-set-prompt": SettingSaved;
+  "settings-set-keybindings": SettingSaved;
+  "settings-set-notification": SettingSaved;
+  "settings-set-explorer": SettingSaved;
+  "settings-set-git": SettingSaved;
+  "settings-set-commit-suggesters": SettingSaved;
+  "projects-list": Project[];
+  "repository-get": RepositoryState;
+  "projects-add": Project;
+  "projects-remove": { removed: string };
+  "env-request": { cancelled: true } | { saved: string[]; restartRequired: boolean };
+  "env-list": EnvVarInfo[];
+  "env-remove": { removed: string };
+  "tabs-list": InspectedTab[];
+  "tabs-start": { started: string };
+  "tabs-restart": { restarted: string };
+  "tabs-wait": InspectedTab;
+  "tabs-keys": { pressed: string };
+  "tabs-text": { typed: string };
+  "tabs-output": { output: string };
+  "events-tail": ControlEvent[];
+  "editor-open": { opened: string; keep: boolean };
+  "editor-get": (EditorReport & { content: string | undefined }) | null;
+  "editor-list": EditorListing[];
+  "explorer-list": ExplorerListing;
+  "notices-list": NoticeReport[];
+  "tabs-create": TabDescriptor;
+  "tabs-hand-over": TabDescriptor;
+  "commands-list": { name: string | undefined; command: string; cwd: string | undefined; os: string | undefined }[];
+  "tabs-run-command": TabDescriptor;
+  "tabs-close": { closed: string };
+  "tabs-rename": { renamed: string };
+  "app-restart": { restarting: true };
+  notify: { notified: true };
+  hook: { stdout: string };
+  "sbx-accounts": { accounts: string[]; account?: string; signedIn: boolean };
+  "sbx-sign-in": { notKept?: string; signedIn: boolean; account: string };
+  "sbx-get": {
+    status: SbxStatus;
+    settings: SbxProjectSettings;
+    stored: { tet: string[]; environment: string[]; skills: SbxSkillsSettings };
+    problems: SbxProblems;
+  };
+  "sbx-set-enabled": SbxSaved;
+  "sbx-set-ports": SbxSaved;
+  "sbx-set-paths": SbxSaved;
+  "sbx-set-hosts": SbxSaved;
+  "sbx-set-environment": SbxSaved;
+  /** With `--auth`, which of the servers wanting one were signed in, and why the others were not. */
+  "sbx-set-mcp": SbxSaved & { signedIn?: string[]; notSignedIn?: Record<string, string> };
+  "sbx-set-skills": SbxSaved;
+  "sbx-set-skills-folder": SbxSaved;
+  "worktree-add": { projectId: string; worktree: string | undefined; branch: string; path: string };
+  "worktree-delete": { deleted: string };
+  "worktree-agent-merge":
+    { status: string; path: string; files: string[]; next: string } | { status: string; base: string; branch: string };
+  "issues-read": Omit<TrackedDetail, "avatars">;
+  "issues-mark-seen": { seen: number | "all" };
+  "issues-field-options": { options: string[] };
+  "issues-set-field": { set: string; value: TrackedFieldValue };
+  "issues-update": { updated: number };
+  "issues-edit-comment": { edited: string };
+  "issues-delete-comment": { deleted: string };
+  "issues-open": { opened: number; keep: boolean };
+  "issues-send-to-agent": TabDescriptor;
+  "issues-link-session": { linked: number; tabId: string; movedFrom: number | undefined; replacedSession: true | undefined };
+  "issues-unlink-session": { unlinked: number; tabId: string };
+  "issues-session": ControlTrackedSession;
+  "issues-set-source": { source: string | null };
+  "issues-get-source": IssueTrackerInfo;
+  "issues-unread": Pick<Issue, "number" | "title" | "url" | "updatedAt">[];
+  "issues-list": Omit<Issue, "avatars">[];
+  "issues-latest": TrackedLatest;
+  "issues-filter-options": { labels: string[]; people: string[] };
+  "issues-image": { dataUrl: string | null };
+  "issues-create": { created: number };
+  "issues-delete": { deleted: number };
+  "issues-comment": { commented: number; internal: boolean };
+  "issues-upload": { markdown: string };
+  "change-requests-read": Omit<TrackedDetail, "avatars">;
+  "change-requests-mark-seen": { seen: number | "all" };
+  "change-requests-field-options": { options: string[] };
+  "change-requests-set-field": { set: string; value: TrackedFieldValue };
+  "change-requests-update": { updated: number };
+  "change-requests-edit-comment": { edited: string };
+  "change-requests-delete-comment": { deleted: string };
+  "change-requests-open": { opened: number; keep: boolean };
+  "change-requests-send-to-agent": TabDescriptor;
+  "change-requests-link-session": { linked: number; tabId: string; movedFrom: number | undefined; replacedSession: true | undefined };
+  "change-requests-unlink-session": { unlinked: number; tabId: string };
+  "change-requests-session": ControlTrackedSession;
+  "change-requests-list": Omit<ChangeRequestRow, "avatars">[];
+  "change-requests-latest": ChangeRequestsLatest;
+  "change-requests-filter-options": { labels: string[]; people: string[] };
+  "change-requests-unread": (Pick<ChangeRequestRow, "number" | "title" | "url" | "updatedAt"> & { checks: ChecksState | undefined })[];
+  "change-requests-comment": { commented: number };
+  "change-requests-approve": { approved: number };
+  "change-requests-merge": { autoMerge: number } | { merged: number };
+}>;
 
 /** `tet-ctl`'s exit codes, for an agent to branch on. */
 export const EXIT_CODES = {

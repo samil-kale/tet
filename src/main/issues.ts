@@ -21,8 +21,8 @@ import {
   writeOnTracker,
   type TrackerAccounts,
   type TrackerRepository,
-  type IssueTrackerInfo,
 } from "./providers/tracker";
+import type { IssueTrackerInfo } from "../shared/types/providers";
 import { PROVIDERS } from "./providers/index";
 import type { ListPage } from "./providers/provider";
 import { forgetAllSessionLinks, forgetLinkedSession } from "./store/session-links";

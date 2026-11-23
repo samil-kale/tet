@@ -1,6 +1,6 @@
 import { errorMessage } from "../../shared/errors";
 import type { RepositoryState } from "../../shared/types/git";
-import type { IssueDetail, TrackedDetail, TrackedField, ProviderAccount, ProviderId } from "../../shared/types/providers";
+import type { IssueDetail, IssueTrackerInfo, ProviderAccount, TrackedDetail, TrackedField } from "../../shared/types/providers";
 import { isIssueSource, readIssueSource, writeIssueSource } from "../store/tet-json";
 import type { AccountStore } from "./accounts";
 import { PROVIDERS } from "./index";
@@ -214,19 +214,6 @@ export async function setIssueSource(
   await onTracker(accounts, repository, (provider, tracker) => provider.repository.listLabels(tracker), { source: sourcePath });
   await writeIssueSource(repository.at.path, sourcePath);
   return sourcePath;
-}
-
-/** Where a repository's issues are read from (`readIssueTracker`). */
-export interface IssueTrackerInfo {
-  /** The provider of the host's accounts; null with none. */
-  provider: ProviderId | null;
-  host: string;
-  /** The repository path the issues are read from: `source`, or else the remote's own. */
-  path: string;
-  /** What the repository's tet.json names; null for the remote's own path. */
-  source: string | null;
-  /** The users of the host's accounts, in the order `onTracker` tries them. */
-  accounts: string[];
 }
 
 /** The tracker `onTracker` reads the repository's issues from, without asking it. */

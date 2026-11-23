@@ -569,3 +569,16 @@ export interface ChangeRequestLatestResult {
   latest?: ChangeRequestsLatest;
   error?: string;
 }
+
+/** Where a repository's issues are read from (`readIssueTracker`). */
+export interface IssueTrackerInfo {
+  /** The provider of the host's accounts; null with none. */
+  provider: ProviderId | null;
+  host: string;
+  /** The repository path the issues are read from: `source`, or else the remote's own. */
+  path: string;
+  /** What the repository's tet.json names; null for the remote's own path. */
+  source: string | null;
+  /** The users of the host's accounts, in the order `onTracker` tries them. */
+  accounts: string[];
+}

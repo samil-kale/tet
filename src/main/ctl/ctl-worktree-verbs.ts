@@ -1,4 +1,4 @@
-import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
+import type { ControlRequest } from "../../shared/ctl";
 import { projectRef, sameProjectRef, worktreeOf, type Project, type ProjectRef } from "../../shared/types/project";
 import { isWorking } from "../../shared/types/terminals";
 import {
@@ -10,7 +10,7 @@ import {
   tetWorktree,
   text,
   type ControlDeps,
-  type Handler,
+  type HandlersOf,
   type RefFrom,
 } from "./ctl-verb";
 
@@ -18,7 +18,7 @@ import {
  * The worktree verbs: add, delete, and the merge an agent runs. `refFrom` is the server's lookup of
  * the repository or worktree a verb acts on (resolveCallerRef).
  */
-export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `worktree-${string}`>, Handler> {
+export function worktreeVerbs(deps: ControlDeps, refFrom: RefFrom): HandlersOf<"worktree-"> {
   const project = (args: Record<string, unknown>, caller: ControlRequest["caller"]): Project => refFrom(args, caller).project;
   const repository = (ref: ProjectRef) => repositoryOf(deps, ref);
 

@@ -10,7 +10,7 @@ import type { AgentId } from "../../shared/types/agents";
 import type { ProjectCommand, ProjectRef } from "../../shared/types/project";
 import { TRACKED_KINDS, type TrackedRef } from "../../shared/types/providers";
 import type { ActionResult } from "../../shared/types/action";
-import type { HandoverResult, TrackedLinkResult, TabDescriptor } from "../../shared/types/terminals";
+import type { HandoverResult, TrackedLinkResult, TabDescriptor, InspectedTab } from "../../shared/types/terminals";
 import type { ResolvedRef } from "../store/resolved-ref";
 import type { HostSetups } from "./host-setup";
 import type { TrackedLinks } from "./tracked-links";
@@ -64,15 +64,6 @@ export interface HookOutcome {
   stdout: string;
   /** None where the notification settings say so. */
   notification?: HookNotification;
-}
-
-/** A `tabs-list` entry: the window's descriptor plus what only the session manager knows. */
-export interface InspectedTab extends TabDescriptor {
-  /** The session this tab's hooks named, claimed or not. */
-  reportedSessionId?: string;
-  sandbox?: string;
-  /** Opened from a sandbox, so it runs there or not at all. */
-  sandboxOnly?: true;
 }
 
 /**

@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import { type ControlVerbName, type HELP_VERB, HOOK_EVENTS, TAB_KEYS } from "../../shared/ctl";
+import { HOOK_EVENTS, TAB_KEYS } from "../../shared/ctl";
 import { KEYBINDING_PRESETS } from "../../shared/keybinding-presets";
 import { THEMES, themeKey } from "../../shared/themes";
 import type { SuggesterEntry } from "../../shared/types/agents";
@@ -8,7 +8,7 @@ import { EXPLORER_SETTING_IDS, EXPLORER_SORT_ORDERS } from "../../shared/types/f
 import { projectRefsOf, sameProjectRef, type ProjectRef } from "../../shared/types/project";
 import { COLOR_SCHEMES, GIT_SETTING_IDS, NOTIFICATION_IDS, PROMPT_IDS } from "../../shared/types/settings";
 import { isWorking, TERMINAL_STATUSES } from "../../shared/types/terminals";
-import type { InspectedTab } from "../terminals/session-manager";
+import type { InspectedTab } from "../../shared/types/terminals";
 import { isEnvName, reservedRefusal } from "../../shared/env-rules";
 import { machineName } from "../store/env-names";
 import { repositoryRelative } from "../util/path-inside";
@@ -34,7 +34,7 @@ import {
   text,
   type Caller,
   type ControlDeps,
-  type Handler,
+  type Handlers,
   type OwnedTab,
   type RefFrom,
 } from "./ctl-verb";
@@ -49,9 +49,6 @@ const EVENTS_TAIL = 50;
 const OUTPUT_KB = 16;
 /** What `tabs-keys` presses, for its refusals. */
 const KEY_NAMES = Object.keys(TAB_KEYS).join(", ");
-
-/** Every verb's handler but `help`, which the CLI answers itself. */
-type Handlers = Record<Exclude<ControlVerbName, typeof HELP_VERB>, Handler>;
 
 export function verbs(deps: ControlDeps): Handlers {
   const { store, settings } = deps;

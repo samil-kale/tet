@@ -1,4 +1,3 @@
-import type { ControlVerbName } from "../../shared/ctl";
 import { CHANGE_REQUEST_STATE_FILTERS, type ChangeRequestFilter } from "../../shared/types/providers";
 import { trackedVerbs } from "./ctl-tracked-verbs";
 import {
@@ -11,7 +10,7 @@ import {
   text,
   withoutAvatars,
   type ControlDeps,
-  type Handler,
+  type HandlersOf,
   type OwnedTab,
   type RefFrom,
 } from "./ctl-verb";
@@ -35,11 +34,7 @@ function changeRequestFilter(args: Record<string, unknown>): ChangeRequestFilter
  * The change request verbs: those an issue has too (`trackedVerbs`), and the host's own, as the issue
  * verbs (ctl-issue-verbs.ts).
  */
-export function changeRequestVerbs(
-  deps: ControlDeps,
-  refFrom: RefFrom,
-  ownedTab: OwnedTab,
-): Record<Extract<ControlVerbName, `change-requests-${string}`>, Handler> {
+export function changeRequestVerbs(deps: ControlDeps, refFrom: RefFrom, ownedTab: OwnedTab): HandlersOf<"change-requests-"> {
   const shared = trackedVerbs("change-request", deps, refFrom, ownedTab);
   const requestNumber = (args: Record<string, unknown>): number => numberArg(args, "pull or merge request");
 

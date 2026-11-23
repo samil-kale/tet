@@ -1,5 +1,5 @@
 import * as path from "node:path";
-import type { ControlRequest, ControlVerbName } from "../../shared/ctl";
+import type { ControlRequest, ControlResults } from "../../shared/ctl";
 import type { Project } from "../../shared/types/project";
 import { SBX_ACCESS, SBX_MCP_NEEDS_AUTH, type SbxSkillsSettings, type SbxProjectSettings } from "../../shared/types/sbx";
 import {
@@ -22,7 +22,7 @@ import {
   text,
   type Answer,
   type ControlDeps,
-  type Handler,
+  type HandlersOf,
   type RefFrom,
 } from "./ctl-verb";
 import { PLATFORM } from "../util/host-platform";
@@ -32,7 +32,7 @@ import { PLATFORM } from "../util/host-platform";
  * (ControlDeps.sbx). `refFrom` is the server's lookup of the repository or worktree a verb acts on
  * (resolveCallerRef).
  */
-export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<ControlVerbName, `sbx-${string}`>, Handler> {
+export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): HandlersOf<"sbx-"> {
   /** What the SBX Settings dialog waits for before it shows its fields (SbxSettingsDialog's setup),
    *  which only the user can set up there. Returns what it read, for the Save to take the
    *  organization from. */
@@ -66,7 +66,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       environmentValues?: Record<string, string>;
     },
     switching = false,
-  ): Promise<Answer> => {
+  ): Promise<Answer<ControlResults["sbx-set-enabled"]>> => {
     const { project: found, ref } = refFrom(args, caller);
     if (ref.worktree !== undefined) {
       throw new ControlError(
@@ -257,7 +257,7 @@ export function sbxVerbs(deps: ControlDeps, refFrom: RefFrom): Record<Extract<Co
       return {
         ...saved,
         result: {
-          ...(saved.result as object),
+          ...saved.result,
           signedIn: needing.map((server) => server.name).filter((name) => notSignedIn[name] === undefined),
           ...(Object.keys(notSignedIn).length > 0 ? { notSignedIn } : {}),
         },

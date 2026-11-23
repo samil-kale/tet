@@ -384,10 +384,10 @@ A tab and its project row show *working* (spinner), *waiting for an answer* (que
 Lets an agent ask the app for what the filesystem and git can't give (theme, projects, tabs). A
 second transport onto the same singletons `ipc/` is handed (`Repository`, the session managers,
 `projects.ts`), never a second implementation of what they do; a verb may combine them where the
-window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and verbs:
-`src/shared/ctl.ts`; server: `src/main/ctl/ctl-server.ts`; handlers: `ctl-verbs.ts` and the
-`ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all (`ControlDeps`,
-`ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
+window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and verbs, each
+verb's answer typed (`ControlResults`): `src/shared/ctl.ts`; server: `src/main/ctl/ctl-server.ts`;
+handlers: `ctl-verbs.ts` and the `ctl-*-verbs.ts` beside it, on what `ctl-verb.ts` gives them all
+(`ControlDeps`, `ControlTerminals`, `resolveCallerRef`); CLI: `src/cli/tet-ctl.ts`.
 
 - **Environment variables** (`src/main/store/environment.ts`): tokens and passwords an agent needs
   are typed only into TET's dialog (`env-request`), never the chat. The account of the project's
@@ -402,8 +402,8 @@ window has no counterpart (`worktree-agent-merge`, `tabs-output`). Contract and 
   cannot do itself**: where it already can and `tet-ctl` doing it changes nothing beyond that, the
   verb answers there.
 - **Direction of travel**: every setting in `settings-get` becomes settable through `tet-ctl`. A
-  new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, handler,
-  `ctl.test.ts` case) — the user decides what an agent may change.
+  new or extended setting comes with an *offer* to add its verb (`ControlVerb` entry, its answer
+  in `ControlResults`, handler, `ctl.test.ts` case) — the user decides what an agent may change.
 
 ## sbx: agent tabs in a Docker sandbox
 

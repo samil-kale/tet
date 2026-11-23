@@ -115,7 +115,7 @@ export function trackedVerbs(kind: TrackedKind, deps: ControlDeps, refFrom: RefF
       const number = optionalText(args, "number") === undefined ? undefined : numberOf(args);
       return refusable(async () => {
         await ops.markSeen(project.id, number);
-        return { result: { seen: number ?? "all" } };
+        return { result: { seen: number ?? ("all" as const) } };
       });
     }) satisfies Handler,
 
