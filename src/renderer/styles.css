@@ -1703,7 +1703,6 @@ button.change-request-check:hover {
   top: calc(-1 * var(--thread-gap));
   bottom: 0;
 }
-
 /* A filled dot in the place of an avatar: the same 22px footprint, so the line and the message keep
    their places. */
 .issue-event-dot {
@@ -1711,7 +1710,7 @@ button.change-request-check:hover {
   flex: none;
   width: 10px;
   height: 10px;
-  margin: 2px 4.5px 0;
+  margin: 0 4.5px 0;
   border: 2px solid var(--tet-app-border);
   border-radius: 50%;
   background: var(--tet-app-background);
@@ -1721,7 +1720,7 @@ button.change-request-check:hover {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  line-height: 20px;
+  line-height: 22px;
 }
 
 .issue-event-new {
