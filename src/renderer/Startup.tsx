@@ -4,6 +4,7 @@ import type { Requirements } from "../shared/types/agents";
 import { App } from "./App";
 import { RequirementsDialog } from "./dialogs/RequirementsDialog";
 import { useBusy } from "./ui/use-busy";
+import { useWindowDrawn } from "./ui/use-window-drawn";
 
 /**
  * The app, once its requirements are met. Main opens the stored projects only after the check
@@ -31,6 +32,9 @@ export function Startup() {
   useEffect(() => {
     void check();
   }, [check]);
+
+  // A met check shows the window from `App`, once its lists are in.
+  useWindowDrawn(failure !== undefined || (requirements !== null && !requirements.met));
 
   if (failure !== undefined) {
     return (

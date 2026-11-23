@@ -16,6 +16,8 @@ import { isOpenableUrl } from "./util/shell-open";
 const OUTPUT_FLUSH_MS = 8;
 /** Minimum gap between two renderer-crash rebuilds. */
 const RENDERER_REBUILD_GAP_MS = 60_000;
+/** How long a window stays hidden for the page's `app:drawn` before it shows regardless. */
+const SHOW_FALLBACK_MS = 5000;
 /** A question's wait for the window: one in its requirements check or reloading never answers. */
 const WINDOW_ANSWER_TIMEOUT_MS = 2000;
 
@@ -57,6 +59,7 @@ export class AppWindow {
   private backgroundGradient = true;
 
   constructor(private readonly deps: AppWindowDeps) {
+    on("app:drawn", () => this.showOnce(this.liveWindow()));
     on("app:notice-listening", () => {
       this.noticesHeard = true;
       for (const notice of this.heldNotices.splice(0)) {
@@ -68,6 +71,14 @@ export class AppWindow {
   /** The window while it stands; undefined before it exists, once closed, or while destroyed. */
   private liveWindow(): BrowserWindow | undefined {
     return this.window?.isDestroyed() === false ? this.window : undefined;
+  }
+
+  /** Shows the window the first time only: a reloaded page reports again, and `show` would take
+   *  the focus back from whatever the user is in. */
+  private showOnce(window: BrowserWindow | undefined): void {
+    if (!this.deps.hidden && window && !window.isDestroyed() && !window.isVisible()) {
+      window.show();
+    }
   }
 
   send = <C extends keyof EventChannels>(channel: C, payload: EventChannels[C]): void => {
@@ -277,9 +288,11 @@ export class AppWindow {
       }
       this.send("app:background-gradient", this.backgroundGradient);
     });
-    // Shown once the page has drawn, so no empty window shows first.
+    // Shown once the page reports what the user waits for (`app:drawn`), so neither an empty window
+    // nor a half-built workspace shows first; the timer shows it anyway if the page never reports.
     if (!this.deps.hidden) {
-      window.once("ready-to-show", () => window.show());
+      const showTimer = setTimeout(() => this.showOnce(window), SHOW_FALLBACK_MS);
+      window.once("closed", () => clearTimeout(showTimer));
     }
     // Ends attractAttention's flash.
     window.on("focus", () => window.flashFrame(false));

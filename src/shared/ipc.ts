@@ -167,6 +167,7 @@ export interface SendChannels {
   "startup:quit": TETApi["startup"]["quit"];
   "app:notice-shown": TETApi["app"]["reportNotice"];
   "app:restart": TETApi["app"]["restart"];
+  "app:drawn": TETApi["app"]["drawn"];
   /** The window's `onNotice` listens: main releases the notices it held. */
   "app:notice-listening": () => void;
   "sbx:cancel-setup": TETApi["sbx"]["cancelSetup"];

@@ -33,6 +33,7 @@ const api: TETApi = {
     info: () => invoke("app:info"),
     reportNotice: (report) => send("app:notice-shown", report),
     restart: () => send("app:restart"),
+    drawn: () => send("app:drawn"),
   },
   sbx: {
     status: (projectId: string) => invoke("sbx:status", projectId),

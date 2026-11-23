@@ -53,6 +53,7 @@ import { useEditorOpening } from "./tabs/use-editor-opening";
 import { useTabRestore } from "./tabs/use-tab-restore";
 import { useEditorSync } from "./tabs/use-editor-sync";
 import { useRefHeads } from "./lanes/projects/use-ref-heads";
+import { useWindowDrawn } from "./ui/use-window-drawn";
 import { useWindowFocused } from "./ui/use-window-focused";
 import { useWindowShortcuts } from "./ui/use-window-shortcuts";
 import { useRefFeeds } from "./use-ref-feeds";
@@ -78,7 +79,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   }, []);
   /** Each repository's or worktree's git state, tabs and starting flag (use-ref-feeds.ts);
    *  everything below is by `refKey` too, but `sandboxed`. */
-  const { states, tabs, starting } = useRefFeeds(projectsRef, loadedProjects);
+  const { states, tabs, starting, loaded } = useRefFeeds(projectsRef, loadedProjects);
+  useWindowDrawn(loaded);
   /**
    * Renderer-only, see `editor-tab.ts`; a repository or worktree with none has no entry. Untouched
    * tabs keep their instance across updates: `stripTabs` compares items.

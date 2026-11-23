@@ -88,8 +88,11 @@ export interface TETApi {
     reportNotice: (report: NoticeReport) => void;
     /** Ends every session and starts TET again, as `tet-ctl app-restart` does. */
     restart: () => void;
+    /** The page has drawn what the user waits for (the workspace, or the requirements dialog):
+     *  main shows the window. */
+    drawn: () => void;
   };
-  /** Docker Sandboxes, opt-in per project through the project row's "SBX Settings". */
+  /** Docker Sandboxes,opt-in per project through the project row's "SBX Settings". */
   sbx: {
     /** All the dialog checks before showing its fields. Never cached, PATH re-read first. Per
      *  project: the policy must allow the project's folder. */

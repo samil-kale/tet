@@ -22,6 +22,8 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
    * the progress bar and the layout persistence.
    */
   const [starting, setStarting] = useState<Record<string, boolean>>({});
+  /** Whether the first load above has landed: the lists the views draw first are filled. */
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const unsubscribers = [
@@ -73,6 +75,7 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
         ...Object.fromEntries(loaded.map(([id, , , isStarting]) => [id, isStarting])),
         ...current,
       }));
+      setLoaded(true);
     })();
 
     return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
@@ -89,5 +92,5 @@ export function useRefFeeds(projectsRef: RefObject<Project[]>, onProjects: (stor
     [],
   );
 
-  return { states, tabs, starting };
+  return { states, tabs, starting, loaded };
 }
