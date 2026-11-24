@@ -250,6 +250,6 @@ export function isMarkdown(filePath: string): boolean {
 /** A Markdown fence's info string, a grammar's name ("typescript") or an extension ("ts"). */
 export function languageForFence(info: string): string | undefined {
   const name = info.trim().split(/\s/)[0].toLowerCase();
-  // Own keys only: `in` would take "constructor" for a grammar.
+  // Own keys only: `in` would take "constructor" for a grammar, so it is not used.
   return Object.hasOwn(GRAMMARS, name) ? name : Object.hasOwn(EXTENSIONS, name) ? EXTENSIONS[name] : undefined;
 }
