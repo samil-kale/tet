@@ -3,6 +3,13 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.8 (2026-11-24)
+
+- **Long lists and heavy output.** The commit graph and the issue list draw only the rows in view,
+  so long histories and trackers stay responsive, and a terminal flooded with output no longer
+  stalls the window.
+- **Fixes.** File reads, provider searches and terminal restarts are more robust.
+
 ## 0.27.6 (2026-11-23)
 
 - **Clickable notices.** A notice about a tab, an issue or a change request opens it on click.
