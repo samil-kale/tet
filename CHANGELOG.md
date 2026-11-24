@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.11 (2026-11-24)
+
+- **Fixes.** The tab strip's edge fades out smoothly while it scrolls.
+
 ## 0.27.10 (2026-11-24)
 
 - **Fade instead of ellipsis.** Text too long for its room and rows past a scroller's end fade out instead of being cut off or ending in an ellipsis; fields in dialogs stay unfaded.
