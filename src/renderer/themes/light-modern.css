@@ -25,7 +25,7 @@
   --tet-sectionHeader-foreground: #202020;
   --tet-titleBar-activeForeground: #606060;
 
-  --tet-app-background: #fafafd;
+  --tet-app-background: #f0f0f4;
   /* Not the theme's #f0f1f2 (panel.border): its input.border, #d8d8d866, made opaque. */
   --tet-app-border: #d8d8d8;
 

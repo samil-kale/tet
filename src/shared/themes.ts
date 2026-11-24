@@ -99,7 +99,7 @@ export const THEMES: ThemeDefinition[] = [
     label: "VS Code",
     shikiTheme: "light-plus",
     kind: "light",
-    windowBackground: "#fafafd",
+    windowBackground: "#f0f0f4",
     titleBarSymbolColor: "#606060",
     terminalBackground: "#ffffff",
     terminalForeground: "#3b3b3b",
