@@ -339,6 +339,12 @@ per-line decision is for an agent.
   field label), through `named` (`ui/named.tsx`), never a span of the caller's own. Plain stay a
   count (`3 files`), what a notice or a progress line says, and every other kind of name (a project,
   an account, a host, a command): ask the user before setting one of those apart.
+- **Nothing is cut off hard or ends in an ellipsis; it fades out.** Text too long for its room and
+  rows past a scroller's end fade over `--text-fade`, by a mask that runs only while something
+  overflows (`text-fade`, `rows-overflow` in `styles.css`, as a tab's label does). A new text class
+  joins that rule, a new scroller of rows the other; the mask covers the whole box, so a text with a
+  border or an icon beside it is wrapped (`.dropdown-label`). Viewers of content (editor, Markdown,
+  images, code field) and boxes drawing their own edge (a dropdown's list) are no such scroller.
 - Row hover is `--tet-list-hoverBackground`, action button hover `--tet-toolbar-hoverBackground`.
 - A disabled control is dimmed, never recolored (opacity 0.4, the default cursor): every new
   control gets that state with it.

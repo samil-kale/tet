@@ -82,7 +82,7 @@ export function Dropdown<T extends string>({ value, options, onChange, disabled,
             ))}
           </span>
         ) : (
-          selected?.label
+          <span className="dropdown-label">{selected?.label}</span>
         )}
       </button>
       <ChevronIcon expanded className="select-chevron" />

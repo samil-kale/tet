@@ -155,8 +155,10 @@ textarea:focus,
   border-color: var(--tet-focusBorder);
 }
 
-/* Text cut short with an ellipsis rather than wrapped or pushing its row wider: the label, name or
-   path that shares a row with something that keeps its room. */
+/* Text too long for its room fades out over `--text-fade`, never ends in an ellipsis: the label,
+   name or path that shares a row with something that keeps its room. The mask runs only while the
+   text overflows (the scroll timeline of its own inline axis). A dropdown's trigger wraps its text
+   (`.dropdown-label`), so the fade leaves its border and chevron alone. */
 .titlebar-name,
 .status-bar-tab,
 .list-label,
@@ -171,13 +173,22 @@ textarea:focus,
 .sbx-path-value,
 .suggester-name,
 .repository-name,
-.dropdown-trigger,
-.dropdown-menu .context-menu-item,
+.dropdown-label,
+.dropdown-menu .context-menu-item > span,
+.context-menu.truncating .context-menu-item > span:not(.line-icon),
 .status-list-label,
 .notice.session .notice-message {
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  animation: text-fade linear both;
+  animation-timeline: scroll(self inline);
+}
+
+@keyframes text-fade {
+  from,
+  to {
+    mask-image: linear-gradient(to left, transparent, var(--tet-foreground) var(--text-fade));
+  }
 }
 
 /* Styled like a `<select>`: a native select's open list is drawn by Chrome, ignoring every color
@@ -329,6 +340,9 @@ textarea:focus,
      sash is the gap between two), and their rows and fields this far in from their edges. */
   --island-gap: 6px;
   --island-radius: 10px;
+  /* Text too long for its room, or rows past a scroller's end, fade out over this, as a tab's label
+     does. */
+  --text-fade: 24px;
   /* Pane floors, as MIN_AREA_* in Sash.tsx. Stated here too: a sash only bounds a drag, and
      shrinking the window reaches the same panes. */
   --area-min-width: 230px;
@@ -932,6 +946,43 @@ textarea:focus,
   right: calc(var(--island-gap) + 6px);
   top: 50%;
   transform: translateY(-50%);
+}
+
+/* 1 while rows lie below a scroller's end, down to 0 over the last `--text-fade` of its scroll; 0
+   while nothing overflows, its scroll timeline being inactive then. */
+@property --rows-overflow {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes rows-overflow {
+  from {
+    --rows-overflow: 1;
+  }
+  to {
+    --rows-overflow: 0;
+  }
+}
+
+/* Rows below a scroller's end fade out over `--text-fade` rather than being cut off. Every box of
+   rows that scrolls takes it, not a viewer of content (editor, Markdown, images, code field) and not
+   a box that draws its own edge (a dropdown's list), which the mask would dissolve. */
+.project-list,
+.command-list,
+.tree,
+.repository-list,
+.master-list,
+.popup-items,
+.row-section-rows,
+.sbx-settings-tab,
+.settings-dialog .dialog-body,
+.change-request-checks,
+.tracked-view {
+  animation: rows-overflow linear both;
+  animation-timeline: scroll(self block);
+  animation-range: calc(100% - var(--text-fade)) 100%;
+  mask-image: linear-gradient(to bottom, var(--tet-foreground) calc(100% - var(--text-fade) * var(--rows-overflow)), transparent);
 }
 
 /* A section's scroller of rows, inset from the island's edges. */
@@ -2312,11 +2363,16 @@ button.change-request-check:hover {
   margin-left: auto;
 }
 
-/* Plain text, no icon or arrow: a block, which can end in an ellipsis; centered by its line, as
-   high as the row (`.context-menu-item`). */
+/* Plain text, no icon or arrow: a block, which can fade out; centered by its line, as high as the
+   row (`.context-menu-item`). */
 .dropdown-menu .context-menu-item {
   display: block;
   line-height: var(--popup-row-height);
+}
+
+.dropdown-menu .context-menu-item > span,
+.dropdown-label {
+  display: block;
 }
 
 /* A menu's field (`Dropdown`'s filter) stays put while its entries scroll under it, covering the
@@ -2330,11 +2386,9 @@ button.change-request-check:hover {
   background: var(--tet-menu-background);
 }
 
-/* A menu with a `maxWidth`: a label too long for it ends in an ellipsis, its icon keeps its room. */
+/* A menu with a `maxWidth`: a label too long for it fades out, its icon keeps its room. */
 .context-menu.truncating .context-menu-item > span:not(.line-icon) {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .context-menu.truncating .context-menu-item > .line-icon {
@@ -3148,8 +3202,12 @@ button.change-request-check:hover {
   width: 700px;
 }
 
-.dialog:is(.change-request-dialog, .commit-dialog, .env-dialog) {
+.dialog:is(.change-request-dialog, .env-dialog) {
   width: var(--dialog-tall-width);
+}
+
+.dialog.commit-dialog {
+  width: 640px;
 }
 
 .dialog.change-request-dialog .dialog-textarea {
