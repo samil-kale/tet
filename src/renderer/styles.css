@@ -440,7 +440,6 @@ textarea:focus,
 /* The wordmark, the project's name and its branch: what in the bar may be cut; the icon keeps its box. */
 .titlebar-name {
   font-size: var(--small-font-size);
-  font-weight: 600;
   letter-spacing: 1.5px;
   color: var(--tet-titleBar-activeForeground);
 }
@@ -456,11 +455,9 @@ textarea:focus,
   background: var(--tet-titleBar-activeForeground);
 }
 
-/* The project's name and its branch, in the wordmark's style but regular: they fade in as they
-   change, as a lane does on a view switch, keyed by what they show, so a new one is a new element
-   and the animation starts again. */
+/* The project's name and its branch fade in as they change, as a lane does on a view switch: keyed
+   by what they show, so a new one is a new element and the animation starts again. */
 .titlebar-project {
-  font-weight: 400;
   animation: lane-fade-in 0.1s ease-out;
 }
 
