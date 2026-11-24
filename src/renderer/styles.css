@@ -437,12 +437,28 @@ textarea:focus,
   flex: none;
 }
 
-/* The one thing in the bar that may be cut; the icon beside it keeps its box. */
+/* The wordmark, the project's name and its branch: what in the bar may be cut; the icon keeps its box. */
 .titlebar-name {
   font-size: var(--small-font-size);
   font-weight: 600;
   letter-spacing: 1.5px;
   color: var(--tet-titleBar-activeForeground);
+}
+
+/* The dot between the wordmark, the active project's name and its branch, the name's own colour. A
+   pixel below the bar's middle, where the lowercase letters' middle sits. */
+.titlebar-sep {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  margin: 2px 1px 0;
+  border-radius: 50%;
+  background: var(--tet-titleBar-activeForeground);
+}
+
+/* The branch gives way before the project's name when the bar is short. */
+.titlebar-branch {
+  flex: 0 100000 auto;
 }
 
 /* Just enough room around the icon for the hover background. A `.status-icon` is a status in an

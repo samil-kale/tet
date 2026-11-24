@@ -250,7 +250,8 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
   /** The project rows' HEAD, remote and dirty flag (use-ref-heads.ts). */
   const heads = useRefHeads(states);
 
-  /** The status bar's project, branch and change count: the active repository's or worktree's. */
+  /** The status bar's and the title bar's project and branch, and the status bar's change count: the
+   *  active repository's or worktree's. */
   const activeProject = activeResolved ? projects.find((project) => project.id === activeResolved.ref.projectId) : undefined;
   const activeBranchName = activeResolved
     ? activeResolved.worktree
@@ -432,6 +433,22 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       <div className={PLATFORM.centersTitle ? "titlebar titlebar-centered" : "titlebar"}>
         <img className="titlebar-icon" src="icon.png" alt="" />
         <span className="titlebar-name">TET</span>
+        {activeProject && (
+          <>
+            <span className="titlebar-sep" />
+            <span className="titlebar-name" title={activeProject.name}>
+              {activeProject.name}
+            </span>
+            {activeBranchName && (
+              <>
+                <span className="titlebar-sep" />
+                <span className="titlebar-name titlebar-branch" title={activeBranchName}>
+                  {activeBranchName}
+                </span>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <div className="body">
