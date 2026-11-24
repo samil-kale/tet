@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.9 (2026-11-24)
+
+- **Title bar.** It shows the active project and branch next to the wordmark.
+- **Fixes.** Lists and settings panes scroll with a gutter that keeps the row width, and the light theme's app background is lighter.
+
 ## 0.27.8 (2026-11-24)
 
 - **Long lists and heavy output.** The commit graph and the issue list draw only the rows in view,
