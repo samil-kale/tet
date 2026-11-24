@@ -1925,19 +1925,27 @@ button.change-request-check:hover {
 }
 
 /* 1 while tabs lie past the strip's end, down to 0 over the last of its scroll the fade takes up; 0
-   while nothing overflows, its scroll timeline being inactive then. */
+   while nothing overflows, its scroll timeline being inactive then. `--tabs-scroll` is the
+   animated value, `--tabs-overflow` follows it through a transition, so a wheel step that lands at
+   the end fades out rather than popping. */
+@property --tabs-scroll {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
 @property --tabs-overflow {
   syntax: "<number>";
   inherits: true;
   initial-value: 0;
 }
 
-@keyframes tabs-overflow {
+@keyframes tabs-scroll {
   from {
-    --tabs-overflow: 1;
+    --tabs-scroll: 1;
   }
   to {
-    --tabs-overflow: 0;
+    --tabs-scroll: 0;
   }
 }
 
@@ -1958,11 +1966,15 @@ button.change-request-check:hover {
   padding: 0 var(--island-gap);
   background: var(--tet-editor-background);
   border-bottom: 2px solid var(--tet-app-background);
-  /* `--tabs-overflow` follows the tabs' scroll (`.tabs`). */
+  /* `--tabs-scroll` follows the tabs' scroll (`.tabs`). */
   timeline-scope: --tabs;
-  animation: tabs-overflow linear both;
+  --tabs-overflow: var(--tabs-scroll);
+  transition: --tabs-overflow 0.15s ease-out;
+  animation: tabs-scroll linear both;
   animation-timeline: --tabs;
-  animation-range: calc(100% - var(--tabs-fade-clear) - var(--tabs-fade)) 100%;
+  /* Ends 2px before the scroller's end: a fractional scroll position never reaches it, and the fade
+     would then still eat the last pixels of the last tab's border. */
+  animation-range: calc(100% - var(--tabs-fade-clear) - var(--tabs-fade) - 2px) calc(100% - 2px);
 }
 
 /* Indeterminate: nothing here reports real progress. `ProgressBar` sets the bit's width, offset,
@@ -2006,6 +2018,8 @@ button.change-request-check:hover {
   overflow-x: auto;
   scrollbar-width: none;
   scroll-timeline: --tabs inline;
+  /* A wheel step glides, so the fade shrinks along with it instead of vanishing in one frame. */
+  scroll-behavior: smooth;
   /* Fades out under the line before the + (`.new-tab::before`), and keeps a tab scrolled into view
      clear of the fade. */
   mask-image: linear-gradient(
