@@ -436,13 +436,13 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
         {activeProject && (
           <>
             <span className="titlebar-sep" />
-            <span className="titlebar-name" title={activeProject.name}>
+            <span key={activeProject.id} className="titlebar-name titlebar-project" title={activeProject.name}>
               {activeProject.name}
             </span>
             {activeBranchName && (
               <>
                 <span className="titlebar-sep" />
-                <span className="titlebar-name titlebar-branch" title={activeBranchName}>
+                <span key={activeBranchName} className="titlebar-name titlebar-project titlebar-branch" title={activeBranchName}>
                   {activeBranchName}
                 </span>
               </>

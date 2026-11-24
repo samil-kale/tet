@@ -456,6 +456,14 @@ textarea:focus,
   background: var(--tet-titleBar-activeForeground);
 }
 
+/* The project's name and its branch, in the wordmark's style but regular: they fade in as they
+   change, as a lane does on a view switch, keyed by what they show, so a new one is a new element
+   and the animation starts again. */
+.titlebar-project {
+  font-weight: 400;
+  animation: lane-fade-in 0.1s ease-out;
+}
+
 /* The branch gives way before the project's name when the bar is short. */
 .titlebar-branch {
   flex: 0 100000 auto;
