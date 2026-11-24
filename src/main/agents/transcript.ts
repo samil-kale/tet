@@ -86,7 +86,15 @@ export function listTranscriptDir(
       files.map((file) => path.join(dir, file)),
       caches,
     );
-    return mapLimited(files, READ_CONCURRENCY, (file) => readOne(path.join(dir, file), file));
+    // A transcript deleted since the readdir (the agent's picker does it behind TET's back) is no session.
+    return mapLimited(files, READ_CONCURRENCY, (file) =>
+      readOne(path.join(dir, file), file).catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          return undefined;
+        }
+        throw error;
+      }),
+    );
   });
 }
 
