@@ -1,2 +1,5 @@
 # Prose is wrapped by hand, and CHANGELOG.md is the text of the GitHub releases.
 *.md
+
+# TET rewrites it itself (jsonc-parser keeps comments, and lays arrays out its own way).
+tet.json
