@@ -344,7 +344,8 @@ per-line decision is for an agent.
   overflows (`text-fade`, `rows-overflow` in `styles.css`, as a tab's label does). A new text class
   joins that rule, a new scroller of rows the other; the mask covers the whole box, so a text with a
   border or an icon beside it is wrapped (`.dropdown-label`). Viewers of content (editor, Markdown,
-  images, code field) and boxes drawing their own edge (a dropdown's list) are no such scroller.
+  images, code field), boxes drawing their own edge (a dropdown's list) and a dialog's scrollers
+  are no such scroller.
 - Row hover is `--tet-list-hoverBackground`, action button hover `--tet-toolbar-hoverBackground`.
 - A disabled control is dimmed, never recolored (opacity 0.4, the default cursor): every new
   control gets that state with it.

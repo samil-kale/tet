@@ -967,16 +967,12 @@ textarea:focus,
 
 /* Rows below a scroller's end fade out over `--text-fade` rather than being cut off. Every box of
    rows that scrolls takes it, not a viewer of content (editor, Markdown, images, code field) and not
-   a box that draws its own edge (a dropdown's list), which the mask would dissolve. */
+   a box that draws its own edge (a dropdown's list), which the mask would dissolve, and not a
+   dialog's scroller, whose fields it would fade. */
 .project-list,
 .command-list,
 .tree,
-.repository-list,
-.master-list,
 .popup-items,
-.row-section-rows,
-.sbx-settings-tab,
-.settings-dialog .dialog-body,
 .change-request-checks,
 .tracked-view {
   animation: rows-overflow linear both;
