@@ -2018,8 +2018,6 @@ button.change-request-check:hover {
   overflow-x: auto;
   scrollbar-width: none;
   scroll-timeline: --tabs inline;
-  /* A wheel step glides, so the fade shrinks along with it instead of vanishing in one frame. */
-  scroll-behavior: smooth;
   /* Fades out under the line before the + (`.new-tab::before`), and keeps a tab scrolled into view
      clear of the fade. */
   mask-image: linear-gradient(
