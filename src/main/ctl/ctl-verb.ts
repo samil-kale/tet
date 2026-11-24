@@ -334,8 +334,9 @@ export interface ControlDeps {
    *  none). Must never throw: `hook` notifications on the way to answering a turn. A click brings
    *  `target` to the front; the notification center lists it with `mark`'s icon. */
   showDesktopNotification(title: string, message: string, target?: TabRef, mark?: NoticeMark, agentId?: AgentId): void;
-  /** A notice in the window (Notices.tsx), as every other one main tells the user. */
-  notice(severity: NoticeSeverity, message: string, title?: string): void;
+  /** A notice in the window (Notices.tsx), as every other one main tells the user; a click on it shows
+   *  `target`. */
+  notice(severity: NoticeSeverity, message: string, title?: string, target?: TabRef): void;
   /** main.ts's, shared with ipc/environment.ts. */
   environment: Pick<EnvStore, "list" | "remove">;
   envRequests: Pick<EnvRequests, "ask">;

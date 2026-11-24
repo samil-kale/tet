@@ -171,7 +171,8 @@ export async function unlinkTrackedSession({ ref, tabId }: TrackedSession, track
 }
 
 /** The tab's session linked to the issue or change request it was dropped on; a notice says what
- *  that changed, named as `nameOf` names one of its kind, or what refused it. */
+ *  that changed, named as `nameOf` names one of its kind, a click on it opening that one, or what
+ *  refused it. */
 export async function linkTrackedSession(
   ref: ProjectRef,
   tabId: string,
@@ -188,7 +189,7 @@ export async function linkTrackedSession(
     movedFrom === undefined
       ? `Session linked to ${nameOf(tracked.number)}`
       : `Session moved from ${nameOf(movedFrom)} to ${nameOf(tracked.number)}`;
-  notify("info", replacedSession ? `${linked} in place of its previous one` : linked);
+  notify("info", replacedSession ? `${linked} in place of its previous one` : linked, { opens: { projectId: ref.projectId, tracked } });
 }
 
 const trackedListeners = new Set<(projectId: string, kind: TrackedKind) => void>();

@@ -126,9 +126,10 @@ export class AppWindow {
     this.liveWindow()?.webContents.send(channel, payload);
   };
 
-  /** Everything the user is told from this process (Notices.tsx), held as `send` holds it. */
-  notice = (severity: NoticeSeverity, message: string, title?: string): void => {
-    this.send("app:notice", { severity, title, message });
+  /** Everything the user is told from this process (Notices.tsx), held as `send` holds it; a click on
+   *  one about `target` shows that tab. */
+  notice = (severity: NoticeSeverity, message: string, title?: string, target?: TabRef): void => {
+    this.send("app:notice", { severity, title, message, target });
   };
 
   noticeProgress = (progress: NoticeProgress): void => {

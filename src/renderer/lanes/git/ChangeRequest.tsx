@@ -171,8 +171,10 @@ export async function askChangeRequest(
     return;
   }
   if (found.open) {
-    const { number, url } = found.open;
-    notify("info", `${capitalized(kind.noun)} ${changeRequestName(kind, number)} is open already.\n${url}`, { link: url });
+    const { number } = found.open;
+    notify("info", `${capitalized(kind.noun)} ${changeRequestName(kind, number)} is open already.`, {
+      opens: { projectId: ref.projectId, tracked: { kind: "change-request", number } },
+    });
     return;
   }
   // Where the remote lacks what the branch has, or has no branch of it yet.
@@ -242,7 +244,7 @@ export async function askChangeRequest(
     return;
   }
   if (created) {
-    const { number, url } = created;
+    const { number } = created;
     // It stands either way, so what did not follow is told beside it.
     const missed = [
       created.approveError === undefined ? undefined : `Could not approve it: ${created.approveError}.`,
@@ -250,8 +252,8 @@ export async function askChangeRequest(
     ].filter((sentence) => sentence !== undefined);
     notify(
       missed.length > 0 ? "warning" : "info",
-      `${[`Created ${kind.noun} ${changeRequestName(kind, number)} into ${created.into}.`, ...missed].join(" ")}\n${url}`,
-      { link: url },
+      [`Created ${kind.noun} ${changeRequestName(kind, number)} into ${created.into}.`, ...missed].join(" "),
+      { opens: { projectId: ref.projectId, tracked: { kind: "change-request", number } } },
     );
   }
 }

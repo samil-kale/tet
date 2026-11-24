@@ -600,7 +600,7 @@ export function App({ worktreesSupported }: { worktreesSupported: boolean }) {
       {sbxSettingsProject && <SbxSettingsDialog key={sbxSettingsProject.id} project={sbxSettingsProject} onClose={closeSbxSettings} />}
       {envRequest && <EnvDialog key={envRequest.id} request={envRequest} onClose={closeEnvRequest} />}
 
-      <Notices />
+      <Notices onShowTab={showNoticeTab} onOpenTracked={openNoticeTracked} />
       <NoticesCenter onShowTab={showNoticeTab} onOpenTracked={openNoticeTracked} />
       <Dialogs />
     </div>

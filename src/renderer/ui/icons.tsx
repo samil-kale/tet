@@ -15,7 +15,6 @@ import {
   CircleX,
   Code,
   Columns2,
-  Copy,
   File,
   FileCode,
   FilePlus,
@@ -39,6 +38,7 @@ import {
   ListOrdered,
   ListTree,
   ListX,
+  LoaderCircle,
   LogIn,
   MessageCircleCheck,
   MessageCircleQuestionMark,
@@ -365,14 +365,11 @@ export function ChevronIcon({ expanded, ...props }: IconProps & { expanded: bool
 }
 
 /** Lucide's `loader-circle` as a tab's working mark (`TabMark`), turning about its centre inside the
- *  svg: a CSS rotation of the box wobbles wherever the box lies on a fractional pixel. */
-export function SpinnerIcon(props: IconProps) {
-  // The whole 24 grid at Lucide's stroke of 2, as `Lucide` draws it by default.
-  return (
-    <Svg {...props} extent={19.2} cx={12} cy={12} grid={24} stroke={2}>
-      <path className="spinner-turn" d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </Svg>
-  );
+ *  svg (`.spinner`): a CSS rotation of the box wobbles wherever the box lies on a fractional pixel. */
+export function SpinnerIcon({ className, ...props }: IconProps) {
+  // Its arc lies at radius 9, inside the radius 10 of the circles and bubbles beside it (the other
+  // marks, the severity icons): cropped by 9/10 of the 24 grid to their size, at their stroke.
+  return <Lucide {...props} className={[className, "spinner"].filter(Boolean).join(" ")} icon={LoaderCircle} extent={17.28} />;
 }
 
 /** Lucide's `play`, two pixels under like `CloseIcon`. */
@@ -393,11 +390,6 @@ export function CommitIcon(props: IconProps) {
 /** Lucide's `git-pull-request` — a pull or merge request, on either host. */
 export function ChangeRequestIcon(props: IconProps) {
   return <Lucide {...props} icon={GitPullRequest} />;
-}
-
-/** Lucide's `copy` — copies a notice's link. */
-export function CopyIcon(props: IconProps) {
-  return <Lucide {...props} icon={Copy} />;
 }
 
 /** Lucide's `package` — a stash. */

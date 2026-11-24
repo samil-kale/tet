@@ -1,13 +1,14 @@
 import { LinkifyIt } from "linkify-it";
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { AgentId } from "../../shared/types/agents";
 import type { Notice, NoticeMark, NoticeProgress, NoticeSeverity } from "../../shared/types/app";
-import { refKeyOf } from "../../shared/types/project";
+import { refKeyOf, type ProjectRef } from "../../shared/types/project";
+import type { TrackedRef } from "../../shared/types/providers";
 import { isWorking } from "../../shared/types/terminals";
 import type { TabDescriptor, TabRef } from "../../shared/types/terminals";
 import { AgentIcon } from "./agent-icons";
-import { CheckIcon, CloseIcon, CopyIcon, SeverityIcon } from "./icons";
+import { CloseIcon, SeverityIcon } from "./icons";
 import { TabMark } from "./TabMark";
 import { ProgressBar } from "./ProgressBar";
 import { createStore, useStore } from "./store";
@@ -147,7 +148,7 @@ function runAfterClose(): void {
 }
 
 /** What a notice may carry beside its words. */
-type NoticeOptions = Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId" | "link" | "opens">;
+type NoticeOptions = Pick<Notice, "title" | "toast" | "target" | "mark" | "agentId" | "opens">;
 
 export function notify(severity: NoticeSeverity, message: string, options: NoticeOptions = {}): void {
   const wait = options.toast === false ? 0 : takeSlot("enter");
@@ -159,7 +160,7 @@ export function notify(severity: NoticeSeverity, message: string, options: Notic
 }
 
 function add(severity: NoticeSeverity, message: string, options: NoticeOptions): void {
-  const { title, toast, target, mark, agentId, link, opens } = options;
+  const { title, toast, target, mark, agentId, opens } = options;
   const same = shown
     .get()
     .find(
@@ -184,7 +185,6 @@ function add(severity: NoticeSeverity, message: string, options: NoticeOptions):
     target,
     mark,
     agentId,
-    link,
     opens,
   };
   shown.set([...shown.get().filter((notice) => notice !== same), entry].slice(-CENTER_MAX));
@@ -405,6 +405,21 @@ export function clearNotices(): void {
   closeCenter(() => shown.set(shown.get().filter((notice) => !cleared.has(notice.id))));
 }
 
+/** What a click on a notice opens, in a toast and in the notification center alike. */
+export interface NoticeOpeners {
+  /** Shows the tab a notice is about. */
+  onShowTab: (ref: ProjectRef, tabId: string) => void;
+  /** Opens the issue or change request a notice is about in its tab (`Notice.opens`). */
+  onOpenTracked: (projectId: string, tracked: TrackedRef) => void;
+}
+
+/** A click on `notice`: the tab it is about shown, else its issue or change request opened; none for
+ *  a notice about neither. */
+export function noticeOpen(notice: ShownNotice, { onShowTab, onOpenTracked }: NoticeOpeners): (() => void) | undefined {
+  const { target, opens } = notice;
+  return target ? () => onShowTab(target.ref, target.tabId) : opens ? () => onOpenTracked(opens.projectId, opens.tracked) : undefined;
+}
+
 /** A notice's box, in a toast and in the notification center alike: its severity and, for a turn's
  *  notice (`agentId`), `session`. */
 export function noticeClass(notice: ShownNotice): string {
@@ -412,11 +427,11 @@ export function noticeClass(notice: ShownNotice): string {
 }
 
 /**
- * A notice's icon, title, message and progress bar, in a toast and in the notification center alike.
- * A turn's notice (`agentId`) is one line there: its mark, the message and, at the right edge, the
- * agent's icon, the mark saying what the title would.
+ * A notice's icon, title, message, buttons (`children`) and progress bar, in a toast and in the
+ * notification center alike. A turn's notice (`agentId`) is one line there: its mark, the message and,
+ * at the right edge, the agent's icon in a button's place, the mark saying what the title would.
  */
-export function NoticeBody({ notice }: { notice: ShownNotice }) {
+export function NoticeBody({ notice, children }: { notice: ShownNotice; children?: ReactNode }) {
   return (
     <>
       {notice.mark ? (
@@ -430,7 +445,14 @@ export function NoticeBody({ notice }: { notice: ShownNotice }) {
           <LinkedMessage message={notice.message} />
         </span>
       </span>
-      {notice.agentId && <AgentIcon agentId={notice.agentId} className="line-icon" />}
+      <span className="toolbar">
+        {notice.agentId && (
+          <span className="status-icon">
+            <AgentIcon agentId={notice.agentId} />
+          </span>
+        )}
+        {children}
+      </span>
       {notice.progress && (
         <span className="notice-progress">
           {notice.progress.fraction === null ? (
@@ -473,45 +495,13 @@ function LinkedMessage({ message }: { message: string }) {
   ));
 }
 
-/** How long the copy button shows its check once it copied. */
-const COPIED_MS = 1500;
-
-/** Beside a notice's X where it has a link: copies it, a check standing in for its icon a moment
- *  after. */
-export function NoticeCopyButton({ notice }: { notice: ShownNotice }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) {
-      return;
-    }
-    const timer = setTimeout(() => setCopied(false), COPIED_MS);
-    return () => clearTimeout(timer);
-  }, [copied]);
-  const { link } = notice;
-  if (!link) {
-    return null;
-  }
-  return (
-    <button
-      type="button"
-      className="icon-button"
-      title="Copy link"
-      onClick={(event) => {
-        event.stopPropagation();
-        void navigator.clipboard.writeText(link).then(() => setCopied(true));
-      }}
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </button>
-  );
-}
-
 /**
- * Stacked in the bottom right corner, newest at the bottom, removed by their X. Inside the dialog
- * on top while one is up (`useTopDialog`): outside it they would lie under its dim, inert. None
- * while the notification center is open, which lists them.
+ * Stacked in the bottom right corner, newest at the bottom, removed by their X. A click on one opens
+ * what it is about as in the notification center (`noticeOpen`) and takes its toast down, the entry
+ * staying in the center. Inside the dialog on top while one is up (`useTopDialog`): outside it they
+ * would lie under its dim, inert. None while the notification center is open, which lists them.
  */
-export function Notices() {
+export const Notices = memo(function Notices(openers: NoticeOpeners) {
   const notices = useStore(shown).filter((notice) => notice.toast);
   const open = useStore(centerOpen);
   const dialog = useTopDialog();
@@ -520,29 +510,45 @@ export function Notices() {
   }
   const stack = (
     <div className="notices">
-      {notices.map((notice) => (
-        <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
-          <div className={noticeClass(notice)} onMouseEnter={() => (hovered = notice.id)} onMouseLeave={() => (hovered = undefined)}>
-            <NoticeBody notice={notice} />
-            <NoticeCopyButton notice={notice} />
-            <button
-              type="button"
-              className="icon-button"
-              title={removable(notice) && !notice.progress ? "Remove" : "Dismiss"}
-              onClick={() => {
-                if (removable(notice) && !notice.progress) {
-                  leaveNotice(notice.id);
-                } else {
-                  dismissNotice(notice.id);
-                }
-              }}
+      {notices.map((notice) => {
+        const openNotice = noticeOpen(notice, openers);
+        return (
+          <div key={notice.id} className={`notice-item${notice.leaving || notice.dismissing ? " leaving" : ""}`}>
+            <div
+              className={`${noticeClass(notice)}${openNotice ? " clickable" : ""}`}
+              onMouseEnter={() => (hovered = notice.id)}
+              onMouseLeave={() => (hovered = undefined)}
+              onClick={
+                openNotice
+                  ? () => {
+                      dismissNotice(notice.id);
+                      openNotice();
+                    }
+                  : undefined
+              }
             >
-              <CloseIcon />
-            </button>
+              <NoticeBody notice={notice}>
+                <button
+                  type="button"
+                  className="icon-button"
+                  title={removable(notice) && !notice.progress ? "Remove" : "Dismiss"}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (removable(notice) && !notice.progress) {
+                      leaveNotice(notice.id);
+                    } else {
+                      dismissNotice(notice.id);
+                    }
+                  }}
+                >
+                  <CloseIcon />
+                </button>
+              </NoticeBody>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
   return dialog ? createPortal(stack, dialog) : stack;
-}
+});
