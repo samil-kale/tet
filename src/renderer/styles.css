@@ -290,8 +290,8 @@ textarea:focus,
    IntelliJ's thin one, a tab's 11px bar (`.pane-body`) a 7px one, its regular one at rest. A view
    wanting none hides them itself. */
 ::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
 }
 
 ::-webkit-scrollbar-track,
@@ -348,6 +348,8 @@ textarea:focus,
   --checkbox-radius: 3px;
   /* How far a scrollbar's pill stands in from the bar's edges, a thin bar's and a thick one's alike. */
   --scrollbar-inset: 2px;
+  /* The app's scrollbar, and the room `scrollbar-gutter: stable` keeps for it. */
+  --scrollbar-width: 7px;
   /* How far a menu's rows, a dropdown's among them, and a status bar list's stand in from the box's
      edge, before their own inset (`.context-menu-item`). */
   --menu-padding-block: 6px;
@@ -915,7 +917,10 @@ textarea:focus,
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 var(--island-gap);
+  /* The scrollbar's room is kept, so the rows' width holds when the list starts to scroll; the right
+     padding is the gap less that room, so the rows keep the width they had without it. */
+  scrollbar-gutter: stable;
+  padding: 0 max(0px, calc(var(--island-gap) - var(--scrollbar-width))) 0 var(--island-gap);
   /* A margin, not padding: rows scrolling past the bottom are cut off above the island's edge. */
   margin-bottom: 8px;
 }
