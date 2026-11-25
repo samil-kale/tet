@@ -9,7 +9,6 @@ import { anyAgentInstalled, checkRequirements } from "../requirements";
 import { augmentAgentPath } from "../agents/agent-path";
 import type { IpcDeps } from "./deps";
 import { PLATFORM } from "../util/host-platform";
-import { markStartup } from "../util/startup-timing";
 
 /** The startup gate, the app's own facts, the settings, and what the agents are. */
 export function registerAppIpc({
@@ -23,13 +22,10 @@ export function registerAppIpc({
   handle("startup:check", async (): Promise<Requirements> => {
     const initial = firstCheck;
     firstCheck = undefined;
-    markStartup("renderer asked startup:check");
     // Re-checks re-scan manager bin dirs, so an install since startup is found.
     const requirements = await (initial ?? augmentAgentPath().then(checkRequirements));
-    markStartup("requirements checked");
     if (requirements.met) {
       await openWorkspace();
-      markStartup("workspace opened");
     }
     return requirements;
   });

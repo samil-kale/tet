@@ -6,7 +6,6 @@ import { git } from "./git/git-client";
 import { isSimulatedMissing } from "./util/simulate";
 import { augmentAgentPath } from "./agents/agent-path";
 import { findsExecutable } from "./util/process";
-import { markStartup } from "./util/startup-timing";
 
 const GIT: Omit<Requirement, "installed"> = {
   name: "Git",
@@ -79,12 +78,9 @@ function agentRequirements(): Requirement[] {
  */
 export async function checkRequirements(): Promise<Requirements> {
   // In the git utility process (git-client.ts).
-  const gitVersion = (isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined)).finally(() =>
-    markStartup("git checked"),
-  );
+  const gitVersion = isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
   const agents = agentRequirements();
   const sbx = found(SBX.command);
-  markStartup("agents and sbx found");
   const version = await gitVersion;
   const installed = version !== undefined;
   return {
