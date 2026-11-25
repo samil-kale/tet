@@ -1560,6 +1560,9 @@ button.change-request-check:hover {
 .tracked-main {
   /* The entries' distance; the line joining them is drawn to it. */
   --thread-gap: 16px;
+  /* The line's distance from the entries' outer left edge: the avatars' middle (a card's border and
+     padding, then half the avatar). */
+  --thread-line-x: 21px;
   flex: 999 1 420px;
   gap: var(--thread-gap);
   min-width: min(420px, 100%);
@@ -1703,7 +1706,8 @@ button.change-request-check:hover {
 .tracked-event {
   position: relative;
   gap: 6px;
-  padding: 0 var(--card-padding);
+  /* A card's border is in the avatar's distance from the edge too. */
+  padding: 0 calc(var(--card-padding) + 1px);
 }
 
 /* The line joining a thread's entries, through the avatars' middle: over the thread's gap above a
@@ -1712,17 +1716,19 @@ button.change-request-check:hover {
 .tracked-main > .tracked-event::before {
   content: "";
   position: absolute;
-  left: 19px;
   width: 1px;
   background: var(--tet-app-border);
 }
 
+/* Measured from the card's padding box, inside its border. */
 .tracked-main > .tracked-card:not(:first-child)::before {
+  left: calc(var(--thread-line-x) - 1px);
   top: calc(-1px - var(--thread-gap));
   height: calc(2px + var(--thread-gap));
 }
 
 .tracked-main > .tracked-event::before {
+  left: var(--thread-line-x);
   top: calc(-1 * var(--thread-gap));
   bottom: 0;
 }
@@ -1731,9 +1737,9 @@ button.change-request-check:hover {
 .tracked-event-dot {
   position: relative;
   flex: none;
-  width: 10px;
-  height: 10px;
-  margin: 0 4.5px 0;
+  width: 11px;
+  height: 11px;
+  margin: 0 5px;
   border: 2px solid var(--tet-app-border);
   border-radius: 50%;
   background: var(--tet-app-background);
