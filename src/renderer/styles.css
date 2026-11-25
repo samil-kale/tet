@@ -1215,18 +1215,6 @@ textarea:focus,
   flex-direction: column;
 }
 
-.tracked-empty,
-.tracked-none,
-.tracked-side-name,
-.tracked-card-title,
-.tracked-bar-number,
-.text-box-attach,
-.tracked-event-old,
-.tracked-event-time,
-.tracked-session-where {
-  color: var(--tet-descriptionForeground);
-}
-
 .tracked-card-author,
 .tracked-event-name,
 .tracked-side-title {
@@ -1392,10 +1380,10 @@ textarea:focus,
 
 .editor-bar.tracked-bar {
   gap: 0;
-  padding: 0;
+  padding: 0 6px;
 }
 
-.tracked-bar > :is(.tracked-state, .tracked-bar-number) {
+.tracked-bar >:is(.tracked-state, .tracked-bar-number) {
   padding: 0 10px;
   font-size: var(--tet-font-size);
 }
@@ -2112,7 +2100,7 @@ button.change-request-check:hover {
   position: relative;
   align-self: stretch;
   flex: none;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 
 .editor-bar-actions::after {
