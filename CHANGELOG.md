@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.13 (2026-11-25)
+
+- **Assignee and reviewer on a new change request.** The new change request dialog picks them from a list and remembers the picks.
+
 ## 0.27.12 (2026-11-25)
 
 - **Fixes.** Startup reads a project's id without spawning git and reports the window as drawn sooner.
