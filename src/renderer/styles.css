@@ -2934,7 +2934,7 @@ button.change-request-check:hover {
 .dialog-tabs {
   align-items: center;
   gap: var(--action-gap);
-  padding: 0 var(--island-gap);
+  padding: 0 8px 0 var(--island-gap);
   overflow: hidden;
 }
 
@@ -2958,7 +2958,7 @@ button.change-request-check:hover {
   align-items: center;
   gap: 8px;
   flex: none;
-  padding: 0 6px 0 12px;
+  padding: 0 8px 0 16px;
 }
 
 .dialog-title {
