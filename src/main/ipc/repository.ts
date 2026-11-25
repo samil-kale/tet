@@ -28,6 +28,7 @@ import type { ChangeRequestInput } from "../../shared/types/providers";
 import { addExclude, addFolder, removeFolder } from "../store/tet-json";
 import { cancelSuggestion, suggestCommitMessage } from "../agents/suggest";
 import {
+  changeRequestPeople,
   changeRequestTarget,
   createChangeRequest,
   findChangeRequest,
@@ -173,6 +174,7 @@ export function registerRepositoryIpc({
   on("repository:cancel-suggestion", () => cancelSuggestion());
   handle("repository:change-request-target", (_event, ref: ProjectRef) => changeRequestTarget(changeRequests, ref));
   handle("repository:find-change-request", (_event, ref: ProjectRef) => findChangeRequest(changeRequests, ref));
+  handle("repository:change-request-people", (_event, ref: ProjectRef) => changeRequestPeople(changeRequests, ref));
   handle("repository:suggest-change-request", (_event, ref: ProjectRef, into: string) => suggestChangeRequest(changeRequests, ref, into));
   handle("repository:create-change-request", (_event, ref: ProjectRef, input: ChangeRequestInput) =>
     createChangeRequest(changeRequests, ref, input),

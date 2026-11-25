@@ -501,8 +501,18 @@ export interface ChangeRequest {
 /** The checked-out branch's open pull or merge request, `open` absent where it has none. */
 export type ChangeRequestFindResult = (ActionDone & { open?: ChangeRequest }) | ActionRefused;
 
-/** What the dialog asks for: its text, and what is done with it once it is open. */
-export interface ChangeRequestInput {
+/** Whom a pull or merge request is assigned to and asked to review, by login; absent for nobody. */
+export interface ChangeRequestPeople {
+  assignee?: string;
+  reviewer?: string;
+}
+
+/** Who can be assigned to the checked-out branch's pull or merge request or review it, by login, and
+ *  the project's last picks among them (`Project.changeRequestPeople`). */
+export type ChangeRequestPeopleResult = (ActionDone & ChangeRequestPeople & { people: string[] }) | ActionRefused;
+
+/** What the dialog asks for: its text, whom it goes to, and what is done with it once it is open. */
+export interface ChangeRequestInput extends ChangeRequestPeople {
   /** The branch it merges into, one of `ChangeRequestTarget.branches`. */
   into: string;
   title: string;
@@ -523,8 +533,11 @@ export interface ChangeRequestInput {
 /** Opened, with why what was to follow did not: the request stands either way. */
 export type ChangeRequestCreateResult = (ActionDone & ChangeRequest & ChangeRequestFollowUps) | ActionRefused;
 
-/** Why an approval or auto-merge asked for did not happen; absent where it did or was not asked. */
+/** Why an assignee, a reviewer, an approval or auto-merge asked for did not happen; absent where it
+ *  did or was not asked. */
 export interface ChangeRequestFollowUps {
+  assignError?: string;
+  reviewError?: string;
   approveError?: string;
   autoMergeError?: string;
 }

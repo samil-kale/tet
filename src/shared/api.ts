@@ -20,6 +20,7 @@ import type {
   ChangeRequestCreateResult,
   ChangeRequestFindResult,
   ChangeRequestInput,
+  ChangeRequestPeopleResult,
   ChangeRequestTargetResult,
   TrackedChange,
   IssueCreateResult,
@@ -326,6 +327,8 @@ export interface TETApi {
     changeRequestTarget: (ref: ProjectRef) => Promise<ChangeRequestTargetResult>;
     /** The checked-out branch's open pull or merge request, asked of its host. */
     findChangeRequest: (ref: ProjectRef) => Promise<ChangeRequestFindResult>;
+    /** Who its host lets be assigned to one or review it, and the project's last picks among them. */
+    changeRequestPeople: (ref: ProjectRef) => Promise<ChangeRequestPeopleResult>;
     /** The settings' `prompts.commitSuggesters` suggest the title and description of the checked-out
      *  branch's pull or merge request into `into`, in the shape of a commit message: the first line is
      *  the title. */

@@ -3227,7 +3227,8 @@ button.change-request-check:hover {
 }
 
 /* The options in two columns: draft, auto-merge and squash, each ruling out the next, one below the
-   other in the first; the host's own beside them. */
+   other in the first; the host's own beside them. Assignee and Reviewer above them in the same two. */
+.change-request-people,
 .change-request-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -685,6 +685,25 @@ describe("the stores", () => {
     assert.equal(new ProjectStore(dir).list().length, 3, "persisted");
     assert.deepEqual(fs.readdirSync(dir), ["projects.json"], "renamed into place, no temporary file left");
   });
+
+  it("remember whom a project's last change request went to, a broken pick dropping alone", () => {
+    const dir = tempDir("tet-projects-");
+    const pathOf = (name: string): string => path.resolve(path.sep, name);
+    fs.writeFileSync(
+      path.join(dir, "projects.json"),
+      JSON.stringify([
+        { id: "a", path: pathOf("a"), name: "a", changeRequestPeople: { assignee: 7, reviewer: "victor" } },
+        { id: "b", path: pathOf("b"), name: "b", changeRequestPeople: "junk" },
+      ]),
+    );
+    const store = new ProjectStore(dir);
+    assert.deepEqual(store.get("a")?.changeRequestPeople, { reviewer: "victor" });
+    assert.equal(store.get("b")?.changeRequestPeople, undefined, "the project kept, its pick not");
+    store.setChangeRequestPeople("b", { assignee: "victor" });
+    assert.deepEqual(new ProjectStore(dir).get("b")?.changeRequestPeople, { assignee: "victor" }, "persisted");
+    store.setId("b", "c");
+    assert.deepEqual(store.get("c")?.changeRequestPeople, { assignee: "victor" }, "kept with a new id");
+  });
 });
 
 describe("what TET keeps", { skip: PLATFORM.spawnsThroughCmd && "not win32" }, () => {

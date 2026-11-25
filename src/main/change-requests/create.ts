@@ -8,6 +8,8 @@ import type {
   ChangeRequestFindResult,
   ChangeRequestFollowUps,
   ChangeRequestInput,
+  ChangeRequestPeople,
+  ChangeRequestPeopleResult,
   ChangeRequestTargetResult,
 } from "../../shared/types/providers";
 import { suggestChangeRequest as suggestText } from "../agents/suggest";
@@ -17,6 +19,7 @@ import type { GitProvider, Tracker } from "../providers/provider";
 import { notOpenMessage } from "../store/resolved-ref";
 import type { ProjectStore } from "../store/project-store";
 import type { SettingsAccess } from "../store/settings";
+import { logFailure } from "../util/json-file";
 
 /**
  * A pull or merge request from the checked-out branch, into a branch of the repository it is pushed
@@ -123,6 +126,27 @@ export async function findChangeRequest(
   }
 }
 
+/** Who can be assigned to it or review it, asked of its host, and of the project's last picks those
+ *  still among them. */
+export async function changeRequestPeople(
+  deps: Pick<ChangeRequestDeps, "accounts" | "repositories" | "store">,
+  ref: ProjectRef,
+): Promise<ChangeRequestPeopleResult> {
+  try {
+    const { target } = requireTarget(deps, ref);
+    const people = await onHost(deps.accounts, target, (provider, tracker) => provider.repository.listPeople(tracker));
+    const { assignee, reviewer } = deps.store.get(ref.projectId)?.changeRequestPeople ?? {};
+    return {
+      ok: true,
+      people,
+      ...(assignee !== undefined && people.includes(assignee) && { assignee }),
+      ...(reviewer !== undefined && people.includes(reviewer) && { reviewer }),
+    };
+  } catch (error) {
+    return failure(error);
+  }
+}
+
 /** Its title and description, suggested from the commits `into`, the branch it merges into, lacks. */
 export async function suggestChangeRequest(
   deps: Pick<ChangeRequestDeps, "repositories" | "settings" | "store">,
@@ -144,13 +168,14 @@ export async function suggestChangeRequest(
   );
 }
 
-/** Opens one from the checked-out branch, pushed by then, and approves it and sets it to auto-merge
- *  as asked, through the account that opened it. A write: another account takes over only from one
- *  that does not reach the repository (`WRITE_HANDS_OVER`). */
+/** Opens one from the checked-out branch, pushed by then, assigns it and asks for a review, and
+ *  approves it and sets it to auto-merge as asked, through the account that opened it; whom it went
+ *  to is the project's next pick. A write: another account takes over only from one that does not
+ *  reach the repository (`WRITE_HANDS_OVER`). */
 export async function createChangeRequest(
   deps: Pick<ChangeRequestDeps, "accounts" | "repositories" | "store">,
   ref: ProjectRef,
-  { into, title, description, draft, deleteSourceBranch, ...asked }: ChangeRequestInput,
+  { into, title, description, draft, deleteSourceBranch, assignee, reviewer, ...asked }: ChangeRequestInput,
 ): Promise<ChangeRequestCreateResult> {
   try {
     const { target } = requireTarget(deps, ref, into);
@@ -166,14 +191,48 @@ export async function createChangeRequest(
           draft,
           deleteSourceBranch,
         });
-        return { ...opened, ...(await approveAndAutoMerge(provider, tracker, opened.number, asked)) };
+        return {
+          ...opened,
+          ...(await assignAndRequestReview(provider, tracker, opened.number, { assignee, reviewer })),
+          ...(await approveAndAutoMerge(provider, tracker, opened.number, asked)),
+        };
       },
       WRITE_HANDS_OVER,
     );
+    logFailure("remember whom the change request went to", () => deps.store.setChangeRequestPeople(ref.projectId, { assignee, reviewer }));
     return { ok: true, ...created };
   } catch (error) {
     return failure(error);
   }
+}
+
+/**
+ * Assigns an open one and asks for its review, as asked, before `approveAndAutoMerge`: approved and
+ * set to auto-merge, the host may merge it before the reviewer is asked. Never throws, for the reason
+ * `approveAndAutoMerge` gives.
+ */
+export async function assignAndRequestReview(
+  provider: GitProvider,
+  tracker: Tracker,
+  number: number,
+  { assignee, reviewer }: ChangeRequestPeople,
+): Promise<Pick<ChangeRequestFollowUps, "assignError" | "reviewError">> {
+  const told: Pick<ChangeRequestFollowUps, "assignError" | "reviewError"> = {};
+  if (assignee !== undefined) {
+    try {
+      await provider.changeRequests.setField(tracker, number, "assignees", [assignee]);
+    } catch (error) {
+      told.assignError = errorMessage(error);
+    }
+  }
+  if (reviewer !== undefined) {
+    try {
+      await provider.changeRequests.setField(tracker, number, "reviewers", [reviewer]);
+    } catch (error) {
+      told.reviewError = errorMessage(error);
+    }
+  }
+  return told;
 }
 
 /**

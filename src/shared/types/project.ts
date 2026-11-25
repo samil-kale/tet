@@ -1,8 +1,9 @@
 import type { ActionDone, ActionRefused } from "./action";
 import type { WorktreeInfo } from "./git";
+import type { ChangeRequestPeople } from "./providers";
 
-/** A repository TET has open. Stored in `projects.json` as `{id, path, name}`; `worktrees` is read off
- *  the disk and never stored. */
+/** A repository TET has open. Stored in `projects.json` as `{id, path, name, changeRequestPeople}`;
+ *  `worktrees` is read off the disk and never stored. */
 export interface Project {
   /** `tet.id` in the repository's git config (projects.ts's resolveProjectId), shared by its
    *  worktrees. */
@@ -14,6 +15,9 @@ export interface Project {
   /** Its linked worktrees, by branch (git.ts's readWorktrees). Those TET made carry their `key`;
    *  the others (made elsewhere) are shown greyed and never opened. */
   worktrees: ProjectWorktree[];
+  /** Whom its last pull or merge request opened in TET went to, which the next one's dialog picks
+   *  first; absent until one was opened. */
+  changeRequestPeople?: ChangeRequestPeople;
 }
 
 /** A linked worktree of a project, as the projects lane lists it. */

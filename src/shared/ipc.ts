@@ -108,6 +108,7 @@ export interface InvokeChannels {
   "repository:suggest-commit-message": TETApi["repository"]["suggestCommitMessage"];
   "repository:change-request-target": TETApi["repository"]["changeRequestTarget"];
   "repository:find-change-request": TETApi["repository"]["findChangeRequest"];
+  "repository:change-request-people": TETApi["repository"]["changeRequestPeople"];
   "repository:suggest-change-request": TETApi["repository"]["suggestChangeRequest"];
   "repository:create-change-request": TETApi["repository"]["createChangeRequest"];
   "repository:stash-push": TETApi["repository"]["stashPush"];

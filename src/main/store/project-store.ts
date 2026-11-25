@@ -1,8 +1,24 @@
 import * as path from "node:path";
 import type { Project, ProjectWorktree } from "../../shared/types/project";
-import { readRows, writeJson } from "../util/json-file";
+import type { ChangeRequestPeople } from "../../shared/types/providers";
+import { isRecord, readRows, writeJson } from "../util/json-file";
 import { readHeadBranch } from "../util/linked-git-dir";
 import { ownedWorktreeKeys, worktreeDir } from "./project-dirs";
+
+/** The picks a row holds, each kept only as a string: a broken one is never picked, nor drops its
+ *  project. */
+function changeRequestPeopleOf(value: unknown): { changeRequestPeople?: ChangeRequestPeople } {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const { assignee, reviewer } = value;
+  return {
+    changeRequestPeople: {
+      ...(typeof assignee === "string" && { assignee }),
+      ...(typeof reviewer === "string" && { reviewer }),
+    },
+  };
+}
 
 /** Finding a project, all either transport needs to answer *about* one; the store's own edits
  *  are the window's (`ipc/projects.ts`). Taken by `ControlDeps`. */
@@ -77,6 +93,14 @@ export class ProjectStore implements ProjectLookup {
     return true;
   }
 
+  /** Remembers whom the project's pull or merge request just opened went to, for the next one. */
+  setChangeRequestPeople(projectId: string, changeRequestPeople: ChangeRequestPeople): void {
+    const project = this.get(projectId);
+    if (project) {
+      this.save(this.projects.map((entry) => (entry === project ? { ...project, changeRequestPeople } : entry)));
+    }
+  }
+
   remove(projectId: string): void {
     this.save(this.projects.filter((project) => project.id !== projectId));
   }
@@ -99,9 +123,17 @@ export class ProjectStore implements ProjectLookup {
   }
 
   private load(): void {
-    this.projects = readRows<{ id: string; path: string; name: string }>(this.file, ["id", "path", "name"]).map(
-      ({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name, worktrees: this.ownWorktrees(id) }),
-    );
+    this.projects = readRows<{ id: string; path: string; name: string; changeRequestPeople?: unknown }>(this.file, [
+      "id",
+      "path",
+      "name",
+    ]).map(({ id, path: repositoryPath, name, changeRequestPeople }) => ({
+      id,
+      path: repositoryPath,
+      name,
+      worktrees: this.ownWorktrees(id),
+      ...changeRequestPeopleOf(changeRequestPeople),
+    }));
   }
 
   /** Throws when the file cannot be written, the projects unchanged. */
@@ -109,7 +141,7 @@ export class ProjectStore implements ProjectLookup {
     // Renamed into place: `load` reads a half-written file as none, and the next save would keep that.
     writeJson(
       this.file,
-      projects.map(({ id, path: repositoryPath, name }) => ({ id, path: repositoryPath, name })),
+      projects.map(({ id, path: repositoryPath, name, changeRequestPeople }) => ({ id, path: repositoryPath, name, changeRequestPeople })),
     );
     this.projects = projects;
   }

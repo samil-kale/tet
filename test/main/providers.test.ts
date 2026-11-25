@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { describe, it } from "node:test";
-import { approveAndAutoMerge } from "../../src/main/change-requests/create";
+import { approveAndAutoMerge, assignAndRequestReview } from "../../src/main/change-requests/create";
 import { changeRequestMarkdown, checkoutSentence } from "../../src/main/change-requests/tracker";
 import { AccountStore } from "../../src/main/providers/accounts";
 import { PROVIDERS } from "../../src/main/providers";
@@ -1092,6 +1092,32 @@ describe("a pull or merge request", () => {
     calls.length = 0;
     assert.deepEqual(await approveAndAutoMerge(providerOf(false), tracker, 7, { approve: true, autoMerge: false, squash: false }), {});
     assert.deepEqual(calls, ["approve token-a 7"], "nothing not asked for");
+  });
+
+  it("is assigned and its review asked for by login, each failure told and none undoing it", async () => {
+    const tracker: Tracker = { host: "github.com", token: "token-a", path: "owner/app" };
+    const calls: string[] = [];
+    const provider = {
+      changeRequests: {
+        setField: async (on: Tracker, number: number, fieldId: string, value: unknown) => {
+          calls.push(`${fieldId} ${JSON.stringify(value)} ${on.token} ${number}`);
+          if (fieldId === "reviewers") {
+            throw new Error("Review cannot be requested from pull request author.");
+          }
+        },
+      },
+    } as unknown as GitProvider;
+    assert.deepEqual(await assignAndRequestReview(provider, tracker, 42, { assignee: "victor", reviewer: "victor" }), {
+      reviewError: "Review cannot be requested from pull request author.",
+    });
+    assert.deepEqual(
+      calls,
+      ['assignees ["victor"] token-a 42', 'reviewers ["victor"] token-a 42'],
+      "each as its field, through the account that opened it",
+    );
+    calls.length = 0;
+    assert.deepEqual(await assignAndRequestReview(provider, tracker, 7, {}), {});
+    assert.deepEqual(calls, [], "nobody picked, nothing set");
   });
 
   it("is reached on the host the remote names, through that host's accounts alone", async () => {

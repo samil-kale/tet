@@ -147,6 +147,7 @@ const api: TETApi = {
     cancelSuggestion: () => send("repository:cancel-suggestion"),
     changeRequestTarget: (ref) => invoke("repository:change-request-target", ref),
     findChangeRequest: (ref) => invoke("repository:find-change-request", ref),
+    changeRequestPeople: (ref) => invoke("repository:change-request-people", ref),
     suggestChangeRequest: (ref, into) => invoke("repository:suggest-change-request", ref, into),
     createChangeRequest: (ref, input) => invoke("repository:create-change-request", ref, input),
     stashPush: (ref, message) => invoke("repository:stash-push", ref, message),
