@@ -10,7 +10,7 @@ import type { GitActionResult, GitCommandResult, RepositoryState } from "../shar
 import type { AddRepositoryResult, ProjectCommand, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
 import type { ControlRecords } from "./ctl/ctl-records";
 import { git } from "./git/git-client";
-import { readHeadBranch, readRepositoryPath } from "./util/linked-git-dir";
+import { readHeadBranch, readProjectId, readRepositoryPath } from "./util/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
 import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
@@ -105,7 +105,7 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
     if (!project) {
       let stored: string | undefined;
       try {
-        stored = await git.readProjectId(repositoryPath);
+        stored = await readProjectId(repositoryPath);
       } catch (error) {
         return { ok: false, error: `${repositoryPath}'s git config could not be read: ${errorMessage(error)}` };
       }
@@ -158,7 +158,7 @@ export async function resolveStoredIds(deps: Pick<ProjectDeps, "store" | "notice
   const projects = deps.store.list();
   const read = await Promise.all(
     projects.map((project) =>
-      git.readProjectId(project.path).then(
+      readProjectId(project.path).then(
         (id) => ({ id }),
         () => undefined,
       ),

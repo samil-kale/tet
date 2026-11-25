@@ -52,6 +52,32 @@ function resolveWin32Executable(executable: string): { path: string; batch: bool
   return undefined;
 }
 
+/**
+ * Whether `executable` names a program `resolveCommand` would start — found in its folder or along
+ * PATH, on win32 by the extensions cmd.exe tries, elsewhere a file that may be executed — without
+ * starting it.
+ */
+export function findsExecutable(executable: string): boolean {
+  if (PLATFORM.spawnsThroughCmd) {
+    const resolved = resolveWin32Executable(executable);
+    return resolved !== undefined && fs.existsSync(resolved.path);
+  }
+  const candidates = executable.includes("/")
+    ? [executable]
+    : (process.env.PATH ?? "")
+        .split(path.delimiter)
+        .filter(Boolean)
+        .map((dir) => path.join(dir, executable));
+  return candidates.some((candidate) => {
+    try {
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return fs.statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  });
+}
+
 export interface ResolvedCommand {
   command: string;
   args: string[];

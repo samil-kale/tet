@@ -63,7 +63,9 @@ import { settingsAccessOf } from "./settings-access";
 import { SettingsStore } from "./store/settings";
 import { currentTheme } from "./store/theme";
 import { PLATFORM } from "./util/host-platform";
+import { markStartup } from "./util/startup-timing";
 
+markStartup("main.js loaded");
 dropOuterKept();
 
 /**
@@ -273,6 +275,7 @@ let workspaceOpened: Promise<void> | undefined;
 function openWorkspace(): Promise<void> {
   workspaceOpened ??= (async () => {
     await resolveStoredIds(projectDeps);
+    markStartup("project ids read");
     await openStoredProjects(projectDeps);
     void startControl();
   })().catch((error: unknown) => {
@@ -403,11 +406,12 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   void app.whenReady().then(async () => {
+    markStartup("electron ready");
     Menu.setApplicationMenu(null);
     // Before anything reads PATH, add the agents' install dirs to the OS's bare GUI PATH. Awaited
     // only after the window: on macOS/Linux it asks the login shell. The initial requirements
     // check uses this preparation even when it finishes before the window loads.
-    const pathReady = augmentAgentPath();
+    const pathReady = augmentAgentPath().finally(() => markStartup("PATH read"));
     sweepDropFiles(dataRoot);
     void environment.applyEncryption();
     try {
@@ -446,6 +450,7 @@ if (!app.requestSingleInstanceLock()) {
       shutdown,
     });
     createWindow();
+    markStartup("window created");
     // The git process inherits its environment at the fork, so it waits for PATH; started up front
     // while the renderer loads.
     await pathReady;

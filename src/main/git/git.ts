@@ -186,23 +186,6 @@ export async function resolveRoot(cwd: string): Promise<string | undefined> {
   throw new Error(result.stderr.trim() || `git rev-parse failed in ${cwd}`);
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/**
- * The repository's project id, `tet.id` in its own config (`--local`: a linked worktree reads the
- * repository's, which is the point); undefined where it has none, or none valid. Rejects where git
- * cannot say (the folder gone, git not started): no answer is not "none", which would replace it.
- */
-export async function readProjectId(cwd: string): Promise<string | undefined> {
-  const result = await git(cwd, ["config", "--local", "--get", "tet.id"]);
-  // Exit 1 is git's "no such key".
-  if (result.code !== 0 && result.code !== 1) {
-    throw new Error(result.stderr.trim() || `git config failed (exit code ${result.code})`);
-  }
-  const id = result.code === 0 ? result.stdout.trim() : "";
-  return UUID.test(id) ? id.toLowerCase() : undefined;
-}
-
 export function writeProjectId(cwd: string, id: string): Promise<GitCommandResult> {
   return run(cwd, ["config", "--local", "tet.id", id]);
 }

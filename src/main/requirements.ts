@@ -3,9 +3,10 @@ import { AGENTS, agentInstalled } from "./agents";
 import { worktreesSupported } from "../shared/types/git";
 import type { Requirement, Requirements } from "../shared/types/agents";
 import { git } from "./git/git-client";
-import { readSbxVersion } from "./sbx/sbx-cli";
 import { isSimulatedMissing } from "./util/simulate";
 import { augmentAgentPath } from "./agents/agent-path";
+import { findsExecutable } from "./util/process";
+import { markStartup } from "./util/startup-timing";
 
 const GIT: Omit<Requirement, "installed"> = {
   name: "Git",
@@ -30,7 +31,7 @@ function yieldToLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-/** Checked one tick apart (yieldToLoop). */
+/** Started one tick apart (yieldToLoop); what the tabs reuse (`agentInstalled`). */
 async function checkAgentRequirements(): Promise<Requirement[]> {
   // No repository's directory: the checks are about the programs.
   const cwd = os.tmpdir();
@@ -50,23 +51,41 @@ async function checkAgentRequirements(): Promise<Requirement[]> {
   return Promise.all(agentChecks);
 }
 
+/** Whether `command` is there to start: looked up, never started (`findsExecutable`). */
+function found(command: string): boolean {
+  return !isSimulatedMissing(command) && findsExecutable(command);
+}
+
+/**
+ * Each agent as the gate sees it: found on PATH. Starting each for its `--version` (on win32 an npm
+ * shim through cmd.exe) would hold the whole start for the slowest; one that is there but fails to
+ * run says so in its tab, which checks it by starting it (`agentInstalled`).
+ */
+function agentRequirements(): Requirement[] {
+  // The shell has no `install`.
+  return AGENTS.filter((agent) => agent.install !== undefined).map((agent) => ({
+    name: agent.displayName,
+    command: agent.executable(),
+    installed: found(agent.executable()),
+  }));
+}
+
 /**
  * Needed before the app opens: git, and an agent or sbx — a sandboxed tab runs the agent's CLI in
  * its sandbox (AgentPlaces.sbxOnly). Met, ipc/app.ts's `startup:check` opens the workspace; unmet,
  * `RequirementsDialog` is a wall and installs nothing. Never answered from memory: each re-check
  * re-scans the managers' bin dirs (`augmentAgentPath`); an install elsewhere needs a restart.
- * Projects opened afterwards reuse this answer (`agentInstalled`).
+ * Git alone is started: its version says whether worktrees can be made.
  */
 export async function checkRequirements(): Promise<Requirements> {
-  // In the git utility process (git-client.ts), so started alongside the agent checks.
-  const gitVersion = isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
-
-  // A tick ahead of the agents: on win32 process creations hurt when sharing a tick (yieldToLoop).
-  const sbxInstalled = readSbxVersion().then((sbxVersion) => sbxVersion !== undefined);
-  await yieldToLoop();
-
-  const agents = await checkAgentRequirements();
-  const [version, sbx] = await Promise.all([gitVersion, sbxInstalled]);
+  // In the git utility process (git-client.ts).
+  const gitVersion = (isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined)).finally(() =>
+    markStartup("git checked"),
+  );
+  const agents = agentRequirements();
+  const sbx = found(SBX.command);
+  markStartup("agents and sbx found");
+  const version = await gitVersion;
   const installed = version !== undefined;
   return {
     met: installed && (SHELL_SUFFICES || agents.some((agent) => agent.installed) || sbx),

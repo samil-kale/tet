@@ -11,6 +11,7 @@ import { on, once } from "./ipc/channels";
 import { logError } from "./util/error-log";
 import { PLATFORM } from "./util/host-platform";
 import { isOpenableUrl } from "./util/shell-open";
+import { markStartup, reportStartup } from "./util/startup-timing";
 
 /** Output arrives in small chunks; batch them rather than one IPC message each. */
 const OUTPUT_FLUSH_MS = 8;
@@ -88,7 +89,10 @@ export class AppWindow {
   private backgroundGradient = true;
 
   constructor(private readonly deps: AppWindowDeps) {
-    on("app:drawn", () => this.showOnce(this.liveWindow()));
+    on("app:drawn", () => {
+      markStartup("page drawn");
+      this.showOnce(this.liveWindow());
+    });
     on("tabs:output-ack", (_event, ref, tabId, length) => this.ackOutput(ref, tabId, length));
     on("app:notice-listening", () => {
       this.noticesHeard = true;
@@ -108,6 +112,7 @@ export class AppWindow {
   private showOnce(window: BrowserWindow | undefined): void {
     if (!this.deps.hidden && window && !window.isDestroyed() && !window.isVisible()) {
       window.show();
+      reportStartup();
     }
   }
 
@@ -435,13 +440,16 @@ export class AppWindow {
 
     // Every load, reloads included, has no listener until App subscribes.
     window.webContents.on("did-start-loading", () => {
+      markStartup("page loading");
       this.noticesHeard = false;
       this.resetFlow();
       this.deps.onPageLoad();
     });
     // A reload reads the theme off the window's original arguments, possibly stale since showTheme.
     // The renderer ignores its own theme id.
+    window.webContents.on("dom-ready", () => markStartup("page scripts ran"));
     window.webContents.on("did-finish-load", () => {
+      markStartup("page loaded");
       if (this.theme) {
         this.send("app:theme", this.theme.id);
       }

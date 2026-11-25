@@ -11,7 +11,8 @@ import { stopGitProcess } from "../../src/main/git/git-client";
 import { PLATFORM } from "../../src/main/util/host-platform";
 import { pathKey } from "../../src/main/util/process";
 import type { Requirements } from "../../src/shared/types/agents";
-import { forkUtilitiesInProcess, ROOT } from "../helpers";
+import { AGENTS } from "../../src/main/agents";
+import { forkUtilitiesInProcess, ROOT, tempDir } from "../helpers";
 
 /** ipc/: what the handlers do beyond passing on, and that every channel has one. */
 
@@ -53,9 +54,20 @@ describe("the startup gate", () => {
   }
 
   /** A fresh check finds the programs without starting the machine's agents or login shell. */
+  /** Every agent's program on PATH (the gate looks them up), each a stand-in never started. */
   function installedPrograms(t: TestContext) {
     forkUtilitiesInProcess();
     t.after(stopGitProcess);
+    const bin = tempDir("tet-programs-");
+    for (const agent of AGENTS.filter((entry) => entry.install !== undefined)) {
+      fs.writeFileSync(path.join(bin, agent.executable() + (PLATFORM.spawnsThroughCmd ? ".exe" : "")), "", { mode: 0o755 });
+    }
+    const key = pathKey(process.env);
+    const before = process.env[key];
+    process.env[key] = [bin, before].filter(Boolean).join(path.delimiter);
+    t.after(() => {
+      process.env[key] = before;
+    });
     const paths = t.mock.method(childProcess, "execFile", ((...args: unknown[]) => {
       const callback = args.at(-1) as (error: null, stdout: string, stderr: string) => void;
       queueMicrotask(() => callback(null, `__TET_PATH_START__${process.env[pathKey(process.env)]}__TET_PATH_END__`, ""));
@@ -94,13 +106,13 @@ describe("the startup gate", () => {
     assert.equal(gate.opened(), 1);
   });
 
-  it("re-checks programs and PATH after missing requirements", async (t) => {
+  it("re-checks PATH after missing requirements, looking the agents up without starting them", async (t) => {
     const { paths, programs } = installedPrograms(t);
     const gate = startup(Promise.resolve(unmet));
     assert.strictEqual(await gate.check(), unmet);
     assert.equal((await gate.check()).met, true);
     assert.equal(gate.opened(), 1);
-    assert.ok(programs.mock.callCount() > 0);
+    assert.equal(programs.mock.callCount(), 0);
     if (!PLATFORM.agentDirsKnown) {
       // git.ts runs through execFile too, for the requirements' own git version.
       assert.equal(paths.mock.calls.filter((call) => call.arguments[0] !== "git").length, 1);
