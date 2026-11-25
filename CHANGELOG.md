@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.12 (2026-11-25)
+
+- **Fixes.** Startup reads a project's id without spawning git and reports the window as drawn sooner.
+
 ## 0.27.11 (2026-11-24)
 
 - **Fixes.** The tab strip's edge fades out smoothly while it scrolls.
