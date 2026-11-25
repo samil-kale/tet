@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.14 (2026-11-25)
+
+- **Fixes.** Thinner separators on the tab strip and editor bar, tighter padding in dialog headers and tracked tabs, and a change request's commit and line counts stay on one line.
+
 ## 0.27.13 (2026-11-25)
 
 - **Assignee and reviewer on a new change request.** The new change request dialog picks them from a list and remembers the picks.
