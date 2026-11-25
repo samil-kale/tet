@@ -177,6 +177,7 @@ textarea:focus,
 .dropdown-menu .context-menu-item > span,
 .context-menu.truncating .context-menu-item > span:not(.line-icon),
 .status-list-label,
+.text-box-tools,
 .change-request-segment-head > .tracked-none,
 .notice.session .notice-message {
   overflow: hidden;
@@ -1553,13 +1554,15 @@ button.change-request-check:hover {
   gap: 20px;
 }
 
-/* Takes the room; the side column goes under it in a narrow pane. */
+/* Takes the room; the side column goes under it in a narrow pane. Never narrower than the text
+   box's bar (`.text-box-tabs`: the tabs and the format buttons), whose buttons would else run
+   under the side column. */
 .tracked-main {
   /* The entries' distance; the line joining them is drawn to it. */
   --thread-gap: 16px;
-  flex: 999 1 320px;
+  flex: 999 1 420px;
   gap: var(--thread-gap);
-  min-width: 0;
+  min-width: min(420px, 100%);
 }
 
 .tracked-card {
@@ -1632,7 +1635,7 @@ button.change-request-check:hover {
   border-radius: var(--border-radius) var(--border-radius) 0 0;
 }
 
-/* The format buttons, a `.toolbar` at the bar's end. */
+/* The format buttons, a `.toolbar` at the bar's end; the ones past the room fade out. */
 .text-box-tools {
   margin-left: auto;
   padding: 0 6px;
