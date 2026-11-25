@@ -1965,7 +1965,7 @@ button.change-request-check:hover {
   flex: none;
   padding: 0 var(--island-gap);
   background: var(--tet-editor-background);
-  border-bottom: 2px solid var(--tet-app-background);
+  border-bottom: 1px solid var(--tet-app-border);
   /* `--tabs-scroll` follows the tabs' scroll (`.tabs`). */
   timeline-scope: --tabs;
   --tabs-overflow: var(--tabs-scroll);
@@ -2107,12 +2107,23 @@ button.change-request-check:hover {
 }
 
 /* The editor tab's bar boxes its actions (a `.toolbar`) at its start, at the bar's full height, set
-   off from the path by a line in the ground's colour, as the bar's own (`.editor-bar`). */
+   off from what follows by a short separator, as between tabs (`--separator-height`). */
 .editor-bar-actions {
+  position: relative;
   align-self: stretch;
   flex: none;
-  border-right: 2px solid var(--tet-app-background);
   padding: 0 6px;
+}
+
+.editor-bar-actions::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 1px;
+  height: var(--separator-height);
+  transform: translateY(-50%);
+  background: var(--tet-app-border);
 }
 
 .tab-label {
@@ -2648,7 +2659,7 @@ button.change-request-check:hover {
   height: var(--bar-height);
   padding: 0 2px 0 0;
   background: var(--tet-editor-background);
-  border-bottom: 2px solid var(--tet-app-background);
+  border-bottom: 1px solid var(--tet-app-border);
 }
 
 .editor-bar-title {
