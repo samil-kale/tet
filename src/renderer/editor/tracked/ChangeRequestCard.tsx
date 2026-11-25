@@ -186,13 +186,19 @@ export function ChangeRequestCard({
       <div className="tracked-card-header">
         <span className="tracked-card-title">
           {named`${status.head} into ${status.base}`}
-          {" · "}
-          {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
+          {" "}
+          <span className="change-request-fact-unit">
+            {"· "}
+            {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
+          </span>
           {status.additions !== undefined && status.deletions !== undefined && (
             <>
-              {" · "}
-              <span className="change-request-additions">+{status.additions}</span>{" "}
-              <span className="change-request-deletions">−{status.deletions}</span>
+              {" "}
+              <span className="change-request-fact-unit">
+                {"· "}
+                <span className="change-request-additions">+{status.additions}</span>{" "}
+                <span className="change-request-deletions">−{status.deletions}</span>
+              </span>
             </>
           )}
         </span>

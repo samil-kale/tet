@@ -177,6 +177,7 @@ textarea:focus,
 .dropdown-menu .context-menu-item > span,
 .context-menu.truncating .context-menu-item > span:not(.line-icon),
 .status-list-label,
+.change-request-segment-head > .tracked-none,
 .notice.session .notice-message {
   overflow: hidden;
   white-space: nowrap;
@@ -1383,13 +1384,17 @@ textarea:focus,
   padding: 0 6px;
 }
 
-.tracked-bar >:is(.tracked-state, .tracked-bar-number) {
+.tracked-bar > :is(.tracked-state, .tracked-bar-number) {
   padding: 0 10px;
   font-size: var(--tet-font-size);
 }
 
 /* A change request's card atop the thread: its branches the title, its status the body. No line of the
    thread runs up to the text's card below it, which stands first as it does without one. */
+.change-request-fact-unit {
+  white-space: nowrap;
+}
+
 .change-request-additions {
   color: var(--tet-terminal-ansiGreen);
 }
