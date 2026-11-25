@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RepositoryState } from "../../../shared/types/git";
 import type { ProjectRef } from "../../../shared/types/project";
 import {
@@ -15,10 +15,12 @@ import {
 import { askLogin } from "../../git/GitLogin";
 import type { FileAsk } from "../../git/run-action";
 import { filled, prompt, type PromptFields } from "../../ui/Dialog";
-import { Dropdown, type DropdownOption } from "../../ui/Dropdown";
+import { Dropdown } from "../../ui/Dropdown";
 import { Checkbox, Field, SuggestField, TextField } from "../../ui/Field";
+import { ChevronIcon } from "../../ui/icons";
 import { named } from "../../ui/named";
 import { notify } from "../../ui/Notices";
+import { PickMenu } from "../../ui/PickMenu";
 
 /** The button's and the dialog's title, in the host's word: "Push and create Pull-Request". Until
  *  the host is known, or where it is none, it says "Change Request" (the code's word for either). */
@@ -48,9 +50,40 @@ function splitSuggestion(text: string): { title: string; description: string } {
 /** The dialog's checkboxes. */
 type ChangeRequestOption = Exclude<keyof ChangeRequestInput, "into" | "title" | "description" | keyof ChangeRequestPeople>;
 
-/** What the Assignee and Reviewer dropdowns offer: nobody, then the host's people by login. */
-function personOptions(people: string[]): DropdownOption<string>[] {
-  return [{ value: "", label: "Nobody", separatorAfter: true }, ...people.map((login) => ({ value: login, label: login }))];
+/** The Assignee or Reviewer field: a trigger drawn as a dropdown's, opening the list a tracked tab's
+ *  side column picks people from (`PickMenu`), the pick marked and first, picked again to take it
+ *  back; empty with nobody picked. Disabled with the dialog's body, as `MenuButton` has no state of
+ *  its own for it. */
+function PersonField({
+  label,
+  error,
+  people,
+  picked,
+  onChange,
+}: {
+  label: string;
+  error?: string;
+  people: string[];
+  picked: string | undefined;
+  onChange: (picked: string | undefined) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  return (
+    <Field label={label} error={error}>
+      <div ref={box} className="select-field">
+        <PickMenu
+          className="dropdown-trigger"
+          alignTo={box}
+          options={people}
+          isPicked={(login) => login === picked}
+          onPick={(login) => onChange(login === picked ? undefined : login)}
+        >
+          <span className="dropdown-label">{picked}</span>
+        </PickMenu>
+        <ChevronIcon expanded className="select-chevron" />
+      </div>
+    </Field>
+  );
 }
 
 /** `value` with what cannot apply unchecked: a draft is never set to auto-merge, and only one set to
@@ -95,9 +128,7 @@ function ChangeRequestFields({
     [hold],
   );
   const tick = (option: ChangeRequestOption) => (checked: boolean) => onChange((current) => applicable({ ...current, [option]: checked }));
-  const pick = (role: keyof ChangeRequestPeople) => (login: string) =>
-    onChange((current) => ({ ...current, [role]: login === "" ? undefined : login }));
-  const options = personOptions(people);
+  const pick = (role: keyof ChangeRequestPeople) => (login: string | undefined) => onChange((current) => ({ ...current, [role]: login }));
   return (
     <>
       {/* The host's word is no name: only the branch is set apart. */}
@@ -149,12 +180,8 @@ function ChangeRequestFields({
         onSuggesting={onSuggesting}
       />
       <div className="change-request-people">
-        <Field label="Assignee" error={peopleError}>
-          <Dropdown value={value.assignee ?? ""} options={options} onChange={pick("assignee")} disabled={busy} />
-        </Field>
-        <Field label="Reviewer">
-          <Dropdown value={value.reviewer ?? ""} options={options} onChange={pick("reviewer")} disabled={busy} />
-        </Field>
+        <PersonField label="Assignee" error={peopleError} people={people} picked={value.assignee} onChange={pick("assignee")} />
+        <PersonField label="Reviewer" people={people} picked={value.reviewer} onChange={pick("reviewer")} />
       </div>
       <div className="change-request-options">
         <div>
