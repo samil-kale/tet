@@ -14,13 +14,11 @@
     "npm run dist"
   ],
   "sbx": {
-    "enabled": true,
+    "enabled": false,
     "ports": [],
     "paths": [],
     "hosts": [],
-    "environment": [
-      "CLAUDE_CODE_SCROLL_SPEED"
-    ],
+    "environment": ["CLAUDE_CODE_SCROLL_SPEED"],
     "mcp": [],
     "setup": []
   }

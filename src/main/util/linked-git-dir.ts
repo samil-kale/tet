@@ -60,34 +60,27 @@ export function readRepositoryPath(root: string): string | undefined {
   }
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
- * The repository's project id, `tet.id` in its own config file as `git config --local --get` reads
- * it (a linked worktree reads the repository's, which is the point; includes are not followed),
- * without starting git; undefined where it has none, or none valid. Rejects where the file cannot
- * be read (the folder gone): no answer is not "none", which would replace it.
+ * `section.key` (no subsection) of the repository's own config file, as `git config --local --get`
+ * reads it, without starting git: a linked worktree reads the repository's, includes are not
+ * followed, the last value wins. Undefined where it has none; rejects where the file cannot be read
+ * (the folder gone).
  */
-export async function readProjectId(root: string): Promise<string | undefined> {
+export async function readLocalConfig(root: string, section: string, key: string): Promise<string | undefined> {
   const linked = readLinkedGitDir(root);
   const gitDir = linked ? (linked.commonDir ?? linked.gitDir) : path.join(root, ".git");
-  const id = gitConfigValue(await fs.promises.readFile(path.join(gitDir, "config"), "utf8"), "tet", "id") ?? "";
-  return UUID.test(id) ? id.toLowerCase() : undefined;
+  return configValue(await fs.promises.readFile(path.join(gitDir, "config"), "utf8"), section, key);
 }
 
-/**
- * The last value of `key` in `[section]` (no subsection) of a git config file's text, as git parses
- * it: names without case, quotes and backslash escapes in the value, `#` and `;` comments outside
- * quotes. A key without `=` is git's boolean true and gives "".
- */
-export function gitConfigValue(text: string, section: string, key: string): string | undefined {
+/** As git parses the file: names without case, a subsection another section, quotes and backslash
+ *  escapes in the value, `#` and `;` comments outside quotes. A key without `=` gives "". */
+function configValue(text: string, section: string, key: string): string | undefined {
   let inSection = false;
   let value: string | undefined;
   for (const rawLine of text.split(/\r?\n/)) {
     let line = rawLine.trim();
     const header = /^\[\s*([^\]\s"]+)\s*(?:"(?:[^"\\]|\\.)*"\s*)?\]/.exec(line);
     if (header) {
-      // A subsection (`[tet "x"]`) is another section than `[tet]`.
       inSection = header[1].toLowerCase() === section.toLowerCase() && !header[0].includes('"');
       line = line.slice(header[0].length).trim();
     }

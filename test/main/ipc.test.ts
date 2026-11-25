@@ -53,8 +53,8 @@ describe("the startup gate", () => {
     return { check: () => check(), opened: () => opened };
   }
 
-  /** A fresh check finds the programs without starting the machine's agents or login shell. */
-  /** Every agent's program on PATH (the gate looks them up), each a stand-in never started. */
+  /** A fresh check finds the programs without starting the machine's agents or login shell: each
+   *  agent a stand-in on PATH, where the gate looks it up. */
   function installedPrograms(t: TestContext) {
     forkUtilitiesInProcess();
     t.after(stopGitProcess);

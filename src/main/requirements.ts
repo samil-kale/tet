@@ -21,34 +21,8 @@ const SBX: Omit<Requirement, "installed"> = {
 /** For the e2e tests: a CI runner with git and no agent still opens, shell only. */
 const SHELL_SUFFICES = process.argv.includes("--allow-shell-only");
 
-/**
- * Checking an agent spawns it, on win32 mostly via cmd.exe, whose process creation blocks the event
- * loop. In one tick, such blocks merge into one long startup freeze; a tick between each keeps them
- * apart.
- */
-function yieldToLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-/** Started one tick apart (yieldToLoop); what the tabs reuse (`agentInstalled`). */
-async function checkAgentRequirements(): Promise<Requirement[]> {
-  // No repository's directory: the checks are about the programs.
-  const cwd = os.tmpdir();
-  // The shell has no `install`.
-  const installable = AGENTS.filter((agent) => agent.install !== undefined);
-  const agentChecks: Promise<Requirement>[] = [];
-  for (const agent of installable) {
-    agentChecks.push(
-      (async (): Promise<Requirement> => ({
-        name: agent.displayName,
-        command: agent.executable(),
-        installed: await agentInstalled(agent, cwd, true),
-      }))(),
-    );
-    await yieldToLoop();
-  }
-  return Promise.all(agentChecks);
-}
+/** The agents to install; the shell has no `install`. */
+const INSTALLABLE = AGENTS.filter((agent) => agent.install !== undefined);
 
 /** Whether `command` is there to start: looked up, never started (`findsExecutable`). */
 function found(command: string): boolean {
@@ -56,30 +30,23 @@ function found(command: string): boolean {
 }
 
 /**
- * Each agent as the gate sees it: found on PATH. Starting each for its `--version` (on win32 an npm
- * shim through cmd.exe) would hold the whole start for the slowest; one that is there but fails to
- * run says so in its tab, which checks it by starting it (`agentInstalled`).
- */
-function agentRequirements(): Requirement[] {
-  // The shell has no `install`.
-  return AGENTS.filter((agent) => agent.install !== undefined).map((agent) => ({
-    name: agent.displayName,
-    command: agent.executable(),
-    installed: found(agent.executable()),
-  }));
-}
-
-/**
  * Needed before the app opens: git, and an agent or sbx — a sandboxed tab runs the agent's CLI in
  * its sandbox (AgentPlaces.sbxOnly). Met, ipc/app.ts's `startup:check` opens the workspace; unmet,
  * `RequirementsDialog` is a wall and installs nothing. Never answered from memory: each re-check
  * re-scans the managers' bin dirs (`augmentAgentPath`); an install elsewhere needs a restart.
- * Git alone is started: its version says whether worktrees can be made.
+ *
+ * Only git is started, in its utility process (git-client.ts): its version says whether worktrees
+ * can be made. The agents and sbx are looked up on PATH: starting each for its `--version` (on win32
+ * an npm shim through cmd.exe) would hold the whole start for the slowest, and one that is there but
+ * fails to run says so in its tab, which starts it (`agentInstalled`).
  */
 export async function checkRequirements(): Promise<Requirements> {
-  // In the git utility process (git-client.ts).
   const gitVersion = isSimulatedMissing(GIT.command) ? Promise.resolve(undefined) : git.version().catch(() => undefined);
-  const agents = agentRequirements();
+  const agents = INSTALLABLE.map((agent) => ({
+    name: agent.displayName,
+    command: agent.executable(),
+    installed: found(agent.executable()),
+  }));
   const sbx = found(SBX.command);
   const version = await gitVersion;
   const installed = version !== undefined;
@@ -93,12 +60,29 @@ export async function checkRequirements(): Promise<Requirements> {
 }
 
 /**
+ * Checking an agent spawns it, on win32 mostly via cmd.exe, whose process creation blocks the event
+ * loop. In one tick, such blocks merge into one long freeze; a tick between each keeps them apart.
+ */
+function yieldToLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/**
  * Whether any agent CLI is installed now — deciding sbx-only: add-repository opens the SBX Settings
  * when none is, and SbxSettingsDialog locks on it. Never stored or polled; asked where TET refreshes
  * host state, PATH re-read first since the user may just have installed one (`augmentAgentPath`
- * joins a running call, so beside `sbx:status` it costs one login shell).
+ * joins a running call, so beside `sbx:status` it costs one login shell). Each agent is started, one
+ * tick apart (yieldToLoop), and not looked up: this answer is what the tabs reuse (`agentInstalled`),
+ * so an agent installed since they asked is found by them too.
  */
 export async function anyAgentInstalled(): Promise<boolean> {
   await augmentAgentPath();
-  return (await checkAgentRequirements()).some((agent) => agent.installed);
+  // No repository's directory: the checks are about the programs.
+  const cwd = os.tmpdir();
+  const checks: Promise<boolean>[] = [];
+  for (const agent of INSTALLABLE) {
+    checks.push(agentInstalled(agent, cwd, true));
+    await yieldToLoop();
+  }
+  return (await Promise.all(checks)).some(Boolean);
 }

@@ -15,6 +15,7 @@ import {
   deleteWorktree,
   openStoredProjects,
   projectFileChanged,
+  readProjectId,
   removeMissingProject,
   removeProject,
   resolveStoredIds,
@@ -26,7 +27,8 @@ import { SbxLocalStore } from "../../src/main/sbx/sbx-local";
 import { readCommands, readSbxSettings, writeCommands } from "../../src/main/store/tet-json";
 import type { AddRepositoryResult, ProjectRef, ProjectsChange } from "../../src/shared/types/project";
 import type { NoticeSeverity } from "../../src/shared/types/app";
-import { eventually, forkUtilitiesInProcess, git, initBare, isolateGitConfig, tempDir } from "../helpers";
+import { eventually, forkUtilitiesInProcess, git, initBare, initRepository, isolateGitConfig, tempDir } from "../helpers";
+import { readLocalConfig } from "../../src/main/util/linked-git-dir";
 
 /**
  * projects.ts against the real git and real Repositories, the tab managers faked: a project's id in its
@@ -549,5 +551,41 @@ describe("a worktree's tet.json", () => {
     fs.writeFileSync(path.join(repo.main, "tet.json"), JSON.stringify({ commands: ["npm test"] }));
     await eventually("told", () => told.includes(id));
     assert.ok(told.every((projectId) => projectId === id));
+  });
+});
+
+describe("a project's id, read off its git config", () => {
+  const ID = "0b6c1e1e-6a8f-4f5e-9a51-3c1f2b7d9e10";
+
+  it("is what git wrote, in the repository and in a linked worktree", async () => {
+    const dir = initRepository("tet-project-id-");
+    assert.equal(await readProjectId(dir), undefined);
+    git(dir, "config", "--local", "tet.id", ID.toUpperCase());
+    assert.equal(await readProjectId(dir), ID);
+    const worktree = path.join(tempDir("tet-project-id-wt-"), "wt");
+    git(dir, "worktree", "add", "-q", "-b", "wt", worktree);
+    assert.equal(await readProjectId(worktree), ID);
+    git(dir, "config", "--local", "tet.id", "not-a-uuid");
+    assert.equal(await readProjectId(dir), undefined);
+    await assert.rejects(readProjectId(tempDir("tet-project-id-none-")));
+  });
+
+  it("is read as git reads the file", async () => {
+    const dir = initRepository("tet-project-id-syntax-");
+    fs.appendFileSync(
+      path.join(dir, ".git", "config"),
+      [
+        '[tet "sub"]',
+        "\tid = subsection",
+        "; a comment",
+        "[TeT]",
+        '\tID = "a#b" # cut',
+        "[other] id = other",
+        '[tet] id = "last\\"quoted" ; cut',
+        "",
+      ].join("\r\n"),
+    );
+    assert.equal(await readLocalConfig(dir, "tet", "id"), git(dir, "config", "--local", "--get", "tet.id"));
+    assert.equal(await readLocalConfig(dir, "tet", "missing"), undefined);
   });
 });

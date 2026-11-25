@@ -8,7 +8,7 @@ import { shell } from "electron";
 import { GitLoginStore } from "../../src/main/git/git-logins";
 import * as git_ from "../../src/main/git/git";
 import { Repository, RepositoryManager } from "../../src/main/git/repository";
-import { gitConfigValue, readProjectId, readRepositoryPath } from "../../src/main/util/linked-git-dir";
+import { readRepositoryPath } from "../../src/main/util/linked-git-dir";
 import type { ActionResult } from "../../src/shared/types/action";
 import { type GitCommandResult, type GitLogin, worktreeBase } from "../../src/shared/types/git";
 import { MISSING_MTIME_MS, type FileSearchQuery, type FileSearchResult } from "../../src/shared/types/files";
@@ -1141,51 +1141,5 @@ describe("the watcher under a folder git ignores", () => {
     fs.writeFileSync(path.join(dir, "new.txt"), "new\n");
     await eventually("a new file elsewhere is listed", () => listings > baseline.listings, 5000);
     await eventually("and shows in the state", () => states > baseline.states, 5000);
-  });
-});
-
-describe("the project id read off the git config file", () => {
-  const ID = "0b6c1e1e-6a8f-4f5e-9a51-3c1f2b7d9e10";
-
-  it("reads what git wrote, from the repository and from a linked worktree", async () => {
-    const dir = initRepository("tet-project-id-");
-    assert.equal(await readProjectId(dir), undefined);
-    git(dir, "config", "--local", "tet.id", ID.toUpperCase());
-    assert.equal(await readProjectId(dir), ID);
-    const worktree = path.join(tempDir("tet-project-id-wt-"), "wt");
-    git(dir, "worktree", "add", "-q", "-b", "wt", worktree);
-    assert.equal(await readProjectId(worktree), ID);
-    git(dir, "config", "--local", "tet.id", "not-a-uuid");
-    assert.equal(await readProjectId(dir), undefined);
-  });
-
-  it("rejects where there is no config to read", async () => {
-    await assert.rejects(readProjectId(tempDir("tet-project-id-none-")));
-  });
-
-  it("parses the file as git does", () => {
-    const text = [
-      "[core]",
-      "\tid = core-value",
-      '[tet "sub"]',
-      "\tid = subsection-value",
-      "; a comment",
-      "[TeT]",
-      '\tID = "first" # cut',
-      "[other] id = other-value",
-      '[tet] id = "last\\"quoted" ; cut',
-    ].join("\r\n");
-    assert.equal(gitConfigValue(text, "tet", "id"), 'last"quoted');
-    assert.equal(gitConfigValue("[tet]\n\tflag\n", "tet", "flag"), "");
-    assert.equal(gitConfigValue("[tet]\n\tother = 1\n", "tet", "id"), undefined);
-  });
-
-  it("agrees with git on the same file", () => {
-    const dir = initRepository("tet-project-id-agree-");
-    fs.appendFileSync(path.join(dir, ".git", "config"), '[tet]\n\tid = "a#b" ; comment\n[tet "x"]\n\tid = no\n[Tet]\n\tId = c\\"d\n');
-    assert.equal(
-      gitConfigValue(fs.readFileSync(path.join(dir, ".git", "config"), "utf8"), "tet", "id"),
-      git(dir, "config", "--local", "--get", "tet.id"),
-    );
   });
 });

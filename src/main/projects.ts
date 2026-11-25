@@ -10,7 +10,7 @@ import type { GitActionResult, GitCommandResult, RepositoryState } from "../shar
 import type { AddRepositoryResult, ProjectCommand, ProjectRef, ProjectsChange, ProjectWorktree } from "../shared/types/project";
 import type { ControlRecords } from "./ctl/ctl-records";
 import { git } from "./git/git-client";
-import { readHeadBranch, readProjectId, readRepositoryPath } from "./util/linked-git-dir";
+import { readHeadBranch, readLocalConfig, readRepositoryPath } from "./util/linked-git-dir";
 import type { RepositoryManager } from "./git/repository";
 import { inTurn } from "./util/async";
 import { logFailure } from "./util/json-file";
@@ -124,6 +124,19 @@ async function addNow(deps: ProjectDeps, directory: string): Promise<AddReposito
   return { ok: true, project, worktree };
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The repository's project id, `tet.id` in its own config (a linked worktree reads the repository's,
+ * which is the point), read off the file: starting git once per project would hold the start.
+ * Undefined where it has none, or none valid; rejects where the file cannot be read (the folder
+ * gone): no answer is not "none", which would replace it.
+ */
+export async function readProjectId(repositoryPath: string): Promise<string | undefined> {
+  const id = (await readLocalConfig(repositoryPath, "tet", "id")) ?? "";
+  return UUID.test(id) ? id.toLowerCase() : undefined;
+}
+
 /**
  * The project id from the repository's `tet.id` as read (`stored`), written where it has none. A
  * value another project holds at another path — a copied folder — is replaced: two folders never
@@ -152,7 +165,7 @@ async function resolveProjectId(
 /**
  * Each stored project's id as its repository says, before anything of it opens: read at once, then
  * settled in order, so a copied folder is told apart from the one it was copied from. A repository
- * git cannot answer for keeps the stored id — no answer is not "none", which would replace it.
+ * whose config cannot be read keeps the stored id — no answer is not "none", which would replace it.
  */
 export async function resolveStoredIds(deps: Pick<ProjectDeps, "store" | "notice">): Promise<void> {
   const projects = deps.store.list();
