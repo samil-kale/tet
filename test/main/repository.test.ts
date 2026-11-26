@@ -101,6 +101,14 @@ function errorOf(result: ActionResult): string | undefined {
   return result.ok ? undefined : result.error;
 }
 
+/** Whether `promise` has settled once everything ready to run has run. */
+async function settled(promise: Promise<unknown>): Promise<boolean> {
+  let ended = false;
+  void promise.then(() => (ended = true));
+  await new Promise((resolve) => setImmediate(resolve));
+  return ended;
+}
+
 describe("a discard, through the trash as in GitHub Desktop", () => {
   let dir: string;
   let repository: Repository;
@@ -278,6 +286,19 @@ describe("a command clicked during the periodic fetch", () => {
   });
 });
 
+describe("a repository closed", () => {
+  it("resolves once its read of the ignore list has ended, whose git runs in its folder", async () => {
+    const repository = await open(initRepository("tet-repository-closed-ignored-"));
+    let read: () => void = () => undefined;
+    // A read underway, as the first read's end starts one.
+    Object.assign(repository, { ignoredReads: new Set([new Promise<void>((resolve) => (read = resolve))]) });
+    const closed = repository.dispose();
+    assert.equal(await settled(closed), false);
+    read();
+    await closed;
+  });
+});
+
 describe("every repository disposed on quitting", () => {
   /** An open repository of a manager of its own, its first read done. */
   async function openInManager(prefix: string): Promise<{ manager: RepositoryManager; repository: Repository }> {
@@ -293,14 +314,6 @@ describe("every repository disposed on quitting", () => {
     const repository = manager.open({ ref: { projectId: path.basename(dir) }, path: dir, name: () => path.basename(dir) });
     await repository.refresh();
     return { manager, repository };
-  }
-
-  /** Whether `promise` has settled once everything ready to run has run. */
-  async function settled(promise: Promise<unknown>): Promise<boolean> {
-    let ended = false;
-    void promise.then(() => (ended = true));
-    await new Promise((resolve) => setImmediate(resolve));
-    return ended;
   }
 
   it("waits for the action underway", async () => {

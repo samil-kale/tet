@@ -200,6 +200,8 @@ export class Repository {
   private ignored: ReadonlySet<string> = new Set();
   /** The newest `reloadIgnored`, so an older read finishing late is not taken. */
   private ignoredLoad = 0;
+  /** `reloadIgnored`'s reads underway, for `dispose` to wait on: one may outlive a newer. */
+  private readonly ignoredReads = new Set<Promise<void>>();
   private ignoredTimer: ReturnType<typeof setTimeout> | undefined;
   /** The Explorer's last listing showed ignored files: paths appearing under them re-list it. */
   private explorerShowsIgnored = false;
@@ -1138,14 +1140,17 @@ export class Repository {
       return;
     }
     const load = ++this.ignoredLoad;
-    void listIgnored(this.at.path).then(
-      (entries) => {
-        if (load === this.ignoredLoad && !this.disposed) {
-          this.ignored = new Set(entries);
-        }
-      },
-      () => undefined,
-    );
+    const read = listIgnored(this.at.path)
+      .then(
+        (entries) => {
+          if (load === this.ignoredLoad && !this.disposed) {
+            this.ignored = new Set(entries);
+          }
+        },
+        () => undefined,
+      )
+      .finally(() => this.ignoredReads.delete(read));
+    this.ignoredReads.add(read);
   }
 
   /** Only a missing repository folder closes the project; a worktree belongs to syncWorktrees. */
@@ -1225,7 +1230,7 @@ export class Repository {
     this.closeWatchers();
     // The git process caches per-directory answers; on quit it is stopped after this.
     void git.forget(this.at.path).catch(() => undefined);
-    return Promise.allSettled([this.starting, this.inflight, this.action, this.autoFetching]).then(() => undefined);
+    return Promise.allSettled([this.starting, this.inflight, this.action, this.autoFetching, ...this.ignoredReads]).then(() => undefined);
   }
 
   /** Resolves once the action underway has ended, whatever else still runs. */
