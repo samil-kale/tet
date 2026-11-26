@@ -388,8 +388,8 @@ textarea:focus,
      between two side by side, as IntelliJ's toolbar buttons with their 2px on either side. */
   --action-size: 22px;
   --action-gap: 4px;
-  /* A vertical separator's length: between a text box's formats (`.text-box-separator`) and
-     between tabs (`.tab::before`). */
+  /* A vertical separator's length: between a text box's formats (`.text-box-separator`), and a
+     tab's drop line (`.tab::before`). */
   --separator-height: 16px;
   /* Secondary text beside the UI font: a header's, a link's, a detail's; the badges smaller. */
   --small-font-size: 12px;
@@ -1385,9 +1385,14 @@ textarea:focus,
   padding: 0 6px;
 }
 
-.tracked-bar > :is(.tracked-state, .tracked-bar-number) {
-  padding: 0 10px;
-  font-size: var(--tet-font-size);
+/* Room parts it from the actions and the title, no separator; a state of two words stays on one line. */
+.tracked-bar > .tracked-state {
+  flex: none;
+}
+
+/* The number leads the title, set back from it. */
+.tracked-bar-number {
+  color: var(--tet-descriptionForeground);
 }
 
 /* A change request's card atop the thread: its branches the title, its status the body. No line of the
@@ -1844,9 +1849,10 @@ button.change-request-check:hover {
   gap: var(--action-gap);
 }
 
-/* A label, and in an issue's tab a name in a sentence (`named`) as GitLab draws a branch: a pill, in
-   the editor's font the name keeps. */
+/* A label, an issue's state in its bar, and in an issue's tab a name in a sentence (`named`) as
+   GitLab draws a branch: a pill, in the editor's font the name keeps. */
 .label-pill,
+.tracked-bar > .tracked-state,
 .tracked-view .inline-name {
   padding: 3px 7px;
   border: 1px solid var(--tet-app-border);
@@ -1955,8 +1961,7 @@ button.change-request-check:hover {
    tab's content is the ground's colour, as if the island parted there. */
 .tab-strip {
   /* While more tabs lie past the strip's end they fade out over `--tabs-fade`, gone
-     `--tabs-fade-clear` before their scroller's end: the line before the + has as much room on its
-     left as on its right, to the + glyph, as Chrome's. */
+     `--tabs-fade-clear` before their scroller's end, clear of the +. */
   --tabs-fade: 24px;
   --tabs-fade-clear: 11px;
   position: relative;
@@ -2020,8 +2025,7 @@ button.change-request-check:hover {
   overflow-x: auto;
   scrollbar-width: none;
   scroll-timeline: --tabs inline;
-  /* Fades out under the line before the + (`.new-tab::before`), and keeps a tab scrolled into view
-     clear of the fade. */
+  /* Fades out before the +, and keeps a tab scrolled into view clear of the fade. */
   mask-image: linear-gradient(
     to left,
     transparent calc(var(--tabs-overflow) * var(--tabs-fade-clear)),
@@ -2049,7 +2053,7 @@ button.change-request-check:hover {
 }
 
 .tab {
-  /* For its separator, the drop line (`.tab::before`). */
+  /* For its drop lines (`.tab::before`, `.tab::after`). */
   position: relative;
   gap: 8px;
   /* Less on the right: the close button carries room of its own around the glyph. */
@@ -2074,17 +2078,16 @@ button.change-request-check:hover {
   border-color: var(--tet-app-border);
 }
 
-/* Tab separators are the app border and double as drop marks. */
+/* No separator parts the tabs: the gap does, and the outline or the hover fill around one. Only
+   where a drag would drop, a line in the accent, in the gap. */
 .tab::before,
-.tab::after,
-.new-tab::before {
+.tab::after {
   position: absolute;
   pointer-events: none;
   top: 50%;
   width: 1px;
   height: var(--separator-height);
   transform: translateY(-50%);
-  background: var(--tet-app-border);
 }
 
 .tab::before {
@@ -2095,12 +2098,6 @@ button.change-request-check:hover {
   right: -3px;
 }
 
-/* None beside the active or the hovered tab, whose outline or fill parts it already. */
-.tab:not(.active, :hover) + .tab:not(.active, :hover)::before {
-  content: "";
-}
-
-/* Where a drag would drop, always: the drop line is the separator, marking. */
 .tab.drop-before::before,
 .tab.drop-after::after {
   content: "";
@@ -2109,23 +2106,11 @@ button.change-request-check:hover {
 }
 
 /* The editor tab's bar boxes its actions (a `.toolbar`) at its start, at the bar's full height, set
-   off from what follows by a short separator, as between tabs (`--separator-height`). */
+   off from what follows by its padding alone. */
 .editor-bar-actions {
-  position: relative;
   align-self: stretch;
   flex: none;
   padding: 0 8px;
-}
-
-.editor-bar-actions::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 0;
-  width: 1px;
-  height: var(--separator-height);
-  transform: translateY(-50%);
-  background: var(--tet-app-border);
 }
 
 .tab-label {
@@ -2223,23 +2208,10 @@ button.change-request-check:hover {
 }
 
 .new-tab {
-  /* For the line before it (`.new-tab::before`). */
-  position: relative;
   display: flex;
   align-items: center;
   flex: none;
   padding-left: 5px;
-}
-
-/* The separator sits outside the scroller so its edge cannot clip it. */
-.new-tab::before {
-  content: "";
-  left: calc(var(--action-gap) / -2);
-  opacity: var(--tabs-overflow);
-}
-
-.tabs:has(> .tab:last-child:not(.active, :hover)) ~ .new-tab::before {
-  opacity: 1;
 }
 
 /* What floats over the window reads alike: the menus, the status bar's lists, the notification
