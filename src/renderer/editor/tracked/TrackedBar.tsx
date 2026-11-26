@@ -108,8 +108,9 @@ export function TrackedBar({
           )}
         </div>
         <span className="tracked-state">{stateOf(issue)}</span>
+        <span className="tracked-bar-number">{numberOf(issue)}</span>
         <span className="editor-bar-title" title={issue.title}>
-          <span className="tracked-bar-number">{numberOf(issue)}</span> {issue.title}
+          {issue.title}
         </span>
       </div>
       {agentMenu.render(agentEntries, "new-tab-menu")}

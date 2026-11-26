@@ -1219,7 +1219,8 @@ textarea:focus,
 
 .tracked-card-author,
 .tracked-event-name,
-.tracked-side-title {
+.tracked-side-title,
+.change-request-branch {
   font-weight: 600;
 }
 
@@ -1385,14 +1386,15 @@ textarea:focus,
   padding: 0 6px;
 }
 
-/* Room parts it from the actions and the title, no separator; a state of two words stays on one line. */
-.tracked-bar > .tracked-state {
+/* Room parts the state and the number from the actions and the title, no separator; a state of two
+   words stays on one line. */
+.tracked-bar > :is(.tracked-state, .tracked-bar-number) {
   flex: none;
 }
 
-/* The number leads the title, set back from it. */
-.tracked-bar-number {
-  color: var(--tet-descriptionForeground);
+/* As far from the state as the title is from it (`.editor-bar-title`'s padding). */
+.tracked-bar > .tracked-bar-number {
+  margin-left: 10px;
 }
 
 /* A change request's card atop the thread: its branches the title, its status the body. No line of the
@@ -1416,14 +1418,10 @@ textarea:focus,
   padding: 6px var(--card-padding);
 }
 
-/* Its head, status and lists stand on the editor's fill, the segments on the ground's,
-   under the card's rounded corners. */
+/* Its head stands on the ground's fill as every card's, the rest on the editor's; a segment's hover
+   stays under the card's rounded corners. */
 .change-request-card {
   overflow: hidden;
-}
-
-.change-request-card > .tracked-card-header {
-  background: var(--tet-editor-background);
 }
 
 .change-request-fact {
@@ -1449,19 +1447,15 @@ textarea:focus,
 .change-request-segments {
   display: flex;
   border-top: 1px solid var(--tet-app-border);
-  background: var(--tet-app-background);
 }
 
+/* No line parts them: their padding does. */
 .change-request-segment {
   flex: 1 1 0;
   min-width: 0;
   gap: 8px;
   padding: 10px var(--card-padding);
   text-align: left;
-}
-
-.change-request-segment + .change-request-segment {
-  border-left: 1px solid var(--tet-app-border);
 }
 
 button.change-request-segment:hover {
@@ -1849,10 +1843,10 @@ button.change-request-check:hover {
   gap: var(--action-gap);
 }
 
-/* A label, an issue's state in its bar, and in an issue's tab a name in a sentence (`named`) as
-   GitLab draws a branch: a pill, in the editor's font the name keeps. */
+/* A label, an issue's state and number in its bar, and in an issue's tab a name in a sentence
+   (`named`) as GitLab draws a branch: a pill, in the editor's font the name keeps. */
 .label-pill,
-.tracked-bar > .tracked-state,
+.tracked-bar > :is(.tracked-state, .tracked-bar-number),
 .tracked-view .inline-name {
   padding: 3px 7px;
   border: 1px solid var(--tet-app-border);

@@ -185,7 +185,7 @@ export function ChangeRequestCard({
     <div className="tracked-card change-request-card">
       <div className="tracked-card-header">
         <span className="tracked-card-title">
-          {named`${status.head} into ${status.base}`}{" "}
+          <span className="change-request-branch">{status.head}</span> into <span className="change-request-branch">{status.base}</span>{" "}
           <span className="change-request-fact-unit">
             {"· "}
             {status.commits === 1 ? "1 commit" : `${status.commits} commits`}
