@@ -1381,11 +1381,6 @@ textarea:focus,
   user-select: text;
 }
 
-.editor-bar.tracked-bar {
-  gap: 0;
-  padding: 0 6px;
-}
-
 /* Room parts the state and the number from the actions and the title, no separator; a state of two
    words stays on one line. */
 .tracked-bar > :is(.tracked-state, .tracked-bar-number) {
@@ -2622,10 +2617,9 @@ button.change-request-check:hover {
 .editor-bar {
   display: flex;
   align-items: center;
-  gap: 2px;
   flex: none;
   height: var(--bar-height);
-  padding: 0 2px 0 0;
+  padding: 0 6px;
   background: var(--tet-editor-background);
   border-bottom: 1px solid var(--tet-app-border);
 }
@@ -2635,6 +2629,16 @@ button.change-request-check:hover {
   min-width: 0;
   padding: 0 10px;
   font-size: var(--tet-font-size);
+}
+
+/* Right after the actions, the path stands as far from the last icon as a change request's state
+   does in `.tracked-bar`: the actions' own padding. */
+.editor-bar-actions + .editor-bar-title {
+  padding-left: 0;
+}
+
+.editor-dirty + .editor-bar-title {
+  padding-left: 4px;
 }
 
 /* A toggle that is on (the editor bar's, a filter field's; the Navigation Bar's have their own).
