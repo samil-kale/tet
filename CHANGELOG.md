@@ -3,9 +3,9 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
-## 0.27.15 (2026-11-26)
+## 0.27.16 (2026-11-26)
 
-- **Fixes.** No more separators on the tab strip and an issue's or change request's bar, whose state and number now stand as pills before the title; a change request's branches are bold, the thread's line runs through the avatars' middle, and a text box's format buttons fade out instead of running under the side column.
+- **Fixes.** No more separators on the tab strip and an issue's or change request's bar, whose state and number now stand as pills before the title; a change request's branches are bold, the thread's line runs through the avatars' middle, and a text box's format buttons fade out instead of running under the side column. On Windows, deleting a worktree or a project no longer fails now and then while TET is still reading what git ignores in it.
 
 ## 0.27.14 (2026-11-25)
 
