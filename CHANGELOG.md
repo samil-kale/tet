@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.27.15 (2026-11-26)
+
+- **Fixes.** No more separators on the tab strip and an issue's or change request's bar, whose state and number now stand as pills before the title; a change request's branches are bold, the thread's line runs through the avatars' middle, and a text box's format buttons fade out instead of running under the side column.
+
 ## 0.27.14 (2026-11-25)
 
 - **Fixes.** Thinner separators on the tab strip and editor bar, tighter padding in dialog headers and tracked tabs, and a change request's commit and line counts stay on one line.
