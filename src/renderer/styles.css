@@ -2418,12 +2418,8 @@ button.change-request-check:hover {
   visibility: hidden;
 }
 
-/* The annotate mode's bar (`AnnotateBar`) stands over the pane body's top edge; its terminal starts
-   below it. */
-.terminal-host.annotating {
-  top: calc(var(--bar-height) + var(--island-gap));
-}
-
+/* The annotate mode's bar (`AnnotateBar`) lies over the terminal's top edge, which keeps its size:
+   a bar that took room would refit the pty, and the agent would redraw what is being marked. */
 .annotate-bar {
   position: absolute;
   top: 0;

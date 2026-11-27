@@ -33,7 +33,8 @@ interface TerminalHostProps {
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
  * follows at once, active or not: an unmounted container has no layout to take output into.
  *
- * In the annotate mode the host also draws the mode's bar (`AnnotateBar`) above the terminal.
+ * In the annotate mode the host also draws the mode's bar (`AnnotateBar`) over the terminal's top
+ * edge, which does not resize it.
  */
 export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visible, focused }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -85,10 +86,9 @@ export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visib
   }, [at, tabId, shown]);
 
   // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself.
-  // `annotating` makes room for the annotate bar: the observer above refits.
   return (
     <>
-      <div ref={container} className={`terminal-host${active ? "" : " hidden"}${annotating ? " annotating" : ""}`} />
+      <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />
       {annotating && shown && <AnnotateBar at={at} tabId={tabId} />}
     </>
   );

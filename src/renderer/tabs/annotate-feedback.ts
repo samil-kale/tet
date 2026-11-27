@@ -131,36 +131,12 @@ const ALL_TRACKING = Object.keys(TRACKING_PARAMS).join(";");
 
 /**
  * Switches the mouse reporting off in xterm alone, so it selects text where a TUI had taken the
- * mouse. One sequence, which `trackingAfter` knows again as its own: the focus and encoding modes
- * stay.
+ * mouse. The focus and encoding modes stay.
  */
 export const MOUSE_TRACKING_OFF = `\x1b[?${ALL_TRACKING}l`;
-
-/** Whether a private-mode sequence names a mouse reporting mode. */
-export function touchesTracking(params: readonly number[]): boolean {
-  return params.some((param) => param in TRACKING_PARAMS);
-}
 
 /** The sequence that puts a mode back. */
 export function mouseTrackingOn(mode: MouseTracking): string {
   const param = Object.entries(TRACKING_PARAMS).find(([, name]) => name === mode)?.[0];
   return param === undefined ? "" : `\x1b[?${param}h`;
-}
-
-/**
- * What the program wants after a private-mode set (`h`) or reset (`l`) of `params`, from what it
- * wanted before; our own `MOUSE_TRACKING_OFF` is no wish of the program's.
- */
-export function trackingAfter(wanted: MouseTracking, params: readonly number[], set: boolean): MouseTracking {
-  if (!set && params.join(";") === ALL_TRACKING) {
-    return wanted;
-  }
-  let next = wanted;
-  for (const param of params) {
-    const name = TRACKING_PARAMS[param];
-    if (name !== undefined) {
-      next = set ? name : "none";
-    }
-  }
-  return next;
 }

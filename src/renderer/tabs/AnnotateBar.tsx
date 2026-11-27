@@ -8,6 +8,7 @@ import { commentOnSelection } from "./annotate-comment";
 import { KIND_LABELS, type AnnotationKind } from "./annotate-feedback";
 import {
   addAnnotation,
+  clearAnnotations,
   closeMenu,
   copySelectedText,
   readSelection,
@@ -23,7 +24,7 @@ import { viewKey } from "./terminal-views";
 /** How far the popup stands off the pointer. */
 const POPUP_OFFSET = 14;
 
-function menuEntries(key: string, menu: AnnotateMenu): ContextMenuEntry[] {
+function menuEntries(key: string, menu: AnnotateMenu, count: number): ContextMenuEntry[] {
   const mark = (kind: AnnotationKind) =>
     menu.selected
       ? () => {
@@ -40,6 +41,9 @@ function menuEntries(key: string, menu: AnnotateMenu): ContextMenuEntry[] {
     { label: KIND_LABELS.delete, run: mark("delete") },
     SEPARATOR,
     { label: "Remove Annotation", run: annotationId === undefined ? undefined : () => removeAnnotation(key, annotationId) },
+    { label: "Remove All Annotations", run: count > 0 ? () => clearAnnotations(key) : undefined },
+    SEPARATOR,
+    { label: "Send to Agent", run: count > 0 ? () => sendAnnotations(key) : undefined },
     SEPARATOR,
     { label: "Copy", run: menu.selected ? () => copySelectedText(key) : undefined },
   ];
@@ -114,7 +118,7 @@ export function AnnotateBar({ at, tabId }: AnnotateBarProps) {
           )),
           layer,
         )}
-      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu)} onClose={() => closeMenu(key)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count)} onClose={() => closeMenu(key)} />}
       {hover && hovered && (
         <AnnotatePopup x={hover.x} y={hover.y}>
           <div className="annotate-popup-title">

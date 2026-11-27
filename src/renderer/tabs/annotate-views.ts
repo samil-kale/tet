@@ -8,8 +8,6 @@ import {
   relocateRange,
   rowSegments,
   textOfRange,
-  touchesTracking,
-  trackingAfter,
   type Annotation,
   type AnnotationKind,
   type CellRange,
@@ -81,8 +79,8 @@ interface Session {
   term: Terminal;
   snapshot: AnnotateSnapshot;
   nextId: number;
-  /** What the program last asked of the mouse reporting, put back when the mode ends. */
-  wanted: MouseTracking;
+  /** The mouse reporting a drag took from the program, put back when it ends. */
+  suspended?: MouseTracking;
   /** The overlay's elements, in `.xterm-screen`. */
   marks: HTMLElement[];
   frame?: number;
@@ -299,10 +297,12 @@ function draw(session: Session): void {
 }
 
 /**
- * Puts the tab's terminal in the mode. xterm selects only where no TUI has the mouse, so the
- * mouse reporting goes off in xterm alone (the pty is told nothing) for as long as the mode lasts,
- * whatever the program asks meanwhile; and the wheel never reaches an alternate screen, where xterm
- * would turn it into arrow keys. `edit` is asked for a click on a comment.
+ * Puts the tab's terminal in the mode. Where a TUI has the mouse, xterm does not select, so a drag
+ * is taken from it: the press is held back, and once the pointer has moved the reporting goes off in
+ * xterm alone (the pty is told nothing) and the press is made again, which xterm then selects by;
+ * the reporting comes back with the release. A press that does not move is a click: it is the
+ * program's, made again for it after the release. The wheel is never touched. `edit` is asked for a
+ * click on a comment.
  */
 export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void): void {
   const element = term.element;
@@ -317,7 +317,6 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     term,
     snapshot: { active: true, annotations: [], layer, pills: [] },
     nextId: 1,
-    wanted: term.modes.mouseTrackingMode,
     marks: [],
     searchedAt: 0,
     stops: [],
@@ -328,43 +327,140 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     session.stops.push(() => disposable.dispose());
   };
 
-  term.write(MOUSE_TRACKING_OFF);
-  const privateModes = (set: boolean) => (params: (number | number[])[]) => {
-    const numbers = params.flat();
-    session.wanted = trackingAfter(session.wanted, numbers, set);
-    // xterm applies the program's own set next, which would turn the reporting on again.
-    if (set && touchesTracking(numbers)) {
-      term.write(MOUSE_TRACKING_OFF);
-    }
-    return false;
-  };
-  keep(term.parser.registerCsiHandler({ prefix: "?", final: "h" }, privateModes(true)));
-  keep(term.parser.registerCsiHandler({ prefix: "?", final: "l" }, privateModes(false)));
-
-  term.attachCustomWheelEventHandler(() => term.buffer.active.type !== "alternate");
-  session.stops.push(() => term.attachCustomWheelEventHandler(() => true));
-
   const redraw = (): void => requestDraw(session);
   keep(term.onScroll(redraw));
   keep(term.onWriteParsed(redraw));
   keep(term.onResize(redraw));
   keep(term.buffer.onBufferChange(redraw));
 
-  let pressed: { x: number; y: number } | undefined;
   const on = <K extends keyof HTMLElementEventMap>(type: K, listener: (event: HTMLElementEventMap[K]) => void, capture = false): void => {
     element.addEventListener(type, listener, capture);
     session.stops.push(() => element.removeEventListener(type, listener, capture));
   };
-  // A press on a pill is the pill's: xterm would start a selection under it.
+
+  /** A click on a comment asks for its edit, and is no one else's. */
+  const editsComment = (event: MouseEvent): boolean => {
+    const clicked = annotationUnder(term, session.snapshot.annotations, event);
+    if (clicked?.kind !== "comment") {
+      return false;
+    }
+    edit(clicked.id);
+    return true;
+  };
+
+  // The left press that a program with the mouse is not given yet, until it is a click or a drag.
+  let press: { target: EventTarget | null; x: number; y: number; selecting: boolean; started: boolean } | undefined;
+  // Our own presses, which the listeners below let through.
+  let remaking = false;
+  const remake = (type: "mousedown" | "mouseup", held: NonNullable<typeof press>): void => {
+    remaking = true;
+    try {
+      (held.target ?? element).dispatchEvent(
+        new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: held.x,
+          clientY: held.y,
+          // xterm starts a selection only on a single click (`detail` 1), and a made event has 0.
+          detail: 1,
+          button: 0,
+          buttons: type === "mousedown" ? 1 : 0,
+        }),
+      );
+    } finally {
+      remaking = false;
+    }
+  };
+  const onMove = (event: MouseEvent): void => {
+    const held = press;
+    if (!held || held.started) {
+      return;
+    }
+    // Not the program's either: motion without a press.
+    event.stopPropagation();
+    if (held.selecting || Math.hypot(event.clientX - held.x, event.clientY - held.y) < CLICK_SLOP) {
+      return;
+    }
+    held.selecting = true;
+    session.suspended = term.modes.mouseTrackingMode;
+    // Without the reporting xterm turns the wheel on an alternate screen into arrow keys.
+    term.attachCustomWheelEventHandler(() => term.buffer.active.type !== "alternate");
+    term.write(MOUSE_TRACKING_OFF, () => {
+      held.started = true;
+      remake("mousedown", held);
+    });
+  };
+  const stopPress = (): void => {
+    document.removeEventListener("mousemove", onMove, true);
+    document.removeEventListener("mouseup", onRelease, true);
+  };
+  function onRelease(event: MouseEvent): void {
+    const held = press;
+    press = undefined;
+    stopPress();
+    if (!held) {
+      return;
+    }
+    if (held.selecting) {
+      // xterm ends its selection with this release. The reporting stays off while the selection
+      // stands: turning it on again clears it (`SelectionService.disable`).
+      if (!term.hasSelection()) {
+        restoreTracking(session);
+      }
+      return;
+    }
+    event.stopPropagation();
+    if (!editsComment(event)) {
+      remake("mousedown", held);
+      remake("mouseup", held);
+    }
+  }
+  session.stops.push(stopPress);
+  // The program has the mouse again once the selection is gone: a click, or a mark made of it.
+  keep(
+    term.onSelectionChange(() => {
+      if (!press && !term.hasSelection()) {
+        restoreTracking(session);
+      }
+    }),
+  );
+
+  // Before xterm's own: a press on a pill is the pill's, and a left press where a program has the
+  // mouse is held back. Elsewhere xterm selects for itself.
   on(
     "mousedown",
     (event) => {
+      if (remaking) {
+        return;
+      }
       if (onPill(event)) {
         event.stopPropagation();
+        return;
       }
+      if (event.button !== 0) {
+        // The right button opens the mode's menu: a program with the mouse would paste on it.
+        if (event.button === 2 && term.modes.mouseTrackingMode !== "none") {
+          event.stopPropagation();
+        }
+        return;
+      }
+      if (term.modes.mouseTrackingMode === "none") {
+        return;
+      }
+      event.stopPropagation();
+      event.preventDefault();
+      term.focus();
+      if (session.snapshot.hover) {
+        change(session, { hover: undefined });
+      }
+      press = { target: event.target, x: event.clientX, y: event.clientY, selecting: false, started: false };
+      document.addEventListener("mousemove", onMove, true);
+      document.addEventListener("mouseup", onRelease, true);
     },
     true,
   );
+  let pressed: { x: number; y: number } | undefined;
   on("mousedown", (event) => {
     pressed = event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
     if (session.snapshot.hover) {
@@ -383,10 +479,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     ) {
       return;
     }
-    const clicked = annotationUnder(term, session.snapshot.annotations, event);
-    if (clicked?.kind === "comment") {
-      edit(clicked.id);
-    }
+    editsComment(event);
   });
   on("mousemove", (event) => {
     // The pill says for itself what it holds (`setHover`).
@@ -419,6 +512,15 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
   notify(key);
 }
 
+/** The program has the mouse again, after a drag took it. */
+function restoreTracking(session: Session): void {
+  if (session.suspended !== undefined) {
+    session.term.write(mouseTrackingOn(session.suspended));
+    session.term.attachCustomWheelEventHandler(() => true);
+    session.suspended = undefined;
+  }
+}
+
 /** The pointer came onto an annotation's pill, or left it. */
 export function setHover(key: string, hover: AnnotateHover | undefined): void {
   const session = sessions.get(key);
@@ -445,10 +547,12 @@ function end(key: string): Session | undefined {
   return session;
 }
 
-/** Ends the mode: every mark goes, and the mouse reporting comes back as the program last asked. */
+/** Ends the mode: every mark goes, and the mouse reporting comes back if a drag has it. */
 export function stopAnnotating(key: string): void {
   const session = end(key);
-  session?.term.write(mouseTrackingOn(session.wanted));
+  if (session) {
+    restoreTracking(session);
+  }
 }
 
 /** Ends the mode of a terminal being disposed: nothing more is written to it. */
@@ -497,6 +601,14 @@ export function removeAnnotation(key: string, annotationId: number): void {
   const session = sessions.get(key);
   if (session) {
     change(session, { annotations: session.snapshot.annotations.filter((a) => a.id !== annotationId), hover: undefined });
+  }
+}
+
+/** Every annotation goes; the mode stays. */
+export function clearAnnotations(key: string): void {
+  const session = sessions.get(key);
+  if (session) {
+    change(session, { annotations: [], hover: undefined });
   }
 }
 

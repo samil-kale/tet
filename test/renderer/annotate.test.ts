@@ -9,8 +9,6 @@ import {
   relocateRange,
   rowSegments,
   textOfRange,
-  touchesTracking,
-  trackingAfter,
   type Annotation,
   type CellRange,
   type RangeSource,
@@ -117,10 +115,8 @@ describe("formatFeedback", () => {
 });
 
 describe("mouse reporting", () => {
-  it("turns the reporting modes off in one sequence and the other modes stay", () => {
+  it("turns the reporting modes off in one sequence, the other modes staying", () => {
     assert.equal(MOUSE_TRACKING_OFF, "\x1b[?9;1000;1002;1003l");
-    assert.equal(touchesTracking([1006]), false);
-    assert.equal(touchesTracking([1004, 1002]), true);
   });
 
   it("puts a mode back by its own sequence", () => {
@@ -129,17 +125,6 @@ describe("mouse reporting", () => {
     assert.equal(mouseTrackingOn("drag"), "\x1b[?1002h");
     assert.equal(mouseTrackingOn("any"), "\x1b[?1003h");
     assert.equal(mouseTrackingOn("none"), "");
-  });
-
-  it("follows what the program asks, a set naming the mode and a reset ending all", () => {
-    assert.equal(trackingAfter("none", [1000], true), "vt200");
-    assert.equal(trackingAfter("vt200", [1003, 1006], true), "any");
-    assert.equal(trackingAfter("any", [1003], false), "none");
-    assert.equal(trackingAfter("drag", [1004], true), "drag");
-  });
-
-  it("takes no reset of ours for the program's", () => {
-    assert.equal(trackingAfter("vt200", [9, 1000, 1002, 1003], false), "vt200");
   });
 });
 
