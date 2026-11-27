@@ -15,7 +15,7 @@ import {
   CircleX,
   Code,
   Columns2,
-  Delete,
+  Eraser,
   File,
   FileCode,
   FilePlus,
@@ -529,12 +529,10 @@ export function SendIcon(props: IconProps) {
   return <Lucide {...props} icon={Send} />;
 }
 
-/** The annotate island's "Delete": Lucide's `delete`, the backspace key, which is wide and flat:
- *  cropped to its width (20 units and the stroke), and drawn at 18px by its button
- *  (`.annotate-delete`) instead of the shared 14. A stroke is a share of the drawing, so it is
- *  thinned by the same ratio (2 * 14 / 18) to stay as fine as the others'. */
-export function DeleteIcon(props: IconProps) {
-  return <Lucide {...props} icon={Delete} extent={22} stroke={1.56} />;
+/** The annotate island's "Delete": Lucide's `eraser`, one notch above the shared size: it fills its
+ *  24-unit grid edge to edge, so its crop (18 of a full 19.2) leaves it just inside the box. */
+export function EraserIcon(props: IconProps) {
+  return <Lucide {...props} icon={Eraser} extent={18} />;
 }
 
 /** The annotate island's "Looks good": Lucide's `thumbs-up`. */

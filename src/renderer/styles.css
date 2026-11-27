@@ -2456,12 +2456,6 @@ button.change-request-check:hover {
     transform var(--popup-fade) ease-out;
 }
 
-/* The backspace key is wide and flat, which a square 14px box makes small beside the round icons: its
-   drawing is larger, within the button. */
-.annotate-delete {
-  --icon-size: 18px;
-}
-
 /* What carries it: the grip, as a status in an action's place. */
 .annotate-grip {
   margin-left: 6px;

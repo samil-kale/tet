@@ -1,6 +1,6 @@
 import { memo, useRef, type CSSProperties, type PointerEvent } from "react";
 import { IconButton } from "../ui/IconButton";
-import { CloseIcon, DeleteIcon, GripIcon, MessageIcon, SendIcon, ThumbsUpIcon } from "../ui/icons";
+import { CloseIcon, EraserIcon, GripIcon, MessageIcon, SendIcon, ThumbsUpIcon } from "../ui/icons";
 import { useStoredShare } from "../ui/layout-storage";
 import { commentOnSelection } from "./annotate-comment";
 import { ACTION_LABELS, COMMENT_ACTION } from "./annotate-feedback";
@@ -79,13 +79,8 @@ export const AnnotateIsland = memo(function AnnotateIsland({ viewKey, selected, 
           <IconButton title={COMMENT_ACTION} disabled={!selected} onClick={() => void commentOnSelection(viewKey)}>
             <MessageIcon />
           </IconButton>
-          <IconButton
-            className="annotate-delete"
-            title={ACTION_LABELS.delete}
-            disabled={!selected}
-            onClick={() => markSelection(viewKey, "delete")}
-          >
-            <DeleteIcon />
+          <IconButton title={ACTION_LABELS.delete} disabled={!selected} onClick={() => markSelection(viewKey, "delete")}>
+            <EraserIcon />
           </IconButton>
           <IconButton title="Send to Agent" disabled={count === 0} onClick={() => sendAnnotations(viewKey)}>
             <SendIcon />
