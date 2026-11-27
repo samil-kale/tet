@@ -26,6 +26,7 @@
   border: 1px solid var(--tet-app-border);
   background: var(--tet-app-background);
   color: inherit;
+  font-size: 13px;
 }
 
 /* Its image keeps the shape it declares where the card is narrower than it. */
