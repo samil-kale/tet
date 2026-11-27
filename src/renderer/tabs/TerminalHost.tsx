@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { ProjectRef } from "../../shared/types/project";
-import { attachTerminal, fitTerminal, focusTerminal, hasTerminal, hideTerminal, showTerminal } from "./terminal-views";
+import { AnnotateBar } from "./AnnotateBar";
+import { useAnnotating } from "./annotate-views";
+import { attachTerminal, fitTerminal, focusTerminal, hasTerminal, hideTerminal, showTerminal, viewKey } from "./terminal-views";
 
 /** A window-edge drag fires many observations; every pty resize repaints the TUI. */
 const RESIZE_DEBOUNCE_MS = 100;
@@ -30,10 +32,13 @@ interface TerminalHostProps {
  *
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
  * follows at once, active or not: an unmounted container has no layout to take output into.
+ *
+ * In the annotate mode the host also draws the mode's bar (`AnnotateBar`) above the terminal.
  */
 export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visible, focused }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
   const shown = active && visible;
+  const annotating = useAnnotating(viewKey(at, tabId));
 
   // Refit on coming on screen: hidden, its size went stale. The resize also starts its process.
   // Shown before the fit, since the renderer decides the cell width the fit measures
@@ -80,5 +85,11 @@ export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visib
   }, [at, tabId, shown]);
 
   // "hidden" is visibility, not display — xterm needs a laid-out element to measure itself.
-  return <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />;
+  // `annotating` makes room for the annotate bar: the observer above refits.
+  return (
+    <>
+      <div ref={container} className={`terminal-host${active ? "" : " hidden"}${annotating ? " annotating" : ""}`} />
+      {annotating && shown && <AnnotateBar at={at} tabId={tabId} />}
+    </>
+  );
 }

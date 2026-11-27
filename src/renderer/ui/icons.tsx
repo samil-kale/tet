@@ -56,6 +56,7 @@ import {
   Regex,
   Save,
   Search,
+  Send,
   Settings,
   Shield,
   SquareArrowOutUpRight,
@@ -412,7 +413,7 @@ export function ArrowDownIcon(props: IconProps) {
   return <Lucide {...props} icon={ArrowDown} extent={16.7} />;
 }
 
-/** Lucide's `square-sparkles` — a model's suggestion, an issue opened in an agent. */
+/** Lucide's `square-sparkles` — a model's suggestion. */
 export function SquareSparklesIcon(props: IconProps) {
   return <Lucide {...props} icon={SquareSparkles} />;
 }
@@ -519,6 +520,11 @@ export function ExpandAllIcon(props: IconProps) {
 /** Every filter field's "Clear" (FilterField): Lucide's `list-x`. */
 export function ClearIcon(props: IconProps) {
   return <Lucide {...props} icon={ListX} />;
+}
+
+/** "Send to Agent", an issue's or change request's bar and the annotate bar's: Lucide's `send`. */
+export function SendIcon(props: IconProps) {
+  return <Lucide {...props} icon={Send} />;
 }
 
 /** Local Changes' "View as List", and a text box's bullet list: Lucide's `list`. */

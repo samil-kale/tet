@@ -5,7 +5,7 @@ import { agentEntry, AgentIcon } from "../../ui/agent-icons";
 import { BAR_MENU_DROP, useAnchoredMenu, type ContextMenuEntry } from "../../ui/ContextMenu";
 import { askName, confirmed } from "../../ui/Dialog";
 import { IconButton } from "../../ui/IconButton";
-import { RemoteIcon, SquareSparklesIcon, PencilIcon, TrashIcon } from "../../ui/icons";
+import { RemoteIcon, SendIcon, PencilIcon, TrashIcon } from "../../ui/icons";
 import { useAgents } from "../../ui/use-agents";
 import { openTrackedSession } from "../editor-tab";
 import type { TrackedActions } from "./tracked-actions";
@@ -91,7 +91,7 @@ export function TrackedBar({
             </IconButton>
           ) : (
             <button type="button" className="icon-button" title="Send to Agent" onMouseDown={agentMenu.open}>
-              <SquareSparklesIcon />
+              <SendIcon />
             </button>
           )}
           <IconButton title={`Rename ${trackedNoun(issue)}...`} onClick={() => void askTrackedTitle(issue.title, actions.rename, issue)}>

@@ -1,0 +1,529 @@
+import { useCallback, useSyncExternalStore } from "react";
+import type { Terminal } from "@xterm/xterm";
+import {
+  annotationAt,
+  formatFeedback,
+  MOUSE_TRACKING_OFF,
+  mouseTrackingOn,
+  relocateRange,
+  rowSegments,
+  textOfRange,
+  touchesTracking,
+  trackingAfter,
+  type Annotation,
+  type AnnotationKind,
+  type CellRange,
+  type MouseTracking,
+} from "./annotate-feedback";
+
+/**
+ * The annotate mode of agent tabs: what a tab's terminal is marked with, kept outside React as the
+ * xterm instances are, and read through `useAnnotate` (editor/editor-views.ts keeps the editor's
+ * the same way). A tab is in the mode while it has a session here; ending it drops every mark.
+ */
+
+/** Where the right click landed. */
+export interface AnnotateMenu {
+  x: number;
+  y: number;
+  /** Text is selected: it can be marked and copied. */
+  selected: boolean;
+  /** The annotation under the pointer. */
+  annotationId?: number;
+}
+
+/** The annotation under the pointer, and where it rested. */
+export interface AnnotateHover {
+  id: number;
+  x: number;
+  y: number;
+}
+
+/** Where an annotation's pill stands in the layer, in pixels: `top` is its row's middle, which the
+ *  pill centres on, so its height is its own. */
+export interface AnnotationPill {
+  id: number;
+  number: number;
+  kind: AnnotationKind;
+  left: number;
+  top: number;
+}
+
+export interface AnnotateSnapshot {
+  active: boolean;
+  annotations: readonly Annotation[];
+  hover?: AnnotateHover;
+  menu?: AnnotateMenu;
+  /** Over the whole terminal, above xterm's scrollable element, which would take the pointer from
+   *  anything in `.xterm-screen`: the pills are drawn into it (`AnnotateBar`). */
+  layer?: HTMLElement;
+  pills: readonly AnnotationPill[];
+}
+
+/** A tab not in the mode — one instance, so it compares equal. */
+const OFF: AnnotateSnapshot = { active: false, annotations: [], pills: [] };
+
+/** The room a pill keeps at the screen's right edge, wide enough for its number and button. */
+const PILL_ROOM = 72;
+
+/** What a pill is, for a pointer to tell it from the text under it. */
+const PILL_SELECTOR = ".annotation-pill";
+
+/** How often a lost annotation's text is looked for: the search reads the whole buffer, and a
+ *  program that is printing redraws all the time. */
+const RELOCATE_INTERVAL_MS = 250;
+
+/** A click moves no more than this and still is no drag. */
+const CLICK_SLOP = 3;
+
+interface Session {
+  key: string;
+  term: Terminal;
+  snapshot: AnnotateSnapshot;
+  nextId: number;
+  /** What the program last asked of the mouse reporting, put back when the mode ends. */
+  wanted: MouseTracking;
+  /** The overlay's elements, in `.xterm-screen`. */
+  marks: HTMLElement[];
+  frame?: number;
+  /** When the text of the lost annotations was last looked for, and the draw that looks again. */
+  searchedAt: number;
+  retry?: ReturnType<typeof setTimeout>;
+  stops: (() => void)[];
+}
+
+const sessions = new Map<string, Session>();
+const listeners = new Map<string, Set<() => void>>();
+
+function snapshotOf(key: string): AnnotateSnapshot {
+  return sessions.get(key)?.snapshot ?? OFF;
+}
+
+function notify(key: string): void {
+  listeners.get(key)?.forEach((listener) => listener());
+}
+
+function subscribe(key: string, listener: () => void): () => void {
+  let set = listeners.get(key);
+  if (!set) {
+    set = new Set();
+    listeners.set(key, set);
+  }
+  set.add(listener);
+  return () => {
+    set.delete(listener);
+    if (set.size === 0) {
+      listeners.delete(key);
+    }
+  };
+}
+
+/** What `read` takes of the tab's snapshot: the caller re-renders only when that changes. */
+function useAnnotateValue<T>(key: string, read: (snapshot: AnnotateSnapshot) => T): T {
+  const subscribeKey = useCallback((listener: () => void) => subscribe(key, listener), [key]);
+  return useSyncExternalStore(subscribeKey, () => read(snapshotOf(key)));
+}
+
+export function useAnnotate(key: string): AnnotateSnapshot {
+  return useAnnotateValue(key, (snapshot) => snapshot);
+}
+
+/** Whether the tab is in the mode, for what only follows that: the host's room for the bar, and the bar. */
+export function useAnnotating(key: string): boolean {
+  return useAnnotateValue(key, (snapshot) => snapshot.active);
+}
+
+export function isAnnotating(key: string): boolean {
+  return sessions.has(key);
+}
+
+/** Only a change of the annotations redraws the marks; the pointer's moves change the rest. */
+function change(session: Session, patch: Partial<AnnotateSnapshot>): void {
+  session.snapshot = { ...session.snapshot, ...patch };
+  if (patch.annotations) {
+    requestDraw(session);
+  }
+  notify(session.key);
+}
+
+function onPill(event: Event): boolean {
+  return event.target instanceof Element && event.target.closest(PILL_SELECTOR) !== null;
+}
+
+/** The pills only move the store when they differ: a redraw follows every write of the program. */
+function setPills(session: Session, pills: readonly AnnotationPill[]): void {
+  if (JSON.stringify(session.snapshot.pills) === JSON.stringify(pills)) {
+    return;
+  }
+  session.snapshot = { ...session.snapshot, pills };
+  notify(session.key);
+}
+
+/** An annotation still lies where it was made: the same buffer, and the same text there. */
+function isIntact(term: Terminal, annotation: Annotation): boolean {
+  return annotation.buffer === term.buffer.active.type && textOfRange(term.buffer.active, annotation.range) === annotation.text;
+}
+
+function screenOf(term: Terminal): HTMLElement | undefined {
+  const screen = term.element?.querySelector(".xterm-screen");
+  return screen instanceof HTMLElement ? screen : undefined;
+}
+
+/** The buffer cell under a pointer, undefined outside the screen. */
+function cellAt(term: Terminal, event: MouseEvent): { row: number; col: number } | undefined {
+  const screen = screenOf(term);
+  if (!screen) {
+    return undefined;
+  }
+  const rect = screen.getBoundingClientRect();
+  const col = Math.floor((event.clientX - rect.left) / (rect.width / term.cols));
+  const viewportRow = Math.floor((event.clientY - rect.top) / (rect.height / term.rows));
+  if (col < 0 || col >= term.cols || viewportRow < 0 || viewportRow >= term.rows) {
+    return undefined;
+  }
+  return { row: term.buffer.active.viewportY + viewportRow, col };
+}
+
+function annotationUnder(term: Terminal, annotations: readonly Annotation[], event: MouseEvent): Annotation | undefined {
+  const cell = cellAt(term, event);
+  const found = cell && annotationAt(annotations, cell.row, cell.col);
+  return found && isIntact(term, found) ? found : undefined;
+}
+
+/**
+ * An annotation follows its text: one whose text left its rows is looked for in the buffer, and a
+ * draw comes again if it was not time to look. One not found shows no more and stays in the list.
+ */
+function settle(session: Session): void {
+  const { term } = session;
+  const buffer = term.buffer.active;
+  const lost = session.snapshot.annotations.filter((annotation) => annotation.buffer === buffer.type && !isIntact(term, annotation));
+  if (lost.length === 0) {
+    return;
+  }
+  const wait = session.searchedAt + RELOCATE_INTERVAL_MS - Date.now();
+  if (wait > 0) {
+    session.retry ??= setTimeout(() => {
+      session.retry = undefined;
+      requestDraw(session);
+    }, wait);
+    return;
+  }
+  session.searchedAt = Date.now();
+  const moved = new Map<number, CellRange>();
+  for (const annotation of lost) {
+    const range = relocateRange(buffer, buffer.length, annotation.range, annotation.text);
+    if (range) {
+      moved.set(annotation.id, range);
+    }
+  }
+  if (moved.size > 0) {
+    const annotations = session.snapshot.annotations.map((annotation) => {
+      const range = moved.get(annotation.id);
+      return range ? { ...annotation, range } : annotation;
+    });
+    session.snapshot = { ...session.snapshot, annotations };
+    notify(session.key);
+  }
+}
+
+function requestDraw(session: Session): void {
+  session.frame ??= requestAnimationFrame(() => {
+    session.frame = undefined;
+    draw(session);
+  });
+}
+
+function clearMarks(session: Session): void {
+  for (const element of session.marks) {
+    element.remove();
+  }
+  session.marks = [];
+}
+
+/**
+ * One element per row of each annotation, and where its pill goes (`AnnotateBar` draws it, with its
+ * buttons). Not terminal.registerDecoration(): xterm hides decorations on the alternate screen,
+ * where an agent's TUI runs (`links/link-provider.ts`). Redrawn whenever the screen changes; an
+ * annotation whose text left its place shows no more, and stays in the list.
+ */
+function draw(session: Session): void {
+  settle(session);
+  clearMarks(session);
+  const { term } = session;
+  const screen = screenOf(term);
+  if (!screen) {
+    return;
+  }
+  const cellWidth = screen.clientWidth / term.cols;
+  const cellHeight = screen.clientHeight / term.rows;
+  // The layer covers the terminal's element; the screen may stand inside it.
+  const screenBox = screen.getBoundingClientRect();
+  const layerBox = (session.snapshot.layer ?? screen).getBoundingClientRect();
+  const offsetX = screenBox.left - layerBox.left;
+  const offsetY = screenBox.top - layerBox.top;
+  const pills: AnnotationPill[] = [];
+  session.snapshot.annotations.forEach((annotation, index) => {
+    if (!isIntact(term, annotation)) {
+      return;
+    }
+    let last: { top: number; endCol: number } | undefined;
+    for (const segment of rowSegments(annotation.range, term.cols)) {
+      const viewportRow = segment.row - term.buffer.active.viewportY;
+      if (viewportRow < 0 || viewportRow >= term.rows) {
+        continue;
+      }
+      const mark = document.createElement("div");
+      mark.className = `annotation-mark annotation-kind-${annotation.kind}`;
+      const top = viewportRow * cellHeight;
+      mark.style.left = `${segment.startCol * cellWidth}px`;
+      mark.style.top = `${top}px`;
+      mark.style.width = `${(segment.endCol - segment.startCol) * cellWidth}px`;
+      mark.style.height = `${cellHeight}px`;
+      screen.appendChild(mark);
+      session.marks.push(mark);
+      last = { top, endCol: segment.endCol };
+    }
+    if (last) {
+      // Right after the marked text; kept on screen where that ends at the edge.
+      pills.push({
+        id: annotation.id,
+        number: index + 1,
+        kind: annotation.kind,
+        left: offsetX + Math.min(last.endCol * cellWidth, screen.clientWidth - PILL_ROOM),
+        top: offsetY + last.top + cellHeight / 2,
+      });
+    }
+  });
+  setPills(session, pills);
+}
+
+/**
+ * Puts the tab's terminal in the mode. xterm selects only where no TUI has the mouse, so the
+ * mouse reporting goes off in xterm alone (the pty is told nothing) for as long as the mode lasts,
+ * whatever the program asks meanwhile; and the wheel never reaches an alternate screen, where xterm
+ * would turn it into arrow keys. `edit` is asked for a click on a comment.
+ */
+export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void): void {
+  const element = term.element;
+  if (sessions.has(key) || !element) {
+    return;
+  }
+  const layer = document.createElement("div");
+  layer.className = "annotation-layer";
+  element.appendChild(layer);
+  const session: Session = {
+    key,
+    term,
+    snapshot: { active: true, annotations: [], layer, pills: [] },
+    nextId: 1,
+    wanted: term.modes.mouseTrackingMode,
+    marks: [],
+    searchedAt: 0,
+    stops: [],
+  };
+  sessions.set(key, session);
+  session.stops.push(() => layer.remove());
+  const keep = (disposable: { dispose(): void }): void => {
+    session.stops.push(() => disposable.dispose());
+  };
+
+  term.write(MOUSE_TRACKING_OFF);
+  const privateModes = (set: boolean) => (params: (number | number[])[]) => {
+    const numbers = params.flat();
+    session.wanted = trackingAfter(session.wanted, numbers, set);
+    // xterm applies the program's own set next, which would turn the reporting on again.
+    if (set && touchesTracking(numbers)) {
+      term.write(MOUSE_TRACKING_OFF);
+    }
+    return false;
+  };
+  keep(term.parser.registerCsiHandler({ prefix: "?", final: "h" }, privateModes(true)));
+  keep(term.parser.registerCsiHandler({ prefix: "?", final: "l" }, privateModes(false)));
+
+  term.attachCustomWheelEventHandler(() => term.buffer.active.type !== "alternate");
+  session.stops.push(() => term.attachCustomWheelEventHandler(() => true));
+
+  const redraw = (): void => requestDraw(session);
+  keep(term.onScroll(redraw));
+  keep(term.onWriteParsed(redraw));
+  keep(term.onResize(redraw));
+  keep(term.buffer.onBufferChange(redraw));
+
+  let pressed: { x: number; y: number } | undefined;
+  const on = <K extends keyof HTMLElementEventMap>(type: K, listener: (event: HTMLElementEventMap[K]) => void, capture = false): void => {
+    element.addEventListener(type, listener, capture);
+    session.stops.push(() => element.removeEventListener(type, listener, capture));
+  };
+  // A press on a pill is the pill's: xterm would start a selection under it.
+  on(
+    "mousedown",
+    (event) => {
+      if (onPill(event)) {
+        event.stopPropagation();
+      }
+    },
+    true,
+  );
+  on("mousedown", (event) => {
+    pressed = event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
+    if (session.snapshot.hover) {
+      change(session, { hover: undefined });
+    }
+  });
+  on("mouseup", (event) => {
+    const down = pressed;
+    pressed = undefined;
+    if (
+      onPill(event) ||
+      !down ||
+      event.button !== 0 ||
+      Math.hypot(event.clientX - down.x, event.clientY - down.y) >= CLICK_SLOP ||
+      term.hasSelection()
+    ) {
+      return;
+    }
+    const clicked = annotationUnder(term, session.snapshot.annotations, event);
+    if (clicked?.kind === "comment") {
+      edit(clicked.id);
+    }
+  });
+  on("mousemove", (event) => {
+    // The pill says for itself what it holds (`setHover`).
+    if (onPill(event)) {
+      return;
+    }
+    // A drag selects; the pointer resting on a mark says what it holds.
+    const found = event.buttons === 0 ? annotationUnder(term, session.snapshot.annotations, event) : undefined;
+    if (found?.id !== session.snapshot.hover?.id) {
+      change(session, { hover: found && { id: found.id, x: event.clientX, y: event.clientY } });
+    }
+  });
+  on("mouseleave", () => {
+    if (session.snapshot.hover) {
+      change(session, { hover: undefined });
+    }
+  });
+  // Before the container's own listener (terminal-views.ts), which copies or pastes: here the right
+  // button opens the mode's menu.
+  on("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const under = annotationUnder(term, session.snapshot.annotations, event);
+    change(session, {
+      hover: undefined,
+      menu: { x: event.clientX, y: event.clientY, selected: term.hasSelection(), annotationId: under?.id },
+    });
+  });
+
+  notify(key);
+}
+
+/** The pointer came onto an annotation's pill, or left it. */
+export function setHover(key: string, hover: AnnotateHover | undefined): void {
+  const session = sessions.get(key);
+  if (session && session.snapshot.hover?.id !== hover?.id) {
+    change(session, { hover });
+  }
+}
+
+function end(key: string): Session | undefined {
+  const session = sessions.get(key);
+  if (!session) {
+    return undefined;
+  }
+  sessions.delete(key);
+  for (const stop of session.stops) {
+    stop();
+  }
+  if (session.frame !== undefined) {
+    cancelAnimationFrame(session.frame);
+  }
+  clearTimeout(session.retry);
+  clearMarks(session);
+  notify(key);
+  return session;
+}
+
+/** Ends the mode: every mark goes, and the mouse reporting comes back as the program last asked. */
+export function stopAnnotating(key: string): void {
+  const session = end(key);
+  session?.term.write(mouseTrackingOn(session.wanted));
+}
+
+/** Ends the mode of a terminal being disposed: nothing more is written to it. */
+export function dropAnnotating(key: string): void {
+  end(key);
+}
+
+/** What the selection covers, read before a question for the mark made after it: the program may
+ *  have switched screens meanwhile. */
+export type SelectedText = Pick<Annotation, "range" | "text" | "buffer">;
+
+export function readSelection(key: string): SelectedText | undefined {
+  const term = sessions.get(key)?.term;
+  const position = term?.getSelectionPosition();
+  if (!term || !position) {
+    return undefined;
+  }
+  // 0-based columns and absolute rows, the end column exclusive.
+  const range = { startRow: position.start.y, startCol: position.start.x, endRow: position.end.y, endCol: position.end.x };
+  const text = textOfRange(term.buffer.active, range);
+  return text === "" ? undefined : { range, text, buffer: term.buffer.active.type };
+}
+
+export function addAnnotation(key: string, kind: AnnotationKind, selected: SelectedText, comment?: string): void {
+  const session = sessions.get(key);
+  if (!session) {
+    return;
+  }
+  const annotation: Annotation = { ...selected, id: session.nextId++, kind, comment };
+  session.term.clearSelection();
+  change(session, { annotations: [...session.snapshot.annotations, annotation] });
+}
+
+export function annotationOf(key: string, annotationId: number): Annotation | undefined {
+  return sessions.get(key)?.snapshot.annotations.find((annotation) => annotation.id === annotationId);
+}
+
+export function setComment(key: string, annotationId: number, comment: string): void {
+  const session = sessions.get(key);
+  if (session) {
+    change(session, { annotations: session.snapshot.annotations.map((a) => (a.id === annotationId ? { ...a, comment } : a)) });
+  }
+}
+
+export function removeAnnotation(key: string, annotationId: number): void {
+  const session = sessions.get(key);
+  if (session) {
+    change(session, { annotations: session.snapshot.annotations.filter((a) => a.id !== annotationId), hover: undefined });
+  }
+}
+
+export function closeMenu(key: string): void {
+  const session = sessions.get(key);
+  if (session?.snapshot.menu) {
+    change(session, { menu: undefined });
+  }
+}
+
+export function copySelectedText(key: string): void {
+  const term = sessions.get(key)?.term;
+  if (term?.hasSelection()) {
+    void navigator.clipboard.writeText(term.getSelection());
+    term.clearSelection();
+  }
+}
+
+/** Types the feedback into the agent's prompt, without Enter, and ends the mode. */
+export function sendAnnotations(key: string): void {
+  const session = sessions.get(key);
+  if (!session || session.snapshot.annotations.length === 0) {
+    return;
+  }
+  const { term } = session;
+  const feedback = formatFeedback(session.snapshot.annotations);
+  stopAnnotating(key);
+  term.paste(feedback);
+  term.focus();
+}

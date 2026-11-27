@@ -2208,7 +2208,8 @@ button.change-request-check:hover {
 .context-menu,
 .notices-center,
 .status-list,
-.notice {
+.notice,
+.annotate-popup {
   color: var(--tet-menu-foreground);
   background: var(--tet-menu-background);
   border: 1px solid var(--tet-app-border);
@@ -2219,7 +2220,8 @@ button.change-request-check:hover {
 .context-menu,
 .notices-center,
 .status-list,
-.notices {
+.notices,
+.annotate-popup {
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
 
@@ -2414,6 +2416,121 @@ button.change-request-check:hover {
 /* visibility, not display: xterm needs a laid-out element to measure itself. */
 .terminal-host.hidden {
   visibility: hidden;
+}
+
+/* The annotate mode's bar (`AnnotateBar`) stands over the pane body's top edge; its terminal starts
+   below it. */
+.terminal-host.annotating {
+  top: calc(var(--bar-height) + var(--island-gap));
+}
+
+.annotate-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+/* The count is a pill beside the actions as a change request's state is (`.tracked-bar`), never in
+   `.editor-bar-title`, whose clip would cut it. */
+.annotate-bar > .label-pill {
+  flex: none;
+}
+
+/* What an annotation is, by its colour: the terminal's green for "looks good", its red for a delete,
+   its blue for a comment. Its text, its pill and the bar's pill take it alike. */
+.annotation-kind-good {
+  --annotation-color: var(--tet-terminal-ansiGreen);
+}
+
+.annotation-kind-delete {
+  --annotation-color: var(--tet-terminal-ansiRed);
+}
+
+.annotation-kind-comment {
+  --annotation-color: var(--tet-terminal-ansiBlue);
+}
+
+/* The marks the mode draws over a terminal's screen (`annotate-views.ts`). Tinted, for the text to
+   show through. */
+.annotation-mark {
+  position: absolute;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--annotation-color) 28%, transparent);
+  box-shadow: inset 0 -2px 0 var(--annotation-color);
+}
+
+/* A delete is struck through instead. */
+.annotation-mark.annotation-kind-delete {
+  box-shadow: none;
+}
+
+.annotation-mark.annotation-kind-delete::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* As thick as the underline of the other two (`.annotation-mark`'s inset shadow). */
+  top: calc(50% - 1px);
+  border-top: 2px solid var(--annotation-color);
+}
+
+/* Over the whole terminal, for the pills: they stand above xterm's scrollable element, which the
+   pointer would otherwise meet first. Only the pills take it. */
+.annotation-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* An annotation's pill, right after its text: floats as the menus do, so it reads against the
+   terminal. Its number and its button, which is smaller than a bar's to fit one row. */
+.annotation-pill {
+  pointer-events: auto;
+  position: absolute;
+  /* Centred on its row's middle, a pixel lower: the letters of a row sit below the middle of its
+     cell, which the pill is set against. */
+  transform: translateY(calc(-50% + 1px));
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 5px 3px 7px;
+  border: 1px solid var(--annotation-color);
+  border-radius: var(--border-radius);
+  color: var(--tet-menu-foreground);
+  background: var(--tet-menu-background);
+  box-shadow: 0 2px 6px var(--tet-popup-shadow);
+  font-family: var(--tet-font-family);
+  font-size: var(--small-font-size);
+  line-height: 1;
+  --action-size: 16px;
+  --icon-size: 12px;
+}
+
+.annotation-number {
+  margin-right: 4px;
+  font-weight: 600;
+}
+
+/* What a mark holds, where the pointer rests on it: floats as the menus do. Sized by its text alone,
+   so `AnnotatePopup` measures the same width wherever it first lays out. */
+.annotate-popup {
+  position: fixed;
+  z-index: 27;
+  width: max-content;
+  max-width: 300px;
+  padding: 8px 10px;
+  font-size: var(--tet-font-size);
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+.annotate-popup-title {
+  margin-bottom: 2px;
+  font-size: var(--small-font-size);
+  color: var(--tet-descriptionForeground);
 }
 
 /*

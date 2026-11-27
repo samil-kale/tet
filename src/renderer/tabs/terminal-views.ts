@@ -10,6 +10,8 @@ import { CONTROL_START_SIZE } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
+import { editComment } from "./annotate-comment";
+import { dropAnnotating, isAnnotating, startAnnotating, stopAnnotating } from "./annotate-views";
 import { createFileLinkProvider } from "./links/file-links";
 import { endLinkHover } from "./links/link-provider";
 import { createUrlLinkProvider } from "./links/url-links";
@@ -53,7 +55,8 @@ const FOCUS_OUT = "\x1b[O";
  */
 const views = new Map<string, TerminalView>();
 
-function viewKey(ref: ProjectRef, tabId: string): string {
+/** Also the key of the tab's annotate mode (`annotate-views.ts`). */
+export function viewKey(ref: ProjectRef, tabId: string): string {
   return `${refKeyOf(ref)} ${tabId}`;
 }
 
@@ -608,6 +611,24 @@ export function clearTerminalOutput(ref: ProjectRef, tabId: string): void {
   views.get(viewKey(ref, tabId))?.term.clear();
 }
 
+/** Puts the tab's terminal in the annotate mode or takes it out, which drops every annotation. A
+ *  terminal never attached has nothing to mark. */
+export function setAnnotating(ref: ProjectRef, tabId: string, on: boolean): void {
+  const key = viewKey(ref, tabId);
+  if (!on) {
+    stopAnnotating(key);
+    return;
+  }
+  const view = views.get(key);
+  if (view) {
+    startAnnotating(key, view.term, (annotationId) => void editComment(key, annotationId));
+  }
+}
+
+export function isTabAnnotating(ref: ProjectRef, tabId: string): boolean {
+  return isAnnotating(viewKey(ref, tabId));
+}
+
 export function disposeTerminal(ref: ProjectRef, tabId: string): void {
   const key = viewKey(ref, tabId);
   earlyOutput.delete(key);
@@ -622,6 +643,7 @@ export function disposeTerminal(ref: ProjectRef, tabId: string): void {
 
 /** One xterm gone for good. */
 function dropView(key: string, view: TerminalView): void {
+  dropAnnotating(key);
   views.delete(key);
   releaseWebgl(view);
   endLinkHover(view.term);

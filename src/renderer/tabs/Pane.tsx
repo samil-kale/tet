@@ -11,7 +11,7 @@ import { BAR_MENU_DROP, SEPARATOR, useAnchoredMenu, useContextMenu, type Context
 import { askName, confirmed, refusal } from "../ui/Dialog";
 import { notify } from "../ui/Notices";
 import { TerminalHost } from "./TerminalHost";
-import { clearTerminalOutput, resetMouseModes } from "./terminal-views";
+import { clearTerminalOutput, hasTerminal, isTabAnnotating, resetMouseModes, setAnnotating } from "./terminal-views";
 import { editorLabel, kindOf, paneTabKind, terminalLabel, type PaneTab, type PaneTabKind } from "./pane-tab";
 import { EditorHost, useEditorBusy, useEditorPreview, useTrackedLabel } from "../editor/EditorHost";
 import { getEditorSnapshot, keepEditor } from "../editor/editor-views";
@@ -464,6 +464,7 @@ export const Pane = memo(function Pane({
       return number === undefined ? [] : [{ label: TRACKED_FACES[kind].open, run: () => onOpenTracked({ kind, number }) }];
     });
     const linked: ContextMenuEntry[] = openLinked.length > 0 ? [...openLinked, SEPARATOR] : [];
+    const annotating = isTabAnnotating(at, tabId);
     return [
       ...linked,
       {
@@ -472,6 +473,23 @@ export const Pane = memo(function Pane({
       },
       // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
       ...(info?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
+      // Where the feedback has a prompt to go to (AgentInfo.takesPrompt); a terminal never shown has
+      // nothing to mark. Its tab comes forward, where the mode's bar is.
+      ...(info?.takesPrompt === true
+        ? [
+            annotating
+              ? { label: "Cancel Annotating", run: () => setAnnotating(at, tabId, false) }
+              : {
+                  label: "Annotate",
+                  run: hasTerminal(at, tabId)
+                    ? () => {
+                        setAnnotating(at, tabId, true);
+                        onActivate(tabId, paneId);
+                      }
+                    : undefined,
+                },
+          ]
+        : []),
       SEPARATOR,
       ...closeEntries,
       ...(hasSessions
