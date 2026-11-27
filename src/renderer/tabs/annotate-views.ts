@@ -67,8 +67,8 @@ const PILL_ROOM = 72;
 /** What a pill is, for a pointer to tell it from the text under it. */
 const PILL_SELECTOR = ".annotation-pill";
 
-/** How often a lost annotation's text is looked for: the search reads the whole buffer, and a
- *  program that is printing redraws all the time. */
+/** How soon a text that was looked for in vain is looked for again: the search reads the whole
+ *  buffer, and a program that is printing redraws all the time. */
 const RELOCATE_INTERVAL_MS = 250;
 
 /** A click moves no more than this and still is no drag. */
@@ -84,8 +84,8 @@ interface Session {
   /** The overlay's elements, in `.xterm-screen`. */
   marks: HTMLElement[];
   frame?: number;
-  /** When the text of the lost annotations was last looked for, and the draw that looks again. */
-  searchedAt: number;
+  /** When an annotation's text was looked for in vain, by its id, and the draw that looks again. */
+  failedAt: Map<number, number>;
   retry?: ReturnType<typeof setTimeout>;
   stops: (() => void)[];
 }
@@ -185,30 +185,33 @@ function annotationUnder(term: Terminal, annotations: readonly Annotation[], eve
 }
 
 /**
- * An annotation follows its text: one whose text left its rows is looked for in the buffer, and a
- * draw comes again if it was not time to look. One not found shows no more and stays in the list.
+ * An annotation follows its text: one whose text left its rows is looked for in the buffer. A text
+ * that moved by a few rows, as a scrolling program's does, is found at once; one not found is not
+ * looked for again before `RELOCATE_INTERVAL_MS` have passed (a draw comes then), shows no more and
+ * stays in the list.
  */
 function settle(session: Session): void {
   const { term } = session;
   const buffer = term.buffer.active;
-  const lost = session.snapshot.annotations.filter((annotation) => annotation.buffer === buffer.type && !isIntact(term, annotation));
-  if (lost.length === 0) {
-    return;
-  }
-  const wait = session.searchedAt + RELOCATE_INTERVAL_MS - Date.now();
-  if (wait > 0) {
-    session.retry ??= setTimeout(() => {
-      session.retry = undefined;
-      requestDraw(session);
-    }, wait);
-    return;
-  }
-  session.searchedAt = Date.now();
+  const now = Date.now();
   const moved = new Map<number, CellRange>();
-  for (const annotation of lost) {
+  let wait = Infinity;
+  for (const annotation of session.snapshot.annotations) {
+    if (annotation.buffer !== buffer.type || isIntact(term, annotation)) {
+      session.failedAt.delete(annotation.id);
+      continue;
+    }
+    const remaining = (session.failedAt.get(annotation.id) ?? 0) + RELOCATE_INTERVAL_MS - now;
+    if (remaining > 0) {
+      wait = Math.min(wait, remaining);
+      continue;
+    }
     const range = relocateRange(buffer, buffer.length, annotation.range, annotation.text);
     if (range) {
       moved.set(annotation.id, range);
+      session.failedAt.delete(annotation.id);
+    } else {
+      session.failedAt.set(annotation.id, now);
     }
   }
   if (moved.size > 0) {
@@ -218,6 +221,12 @@ function settle(session: Session): void {
     });
     session.snapshot = { ...session.snapshot, annotations };
     notify(session.key);
+  }
+  if (wait < Infinity) {
+    session.retry ??= setTimeout(() => {
+      session.retry = undefined;
+      requestDraw(session);
+    }, wait);
   }
 }
 
@@ -314,7 +323,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     snapshot: { active: true, annotations: [], layer, pills: [] },
     nextId: 1,
     marks: [],
-    searchedAt: 0,
+    failedAt: new Map(),
     stops: [],
   };
   sessions.set(key, session);
