@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.29.1 (2026-11-27)
+
+- **Annotate island.** The annotate controls sit in an island you can move, with a button per mark, and a selection stays on its text as the terminal scrolls.
+
 ## 0.29.0 (2026-11-27)
 
 - **Annotate an agent's output.** Pick "Annotate" from an agent tab's menu, select text in the terminal and mark it as looks good, delete or a comment. "Send to Agent" types the numbered annotations into the agent's prompt.
