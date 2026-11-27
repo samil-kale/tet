@@ -3,6 +3,11 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.29.0 (2026-11-27)
+
+- **Annotate an agent's output.** Pick "Annotate" from an agent tab's menu, select text in the terminal and mark it as looks good, delete or a comment. "Send to Agent" types the numbered annotations into the agent's prompt.
+- **Fixes.** Task checkboxes in Markdown text look like the app's own, and inline code in an issue's or change request's text is set apart like a name.
+
 ## 0.28.0 (2026-11-26)
 
 - **Fixes.** The editor tab's bar spacing matches the bar of an issue's or change request's tab.
