@@ -2539,12 +2539,6 @@ button.change-request-check:hover {
   pointer-events: none;
 }
 
-.annotate-popup-title {
-  margin-bottom: 2px;
-  font-size: var(--small-font-size);
-  color: var(--tet-descriptionForeground);
-}
-
 /*
  * xterm.css hardcodes a black background here, showing wherever the viewport outgrows its rows.
  * The selector copies xterm.css's two-class one, or it loses the cascade despite loading later.

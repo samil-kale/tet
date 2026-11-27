@@ -213,6 +213,19 @@ async function pasteClipboard(view: TerminalView): Promise<void> {
   }
 }
 
+/**
+ * Types text into the tab as keystrokes, not as a paste, which an agent may fold into a placeholder
+ * that cannot be added to ("[Pasted text #1 +3 lines]"): a line break is the agent's Shift+Enter
+ * (`shiftEnter`; a plain Enter would submit), any other control character a space.
+ */
+function typeText(view: TerminalView, text: string): void {
+  const typed = text
+    .split("\n")
+    .map((line) => line.replace(/\p{Cc}/gu, " "))
+    .join(view.shiftEnter ?? " ");
+  window.tet.tabs.input(view.ref, view.tabId, typed);
+}
+
 /** Copies the selection and clears it; false when there is none. */
 function copySelection(term: Terminal): boolean {
   const selection = term.getSelection();
@@ -621,7 +634,12 @@ export function setAnnotating(ref: ProjectRef, tabId: string, on: boolean): void
   }
   const view = views.get(key);
   if (view) {
-    startAnnotating(key, view.term, (annotationId) => void editComment(key, annotationId));
+    startAnnotating(
+      key,
+      view.term,
+      (annotationId) => void editComment(key, annotationId),
+      (text) => typeText(view, text),
+    );
   }
 }
 

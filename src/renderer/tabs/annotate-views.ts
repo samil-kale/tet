@@ -79,6 +79,8 @@ interface Session {
   term: Terminal;
   snapshot: AnnotateSnapshot;
   nextId: number;
+  /** Types text into the tab's prompt (`terminal-views.ts`). */
+  type: (text: string) => void;
   /** The mouse reporting a drag took from the program, put back when it ends. */
   suspended?: MouseTracking;
   /** The overlay's elements, in `.xterm-screen`. */
@@ -309,7 +311,7 @@ function draw(session: Session): void {
  * program's, made again for it after the release. The wheel is never touched. `edit` is asked for a
  * click on a comment.
  */
-export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void): void {
+export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void, type: (text: string) => void): void {
   const element = term.element;
   if (sessions.has(key) || !element) {
     return;
@@ -322,6 +324,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     term,
     snapshot: { active: true, annotations: [], layer, pills: [] },
     nextId: 1,
+    type,
     marks: [],
     failedAt: new Map(),
     stops: [],
@@ -617,7 +620,8 @@ export function closeMenu(key: string): void {
   }
 }
 
-/** Types the feedback into the agent's prompt, without Enter, and ends the mode. */
+/** Types the feedback into the agent's prompt, without Enter, and ends the mode. Typed, not pasted:
+ *  an agent may fold a paste into a placeholder the user cannot add to. */
 export function sendAnnotations(key: string): void {
   const session = sessions.get(key);
   if (!session || session.snapshot.annotations.length === 0) {
@@ -626,6 +630,6 @@ export function sendAnnotations(key: string): void {
   const { term } = session;
   const feedback = formatFeedback(session.snapshot.annotations);
   stopAnnotating(key);
-  term.paste(feedback);
+  session.type(feedback);
   term.focus();
 }

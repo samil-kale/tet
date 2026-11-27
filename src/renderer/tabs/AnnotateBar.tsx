@@ -115,8 +115,7 @@ export function AnnotateBar({ at, tabId, shown }: AnnotateBarProps) {
   const count = annotations.length;
   // The pills, the menu and the popup only where the bar is on screen and not on its way out.
   const live = shown && !closing;
-  const hoveredIndex = hover ? annotations.findIndex((annotation) => annotation.id === hover.id) : -1;
-  const hovered = annotations[hoveredIndex];
+  const hovered = hover && annotations.find((annotation) => annotation.id === hover.id);
   return (
     <>
       <div className={`editor-bar annotate-bar${closing ? " closing" : ""}${shown ? "" : " hidden"}`}>
@@ -150,11 +149,9 @@ export function AnnotateBar({ at, tabId, shown }: AnnotateBarProps) {
           layer,
         )}
       {live && menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count)} onClose={() => closeMenu(key)} />}
-      {live && hover && hoveredIndex >= 0 && (
+      {/* Only a comment has something to say; a looks good or a delete says it by its colour. */}
+      {live && hover && hovered?.kind === "comment" && (
         <AnnotatePopup x={hover.x} y={hover.y}>
-          <div className="annotate-popup-title">
-            {KIND_LABELS[hovered.kind]} {hoveredIndex + 1}
-          </div>
           {hovered.comment}
         </AnnotatePopup>
       )}
