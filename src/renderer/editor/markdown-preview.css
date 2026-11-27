@@ -19,6 +19,15 @@
   border-radius: var(--border-radius);
 }
 
+/* Inline code in an issue's text is the pill of a name in its sentences (`.inline-name` in
+   `styles.css`). */
+.markdown-body.compact :not(pre) > code {
+  padding: 1px 5px;
+  border: 1px solid var(--tet-app-border);
+  background: var(--tet-app-background);
+  color: inherit;
+}
+
 /* Its image keeps the shape it declares where the card is narrower than it. */
 .markdown-body.compact img[width][height] {
   height: auto;
@@ -94,9 +103,30 @@
   list-style: none;
 }
 
+/* Drawn as the app's checkbox (`.checkbox-label input` in `styles.css`), which does not reach into
+   this shadow root: a change to one is made to the other. */
 .markdown-body .task-list-item-checkbox {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 16px;
+  height: 16px;
   margin: 0 0.4em 0 -1.4em;
+  padding: 0;
   vertical-align: middle;
+  background: var(--tet-settings-checkboxBackground, var(--tet-input-background));
+  border: 1px solid var(--tet-settings-checkboxBorder, var(--tet-app-border));
+  border-radius: var(--checkbox-radius);
+}
+
+.markdown-body .task-list-item-checkbox:checked::before {
+  content: "";
+  margin-top: 2px;
+  width: 14px;
+  height: 14px;
+  background: var(--tet-settings-checkboxForeground, var(--tet-input-foreground));
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 .markdown-body :is(sub, sup) {
