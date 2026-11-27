@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ProjectRef } from "../../shared/types/project";
-import { AnnotateBar } from "./AnnotateBar";
+import { AnnotateOverlay } from "./AnnotateOverlay";
 import { attachTerminal, fitTerminal, focusTerminal, hasTerminal, hideTerminal, showTerminal } from "./terminal-views";
 
 /** A window-edge drag fires many observations; every pty resize repaints the TUI. */
@@ -32,8 +32,8 @@ interface TerminalHostProps {
  * Once attached it stays attached. A tab moved into another pane gets a fresh host, and its xterm
  * follows at once, active or not: an unmounted container has no layout to take output into.
  *
- * In the annotate mode the host also draws the mode's bar (`AnnotateBar`) over the terminal's top
- * edge, which does not resize it.
+ * In the annotate mode the host also draws the mode's overlay (`AnnotateOverlay`): its island over
+ * the terminal's top edge, which does not resize it.
  */
 export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visible, focused }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
@@ -87,7 +87,7 @@ export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visib
   return (
     <>
       <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />
-      <AnnotateBar at={at} tabId={tabId} shown={shown} />
+      <AnnotateOverlay at={at} tabId={tabId} shown={shown} />
     </>
   );
 }

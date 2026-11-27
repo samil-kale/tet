@@ -1,20 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import type { ProjectRef } from "../../shared/types/project";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
-import { IconButton } from "../ui/IconButton";
-import { CloseIcon, SendIcon } from "../ui/icons";
 import { CLOSE_MS } from "../ui/use-closing";
+import { AnnotateIsland } from "./AnnotateIsland";
+import { AnnotationPills } from "./AnnotationPills";
 import { commentOnSelection } from "./annotate-comment";
-import { KIND_LABELS, type AnnotationKind } from "./annotate-feedback";
+import { ACTION_LABELS, COMMENT_ACTION, type AnnotationKind } from "./annotate-feedback";
 import {
-  addAnnotation,
   clearAnnotations,
   closeMenu,
-  readSelection,
+  markSelection,
   removeAnnotation,
   sendAnnotations,
-  setHover,
   stopAnnotating,
   useAnnotate,
   type AnnotateMenu,
@@ -26,20 +23,12 @@ import { viewKey } from "./terminal-views";
 const POPUP_OFFSET = 14;
 
 function menuEntries(key: string, menu: AnnotateMenu, count: number): ContextMenuEntry[] {
-  const mark = (kind: AnnotationKind) =>
-    menu.selected
-      ? () => {
-          const selected = readSelection(key);
-          if (selected) {
-            addAnnotation(key, kind, selected);
-          }
-        }
-      : undefined;
+  const mark = (kind: AnnotationKind) => (menu.selected ? () => markSelection(key, kind) : undefined);
   const { annotationId } = menu;
   return [
-    { label: KIND_LABELS.good, run: mark("good") },
-    { label: `${KIND_LABELS.comment}...`, run: menu.selected ? () => void commentOnSelection(key) : undefined },
-    { label: KIND_LABELS.delete, run: mark("delete") },
+    { label: ACTION_LABELS.good, run: mark("good") },
+    { label: COMMENT_ACTION, run: menu.selected ? () => void commentOnSelection(key) : undefined },
+    { label: ACTION_LABELS.delete, run: mark("delete") },
     SEPARATOR,
     { label: "Remove Annotation", run: annotationId === undefined ? undefined : () => removeAnnotation(key, annotationId) },
     { label: "Remove All Annotations", run: count > 0 ? () => clearAnnotations(key) : undefined },
@@ -71,24 +60,23 @@ function AnnotatePopup({ x, y, children }: { x: number; y: number; children: Rea
   );
 }
 
-interface AnnotateBarProps {
+interface AnnotateOverlayProps {
   at: ProjectRef;
   tabId: string;
-  /** The tab is on screen. The bar stays mounted while it is not, hidden, so that coming back to it
-   *  does not slide it in again. */
+  /** The tab is on screen. The island stays mounted while it is not, hidden, so that coming back to
+   *  it does not slide it in again. */
   shown: boolean;
 }
 
 /**
- * The annotate mode's bar over a terminal on screen, as the editor tab's (`TerminalHost` mounts it):
- * what sends the annotations, what cancels the mode (every annotation goes with it) and how many
- * there are. What marks the selection is the terminal's right-click menu, drawn here too, as are the
- * annotations' pills over the text and the popup of the one under the pointer.
+ * The annotate mode over a terminal on screen (`TerminalHost` mounts it): its island
+ * (`AnnotateIsland`), the terminal's right-click menu, which marks the selection, the annotations'
+ * pills over the text (`AnnotationPills`) and the popup of the one under the pointer.
  *
- * Slides in as a pane's new-tab menu does, and out for `CLOSE_MS` once the mode has ended, showing
- * what it showed last.
+ * The island slides in as a pane's new-tab menu does, and out for `CLOSE_MS` once the mode has
+ * ended, showing what it showed last.
  */
-export function AnnotateBar({ at, tabId, shown }: AnnotateBarProps) {
+export function AnnotateOverlay({ at, tabId, shown }: AnnotateOverlayProps) {
   const key = viewKey(at, tabId);
   const snapshot = useAnnotate(key);
   const lastActive = useRef<AnnotateSnapshot | undefined>(undefined);
@@ -111,43 +99,15 @@ export function AnnotateBar({ at, tabId, shown }: AnnotateBarProps) {
   if (!view) {
     return null;
   }
-  const { annotations, hover, menu, pills, layer } = view;
+  const { annotations, hover, menu, pills, layer, selected } = view;
   const count = annotations.length;
-  // The pills, the menu and the popup only where the bar is on screen and not on its way out.
+  // The pills, the menu and the popup only where the island is on screen and not on its way out.
   const live = shown && !closing;
   const hovered = hover && annotations.find((annotation) => annotation.id === hover.id);
   return (
     <>
-      <div className={`editor-bar annotate-bar${closing ? " closing" : ""}${shown ? "" : " hidden"}`}>
-        <div className="toolbar editor-bar-actions">
-          <IconButton title="Send to Agent" disabled={count === 0} onClick={() => sendAnnotations(key)}>
-            <SendIcon />
-          </IconButton>
-          <IconButton title="Cancel" onClick={() => stopAnnotating(key)}>
-            <CloseIcon />
-          </IconButton>
-        </div>
-        <span className="label-pill">{count === 1 ? "1 annotation" : `${count} annotations`}</span>
-      </div>
-      {live &&
-        layer &&
-        createPortal(
-          pills.map((pill) => (
-            <div
-              key={pill.id}
-              className={`annotation-pill annotation-kind-${pill.kind}`}
-              style={{ left: pill.left, top: pill.top }}
-              onMouseEnter={(event) => setHover(key, { id: pill.id, x: event.clientX, y: event.clientY })}
-              onMouseLeave={() => setHover(key, undefined)}
-            >
-              <span className="annotation-number">{pill.number}</span>
-              <IconButton title="Remove Annotation" onClick={() => removeAnnotation(key, pill.id)}>
-                <CloseIcon />
-              </IconButton>
-            </div>
-          )),
-          layer,
-        )}
+      <AnnotateIsland viewKey={key} selected={selected} count={count} closing={closing} shown={shown} />
+      {live && layer && <AnnotationPills viewKey={key} pills={pills} layer={layer} />}
       {live && menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count)} onClose={() => closeMenu(key)} />}
       {/* Only a comment has something to say; a looks good or a delete says it by its colour. */}
       {live && hover && hovered?.kind === "comment" && (

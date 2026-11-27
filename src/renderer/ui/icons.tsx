@@ -15,6 +15,7 @@ import {
   CircleX,
   Code,
   Columns2,
+  Delete,
   File,
   FileCode,
   FilePlus,
@@ -66,6 +67,7 @@ import {
   SquareTerminal,
   Tag,
   TextQuote,
+  ThumbsUp,
   Trash2,
   Undo2,
   User,
@@ -525,6 +527,19 @@ export function ClearIcon(props: IconProps) {
 /** "Send to Agent", an issue's or change request's bar and the annotate bar's: Lucide's `send`. */
 export function SendIcon(props: IconProps) {
   return <Lucide {...props} icon={Send} />;
+}
+
+/** The annotate island's "Delete": Lucide's `delete`, the backspace key, which is wide and flat:
+ *  cropped to its width (20 units and the stroke), and drawn at 18px by its button
+ *  (`.annotate-delete`) instead of the shared 14. A stroke is a share of the drawing, so it is
+ *  thinned by the same ratio (2 * 14 / 18) to stay as fine as the others'. */
+export function DeleteIcon(props: IconProps) {
+  return <Lucide {...props} icon={Delete} extent={22} stroke={1.56} />;
+}
+
+/** The annotate island's "Looks good": Lucide's `thumbs-up`. */
+export function ThumbsUpIcon(props: IconProps) {
+  return <Lucide {...props} icon={ThumbsUp} />;
 }
 
 /** Local Changes' "View as List", and a text box's bullet list: Lucide's `list`. */

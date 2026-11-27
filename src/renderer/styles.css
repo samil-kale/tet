@@ -342,6 +342,10 @@ textarea:focus,
      sash is the gap between two), and their rows and fields this far in from their edges. */
   --island-gap: 6px;
   --island-radius: 10px;
+  /* How far a terminal stands in from its pane's sides, and so the annotate island's track. The right
+     is narrower than the left: no scrollbar sits there to leave room for. */
+  --terminal-inset-start: 12px;
+  --terminal-inset-end: 6px;
   /* Text too long for its room, or rows past a scroller's end, fade out over this, as a tab's label
      does. */
   --text-fade: 24px;
@@ -2204,11 +2208,12 @@ button.change-request-check:hover {
 }
 
 /* What floats over the window reads alike: the menus, the status bar's lists, the notification
-   center and the toasts. */
+   center, the toasts and the annotate mode's island and popup. */
 .context-menu,
 .notices-center,
 .status-list,
 .notice,
+.annotate-island,
 .annotate-popup {
   color: var(--tet-menu-foreground);
   background: var(--tet-menu-background);
@@ -2221,6 +2226,7 @@ button.change-request-check:hover {
 .notices-center,
 .status-list,
 .notices,
+.annotate-island,
 .annotate-popup {
   box-shadow: 0 4px 12px var(--tet-popup-shadow);
 }
@@ -2406,8 +2412,7 @@ button.change-request-check:hover {
    `buildXtermTheme` reads (themes/theme-colors.ts), so the two cannot drift. */
 .terminal-host {
   position: absolute;
-  /* Right inset is narrower than left: no scrollbar sits there to leave room for. */
-  inset: 6px 6px 6px 12px;
+  inset: 6px var(--terminal-inset-end) 6px var(--terminal-inset-start);
   background: var(--tet-editor-background);
   /* Keeps the DOM renderer's row updates from restyling and relaying out the whole window. */
   contain: size layout style;
@@ -2418,40 +2423,69 @@ button.change-request-check:hover {
   visibility: hidden;
 }
 
-/* The annotate mode's bar (`AnnotateBar`) lies over the terminal's top edge, which keeps its size:
-   a bar that took room would refit the pty, and the agent would redraw what is being marked. */
-/* Slides down as a pane's new-tab menu does (`drop-in`), and back up when the mode ends. */
-.annotate-bar {
+/* The room the annotate mode's island moves in: the terminal's width, over its top edge. Takes no
+   pointer itself, so the terminal below keeps it. */
+.annotate-track {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: var(--terminal-inset-start);
+  right: var(--terminal-inset-end);
   z-index: 1;
+  pointer-events: none;
+}
+
+/* The annotate mode's island (`AnnotateIsland`) lies over the terminal's top edge, which keeps its
+   size: an island that took room would refit the pty, and the agent would redraw what is being marked.
+   Floats as the menus do, for it stands on the terminal's own fill. Its place is `--share` of the
+   room it has to move in, by `left` and `translate`, which its slide (a `transform`) leaves alone.
+   Slides down as a pane's new-tab menu does (`drop-in`), and back up when the mode ends. */
+.annotate-island {
+  position: absolute;
+  top: var(--island-gap);
+  left: calc(var(--share) * 100%);
+  translate: calc(var(--share) * -100%) 0;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  width: max-content;
+  padding: 7px 0;
+  border-radius: var(--island-radius);
   animation: drop-in var(--popup-fade) ease-out;
   transition:
     opacity var(--popup-fade) ease-out,
     transform var(--popup-fade) ease-out;
 }
 
-/* A tab not on screen keeps its bar, so that it does not slide in again on coming back. */
-.annotate-bar.hidden {
+/* The backspace key is wide and flat, which a square 14px box makes small beside the round icons: its
+   drawing is larger, within the button. */
+.annotate-delete {
+  --icon-size: 18px;
+}
+
+/* What carries it: the grip, as a status in an action's place. */
+.annotate-grip {
+  margin-left: 6px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.annotate-grip:active {
+  cursor: grabbing;
+}
+
+/* A tab not on screen keeps its island, so that it does not slide in again on coming back. */
+.annotate-island.hidden {
   visibility: hidden;
 }
 
-.annotate-bar.closing {
+.annotate-island.closing {
   opacity: 0;
   transform: translateY(-16px);
   pointer-events: none;
 }
 
-/* The count is a pill beside the actions as a change request's state is (`.tracked-bar`), never in
-   `.editor-bar-title`, whose clip would cut it. */
-.annotate-bar > .label-pill {
-  flex: none;
-}
-
 /* What an annotation is, by its colour: the terminal's green for "looks good", its red for a delete,
-   its blue for a comment. Its text, its pill and the bar's pill take it alike. */
+   its blue for a comment. Its text and its pill take it alike. */
 .annotation-kind-good {
   --annotation-color: var(--tet-terminal-ansiGreen);
 }

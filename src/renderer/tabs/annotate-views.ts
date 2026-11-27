@@ -24,7 +24,7 @@ import {
 export interface AnnotateMenu {
   x: number;
   y: number;
-  /** Text is selected: it can be marked and copied. */
+  /** Text is selected: it can be marked. */
   selected: boolean;
   /** The annotation under the pointer. */
   annotationId?: number;
@@ -52,14 +52,16 @@ export interface AnnotateSnapshot {
   annotations: readonly Annotation[];
   hover?: AnnotateHover;
   menu?: AnnotateMenu;
+  /** Text is selected: the island's buttons that mark it are on. */
+  selected: boolean;
   /** Over the whole terminal, above xterm's scrollable element, which would take the pointer from
-   *  anything in `.xterm-screen`: the pills are drawn into it (`AnnotateBar`). */
+   *  anything in `.xterm-screen`: the pills are drawn into it (`AnnotationPills`). */
   layer?: HTMLElement;
   pills: readonly AnnotationPill[];
 }
 
 /** A tab not in the mode — one instance, so it compares equal. */
-const OFF: AnnotateSnapshot = { active: false, annotations: [], pills: [] };
+const OFF: AnnotateSnapshot = { active: false, annotations: [], pills: [], selected: false };
 
 /** The room a pill keeps at the screen's right edge, wide enough for its number and button. */
 const PILL_ROOM = 72;
@@ -81,6 +83,9 @@ interface Session {
   nextId: number;
   /** Types text into the tab's prompt (`terminal-views.ts`). */
   type: (text: string) => void;
+  /** What is selected, as it was when the selection last changed: the text to follow once the program
+   *  redraws. */
+  selection?: SelectedText;
   /** The mouse reporting a drag took from the program, put back when it ends. */
   suspended?: MouseTracking;
   /** The overlay's elements, in `.xterm-screen`. */
@@ -155,8 +160,8 @@ function setPills(session: Session, pills: readonly AnnotationPill[]): void {
   notify(session.key);
 }
 
-/** An annotation still lies where it was made: the same buffer, and the same text there. */
-function isIntact(term: Terminal, annotation: Annotation): boolean {
+/** An annotation, or a selection, still lies where it was made: the same buffer, and the same text there. */
+function isIntact(term: Terminal, annotation: SelectedText): boolean {
   return annotation.buffer === term.buffer.active.type && textOfRange(term.buffer.active, annotation.range) === annotation.text;
 }
 
@@ -187,12 +192,36 @@ function annotationUnder(term: Terminal, annotations: readonly Annotation[], eve
 }
 
 /**
+ * A selection follows its text as an annotation does: one whose text moved, as a program's does
+ * when it scrolls or grows its input, is made again where the text went; one whose text is gone is
+ * dropped, for it would mark whatever stands in its place now.
+ */
+function followSelection(session: Session): void {
+  const { term, selection } = session;
+  const buffer = term.buffer.active;
+  if (!selection || !term.hasSelection()) {
+    return;
+  }
+  if (selection.buffer !== buffer.type || isIntact(term, selection)) {
+    return;
+  }
+  const range = relocateRange(buffer, buffer.length, selection.range, selection.text);
+  if (!range) {
+    term.clearSelection();
+    return;
+  }
+  // The selection's length runs across the rows' ends as one line of cells.
+  term.select(range.startCol, range.startRow, (range.endRow - range.startRow) * term.cols + range.endCol - range.startCol);
+}
+
+/**
  * An annotation follows its text: one whose text left its rows is looked for in the buffer. A text
  * that moved by a few rows, as a scrolling program's does, is found at once; one not found is not
  * looked for again before `RELOCATE_INTERVAL_MS` have passed (a draw comes then), shows no more and
  * stays in the list.
  */
 function settle(session: Session): void {
+  followSelection(session);
   const { term } = session;
   const buffer = term.buffer.active;
   const now = Date.now();
@@ -247,7 +276,7 @@ function clearMarks(session: Session): void {
 }
 
 /**
- * One element per row of each annotation, and where its pill goes (`AnnotateBar` draws it, with its
+ * One element per row of each annotation, and where its pill goes (`AnnotationPills` draws it, with its
  * buttons). Not terminal.registerDecoration(): xterm hides decorations on the alternate screen,
  * where an agent's TUI runs (`links/link-provider.ts`). Redrawn whenever the screen changes; an
  * annotation whose text left its place shows no more, and stays in the list.
@@ -322,9 +351,10 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
   const session: Session = {
     key,
     term,
-    snapshot: { active: true, annotations: [], layer, pills: [] },
+    snapshot: { active: true, annotations: [], layer, pills: [], selected: false },
     nextId: 1,
     type,
+    selection: selectionOf(term),
     marks: [],
     failedAt: new Map(),
     stops: [],
@@ -429,10 +459,15 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     }
   }
   session.stops.push(stopPress);
-  // The program has the mouse again once the selection is gone: a click, or a mark made of it.
   keep(
     term.onSelectionChange(() => {
-      if (!press && !term.hasSelection()) {
+      const selected = term.hasSelection();
+      session.selection = selectionOf(term);
+      if (selected !== session.snapshot.selected) {
+        change(session, { selected });
+      }
+      // The program has the mouse again once the selection is gone: a click, or a mark made of it.
+      if (!press && !selected) {
         restoreTracking(session);
       }
     }),
@@ -565,16 +600,28 @@ export function dropAnnotating(key: string): void {
  *  have switched screens meanwhile. */
 export type SelectedText = Pick<Annotation, "range" | "text" | "buffer">;
 
-export function readSelection(key: string): SelectedText | undefined {
-  const term = sessions.get(key)?.term;
-  const position = term?.getSelectionPosition();
-  if (!term || !position) {
+function selectionOf(term: Terminal): SelectedText | undefined {
+  const position = term.getSelectionPosition();
+  if (!position) {
     return undefined;
   }
   // 0-based columns and absolute rows, the end column exclusive.
   const range = { startRow: position.start.y, startCol: position.start.x, endRow: position.end.y, endCol: position.end.x };
   const text = textOfRange(term.buffer.active, range);
   return text === "" ? undefined : { range, text, buffer: term.buffer.active.type };
+}
+
+export function readSelection(key: string): SelectedText | undefined {
+  const term = sessions.get(key)?.term;
+  return term && selectionOf(term);
+}
+
+/** Marks what is selected. */
+export function markSelection(key: string, kind: AnnotationKind): void {
+  const selected = readSelection(key);
+  if (selected) {
+    addAnnotation(key, kind, selected);
+  }
 }
 
 export function addAnnotation(key: string, kind: AnnotationKind, selected: SelectedText, comment?: string): void {

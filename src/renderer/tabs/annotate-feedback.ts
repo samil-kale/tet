@@ -109,13 +109,19 @@ export function relocateRange(source: RangeSource, length: number, range: CellRa
   return undefined;
 }
 
-/** What the menu and the popup call an annotation of this kind; the feedback says it in lower case. */
-export const KIND_LABELS: Record<AnnotationKind, string> = { good: "Looks Good", comment: "Comment", delete: "Delete" };
+/** What marking the selection is called, in the menu and on the island's buttons. */
+export const ACTION_LABELS: Record<AnnotationKind, string> = { good: "Looks good", comment: "Comment", delete: "Delete" };
+
+/** Asks for the comment, as a question does. */
+export const COMMENT_ACTION = `${ACTION_LABELS.comment}...`;
+
+/** The feedback's word for an annotation of each kind. */
+const KIND_WORDS: Record<AnnotationKind, string> = { good: "looks good", comment: "comment", delete: "delete" };
 
 /** The feedback typed into the agent's prompt: one numbered line per annotation, in the order made. */
 export function formatFeedback(annotations: readonly Annotation[]): string {
   const lines = annotations.map((annotation, index) => {
-    const head = `${index + 1} (${KIND_LABELS[annotation.kind].toLowerCase()}) "${annotation.text}"`;
+    const head = `${index + 1} (${KIND_WORDS[annotation.kind]}) "${annotation.text}"`;
     return annotation.comment === undefined ? head : `${head}: ${annotation.comment}`;
   });
   return `Annotations on your output\n\n${lines.join("\n")}`;
