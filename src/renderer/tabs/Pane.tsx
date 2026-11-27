@@ -474,20 +474,18 @@ export const Pane = memo(function Pane({
       // Plain line output only (AgentInfo.clearable): an agent's TUI would not redraw what was wiped.
       ...(info?.clearable === true ? [{ label: "Clear", run: () => clearTerminalOutput(at, tabId) }] : []),
       // Where the feedback has a prompt to go to (AgentInfo.takesPrompt); a terminal never shown has
-      // nothing to mark. Its tab comes forward, where the mode's bar is.
-      ...(info?.takesPrompt === true
+      // nothing to mark. Its tab comes forward, where the mode's bar is, which ends the mode.
+      ...(info?.takesPrompt === true && !annotating
         ? [
-            annotating
-              ? { label: "Cancel Annotating", run: () => setAnnotating(at, tabId, false) }
-              : {
-                  label: "Annotate",
-                  run: hasTerminal(at, tabId)
-                    ? () => {
-                        setAnnotating(at, tabId, true);
-                        onActivate(tabId, paneId);
-                      }
-                    : undefined,
-                },
+            {
+              label: "Annotate",
+              run: hasTerminal(at, tabId)
+                ? () => {
+                    setAnnotating(at, tabId, true);
+                    onActivate(tabId, paneId);
+                  }
+                : undefined,
+            },
           ]
         : []),
       SEPARATOR,

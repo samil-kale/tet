@@ -1,16 +1,16 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { ProjectRef } from "../../shared/types/project";
 import { ContextMenu, SEPARATOR, type ContextMenuEntry } from "../ui/ContextMenu";
 import { IconButton } from "../ui/IconButton";
 import { CloseIcon, SendIcon } from "../ui/icons";
+import { CLOSE_MS } from "../ui/use-closing";
 import { commentOnSelection } from "./annotate-comment";
 import { KIND_LABELS, type AnnotationKind } from "./annotate-feedback";
 import {
   addAnnotation,
   clearAnnotations,
   closeMenu,
-  copySelectedText,
   readSelection,
   removeAnnotation,
   sendAnnotations,
@@ -18,6 +18,7 @@ import {
   stopAnnotating,
   useAnnotate,
   type AnnotateMenu,
+  type AnnotateSnapshot,
 } from "./annotate-views";
 import { viewKey } from "./terminal-views";
 
@@ -44,8 +45,7 @@ function menuEntries(key: string, menu: AnnotateMenu, count: number): ContextMen
     { label: "Remove All Annotations", run: count > 0 ? () => clearAnnotations(key) : undefined },
     SEPARATOR,
     { label: "Send to Agent", run: count > 0 ? () => sendAnnotations(key) : undefined },
-    SEPARATOR,
-    { label: "Copy", run: menu.selected ? () => copySelectedText(key) : undefined },
+    { label: "Cancel", run: () => stopAnnotating(key) },
   ];
 }
 
@@ -74,6 +74,9 @@ function AnnotatePopup({ x, y, children }: { x: number; y: number; children: Rea
 interface AnnotateBarProps {
   at: ProjectRef;
   tabId: string;
+  /** The tab is on screen. The bar stays mounted while it is not, hidden, so that coming back to it
+   *  does not slide it in again. */
+  shown: boolean;
 }
 
 /**
@@ -81,26 +84,54 @@ interface AnnotateBarProps {
  * what sends the annotations, what cancels the mode (every annotation goes with it) and how many
  * there are. What marks the selection is the terminal's right-click menu, drawn here too, as are the
  * annotations' pills over the text and the popup of the one under the pointer.
+ *
+ * Slides in as a pane's new-tab menu does, and out for `CLOSE_MS` once the mode has ended, showing
+ * what it showed last.
  */
-export function AnnotateBar({ at, tabId }: AnnotateBarProps) {
+export function AnnotateBar({ at, tabId, shown }: AnnotateBarProps) {
   const key = viewKey(at, tabId);
-  const { annotations, hover, menu, pills, layer } = useAnnotate(key);
+  const snapshot = useAnnotate(key);
+  const lastActive = useRef<AnnotateSnapshot | undefined>(undefined);
+  const [, leave] = useState(0);
+  if (snapshot.active) {
+    lastActive.current = snapshot;
+  }
+  const closing = !snapshot.active && lastActive.current !== undefined;
+  useEffect(() => {
+    if (!closing) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      lastActive.current = undefined;
+      leave((left) => left + 1);
+    }, CLOSE_MS);
+    return () => clearTimeout(timer);
+  }, [closing]);
+  const view = snapshot.active ? snapshot : lastActive.current;
+  if (!view) {
+    return null;
+  }
+  const { annotations, hover, menu, pills, layer } = view;
   const count = annotations.length;
-  const hovered = hover && annotations.find((annotation) => annotation.id === hover.id);
+  // The pills, the menu and the popup only where the bar is on screen and not on its way out.
+  const live = shown && !closing;
+  const hoveredIndex = hover ? annotations.findIndex((annotation) => annotation.id === hover.id) : -1;
+  const hovered = annotations[hoveredIndex];
   return (
     <>
-      <div className="editor-bar annotate-bar">
+      <div className={`editor-bar annotate-bar${closing ? " closing" : ""}${shown ? "" : " hidden"}`}>
         <div className="toolbar editor-bar-actions">
           <IconButton title="Send to Agent" disabled={count === 0} onClick={() => sendAnnotations(key)}>
             <SendIcon />
           </IconButton>
-          <IconButton title="Cancel Annotating" onClick={() => stopAnnotating(key)}>
+          <IconButton title="Cancel" onClick={() => stopAnnotating(key)}>
             <CloseIcon />
           </IconButton>
         </div>
         <span className="label-pill">{count === 1 ? "1 annotation" : `${count} annotations`}</span>
       </div>
-      {layer &&
+      {live &&
+        layer &&
         createPortal(
           pills.map((pill) => (
             <div
@@ -118,11 +149,11 @@ export function AnnotateBar({ at, tabId }: AnnotateBarProps) {
           )),
           layer,
         )}
-      {menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count)} onClose={() => closeMenu(key)} />}
-      {hover && hovered && (
+      {live && menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count)} onClose={() => closeMenu(key)} />}
+      {live && hover && hoveredIndex >= 0 && (
         <AnnotatePopup x={hover.x} y={hover.y}>
           <div className="annotate-popup-title">
-            {KIND_LABELS[hovered.kind]} {annotations.indexOf(hovered) + 1}
+            {KIND_LABELS[hovered.kind]} {hoveredIndex + 1}
           </div>
           {hovered.comment}
         </AnnotatePopup>

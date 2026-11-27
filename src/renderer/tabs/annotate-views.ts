@@ -116,19 +116,9 @@ function subscribe(key: string, listener: () => void): () => void {
   };
 }
 
-/** What `read` takes of the tab's snapshot: the caller re-renders only when that changes. */
-function useAnnotateValue<T>(key: string, read: (snapshot: AnnotateSnapshot) => T): T {
-  const subscribeKey = useCallback((listener: () => void) => subscribe(key, listener), [key]);
-  return useSyncExternalStore(subscribeKey, () => read(snapshotOf(key)));
-}
-
 export function useAnnotate(key: string): AnnotateSnapshot {
-  return useAnnotateValue(key, (snapshot) => snapshot);
-}
-
-/** Whether the tab is in the mode, for what only follows that: the host's room for the bar, and the bar. */
-export function useAnnotating(key: string): boolean {
-  return useAnnotateValue(key, (snapshot) => snapshot.active);
+  const subscribeKey = useCallback((listener: () => void) => subscribe(key, listener), [key]);
+  return useSyncExternalStore(subscribeKey, () => snapshotOf(key));
 }
 
 export function isAnnotating(key: string): boolean {
@@ -142,6 +132,12 @@ function change(session: Session, patch: Partial<AnnotateSnapshot>): void {
     requestDraw(session);
   }
   notify(session.key);
+}
+
+function clearHover(session: Session): void {
+  if (session.snapshot.hover) {
+    change(session, { hover: undefined });
+  }
 }
 
 function onPill(event: Event): boolean {
@@ -348,8 +344,9 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     return true;
   };
 
-  // The left press that a program with the mouse is not given yet, until it is a click or a drag.
-  let press: { target: EventTarget | null; x: number; y: number; selecting: boolean; started: boolean } | undefined;
+  // The left press that a program with the mouse is not given yet, until it is a click or a drag:
+  // `pending`, then `starting` while xterm is switched to selecting, then `selecting`.
+  let press: { target: EventTarget | null; x: number; y: number; phase: "pending" | "starting" | "selecting" } | undefined;
   // Our own presses, which the listeners below let through.
   let remaking = false;
   const remake = (type: "mousedown" | "mouseup", held: NonNullable<typeof press>): void => {
@@ -374,21 +371,24 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
   };
   const onMove = (event: MouseEvent): void => {
     const held = press;
-    if (!held || held.started) {
+    if (!held || held.phase === "selecting") {
       return;
     }
     // Not the program's either: motion without a press.
     event.stopPropagation();
-    if (held.selecting || Math.hypot(event.clientX - held.x, event.clientY - held.y) < CLICK_SLOP) {
+    if (held.phase === "starting" || Math.hypot(event.clientX - held.x, event.clientY - held.y) < CLICK_SLOP) {
       return;
     }
-    held.selecting = true;
+    held.phase = "starting";
     session.suspended = term.modes.mouseTrackingMode;
     // Without the reporting xterm turns the wheel on an alternate screen into arrow keys.
     term.attachCustomWheelEventHandler(() => term.buffer.active.type !== "alternate");
     term.write(MOUSE_TRACKING_OFF, () => {
-      held.started = true;
-      remake("mousedown", held);
+      // A release before xterm was switched has ended the press already.
+      if (press === held) {
+        held.phase = "selecting";
+        remake("mousedown", held);
+      }
     });
   };
   const stopPress = (): void => {
@@ -402,7 +402,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     if (!held) {
       return;
     }
-    if (held.selecting) {
+    if (held.phase !== "pending") {
       // xterm ends its selection with this release. The reporting stays off while the selection
       // stands: turning it on again clears it (`SelectionService.disable`).
       if (!term.hasSelection()) {
@@ -428,6 +428,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
 
   // Before xterm's own: a press on a pill is the pill's, and a left press where a program has the
   // mouse is held back. Elsewhere xterm selects for itself.
+  let pressed: { x: number; y: number } | undefined;
   on(
     "mousedown",
     (event) => {
@@ -438,6 +439,8 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
         event.stopPropagation();
         return;
       }
+      clearHover(session);
+      pressed = event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
       if (event.button !== 0) {
         // The right button opens the mode's menu: a program with the mouse would paste on it.
         if (event.button === 2 && term.modes.mouseTrackingMode !== "none") {
@@ -451,22 +454,12 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
       event.stopPropagation();
       event.preventDefault();
       term.focus();
-      if (session.snapshot.hover) {
-        change(session, { hover: undefined });
-      }
-      press = { target: event.target, x: event.clientX, y: event.clientY, selecting: false, started: false };
+      press = { target: event.target, x: event.clientX, y: event.clientY, phase: "pending" };
       document.addEventListener("mousemove", onMove, true);
       document.addEventListener("mouseup", onRelease, true);
     },
     true,
   );
-  let pressed: { x: number; y: number } | undefined;
-  on("mousedown", (event) => {
-    pressed = event.button === 0 ? { x: event.clientX, y: event.clientY } : undefined;
-    if (session.snapshot.hover) {
-      change(session, { hover: undefined });
-    }
-  });
   on("mouseup", (event) => {
     const down = pressed;
     pressed = undefined;
@@ -492,11 +485,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
       change(session, { hover: found && { id: found.id, x: event.clientX, y: event.clientY } });
     }
   });
-  on("mouseleave", () => {
-    if (session.snapshot.hover) {
-      change(session, { hover: undefined });
-    }
-  });
+  on("mouseleave", () => clearHover(session));
   // Before the container's own listener (terminal-views.ts), which copies or pastes: here the right
   // button opens the mode's menu.
   on("contextmenu", (event) => {
@@ -616,14 +605,6 @@ export function closeMenu(key: string): void {
   const session = sessions.get(key);
   if (session?.snapshot.menu) {
     change(session, { menu: undefined });
-  }
-}
-
-export function copySelectedText(key: string): void {
-  const term = sessions.get(key)?.term;
-  if (term?.hasSelection()) {
-    void navigator.clipboard.writeText(term.getSelection());
-    term.clearSelection();
   }
 }
 

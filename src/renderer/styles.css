@@ -2420,12 +2420,28 @@ button.change-request-check:hover {
 
 /* The annotate mode's bar (`AnnotateBar`) lies over the terminal's top edge, which keeps its size:
    a bar that took room would refit the pty, and the agent would redraw what is being marked. */
+/* Slides down as a pane's new-tab menu does (`drop-in`), and back up when the mode ends. */
 .annotate-bar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
   z-index: 1;
+  animation: drop-in var(--popup-fade) ease-out;
+  transition:
+    opacity var(--popup-fade) ease-out,
+    transform var(--popup-fade) ease-out;
+}
+
+/* A tab not on screen keeps its bar, so that it does not slide in again on coming back. */
+.annotate-bar.hidden {
+  visibility: hidden;
+}
+
+.annotate-bar.closing {
+  opacity: 0;
+  transform: translateY(-16px);
+  pointer-events: none;
 }
 
 /* The count is a pill beside the actions as a change request's state is (`.tracked-bar`), never in
