@@ -3,6 +3,10 @@
 Newest release first. Each release's section is what its GitHub Release shows as notes: what
 changed for the user, not the commit list.
 
+## 0.29.2 (2026-11-28)
+
+- **Fixes.** Entering Annotate clears the agent's text selection. Send to Agent is disabled while the agent is waiting for an answer, and the delete mark uses an eraser icon.
+
 ## 0.29.1 (2026-11-27)
 
 - **Annotate island.** The annotate controls sit in an island you can move, with a button per mark, and a selection stays on its text as the terminal scrolls.
