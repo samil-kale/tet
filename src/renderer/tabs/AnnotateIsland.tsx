@@ -20,6 +20,9 @@ interface AnnotateIslandProps {
   selected: boolean;
   /** How many annotations there are to send. */
   count: number;
+  /** The agent stands on a question: what is typed would land in a list of answers, so nothing is
+   *  sent. */
+  waiting: boolean;
   /** The mode has ended: the island slides out. */
   closing: boolean;
   /** The tab is on screen; hidden while it is not. */
@@ -32,7 +35,7 @@ interface AnnotateIslandProps {
  * selection, what sends the annotations and what cancels the mode (every annotation goes with it).
  * Its props hold still while the pointer hovers or the menu opens, which it need not draw for.
  */
-export const AnnotateIsland = memo(function AnnotateIsland({ viewKey, selected, count, closing, shown }: AnnotateIslandProps) {
+export const AnnotateIsland = memo(function AnnotateIsland({ viewKey, selected, count, waiting, closing, shown }: AnnotateIslandProps) {
   const [share, setShare] = useStoredShare(ISLAND_SHARE_KEY, 1 / 2);
   const track = useRef<HTMLDivElement>(null);
   const island = useRef<HTMLDivElement>(null);
@@ -62,17 +65,17 @@ export const AnnotateIsland = memo(function AnnotateIsland({ viewKey, selected, 
         className={`annotate-island${closing ? " closing" : ""}${shown ? "" : " hidden"}`}
         style={{ "--share": share } as CSSProperties}
       >
-        <span
-          className="status-icon annotate-grip"
-          title="Move"
-          onPointerDown={grab}
-          onPointerMove={carry}
-          onPointerUp={drop}
-          onPointerCancel={drop}
-        >
-          <GripIcon />
-        </span>
         <div className="toolbar editor-bar-actions">
+          <span
+            className="status-icon annotate-grip"
+            title="Move"
+            onPointerDown={grab}
+            onPointerMove={carry}
+            onPointerUp={drop}
+            onPointerCancel={drop}
+          >
+            <GripIcon />
+          </span>
           <IconButton title={ACTION_LABELS.good} disabled={!selected} onClick={() => markSelection(viewKey, "good")}>
             <ThumbsUpIcon />
           </IconButton>
@@ -82,7 +85,11 @@ export const AnnotateIsland = memo(function AnnotateIsland({ viewKey, selected, 
           <IconButton title={ACTION_LABELS.delete} disabled={!selected} onClick={() => markSelection(viewKey, "delete")}>
             <EraserIcon />
           </IconButton>
-          <IconButton title="Send to Agent" disabled={count === 0} onClick={() => sendAnnotations(viewKey)}>
+          <IconButton
+            title={waiting ? "The agent is waiting for an answer" : "Send to Agent"}
+            disabled={count === 0 || waiting}
+            onClick={() => sendAnnotations(viewKey)}
+          >
             <SendIcon />
           </IconButton>
           <IconButton title="Cancel" onClick={() => stopAnnotating(viewKey)}>

@@ -2458,7 +2458,6 @@ button.change-request-check:hover {
 
 /* What carries it: the grip, as a status in an action's place. */
 .annotate-grip {
-  margin-left: 6px;
   cursor: grab;
   touch-action: none;
 }

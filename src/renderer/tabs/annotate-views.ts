@@ -351,7 +351,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
   const session: Session = {
     key,
     term,
-    snapshot: { active: true, annotations: [], layer, pills: [], selected: false },
+    snapshot: { active: true, annotations: [], layer, pills: [], selected: term.hasSelection() },
     nextId: 1,
     type,
     selection: selectionOf(term),

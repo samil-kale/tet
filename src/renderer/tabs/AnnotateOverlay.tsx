@@ -22,7 +22,7 @@ import { viewKey } from "./terminal-views";
 /** How far the popup stands off the pointer. */
 const POPUP_OFFSET = 14;
 
-function menuEntries(key: string, menu: AnnotateMenu, count: number): ContextMenuEntry[] {
+function menuEntries(key: string, menu: AnnotateMenu, count: number, waiting: boolean): ContextMenuEntry[] {
   const mark = (kind: AnnotationKind) => (menu.selected ? () => markSelection(key, kind) : undefined);
   const { annotationId } = menu;
   return [
@@ -33,7 +33,7 @@ function menuEntries(key: string, menu: AnnotateMenu, count: number): ContextMen
     { label: "Remove Annotation", run: annotationId === undefined ? undefined : () => removeAnnotation(key, annotationId) },
     { label: "Remove All Annotations", run: count > 0 ? () => clearAnnotations(key) : undefined },
     SEPARATOR,
-    { label: "Send to Agent", run: count > 0 ? () => sendAnnotations(key) : undefined },
+    { label: "Send to Agent", run: count > 0 && !waiting ? () => sendAnnotations(key) : undefined },
     { label: "Cancel", run: () => stopAnnotating(key) },
   ];
 }
@@ -66,6 +66,8 @@ interface AnnotateOverlayProps {
   /** The tab is on screen. The island stays mounted while it is not, hidden, so that coming back to
    *  it does not slide it in again. */
   shown: boolean;
+  /** Its agent stands on a question: nothing is sent while it does. */
+  waiting: boolean;
 }
 
 /**
@@ -76,7 +78,7 @@ interface AnnotateOverlayProps {
  * The island slides in as a pane's new-tab menu does, and out for `CLOSE_MS` once the mode has
  * ended, showing what it showed last.
  */
-export function AnnotateOverlay({ at, tabId, shown }: AnnotateOverlayProps) {
+export function AnnotateOverlay({ at, tabId, shown, waiting }: AnnotateOverlayProps) {
   const key = viewKey(at, tabId);
   const snapshot = useAnnotate(key);
   const lastActive = useRef<AnnotateSnapshot | undefined>(undefined);
@@ -106,9 +108,11 @@ export function AnnotateOverlay({ at, tabId, shown }: AnnotateOverlayProps) {
   const hovered = hover && annotations.find((annotation) => annotation.id === hover.id);
   return (
     <>
-      <AnnotateIsland viewKey={key} selected={selected} count={count} closing={closing} shown={shown} />
+      <AnnotateIsland viewKey={key} selected={selected} count={count} waiting={waiting} closing={closing} shown={shown} />
       {live && layer && <AnnotationPills viewKey={key} pills={pills} layer={layer} />}
-      {live && menu && <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count)} onClose={() => closeMenu(key)} />}
+      {live && menu && (
+        <ContextMenu x={menu.x} y={menu.y} entries={menuEntries(key, menu, count, waiting)} onClose={() => closeMenu(key)} />
+      )}
       {/* Only a comment has something to say; a looks good or a delete says it by its colour. */}
       {live && hover && hovered?.kind === "comment" && (
         <AnnotatePopup x={hover.x} y={hover.y}>

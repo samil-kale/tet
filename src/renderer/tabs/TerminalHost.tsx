@@ -13,6 +13,9 @@ interface TerminalHostProps {
   shiftEnter: string | undefined;
   /** A dropped name is typed with what it names before it, its agent's (AgentInfo.labelsDrops). */
   labelsDrops: boolean;
+  /** Its agent stands on a question: what is typed would land in a list of answers, so the annotate
+   *  mode does not send. */
+  waiting: boolean;
   /** The one on screen in its pane; the others keep their layout but stay hidden. */
   active: boolean;
   /** Whether the pane itself is on screen — the repository or worktree is the active one. */
@@ -35,7 +38,7 @@ interface TerminalHostProps {
  * In the annotate mode the host also draws the mode's overlay (`AnnotateOverlay`): its island over
  * the terminal's top edge, which does not resize it.
  */
-export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visible, focused }: TerminalHostProps) {
+export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, waiting, active, visible, focused }: TerminalHostProps) {
   const container = useRef<HTMLDivElement>(null);
   const shown = active && visible;
 
@@ -87,7 +90,7 @@ export function TerminalHost({ at, tabId, shiftEnter, labelsDrops, active, visib
   return (
     <>
       <div ref={container} className={`terminal-host${active ? "" : " hidden"}`} />
-      <AnnotateOverlay at={at} tabId={tabId} shown={shown} />
+      <AnnotateOverlay at={at} tabId={tabId} shown={shown} waiting={waiting} />
     </>
   );
 }

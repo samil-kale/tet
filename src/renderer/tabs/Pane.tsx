@@ -662,6 +662,7 @@ export const Pane = memo(function Pane({
                   tabId={tab.tabId}
                   shiftEnter={agentInfo(agents, kinded.tab.agentId)?.shiftEnter}
                   labelsDrops={agentInfo(agents, kinded.tab.agentId)?.labelsDrops === true}
+                  waiting={kinded.tab.waitingAt !== undefined}
                   active={active}
                   visible={visible}
                   focused={focused}
