@@ -2529,9 +2529,7 @@ button.change-request-check:hover {
 .annotation-pill {
   pointer-events: auto;
   position: absolute;
-  /* Centred on its row's middle, a pixel lower: the letters of a row sit below the middle of its
-     cell, which the pill is set against. */
-  transform: translateY(calc(-50% + 1px));
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 2px;

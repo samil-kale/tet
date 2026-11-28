@@ -340,10 +340,10 @@ function draw(session: Session): void {
  * program's, made again for it after the release. The wheel is never touched. `edit` is asked for a
  * click on a comment.
  */
-export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void, type: (text: string) => void): void {
+export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void, type: (text: string) => void): boolean {
   const element = term.element;
   if (sessions.has(key) || !element) {
-    return;
+    return false;
   }
   const layer = document.createElement("div");
   layer.className = "annotation-layer";
@@ -546,6 +546,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
   });
 
   notify(key);
+  return true;
 }
 
 /** The program has the mouse again, after a drag took it. */
