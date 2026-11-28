@@ -6,7 +6,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { openFile } from "../editor/editor-tab";
 import { onRefClosed } from "../ref-lifetime";
 import { Terminal } from "@xterm/xterm";
-import { CONTROL_START_SIZE, TAB_KEYS } from "../../shared/ctl";
+import { CONTROL_START_SIZE } from "../../shared/ctl";
 import { errorMessage } from "../../shared/errors";
 import { refKeyOf } from "../../shared/types/project";
 import type { ProjectRef } from "../../shared/types/project";
@@ -633,18 +633,13 @@ export function setAnnotating(ref: ProjectRef, tabId: string, on: boolean): void
     return;
   }
   const view = views.get(key);
-  if (!view) {
-    return;
-  }
-  const started = startAnnotating(
-    key,
-    view.term,
-    (annotationId) => void editComment(key, annotationId),
-    (text) => typeText(view, text),
-  );
-  if (started) {
-    // Typing dismisses the program's selection, and Backspace removes the space again.
-    window.tet.tabs.input(ref, tabId, ` ${TAB_KEYS.backspace}`);
+  if (view) {
+    startAnnotating(
+      key,
+      view.term,
+      (annotationId) => void editComment(key, annotationId),
+      (text) => typeText(view, text),
+    );
   }
 }
 

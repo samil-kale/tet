@@ -340,10 +340,10 @@ function draw(session: Session): void {
  * program's, made again for it after the release. The wheel is never touched. `edit` is asked for a
  * click on a comment.
  */
-export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void, type: (text: string) => void): boolean {
+export function startAnnotating(key: string, term: Terminal, edit: (annotationId: number) => void, type: (text: string) => void): void {
   const element = term.element;
   if (sessions.has(key) || !element) {
-    return false;
+    return;
   }
   const layer = document.createElement("div");
   layer.className = "annotation-layer";
@@ -391,7 +391,7 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
   let press: { target: EventTarget | null; x: number; y: number; phase: "pending" | "starting" | "selecting" } | undefined;
   // Our own presses, which the listeners below let through.
   let remaking = false;
-  const remake = (type: "mousedown" | "mouseup", held: NonNullable<typeof press>): void => {
+  const remake = (type: "mousedown" | "mouseup", held: Omit<NonNullable<typeof press>, "phase">): void => {
     remaking = true;
     try {
       (held.target ?? element).dispatchEvent(
@@ -545,8 +545,15 @@ export function startAnnotating(key: string, term: Terminal, edit: (annotationId
     });
   });
 
+  // A click in the corner lets the program dismiss its own selection.
+  const screen = term.modes.mouseTrackingMode !== "none" ? screenOf(term) : undefined;
+  const bounds = screen?.getBoundingClientRect();
+  if (screen && bounds && bounds.width >= 1 && bounds.height >= 1) {
+    const corner = { target: screen, x: bounds.right - 1, y: bounds.top };
+    remake("mousedown", corner);
+    remake("mouseup", corner);
+  }
   notify(key);
-  return true;
 }
 
 /** The program has the mouse again, after a drag took it. */
